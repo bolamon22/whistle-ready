@@ -7,7 +7,7 @@ import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;defaultRole:string;hourlyRate:number|null }
 interface TimeEntry { id:string;workerId:string;date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;notes:string|null;isManualEdit:boolean;worker:Worker }
-interface Tournament { id:string;name:string;dates:string }
+interface Tournament { id:string;name:string;dates:string;logoUrl:string }
 
 function calcHours(e:TimeEntry):number {
   if(e.hoursManual!=null)return e.hoursManual

@@ -6,7 +6,7 @@ import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;defaultRole:string }
 interface Avail { workerId:string;date:string;timeSlots:string }
-interface Tournament { id:string;name:string;dates:string }
+interface Tournament { id:string;name:string;dates:string;logoUrl:string }
 
 export default function AvailabilityPage({ params }: { params:{id:string} }) {
   const [tournament,setTournament]=useState<Tournament|null>(null)
