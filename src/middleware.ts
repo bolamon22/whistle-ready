@@ -86,6 +86,7 @@ export default withAuth(
     return NextResponse.redirect(new URL('/unauthorized', req.url))
   },
   {
+    secret: process.env.NEXTAUTH_SECRET,
     callbacks: {
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl
