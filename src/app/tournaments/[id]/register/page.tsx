@@ -26,6 +26,21 @@ const DEFAULT_DIVISIONS = [
   'HS Boys JV', 'HS Boys Varsity', 'HS Girls JV', 'HS Girls Varsity',
 ]
 
+interface Pricing { tier1: number; tier1Max: number; tier2: number; tier2Max: number; tier3: number; sevenVSeven: number }
+const DEFAULT_PRICING: Pricing = { tier1: 1495, tier1Max: 3, tier2: 1450, tier2Max: 6, tier3: 1395, sevenVSeven: 1095 }
+
+function calcInvoice(teams: TeamRow[], pricing: Pricing): number {
+  const sevenV = teams.filter(t => t.division.toLowerCase().includes('7v7') || t.division.toLowerCase().includes('7 v 7'))
+  const regular = teams.filter(t => !t.division.toLowerCase().includes('7v7') && !t.division.toLowerCase().includes('7 v 7'))
+  let total = sevenV.length * pricing.sevenVSeven
+  const n = regular.length
+  const rate = n <= pricing.tier1Max ? pricing.tier1 : n <= pricing.tier2Max ? pricing.tier2 : pricing.tier3
+  total += n * rate
+  return total
+}
+
+const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+
 const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
 const smallInputCls = "w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
 
@@ -59,6 +74,8 @@ export default function RegisterPage() {
   const [notes, setNotes] = useState('')
   const [teams, setTeams] = useState<TeamRow[]>([emptyTeam()])
 
+  const [pricing, setPricing] = useState<Pricing>(DEFAULT_PRICING)
+
   // Club logo state
   const [clubLogoUrl, setClubLogoUrl] = useState('')
   const [clubLogoUploading, setClubLogoUploading] = useState(false)
@@ -73,6 +90,10 @@ export default function RegisterPage() {
         try {
           const divs = JSON.parse(d.registrationDivisions || '[]')
           if (divs.length > 0) setDivisions(divs)
+        } catch {}
+        try {
+          const p = JSON.parse(d.registrationPricing || '{}')
+          if (p.tier1) setPricing(p)
         } catch {}
       })
       .catch(() => {})
@@ -129,8 +150,9 @@ export default function RegisterPage() {
       const registration = await res.json()
 
       // Redirect to Stripe if paying by credit card
-      if (paymentMethod === 'credit_card' && registration.invoiceAmount > 0) {
-        const baseAmount = registration.invoiceAmount
+      const calculatedAmount = calcInvoice(teams, pricing)
+      if (paymentMethod === 'credit_card' && calculatedAmount > 0) {
+        const baseAmount = calculatedAmount
         const amountWithFee = Math.round(baseAmount * 1.03 * 100) / 100 // +3% to offset Stripe fees
         const stripeRes = await fetch('/api/stripe/checkout', {
           method: 'POST',
@@ -360,28 +382,91 @@ export default function RegisterPage() {
               </div>
             </section>
 
-            {/* Payment Options */}
+            {/* Pricing Matrix */}
             <section>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">Registration Fees</h2>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden mb-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-600 text-xs uppercase tracking-wide">
+                      <th className="text-left px-4 py-2">Teams</th>
+                      <th className="text-right px-4 py-2">Price per Team</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-4 py-2 text-gray-700">1–{pricing.tier1Max} teams</td>
+                      <td className="px-4 py-2 text-right font-medium text-gray-800">{fmt(pricing.tier1)}</td>
+                    </tr>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-4 py-2 text-gray-700">{pricing.tier1Max + 1}–{pricing.tier2Max} teams</td>
+                      <td className="px-4 py-2 text-right font-medium text-gray-800">{fmt(pricing.tier2)}</td>
+                    </tr>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-4 py-2 text-gray-700">{pricing.tier2Max + 1}+ teams</td>
+                      <td className="px-4 py-2 text-right font-medium text-gray-800">{fmt(pricing.tier3)}</td>
+                    </tr>
+                    <tr className="border-t border-gray-200 bg-blue-50">
+                      <td className="px-4 py-2 text-gray-700">7v7 teams</td>
+                      <td className="px-4 py-2 text-right font-medium text-gray-800">{fmt(pricing.sevenVSeven)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Estimated Total */}
+              {teams.length > 0 && calcInvoice(teams, pricing) > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-800">Estimated Total</p>
+                    <p className="text-xs text-blue-600 mt-0.5">{teams.length} team{teams.length !== 1 ? 's' : ''} · based on current fee tier</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-blue-800">{fmt(calcInvoice(teams, pricing))}</p>
+                    {paymentMethod === 'credit_card' && (
+                      <p className="text-xs text-blue-500 mt-0.5">+3% CC fee = {fmt(Math.round(calcInvoice(teams, pricing) * 1.03))}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <h2 className="text-lg font-semibold text-gray-800 mb-3">Payment Options <span className="text-red-500">*</span></h2>
-              <div className="flex flex-wrap gap-6">
+              <div className="flex flex-wrap gap-4">
                 {[
-                  { value: 'credit_card', label: 'Pay By Credit Card' },
-                  { value: 'check', label: 'Pay By Check' },
-                  { value: 'zelle', label: 'Pay By Zelle' },
+                  { value: 'credit_card', label: 'Credit Card' },
+                  { value: 'check', label: 'Check' },
+                  { value: 'zelle', label: 'Zelle' },
+                  { value: 'ach', label: 'ACH' },
+                  { value: 'paypal', label: 'PayPal' },
                 ].map(opt => (
-                  <label key={opt.value} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <label key={opt.value} className={`flex items-center gap-2 cursor-pointer text-sm border rounded-lg px-4 py-2 transition-colors ${paymentMethod === opt.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                     <input type="radio" name="paymentMethod" value={opt.value}
                       checked={paymentMethod === opt.value}
-                      onChange={e => setPaymentMethod(e.target.value)} />
+                      onChange={e => setPaymentMethod(e.target.value)}
+                      className="hidden" />
+                    {opt.value === 'credit_card' && '💳 '}
+                    {opt.value === 'check' && '✉️ '}
+                    {opt.value === 'zelle' && '⚡ '}
+                    {opt.value === 'ach' && '🏦 '}
+                    {opt.value === 'paypal' && '🅿️ '}
                     {opt.label}
                   </label>
                 ))}
               </div>
+              {paymentMethod === 'credit_card' && (
+                <p className="text-sm text-blue-600 mt-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">You'll be redirected to a secure Stripe payment page after submitting. A 3% processing fee applies.</p>
+              )}
               {paymentMethod === 'zelle' && (
-                <p className="text-sm text-gray-500 mt-2">Please send Zelle to <strong>info@sunshinelax.com</strong></p>
+                <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Please send Zelle to <strong>info@sunshinelax.com</strong></p>
               )}
               {paymentMethod === 'check' && (
-                <p className="text-sm text-gray-500 mt-2">Please mail checks payable to <strong>Sunshine Events Group</strong></p>
+                <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Please mail checks payable to <strong>Sunshine Events Group</strong> to:<br/>11830 Wiles Rd. Coral Springs, FL 33076</p>
+              )}
+              {paymentMethod === 'ach' && (
+                <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">ACH payment instructions will be provided after registration is confirmed.</p>
+              )}
+              {paymentMethod === 'paypal' && (
+                <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">PayPal payment instructions will be provided after registration is confirmed.</p>
               )}
             </section>
 
