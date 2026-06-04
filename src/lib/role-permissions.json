@@ -1,0 +1,302 @@
+{
+  "features": [
+    {
+      "key": "tournaments_list",
+      "label": "Tournaments List",
+      "group": "Tournaments",
+      "routes": [
+        "/"
+      ]
+    },
+    {
+      "key": "tournament_dashboard",
+      "label": "Tournament Dashboard",
+      "group": "Tournaments",
+      "routes": [
+        "/tournaments/*/dashboard"
+      ]
+    },
+    {
+      "key": "tournament_schedule",
+      "label": "Schedule & Games",
+      "group": "Tournaments",
+      "routes": [
+        "/tournaments/*"
+      ]
+    },
+    {
+      "key": "tournament_roster",
+      "label": "Roster",
+      "group": "Staff",
+      "routes": [
+        "/tournaments/*/roster"
+      ]
+    },
+    {
+      "key": "tournament_availability",
+      "label": "Availability",
+      "group": "Staff",
+      "routes": [
+        "/tournaments/*/availability"
+      ]
+    },
+    {
+      "key": "tournament_assignments",
+      "label": "Assignments",
+      "group": "Staff",
+      "routes": [
+        "/api/assignments"
+      ]
+    },
+    {
+      "key": "tournament_time_entries",
+      "label": "Time Entries",
+      "group": "Staff",
+      "routes": [
+        "/tournaments/*/time-entries"
+      ]
+    },
+    {
+      "key": "tournament_pay_summary",
+      "label": "Pay Summary",
+      "group": "Finance",
+      "routes": [
+        "/tournaments/*/pay-summary"
+      ]
+    },
+    {
+      "key": "tournament_financials",
+      "label": "Financials",
+      "group": "Finance",
+      "routes": [
+        "/tournaments/*/financials"
+      ]
+    },
+    {
+      "key": "tournament_registrations",
+      "label": "Team Registrations",
+      "group": "Registrations",
+      "routes": [
+        "/tournaments/*/registrations"
+      ]
+    },
+    {
+      "key": "tournament_player_regs",
+      "label": "Player Registrations",
+      "group": "Registrations",
+      "routes": [
+        "/tournaments/*/player-registrations"
+      ]
+    },
+    {
+      "key": "tournament_settings",
+      "label": "Tournament Settings",
+      "group": "Tournaments",
+      "routes": [
+        "/tournaments/*/settings"
+      ]
+    },
+    {
+      "key": "staff_pool",
+      "label": "Staff Pool",
+      "group": "Staff",
+      "routes": [
+        "/staff"
+      ]
+    },
+    {
+      "key": "admin_users",
+      "label": "User Management",
+      "group": "Admin",
+      "routes": [
+        "/admin"
+      ]
+    },
+    {
+      "key": "cd_overview",
+      "label": "Club Dir: Overview Tab",
+      "group": "Club Director",
+      "routes": []
+    },
+    {
+      "key": "cd_players",
+      "label": "Club Dir: Players Tab",
+      "group": "Club Director",
+      "routes": []
+    },
+    {
+      "key": "cd_schedule",
+      "label": "Club Dir: Schedule Tab",
+      "group": "Club Director",
+      "routes": []
+    },
+    {
+      "key": "cd_billing",
+      "label": "Club Dir: Billing Tab",
+      "group": "Club Director",
+      "routes": []
+    }
+  ],
+  "roles": {
+    "director": {
+      "tournaments_list": true,
+      "tournament_dashboard": true,
+      "tournament_schedule": true,
+      "tournament_roster": true,
+      "tournament_availability": true,
+      "tournament_assignments": true,
+      "tournament_time_entries": true,
+      "tournament_pay_summary": true,
+      "tournament_financials": true,
+      "tournament_registrations": true,
+      "tournament_player_regs": true,
+      "tournament_settings": true,
+      "staff_pool": true,
+      "admin_users": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false
+    },
+    "assigner": {
+      "tournaments_list": true,
+      "tournament_dashboard": false,
+      "tournament_schedule": true,
+      "tournament_roster": true,
+      "tournament_availability": true,
+      "tournament_assignments": true,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": true,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": true,
+      "admin_users": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false
+    },
+    "coach": {
+      "tournaments_list": false,
+      "tournament_dashboard": false,
+      "tournament_schedule": false,
+      "tournament_roster": false,
+      "tournament_availability": false,
+      "tournament_assignments": false,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": false,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": false,
+      "admin_users": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false
+    },
+    "ref": {
+      "tournaments_list": false,
+      "tournament_dashboard": false,
+      "tournament_schedule": false,
+      "tournament_roster": false,
+      "tournament_availability": false,
+      "tournament_assignments": false,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": false,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": false,
+      "admin_users": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false
+    },
+    "scorekeeper": {
+      "tournaments_list": false,
+      "tournament_dashboard": false,
+      "tournament_schedule": false,
+      "tournament_roster": false,
+      "tournament_availability": false,
+      "tournament_assignments": false,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": false,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": false,
+      "admin_users": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false
+    },
+    "parent": {
+      "tournaments_list": false,
+      "tournament_dashboard": false,
+      "tournament_schedule": false,
+      "tournament_roster": false,
+      "tournament_availability": false,
+      "tournament_assignments": false,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": false,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": false,
+      "admin_users": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false
+    },
+    "viewer": {
+      "tournaments_list": false,
+      "tournament_dashboard": false,
+      "tournament_schedule": false,
+      "tournament_roster": false,
+      "tournament_availability": false,
+      "tournament_assignments": false,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": false,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": false,
+      "admin_users": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false
+    },
+    "club_director": {
+      "tournaments_list": false,
+      "tournament_dashboard": false,
+      "tournament_schedule": false,
+      "tournament_roster": false,
+      "tournament_availability": false,
+      "tournament_assignments": false,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": false,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": false,
+      "admin_users": false,
+      "cd_overview": true,
+      "cd_players": true,
+      "cd_schedule": true,
+      "cd_billing": true
+    }
+  }
+}

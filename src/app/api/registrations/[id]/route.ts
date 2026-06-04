@@ -35,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           coachName: t.coachName || '',
           coachPhone: t.coachPhone || '',
           coachEmail: t.coachEmail || '',
+          logoUrl: t.logoUrl || '',
         })),
       },
     },

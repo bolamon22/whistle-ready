@@ -209,6 +209,7 @@ model RegisteredTeam {
   coachName      String
   coachPhone     String
   coachEmail     String
+  logoUrl        String @default("")
 
   registration TeamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
@@ -239,7 +240,8 @@ model PlayerRegistration {
   wantsUpdates         Boolean  @default(false)
   createdAt            DateTime @default(now())
 
-  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  tournament   Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  parentLinks  ParentPlayerLink[]
 
   @@index([tournamentId])
 }
@@ -259,6 +261,74 @@ model PaymentRecord {
 
   @@index([workerId])
   @@index([tournamentId])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String?
+  role      String   @default("viewer")
+  photoUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model UserTournamentFollow {
+  id           String   @id @default(cuid())
+  userId       String
+  tournamentId String
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, tournamentId])
+  @@index([userId])
+}
+
+model UserTeamFollow {
+  id           String   @id @default(cuid())
+  userId       String
+  tournamentId String
+  teamName     String
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, tournamentId, teamName])
+  @@index([userId])
+}
+
+model CoachProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  tournamentId String
+  teamName     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ClubDirectorLink {
+  id           String   @id @default(cuid())
+  userId       String
+  tournamentId String
+  clubName     String
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, tournamentId, clubName])
+  @@index([userId])
+}
+
+model ParentPlayerLink {
+  id                   String             @id @default(cuid())
+  userId               String
+  playerRegistrationId String
+  createdAt            DateTime           @default(now())
+
+  playerReg PlayerRegistration @relation(fields: [playerRegistrationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, playerRegistrationId])
+  @@index([userId])
 }
 
 model TournamentTransaction {

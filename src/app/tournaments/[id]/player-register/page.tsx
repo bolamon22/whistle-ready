@@ -18,6 +18,8 @@ export default function PlayerRegisterPage() {
   const [tournamentLogo, setTournamentLogo] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [teamsByDivision, setTeamsByDivision] = useState<Record<string, string[]>>({})
+  const [teamClubOther, setTeamClubOther] = useState('')
 
   // Player info
   const [playerName, setPlayerName] = useState('')
@@ -59,6 +61,25 @@ export default function PlayerRegisterPage() {
         if (d.logoUrl) setTournamentLogo(d.logoUrl)
       })
       .catch(() => {})
+
+    fetch(`/api/registrations?tournamentId=${tournamentId}`)
+      .then(r => r.json())
+      .then((regs: { teams: { teamName: string; clubName: string; division: string }[] }[]) => {
+        const byDiv: Record<string, Set<string>> = {}
+        regs.flatMap(r => r.teams).forEach(t => {
+          const div = t.division || 'Other'
+          const name = t.teamName || t.clubName
+          if (!name) return
+          if (!byDiv[div]) byDiv[div] = new Set()
+          byDiv[div].add(name)
+        })
+        const sorted: Record<string, string[]> = {}
+        Object.keys(byDiv).sort().forEach(div => {
+          sorted[div] = Array.from(byDiv[div]).sort()
+        })
+        setTeamsByDivision(sorted)
+      })
+      .catch(() => {})
   }, [tournamentId])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,7 +97,7 @@ export default function PlayerRegisterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tournamentId, playerName, playerEmail, usLacrosseNumber,
-          gender, dob, grade, teamClubName, jerseyNumber,
+          gender, dob, grade, teamClubName: teamClubName === '__other__' ? teamClubOther : teamClubName, jerseyNumber,
           parentName, parentEmail, parentPhone,
           parent2Name, parent2Email, parent2Phone,
           emergencyContactName, emergencyContactPhone,
@@ -183,8 +204,26 @@ export default function PlayerRegisterPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Team or Club Name <span className="text-red-500">*</span></label>
-                  <input required autoComplete="organization" value={teamClubName}
-                    onChange={e => setTeamClubName(e.target.value)} className={inputCls} />
+                  {Object.keys(teamsByDivision).length > 0 ? (
+                    <>
+                      <select required value={teamClubName} onChange={e => { setTeamClubName(e.target.value); if (e.target.value !== '__other__') setTeamClubOther('') }} className={inputCls}>
+                        <option value="">Please Select</option>
+                        {Object.entries(teamsByDivision).map(([div, teams]) => (
+                          <optgroup key={div} label={div}>
+                            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                          </optgroup>
+                        ))}
+                        <option value="__other__">Other (not listed)</option>
+                      </select>
+                      {teamClubName === '__other__' && (
+                        <input required autoComplete="organization" placeholder="Enter your team or club name"
+                          value={teamClubOther} onChange={e => setTeamClubOther(e.target.value)} className={`${inputCls} mt-2`} />
+                      )}
+                    </>
+                  ) : (
+                    <input required autoComplete="organization" value={teamClubName}
+                      onChange={e => setTeamClubName(e.target.value)} className={inputCls} />
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Player Jersey Number</label>

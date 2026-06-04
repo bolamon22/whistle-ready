@@ -1,445 +1,285 @@
 'use client'
-import { useEffect, useState } from 'react'
+
+import { useEffect, useState, useMemo } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
-interface Game {
-  id:string; gameNumber:string; date:string; startTime:string
-  division:string; pool:string|null; location:string
-  team1:string; team2:string; score1:number|null; score2:number|null
-  isChampionship:boolean; isCanceled:boolean
-}
 interface Tournament {
-  id:string; name:string; sport:string; startDate:string; endDate:string
-  location:string; dates:string; logoUrl:string
+  id: string; name: string; startDate: string; endDate: string
+  location: string; logoUrl: string; sport: string
 }
-interface TeamRecord { W:number; L:number; T:number; GF:number; GA:number }
-type DivStandings = Record<string, TeamRecord>
-type AllStandings = Record<string, DivStandings>
-
-function fTime(t:string){if(!t)return'';const[h,m]=t.split(':');const hr=parseInt(h);return`${hr%12||12}:${m} ${hr>=12?'PM':'AM'}`}
-function fDate(d:string){return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
-function fDateShort(d:string){return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
-function fField(f:string){return f.includes(' - ')?f.split(' - ').slice(1).join(' - ').trim():f}
-function pts(r:TeamRecord){return r.W*2+r.T}
-
-function buildStandings(games:Game[]):AllStandings {
-  const out:AllStandings={}
-  for(const g of games){
-    if(g.isCanceled||g.score1===null||g.score2===null)continue
-    const key=`${g.division}|||${g.pool??''}`
-    if(!out[key])out[key]={}
-    const add=(team:string,gf:number,ga:number)=>{
-      if(!out[key][team])out[key][team]={W:0,L:0,T:0,GF:0,GA:0}
-      out[key][team].GF+=gf;out[key][team].GA+=ga
-      if(gf>ga)out[key][team].W++
-      else if(gf<ga)out[key][team].L++
-      else out[key][team].T++
-    }
-    add(g.team1,g.score1,g.score2);add(g.team2,g.score2,g.score1)
-  }
-  return out
+interface Game {
+  id: string; gameNumber: string; date: string; startTime: string
+  division: string; pool: string | null; location: string
+  team1: string; team2: string
+  score1: number | null; score2: number | null
+  isCanceled: boolean; isChampionship: boolean
+}
+interface Standing {
+  team: string; w: number; l: number; t: number; gf: number; ga: number; pts: number
 }
 
-function gameResult(g:Game,team:string):'W'|'L'|'T'|null{
-  if(g.score1===null||g.score2===null)return null
-  const my=g.team1===team?g.score1:g.score2, opp=g.team1===team?g.score2:g.score1
-  return my>opp?'W':my<opp?'L':'T'
+function calcStandings(games: Game[], division: string): Standing[] {
+  const map: Record<string, Standing> = {}
+  const ensure = (t: string) => { if (!map[t]) map[t] = { team: t, w: 0, l: 0, t: 0, gf: 0, ga: 0, pts: 0 } }
+  games.filter(g => g.division === division && !g.isCanceled && !g.isChampionship && g.score1 !== null && g.score2 !== null)
+    .forEach(g => {
+      ensure(g.team1); ensure(g.team2)
+      const s1 = g.score1!, s2 = g.score2!
+      map[g.team1].gf += s1; map[g.team1].ga += s2
+      map[g.team2].gf += s2; map[g.team2].ga += s1
+      if (s1 > s2) { map[g.team1].w++; map[g.team1].pts += 3; map[g.team2].l++ }
+      else if (s2 > s1) { map[g.team2].w++; map[g.team2].pts += 3; map[g.team1].l++ }
+      else { map[g.team1].t++; map[g.team1].pts++; map[g.team2].t++; map[g.team2].pts++ }
+    })
+  return Object.values(map).sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga))
 }
 
-function sortStandings(entries:[string,TeamRecord][]){
-  return [...entries].sort((a,b)=>{
-    const pd=pts(b[1])-pts(a[1]);if(pd!==0)return pd
-    const wd=b[1].W-a[1].W;if(wd!==0)return wd
-    return(b[1].GF-b[1].GA)-(a[1].GF-a[1].GA)
-  })
-}
+export default function PublicTournamentPage() {
+  const { id } = useParams()
+  const [tournament, setTournament] = useState<Tournament | null>(null)
+  const [games, setGames] = useState<Game[]>([])
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'schedule' | 'standings'>('schedule')
+  const [filterDiv, setFilterDiv] = useState('ALL')
+  const [filterDate, setFilterDate] = useState('ALL')
+  const [filterTeam, setFilterTeam] = useState('ALL')
+  const [followedTeams, setFollowedTeams] = useState<string[]>([])
 
-// ── Standings table ──────────────────────────────────────────
-function StandingsTable({entries,onTeamClick,poolLabel}:{entries:[string,TeamRecord][];onTeamClick:(t:string)=>void;poolLabel?:string}){
-  return(
-    <div className="border border-slate-200 rounded-xl overflow-hidden">
-      {poolLabel&&(
-        <div className="text-center py-2.5 font-semibold text-sky-700 text-sm border-b border-slate-200 bg-white">{poolLabel}</div>
-      )}
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 bg-white">
-            <th className="text-left px-4 py-2.5 font-bold text-sky-700 text-sm">Team</th>
-            <th className="text-center px-4 py-2.5 font-bold text-sky-700 text-sm w-14">W</th>
-            <th className="text-center px-4 py-2.5 font-bold text-sky-700 text-sm w-14">L</th>
-            <th className="text-center px-4 py-2.5 font-bold text-sky-700 text-sm w-14">T</th>
-            <th className="text-center px-4 py-2.5 font-bold text-sky-700 text-sm w-14">GS</th>
-            <th className="text-center px-4 py-2.5 font-bold text-sky-700 text-sm w-14">GA</th>
-            <th className="text-center px-4 py-2.5 font-bold text-sky-700 text-sm w-14">Pts</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map(([name,r],i)=>(
-            <tr key={name} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/50'} hover:bg-sky-50/40 transition-colors`}>
-              <td className="px-4 py-3">
-                <button onClick={()=>onTeamClick(name)} className="font-medium text-slate-800 hover:text-sky-600 transition-colors text-left">{name}</button>
-              </td>
-              <td className="px-4 py-3 text-center text-slate-700">{r.W}</td>
-              <td className="px-4 py-3 text-center text-slate-700">{r.L}</td>
-              <td className="px-4 py-3 text-center text-slate-700">{r.T}</td>
-              <td className="px-4 py-3 text-center text-slate-700">{r.GF}</td>
-              <td className="px-4 py-3 text-center text-slate-700">{r.GA}</td>
-              <td className="px-4 py-3 text-center font-bold text-slate-800">{pts(r)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ── Schedule table ───────────────────────────────────────────
-function ScheduleTable({games,activeTeam,onTeamClick}:{games:Game[];activeTeam?:string;onTeamClick:(t:string)=>void}){
-  const byDate=games.reduce<Record<string,Game[]>>((acc,g)=>{
-    if(!acc[g.date])acc[g.date]=[];acc[g.date].push(g);return acc
-  },{})
-  const dates=Object.keys(byDate).sort()
-  if(games.length===0)return<div className="p-8 text-center text-slate-400 text-sm">No games found</div>
-  return(
-    <div className="space-y-4">
-      {dates.map(date=>(
-        <div key={date}>
-          <div className="bg-slate-700 text-white text-center text-sm font-semibold py-2 rounded-t-xl">{fDate(date)}</div>
-          <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl overflow-hidden">
-            <div className="grid grid-cols-[52px_80px_1fr_1fr_72px_1fr] gap-x-2 px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              <div>Game</div><div>Time</div><div>Location</div><div>Team</div><div className="text-center">Score</div><div>Team</div>
-            </div>
-            {byDate[date].map((g,i)=>{
-              const hs=g.score1!==null&&g.score2!==null
-              const t1w=hs&&g.score1!>g.score2!, t2w=hs&&g.score2!>g.score1!
-              return(
-                <div key={g.id} className={`grid grid-cols-[52px_80px_1fr_1fr_72px_1fr] gap-x-2 px-4 py-3 items-center text-sm ${i>0?'border-t border-slate-100':''} hover:bg-slate-50 ${g.isChampionship?'bg-amber-50/20':''}`}>
-                  <div className="text-slate-400 font-mono text-xs">{g.isChampionship?'★ ':''}{g.gameNumber}</div>
-                  <div className="font-semibold text-slate-700 text-xs">{fTime(g.startTime)}<div className="text-slate-400 font-normal">{fField(g.location)}</div></div>
-                  <div className="text-slate-400 text-xs leading-tight hidden sm:block">{g.location}</div>
-                  <button onClick={()=>onTeamClick(g.team1)} className={`font-semibold text-left truncate transition-colors hover:text-sky-600 ${activeTeam===g.team1?'text-sky-700':t1w?'text-emerald-700':t2w?'text-slate-400':'text-slate-800'}`}>{g.team1}</button>
-                  <div className="text-center">
-                    {hs
-                      ?<span className="font-bold tabular-nums text-xs"><span className={t1w?'text-emerald-600':t2w?'text-slate-400':'text-slate-600'}>{g.score1}</span><span className="text-slate-300 mx-0.5">–</span><span className={t2w?'text-emerald-600':t1w?'text-slate-400':'text-slate-600'}>{g.score2}</span></span>
-                      :<span className="text-slate-300 text-xs">–</span>
-                    }
-                  </div>
-                  <button onClick={()=>onTeamClick(g.team2)} className={`font-semibold text-left truncate transition-colors hover:text-sky-600 ${activeTeam===g.team2?'text-sky-700':t2w?'text-emerald-700':t1w?'text-slate-400':'text-slate-800'}`}>{g.team2}</button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Main ─────────────────────────────────────────────────────
-export default function PublicPage({params}:{params:{id:string}}){
-  const [tournament,setTournament]=useState<Tournament|null>(null)
-  const [games,setGames]=useState<Game[]>([])
-  const [loading,setLoading]=useState(true)
-  const [activeDivision,setActiveDivision]=useState<string|null>(null)
-  const [activePool,setActivePool]=useState<string|null>(null)   // null=not chosen yet, ''=no-pool games
-  const [activeTeam,setActiveTeam]=useState<string|null>(null)
-  const [view,setView]=useState<'standings'|'schedule'|'bracket'>('standings')
-  const [teamDateFilter,setTeamDateFilter]=useState('all')
-
-  useEffect(()=>{
+  useEffect(() => {
     Promise.all([
-      fetch(`/api/tournaments/${params.id}`).then(r=>r.json()),
-      fetch(`/api/tournaments/${params.id}/games`).then(r=>r.json()),
-    ]).then(([t,g])=>{
+      fetch(`/api/tournaments/${id}`).then(r => r.json()),
+      fetch(`/api/tournaments/${id}/games`).then(r => r.json()),
+    ]).then(([t, g]) => {
       setTournament(t)
-      setGames((g as Game[]).filter((x:Game)=>!x.isCanceled&&x.startTime&&x.location))
+      setGames(Array.isArray(g) ? g : [])
       setLoading(false)
     })
-  },[params.id])
+    try {
+      const saved = JSON.parse(localStorage.getItem(`follows-${id}`) || '[]')
+      setFollowedTeams(saved)
+    } catch {}
+  }, [id])
 
-  if(loading)return(
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-3">
-      <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"/>
-      <p className="text-slate-400 text-sm">Loading…</p>
+  const toggleFollow = (team: string) => {
+    setFollowedTeams(prev => {
+      const next = prev.includes(team) ? prev.filter(t => t !== team) : [...prev, team]
+      localStorage.setItem(`follows-${id}`, JSON.stringify(next))
+      return next
+    })
+  }
+
+  const divisions = useMemo(() => ['ALL', ...Array.from(new Set(games.map(g => g.division).filter(Boolean))).sort()], [games])
+  const dates = useMemo(() => ['ALL', ...Array.from(new Set(games.map(g => g.date).filter(Boolean))).sort()], [games])
+  const allTeams = useMemo(() => Array.from(new Set(games.flatMap(g => [g.team1, g.team2]).filter(Boolean))).sort(), [games])
+
+  const filteredGames = useMemo(() => games
+    .filter(g => !g.isCanceled)
+    .filter(g => filterDiv === 'ALL' || g.division === filterDiv)
+    .filter(g => filterDate === 'ALL' || g.date === filterDate)
+    .filter(g => filterTeam === 'ALL' || g.team1 === filterTeam || g.team2 === filterTeam)
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1
+      return a.startTime < b.startTime ? -1 : 1
+    }), [games, filterDiv, filterDate, filterTeam])
+
+  const divisionGroups = useMemo(() => {
+    const divs = filterDiv === 'ALL'
+      ? Array.from(new Set(filteredGames.map(g => g.division))).sort()
+      : [filterDiv]
+    return divs
+  }, [filteredGames, filterDiv])
+
+  const standingDivisions = useMemo(() =>
+    Array.from(new Set(games.filter(g => !g.isCanceled).map(g => g.division))).sort(), [games])
+
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-gray-400">Loading…</div>
     </div>
   )
-  if(!tournament)return<div className="p-8 text-red-500">Not found</div>
 
-  const dates:string[]=JSON.parse(tournament.dates||'[]')
-  const allDivisions=[...new Set(games.map(g=>g.division))].sort()
-  const standings=buildStandings(games)
-
-  // Navigation helpers
-  function goDivision(div:string){
-    setActiveDivision(div);setActivePool(null);setActiveTeam(null);setView('standings')
-  }
-  function goPool(pool:string|null){
-    setActivePool(pool??'');setActiveTeam(null);setView('standings')
-  }
-  function goTeam(team:string){setActiveTeam(team);setTeamDateFilter('all')}
-  function goBack(){
-    if(activeTeam){setActiveTeam(null);return}
-    if(activePool!==null){setActivePool(null);return}
-    setActiveDivision(null)
-  }
-
-  // Derived data for current division
-  const divGames=activeDivision?games.filter(g=>g.division===activeDivision):[]
-  const divPools=[...new Set(divGames.map(g=>g.pool))].sort() // includes null
-  const hasMultiplePools=divPools.filter(p=>p!==null).length>1
-
-  // Pool-scoped games
-  const poolGames=activeDivision&&activePool!==null
-    ? divGames.filter(g=>(g.pool??'')===(activePool??''))
-    : []
-
-  const poolKey=`${activeDivision}|||${activePool??''}`
-  const poolStandingEntries=standings[poolKey]?sortStandings(Object.entries(standings[poolKey])):[]
-  const poolTeams=[...new Set(poolGames.flatMap(g=>[g.team1,g.team2]))].sort()
-  const completed=poolGames.filter(g=>g.score1!==null&&g.score2!==null).length
-
-  // Team games (across the whole division, not just one pool)
-  const teamGames=activeTeam
-    ? divGames.filter(g=>g.team1===activeTeam||g.team2===activeTeam)
-        .filter(g=>teamDateFilter==='all'||g.date===teamDateFilter)
-        .sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime))
-    : []
-  const teamDates=[...new Set((activeTeam?divGames.filter(g=>g.team1===activeTeam||g.team2===activeTeam):[] ).map(g=>g.date))].sort()
-
-  // Find team record across all pools in this division
-  const teamRecord=activeTeam&&activeDivision
-    ? Object.entries(standings)
-        .filter(([k])=>k.startsWith(`${activeDivision}|||`))
-        .flatMap(([,d])=>Object.entries(d))
-        .filter(([n])=>n===activeTeam)
-        .reduce<TeamRecord|null>((acc,[,r])=>acc?{W:acc.W+r.W,L:acc.L+r.L,T:acc.T+r.T,GF:acc.GF+r.GF,GA:acc.GA+r.GA}:r, null)
-    : null
-
-  // ── Shared sticky header ──
-  const Breadcrumb=()=>(
-    <div className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-      <div className="max-w-5xl mx-auto px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-sm flex-wrap min-w-0">
-            {tournament.logoUrl && <img src={tournament.logoUrl} alt="logo" className="h-7 w-7 object-contain rounded shrink-0" />}
-            {tournament.sport&&<span className="text-xs font-bold text-sky-600 uppercase tracking-wider shrink-0">{tournament.sport}</span>}
-            <span className="text-sky-400 shrink-0">·</span>
-            <span className="font-bold text-slate-900 truncate">{tournament.name}</span>
-            {activeDivision&&<><span className="text-slate-300 shrink-0">›</span><button onClick={()=>{setActiveDivision(null);setActivePool(null);setActiveTeam(null)}} className="text-slate-500 hover:text-sky-600 transition-colors shrink-0">{activeDivision}</button></>}
-            {activePool!==null&&!activeTeam&&<><span className="text-slate-300 shrink-0">›</span><span className="text-slate-700 font-medium shrink-0">{activePool?`Pool ${activePool}`:'Schedule'}</span></>}
-            {activeTeam&&<><span className="text-slate-300 shrink-0">›</span><button onClick={()=>setActiveTeam(null)} className="text-slate-500 hover:text-sky-600 transition-colors truncate">{activePool?`Pool ${activePool}`:'Schedule'}</button><span className="text-slate-300 shrink-0">›</span><span className="text-slate-700 font-medium truncate">{activeTeam}</span></>}
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+          {tournament?.logoUrl && (
+            <img src={tournament.logoUrl} alt="logo" className="h-10 w-10 object-contain rounded-xl border border-gray-100 flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-bold text-gray-800 truncate">{tournament?.name}</h1>
+            <p className="text-xs text-gray-400">{tournament?.location} · {tournament?.startDate}{tournament?.endDate && ` – ${tournament.endDate}`}</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {(activeDivision||activeTeam)&&<button onClick={goBack} className="text-xs text-slate-400 hover:text-slate-700 transition-colors">← Back</button>}
-            <Link href={`/tournaments/${params.id}`} className="text-xs text-slate-300 hover:text-slate-500 transition-colors">Admin ↗</Link>
-          </div>
+          <Link href={`/tournaments/${id}/player-register`} target="_blank"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg flex-shrink-0">
+            Register →
+          </Link>
         </div>
-        {/* Tournament meta (collapsed once drilling) */}
-        {!activeDivision&&(
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-            {(tournament.startDate||dates.length>0)&&(
-              <span className="text-xs text-slate-500">
-                {tournament.startDate
-                  ?(tournament.endDate&&tournament.endDate!==tournament.startDate?`${tournament.startDate} – ${tournament.endDate}`:tournament.startDate)
-                  :dates.map(d=>fDateShort(d)).join(' & ')}
-              </span>
-            )}
-            {tournament.location&&<span className="text-xs text-slate-500">· {tournament.location}</span>}
-          </div>
-        )}
+        <div className="max-w-5xl mx-auto px-4 flex gap-1">
+          {(['schedule', 'standings'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {t === 'schedule' ? '📅 Schedule' : '🏆 Standings'}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  )
 
-  // ── 1. DIVISION HOME ──────────────────────────────────────
-  if(!activeDivision){
-    const totalDone=games.filter(g=>g.score1!==null&&g.score2!==null).length
-    return(
-      <div className="min-h-screen bg-slate-50">
-        <Breadcrumb/>
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-            {[
-              {label:'Divisions',val:allDivisions.length,color:'text-slate-800'},
-              {label:'Total Games',val:games.length,color:'text-slate-800'},
-              {label:'Completed',val:totalDone,color:'text-emerald-600'},
-              {label:'Remaining',val:games.length-totalDone,color:'text-sky-600'},
-            ].map(s=>(
-              <div key={s.label} className="bg-white rounded-xl border border-slate-200 py-4 text-center shadow-sm">
-                <div className={`text-2xl font-bold ${s.color}`}>{s.val}</div>
-                <div className="text-xs text-slate-400 mt-0.5">{s.label}</div>
+      <div className="max-w-5xl mx-auto px-4 py-5">
+
+        {tab === 'schedule' && (
+          <>
+            {/* Filters */}
+            <div className="flex gap-2 flex-wrap mb-4">
+              <select value={filterDiv} onChange={e => setFilterDiv(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {divisions.map(d => <option key={d} value={d}>{d === 'ALL' ? 'All Divisions' : d}</option>)}
+              </select>
+              <select value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {dates.map(d => <option key={d} value={d}>{d === 'ALL' ? 'All Dates' : d}</option>)}
+              </select>
+              <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="ALL">All Teams</option>
+                {allTeams.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              {(filterDiv !== 'ALL' || filterDate !== 'ALL' || filterTeam !== 'ALL') && (
+                <button onClick={() => { setFilterDiv('ALL'); setFilterDate('ALL'); setFilterTeam('ALL') }}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline">Clear</button>
+              )}
+              <span className="text-sm text-gray-400 self-center">{filteredGames.length} games</span>
+            </div>
+
+            {/* Followed teams */}
+            {followedTeams.length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-4 items-center">
+                <span className="text-xs text-gray-400">⭐ Following:</span>
+                {followedTeams.map(t => (
+                  <button key={t} onClick={() => setFilterTeam(filterTeam === t ? 'ALL' : t)}
+                    className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${filterTeam === t ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
+                    {t}
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Select a Division</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {allDivisions.map(div=>{
-              const dg=games.filter(g=>g.division===div)
-              const dc=dg.filter(g=>g.score1!==null&&g.score2!==null).length
-              const pools=[...new Set(dg.map(g=>g.pool))].filter(Boolean)
-              const allDivStandingEntries=Object.entries(standings)
-                .filter(([k])=>k.startsWith(`${div}|||`))
-                .flatMap(([,d])=>Object.entries(d))
-              const leader=allDivStandingEntries.length
-                ? [...allDivStandingEntries].sort((a,b)=>pts(b[1])-pts(a[1]))[0]
-                : null
-              return(
-                <button key={div} onClick={()=>goDivision(div)}
-                  className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm text-left hover:border-sky-400 hover:shadow-md transition-all group">
-                  <div className="font-bold text-slate-800 group-hover:text-sky-700 transition-colors leading-tight mb-1">{div}</div>
-                  {pools.length>0&&<div className="text-xs text-slate-400 mb-1">{pools.length} pool{pools.length!==1?'s':''}</div>}
-                  <div className="text-xs text-slate-400">{dg.length} games{dc>0?` · ${dc} done`:''}</div>
-                  {leader&&dc>0&&<div className="text-xs text-slate-500 mt-2 font-medium truncate">🏅 {leader[0]}</div>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        <div className="text-center py-6 text-xs text-slate-300">Powered by GameDay Staff</div>
-      </div>
-    )
-  }
+            )}
 
-  // ── 2. POOL PICKER ────────────────────────────────────────
-  if(activeDivision&&activePool===null){
-    const pools=[...new Set(divGames.map(g=>g.pool))].sort()
-    // If no pools at all, skip straight into the single "pool"
-    if(pools.length===1&&pools[0]===null){goPool(null);return null}
-
-    return(
-      <div className="min-h-screen bg-slate-50">
-        <Breadcrumb/>
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Select a Pool</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {pools.filter(p=>p!==null).map(pool=>{
-              const pg=divGames.filter(g=>g.pool===pool)
-              const dc=pg.filter(g=>g.score1!==null&&g.score2!==null).length
-              const key=`${activeDivision}|||${pool}`
-              const se=standings[key]?sortStandings(Object.entries(standings[key])):[]
-              return(
-                <button key={pool} onClick={()=>goPool(pool)}
-                  className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-left hover:border-sky-400 hover:shadow-md transition-all group">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pool</div>
-                  <div className="text-2xl font-bold text-slate-800 group-hover:text-sky-700 transition-colors mb-2">{pool}</div>
-                  <div className="text-xs text-slate-400">{pg.length} games{dc>0?` · ${dc} done`:''}</div>
-                  {se.length>0&&dc>0&&(
-                    <div className="mt-3 space-y-0.5">
-                      {se.slice(0,3).map(([name,r],i)=>(
-                        <div key={name} className="flex items-center justify-between text-xs">
-                          <span className={`truncate ${i===0?'font-bold text-slate-700':'text-slate-500'}`}>{i+1}. {name}</span>
-                          <span className="text-sky-600 font-semibold ml-2">{pts(r)}pts</span>
+            {/* Games by division */}
+            {divisionGroups.map(div => {
+              const divGames = filteredGames.filter(g => g.division === div)
+              if (!divGames.length) return null
+              return (
+                <div key={div} className="mb-6">
+                  <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">{div}</h2>
+                  <div className="space-y-2">
+                    {divGames.map(g => {
+                      const hasScore = g.score1 !== null && g.score2 !== null
+                      const isHighlighted = followedTeams.includes(g.team1) || followedTeams.includes(g.team2)
+                      return (
+                        <div key={g.id} className={`bg-white border rounded-xl overflow-hidden ${isHighlighted ? 'border-blue-300 shadow-sm' : 'border-gray-200'}`}>
+                          <div className="px-4 py-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <span>{g.date}</span>·
+                                <span className="font-semibold text-gray-600">{g.startTime}</span>·
+                                <span>{g.location}</span>
+                                {g.isChampionship && <span className="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-semibold">🏆 Championship</span>}
+                              </div>
+                              <span className="text-xs text-gray-300">#{g.gameNumber}</span>
+                            </div>
+                            <div className="space-y-1">
+                              {[{team: g.team1, score: g.score1, opp: g.score2}, {team: g.team2, score: g.score2, opp: g.score1}].map(({team, score, opp}) => (
+                                <div key={team} className={`flex items-center justify-between rounded-lg px-3 py-2 ${hasScore && score! > opp! ? 'bg-green-50' : hasScore && score! < opp! ? 'bg-red-50/40' : 'bg-gray-50'}`}>
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={() => toggleFollow(team)} className="text-sm hover:scale-110 transition-transform">
+                                      {followedTeams.includes(team) ? '⭐' : '☆'}
+                                    </button>
+                                    <span className={`font-semibold text-sm ${hasScore && score! > opp! ? 'text-green-700' : 'text-gray-800'}`}>{team}</span>
+                                  </div>
+                                  {hasScore && <span className={`text-xl font-bold ${score! > opp! ? 'text-green-700' : 'text-gray-500'}`}>{score}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </button>
+                      )
+                    })}
+                  </div>
+                </div>
               )
             })}
-            {/* Also show no-pool games if any */}
-            {divGames.some(g=>g.pool===null)&&(
-              <button onClick={()=>goPool(null)}
-                className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-left hover:border-sky-400 hover:shadow-md transition-all group">
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Games</div>
-                <div className="text-2xl font-bold text-slate-800 group-hover:text-sky-700 transition-colors mb-2">All</div>
-                <div className="text-xs text-slate-400">{divGames.filter(g=>g.pool===null).length} games</div>
-              </button>
+            {filteredGames.length === 0 && (
+              <div className="text-center py-16 text-gray-400">
+                <div className="text-4xl mb-3">📅</div>
+                <p>No games found for the selected filters.</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* STANDINGS */}
+        {tab === 'standings' && (
+          <div className="space-y-6">
+            {standingDivisions.map(div => {
+              const standings = calcStandings(games, div)
+              if (!standings.length) return null
+              return (
+                <div key={div}>
+                  <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">{div}</h2>
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-4 py-3 text-gray-500 font-semibold">Team</th>
+                          <th className="text-center px-3 py-3 text-gray-500 font-semibold w-10">W</th>
+                          <th className="text-center px-3 py-3 text-gray-500 font-semibold w-10">L</th>
+                          <th className="text-center px-3 py-3 text-gray-500 font-semibold w-10">T</th>
+                          <th className="text-center px-3 py-3 text-gray-500 font-semibold w-12">GF</th>
+                          <th className="text-center px-3 py-3 text-gray-500 font-semibold w-12">GA</th>
+                          <th className="text-center px-3 py-3 text-gray-500 font-semibold w-12">+/-</th>
+                          <th className="text-center px-3 py-3 text-gray-500 font-semibold w-12">Pts</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {standings.map((s, i) => (
+                          <tr key={s.team} className={`hover:bg-gray-50 ${i === 0 ? 'bg-yellow-50/50' : ''}`}>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-xs text-gray-400 w-5 inline-block text-center">{i+1}</span>}</span>
+                                <span className="font-medium text-gray-800">{s.team}</span>
+                                {followedTeams.includes(s.team) && <span className="text-xs">⭐</span>}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-center font-semibold text-green-700">{s.w}</td>
+                            <td className="px-3 py-3 text-center font-semibold text-red-600">{s.l}</td>
+                            <td className="px-3 py-3 text-center text-gray-500">{s.t}</td>
+                            <td className="px-3 py-3 text-center text-gray-600">{s.gf}</td>
+                            <td className="px-3 py-3 text-center text-gray-600">{s.ga}</td>
+                            <td className={`px-3 py-3 text-center font-medium ${s.gf-s.ga > 0 ? 'text-green-600' : s.gf-s.ga < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                              {s.gf-s.ga > 0 ? '+' : ''}{s.gf-s.ga}
+                            </td>
+                            <td className="px-3 py-3 text-center font-bold text-blue-700">{s.pts}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="px-4 py-2 text-xs text-gray-400 bg-gray-50 border-t border-gray-100">
+                      W=3pts · T=1pt · Championship games excluded
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {standingDivisions.length === 0 && (
+              <div className="text-center py-16 text-gray-400">
+                <div className="text-4xl mb-3">🏆</div>
+                <p>Standings appear once games have scores.</p>
+              </div>
             )}
           </div>
-        </div>
-        <div className="text-center py-6 text-xs text-slate-300">Powered by GameDay Staff</div>
-      </div>
-    )
-  }
-
-  // ── 3. TEAM DETAIL ────────────────────────────────────────
-  if(activeDivision&&activePool!==null&&activeTeam){
-    return(
-      <div className="min-h-screen bg-slate-50">
-        <Breadcrumb/>
-        <div className="max-w-5xl mx-auto px-4 py-6">
-          {/* Team header */}
-          <div className="mb-5">
-            <h2 className="text-2xl font-bold text-slate-900">{activeTeam}</h2>
-            <div className="flex items-center gap-3 flex-wrap mt-1">
-              <span className="text-slate-500 text-sm">{activeDivision}{activePool?` · Pool ${activePool}`:''}</span>
-              {teamRecord&&<span className="text-sm font-semibold text-slate-600">{teamRecord.W}–{teamRecord.L}{teamRecord.T>0?`–${teamRecord.T}`:''} · {pts(teamRecord)} pts</span>}
-            </div>
-          </div>
-          {teamRecord&&(
-            <div className="grid grid-cols-4 gap-3 mb-6">
-              {[{label:'Wins',val:teamRecord.W,color:'text-emerald-600'},{label:'Losses',val:teamRecord.L,color:'text-red-500'},{label:'Ties',val:teamRecord.T,color:'text-slate-500'},{label:'Points',val:pts(teamRecord),color:'text-sky-600'}].map(s=>(
-                <div key={s.label} className="bg-white rounded-xl border border-slate-200 py-3 text-center shadow-sm">
-                  <div className={`text-2xl font-bold ${s.color}`}>{s.val}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">{s.label}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Date filter */}
-          {teamDates.length>1&&(
-            <div className="flex gap-2 mb-4 flex-wrap">
-              <button onClick={()=>setTeamDateFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${teamDateFilter==='all'?'bg-sky-600 text-white':'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>All Dates</button>
-              {teamDates.map(d=><button key={d} onClick={()=>setTeamDateFilter(d)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${teamDateFilter===d?'bg-sky-600 text-white':'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>{fDateShort(d)}</button>)}
-            </div>
-          )}
-          <ScheduleTable games={teamGames} activeTeam={activeTeam} onTeamClick={t=>{if(t!==activeTeam)goTeam(t)}}/>
-        </div>
-        <div className="text-center py-6 text-xs text-slate-300">Powered by GameDay Staff</div>
-      </div>
-    )
-  }
-
-  // ── 4. POOL DETAIL ────────────────────────────────────────
-  return(
-    <div className="min-h-screen bg-slate-50">
-      <Breadcrumb/>
-      <div className="max-w-5xl mx-auto px-4 py-6">
-
-        {/* View tabs */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex gap-1 bg-slate-200 rounded-lg p-1">
-            {(['standings','schedule','bracket'] as const).map(v=>(
-              <button key={v} onClick={()=>setView(v)} className={`px-4 py-1.5 rounded-md text-sm font-semibold capitalize transition-colors ${view===v?'bg-white text-slate-800 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>{v}</button>
-            ))}
-          </div>
-          {poolGames.length>0&&(
-            <div className="ml-auto text-xs text-slate-400">
-              {completed}/{poolGames.length} games completed
-              <span className="inline-block ml-2 w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden align-middle">
-                <span className="block h-full bg-emerald-500 rounded-full" style={{width:`${Math.round(completed/poolGames.length*100)}%`}}/>
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Standings */}
-        {view==='standings'&&(
-          <div>
-            {poolStandingEntries.length===0
-              ?<div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400 text-sm">No completed games yet — standings will appear here once scores are posted</div>
-              :<StandingsTable entries={poolStandingEntries} onTeamClick={goTeam} poolLabel={activePool?`Pool ${activePool}`:activeDivision??undefined}/>
-            }
-            <p className="text-xs text-slate-400 mt-2 text-center">W=Win(2pts) · T=Tie(1pt) · L=Loss · GS=Goals Scored · GA=Goals Against · Pts=Points</p>
-          </div>
         )}
-
-        {/* Schedule */}
-        {view==='schedule'&&(
-          <ScheduleTable games={poolGames.sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime)||a.location.localeCompare(b.location))} onTeamClick={goTeam}/>
-        )}
-
-        {/* Bracket */}
-        {view==='bracket'&&(
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
-            <div className="text-5xl mb-4">🏆</div>
-            <h2 className="text-xl font-bold text-slate-700 mb-2">Bracket Coming Soon</h2>
-            <p className="text-slate-400 text-sm max-w-xs mx-auto">Playoff bracket will be posted once pool play is complete.</p>
-          </div>
-        )}
-
       </div>
-      <div className="text-center py-6 text-xs text-slate-300">Powered by GameDay Staff</div>
     </div>
   )
 }

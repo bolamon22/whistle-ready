@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
           coachName: t.coachName || '',
           coachPhone: t.coachPhone || '',
           coachEmail: t.coachEmail || '',
+          logoUrl: t.logoUrl || '',
         })),
       },
     },

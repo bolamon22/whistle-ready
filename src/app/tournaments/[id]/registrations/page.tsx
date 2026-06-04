@@ -7,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 
 interface RegisteredTeam {
   id: string; clubName: string; teamName: string; division: string
-  coachName: string; coachPhone: string; coachEmail: string
+  coachName: string; coachPhone: string; coachEmail: string; logoUrl: string
 }
 interface RegistrationPayment {
   id: string; amount: number; method: string; checkNumber: string
@@ -20,7 +20,7 @@ interface Registration {
   invoiceAmount: number; discountAmount: number; discountNote: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
-interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string }
+interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string }
 interface Pricing { tier1: number; tier1Max: number; tier2: number; tier2Max: number; tier3: number; sevenVSeven: number }
 
 const DEFAULT_PRICING: Pricing = { tier1: 1495, tier1Max: 3, tier2: 1450, tier2Max: 6, tier3: 1395, sevenVSeven: 1095 }
@@ -29,7 +29,7 @@ const DEFAULT_DIVISIONS = [
   'Girls 2030','Girls 2029','Girls 2028','Girls 2027','Girls 2026','Girls 2025','Girls 2024','Girls 2023',
   'HS Boys JV','HS Boys Varsity','HS Girls JV','HS Girls Varsity',
 ]
-const emptyTeam = (): TeamRow => ({ clubName: '', teamName: '', division: '', coachName: '', coachPhone: '', coachEmail: '' })
+const emptyTeam = (): TeamRow => ({ clubName: '', teamName: '', division: '', coachName: '', coachPhone: '', coachEmail: '', logoUrl: '' })
 const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
 const smallInputCls = "w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
 const payLabel = (m: string) => m === 'credit_card' ? 'Credit Card' : m === 'zelle' ? 'Zelle' : 'Check'
@@ -106,6 +106,19 @@ export default function RegistrationsPage() {
   const [invoiceAmount, setInvoiceAmount] = useState(0)
   const [discountAmount, setDiscountAmount] = useState(0)
   const [discountNote, setDiscountNote] = useState('')
+  const [logoUploading, setLogoUploading] = useState<number | null>(null)
+
+  const uploadTeamLogo = async (i: number, file: File) => {
+    setLogoUploading(i)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const { url } = await res.json()
+      setTeams(prev => prev.map((t, idx) => idx === i ? { ...t, logoUrl: url } : t))
+      toast.success('Logo uploaded!')
+    } catch { toast.error('Upload failed') }
+    finally { setLogoUploading(null) }
+  }
 
   // Import
   const importFileRef = useRef<HTMLInputElement>(null)
@@ -200,7 +213,7 @@ export default function RegistrationsPage() {
     setClubBasedIn(reg.clubBasedIn); setClubWebsite(reg.clubWebsite)
     setNeedsHotel(reg.needsHotel); setPaymentMethod(reg.paymentMethod); setNotes(reg.notes)
     setInvoiceAmount(reg.invoiceAmount); setDiscountAmount(reg.discountAmount); setDiscountNote(reg.discountNote)
-    setTeams(reg.teams.map(t => ({ clubName: t.clubName, teamName: t.teamName, division: t.division, coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail })))
+    setTeams(reg.teams.map(t => ({ clubName: t.clubName, teamName: t.teamName, division: t.division, coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail, logoUrl: (t as any).logoUrl || '' })))
     setShowForm(true)
   }
 
@@ -493,7 +506,12 @@ export default function RegistrationsPage() {
                                 <td className="px-3 py-2 text-gray-500">{r.contactEmail}</td>
                                 <td className="px-3 py-2">
                                   {r.teams.length > 0
-                                    ? r.teams.map((t,ti) => <div key={ti} className="text-gray-600">{t.teamName} <span className="text-gray-400">({t.division})</span></div>)
+                                    ? r.teams.map((t,ti) => (
+                                        <div key={ti} className="flex items-center gap-1.5 text-gray-600">
+                                          {t.logoUrl && <img src={t.logoUrl} alt="" className="h-4 w-4 object-contain rounded" />}
+                                          {t.teamName} <span className="text-gray-400">({t.division})</span>
+                                        </div>
+                                      ))
                                     : <span className="text-gray-400">No teams</span>}
                                 </td>
                                 <td className="px-3 py-2 text-gray-500">{r.needsHotel}</td>
@@ -688,6 +706,21 @@ export default function RegistrationsPage() {
                               )}
                             </div>
                           ))}
+                        </div>
+                        {/* Team logo */}
+                        <div className="mt-2 flex items-center gap-3">
+                          {team.logoUrl && (
+                            <img src={team.logoUrl} alt="logo" className="h-10 w-10 object-contain rounded-lg border border-gray-200 bg-white" />
+                          )}
+                          <label className="cursor-pointer text-xs text-blue-600 border border-blue-200 hover:bg-blue-50 rounded-lg px-2.5 py-1.5 font-medium">
+                            {logoUploading === i ? 'Uploading…' : team.logoUrl ? '🔄 Replace Logo' : '📁 Upload Team Logo'}
+                            <input type="file" accept="image/*" className="hidden" disabled={logoUploading === i}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) uploadTeamLogo(i, f) }} />
+                          </label>
+                          {team.logoUrl && (
+                            <button type="button" onClick={() => setTeams(prev => prev.map((t, idx) => idx === i ? { ...t, logoUrl: '' } : t))}
+                              className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                          )}
                         </div>
                       </div>
                     ))}

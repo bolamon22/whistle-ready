@@ -21,6 +21,7 @@ interface DashData {
     byDivision: Record<string, number>
     hotelYes: number; hotelMaybe: number
   }
+  playerCount: number
 }
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -102,7 +103,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
             <NavTile href={`/tournaments/${id}`} icon="📅" label="Schedule" sub={`${games.active} games`} />
             <NavTile href={`/tournaments/${id}/registrations`} icon="📋" label="Team Reg" sub={`${reg.clubs} clubs`} color="hover:border-purple-300 hover:bg-purple-50" />
-            <NavTile href={`/tournaments/${id}/player-registrations`} icon="📄" label="Players" sub={`View entries`} color="hover:border-teal-300 hover:bg-teal-50" />
+            <NavTile href={`/tournaments/${id}/player-registrations`} icon="📄" label="Players" sub={data.playerCount ? `${data.playerCount} registered` : `View entries`} color="hover:border-teal-300 hover:bg-teal-50" />
             <NavTile href={`/tournaments/${id}/roster`} icon="👥" label="Staff" sub={`${staff.onRoster} rostered`} />
             <NavTile href={`/tournaments/${id}/pay-summary`} icon="💰" label="Pay" sub="Staff pay" color="hover:border-amber-300 hover:bg-amber-50" />
             <NavTile href={`/tournaments/${id}/financials`} icon="📊" label="Financials" sub="P&L" color="hover:border-green-300 hover:bg-green-50" />

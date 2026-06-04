@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatDate } from '@/lib/utils'
+import { useSession } from 'next-auth/react'
 
 interface Tournament {
   id:string; name:string; sport:string; startDate:string; endDate:string
@@ -13,7 +14,17 @@ interface Tournament {
 const SPORTS = ['Lacrosse','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
 const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50' }
 
+const ADMIN_LINKS = [
+  { label: '👥 User Management',    href: '/admin/users',              desc: 'Add, edit, delete users and assign roles' },
+  { label: '🔐 Permissions',        href: '/admin/permissions',        desc: 'Control what each role can access' },
+  { label: '🏒 Club Director View', href: '/dashboard/club-director',  desc: 'Preview the Club Director dashboard' },
+  { label: '👤 My Profile',         href: '/profile',                  desc: 'Edit your name, email and password' },
+]
+
 export default function HomePage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === 'admin'
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -97,7 +108,38 @@ export default function HomePage() {
           <h1 className="section-title">Tournaments</h1>
           <p className="text-sm text-slate-500 mt-1">Manage staff scheduling for each tournament</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>+ New Tournament</button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <div className="relative">
+              <button
+                onClick={() => setShowAdminPanel(v => !v)}
+                className={`border px-4 py-2 rounded-lg text-sm font-medium transition-colors ${showAdminPanel ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>
+                ⚙ Admin
+              </button>
+              {showAdminPanel && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowAdminPanel(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Admin Tools</p>
+                    </div>
+                    <div className="p-2">
+                      {ADMIN_LINKS.map(link => (
+                        <Link key={link.href} href={link.href}
+                          onClick={() => setShowAdminPanel(false)}
+                          className="flex flex-col px-3 py-3 rounded-xl hover:bg-slate-50 transition-colors group">
+                          <span className="text-sm font-semibold text-slate-700 group-hover:text-sky-600">{link.label}</span>
+                          <span className="text-xs text-slate-400 mt-0.5">{link.desc}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <button className="btn-primary" onClick={() => setShowForm(!showForm)}>+ New Tournament</button>
+        </div>
       </div>
 
       {showForm && (

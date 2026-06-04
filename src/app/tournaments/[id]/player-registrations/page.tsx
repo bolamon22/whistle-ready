@@ -66,25 +66,57 @@ export default function PlayerRegistrationsPage() {
   const [tournamentName, setTournamentName] = useState('')
   const [tournamentLogo, setTournamentLogo] = useState('')
   const [search, setSearch] = useState('')
+  const [filterGender, setFilterGender] = useState('')
+  const [filterGrade, setFilterGrade] = useState('')
+  const [filterHotel, setFilterHotel] = useState('')
+  const [filterTeam, setFilterTeam] = useState('')
+  const [filterDivision, setFilterDivision] = useState('')
+  const [teamDivisionMap, setTeamDivisionMap] = useState<Record<string, string>>({})
 
   const load = () => {
     Promise.all([
       fetch(`/api/player-registrations?tournamentId=${tournamentId}`).then(r => r.json()),
       fetch(`/api/tournaments/${tournamentId}`).then(r => r.json()),
-    ]).then(([regs, t]) => {
+      fetch(`/api/registrations?tournamentId=${tournamentId}`).then(r => r.json()),
+    ]).then(([regs, t, teamRegs]) => {
       setPlayers(regs)
       setTournamentName(t.name || '')
       if (t.logoUrl) setTournamentLogo(t.logoUrl)
+      // Build team name → division map
+      const map: Record<string, string> = {}
+      teamRegs.forEach((r: { teams: { teamName: string; clubName: string; division: string }[] }) => {
+        r.teams.forEach(team => {
+          const name = team.teamName || team.clubName
+          if (name && team.division) map[name] = team.division
+        })
+      })
+      setTeamDivisionMap(map)
       setLoading(false)
     }).catch(() => setLoading(false))
   }
 
   useEffect(() => { load() }, [tournamentId])
 
-  const filtered = players.filter(p =>
-    !search || [p.playerName, p.teamClubName, p.parentName, p.parentEmail, p.grade, p.gender]
-      .some(v => v.toLowerCase().includes(search.toLowerCase()))
-  )
+  const getDivision = (p: PlayerRegistration) => teamDivisionMap[p.teamClubName] || ''
+
+  const filtered = players.filter(p => {
+    if (search && ![p.playerName, p.teamClubName, p.parentName, p.parentEmail, p.grade, p.gender]
+      .some(v => v.toLowerCase().includes(search.toLowerCase()))) return false
+    if (filterGender && p.gender !== filterGender) return false
+    if (filterGrade && p.grade !== filterGrade) return false
+    if (filterHotel && p.needsHotel !== filterHotel) return false
+    if (filterTeam && p.teamClubName !== filterTeam) return false
+    if (filterDivision && getDivision(p) !== filterDivision) return false
+    return true
+  })
+
+  const allGrades = Array.from(new Set(players.map(p => p.grade).filter(Boolean))).sort((a, b) => {
+    const order = ['K','1','2','3','4','5','6','7','8','9','10','11','12']
+    return order.indexOf(a) - order.indexOf(b)
+  })
+  const allTeams = Array.from(new Set(players.map(p => p.teamClubName).filter(Boolean))).sort()
+  const allDivisions = Array.from(new Set(players.map(p => getDivision(p)).filter(Boolean))).sort()
+  const hasFilters = search || filterGender || filterGrade || filterHotel || filterTeam || filterDivision
 
   // Stats
   const byGender = players.reduce((acc, p) => { acc[p.gender] = (acc[p.gender] || 0) + 1; return acc }, {} as Record<string, number>)
@@ -138,24 +170,63 @@ export default function PlayerRegistrationsPage() {
         </div>
 
         {/* Action bar */}
-        <div className="mb-5 flex gap-2 flex-wrap items-center">
+        <div className="mb-4 flex gap-2 flex-wrap items-center">
           <button
             onClick={() => downloadCSV(filtered, tournamentName)}
             disabled={!filtered.length}
             className="border border-gray-300 bg-white text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
           >
-            ⬇ Download CSV {search ? `(${filtered.length} filtered)` : ''}
+            ⬇ CSV {hasFilters ? `(${filtered.length})` : ''}
           </button>
           <Link href={`/tournaments/${tournamentId}/player-register`} target="_blank"
             className="border border-gray-300 bg-white text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
             🔗 Public Form
           </Link>
-          <input
-            type="search" placeholder="Search by name, club, grade…"
-            value={search} onChange={e => setSearch(e.target.value)}
-            className="ml-auto border border-gray-300 rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
         </div>
+
+        {/* Filters */}
+        {!loading && players.length > 0 && (
+          <div className="mb-4 flex gap-2 flex-wrap items-center">
+            <input type="search" placeholder="Search name, club…"
+              value={search} onChange={e => setSearch(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <select value={filterDivision} onChange={e => setFilterDivision(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Divisions</option>
+              {allDivisions.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Teams</option>
+              {allTeams.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={filterGender} onChange={e => setFilterGender(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Genders</option>
+              <option>Female</option>
+              <option>Male</option>
+            </select>
+            <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Grades</option>
+              {allGrades.map(g => <option key={g} value={g}>Grade {g}</option>)}
+            </select>
+            <select value={filterHotel} onChange={e => setFilterHotel(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Hotel</option>
+              <option value="Yes">Hotel Yes</option>
+              <option value="Maybe">Hotel Maybe</option>
+              <option value="No">Hotel No</option>
+            </select>
+            {hasFilters && (
+              <>
+                <button onClick={() => { setSearch(''); setFilterGender(''); setFilterGrade(''); setFilterHotel(''); setFilterTeam(''); setFilterDivision('') }}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline">Clear</button>
+                <span className="text-sm text-gray-500">{filtered.length} of {players.length}</span>
+              </>
+            )}
+          </div>
+        )}
 
         {/* List */}
         {loading ? (
@@ -180,7 +251,7 @@ export default function PlayerRegistrationsPage() {
                   <button onClick={() => setExpanded(expanded === p.id ? null : p.id)} className="flex-1 text-left min-w-0">
                     <div className="font-semibold text-gray-800">{p.playerName}</div>
                     <div className="text-sm text-gray-500">
-                      {p.teamClubName} · Grade {p.grade} · {p.gender}
+                      {p.teamClubName}{getDivision(p) && ` · ${getDivision(p)}`} · Grade {p.grade} · {p.gender}
                       {p.jerseyNumber && ` · #${p.jerseyNumber}`}
                     </div>
                   </button>

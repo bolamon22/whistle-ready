@@ -4,7 +4,7 @@ import prisma from '@/lib/db'
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const id = params.id
 
-  const [tournament, games, registrations, rosterEntries, allAssignments, timeEntries, staffPayments, transactions] = await Promise.all([
+  const [tournament, games, registrations, rosterEntries, allAssignments, timeEntries, staffPayments, transactions, playerCount] = await Promise.all([
     prisma.tournament.findUnique({ where: { id } }),
     prisma.game.findMany({ where: { tournamentId: id }, select: { id: true, division: true, isCanceled: true, assignments: { select: { id: true } } } }),
     prisma.teamRegistration.findMany({
@@ -16,6 +16,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     prisma.timeEntry.findMany({ where: { tournamentId: id }, include: { worker: { select: { hourlyRate: true } } } }),
     prisma.paymentRecord.findMany({ where: { tournamentId: id }, select: { amount: true } }),
     prisma.tournamentTransaction.findMany({ where: { tournamentId: id }, select: { type: true, category: true, amount: true } }),
+    prisma.playerRegistration.count({ where: { tournamentId: id } }),
   ])
 
   if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -117,5 +118,6 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       hotelYes,
       hotelMaybe,
     },
+    playerCount,
   })
 }
