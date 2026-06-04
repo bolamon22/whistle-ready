@@ -5,6 +5,17 @@ import toast from 'react-hot-toast'
 import { DEFAULT_PAY_RATES, PayRates } from '@/lib/utils'
 import TournamentNav from '../TournamentNav'
 
+const DEFAULT_DIVISIONS = [
+  'Boys High School A','Boys High School B','Boys High School B2',
+  'Boys U14 A and B','Boys U12 A and B',
+  'Boys U10 A and B (7v7)','Boys U10 A and B (10v10)','Boys U8 (7v7)',
+  'Girls High School A','Girls High School B','Girls High School B2',
+  'Girls Middle School A',"Girls Middle School B (No 2030's)",
+  "Girls Lower School A (7v7)","Girls Lower School B (7v7 – No 2033's)",
+]
+
+const DEFAULT_PRICING = { tier1: 1495, tier1Max: 3, tier2: 1450, tier2Max: 6, tier3: 1395, sevenVSeven: 1095 }
+
 const RATE_FIELDS=[{key:'youth',label:'Referee – Youth Cert'},{key:'hs',label:'Referee – HS Cert'},{key:'college',label:'Referee – College Cert'},{key:'scorekeeper',label:'Scorekeeper'},{key:'athletic_trainer',label:'Athletic Trainer (hourly base)'},{key:'field_ops',label:'Field Ops (hourly base)'},{key:'assigner',label:'Assigner bonus'}]
 
 export default function SettingsPage({ params }: { params:{id:string} }) {
