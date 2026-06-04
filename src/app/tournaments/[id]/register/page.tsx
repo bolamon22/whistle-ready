@@ -75,6 +75,7 @@ export default function RegisterPage() {
   const [teams, setTeams] = useState<TeamRow[]>([emptyTeam()])
 
   const [pricing, setPricing] = useState<Pricing>(DEFAULT_PRICING)
+  const [showFees, setShowFees] = useState(false)
 
   // Club logo state
   const [clubLogoUrl, setClubLogoUrl] = useState('')
@@ -388,7 +389,20 @@ export default function RegisterPage() {
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-blue-800">Estimated Total</p>
-                    <p className="text-xs text-blue-600 mt-0.5">{teams.length} team{teams.length !== 1 ? 's' : ''} · volume discounts apply for 4+ teams</p>
+                    <p className="text-xs text-blue-600 mt-0.5">
+                      {teams.length} team{teams.length !== 1 ? 's' : ''} ·{' '}
+                      <button type="button" onClick={() => setShowFees(!showFees)} className="underline hover:text-blue-800">
+                        {showFees ? 'hide fee schedule' : 'view fee schedule'}
+                      </button>
+                    </p>
+                    {showFees && (
+                      <div className="mt-2 text-xs text-blue-700 space-y-0.5">
+                        <div>1–{pricing.tier1Max} teams: {fmt(pricing.tier1)}/team</div>
+                        <div>{pricing.tier1Max + 1}–{pricing.tier2Max} teams: {fmt(pricing.tier2)}/team</div>
+                        <div>{pricing.tier2Max + 1}+ teams: {fmt(pricing.tier3)}/team</div>
+                        <div>7v7 teams: {fmt(pricing.sevenVSeven)}/team</div>
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold text-blue-800">{fmt(calcInvoice(teams, pricing))}</p>
