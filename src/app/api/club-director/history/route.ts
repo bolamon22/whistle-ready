@@ -14,7 +14,7 @@ export async function GET() {
   if (links.length === 0) return NextResponse.json([])
 
   // Group by tournament
-  const tournamentIds = [...new Set(links.map(l => l.tournamentId))]
+  const tournamentIds = Array.from(new Set(links.map(l => l.tournamentId)))
   const clubsByTournament: Record<string, string[]> = {}
   for (const l of links) {
     if (!clubsByTournament[l.tournamentId]) clubsByTournament[l.tournamentId] = []
