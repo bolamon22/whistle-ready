@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tournament {
+  id                String   @id @default(cuid())
+  name              String
+  sport             String   @default("")
+  startDate         String   @default("")
+  endDate           String   @default("")
+  location          String   @default("")
+  scheduleIncrement Int      @default(50)
+  dates             String   @default("[]")
+  payRates          String   @default("{\"youth\":50,\"hs\":60,\"college\":70,\"scorekeeper\":15,\"athletic_trainer\":25,\"field_ops\":20,\"assigner\":10}")
+  logoUrl               String @default("")
+  registrationPricing   String @default("{\"tier1\":1495,\"tier1Max\":3,\"tier2\":1450,\"tier2Max\":6,\"tier3\":1395,\"sevenVSeven\":1095}")
+  registrationDivisions String @default("[\"Boys 2030\",\"Boys 2029\",\"Boys 2028\",\"Boys 2027\",\"Boys 2026\",\"Boys 2025\",\"Boys 2024\",\"Boys 2023\",\"Girls 2030\",\"Girls 2029\",\"Girls 2028\",\"Girls 2027\",\"Girls 2026\",\"Girls 2025\",\"Girls 2024\",\"Girls 2023\",\"HS Boys JV\",\"HS Boys Varsity\",\"HS Girls JV\",\"HS Girls Varsity\"]")
+  divisionRules     String   @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  games              Game[]
+  availabilities     Availability[]
+  rosterEntries      RosterEntry[]
+  paymentRecords      PaymentRecord[]
+  teamRegistrations   TeamRegistration[]
+  playerRegistrations PlayerRegistration[]
+  transactions        TournamentTransaction[]
+}
+
+model Game {
+  id             String   @id @default(cuid())
+  tournamentId   String
+  gameNumber     String
+  date           String
+  startTime      String
+  division       String
+  pool           String?
+  location       String
+  team1          String
+  team2          String
+  score1         Int?
+  score2         Int?
+  refCount       Int      @default(2)
+  isChampionship Boolean  @default(false)
+  isCanceled     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  tournament  Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@index([tournamentId])
+  @@index([date, startTime])
+}
+
+model Worker {
+  id              String   @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  certLevel       String   @default("youth")
+  defaultRole     String   @default("ref")
+  isAssigner      Boolean  @default(false)
+  gender          String   @default("both")
+  photoUrl        String?
+  payRateOverride Float?
+  hourlyRate      Float?
+  roles           String   @default("[]")
+  payMethod       String   @default("check")
+  payHandle       String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  availabilities Availability[]
+  assignments    Assignment[]
+  timeEntries    TimeEntry[]
+  rosterEntries  RosterEntry[]
+  paymentRecords PaymentRecord[]
+}
+
+model RosterEntry {
+  id           String   @id @default(cuid())
+  workerId     String
+  tournamentId String
+  gameTarget   Int      @default(0)
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  worker     Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, tournamentId])
+  @@index([tournamentId])
+}
+
+model Availability {
+  id           String @id @default(cuid())
+  workerId     String
+  tournamentId String
+  date         String
+  timeSlots    String @default("[]")
+
+  worker     Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, tournamentId, date])
+  @@index([tournamentId])
+}
+
+model TimeEntry {
+  id           String   @id @default(cuid())
+  workerId     String
+  tournamentId String
+  date         String
+  clockIn      String?
+  clockOut     String?
+  hoursManual  Float?
+  notes        String?
+  isManualEdit Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, tournamentId])
+  @@index([tournamentId])
+}
+
+model Assignment {
+  id        String   @id @default(cuid())
+  gameId    String
+  workerId  String
+  role      String
+  payRate   Float
+  createdAt DateTime @default(now())
+
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, role])
+  @@index([gameId])
+  @@index([workerId])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  tournamentId String
+  action       String
+  deletedBy    String
+  detail       String?
+  createdAt    DateTime @default(now())
+
+  @@index([tournamentId])
+}
+
+model TeamRegistration {
+  id              String   @id @default(cuid())
+  tournamentId    String
+  clubName        String
+  clubContact     String
+  contactEmail    String
+  contactPhone    String
+  clubBasedIn     String   @default("")
+  clubWebsite     String   @default("")
+  numTeams        Int      @default(1)
+  needsHotel      String   @default("No")
+  paymentMethod   String   @default("check")
+  notes           String?
+  invoiceAmount   Float    @default(0)
+  discountAmount  Float    @default(0)
+  discountNote    String   @default("")
+  createdAt       DateTime @default(now())
+
+  tournament Tournament         @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teams      RegisteredTeam[]
+  payments   RegistrationPayment[]
+
+  @@index([tournamentId])
+}
+
+model RegistrationPayment {
+  id             String   @id @default(cuid())
+  registrationId String
+  amount         Float
+  method         String   @default("check")
+  checkNumber    String   @default("")
+  receivedAt     String
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+
+  registration TeamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@index([registrationId])
+}
+
+model RegisteredTeam {
+  id             String @id @default(cuid())
+  registrationId String
+  clubName       String
+  teamName       String
+  division       String
+  coachName      String
+  coachPhone     String
+  coachEmail     String
+
+  registration TeamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@index([registrationId])
+}
+
+model PlayerRegistration {
+  id                   String   @id @default(cuid())
+  tournamentId         String
+  playerName           String
+  playerEmail          String   @default("")
+  usLacrosseNumber     String
+  gender               String
+  dob                  String   @default("")
+  grade                String
+  teamClubName         String
+  jerseyNumber         String   @default("")
+  parentName           String
+  parentEmail          String
+  parentPhone          String
+  parent2Name          String   @default("")
+  parent2Email         String   @default("")
+  parent2Phone         String   @default("")
+  emergencyContactName  String
+  emergencyContactPhone String
+  waiverSignature      String
+  needsHotel           String   @default("")
+  wantsUpdates         Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId])
+}
+
+model PaymentRecord {
+  id           String   @id @default(cuid())
+  workerId     String
+  tournamentId String
+  amount       Float
+  method       String   @default("check")
+  paidAt       DateTime @default(now())
+  notes        String?
+  paidBy       String?
+
+  worker     Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@index([tournamentId])
+}
+
+model TournamentTransaction {
+  id           String   @id @default(cuid())
+  tournamentId String
+  type         String   // 'income' | 'expense'
+  category     String
+  description  String
+  amount       Float
+  method       String   @default("check")
+  date         String
+  notes        String   @default("")
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId])
+  @@index([type])
+}
