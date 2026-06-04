@@ -82,9 +82,8 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
             <span className="text-sm text-emerald-600">Paid: <strong>${totalPaid.toFixed(2)}</strong></span>
             {outstanding>0&&<span className="text-sm text-amber-600">Outstanding: <strong>${outstanding.toFixed(2)}</strong></span>}
           </div>
-          </div>
         </div>
-        <div className="flex gap-2"><Link href={`/tournaments/${params.id}`} className="btn-secondary btn-sm">← Grid</Link><button onClick={exportCSV} className="btn-primary btn-sm" disabled={!data.summary.length}>↓ CSV</button></div>
+        <button onClick={exportCSV} className="btn-primary btn-sm" disabled={!data.summary.length}>↓ CSV</button>
       </div>
 
       {data.summary.length===0?<div className="card p-12 text-center text-slate-400"><p className="font-medium">No assignments yet</p></div>:(
