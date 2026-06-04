@@ -121,6 +121,7 @@ export default function RegistrationsPage() {
       toast.success('Logo uploaded!')
     } catch { toast.error('Upload failed') }
     finally { setLogoUploading(null) }
+  }
 
   const uploadClubLogo = async (file: File) => {
     setClubLogoUploading(true)
@@ -133,7 +134,6 @@ export default function RegistrationsPage() {
       toast.success('Club logo uploaded!')
     } catch { toast.error('Upload failed') }
     finally { setClubLogoUploading(false) }
-  }
   }
 
   // Import
