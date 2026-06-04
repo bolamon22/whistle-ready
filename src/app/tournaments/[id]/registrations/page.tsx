@@ -349,6 +349,7 @@ export default function RegistrationsPage() {
           coachName: getVal(row, m.coachName),
           coachPhone: getVal(row, m.coachPhone),
           coachEmail: getVal(row, m.coachEmail),
+          logoUrl: '',
         })
       }
     }
