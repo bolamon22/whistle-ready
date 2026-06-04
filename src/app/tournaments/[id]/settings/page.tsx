@@ -71,18 +71,47 @@ export default function SettingsPage({ params }: { params:{id:string} }) {
         </div>
         <div className="card p-5">
           <h2 className="font-semibold text-slate-800 mb-1">Registration Divisions</h2>
-          <p className="text-xs text-slate-400 mb-4">These appear in the division dropdown on the public registration form.</p>
+          <p className="text-xs text-slate-400 mb-4">Check the divisions offered in this tournament. You can rename any division inline.</p>
           <div className="space-y-1.5 mb-4">
-            {divisions.map((d,i)=>(
-              <div key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                <span className="text-sm text-slate-700">{d}</span>
-                <button type="button" onClick={()=>setDivisions(divs=>divs.filter((_,idx)=>idx!==i))} className="text-red-400 hover:text-red-600 text-xs ml-2">Remove</button>
+            {DEFAULT_DIVISIONS.map((defaultDiv, i) => {
+              const activeIndex = divisions.indexOf(defaultDiv)
+              const isChecked = activeIndex !== -1
+              const customName = isChecked ? divisions[activeIndex] : defaultDiv
+              return (
+                <div key={i} className="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                  <input type="checkbox" checked={isChecked}
+                    onChange={e => {
+                      if (e.target.checked) setDivisions(d => [...d, defaultDiv])
+                      else setDivisions(d => d.filter(v => v !== customName))
+                    }}
+                    className="w-4 h-4 accent-blue-600 flex-shrink-0" />
+                  {isChecked ? (
+                    <input
+                      className="input flex-1 py-0.5 text-sm"
+                      value={customName}
+                      onChange={e => setDivisions(d => d.map(v => v === customName ? e.target.value : v))}
+                    />
+                  ) : (
+                    <span className="text-sm text-slate-400 flex-1">{defaultDiv}</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="border-t border-slate-100 pt-3 space-y-2">
+            <p className="text-xs text-slate-500 font-medium">Add a custom division</p>
+            <div className="flex gap-2">
+              <input className="input flex-1" placeholder="e.g. Boys U9 (7v7)" value={newDivision} onChange={e=>setNewDivision(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(newDivision.trim()){setDivisions(d=>[...d,newDivision.trim()]);setNewDivision('')}}}}/>
+              <button type="button" className="btn-secondary btn-sm" onClick={()=>{if(newDivision.trim()){setDivisions(d=>[...d,newDivision.trim()]);setNewDivision('')}}}>Add</button>
+            </div>
+            {divisions.filter(d => !DEFAULT_DIVISIONS.includes(d)).map((d, i) => (
+              <div key={i} className="flex items-center gap-3 bg-blue-50 rounded-lg px-3 py-2">
+                <input type="checkbox" checked readOnly className="w-4 h-4 accent-blue-600 flex-shrink-0" />
+                <input className="input flex-1 py-0.5 text-sm" value={d}
+                  onChange={e => setDivisions(divs => divs.map(v => v === d ? e.target.value : v))} />
+                <button type="button" onClick={() => setDivisions(divs => divs.filter(v => v !== d))} className="text-red-400 hover:text-red-600 text-xs">Remove</button>
               </div>
             ))}
-          </div>
-          <div className="flex gap-2">
-            <input className="input flex-1" placeholder="Add division e.g. Boys U9 (7v7)" value={newDivision} onChange={e=>setNewDivision(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(newDivision.trim()){setDivisions(d=>[...d,newDivision.trim()]);setNewDivision('')}}}}/>
-            <button type="button" className="btn-secondary btn-sm" onClick={()=>{if(newDivision.trim()){setDivisions(d=>[...d,newDivision.trim()]);setNewDivision('')}}}>Add</button>
           </div>
           <button type="button" onClick={()=>setDivisions(DEFAULT_DIVISIONS)} className="text-xs text-slate-400 hover:text-slate-600 underline mt-3 block">Reset to defaults</button>
         </div>
