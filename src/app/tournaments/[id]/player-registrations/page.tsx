@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
+import TournamentNav from '../TournamentNav'
 
 interface PlayerRegistration {
   id: string
@@ -138,18 +139,11 @@ export default function PlayerRegistrationsPage() {
       <Toaster />
       <div className="max-w-5xl mx-auto">
 
+        <TournamentNav id={tournamentId as string} name={tournamentName || 'Tournament'} logoUrl={tournamentLogo} />
         {/* Header */}
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            {tournamentLogo && (
-              <img src={tournamentLogo} alt="logo" className="h-14 w-14 object-contain rounded-xl border border-gray-200 bg-gray-50 flex-shrink-0" />
-            )}
-            <div>
-              <Link href={`/tournaments/${tournamentId}/dashboard`} className="text-sm text-blue-600 hover:underline mb-1 block">← Back to Dashboard</Link>
-              <h1 className="text-2xl font-bold text-gray-800">
-                {tournamentName ? `${tournamentName} — Player Registrations` : 'Player Registrations'}
-              </h1>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Player Registrations</h1>
           </div>
 
           {/* Stats */}

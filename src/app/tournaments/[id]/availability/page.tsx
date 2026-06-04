@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatDate, formatTime } from '@/lib/utils'
+import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;defaultRole:string }
 interface Avail { workerId:string;date:string;timeSlots:string }
@@ -93,17 +94,12 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
 
   return(
     <div>
-      <div className="breadcrumb">
-        <Link href="/" className="hover:text-sky-600">Tournaments</Link><span>/</span>
-        <Link href={`/tournaments/${params.id}`} className="hover:text-sky-600">{tournament.name}</Link><span>/</span>
-        <span className="text-slate-700">Availability</span>
-      </div>
+      <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
       <div className="page-header">
         <div>
           <h1 className="section-title">Unavailability</h1>
           <p className="text-sm text-slate-500 mt-1">All rostered staff are <span className="text-emerald-600 font-medium">available by default</span>. Mark anyone who can't work.</p>
         </div>
-        <Link href={`/tournaments/${params.id}`} className="btn-secondary btn-sm">← Grid</Link>
       </div>
 
       {dates.length>0&&(

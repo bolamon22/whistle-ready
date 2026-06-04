@@ -233,11 +233,8 @@ const registrations = [
   },
 ]
 
-const { getSessionCookie } = require('./seed-auth')
-
 async function run() {
-  const cookie = await getSessionCookie()
-  const headers = { 'Content-Type': 'application/json', 'Cookie': cookie }
+  const headers = { 'Content-Type': 'application/json' }
 
   // Find Jingle Brawl tournament
   const res = await fetch(`${BASE}/api/tournaments`, { headers })
@@ -251,7 +248,7 @@ async function run() {
     const body = { ...reg, tournamentId: t.id, numTeams: reg.teams.length }
     const r = await fetch(`${BASE}/api/registrations`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     if (r.ok) {

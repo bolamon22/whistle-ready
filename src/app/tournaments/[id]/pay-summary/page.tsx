@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { certLabel, formatDate, formatTime, PAY_METHODS, WORKER_ROLES, ALL_ROLES } from '@/lib/utils'
+import TournamentNav from '../TournamentNav'
 
 interface GameEntry{gameNumber:string;date:string;startTime:string;division:string;location:string;role:string;pay:number}
 interface TERow{date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;hours:number;pay:number}
@@ -72,11 +73,9 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
 
   return(
     <div>
-      <div className="breadcrumb"><Link href="/" className="hover:text-sky-600">Tournaments</Link><span>/</span><Link href={`/tournaments/${params.id}`} className="hover:text-sky-600">{data.tournamentName}</Link><span>/</span><span className="text-slate-700">Pay Report</span></div>
+      <TournamentNav id={params.id} name={data.tournamentName} logoUrl={data.tournamentLogo} />
       <div className="page-header">
-        <div className="flex items-center gap-3">
-          {data.tournamentLogo && <img src={data.tournamentLogo} alt="logo" className="h-12 w-12 object-contain rounded-xl border border-slate-200 bg-slate-50 flex-shrink-0" />}
-          <div>
+        <div>
           <h1 className="section-title">Pay Summary</h1>
           <div className="flex gap-4 mt-2">
             <span className="text-sm text-slate-500">Total: <strong className="text-slate-900">${total.toFixed(2)}</strong></span>

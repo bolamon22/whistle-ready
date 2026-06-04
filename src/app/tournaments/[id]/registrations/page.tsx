@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import TournamentNav from '../TournamentNav'
 import toast, { Toaster } from 'react-hot-toast'
 
 interface RegisteredTeam {
@@ -418,12 +419,11 @@ export default function RegistrationsPage() {
       <div className="max-w-5xl mx-auto">
 
         {/* Header */}
+        <TournamentNav id={tournamentId as string} name={tournamentName || 'Tournament'} logoUrl={tournamentLogo} />
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            {tournamentLogo && <img src={tournamentLogo} alt="logo" className="h-14 w-14 object-contain rounded-xl border border-gray-200 bg-gray-50 flex-shrink-0" />}
             <div>
-              <Link href={`/tournaments/${tournamentId}`} className="text-sm text-blue-600 hover:underline mb-1 block">← Back to Tournament</Link>
-              <h1 className="text-2xl font-bold text-gray-800">{tournamentName ? `${tournamentName} — Registrations` : 'Team Registrations'}</h1>
+              <h1 className="text-2xl font-bold text-gray-800">Team Registrations</h1>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap justify-end">

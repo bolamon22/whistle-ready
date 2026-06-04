@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
+import TournamentNav from '../TournamentNav'
 
 interface Transaction {
   id: string; type: 'income' | 'expense'; category: string
@@ -143,14 +144,11 @@ export default function FinancialsPage() {
       <Toaster />
       <div className="max-w-5xl mx-auto">
 
+        <TournamentNav id={tournamentId as string} name={tournamentName || 'Tournament'} logoUrl={tournamentLogo} />
         {/* Header */}
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            {tournamentLogo && <img src={tournamentLogo} alt="logo" className="h-14 w-14 object-contain rounded-xl border border-gray-200 flex-shrink-0" />}
-            <div>
-              <Link href={`/tournaments/${tournamentId}/dashboard`} className="text-sm text-blue-600 hover:underline mb-1 block">← Dashboard</Link>
-              <h1 className="text-2xl font-bold text-gray-800">{tournamentName ? `${tournamentName} — Financials` : 'Financials'}</h1>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Financials</h1>
           </div>
           {/* Top-line summary pills */}
           <div className="flex gap-2 flex-wrap">

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatDate } from '@/lib/utils'
+import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;defaultRole:string;hourlyRate:number|null }
 interface TimeEntry { id:string;workerId:string;date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;notes:string|null;isManualEdit:boolean;worker:Worker }
@@ -74,8 +75,8 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
 
   return(
     <div>
-      <div className="breadcrumb"><Link href="/" className="hover:text-sky-600">Tournaments</Link><span>/</span><Link href={`/tournaments/${params.id}`} className="hover:text-sky-600">{tournament.name}</Link><span>/</span><span className="text-slate-700">Time Entries</span></div>
-      <div className="page-header"><div><h1 className="section-title">Hourly Staff Time</h1><p className="text-sm text-slate-500 mt-1">Athletic Trainers &amp; Field Ops — tap Start/Stop to track hours</p></div><Link href={`/tournaments/${params.id}`} className="btn-secondary btn-sm">← Grid</Link></div>
+      <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
+      <div className="page-header"><div><h1 className="section-title">Hourly Staff Time</h1><p className="text-sm text-slate-500 mt-1">Athletic Trainers &amp; Field Ops — tap Start/Stop to track hours</p></div></div>
 
       {dates.length>0&&<div className="flex gap-1 mb-5 border-b border-slate-200">{dates.map(d=><button key={d} onClick={()=>setActiveDay(d)} className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${activeDay===d?'border-sky-600 text-sky-700':'border-transparent text-slate-500 hover:text-slate-700'}`}>{formatDate(d)}</button>)}</div>}
 

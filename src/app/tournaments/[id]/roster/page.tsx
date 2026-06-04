@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { certLabel, WORKER_ROLES, isHourlyRole, PAY_METHODS, CERT_LEVELS } from '@/lib/utils'
+import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
 interface RosterEntry { id:string;workerId:string;gameTarget:number;notes:string|null }
@@ -189,22 +190,11 @@ export default function RosterPage({ params }: { params:{id:string} }) {
 
   return (
     <div>
-      <div className="breadcrumb">
-        <Link href="/" className="hover:text-sky-600">Tournaments</Link><span>/</span>
-        <Link href={`/tournaments/${params.id}`} className="hover:text-sky-600">{tournament.name}</Link><span>/</span>
-        <span className="text-slate-700">Staff</span>
-      </div>
+      <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
       <div className="page-header">
-        <div className="flex items-center gap-3">
-          {tournament.logoUrl && <img src={tournament.logoUrl} alt="logo" className="h-12 w-12 object-contain rounded-xl border border-slate-200 bg-slate-50 flex-shrink-0" />}
-          <div>
-          <h1 className="section-title">{tournament.name} Staff</h1>
+        <div>
+          <h1 className="section-title">Staff Roster</h1>
           <p className="text-sm text-slate-500 mt-1">Confirm who's working this tournament · {onRoster.length} confirmed</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/tournaments/${params.id}/availability`} className="btn-secondary btn-sm">Availability →</Link>
-          <Link href={`/tournaments/${params.id}`} className="btn-secondary btn-sm">← Grid</Link>
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
+import TournamentNav from './TournamentNav'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
@@ -439,38 +440,26 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          {tournament.logoUrl && <Link href={`/tournaments/${params.id}/dashboard`}><img src={tournament.logoUrl} alt="logo" className="h-14 w-14 object-contain rounded-xl border border-slate-200 bg-slate-50 flex-shrink-0 hover:opacity-80 transition-opacity" /></Link>}
-          <div>
-          <div className="breadcrumb"><Link href="/" className="hover:text-sky-600">Tournaments</Link><span>/</span><span className="text-slate-700 font-medium">{tournament.name}</span></div>
-          <h1 className="section-title">{tournament.name}</h1>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="badge bg-slate-100 text-slate-600">{games.length} games</span>
-            <span className="badge bg-sky-100 text-sky-700">{assignedCount} assigned</span>
-            {games.length>0&&<span className="badge bg-emerald-100 text-emerald-700">{Math.round(assignedCount/Math.max(games.length,1)*100)}%</span>}
-          </div>
-          </div>
-        </div>
-        <div className="flex gap-2 flex-wrap items-center">
-          <Link href={`/tournaments/${params.id}/public`} target="_blank" className="btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">🌐 Public View</Link>
-          <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/tournaments/${params.id}/public`);toast.success('Link copied!')}} className="btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">🔗 Share</button>
-          <Link href={`/tournaments/${params.id}/registrations`} className="btn-secondary btn-sm">📋 Registrations</Link>
-          <Link href={`/tournaments/${params.id}/register`} target="_blank" className="btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">📝 Register Team</Link>
-          <Link href={`/tournaments/${params.id}/player-register`} target="_blank" className="btn-secondary btn-sm text-green-600 border-green-200 hover:bg-green-50">🏃 Player Reg</Link>
-          <Link href={`/tournaments/${params.id}/player-registrations`} className="btn-secondary btn-sm text-teal-600 border-teal-200 hover:bg-teal-50">📄 Players</Link>
-          <Link href={`/tournaments/${params.id}/roster`} className="btn-secondary btn-sm">👥 Roster</Link>
-          <Link href={`/tournaments/${params.id}/availability`} className="btn-secondary btn-sm">Availability</Link>
-          <Link href={`/tournaments/${params.id}/time-entries`} className="btn-secondary btn-sm">⏱ Time</Link>
-          <Link href={`/tournaments/${params.id}/pay-summary`} className="btn-secondary btn-sm">$ Pay</Link>
-          <Link href={`/tournaments/${params.id}/financials`} className="btn-secondary btn-sm text-green-600 border-green-200 hover:bg-green-50">📊 Financials</Link>
-          <Link href={`/tournaments/${params.id}/settings`} className="btn-secondary btn-sm">⚙</Link>
-          {dayGames.length>0&&<button onClick={()=>{setShowAutoAssign(true);setAutoResult(null)}} className="btn-secondary btn-sm text-purple-600 border-purple-200 hover:bg-purple-50">⚡ Auto-Assign</button>}
-          {dayGames.length>0&&<button onClick={()=>{setShowClear(true);setClearConfirm('');setClearName('')}} className="btn-secondary btn-sm text-red-500 border-red-200 hover:bg-red-50">🗑 Clear</button>}
-          <button onClick={openAddGame} className="btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">+ Game</button>
-          <label className="btn-primary btn-sm cursor-pointer">↑ Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>
-        </div>
+      {/* Tournament Nav */}
+      <TournamentNav
+        id={params.id}
+        name={tournament.name}
+        logoUrl={tournament.logoUrl}
+        stats={{ games: games.length, assigned: assignedCount, pct: Math.round(assignedCount / Math.max(games.length, 1) * 100) }}
+      />
+
+      {/* Schedule toolbar */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex-1" />
+        <button
+          onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/tournaments/${params.id}/public`);toast.success('Link copied!')}}
+          className="btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+          🔗 Share
+        </button>
+        {dayGames.length>0&&<button onClick={()=>{setShowAutoAssign(true);setAutoResult(null)}} className="btn-secondary btn-sm text-purple-600 border-purple-200 hover:bg-purple-50">⚡ Auto-Assign</button>}
+        {dayGames.length>0&&<button onClick={()=>{setShowClear(true);setClearConfirm('');setClearName('')}} className="btn-secondary btn-sm text-red-500 border-red-200 hover:bg-red-50">🗑 Clear</button>}
+        <button onClick={openAddGame} className="btn-secondary btn-sm">+ Game</button>
+        <label className="btn-primary btn-sm cursor-pointer">↑ Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>
       </div>
 
       {/* View switcher */}

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { DEFAULT_PAY_RATES, PayRates } from '@/lib/utils'
+import TournamentNav from '../TournamentNav'
 
 const RATE_FIELDS=[{key:'youth',label:'Referee – Youth Cert'},{key:'hs',label:'Referee – HS Cert'},{key:'college',label:'Referee – College Cert'},{key:'scorekeeper',label:'Scorekeeper'},{key:'athletic_trainer',label:'Athletic Trainer (hourly base)'},{key:'field_ops',label:'Field Ops (hourly base)'},{key:'assigner',label:'Assigner bonus'}]
 
@@ -15,8 +16,8 @@ export default function SettingsPage({ params }: { params:{id:string} }) {
   if(loading)return<div className="text-slate-400 text-center py-12">Loading…</div>
   return(
     <div className="max-w-xl">
-      <div className="breadcrumb"><Link href="/" className="hover:text-sky-600">Tournaments</Link><span>/</span><Link href={`/tournaments/${params.id}`} className="hover:text-sky-600">{tName}</Link><span>/</span><span className="text-slate-700">Settings</span></div>
-      <div className="page-header"><h1 className="section-title">Tournament Settings</h1><Link href={`/tournaments/${params.id}`} className="btn-secondary btn-sm">← Grid</Link></div>
+      <TournamentNav id={params.id} name={tName} />
+      <div className="page-header"><h1 className="section-title">Tournament Settings</h1></div>
       <form onSubmit={save} className="space-y-5">
         <div className="card p-5"><h2 className="font-semibold text-slate-800 mb-4">General</h2><div><label className="label">Tournament Name</label><input className="input" value={name} onChange={e=>setName(e.target.value)} required/></div></div>
         <div className="card p-5">
