@@ -9,9 +9,17 @@ const RATE_FIELDS=[{key:'youth',label:'Referee – Youth Cert'},{key:'hs',label:
 
 export default function SettingsPage({ params }: { params:{id:string} }) {
   const DEFAULT_PRICING = { tier1: 1495, tier1Max: 3, tier2: 1450, tier2Max: 6, tier3: 1395, sevenVSeven: 1095 }
-  const [name,setName]=useState('');const [rates,setRates]=useState<PayRates>(DEFAULT_PAY_RATES);const [divRules,setDivRules]=useState<Record<string,number>>({});const [pricing,setPricing]=useState(DEFAULT_PRICING);const [tName,setTName]=useState('');const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);const [newKeyword,setNewKeyword]=useState('');const [newCount,setNewCount]=useState('1')
-  useEffect(()=>{fetch(`/api/tournaments/${params.id}`).then(r=>r.json()).then(t=>{setName(t.name);setTName(t.name);setRates({...DEFAULT_PAY_RATES,...JSON.parse(t.payRates)});setDivRules(JSON.parse(t.divisionRules||'{}'));try{const p=JSON.parse(t.registrationPricing||'{}');if(p.tier1)setPricing(p)}catch{}setLoading(false)})},[params.id])
-  async function save(e:React.FormEvent){e.preventDefault();setSaving(true);const res=await fetch(`/api/tournaments/${params.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,payRates:rates,divisionRules:divRules,registrationPricing:JSON.stringify(pricing)})});if(res.ok){toast.success('Saved');setTName(name)}else toast.error('Failed');setSaving(false)}
+  const DEFAULT_DIVISIONS = [
+    'Boys High School A','Boys High School B','Boys High School B2',
+    'Boys U14 A','Boys U14 B','Boys U12 A','Boys U12 B',
+    'Boys U10 A (7v7)','Boys U10 B (7v7)','Boys U10 (10v10)','Boys U8 (7v7)',
+    'Girls High School A','Girls High School B','Girls High School B2',
+    'Girls Middle School A','Girls Middle School B (No 2030s)',
+    'Girls Lower School A (7v7)','Girls Lower School B (7v7 – No 2033s)',
+  ]
+  const [name,setName]=useState('');const [rates,setRates]=useState<PayRates>(DEFAULT_PAY_RATES);const [divRules,setDivRules]=useState<Record<string,number>>({});const [pricing,setPricing]=useState(DEFAULT_PRICING);const [divisions,setDivisions]=useState<string[]>(DEFAULT_DIVISIONS);const [newDivision,setNewDivision]=useState('');const [tName,setTName]=useState('');const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);const [newKeyword,setNewKeyword]=useState('');const [newCount,setNewCount]=useState('1')
+  useEffect(()=>{fetch(`/api/tournaments/${params.id}`).then(r=>r.json()).then(t=>{setName(t.name);setTName(t.name);setRates({...DEFAULT_PAY_RATES,...JSON.parse(t.payRates)});setDivRules(JSON.parse(t.divisionRules||'{}'));try{const p=JSON.parse(t.registrationPricing||'{}');if(p.tier1)setPricing(p)}catch{}try{const d=JSON.parse(t.registrationDivisions||'[]');if(d.length>0)setDivisions(d)}catch{}setLoading(false)})},[params.id])
+  async function save(e:React.FormEvent){e.preventDefault();setSaving(true);const res=await fetch(`/api/tournaments/${params.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,payRates:rates,divisionRules:divRules,registrationPricing:JSON.stringify(pricing),registrationDivisions:JSON.stringify(divisions)})});if(res.ok){toast.success('Saved');setTName(name)}else toast.error('Failed');setSaving(false)}
   function addRule(){if(!newKeyword.trim())return;setDivRules(r=>({...r,[newKeyword.trim()]:parseInt(newCount)||1}));setNewKeyword('');setNewCount('1')}
   function removeRule(k:string){setDivRules(r=>{const n={...r};delete n[k];return n})}
   if(loading)return<div className="text-slate-400 text-center py-12">Loading…</div>
@@ -60,6 +68,23 @@ export default function SettingsPage({ params }: { params:{id:string} }) {
               <button type="button" onClick={()=>setPricing(DEFAULT_PRICING)} className="text-xs text-slate-400 hover:text-slate-600 underline">Reset to defaults</button>
             </div>
           </div>
+        </div>
+        <div className="card p-5">
+          <h2 className="font-semibold text-slate-800 mb-1">Registration Divisions</h2>
+          <p className="text-xs text-slate-400 mb-4">These appear in the division dropdown on the public registration form.</p>
+          <div className="space-y-1.5 mb-4">
+            {divisions.map((d,i)=>(
+              <div key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                <span className="text-sm text-slate-700">{d}</span>
+                <button type="button" onClick={()=>setDivisions(divs=>divs.filter((_,idx)=>idx!==i))} className="text-red-400 hover:text-red-600 text-xs ml-2">Remove</button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input className="input flex-1" placeholder="Add division e.g. Boys U9 (7v7)" value={newDivision} onChange={e=>setNewDivision(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(newDivision.trim()){setDivisions(d=>[...d,newDivision.trim()]);setNewDivision('')}}}}/>
+            <button type="button" className="btn-secondary btn-sm" onClick={()=>{if(newDivision.trim()){setDivisions(d=>[...d,newDivision.trim()]);setNewDivision('')}}}>Add</button>
+          </div>
+          <button type="button" onClick={()=>setDivisions(DEFAULT_DIVISIONS)} className="text-xs text-slate-400 hover:text-slate-600 underline mt-3 block">Reset to defaults</button>
         </div>
         <button type="submit" className="btn-primary w-full btn-lg" disabled={saving}>{saving?'Saving…':'Save Settings'}</button>
       </form>
