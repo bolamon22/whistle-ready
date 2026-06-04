@@ -114,8 +114,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Fall back to refs-who-can-SK only if not enough dedicated SKs.
   const fieldScorekeeper = new Map<string, string>()
   if (stickyScorekeeper) {
-    const fields = [...new Set(games.map(g => g.location))]
-    const times  = [...new Set(games.map(g => g.startTime))].sort()
+    const fields = Array.from(new Set(games.map(g => g.location)))
+    const times  = Array.from(new Set(games.map(g => g.startTime))).sort()
     const firstTime = times[0] ?? '08:00'
 
     // Prefer dedicated scorekeepers first, then ref-SKs

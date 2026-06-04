@@ -49,7 +49,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   // Games summary
   const activeGames = games.filter(g => !g.isCanceled)
   const totalAssignmentSlots = activeGames.reduce((s, g) => s + g.assignments.length, 0)
-  const divisions = [...new Set(activeGames.map(g => g.division).filter(Boolean))]
+  const divisions = Array.from(new Set(activeGames.map(g => g.division).filter(Boolean)))
 
   // Registration summary
   const totalClubs = registrations.length
