@@ -11,11 +11,11 @@ export default function SettingsPage({ params }: { params:{id:string} }) {
   const DEFAULT_PRICING = { tier1: 1495, tier1Max: 3, tier2: 1450, tier2Max: 6, tier3: 1395, sevenVSeven: 1095 }
   const DEFAULT_DIVISIONS = [
     'Boys High School A','Boys High School B','Boys High School B2',
-    'Boys U14 A','Boys U14 B','Boys U12 A','Boys U12 B',
-    'Boys U10 A (7v7)','Boys U10 B (7v7)','Boys U10 (10v10)','Boys U8 (7v7)',
+    'Boys U14 A and B','Boys U12 A and B',
+    'Boys U10 A and B (7v7)','Boys U10 A and B (10v10)','Boys U8 (7v7)',
     'Girls High School A','Girls High School B','Girls High School B2',
-    'Girls Middle School A','Girls Middle School B (No 2030s)',
-    'Girls Lower School A (7v7)','Girls Lower School B (7v7 – No 2033s)',
+    'Girls Middle School A','Girls Middle School B (No 2030's)',
+    'Girls Lower School A (7v7)','Girls Lower School B (7v7 – No 2033's)',
   ]
   const [name,setName]=useState('');const [rates,setRates]=useState<PayRates>(DEFAULT_PAY_RATES);const [divRules,setDivRules]=useState<Record<string,number>>({});const [pricing,setPricing]=useState(DEFAULT_PRICING);const [divisions,setDivisions]=useState<string[]>(DEFAULT_DIVISIONS);const [newDivision,setNewDivision]=useState('');const [tName,setTName]=useState('');const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);const [newKeyword,setNewKeyword]=useState('');const [newCount,setNewCount]=useState('1')
   useEffect(()=>{fetch(`/api/tournaments/${params.id}`).then(r=>r.json()).then(t=>{setName(t.name);setTName(t.name);setRates({...DEFAULT_PAY_RATES,...JSON.parse(t.payRates)});setDivRules(JSON.parse(t.divisionRules||'{}'));try{const p=JSON.parse(t.registrationPricing||'{}');if(p.tier1)setPricing(p)}catch{}try{const d=JSON.parse(t.registrationDivisions||'[]');if(d.length>0)setDivisions(d)}catch{}setLoading(false)})},[params.id])

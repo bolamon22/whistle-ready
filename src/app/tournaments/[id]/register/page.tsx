@@ -19,11 +19,12 @@ const emptyTeam = (): TeamRow => ({
 })
 
 const DEFAULT_DIVISIONS = [
-  'Boys 2030', 'Boys 2029', 'Boys 2028', 'Boys 2027', 'Boys 2026',
-  'Boys 2025', 'Boys 2024', 'Boys 2023',
-  'Girls 2030', 'Girls 2029', 'Girls 2028', 'Girls 2027', 'Girls 2026',
-  'Girls 2025', 'Girls 2024', 'Girls 2023',
-  'HS Boys JV', 'HS Boys Varsity', 'HS Girls JV', 'HS Girls Varsity',
+  'Boys High School A','Boys High School B','Boys High School B2',
+  'Boys U14 A and B','Boys U12 A and B',
+  'Boys U10 A and B (7v7)','Boys U10 A and B (10v10)','Boys U8 (7v7)',
+  'Girls High School A','Girls High School B','Girls High School B2',
+  'Girls Middle School A',"Girls Middle School B (No 2030's)",
+  "Girls Lower School A (7v7)","Girls Lower School B (7v7 – No 2033's)",
 ]
 
 interface Pricing { tier1: number; tier1Max: number; tier2: number; tier2Max: number; tier3: number; sevenVSeven: number }
