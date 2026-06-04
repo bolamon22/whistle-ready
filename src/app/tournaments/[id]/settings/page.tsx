@@ -167,11 +167,11 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           <SectionCard title="Divisions" description="Select and name the divisions offered in this tournament" icon="🏅"
             open={open === 'divisions'} onToggle={() => toggle('divisions')}
             badge={`${checkedCount} active`}>
-            <div className="space-y-1.5 mb-4">
+            <div className="grid grid-cols-2 gap-1.5 mb-4">
               {DEFAULT_DIVISIONS.map((defaultDiv, i) => {
                 const checkedForReal = divisions.includes(defaultDiv)
                 return (
-                  <div key={i} className={`flex items-center gap-3 rounded-xl px-3 py-2 transition-colors ${checkedForReal ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
+                  <div key={i} className={`flex items-center gap-2 rounded-xl px-3 py-2 transition-colors ${checkedForReal ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
                     <input type="checkbox" checked={checkedForReal}
                       onChange={e => {
                         if (e.target.checked) setDivisions(d => [...d, defaultDiv])
@@ -180,12 +180,12 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
                       className="w-4 h-4 accent-blue-600 flex-shrink-0" />
                     {checkedForReal ? (
                       <input
-                        className="flex-1 bg-transparent border-0 text-sm text-gray-800 font-medium focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1"
+                        className="flex-1 min-w-0 bg-transparent border-0 text-sm text-gray-800 font-medium focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1"
                         value={divisions.find(d => d === defaultDiv) || defaultDiv}
                         onChange={e => setDivisions(d => d.map(v => v === defaultDiv ? e.target.value : v))}
                       />
                     ) : (
-                      <span className="text-sm text-gray-400 flex-1">{defaultDiv}</span>
+                      <span className="text-sm text-gray-400 flex-1 truncate">{defaultDiv}</span>
                     )}
                   </div>
                 )
