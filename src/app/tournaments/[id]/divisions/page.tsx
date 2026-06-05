@@ -210,7 +210,7 @@ if (loading) return (
               {divisions.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs text-slate-400">
                   No divisions yet.
-                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder -></Link>
+                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder →</Link>
                 </div>
               ) : (
                 <div>
@@ -347,7 +347,7 @@ if (loading) return (
                       <p className="text-xs text-slate-400">{teams.filter(t => !t.pool).length > 0 ? `${teams.filter(t => !t.pool).length} teams unassigned` : 'All teams assigned'}</p>
                       <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
                         className="btn-primary btn-sm">
-                        Assign Teams to Pools ->
+                        Assign Teams to Pools →
                       </Link>
                     </div>
 
