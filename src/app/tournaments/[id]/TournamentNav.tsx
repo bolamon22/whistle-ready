@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface Props {
   id: string
@@ -9,15 +10,32 @@ interface Props {
   stats?: { games: number; assigned: number; pct: number }
 }
 
+interface TournamentMeta {
+  sport: string
+  startDate: string
+  endDate: string
+  location: string
+  dates: string
+  logoUrl: string
+}
+
 export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const pathname = usePathname()
   const base = `/tournaments/${id}`
+  const [meta, setMeta] = useState<TournamentMeta | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/tournaments/${id}`)
+      .then(r => r.json())
+      .then(d => setMeta(d))
+      .catch(() => {})
+  }, [id])
 
   const tabs = [
-    { href: `${base}/dashboard`,     label: 'Dashboard'                  },
-    { href: `${base}/roster`,        label: 'Staff'                      },
-    { href: `${base}/registrations`, label: 'Registrations'              },
-    { href: `${base}/settings`,      label: 'Settings'                   },
+    { href: `${base}/dashboard`,     label: 'Dashboard'     },
+    { href: `${base}/roster`,        label: 'Staff'         },
+    { href: `${base}/registrations`, label: 'Registrations' },
+    { href: `${base}/settings`,      label: 'Settings'      },
   ]
 
   const isActive = (href: string, exact?: boolean) => {
@@ -25,36 +43,54 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     return pathname.startsWith(href)
   }
 
+  const logo = meta?.logoUrl || logoUrl
+  const dateStr = meta?.startDate
+    ? (meta.endDate && meta.endDate !== meta.startDate ? `${meta.startDate} – ${meta.endDate}` : meta.startDate)
+    : (() => { try { return JSON.parse(meta?.dates || '[]').join(' · ') } catch { return '' } })()
+
   return (
     <div className="bg-[#0f1f3d] mb-6">
-      <div className="px-6 pt-5 pb-0">
+      <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-0">
+
         {/* Header row */}
         <div className="flex items-center justify-between gap-4 pb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+
+            {/* Logo */}
             <Link href={`${base}/dashboard`} className="flex-shrink-0">
-              {logoUrl
-                ? <img src={logoUrl} alt="logo" className="h-11 w-11 object-contain rounded-xl border border-white/10 bg-white/5 hover:border-white/30 transition-colors" />
-                : <div className="h-11 w-11 rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
+              {logo
+                ? <img src={logo} alt="logo" className="h-11 w-11 sm:h-12 sm:w-12 object-contain rounded-xl border border-white/10 bg-white/5 hover:border-white/30 transition-colors" />
+                : <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
               }
             </Link>
-            <div>
-              <div className="text-[11px] text-slate-400 mb-0.5">
+
+            <div className="min-w-0">
+              <div className="text-[10px] text-slate-500 mb-0.5">
                 <Link href="/" className="hover:text-teal-400 transition-colors">Tournaments</Link>
                 <span className="mx-1 opacity-40">/</span>
               </div>
-              <Link href={`${base}/dashboard`} className="text-lg font-bold text-white leading-tight hover:text-teal-300 transition-colors block">{name}</Link>
-              {stats && (
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[11px] text-slate-400">{stats.games} games</span>
-                  <span className="text-slate-600">·</span>
-                  <span className="text-[11px] text-sky-400">{stats.assigned} assigned</span>
-                  {stats.games > 0 && (
-                    <span className={`text-[11px] font-semibold ${stats.pct >= 90 ? 'text-emerald-400' : stats.pct >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
-                      {stats.pct}%
-                    </span>
-                  )}
-                </div>
-              )}
+              <Link href={`${base}/dashboard`}
+                className="text-base sm:text-lg font-bold text-white leading-tight hover:text-teal-300 transition-colors block truncate">
+                {name}
+              </Link>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {meta?.sport && (
+                  <span className="text-[10px] bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded-full font-medium">{meta.sport}</span>
+                )}
+                {dateStr && <span className="text-[10px] text-slate-400">{dateStr}</span>}
+                {meta?.location && <span className="text-[10px] text-slate-500 hidden sm:inline truncate max-w-[200px]">📍 {meta.location}</span>}
+                {stats && (
+                  <>
+                    <span className="text-slate-600 text-[10px]">·</span>
+                    <span className="text-[10px] text-sky-400">{stats.assigned}/{stats.games} assigned</span>
+                    {stats.games > 0 && (
+                      <span className={`text-[10px] font-semibold ${stats.pct >= 90 ? 'text-emerald-400' : stats.pct >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                        {stats.pct}%
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -75,8 +111,8 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         <div className="flex gap-0 overflow-x-auto">
           {tabs.map(tab => (
             <Link key={tab.href} href={tab.href}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                isActive(tab.href, tab.exact)
+              className={`px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                isActive(tab.href)
                   ? 'border-teal-400 text-teal-300'
                   : 'border-transparent text-slate-400 hover:text-white hover:border-white/20'
               }`}>
