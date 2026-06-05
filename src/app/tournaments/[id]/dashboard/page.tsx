@@ -127,10 +127,7 @@ export default function DashboardPage() {
                 className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5">
                 🌐 Public page
               </Link>
-              <Link href={`/tournaments/${id}`}
-                className="bg-teal-500 hover:bg-teal-400 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
-                📅 Open Schedule
-              </Link>
+
             </div>
           </div>
           {/* Nav tabs */}
