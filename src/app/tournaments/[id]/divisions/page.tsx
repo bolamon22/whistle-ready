@@ -259,7 +259,7 @@ if (loading) return (
                         {swapA && swapB ? (
                           <button onClick={swapTeams} disabled={swapping}
                             className="btn-primary btn-sm disabled:opacity-50">
-                            {swapping ? 'Swapping...' : `<-> Swap ${swapA} <-> ${swapB}`}
+                            {swapping ? 'Swapping...' : `↔ Swap ${swapA} ↔ ${swapB}`}
                           </button>
                         ) : swapA ? (
                           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
@@ -305,7 +305,7 @@ if (loading) return (
                                 className={`border-b border-slate-50 last:border-0 cursor-pointer transition-colors ${isSwapA || isSwapB ? 'bg-amber-50' : i % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'}`}>
                                 <td className="px-5 py-3 font-semibold text-slate-800">
                                   <div className="flex items-center gap-2">
-                                    {(isSwapA || isSwapB) && <span className="text-amber-500"><-></span>}
+                                    {(isSwapA || isSwapB) && <span className="text-amber-500">↔</span>}
                                     {team.teamName}
                                   </div>
                                 </td>
