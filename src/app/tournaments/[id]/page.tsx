@@ -315,9 +315,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const workerMap=new Map(workers.map(w=>[w.id,w]))
   const refRoles=new Set(['ref1','ref2','ref3'])
   const dayAssignments=dayGames.flatMap(g=>g.assignments)
-  const assignedBoysRefs=dayAssignments.filter(a=>refRoles.has(a.role)&&workerMap.get(a.workerId)?.gender==='boys').length
-  const assignedGirlsRefs=dayAssignments.filter(a=>refRoles.has(a.role)&&workerMap.get(a.workerId)?.gender==='girls').length
-  const assignedBothRefs=dayAssignments.filter(a=>refRoles.has(a.role)&&workerMap.get(a.workerId)?.gender==='both').length
+  const assignedBoysRefs=dayAssignments.filter(a=>refRoles.has(a.role)&&(a.worker?.gender??workerMap.get(a.workerId)?.gender)==='boys').length
+  const assignedGirlsRefs=dayAssignments.filter(a=>refRoles.has(a.role)&&(a.worker?.gender??workerMap.get(a.workerId)?.gender)==='girls').length
+  const assignedBothRefs=dayAssignments.filter(a=>refRoles.has(a.role)&&(a.worker?.gender??workerMap.get(a.workerId)?.gender)==='both').length
   const assignedSKs=dayAssignments.filter(a=>a.role==='scorekeeper').length
 
   // Live conflict detection for the edit modal
