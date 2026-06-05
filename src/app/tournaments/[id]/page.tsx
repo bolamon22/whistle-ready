@@ -4,6 +4,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
+import ChatWidget from './ChatWidget'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
@@ -63,6 +64,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
         </div>
       )}
     </div>
+    {tournament && <ChatWidget tournamentId={params.id} tournamentName={tournament.name} />}
   )
 }
 

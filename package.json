@@ -9,10 +9,12 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.81",
     "@libsql/client": "^0.8.0",
     "@prisma/adapter-libsql": "^5.14.0",
     "@prisma/client": "^5.14.0",
     "@types/bcryptjs": "^2.4.6",
+    "ai": "^6.0.197",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.10.0",
     "dotenv": "^17.4.2",

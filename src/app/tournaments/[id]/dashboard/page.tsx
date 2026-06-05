@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import ChatWidget from '../ChatWidget'
 
 interface DashData {
   tournament: {
@@ -34,6 +35,7 @@ function StatCard({ label, value, sub, color = 'text-slate-800' }: { label: stri
       <div className="text-sm font-medium text-slate-600 mt-0.5">{label}</div>
       {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
     </div>
+    <ChatWidget tournamentId={String(id)} tournamentName={t.name} />
   )
 }
 
