@@ -14,7 +14,6 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const base = `/tournaments/${id}`
 
   const tabs = [
-    { href: base,                    label: 'Schedule',      exact: true },
     { href: `${base}/dashboard`,     label: 'Dashboard'                  },
     { href: `${base}/roster`,        label: 'Staff'                      },
     { href: `${base}/registrations`, label: 'Registrations'              },
