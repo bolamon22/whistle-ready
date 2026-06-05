@@ -16,23 +16,25 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       args: [params.id],
     })
     const row = result.rows[0]
-    const venues = row ? JSON.parse((row.venues as string) || '[]') : []
-    return NextResponse.json(venues)
+    const raw = row ? JSON.parse((row.venues as string) || '{}') : {}
+    // Support both old array format and new object format
+    if (Array.isArray(raw)) return NextResponse.json({ venues: raw, defaultAvailability: [] })
+    return NextResponse.json({ venues: raw.venues || [], defaultAvailability: raw.defaultAvailability || [] })
   } catch {
-    return NextResponse.json([])
+    return NextResponse.json({ venues: [], defaultAvailability: [] })
   }
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
-    const { venues } = await req.json()
+    const { venues, defaultAvailability } = await req.json()
     const client = getClient()
     try {
       await client.execute(`ALTER TABLE "Tournament" ADD COLUMN "venues" TEXT NOT NULL DEFAULT '[]'`)
     } catch { /* already exists */ }
     await client.execute({
       sql: 'UPDATE "Tournament" SET venues = ? WHERE id = ?',
-      args: [JSON.stringify(venues), params.id],
+      args: [JSON.stringify({ venues, defaultAvailability }), params.id],
     })
     return NextResponse.json({ ok: true })
   } catch (e: any) {

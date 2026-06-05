@@ -25,6 +25,8 @@ const DEFAULT_DIVISIONS = [
   'Girls Lower School A (7v7)', 'Girls Lower School B (7v7 - No 2033s)',
 ]
 
+interface TimeSlot { start: string; end: string }
+interface DayAvailability { date: string; slots: TimeSlot[] }
 interface Field { id: string; name: string; availStart?: string; availEnd?: string; divRestrictions?: string[] }
 interface Venue { id: string; name: string; fields: Field[] }
 
@@ -73,6 +75,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [newFieldNames, setNewFieldNames] = useState<Record<string, string>>({})
   const [bulkFieldCounts, setBulkFieldCounts] = useState<Record<string, string>>({})
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({})
+  const [defaultAvailability, setDefaultAvailability] = useState<DayAvailability[]>([]) 
+  const [tournamentDates, setTournamentDates] = useState<string[]>([])
   const [tName, setTName] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -85,6 +89,17 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(t => {
       setName(t.name); setTName(t.name)
+      // Build list of tournament dates
+      if (t.startDate && t.endDate) {
+        const dates: string[] = []
+        const cur = new Date(t.startDate + 'T12:00:00')
+        const end = new Date(t.endDate + 'T12:00:00')
+        while (cur <= end) {
+          dates.push(cur.toISOString().slice(0, 10))
+          cur.setDate(cur.getDate() + 1)
+        }
+        setTournamentDates(dates)
+      }
       setRates({ ...DEFAULT_PAY_RATES, ...JSON.parse(t.payRates) })
       setDivRules(JSON.parse(t.divisionRules || '{}'))
       try { const p = JSON.parse(t.registrationPricing || '{}'); if (p.tier1) setPricing(p) } catch {}
@@ -92,8 +107,12 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
       try { const v = JSON.parse(t.venues || '[]'); setVenues(v) } catch {}
       setLoading(false)
     })
-    fetch(`/api/venues/${params.id}`).then(r => r.json()).then(v => {
-      if (Array.isArray(v)) setVenues(v)
+    fetch(`/api/venues/${params.id}`).then(r => r.json()).then(data => {
+      if (Array.isArray(data)) { setVenues(data) } // legacy
+      else {
+        if (data.venues) setVenues(data.venues)
+        if (data.defaultAvailability) setDefaultAvailability(data.defaultAvailability)
+      }
     }).catch(() => {})
   }, [params.id])
 
@@ -110,7 +129,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
       }),
       fetch(`/api/venues/${params.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venues }),
+        body: JSON.stringify({ venues, defaultAvailability }),
       }),
     ])
     if (res.ok && venueRes.ok) { toast.success('Settings saved!'); setTName(name) } else toast.error('Failed to save')
@@ -210,6 +229,86 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           <SectionCard title="Venues & Fields" description="Complexes and fields where games are played" icon="🏟️"
             open={open === 'venues'} onToggle={() => toggle('venues')}
             badge={venues.length > 0 ? `${venues.length} venue${venues.length !== 1 ? 's' : ''}, ${totalFields} field${totalFields !== 1 ? 's' : ''}` : undefined}>
+
+            {/* Default Availability */}
+            {tournamentDates.length > 0 && (
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-gray-700 mb-1">📅 Default Field Availability</p>
+                <p className="text-xs text-gray-400 mb-3">
+                  Default hours for all fields. Override per field using the Availability toggle on each field below.
+                </p>
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 w-36">Date</th>
+                        <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Time Slots</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {tournamentDates.map(dateStr => {
+                        const dayAvail = defaultAvailability.find(d => d.date === dateStr)
+                        const slots: TimeSlot[] = dayAvail?.slots || []
+                        const d = new Date(dateStr + 'T12:00:00')
+                        const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric', year: 'numeric' })
+                        const updateSlot = (i: number, field: 'start' | 'end', val: string) => {
+                          setDefaultAvailability(prev => {
+                            const next = prev.filter(x => x.date !== dateStr)
+                            const updated = slots.map((s, idx) => idx === i ? { ...s, [field]: val } : s)
+                            return [...next, { date: dateStr, slots: updated }].sort((a,b) => a.date < b.date ? -1 : 1)
+                          })
+                        }
+                        const addSlot = () => {
+                          setDefaultAvailability(prev => {
+                            const next = prev.filter(x => x.date !== dateStr)
+                            return [...next, { date: dateStr, slots: [...slots, { start: '', end: '' }] }].sort((a,b) => a.date < b.date ? -1 : 1)
+                          })
+                        }
+                        const removeSlot = (i: number) => {
+                          setDefaultAvailability(prev => {
+                            const next = prev.filter(x => x.date !== dateStr)
+                            const updated = slots.filter((_, idx) => idx !== i)
+                            if (updated.length === 0) return next
+                            return [...next, { date: dateStr, slots: updated }].sort((a,b) => a.date < b.date ? -1 : 1)
+                          })
+                        }
+                        return (
+                          <tr key={dateStr} className="align-top">
+                            <td className="px-4 py-3 text-xs font-medium text-gray-700 whitespace-nowrap">{label}</td>
+                            <td className="px-4 py-3">
+                              <div className="space-y-1.5">
+                                {slots.length === 0 && (
+                                  <span className="text-xs text-gray-400 italic">No times set</span>
+                                )}
+                                {slots.map((slot, i) => (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <input type="time"
+                                      className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                      value={slot.start}
+                                      onChange={e => updateSlot(i, 'start', e.target.value)}
+                                    />
+                                    <span className="text-gray-400 text-xs">to</span>
+                                    <input type="time"
+                                      className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                      value={slot.end}
+                                      onChange={e => updateSlot(i, 'end', e.target.value)}
+                                    />
+                                    <button type="button" onClick={() => removeSlot(i)}
+                                      className="text-red-300 hover:text-red-500 text-xs">✕</button>
+                                  </div>
+                                ))}
+                                <button type="button" onClick={addSlot}
+                                  className="text-xs text-blue-500 hover:text-blue-700 hover:underline">+ Add time slot</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {venues.length === 0 && (
               <p className="text-sm text-gray-400 italic mb-4">No venues added yet.</p>
