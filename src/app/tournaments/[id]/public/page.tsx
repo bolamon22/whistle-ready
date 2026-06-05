@@ -71,51 +71,42 @@ function GameCard({ g, followedTeams, toggleFollow }: { g: Game, followedTeams: 
   )
 }
 
-function StandingsTable({ standings, followedTeams }: { standings: Standing[], followedTeams: string[] }) {
+function PoolTable({ pool, standings, followedTeams }: { pool: string, standings: Standing[], followedTeams: string[] }) {
   if (!standings.length) return null
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[360px]">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-3 sm:px-4 py-3 text-gray-500 font-semibold text-xs">Team</th>
-              <th className="text-center px-2 py-3 text-gray-500 font-semibold w-8 text-xs">W</th>
-              <th className="text-center px-2 py-3 text-gray-500 font-semibold w-8 text-xs">L</th>
-              <th className="text-center px-2 py-3 text-gray-500 font-semibold w-8 text-xs">T</th>
-              <th className="hidden sm:table-cell text-center px-3 py-3 text-gray-500 font-semibold w-12 text-xs">GF</th>
-              <th className="hidden sm:table-cell text-center px-3 py-3 text-gray-500 font-semibold w-12 text-xs">GA</th>
-              <th className="text-center px-2 py-3 text-gray-500 font-semibold w-10 text-xs">+/-</th>
-              <th className="text-center px-2 py-3 text-gray-500 font-semibold w-10 text-xs">Pts</th>
+    <div className="border border-gray-200 rounded overflow-hidden">
+      <div className="text-center py-2 font-bold text-sm border-b border-gray-200 bg-white">{pool}</div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-200">
+            <th className="text-left px-3 py-2 font-bold text-xs text-gray-800">Team</th>
+            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-8">W</th>
+            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-8">L</th>
+            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-10">GS</th>
+            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-10">GA</th>
+          </tr>
+        </thead>
+        <tbody>
+          {standings.map((s, i) => (
+            <tr key={s.team} className="border-t border-gray-100">
+              <td className="px-3 py-2">
+                <span className={`text-xs font-medium ${followedTeams.includes(s.team) ? 'text-blue-600' : 'text-rose-700'}`}>{s.team}</span>
+              </td>
+              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.w}</td>
+              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.l}</td>
+              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.gf}</td>
+              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.ga}</td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {standings.map((s, i) => (
-              <tr key={s.team} className={i === 0 ? 'bg-yellow-50/50' : ''}>
-                <td className="px-3 sm:px-4 py-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-xs text-gray-400 w-4 inline-block text-center">{i+1}</span>}</span>
-                    <span className="font-medium text-gray-800 text-xs sm:text-sm">{s.team}</span>
-                    {followedTeams.includes(s.team) && <span className="text-xs">⭐</span>}
-                  </div>
-                </td>
-                <td className="px-2 py-2.5 text-center font-semibold text-green-700 text-xs">{s.w}</td>
-                <td className="px-2 py-2.5 text-center font-semibold text-red-600 text-xs">{s.l}</td>
-                <td className="px-2 py-2.5 text-center text-gray-500 text-xs">{s.t}</td>
-                <td className="hidden sm:table-cell px-3 py-2.5 text-center text-gray-600 text-xs">{s.gf}</td>
-                <td className="hidden sm:table-cell px-3 py-2.5 text-center text-gray-600 text-xs">{s.ga}</td>
-                <td className={`px-2 py-2.5 text-center font-medium text-xs ${s.gf-s.ga > 0 ? 'text-green-600' : s.gf-s.ga < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                  {s.gf-s.ga > 0 ? '+' : ''}{s.gf-s.ga}
-                </td>
-                <td className="px-2 py-2.5 text-center font-bold text-blue-700 text-xs">{s.pts}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="px-3 py-2 text-xs text-gray-400 bg-gray-50 border-t border-gray-100">W=3pts · T=1pt · Championship games excluded</div>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
+}
+
+function StandingsTable({ standings, followedTeams }: { standings: Standing[], followedTeams: string[] }) {
+  if (!standings.length) return null
+  return <PoolTable pool="" standings={standings} followedTeams={followedTeams} />
 }
 
 export default function PublicTournamentPage() {
@@ -247,20 +238,18 @@ export default function PublicTournamentPage() {
               const pools = Array.from(new Set(divGames.map(g => g.pool).filter(Boolean))).sort() as string[]
               return (
                 <div key={div}>
-                  <h2 className="text-sm font-extrabold text-gray-700 uppercase tracking-wider mb-3 border-l-4 border-blue-500 pl-3">{div}</h2>
+                  <h2 className="text-sm font-extrabold text-gray-700 uppercase tracking-wider mb-1 border-l-4 border-blue-500 pl-3">{div}</h2>
                   {pools.length > 0 ? (
-                    <div className="space-y-4">
-                      {pools.map(pool => {
-                        const standings = calcStandings(games, div, pool)
-                        if (!standings.length) return null
-                        return (
-                          <div key={pool}>
-                            <div className="flex items-center gap-2 mb-2"><span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">Pool {pool}</span></div>
-                            <StandingsTable standings={standings} followedTeams={followedTeams} />
-                          </div>
-                        )
-                      })}
-                    </div>
+                    <>
+                      <p className="text-xs text-gray-400 mb-3 pl-3">Pool Standings</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {pools.map(pool => {
+                          const standings = calcStandings(games, div, pool)
+                          if (!standings.length) return null
+                          return <PoolTable key={pool} pool={pool} standings={standings} followedTeams={followedTeams} />
+                        })}
+                      </div>
+                    </>
                   ) : <StandingsTable standings={calcStandings(games, div)} followedTeams={followedTeams} />}
                 </div>
               )
