@@ -11,3 +11,14 @@ export async function POST(req: Request) {
   const payRate=worker.payRateOverride??getPayRate(worker.certLevel,role,payRates)
   return NextResponse.json(await prisma.assignment.upsert({where:{gameId_role:{gameId,role}},create:{gameId,workerId,role,payRate},update:{workerId,payRate},include:{worker:true}}),{status:201})
 }
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const tournamentId = searchParams.get('tournamentId')
+  if (!tournamentId) return NextResponse.json([], { status: 200 })
+  const assignments = await prisma.assignment.findMany({
+    where: { game: { tournamentId } },
+    include: { worker: true },
+  })
+  return NextResponse.json(assignments.map(a => ({ ...a, gameId: a.gameId })))
+}
