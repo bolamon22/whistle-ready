@@ -35,7 +35,6 @@ function StatCard({ label, value, sub, color = 'text-slate-800' }: { label: stri
       <div className="text-sm font-medium text-slate-600 mt-0.5">{label}</div>
       {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
     </div>
-    <ChatWidget tournamentId={String(id)} tournamentName={t.name} />
   )
 }
 
@@ -103,6 +102,7 @@ export default function DashboardPage() {
   const topDivisions = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1]).slice(0, 8)
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50">
 
       {/* ── Header ────────────────────────────────────────────────────── */}
@@ -442,5 +442,7 @@ export default function DashboardPage() {
 
       </div>
     </div>
+    <ChatWidget tournamentId={String(id)} tournamentName={t.name} />
+    </>
   )
 }
