@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@libsql/client": "^0.8.0",
-        "@prisma/adapter-libsql": "^5.14.0",
+    "@prisma/adapter-libsql": "^5.14.0",
     "@prisma/client": "^5.14.0",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
@@ -21,8 +21,9 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1",
-    "xlsx": "^0.18.5",
-    "stripe": "^14.0.0"
+    "resend": "^6.12.4",
+    "stripe": "^14.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20",

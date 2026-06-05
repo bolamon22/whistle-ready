@@ -8,6 +8,7 @@ import TournamentNav from '../TournamentNav'
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
 interface RosterEntry { id:string;workerId:string;gameTarget:number;notes:string|null }
 interface Tournament { id:string;name:string;logoUrl:string }
+interface InviteForm { email: string; name: string }
 
 const GENDERS = [{ value:'both',label:'Boys & Girls' },{ value:'boys',label:'Boys only' },{ value:'girls',label:'Girls only' }]
 
@@ -83,6 +84,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const [tournament, setTournament] = useState<Tournament|null>(null)
   const [allWorkers, setAllWorkers] = useState<Worker[]>([])
   const [roster, setRoster] = useState<RosterEntry[]>([])
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', name: '' })
+  const [inviteSending, setInviteSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string|null>(null)
   const [editSaving, setEditSaving] = useState(false)
@@ -190,6 +194,69 @@ export default function RosterPage({ params }: { params:{id:string} }) {
 
   return (
     <div>
+      {/* ── Invite modal ── */}
+      {showInvite && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="px-6 py-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800">Invite Staff Member</h2>
+              <p className="text-sm text-slate-500 mt-1">They'll receive an email to set up their profile.</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Email address *</label>
+                <input
+                  className="input"
+                  type="email"
+                  placeholder="staff@example.com"
+                  value={inviteForm.email}
+                  onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))}
+                  required
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Name <span className="text-slate-400 font-normal">(optional)</span></label>
+                <input
+                  className="input"
+                  placeholder="Their name"
+                  value={inviteForm.name}
+                  onChange={e => setInviteForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="px-6 pb-5 flex gap-3">
+              <button className="btn-secondary flex-1" onClick={() => { setShowInvite(false); setInviteForm({ email: '', name: '' }) }}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary flex-1 disabled:opacity-50"
+                disabled={!inviteForm.email || inviteSending}
+                onClick={async () => {
+                  setInviteSending(true)
+                  const res = await fetch('/api/invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: inviteForm.email, name: inviteForm.name || null, tournamentId: params.id }),
+                  })
+                  const data = await res.json()
+                  setInviteSending(false)
+                  if (res.ok) {
+                    toast.success(`Invite sent to ${inviteForm.email}`)
+                    setShowInvite(false)
+                    setInviteForm({ email: '', name: '' })
+                  } else {
+                    toast.error(data.error || 'Failed to send invite')
+                  }
+                }}
+              >
+                {inviteSending ? 'Sending…' : '✉️ Send Invite'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
 
       {/* Staff sub-nav */}
@@ -217,6 +284,10 @@ export default function RosterPage({ params }: { params:{id:string} }) {
           <h1 className="section-title">Staff Roster</h1>
           <p className="text-sm text-slate-500 mt-1">Confirm who's working this tournament · {onRoster.length} confirmed</p>
         </div>
+        <button onClick={() => setShowInvite(true)}
+          className="btn-primary btn-sm flex items-center gap-2">
+          ✉️ Invite Staff
+        </button>
       </div>
 
       {/* ── On Roster ── */}

@@ -349,3 +349,17 @@ model TournamentTransaction {
   @@index([tournamentId])
   @@index([type])
 }
+
+model StaffInvite {
+  id           String    @id @default(cuid())
+  token        String    @unique
+  email        String
+  name         String?
+  tournamentId String?
+  usedAt       DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+}
