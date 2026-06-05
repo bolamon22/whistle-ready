@@ -87,7 +87,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [saving, setSaving] = useState(false)
   const [newKeyword, setNewKeyword] = useState('')
   const [newCount, setNewCount] = useState('1')
-  // Individual registration
+  // Registration types
+  const [teamRegEnabled, setTeamRegEnabled] = useState(true)
   const [indivRegEnabled, setIndivRegEnabled] = useState(false)
   const [indivRegDesc, setIndivRegDesc] = useState('')
   const [indivRegTiers, setIndivRegTiers] = useState<{id:string;name:string;price:number;description:string}[]>([])
@@ -117,7 +118,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
       try { const p = JSON.parse(t.registrationPricing || '{}'); if (p.tier1) setPricing(p) } catch {}
       try { const d = JSON.parse(t.registrationDivisions || '[]'); if (d.length > 0) setDivisions(d) } catch {}
       try { const v = JSON.parse(t.venues || '[]'); setVenues(v) } catch {}
-      setIndivRegEnabled(Boolean(d.individualRegEnabled))
+      setTeamRegEnabled(d.teamRegEnabled !== false)
+    setIndivRegEnabled(Boolean(d.individualRegEnabled))
     setIndivRegDesc(d.individualRegDescription || '')
     try { setIndivRegTiers(JSON.parse(d.individualRegTiers || '[]')) } catch {}
     setLoading(false)
@@ -140,6 +142,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           name, payRates: rates, divisionRules: divRules,
           registrationPricing: JSON.stringify(pricing),
           registrationDivisions: JSON.stringify(divisions),
+          teamRegEnabled,
           individualRegEnabled: indivRegEnabled,
           individualRegDescription: indivRegDesc,
           individualRegTiers: JSON.stringify(indivRegTiers),
@@ -643,11 +646,44 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
             </div>
           </SectionCard>
 
-          {/* Individual Player Registration */}
-          <SectionCard title="Individual Player Registration" description="Charge players individually to register" icon="🏃"
-            open={false} onToggle={() => {}} badge={indivRegEnabled ? 'Enabled' : undefined}>
+          {/* Registration Types */}
+          <SectionCard title="Registration Types" description="Choose which registration forms to offer" icon="📋"
+            open={false} onToggle={() => {}} badge={[teamRegEnabled && 'Teams', indivRegEnabled && 'Individual'].filter(Boolean).join(' + ') || undefined}>
+            <div className="space-y-5">
+              {/* Team Registration */}
+              <div className={`p-4 rounded-xl border ${teamRegEnabled ? 'border-teal-300 bg-teal-50' : 'border-gray-200'}`}>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" checked={teamRegEnabled} onChange={e => setTeamRegEnabled(e.target.checked)} className="accent-teal-500 w-4 h-4 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Team Registration</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Clubs register and pay for entire teams. Use for standard team tournaments.</p>
+                    {teamRegEnabled && (
+                      <p className="text-xs text-teal-600 mt-1 font-medium">Link: /tournaments/{params.id}/register</p>
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              {/* Individual Registration */}
+              <div className={`p-4 rounded-xl border ${indivRegEnabled ? 'border-teal-300 bg-teal-50' : 'border-gray-200'}`}>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" checked={indivRegEnabled} onChange={e => setIndivRegEnabled(e.target.checked)} className="accent-teal-500 w-4 h-4 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Individual Player Registration</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Players register and pay individually. Great for free agents or hybrid tournaments.</p>
+                    {indivRegEnabled && (
+                      <p className="text-xs text-teal-600 mt-1 font-medium">Link: /tournaments/{params.id}/individual-register</p>
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-xs text-sky-700">
+                💡 You can enable both — teams register their players and free agents register individually.
+              </div>
+
             <div className="space-y-4">
-              <label className="flex items-center gap-3 cursor-pointer">
+              <label className="flex items-center gap-3 cursor-pointer" style={{display:'none'}}>
                 <input type="checkbox" checked={indivRegEnabled} onChange={e => setIndivRegEnabled(e.target.checked)} className="accent-teal-500 w-4 h-4" />
                 <span className="text-sm font-medium text-gray-700">Enable individual player registration for this tournament</span>
               </label>

@@ -59,6 +59,8 @@ async function run() {
       }
     }
 
+    try { await client.execute(`ALTER TABLE "Tournament" ADD COLUMN "teamRegEnabled" INTEGER NOT NULL DEFAULT 1`) }
+    catch (e) { if (!e.message?.includes('duplicate column')) throw e }
     console.log('✅ IndividualRegistration table + Tournament columns added')
   } catch (e) {
     console.error('❌ Error:', e.message)
