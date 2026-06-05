@@ -260,13 +260,20 @@ export default function ClubDirectorDashboard() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-5 border-b border-gray-200 overflow-x-auto">
+      <div className="flex gap-2 mb-5 border-b border-gray-200 overflow-x-auto items-end">
         {TABS.filter(t => !t.perm || perms[t.perm] !== false).map(t => (
           <button key={t.key} onClick={() => switchTab(t.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${tab === t.key ? 'border-violet-500 text-violet-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {t.label}
           </button>
         ))}
+        <div className="flex-1" />
+        {selTournament && (
+          <a href={`/tournaments/${selTournament}/public`} target="_blank" rel="noopener noreferrer"
+            className="px-3 py-2 text-sm font-semibold text-rose-600 hover:text-rose-700 whitespace-nowrap border-b-2 border-transparent hover:border-rose-300 transition-colors flex items-center gap-1">
+            🌐 Public View
+          </a>
+        )}
       </div>
 
       {/* History tab */}
