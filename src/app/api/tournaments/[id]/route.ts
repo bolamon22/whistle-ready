@@ -19,6 +19,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.divisionRules!==undefined&&{divisionRules:JSON.stringify(b.divisionRules)}),
     ...(b.registrationPricing!==undefined&&{registrationPricing:b.registrationPricing}),
     ...(b.registrationDivisions!==undefined&&{registrationDivisions:b.registrationDivisions}),
+    ...(b.venues!==undefined&&{venues:b.venues}),
   }}))
 }
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {

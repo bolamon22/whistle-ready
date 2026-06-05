@@ -22,6 +22,7 @@ model Tournament {
   registrationPricing   String @default("{\"tier1\":1495,\"tier1Max\":3,\"tier2\":1450,\"tier2Max\":6,\"tier3\":1395,\"sevenVSeven\":1095}")
   registrationDivisions String @default("[\"Boys 2030\",\"Boys 2029\",\"Boys 2028\",\"Boys 2027\",\"Boys 2026\",\"Boys 2025\",\"Boys 2024\",\"Boys 2023\",\"Girls 2030\",\"Girls 2029\",\"Girls 2028\",\"Girls 2027\",\"Girls 2026\",\"Girls 2025\",\"Girls 2024\",\"Girls 2023\",\"HS Boys JV\",\"HS Boys Varsity\",\"HS Girls JV\",\"HS Girls Varsity\"]")
   divisionRules     String   @default("{}")
+  venues            String   @default("[]")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

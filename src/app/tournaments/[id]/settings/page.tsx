@@ -25,7 +25,12 @@ const DEFAULT_DIVISIONS = [
   'Girls Lower School A (7v7)', 'Girls Lower School B (7v7 - No 2033s)',
 ]
 
-type Section = 'general' | 'fees' | 'divisions' | 'payrates' | 'refrules'
+interface Field { id: string; name: string }
+interface Venue { id: string; name: string; fields: Field[] }
+
+function uid() { return Math.random().toString(36).slice(2, 10) }
+
+type Section = 'general' | 'fees' | 'divisions' | 'payrates' | 'refrules' | 'venues'
 
 function SectionCard({ title, description, icon, open, onToggle, children, badge }: {
   title: string; description: string; icon: string; open: boolean
@@ -63,6 +68,9 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [pricing, setPricing] = useState(DEFAULT_PRICING)
   const [divisions, setDivisions] = useState<string[]>(DEFAULT_DIVISIONS)
   const [newDivision, setNewDivision] = useState('')
+  const [venues, setVenues] = useState<Venue[]>([])
+  const [newVenueName, setNewVenueName] = useState('')
+  const [newFieldNames, setNewFieldNames] = useState<Record<string, string>>({})
   const [tName, setTName] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -70,7 +78,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [newCount, setNewCount] = useState('1')
   const [open, setOpen] = useState<Section>('general')
 
-  const toggle = (s: Section) => setOpen(o => o === s ? ('') as any : s)
+  const toggle = (s: Section) => setOpen(o => o === s ? ('' as any) : s)
 
   useEffect(() => {
     fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(t => {
@@ -79,6 +87,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
       setDivRules(JSON.parse(t.divisionRules || '{}'))
       try { const p = JSON.parse(t.registrationPricing || '{}'); if (p.tier1) setPricing(p) } catch {}
       try { const d = JSON.parse(t.registrationDivisions || '[]'); if (d.length > 0) setDivisions(d) } catch {}
+      try { const v = JSON.parse(t.venues || '[]'); setVenues(v) } catch {}
       setLoading(false)
     })
   }, [params.id])
@@ -87,10 +96,47 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
     e.preventDefault(); setSaving(true)
     const res = await fetch(`/api/tournaments/${params.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, payRates: rates, divisionRules: divRules, registrationPricing: JSON.stringify(pricing), registrationDivisions: JSON.stringify(divisions) })
+      body: JSON.stringify({
+        name, payRates: rates, divisionRules: divRules,
+        registrationPricing: JSON.stringify(pricing),
+        registrationDivisions: JSON.stringify(divisions),
+        venues: JSON.stringify(venues),
+      })
     })
     if (res.ok) { toast.success('Settings saved!'); setTName(name) } else toast.error('Failed to save')
     setSaving(false)
+  }
+
+  // Venues helpers
+  function addVenue() {
+    if (!newVenueName.trim()) return
+    setVenues(v => [...v, { id: uid(), name: newVenueName.trim(), fields: [] }])
+    setNewVenueName('')
+  }
+
+  function removeVenue(venueId: string) {
+    setVenues(v => v.filter(x => x.id !== venueId))
+  }
+
+  function updateVenueName(venueId: string, name: string) {
+    setVenues(v => v.map(x => x.id === venueId ? { ...x, name } : x))
+  }
+
+  function addField(venueId: string) {
+    const name = (newFieldNames[venueId] || '').trim()
+    if (!name) return
+    setVenues(v => v.map(x => x.id === venueId ? { ...x, fields: [...x.fields, { id: uid(), name }] } : x))
+    setNewFieldNames(f => ({ ...f, [venueId]: '' }))
+  }
+
+  function removeField(venueId: string, fieldId: string) {
+    setVenues(v => v.map(x => x.id === venueId ? { ...x, fields: x.fields.filter(f => f.id !== fieldId) } : x))
+  }
+
+  function updateFieldName(venueId: string, fieldId: string, name: string) {
+    setVenues(v => v.map(x => x.id === venueId
+      ? { ...x, fields: x.fields.map(f => f.id === fieldId ? { ...f, name } : f) }
+      : x))
   }
 
   function addRule() { if (!newKeyword.trim()) return; setDivRules(r => ({ ...r, [newKeyword.trim()]: parseInt(newCount) || 1 })); setNewKeyword(''); setNewCount('1') }
@@ -98,6 +144,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
 
   if (loading) return <div className="text-slate-400 text-center py-12">Loading…</div>
 
+  const totalFields = venues.reduce((s, v) => s + v.fields.length, 0)
   const checkedCount = divisions.filter(d => DEFAULT_DIVISIONS.includes(d)).length + divisions.filter(d => !DEFAULT_DIVISIONS.includes(d)).length
 
   return (
@@ -123,6 +170,83 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
               <label className="block text-sm font-medium text-gray-700 mb-1">Tournament Name</label>
               <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={name} onChange={e => setName(e.target.value)} required />
+            </div>
+          </SectionCard>
+
+          {/* Venues & Fields */}
+          <SectionCard title="Venues & Fields" description="Complexes and fields where games are played" icon="🏟️"
+            open={open === 'venues'} onToggle={() => toggle('venues')}
+            badge={venues.length > 0 ? `${venues.length} venue${venues.length !== 1 ? 's' : ''}, ${totalFields} field${totalFields !== 1 ? 's' : ''}` : undefined}>
+
+            {venues.length === 0 && (
+              <p className="text-sm text-gray-400 italic mb-4">No venues added yet.</p>
+            )}
+
+            <div className="space-y-4">
+              {venues.map(venue => (
+                <div key={venue.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                  {/* Venue header */}
+                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200">
+                    <span className="text-gray-400 text-sm">🏟</span>
+                    <input
+                      className="flex-1 bg-transparent text-sm font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1"
+                      value={venue.name}
+                      onChange={e => updateVenueName(venue.id, e.target.value)}
+                      placeholder="Venue name"
+                    />
+                    <button type="button" onClick={() => removeVenue(venue.id)}
+                      className="text-red-400 hover:text-red-600 text-sm px-1">✕</button>
+                  </div>
+
+                  {/* Fields list */}
+                  <div className="divide-y divide-gray-100">
+                    {venue.fields.map((field, idx) => (
+                      <div key={field.id} className="flex items-center gap-2 px-4 py-2.5">
+                        <span className="text-xs text-gray-400 w-5 text-right">{idx + 1}</span>
+                        <input
+                          className="flex-1 text-sm text-gray-700 border border-transparent focus:border-gray-300 focus:outline-none rounded px-2 py-1 focus:ring-1 focus:ring-blue-400"
+                          value={field.name}
+                          onChange={e => updateFieldName(venue.id, field.id, e.target.value)}
+                          placeholder={`Field ${idx + 1}`}
+                        />
+                        <button type="button" onClick={() => removeField(venue.id, field.id)}
+                          className="text-red-300 hover:text-red-500 text-sm px-1">✕</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add field row */}
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-t border-gray-100">
+                    <span className="text-xs text-gray-400 w-5" />
+                    <input
+                      className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Field name (e.g. 01, North, Stadium)"
+                      value={newFieldNames[venue.id] || ''}
+                      onChange={e => setNewFieldNames(f => ({ ...f, [venue.id]: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addField(venue.id) } }}
+                    />
+                    <button type="button" onClick={() => addField(venue.id)}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                      + Add Field
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add venue */}
+            <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
+              <input
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Venue / complex name (e.g. Tamarac Sports Complex)"
+                value={newVenueName}
+                onChange={e => setNewVenueName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addVenue() } }}
+              />
+              <button type="button" onClick={addVenue}
+                className="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+                + Add Venue
+              </button>
             </div>
           </SectionCard>
 
