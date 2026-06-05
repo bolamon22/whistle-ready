@@ -24,3 +24,9 @@ export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   await prisma.game.delete({ where:{id:params.id} })
   return NextResponse.json({ ok:true })
 }
+
+export async function GET(_: Request, { params }: { params: { id: string } }) {
+  const game = await prisma.game.findUnique({ where: { id: params.id } })
+  if (!game) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(game)
+}

@@ -29,6 +29,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     { href: `${base}/scores`,              label: '🎯 Post Scores'                  },
     { href: `${base}/assignments`,         label: '📌 Assignments'                  },
     { href: `${base}/results`,             label: '📊 Results'                      },
+    { href: `${base}/staff-view`,          label: '👤 Staff View'                   },
   ]
 
   const isActive = (href: string, exact?: boolean) => {
