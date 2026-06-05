@@ -95,17 +95,17 @@ function PoolCard({division,pool,standings,followedTeams,onScheduleClick}:{divis
   )
 }
 
-type DivTab = 'division'|'standings'|'schedule'|'bracket'
+type DivTab = 'standings'|'schedule'|'bracket'
 
 function DivisionView({division,games,followedTeams,toggleFollow}:{division:string;games:Game[];followedTeams:string[];toggleFollow:(t:string)=>void}) {
-  const [divTab,setDivTab]=useState<DivTab>('division')
+  const [divTab,setDivTab]=useState<DivTab>('standings')
   const divGames=games.filter(g=>g.division===division&&!g.isCanceled)
   const pools=Array.from(new Set(divGames.map(g=>g.pool).filter(Boolean))).sort() as string[]
   const scheduleGames=divGames.filter(g=>!g.isChampionship).sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)
   const bracketGames=divGames.filter(g=>g.isChampionship).sort((a,b)=>a.startTime<b.startTime?-1:1)
 
-  const tabs:DivTab[]=['division','standings','schedule','bracket']
-  const tabLabels:{[k in DivTab]:string}={division:'Division',standings:'Standings',schedule:'Schedule',bracket:'Bracket'}
+  const tabs:DivTab[]=['standings','schedule','bracket']
+  const tabLabels:{[k in DivTab]:string}={standings:'Standings',schedule:'Schedule',bracket:'Bracket'}
 
   return (
     <div>
@@ -118,15 +118,6 @@ function DivisionView({division,games,followedTeams,toggleFollow}:{division:stri
         ))}
       </div>
 
-      {divTab==='division' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {pools.length>0 ? pools.map(pool=>(
-            <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool)} followedTeams={followedTeams} onScheduleClick={()=>setDivTab('schedule')}/>
-          )) : (
-            <PoolCard division={division} pool="" standings={calcStandings(games,division)} followedTeams={followedTeams} onScheduleClick={()=>setDivTab('schedule')}/>
-          )}
-        </div>
-      )}
 
       {divTab==='standings' && (
         <div className="space-y-4">
