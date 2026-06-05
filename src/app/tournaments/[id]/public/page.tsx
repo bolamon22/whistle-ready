@@ -93,7 +93,7 @@ function PoolCard({division,pool,standings,followedTeams,onScheduleClick,onTeamC
           </table>
         </div>
       )}
-      <button onClick={onScheduleClick} className="w-full bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold uppercase tracking-widest py-3 transition-colors">Schedule</button>
+      <button onClick={onScheduleClick} className="w-full bg-[#0f1f3d] hover:bg-slate-700 text-white text-xs font-bold uppercase tracking-widest py-3 transition-colors">Schedule</button>
     </div>
   )
 }
@@ -117,7 +117,7 @@ function DivisionView({division,games,followedTeams,toggleFollow}:{division:stri
       <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-xl overflow-hidden shadow-sm">
         {tabs.map(t=>(
           <button key={t} onClick={()=>setDivTab(t)}
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-wide transition-colors ${divTab===t?'bg-gray-900 text-white':'text-gray-500 hover:bg-gray-50'}`}>
+            className={`flex-1 py-3 text-xs font-bold uppercase tracking-wide transition-colors ${divTab===t?'bg-[#0f1f3d] text-white':'text-gray-500 hover:bg-gray-50'}`}>
             {tabLabels[t]}
           </button>
         ))}
@@ -324,13 +324,13 @@ export default function PublicTournamentPage() {
       )}
 
       {/* Sport header bar */}
-      <div className="bg-gray-800 text-white px-4 py-2.5 flex items-center gap-2">
+      <div className="bg-[#0f1f3d] text-white px-4 py-2.5 flex items-center gap-2">
         <span className="text-sm">🏈</span>
         <span className="text-xs font-bold uppercase tracking-widest text-gray-300">{tournament?.sport||'Flag Football'}</span>
       </div>
 
       {/* Tournament card */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
+      <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-5 flex gap-4 items-start">
           {tournament?.logoUrl ? (
             <img src={tournament.logoUrl} alt="logo" className="w-20 h-20 object-contain rounded-xl border border-gray-100 flex-shrink-0"/>
@@ -339,7 +339,7 @@ export default function PublicTournamentPage() {
           )}
           <div className="flex-1 min-w-0">
             <h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">{tournament?.name}</h1>
-            <p className="text-sm font-semibold text-rose-600 mt-0.5">
+            <p className="text-sm font-semibold text-teal-600 mt-0.5">
               {tournament?.startDate&&fmtDate(tournament.startDate)}{tournament?.endDate&&tournament.endDate!==tournament.startDate&&` - ${fmtDate(tournament.endDate)}`}
             </p>
             <p className="text-sm mt-0.5">
@@ -352,7 +352,7 @@ export default function PublicTournamentPage() {
             </p>
             <div className="flex flex-wrap gap-2 mt-3">
               <Link href={`/tournaments/${id}/player-register`} target="_blank"
-                className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded transition-colors">
+                className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
                 📋 Register
               </Link>
               <button className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold px-3 py-2 rounded hover:bg-green-200 transition-colors">
