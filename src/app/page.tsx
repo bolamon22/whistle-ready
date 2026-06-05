@@ -12,6 +12,7 @@ interface Tournament {
 }
 
 const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
+const fmtDate = (d: string) => { if (!d) return ''; const [y,m,day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}/${y}` }
 const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50' }
 
 const ADMIN_LINKS = [
@@ -272,7 +273,7 @@ export default function HomePage() {
                     <h3 className="font-bold text-slate-900 text-lg truncate">{t.name}</h3>
                     {(t.startDate || dates.length > 0) && (
                       <p className="text-sm text-slate-500 mt-0.5">
-                        {t.startDate ? (t.endDate && t.endDate !== t.startDate ? `${t.startDate} – ${t.endDate}` : t.startDate) : dates.map(d=>formatDate(d)).join(' & ')}
+                        {t.startDate ? (t.endDate && t.endDate !== t.startDate ? `${fmtDate(t.startDate)} – ${fmtDate(t.endDate)}` : fmtDate(t.startDate)) : dates.map(d=>formatDate(d)).join(' & ')}
                       </p>
                     )}
                     {t.location && <p className="text-xs text-slate-400 mt-0.5 truncate">📍 {t.location}</p>}
