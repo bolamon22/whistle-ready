@@ -64,7 +64,6 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
         </div>
       )}
     </div>
-    {tournament && <ChatWidget tournamentId={params.id} tournamentName={tournament.name} />}
   )
 }
 
@@ -977,6 +976,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
     </div>
+    {tournament && <ChatWidget tournamentId={params.id} tournamentName={tournament.name} />}
   )
 }
 
