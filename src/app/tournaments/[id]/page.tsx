@@ -338,6 +338,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   ;[...new Set(dayGames.map(g=>g.division))].forEach(d=>divColorMap.set(d,getDivisionColor(d)))
 
   return(
+    <>
     <div>
       {/* Import modal */}
       {importStep==='mapping'&&(
@@ -977,6 +978,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
       )}
     </div>
     {tournament && <ChatWidget tournamentId={params.id} tournamentName={tournament.name} />}
+    </>
   )
 }
 
