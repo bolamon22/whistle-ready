@@ -896,7 +896,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           <div className="mt-4 bg-white border border-gray-200 rounded-2xl p-4 space-y-2 shadow-sm">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Summary</p>
             <div className="text-xs text-gray-500 space-y-1">
-              <div className="flex justify-between"><span>Divisions</span><span className="font-semibold text-gray-700">{divisions.length}</span></div>
+              <div className="flex justify-between"><span>Divisions</span><span className="font-semibold text-gray-700">{divItems.filter(i => i.checked).length + customDivisions.length}</span></div>
               <div className="flex justify-between"><span>Venues</span><span className="font-semibold text-gray-700">{venues.length}</span></div>
               <div className="flex justify-between"><span>Total fields</span><span className="font-semibold text-gray-700">{venues.reduce((s, v) => s + v.fields.length, 0)}</span></div>
               <div className="flex justify-between"><span>Sections done</span><span className="font-semibold text-gray-700">{SECTIONS.filter(s => isComplete(s.id)).length}/{SECTIONS.length}</span></div>
