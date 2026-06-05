@@ -200,10 +200,11 @@ export default function DashboardPage() {
           <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Admin</h2>
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
 
-            <Hub icon="🏆" label="Competition" count={3} accent="bg-violet-100 text-violet-600">
-              <HubItem href={`/tournaments/${id}/builder`}  icon="🏗"  label="Bracket builder" />
-              <HubItem href={`/tournaments/${id}`}          icon="📅"  label="Master schedule" />
-              <HubItem href={`/tournaments/${id}/scores`}   icon="🎯"  label="Score input" />
+            <Hub icon="🏆" label="Competition" count={4} accent="bg-violet-100 text-violet-600">
+              <HubItem href={`/tournaments/${id}/builder`}    icon="🏗"  label="Tournament builder" />
+              <HubItem href={`/tournaments/${id}/divisions`}  icon="🏅"  label="Divisions & Teams" />
+              <HubItem href={`/tournaments/${id}`}            icon="📅"  label="Master schedule" />
+              <HubItem href={`/tournaments/${id}/scores`}     icon="🎯"  label="Score input" />
             </Hub>
 
             <Hub icon="👥" label="Participants" count={2} accent="bg-rose-100 text-rose-600">
