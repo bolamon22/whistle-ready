@@ -74,6 +74,26 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   return(
     <div>
       <TournamentNav id={params.id} name={data.tournamentName} logoUrl={data.tournamentLogo} />
+
+      {/* Staff sub-nav */}
+      <div className="flex items-center gap-1 mb-6 border-b border-slate-200">
+        <Link href={`/tournaments/${params.id}/roster`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+          👥 Staff Roster
+        </Link>
+        <Link href={`/tournaments/${params.id}/availability`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+          🗓 Availability
+        </Link>
+        <Link href={`/tournaments/${params.id}/time-entries`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+          ⏱ Time Entries
+        </Link>
+        <Link href={`/tournaments/${params.id}/pay-summary`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-sky-600 text-sky-700 transition-colors">
+          💰 Pay Summary
+        </Link>
+      </div>
       <div className="page-header">
         <div>
           <h1 className="section-title">Pay Summary</h1>

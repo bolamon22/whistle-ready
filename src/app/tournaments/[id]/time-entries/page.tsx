@@ -76,6 +76,26 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
   return(
     <div>
       <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
+
+      {/* Staff sub-nav */}
+      <div className="flex items-center gap-1 mb-6 border-b border-slate-200">
+        <Link href={`/tournaments/${params.id}/roster`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+          👥 Staff Roster
+        </Link>
+        <Link href={`/tournaments/${params.id}/availability`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+          🗓 Availability
+        </Link>
+        <Link href={`/tournaments/${params.id}/time-entries`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-sky-600 text-sky-700 transition-colors">
+          ⏱ Time Entries
+        </Link>
+        <Link href={`/tournaments/${params.id}/pay-summary`}
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+          💰 Pay Summary
+        </Link>
+      </div>
       <div className="page-header"><div><h1 className="section-title">Hourly Staff Time</h1><p className="text-sm text-slate-500 mt-1">Athletic Trainers &amp; Field Ops — tap Start/Stop to track hours</p></div></div>
 
       {dates.length>0&&<div className="flex gap-1 mb-5 border-b border-slate-200">{dates.map(d=><button key={d} onClick={()=>setActiveDay(d)} className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${activeDay===d?'border-sky-600 text-sky-700':'border-transparent text-slate-500 hover:text-slate-700'}`}>{formatDate(d)}</button>)}</div>}
