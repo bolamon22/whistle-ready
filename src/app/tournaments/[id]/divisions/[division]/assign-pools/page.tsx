@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
@@ -15,9 +15,8 @@ export default function AssignPoolsPage() {
   const [unassigned, setUnassigned] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const dragTeam = useRef<string | null>(null)
-  const dragSource = useRef<string | null>(null)
   const [dragOver, setDragOver] = useState<string | null>(null)
+  const [dragging, setDragging] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}/divisions/${division}/teams`)
@@ -25,7 +24,7 @@ export default function AssignPoolsPage() {
       .then(data => {
         const allTeams: string[] = (data.teams ?? []).map((t: { teamName: string }) => t.teamName)
         const fetchedPools: Pool[] = (data.pools ?? []).map((p: { id: string; name: string; teamNames: string[] }) => ({
-          id: p.id, name: p.name, teamNames: p.teamNames ?? [],
+          id: p.id, name: p.name, teamNames: Array.isArray(p.teamNames) ? p.teamNames : [],
         }))
         const assignedTeams = new Set(fetchedPools.flatMap(p => p.teamNames))
         setUnassigned(allTeams.filter(t => !assignedTeams.has(t)).sort())
@@ -36,15 +35,26 @@ export default function AssignPoolsPage() {
 
   function moveTeam(team: string, fromKey: string, toKey: string) {
     if (fromKey === toKey) return
+
+    setPools(prev => {
+      let next = prev.map(p => ({ ...p, teamNames: [...p.teamNames] }))
+
+      // Remove from source
+      if (fromKey !== 'unassigned') {
+        next = next.map(p => p.name === fromKey ? { ...p, teamNames: p.teamNames.filter(t => t !== team) } : p)
+      }
+      // Add to destination
+      if (toKey !== 'unassigned') {
+        next = next.map(p => p.name === toKey ? { ...p, teamNames: [...p.teamNames, team] } : p)
+      }
+      return next
+    })
+
     if (fromKey === 'unassigned') {
       setUnassigned(u => u.filter(t => t !== team))
-    } else {
-      setPools(ps => ps.map(p => p.name === fromKey ? { ...p, teamNames: p.teamNames.filter(t => t !== team) } : p))
     }
     if (toKey === 'unassigned') {
       setUnassigned(u => [...u, team].sort())
-    } else {
-      setPools(ps => ps.map(p => p.name === toKey ? { ...p, teamNames: [...p.teamNames, team] } : p))
     }
   }
 
@@ -98,7 +108,6 @@ export default function AssignPoolsPage() {
         </button>
       </div>
 
-      {/* Page */}
       <div className="px-6 py-6 max-w-6xl mx-auto">
         <h1 className="text-lg font-bold text-slate-800">Assign Teams to Pools</h1>
         <p className="text-sm text-slate-500 mt-0.5">{divName}</p>
@@ -113,33 +122,59 @@ export default function AssignPoolsPage() {
           <div className="grid gap-5" style={{ gridTemplateColumns: `repeat(${Math.min(cols.length, 4)}, minmax(180px, 1fr))` }}>
             {cols.map(col => (
               <div key={col.key}>
-                <p className="text-sm font-semibold text-slate-600 mb-2">{col.label}</p>
+                <p className="text-sm font-semibold text-slate-600 mb-2">
+                  {col.label}
+                  <span className="ml-1.5 text-xs font-normal text-slate-400">({col.teams.length})</span>
+                </p>
+
+                {/* Drop zone */}
                 <div
-                  onDragOver={e => { e.preventDefault(); setDragOver(col.key) }}
-                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null) }}
+                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(col.key) }}
+                  onDragEnter={e => { e.preventDefault(); setDragOver(col.key) }}
+                  onDragLeave={e => {
+                    // Only clear if leaving the container itself, not a child
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const x = e.clientX, y = e.clientY
+                    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+                      setDragOver(null)
+                    }
+                  }}
                   onDrop={e => {
                     e.preventDefault()
                     setDragOver(null)
-                    if (!dragTeam.current || dragSource.current === col.key) return
-                    moveTeam(dragTeam.current, dragSource.current!, col.key)
-                    dragTeam.current = null; dragSource.current = null
+                    setDragging(null)
+                    const raw = e.dataTransfer.getData('text/plain')
+                    if (!raw) return
+                    try {
+                      const { team, sourceKey } = JSON.parse(raw)
+                      if (sourceKey !== col.key) moveTeam(team, sourceKey, col.key)
+                    } catch { /* bad data */ }
                   }}
-                  className={`min-h-52 rounded-xl border-2 p-2 space-y-2 transition-colors ${
-                    dragOver === col.key ? 'border-sky-400 bg-sky-50' : 'border-slate-200 bg-slate-50/60'
+                  className={`min-h-52 rounded-xl border-2 p-2 space-y-2 transition-all ${
+                    dragOver === col.key
+                      ? 'border-sky-400 bg-sky-50 scale-[1.01]'
+                      : 'border-slate-200 bg-slate-50/60'
                   }`}
                 >
                   {col.teams.length === 0 ? (
-                    <div className="flex items-center justify-center h-32 text-xs text-slate-400 text-center leading-relaxed px-3">
-                      Add teams by dragging<br />and dropping here
+                    <div className={`flex items-center justify-center h-32 text-xs text-center leading-relaxed px-3 pointer-events-none ${dragOver === col.key ? 'text-sky-500' : 'text-slate-400'}`}>
+                      {dragOver === col.key ? 'Drop here' : 'Add teams by dragging\nand dropping here'}
                     </div>
                   ) : (
                     col.teams.map(team => (
-                      <div key={team} draggable
-                        onDragStart={() => { dragTeam.current = team; dragSource.current = col.key }}
-                        onDragEnd={() => { dragTeam.current = null; dragSource.current = null; setDragOver(null) }}
-                        className="flex items-center gap-2.5 bg-white border border-slate-200 rounded-lg px-3 py-2.5 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:shadow-sm transition-all select-none">
-                        <span className="text-slate-300 text-[10px] leading-none flex-shrink-0">⣿⣿</span>
-                        <span className="text-sm font-medium text-slate-700 truncate">{team}</span>
+                      <div
+                        key={team}
+                        draggable
+                        onDragStart={e => {
+                          e.dataTransfer.setData('text/plain', JSON.stringify({ team, sourceKey: col.key }))
+                          e.dataTransfer.effectAllowed = 'move'
+                          setDragging(team)
+                        }}
+                        onDragEnd={() => { setDragging(null); setDragOver(null) }}
+                        className={`flex items-center gap-2.5 bg-white border border-slate-200 rounded-lg px-3 py-2.5 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:shadow-sm transition-all select-none ${dragging === team ? 'opacity-40' : ''}`}
+                      >
+                        <span className="text-slate-300 text-[10px] leading-none flex-shrink-0 pointer-events-none">⣿⣿</span>
+                        <span className="text-sm font-medium text-slate-700 truncate pointer-events-none">{team}</span>
                       </div>
                     ))
                   )}
@@ -149,10 +184,11 @@ export default function AssignPoolsPage() {
           </div>
         )}
 
-        {/* Unassigned warning */}
         {unassigned.length > 0 && pools.length > 0 && (
           <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
-            <p className="text-sm font-medium text-amber-700">{unassigned.length} team{unassigned.length !== 1 ? 's' : ''} not assigned to a pool</p>
+            <p className="text-sm font-medium text-amber-700">
+              {unassigned.length} team{unassigned.length !== 1 ? 's' : ''} not yet assigned to a pool
+            </p>
           </div>
         )}
       </div>
