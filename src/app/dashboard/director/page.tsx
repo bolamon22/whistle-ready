@@ -58,6 +58,12 @@ export default function DirectorDashboard() {
                   <span key={label} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{label}</span>
                 ))}
               </div>
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <Link href={`/tournaments/${t.id}/public`} onClick={e => e.stopPropagation()}
+                  className="flex items-center justify-center gap-1.5 w-full text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg py-2 transition-colors">
+                  🌐 Public View
+                </Link>
+              </div>
             </Link>
           ))}
         </div>
