@@ -38,6 +38,21 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     { href: `${base}/settings`,      label: 'Settings'      },
   ]
 
+  // Countdown
+  const countdown = (() => {
+    if (!meta?.startDate) return null
+    const today = new Date(); today.setHours(0,0,0,0)
+    const start = new Date(meta.startDate); start.setHours(0,0,0,0)
+    const end   = meta.endDate ? new Date(meta.endDate) : start; end.setHours(0,0,0,0)
+    const diff  = Math.round((start.getTime() - today.getTime()) / 86400000)
+    if (today >= start && today <= end) return { label: 'In Progress', color: 'bg-emerald-500/20 text-emerald-300' }
+    if (diff === 0)  return { label: 'Today!',         color: 'bg-emerald-500/20 text-emerald-300' }
+    if (diff === 1)  return { label: 'Tomorrow',       color: 'bg-amber-500/20 text-amber-300' }
+    if (diff > 1)    return { label: `${diff} days away`, color: 'bg-sky-500/20 text-sky-300' }
+    if (diff === -1) return { label: 'Yesterday',      color: 'bg-slate-500/20 text-slate-400' }
+    return { label: `${Math.abs(diff)} days ago`,      color: 'bg-slate-500/20 text-slate-400' }
+  })()
+
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href
     return pathname.startsWith(href)
@@ -76,6 +91,9 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {meta?.sport && (
                   <span className="text-[10px] bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded-full font-medium">{meta.sport}</span>
+                )}
+                {countdown && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${countdown.color}`}>{countdown.label}</span>
                 )}
                 {dateStr && <span className="text-[10px] text-slate-400">{dateStr}</span>}
                 {meta?.location && <span className="text-[10px] text-slate-500 hidden sm:inline truncate max-w-[200px]">📍 {meta.location}</span>}

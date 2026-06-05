@@ -109,6 +109,20 @@ export default function DashboardPage() {
     ? (t.endDate && t.endDate !== t.startDate ? `${t.startDate} – ${t.endDate}` : t.startDate)
     : dates.join(' · ')
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
+
+  const countdown = (() => {
+    if (!t.startDate) return null
+    const today = new Date(); today.setHours(0,0,0,0)
+    const start = new Date(t.startDate); start.setHours(0,0,0,0)
+    const end   = t.endDate ? new Date(t.endDate) : start; end.setHours(0,0,0,0)
+    const diff  = Math.round((start.getTime() - today.getTime()) / 86400000)
+    if (today >= start && today <= end) return { label: 'In Progress', color: 'bg-emerald-500/20 text-emerald-300' }
+    if (diff === 0)  return { label: 'Today!',            color: 'bg-emerald-500/20 text-emerald-300' }
+    if (diff === 1)  return { label: 'Tomorrow',          color: 'bg-amber-500/20 text-amber-300' }
+    if (diff > 1)    return { label: `${diff} days away`, color: 'bg-sky-500/20 text-sky-300' }
+    if (diff === -1) return { label: 'Yesterday',         color: 'bg-slate-500/20 text-slate-400' }
+    return { label: `${Math.abs(diff)} days ago`,         color: 'bg-slate-500/20 text-slate-400' }
+  })()
   const topDivisions = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1]).slice(0, 8)
 
   return (
