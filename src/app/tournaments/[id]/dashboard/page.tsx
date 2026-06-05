@@ -150,6 +150,9 @@ export default function DashboardPage() {
                   {t.sport && (
                     <span className="text-[10px] bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded-full font-medium">{t.sport}</span>
                   )}
+                  {countdown && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${countdown.color}`}>{countdown.label}</span>
+                  )}
                   {dateStr && <span className="text-[10px] text-slate-400">{dateStr}</span>}
                   {t.location && (
                     <span className="text-[10px] text-slate-500 hidden sm:inline truncate max-w-[200px]">📍 {t.location}</span>
