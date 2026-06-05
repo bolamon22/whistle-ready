@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import ChatWidget from '../ChatWidget'
+import TournamentNav from '../TournamentNav'
 
 interface DashData {
   tournament: {
@@ -23,12 +24,6 @@ interface DashData {
     hotelYes: number; hotelMaybe: number
   }
   playerCount: number
-}
-
-const fmtDate = (d: string) => {
-  if (!d) return ''
-  const [y, m, day] = d.split('-')
-  return `${parseInt(m)}/${parseInt(day)}/${y.slice(2)}`
 }
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -110,86 +105,15 @@ export default function DashboardPage() {
   if (!data) return <div className="text-slate-400 text-center py-20">Tournament not found.</div>
 
   const { tournament: t, games, staff, registrations: reg, financials: fin } = data
-  const dates: string[] = JSON.parse(t.dates || '[]')
-  const dateStr = t.startDate
-    ? (t.endDate && t.endDate !== t.startDate
-        ? `${fmtDate(t.startDate)} – ${fmtDate(t.endDate)}`
-        : fmtDate(t.startDate))
-    : dates.map(fmtDate).join(' · ')
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
 
-  const countdown = (() => {
-    if (!t.startDate) return null
-    const today = new Date(); today.setHours(0,0,0,0)
-    const start = new Date(t.startDate); start.setHours(0,0,0,0)
-    const end   = t.endDate ? new Date(t.endDate) : start; end.setHours(0,0,0,0)
-    const diff  = Math.round((start.getTime() - today.getTime()) / 86400000)
-    if (today >= start && today <= end) return { label: 'In Progress', color: 'bg-emerald-500/20 text-emerald-300' }
-    if (diff === 0)  return { label: 'Today!',            color: 'bg-emerald-500/20 text-emerald-300' }
-    if (diff === 1)  return { label: 'Tomorrow',          color: 'bg-amber-500/20 text-amber-300' }
-    if (diff > 1)    return { label: `${diff} days away`, color: 'bg-sky-500/20 text-sky-300' }
-    if (diff === -1) return { label: 'Yesterday',         color: 'bg-slate-500/20 text-slate-400' }
-    return { label: `${Math.abs(diff)} days ago`,         color: 'bg-slate-500/20 text-slate-400' }
-  })()
   const topDivisions = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1]).slice(0, 8)
 
   return (
     <>
     <div className="min-h-screen bg-slate-50">
 
-      {/* ── Header ────────────────────────────────────────────────────── */}
-      <div className="bg-[#0f1f3d]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 sm:pt-5 pb-0">
-
-          {/* Top row: logo + name + public link */}
-          <div className="flex items-start justify-between gap-3 pb-3">
-            <div className="flex items-center gap-3 min-w-0">
-              {t.logoUrl && (
-                <img src={t.logoUrl} alt="logo"
-                  className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
-              )}
-              <div className="min-w-0">
-                <div className="text-[10px] text-slate-500 mb-0.5">
-                  <Link href="/" className="hover:text-teal-400 transition-colors">Tournaments</Link>
-                  <span className="mx-1 opacity-40">/</span>
-                </div>
-                <h1 className="text-base sm:text-xl font-bold text-white leading-tight truncate">{t.name}</h1>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  {t.sport && (
-                    <span className="text-[10px] bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded-full font-medium">{t.sport}</span>
-                  )}
-                  {countdown && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${countdown.color}`}>{countdown.label}</span>
-                  )}
-                  {dateStr && <span className="text-[10px] text-slate-400">{dateStr}</span>}
-                  {t.location && (
-                    <span className="text-[10px] text-slate-500 hidden sm:inline truncate max-w-[200px]">📍 {t.location}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <Link href={`/tournaments/${id}/public`} target="_blank"
-              className="flex-shrink-0 text-[10px] text-slate-400 hover:text-white border border-white/10 hover:border-white/25 px-2.5 py-1.5 rounded-lg transition-colors mt-0.5">
-              🌐 Public
-            </Link>
-          </div>
-
-          {/* Nav tabs */}
-          <div className="flex gap-0 overflow-x-auto scrollbar-hide -mx-1 px-1">
-            {[
-              { href: `/tournaments/${id}/dashboard`,     label: 'Overview'      },
-              { href: `/tournaments/${id}/registrations`, label: 'Registrations' },
-              { href: `/tournaments/${id}/financials`,    label: 'Financials'    },
-              { href: `/tournaments/${id}/settings`,      label: 'Settings'      },
-            ].map(tab => (
-              <Link key={tab.href} href={tab.href}
-                className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-slate-400 hover:text-white whitespace-nowrap border-b-2 border-transparent hover:border-white/20 transition-colors">
-                {tab.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
+      <TournamentNav id={String(id)} name={t.name} logoUrl={t.logoUrl} />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-6 sm:space-y-8">
 
