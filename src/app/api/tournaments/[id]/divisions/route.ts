@@ -1,31 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
-// GET — list all divisions with team counts and pool counts
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const [teams, pools] = await Promise.all([
-    prisma.registeredTeam.findMany({
+  try {
+    const teams = await prisma.registeredTeam.findMany({
       where: { registration: { tournamentId: params.id } },
-      select: { division: true, teamName: true, clubName: true, coachName: true, coachPhone: true, coachEmail: true, id: true },
-    }),
-    prisma.pool.findMany({ where: { tournamentId: params.id } }),
-  ])
+      select: { division: true },
+    })
 
-  const divMap = new Map<string, { teams: typeof teams; pools: typeof pools }>()
-  for (const t of teams) {
-    if (!divMap.has(t.division)) divMap.set(t.division, { teams: [], pools: [] })
-    divMap.get(t.division)!.teams.push(t)
+    // Pool table may not exist yet — handle gracefully
+    let pools: { division: string }[] = []
+    try {
+      pools = await prisma.pool.findMany({
+        where: { tournamentId: params.id },
+        select: { division: true },
+      })
+    } catch { /* Pool table not migrated yet */ }
+
+    const divMap = new Map<string, { teams: number; pools: number }>()
+    for (const t of teams) {
+      const cur = divMap.get(t.division) ?? { teams: 0, pools: 0 }
+      divMap.set(t.division, { ...cur, teams: cur.teams + 1 })
+    }
+    for (const p of pools) {
+      const cur = divMap.get(p.division) ?? { teams: 0, pools: 0 }
+      divMap.set(p.division, { ...cur, pools: cur.pools + 1 })
+    }
+
+    const divisions = [...divMap.entries()]
+      .map(([name, data]) => ({ name, teamCount: data.teams, poolCount: data.pools }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    return NextResponse.json(divisions)
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ error: 'Failed to load divisions' }, { status: 500 })
   }
-  for (const p of pools) {
-    if (!divMap.has(p.division)) divMap.set(p.division, { teams: [], pools: [] })
-    divMap.get(p.division)!.pools.push(p)
-  }
-
-  const divisions = [...divMap.entries()].map(([name, data]) => ({
-    name,
-    teamCount: data.teams.length,
-    poolCount: data.pools.length,
-  })).sort((a, b) => a.name.localeCompare(b.name))
-
-  return NextResponse.json(divisions)
 }
