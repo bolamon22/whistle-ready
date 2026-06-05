@@ -264,7 +264,14 @@ export default function PublicTournamentPage() {
             <p className="text-sm font-semibold text-rose-600 mt-0.5">
               {tournament?.startDate&&fmtDate(tournament.startDate)}{tournament?.endDate&&tournament.endDate!==tournament.startDate&&` - ${fmtDate(tournament.endDate)}`}
             </p>
-            <p className="text-sm text-gray-500 mt-0.5">{tournament?.location}</p>
+            <p className="text-sm mt-0.5">
+              {tournament?.location ? (
+                <a href={`https://maps.google.com/?q=${encodeURIComponent(tournament.location)}`} target="_blank" rel="noopener noreferrer"
+                  className="text-gray-500 hover:text-blue-600 hover:underline transition-colors inline-flex items-center gap-1">
+                  📍 {tournament.location}
+                </a>
+              ) : null}
+            </p>
             <div className="flex flex-wrap gap-2 mt-3">
               <Link href={`/tournaments/${id}/player-register`} target="_blank"
                 className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded transition-colors">
