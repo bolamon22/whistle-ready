@@ -206,8 +206,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 pb-16">
-      <div className="max-w-2xl mx-auto">
       <Toaster />
+      <div className="max-w-2xl mx-auto">
       <TournamentNav id={params.id} name={tName} />
       <div className="pt-4">
         <div className="flex items-center justify-between mb-6">
@@ -631,6 +631,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           </SectionCard>
 
         </form>
+      </div>
       </div>
     </div>
   )
