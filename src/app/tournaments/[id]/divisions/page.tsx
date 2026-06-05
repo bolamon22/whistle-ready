@@ -153,9 +153,43 @@ export default function DivisionsPage() {
     toast.success('Teams swapped')
   }
 
-  if (loading) return (
+    async function generateGames() {
+    if (!activeDiv) return
+    setGenerating(true)
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), clearExisting: true }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast.error(data.error ?? 'Failed to generate games'); setGenerating(false); return }
+    await loadPoolGames(activeDiv)
+    setGenerating(false)
+    toast.success(`${data.generated} games generated`)
+  }
+
+  async function renumberGames() {
+    if (!activeDiv) return
+    setRenumbering(true)
+    await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'renumber' }),
+    })
+    await loadPoolGames(activeDiv)
+    setRenumbering(false)
+    toast.success('Games renumbered')
+  }
+
+  async function clearGames() {
+    if (!activeDiv) return
+    setShowClearConfirm(false)
+    await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`, { method: 'DELETE' })
+    setPoolGames([])
+    toast.success('Pool games cleared')
+  }
+
+if (loading) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <p className="text-slate-400 animate-pulse">Loading divisions…</p>
+      <p className="text-slate-400 animate-pulse">Loading divisionsâ¦</p>
     </div>
   )
 
@@ -166,7 +200,7 @@ export default function DivisionsPage() {
       <div className="max-w-6xl mx-auto px-6 pb-12">
         <div className="flex gap-6">
 
-          {/* ── Sidebar ──────────────────────────────────────────── */}
+          {/* ââ Sidebar ââââââââââââââââââââââââââââââââââââââââââââ */}
           <div className="w-56 flex-shrink-0">
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden sticky top-6">
               <div className="bg-slate-800 px-4 py-3">
@@ -175,7 +209,7 @@ export default function DivisionsPage() {
               {divisions.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs text-slate-400">
                   No divisions yet.
-                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder →</Link>
+                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder â</Link>
                 </div>
               ) : (
                 <div>
@@ -183,7 +217,7 @@ export default function DivisionsPage() {
                     <button key={div.name} onClick={() => selectDiv(div.name)}
                       className={`w-full text-left px-4 py-3 border-b border-slate-100 last:border-b-0 transition-colors ${activeDiv === div.name ? 'bg-sky-50 border-l-2 border-l-sky-500' : 'hover:bg-slate-50'}`}>
                       <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{div.teamCount} teams · {div.poolCount} pools</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{div.teamCount} teams Â· {div.poolCount} pools</p>
                     </button>
                   ))}
                 </div>
@@ -191,14 +225,14 @@ export default function DivisionsPage() {
             </div>
           </div>
 
-          {/* ── Main content ─────────────────────────────────────── */}
+          {/* ââ Main content âââââââââââââââââââââââââââââââââââââââ */}
           <div className="flex-1 min-w-0">
             {!activeDiv ? (
               <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400">
                 Select a division to get started
               </div>
             ) : loadingDiv ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 animate-pulse">Loading…</div>
+              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 animate-pulse">Loadingâ¦</div>
             ) : (
               <>
                 {/* Sub-tabs */}
@@ -211,7 +245,7 @@ export default function DivisionsPage() {
                   ))}
                 </div>
 
-                {/* ── TEAMS TAB ── */}
+                {/* ââ TEAMS TAB ââ */}
                 {activeTab === 'teams' && (
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                     {/* Header */}
@@ -224,7 +258,7 @@ export default function DivisionsPage() {
                         {swapA && swapB ? (
                           <button onClick={swapTeams} disabled={swapping}
                             className="btn-primary btn-sm disabled:opacity-50">
-                            {swapping ? 'Swapping…' : `↔ Swap ${swapA} ↔ ${swapB}`}
+                            {swapping ? 'Swappingâ¦' : `â Swap ${swapA} â ${swapB}`}
                           </button>
                         ) : swapA ? (
                           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
@@ -235,7 +269,7 @@ export default function DivisionsPage() {
                         )}
                         {(swapA || swapB) && (
                           <button onClick={() => { setSwapA(null); setSwapB(null) }}
-                            className="text-xs text-slate-400 hover:text-slate-600">✕ Cancel</button>
+                            className="text-xs text-slate-400 hover:text-slate-600">â Cancel</button>
                         )}
                       </div>
                     </div>
@@ -270,7 +304,7 @@ export default function DivisionsPage() {
                                 className={`border-b border-slate-50 last:border-0 cursor-pointer transition-colors ${isSwapA || isSwapB ? 'bg-amber-50' : i % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'}`}>
                                 <td className="px-5 py-3 font-semibold text-slate-800">
                                   <div className="flex items-center gap-2">
-                                    {(isSwapA || isSwapB) && <span className="text-amber-500">↔</span>}
+                                    {(isSwapA || isSwapB) && <span className="text-amber-500">â</span>}
                                     {team.teamName}
                                   </div>
                                 </td>
@@ -283,11 +317,11 @@ export default function DivisionsPage() {
                                       onClick={e => e.stopPropagation()}
                                       disabled={assigningTeam === team.teamName}
                                       className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50">
-                                      <option value="">— No pool —</option>
+                                      <option value="">â No pool â</option>
                                       {pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                     </select>
                                   ) : (
-                                    <span className="text-xs text-slate-400">—</span>
+                                    <span className="text-xs text-slate-400">â</span>
                                   )}
                                 </td>
                                 <td className="px-3 py-3">{payBadge(team.paymentStatus)}</td>
@@ -304,7 +338,7 @@ export default function DivisionsPage() {
                   </div>
                 )}
 
-                {/* ── POOLS TAB ── */}
+                {/* ââ POOLS TAB ââ */}
                 {activeTab === 'pools' && (
                   <div className="space-y-4">
                     {/* Assign teams button */}
@@ -312,7 +346,7 @@ export default function DivisionsPage() {
                       <p className="text-xs text-slate-400">{teams.filter(t => !t.pool).length > 0 ? `${teams.filter(t => !t.pool).length} teams unassigned` : 'All teams assigned'}</p>
                       <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
                         className="btn-primary btn-sm">
-                        Assign Teams to Pools →
+                        Assign Teams to Pools â
                       </Link>
                     </div>
 
@@ -323,7 +357,7 @@ export default function DivisionsPage() {
                         onKeyDown={e => e.key === 'Enter' && addPool()} />
                       <button onClick={addPool} disabled={!newPoolName.trim() || addingPool}
                         className="btn-primary btn-sm disabled:opacity-50">
-                        {addingPool ? 'Adding…' : '+ Add Pool'}
+                        {addingPool ? 'Addingâ¦' : '+ Add Pool'}
                       </button>
                     </div>
 
@@ -393,6 +427,98 @@ export default function DivisionsPage() {
                           {teams.filter(t => !t.pool).map(t => t.teamName).join(', ')}
                         </p>
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── POOL GAMES TAB ── */}
+                {activeTab === 'pool-games' && (
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Date (optional)</label>
+                          <input type="date" className="input text-sm" value={genDate} onChange={e => setGenDate(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Refs per game</label>
+                          <select className="input text-sm" value={genRefCount} onChange={e => setGenRefCount(e.target.value)}>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                          </select>
+                        </div>
+                        <button onClick={generateGames} disabled={generating || pools.length === 0}
+                          className="btn-primary btn-sm disabled:opacity-50">
+                          {generating ? 'Generating…' : '⚡ Generate Games'}
+                        </button>
+                        {poolGames.length > 0 && (
+                          <>
+                            <button onClick={renumberGames} disabled={renumbering}
+                              className="btn-sm border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                              {renumbering ? 'Renumbering…' : '# Renumber'}
+                            </button>
+                            {showClearConfirm ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-red-600">Delete all games?</span>
+                                <button onClick={clearGames} className="text-xs text-red-600 font-semibold hover:underline">Yes, clear</button>
+                                <button onClick={() => setShowClearConfirm(false)} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setShowClearConfirm(true)} className="text-xs text-red-400 hover:text-red-600">Clear all</button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {pools.length === 0 && (
+                        <p className="mt-3 text-xs text-amber-600">No pools yet — create pools and assign teams first.</p>
+                      )}
+                    </div>
+                    {poolGames.length === 0 ? (
+                      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">
+                        No pool games yet. Add pools with teams, then click ⚡ Generate Games.
+                      </div>
+                    ) : (
+                      (() => {
+                        const byPool = poolGames.reduce((acc, g) => {
+                          const key = g.pool ?? 'Unassigned'
+                          if (!acc[key]) acc[key] = []
+                          acc[key].push(g)
+                          return acc
+                        }, {})
+                        return Object.entries(byPool).map(([poolName, games]) => (
+                          <div key={poolName} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                              <h3 className="font-semibold text-slate-700">{poolName}</h3>
+                              <span className="text-xs text-slate-400">{games.length} game{games.length !== 1 ? 's' : ''}</span>
+                            </div>
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-slate-50/50 border-b border-slate-100">
+                                  <th className="text-left px-5 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">#</th>
+                                  <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Home</th>
+                                  <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Away</th>
+                                  <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
+                                  <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Time</th>
+                                  <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Location</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {games.map((g, i) => (
+                                  <tr key={g.id} className={`border-b border-slate-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                                    <td className="px-5 py-2.5 font-mono text-xs text-slate-500">{g.gameNumber}</td>
+                                    <td className="px-3 py-2.5 font-medium text-slate-800">{g.team1}</td>
+                                    <td className="px-3 py-2.5 text-slate-600">{g.team2}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.date || '—'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.startTime || '—'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.location || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))
+                      })()
                     )}
                   </div>
                 )}
