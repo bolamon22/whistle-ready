@@ -486,13 +486,13 @@ export default function GridPage({ params }: { params:{id:string} }) {
               ← Dashboard
             </Link>
             {/* Staff assignment counts */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5">
-              <span className="text-[11px] text-sky-300 font-medium">{assignedBoysRefs}B</span>
-              <span className="text-white/20 text-xs">·</span>
-              <span className="text-[11px] text-pink-300 font-medium">{assignedGirlsRefs}G</span>
-              {assignedBothRefs > 0 && <><span className="text-white/20 text-xs">·</span><span className="text-[11px] text-slate-300 font-medium">{assignedBothRefs}±</span></>}
-              <span className="text-white/20 text-xs">·</span>
-              <span className="text-[11px] text-emerald-300 font-medium">{assignedSKs} SK</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5">
+              <span className="text-[11px] text-sky-300 font-medium">{assignedBoysRefs} Boys Refs</span>
+              <span className="text-white/20">·</span>
+              <span className="text-[11px] text-pink-300 font-medium">{assignedGirlsRefs} Girls Refs</span>
+              {assignedBothRefs > 0 && <><span className="text-white/20">·</span><span className="text-[11px] text-slate-300 font-medium">{assignedBothRefs} Both</span></>}
+              <span className="text-white/20">·</span>
+              <span className="text-[11px] text-emerald-300 font-medium">{assignedSKs} Scorekeepers</span>
             </div>
             <Link href="/staff"
               className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">
