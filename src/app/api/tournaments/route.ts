@@ -18,6 +18,16 @@ export async function GET() {
   })))
 }
 export async function POST(req: Request) {
-  const { name, sport, startDate, endDate, location, scheduleIncrement } = await req.json()
-  return NextResponse.json(await prisma.tournament.create({ data:{ name, sport:sport??'', startDate:startDate??'', endDate:endDate??'', location:location??'', scheduleIncrement:scheduleIncrement??50 } }), { status:201 })
+  const { name, sport, startDate, endDate, location, scheduleIncrement, registrationDivisions } = await req.json()
+  return NextResponse.json(await prisma.tournament.create({
+    data: {
+      name,
+      sport: sport ?? '',
+      startDate: startDate ?? '',
+      endDate: endDate ?? '',
+      location: location ?? '',
+      scheduleIncrement: scheduleIncrement ?? 50,
+      ...(registrationDivisions ? { registrationDivisions } : {}),
+    }
+  }), { status: 201 })
 }

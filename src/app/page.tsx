@@ -13,6 +13,16 @@ interface Tournament {
 
 const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
 const fmtDate = (d: string) => { if (!d) return ''; const [y,m,day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}/${y}` }
+
+const DEFAULT_DIVISIONS = [
+  'Boys High School A', 'Boys High School B', 'Boys High School B2',
+  'Boys U14 A and B', 'Boys U12 A and B',
+  'Boys U10 A and B (7v7)', 'Boys U10 A and B (10v10)', 'Boys U8 (7v7)',
+  'Girls High School A', 'Girls High School B', 'Girls High School B2',
+  'Girls Middle School A', 'Girls Middle School B (No 2030s)',
+  'Girls Lower School A (7v7)', 'Girls Lower School B (7v7 - No 2033s)',
+]
+
 const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50' }
 
 const ADMIN_LINKS = [
@@ -31,6 +41,9 @@ export default function HomePage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [divisions, setDivisions] = useState<string[]>([...DEFAULT_DIVISIONS])
+  const [newDivision, setNewDivision] = useState('')
+  const [showDivisions, setShowDivisions] = useState(false)
 
   // Edit state
   const [editId, setEditId] = useState<string | null>(null)
@@ -48,16 +61,37 @@ export default function HomePage() {
 
   function setF(k:string, v:string) { setForm(f => ({ ...f, [k]: v })) }
 
+  function toggleDivision(div: string) {
+    setDivisions(d => d.includes(div) ? d.filter(v => v !== div) : [...d, div])
+  }
+
+  function addCustomDivision() {
+    if (!newDivision.trim()) return
+    setDivisions(d => [...d, newDivision.trim()])
+    setNewDivision('')
+  }
+
   async function create(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) return
     setSaving(true)
     const r = await fetch('/api/tournaments', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ name:form.name.trim(), sport:form.sport, startDate:form.startDate, endDate:form.endDate, location:form.location, scheduleIncrement:parseInt(form.scheduleIncrement)||50 })
+      body: JSON.stringify({
+        name: form.name.trim(), sport: form.sport, startDate: form.startDate,
+        endDate: form.endDate, location: form.location,
+        scheduleIncrement: parseInt(form.scheduleIncrement) || 50,
+        registrationDivisions: JSON.stringify(divisions),
+      })
     })
-    if (r.ok) { toast.success('Tournament created'); setForm(EMPTY_FORM); setShowForm(false); load() }
-    else toast.error('Failed')
+    if (r.ok) {
+      toast.success('Tournament created')
+      setForm(EMPTY_FORM)
+      setDivisions([...DEFAULT_DIVISIONS])
+      setShowForm(false)
+      setShowDivisions(false)
+      load()
+    } else toast.error('Failed')
     setSaving(false)
   }
 
@@ -146,30 +180,82 @@ export default function HomePage() {
       {showForm && (
         <div className="card p-6 mb-6">
           <h2 className="font-semibold text-slate-800 mb-4">New Tournament</h2>
-          <form onSubmit={create} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <label className="label">Tournament Name *</label>
-              <input className="input" placeholder="e.g. Spring Classic 2026" value={form.name} onChange={e=>setF('name',e.target.value)} required autoFocus/>
+          <form onSubmit={create} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <label className="label">Tournament Name *</label>
+                <input className="input" placeholder="e.g. Spring Classic 2026" value={form.name} onChange={e=>setF('name',e.target.value)} required autoFocus/>
+              </div>
+              <div>
+                <label className="label">Sport</label>
+                <select className="select" value={form.sport} onChange={e=>setF('sport',e.target.value)}>
+                  {SPORTS.map(s=><option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div><label className="label">Start Date</label><input className="input" type="date" value={form.startDate} onChange={e=>setF('startDate',e.target.value)}/></div>
+              <div><label className="label">End Date</label><input className="input" type="date" value={form.endDate} onChange={e=>setF('endDate',e.target.value)}/></div>
+              <div>
+                <label className="label">Schedule Increment (minutes)</label>
+                <input className="input" type="number" min="5" max="120" step="5" value={form.scheduleIncrement} onChange={e=>setF('scheduleIncrement',e.target.value)} placeholder="50"/>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="label">Location</label>
+                <input className="input" placeholder="e.g. Village Park, Pleasanton CA" value={form.location} onChange={e=>setF('location',e.target.value)}/>
+              </div>
             </div>
-            <div>
-              <label className="label">Sport</label>
-              <select className="select" value={form.sport} onChange={e=>setF('sport',e.target.value)}>
-                {SPORTS.map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
+
+            {/* Divisions section */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <button type="button" onClick={() => setShowDivisions(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">🏅 Divisions</span>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{divisions.length} selected</span>
+                </div>
+                <span className="text-gray-400 text-sm">{showDivisions ? '▲' : '▼'}</span>
+              </button>
+
+              {showDivisions && (
+                <div className="p-4 border-t border-gray-100">
+                  <div className="flex gap-2 mb-3">
+                    <button type="button" onClick={() => setDivisions([...DEFAULT_DIVISIONS])}
+                      className="text-xs text-blue-600 hover:underline">Select all defaults</button>
+                    <span className="text-gray-300">·</span>
+                    <button type="button" onClick={() => setDivisions([])}
+                      className="text-xs text-gray-400 hover:underline">Clear all</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mb-4">
+                    {DEFAULT_DIVISIONS.map(div => (
+                      <label key={div} className={`flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors ${divisions.includes(div) ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50 border border-transparent hover:bg-gray-100'}`}>
+                        <input type="checkbox" checked={divisions.includes(div)} onChange={() => toggleDivision(div)}
+                          className="w-4 h-4 accent-blue-600 flex-shrink-0" />
+                        <span className={`text-sm truncate ${divisions.includes(div) ? 'text-gray-800 font-medium' : 'text-gray-500'}`}>{div}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {/* Custom divisions */}
+                  {divisions.filter(d => !DEFAULT_DIVISIONS.includes(d)).map(d => (
+                    <div key={d} className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-1.5">
+                      <input type="checkbox" checked readOnly className="w-4 h-4 accent-blue-600 flex-shrink-0" />
+                      <span className="text-sm text-gray-800 font-medium flex-1">{d}</span>
+                      <button type="button" onClick={() => setDivisions(divs => divs.filter(v => v !== d))}
+                        className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                    <input className="input flex-1" placeholder="Add custom division…" value={newDivision}
+                      onChange={e => setNewDivision(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomDivision() } }} />
+                    <button type="button" onClick={addCustomDivision}
+                      className="btn-secondary">Add</button>
+                  </div>
+                </div>
+              )}
             </div>
-            <div><label className="label">Start Date</label><input className="input" type="date" value={form.startDate} onChange={e=>setF('startDate',e.target.value)}/></div>
-            <div><label className="label">End Date</label><input className="input" type="date" value={form.endDate} onChange={e=>setF('endDate',e.target.value)}/></div>
-            <div>
-              <label className="label">Schedule Increment (minutes)</label>
-              <input className="input" type="number" min="5" max="120" step="5" value={form.scheduleIncrement} onChange={e=>setF('scheduleIncrement',e.target.value)} placeholder="50"/>
-            </div>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className="label">Location</label>
-              <input className="input" placeholder="e.g. Village Park, Pleasanton CA" value={form.location} onChange={e=>setF('location',e.target.value)}/>
-            </div>
-            <div className="sm:col-span-2 lg:col-span-3 flex gap-2 pt-1">
+
+            <div className="flex gap-2 pt-1">
               <button type="submit" className="btn-primary" disabled={saving}>{saving?'Creating…':'Create Tournament'}</button>
-              <button type="button" className="btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button>
+              <button type="button" className="btn-secondary" onClick={()=>{setShowForm(false);setShowDivisions(false)}}>Cancel</button>
             </div>
           </form>
         </div>
