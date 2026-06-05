@@ -27,22 +27,65 @@ interface DashData {
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const payLabel = (m: string) => m === 'credit_card' ? 'Credit Card' : m === 'zelle' ? 'Zelle' : 'Check'
 
-function StatCard({ label, value, sub, color = 'text-slate-800' }: { label: string; value: string | number; sub?: string; color?: string }) {
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{children}</h2>
+}
+
+function BigStat({ value, label, sub, valueClass = 'text-slate-900' }: {
+  value: string | number; label: string; sub?: string; valueClass?: string
+}) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4">
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      <div className="text-sm font-medium text-slate-600 mt-0.5">{label}</div>
-      {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
+    <div className="flex flex-col">
+      <span className={`text-3xl font-extrabold leading-none ${valueClass}`}>{value}</span>
+      <span className="text-sm font-semibold text-slate-600 mt-1">{label}</span>
+      {sub && <span className="text-xs text-slate-400 mt-0.5">{sub}</span>}
     </div>
   )
 }
 
-function NavTile({ href, icon, label, sub, color = 'hover:border-blue-300 hover:bg-blue-50' }: { href: string; icon: string; label: string; sub?: string; color?: string }) {
+function DetailRow({ label, value, valueClass = 'text-slate-800' }: {
+  label: string; value: string; valueClass?: string
+}) {
   return (
-    <Link href={href} className={`bg-white border border-slate-200 rounded-xl p-3 flex flex-col items-center text-center gap-1 transition-colors ${color} group`}>
+    <div className="flex items-center justify-between py-2">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className={`text-sm font-semibold ${valueClass}`}>{value}</span>
+    </div>
+  )
+}
+
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+function CardHeader({ icon, title }: { icon: string; title: string }) {
+  return (
+    <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+      <span className="text-base">{icon}</span>
+      <span className="text-sm font-bold text-slate-700">{title}</span>
+    </div>
+  )
+}
+
+function ProgressBar({ pct, color = 'bg-teal-500' }: { pct: number; color?: string }) {
+  return (
+    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+    </div>
+  )
+}
+
+function NavTile({ href, icon, label, accent = 'hover:bg-blue-50 hover:border-blue-200' }: {
+  href: string; icon: string; label: string; accent?: string
+}) {
+  return (
+    <Link href={href} className={`bg-white border border-slate-200 rounded-xl px-3 py-3 flex flex-col items-center gap-1.5 text-center transition-all ${accent} group min-w-[72px]`}>
       <span className="text-xl">{icon}</span>
-      <div className="font-semibold text-slate-700 group-hover:text-slate-900 text-xs leading-tight">{label}</div>
-      {sub && <div className="text-xs text-slate-400 leading-tight">{sub}</div>}
+      <span className="text-[11px] font-semibold text-slate-600 leading-tight whitespace-nowrap">{label}</span>
     </Link>
   )
 }
@@ -59,288 +102,302 @@ export default function DashboardPage() {
       .catch(() => setLoading(false))
   }, [id])
 
-  if (loading) return <div className="text-slate-400 text-center py-20">Loading…</div>
-  if (!data) return <div className="text-slate-400 text-center py-20">Tournament not found.</div>
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="text-slate-400 text-sm animate-pulse">Loading dashboard…</div>
+    </div>
+  )
+  if (!data) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="text-slate-400 text-sm">Tournament not found.</div>
+    </div>
+  )
 
   const { tournament: t, games, staff, registrations: reg, financials: fin } = data
-  const dates: string[] = JSON.parse(t.dates || '[]')
+
   const dateStr = t.startDate
     ? (t.endDate && t.endDate !== t.startDate ? `${t.startDate} – ${t.endDate}` : t.startDate)
-    : dates.join(' · ')
+    : (() => { try { return JSON.parse(t.dates || '[]').join(' · ') } catch { return '' } })()
+
+  const revenue = reg.invoiced + fin.otherIncome
+  const received = reg.received + fin.otherIncome
+  const expense = staff.totalStaffExpense + fin.otherExpenses
+  const grossProfit = revenue - expense
+  const netCash = reg.received + fin.otherIncome - staff.totalStaffPaid - fin.otherExpenses
+  const margin = revenue > 0 ? Math.round((grossProfit / revenue) * 100) : 0
+  const expensePct = revenue > 0 ? Math.min(100, Math.round((expense / revenue) * 100)) : 0
+  const collectionPct = reg.invoiced > 0 ? Math.round((reg.received / reg.invoiced) * 100) : 0
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
-  const topDivisions = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  const topDivisions = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1])
+  const showFinancials = reg.invoiced > 0 || staff.totalStaffExpense > 0 || fin.otherIncome > 0 || fin.otherExpenses > 0
 
   return (
     <div className="min-h-screen bg-slate-50">
+
       {/* Header */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-6 py-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              {t.logoUrl && <img src={t.logoUrl} alt="logo" className="h-16 w-16 object-contain rounded-xl border border-slate-200 bg-slate-50 flex-shrink-0" />}
-              <div>
-                <div className="text-xs text-slate-400 mb-0.5">
-                  <Link href="/" className="hover:text-sky-600">Tournaments</Link> /
-                </div>
-                <h1 className="text-2xl font-bold text-slate-900">{t.name}</h1>
-                <div className="flex items-center gap-3 mt-0.5 text-sm text-slate-500 flex-wrap">
-                  {t.sport && <span className="text-emerald-600 font-medium">{t.sport}</span>}
-                  {dateStr && <span>{dateStr}</span>}
-                  {t.location && <span className="truncate">📍 {t.location}</span>}
-                </div>
+      <div className="bg-slate-900 text-white">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            {t.logoUrl && (
+              <img src={t.logoUrl} alt="logo" className="h-14 w-14 object-contain rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
+            )}
+            <div>
+              <div className="text-xs text-slate-400 mb-0.5">
+                <Link href="/" className="hover:text-teal-400 transition-colors">Tournaments</Link>
+                <span className="mx-1 opacity-40">/</span>
+              </div>
+              <h1 className="text-xl font-bold text-white leading-tight">{t.name}</h1>
+              <div className="flex items-center gap-3 mt-1 text-xs text-slate-300 flex-wrap">
+                {t.sport && <span className="bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-full font-medium">{t.sport}</span>}
+                {dateStr && <span>📅 {dateStr}</span>}
+                {t.location && <span className="opacity-75">📍 {t.location}</span>}
               </div>
             </div>
-            <Link href={`/tournaments/${id}`} className="btn-secondary btn-sm flex-shrink-0">Open Schedule →</Link>
           </div>
+          <Link href={`/tournaments/${id}`} className="flex-shrink-0 bg-teal-500 hover:bg-teal-400 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+            📅 Open Schedule
+          </Link>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-6 py-7 space-y-8">
 
-        {/* Quick nav */}
+        {/* Quick Access */}
         <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Quick Access</h2>
-          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-            <NavTile href={`/tournaments/${id}`} icon="📅" label="Schedule" sub={`${games.active} games`} />
-            <NavTile href={`/tournaments/${id}/registrations`} icon="📋" label="Team Reg" sub={`${reg.clubs} clubs`} color="hover:border-purple-300 hover:bg-purple-50" />
-            <NavTile href={`/tournaments/${id}/player-registrations`} icon="📄" label="Players" sub={data.playerCount ? `${data.playerCount} registered` : `View entries`} color="hover:border-teal-300 hover:bg-teal-50" />
-            <NavTile href={`/tournaments/${id}/roster`} icon="👥" label="Staff" sub={`${staff.onRoster} rostered`} />
-            <NavTile href={`/tournaments/${id}/pay-summary`} icon="💰" label="Pay" sub="Staff pay" color="hover:border-amber-300 hover:bg-amber-50" />
-            <NavTile href={`/tournaments/${id}/financials`} icon="📊" label="Financials" sub="P&L" color="hover:border-green-300 hover:bg-green-50" />
-            <NavTile href={`/tournaments/${id}/settings`} icon="⚙️" label="Settings" sub="Rates & rules" />
-            <NavTile href={`/tournaments/${id}/public`} icon="🌐" label="Public View" sub="Fan-facing page" color="hover:border-rose-300 hover:bg-rose-50" />
-            <NavTile href={`/tournaments/${id}/staff-view`} icon="👤" label="Staff View" sub="Dark schedule" color="hover:border-slate-400 hover:bg-slate-50" />
-            <NavTile href={`/tournaments/${id}/scores`} icon="🎯" label="Post Scores" sub="Quick entry" color="hover:border-blue-300 hover:bg-blue-50" />
-            <NavTile href={`/tournaments/${id}/assignments`} icon="📌" label="Assignments" sub="By game or staff" />
-            <NavTile href={`/tournaments/${id}/builder`} icon="🏗" label="Builder" sub="Tournament setup" color="hover:border-indigo-300 hover:bg-indigo-50" />
+          <SectionTitle>Quick Access</SectionTitle>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <NavTile href={`/tournaments/${id}`}                      icon="📅" label="Schedule"    accent="hover:bg-blue-50 hover:border-blue-200" />
+            <NavTile href={`/tournaments/${id}/registrations`}        icon="📋" label="Team Reg"   accent="hover:bg-violet-50 hover:border-violet-200" />
+            <NavTile href={`/tournaments/${id}/player-registrations`} icon="📄" label="Players"    accent="hover:bg-teal-50 hover:border-teal-200" />
+            <NavTile href={`/tournaments/${id}/roster`}               icon="👥" label="Staff"      accent="hover:bg-sky-50 hover:border-sky-200" />
+            <NavTile href={`/tournaments/${id}/pay-summary`}          icon="💰" label="Pay"        accent="hover:bg-amber-50 hover:border-amber-200" />
+            <NavTile href={`/tournaments/${id}/financials`}           icon="📊" label="Financials" accent="hover:bg-emerald-50 hover:border-emerald-200" />
+            <NavTile href={`/tournaments/${id}/settings`}             icon="⚙️" label="Settings"   accent="hover:bg-slate-100 hover:border-slate-300" />
+            <NavTile href={`/tournaments/${id}/public`}               icon="🌐" label="Public"     accent="hover:bg-rose-50 hover:border-rose-200" />
+            <NavTile href={`/tournaments/${id}/staff-view`}           icon="👤" label="Staff View" accent="hover:bg-slate-100 hover:border-slate-300" />
+            <NavTile href={`/tournaments/${id}/scores`}               icon="🎯" label="Scores"     accent="hover:bg-blue-50 hover:border-blue-200" />
+            <NavTile href={`/tournaments/${id}/assignments`}          icon="📌" label="Assignments" accent="hover:bg-indigo-50 hover:border-indigo-200" />
+            <NavTile href={`/tournaments/${id}/builder`}              icon="🏗"  label="Builder"    accent="hover:bg-indigo-50 hover:border-indigo-200" />
           </div>
         </section>
 
-        {/* Registration summary */}
-        <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Team Registrations</h2>
-          {reg.clubs === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
-              <div className="text-3xl mb-2">📋</div>
-              <p className="text-slate-500 text-sm mb-3">No registrations yet</p>
-              <Link href={`/tournaments/${id}/register`} target="_blank" className="btn-primary btn-sm">Share Registration Form</Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <StatCard label="Clubs Registered" value={reg.clubs} color="text-purple-600" />
-                <StatCard label="Teams Registered" value={reg.teams} color="text-blue-600" />
-                <StatCard label="Paid in Full" value={reg.paidInFull} sub={`${reg.outstanding} outstanding`} color="text-green-600" />
-                {reg.hotelYes + reg.hotelMaybe > 0 && (
-                  <StatCard label="Hotel Requests" value={reg.hotelYes} sub={`${reg.hotelMaybe} maybe`} color="text-amber-600" />
-                )}
+        {/* Top Info Row */}
+        {reg.clubs === 0 ? (
+          <Card className="p-10 text-center">
+            <div className="text-4xl mb-3">📋</div>
+            <p className="text-slate-500 text-sm mb-4">No team registrations yet.</p>
+            <Link href={`/tournaments/${id}/register`} target="_blank"
+              className="inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+              Share Registration Form →
+            </Link>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+            {/* Registration Overview */}
+            <Card>
+              <CardHeader icon="📋" title="Registration Overview" />
+              <div className="px-5 py-4 grid grid-cols-2 gap-4">
+                <BigStat value={reg.clubs} label="Clubs Registered" valueClass="text-violet-600" />
+                <BigStat value={reg.teams} label="Teams Registered" valueClass="text-blue-600" />
               </div>
-
-              {/* Financials */}
-              <div className="bg-white border border-slate-200 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-slate-700 mb-4">💵 Financial Summary</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="text-center p-3 bg-slate-50 rounded-xl">
-                    <div className="text-xl font-bold text-slate-800">{fmt(reg.invoiced)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Total Invoiced</div>
-                  </div>
-                  <div className="text-center p-3 bg-green-50 rounded-xl">
-                    <div className="text-xl font-bold text-green-700">{fmt(reg.received)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Total Received</div>
-                  </div>
-                  <div className={`text-center p-3 rounded-xl ${reg.balance > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
-                    <div className={`text-xl font-bold ${reg.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(reg.balance)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Balance Due</div>
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                {reg.invoiced > 0 && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-xs text-slate-500 mb-1">
-                      <span>Collection progress</span>
-                      <span>{Math.round((reg.received / reg.invoiced) * 100)}%</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((reg.received / reg.invoiced) * 100))}%` }} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Payment method breakdown */}
-                {Object.keys(reg.byMethod).length > 0 && (
-                  <div className="mt-4 flex gap-3 flex-wrap">
-                    {Object.entries(reg.byMethod).map(([method, count]) => (
-                      <span key={method} className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">
-                        {payLabel(method)}: <strong>{count}</strong>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Division breakdown */}
-              {topDivisions.length > 0 && (
-                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-4">🏆 Teams by Division</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {topDivisions.map(([div, count]) => (
-                      <div key={div} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                        <span className="text-xs text-slate-600 truncate mr-2">{div}</span>
-                        <span className="text-sm font-bold text-slate-800 flex-shrink-0">{count}</span>
-                      </div>
-                    ))}
-                  </div>
+              {Object.keys(reg.byMethod).length > 0 && (
+                <div className="px-5 pb-4 flex flex-wrap gap-1.5">
+                  {Object.entries(reg.byMethod).map(([method, count]) => (
+                    <span key={method} className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                      {payLabel(method)}: <strong className="text-slate-700">{count}</strong>
+                    </span>
+                  ))}
                 </div>
               )}
-            </div>
-          )}
-        </section>
+            </Card>
 
-        {/* Games & Staff */}
-        <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Schedule & Staff</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Total Games" value={games.active} sub={games.canceled > 0 ? `${games.canceled} canceled` : undefined} color="text-sky-600" />
-            <StatCard label="Divisions" value={games.divisions} color="text-slate-700" />
-            <StatCard label="Assignments" value={games.assigned} sub={`~${assignPct}% filled`} color="text-blue-600" />
-            <StatCard label="Staff on Roster" value={staff.onRoster} color="text-emerald-600" />
-          </div>
-        </section>
-
-        {/* P&L */}
-        {(reg.invoiced > 0 || staff.totalStaffExpense > 0 || fin.otherIncome > 0 || fin.otherExpenses > 0) && (() => {
-          const revenue = reg.invoiced + fin.otherIncome
-          const received = reg.received + fin.otherIncome
-          const expense = staff.totalStaffExpense + fin.otherExpenses
-          const grossProfit = revenue - expense
-          const netCash = reg.received + fin.otherIncome - staff.totalStaffPaid - fin.otherExpenses
-          const margin = revenue > 0 ? Math.round((grossProfit / revenue) * 100) : 0
-          const profitColor = grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'
-          const cashColor = netCash >= 0 ? 'text-emerald-600' : 'text-red-600'
-          return (
-            <section>
-              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Profit & Loss</h2>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                {/* Summary bar */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100">
-                  <div className="p-5 text-center">
-                    <div className="text-2xl font-bold text-slate-800">{fmt(revenue)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Total Revenue</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{fmt(received)} collected</div>
-                  </div>
-                  <div className="p-5 text-center">
-                    <div className="text-2xl font-bold text-red-500">{fmt(expense)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Staff Expenses</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{fmt(staff.totalStaffPaid)} paid out</div>
-                  </div>
-                  <div className="p-5 text-center">
-                    <div className={`text-2xl font-bold ${profitColor}`}>{fmt(grossProfit)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Gross Profit</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{margin}% margin</div>
-                  </div>
-                  <div className="p-5 text-center">
-                    <div className={`text-2xl font-bold ${cashColor}`}>{fmt(netCash)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Net Cash Position</div>
-                    <div className="text-xs text-slate-400 mt-0.5">collected − paid out</div>
-                  </div>
+            {/* Financial Overview */}
+            <Card>
+              <CardHeader icon="💵" title="Financial Overview" />
+              <div className="px-5 py-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Total Invoiced</span>
+                  <span className="text-sm font-bold text-slate-700">{fmt(reg.invoiced)}</span>
                 </div>
-
-                {/* Detail rows */}
-                <div className="border-t border-slate-100 px-6 py-4 space-y-3 text-sm">
-                  {/* Revenue detail */}
-                  <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Revenue Breakdown</p>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Registration invoices ({reg.clubs} clubs, {reg.teams} teams)</span>
-                        <span className="font-semibold text-slate-800">{fmt(reg.invoiced)}</span>
-                      </div>
-                      {fin.otherIncome > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">Other income (vendor fees, merch, etc.)</span>
-                          <span className="font-semibold text-slate-800">{fmt(fin.otherIncome)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-slate-400 border-t border-slate-100 pt-1.5">
-                        <span className="font-semibold text-slate-700">Total Revenue</span>
-                        <span className="font-bold text-slate-800">{fmt(revenue)}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-400">
-                        <span>Collected so far</span>
-                        <span className="text-emerald-600 font-medium">{fmt(reg.received)}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-400">
-                        <span>Registration balance due</span>
-                        <span className={reg.balance > 0 ? 'text-amber-600 font-medium' : 'text-slate-400'}>{fmt(reg.balance)}</span>
-                      </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Total Received</span>
+                  <span className="text-sm font-bold text-emerald-600">{fmt(reg.received)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Balance Due</span>
+                  <span className={`text-sm font-bold ${reg.balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{fmt(reg.balance)}</span>
+                </div>
+                {reg.invoiced > 0 && (
+                  <div className="pt-1">
+                    <div className="flex justify-between text-xs text-slate-400 mb-1.5">
+                      <span>Collection progress</span>
+                      <span className="font-semibold text-teal-600">{collectionPct}%</span>
                     </div>
+                    <ProgressBar pct={collectionPct} color="bg-teal-500" />
                   </div>
+                )}
+              </div>
+            </Card>
 
-                  <div className="border-t border-slate-100" />
-
-                  {/* Expense detail */}
-                  <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Expense Breakdown</p>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Referee pay ({staff.refCount} assignments)</span>
-                        <span className="font-semibold text-slate-800">{fmt(staff.refPayTotal)}</span>
-                      </div>
-                      {staff.hourlyPayTotal > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">Hourly staff pay</span>
-                          <span className="font-semibold text-slate-800">{fmt(staff.hourlyPayTotal)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Scorekeeper pay ({staff.skCount} assignments)</span>
-                        <span className="font-semibold text-slate-800">{fmt(staff.totalStaffExpense - staff.refPayTotal - staff.hourlyPayTotal)}</span>
-                      </div>
-                      {fin.otherExpenses > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">Other expenses (rentals, supplies, awards, etc.)</span>
-                          <span className="font-semibold text-slate-800">{fmt(fin.otherExpenses)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between border-t border-slate-100 pt-1.5">
-                        <span className="font-semibold text-slate-700">Total Expenses</span>
-                        <span className="font-bold text-red-500">{fmt(expense)}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-400">
-                        <span>Paid out to staff</span>
-                        <span className="text-slate-600 font-medium">{fmt(staff.totalStaffPaid)}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-400">
-                        <span>Staff owed (unpaid)</span>
-                        <span className={staff.totalStaffExpense - staff.totalStaffPaid > 0 ? 'text-amber-600 font-medium' : 'text-slate-400'}>{fmt(staff.totalStaffExpense - staff.totalStaffPaid)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-100" />
-
-                  {/* Bottom line */}
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="font-bold text-slate-800">Gross Profit (Revenue − Expenses)</span>
-                    <span className={`text-xl font-bold ${profitColor}`}>{fmt(grossProfit)}</span>
-                  </div>
-                  {revenue > 0 && (
+            {/* Logistics */}
+            <Card>
+              <CardHeader icon="🏨" title="Logistics" />
+              <div className="px-5 py-4 grid grid-cols-2 gap-4">
+                <div>
+                  <BigStat
+                    value={`${reg.paidInFull}/${reg.teams}`}
+                    label="Paid in Full"
+                    sub={reg.outstanding > 0 ? `${reg.outstanding} outstanding` : 'All paid!'}
+                    valueClass="text-emerald-600"
+                  />
+                  {reg.teams > 0 && (
                     <div className="mt-2">
-                      <div className="flex justify-between text-xs text-slate-500 mb-1">
-                        <span>Expenses as % of revenue</span>
-                        <span>{Math.min(100, Math.round((expense / revenue) * 100))}%</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
-                        <div className="h-full bg-red-400 rounded-l-full" style={{ width: `${Math.min(100, Math.round((expense / revenue) * 100))}%` }} />
-                      </div>
+                      <ProgressBar pct={Math.round((reg.paidInFull / reg.teams) * 100)} color="bg-emerald-500" />
                     </div>
                   )}
                 </div>
+                {(reg.hotelYes + reg.hotelMaybe) > 0 ? (
+                  <BigStat
+                    value={reg.hotelYes}
+                    label="Hotel Requests"
+                    sub={reg.hotelMaybe > 0 ? `${reg.hotelMaybe} maybe` : undefined}
+                    valueClass="text-amber-600"
+                  />
+                ) : (
+                  <div className="flex flex-col pt-1">
+                    <span className="text-slate-200 text-2xl">🏨</span>
+                    <span className="text-xs text-slate-400 mt-1">No hotel requests</span>
+                  </div>
+                )}
               </div>
-            </section>
-          )
-        })()}
+            </Card>
+          </div>
+        )}
+
+        {/* Division Table + Schedule & Staff */}
+        {reg.clubs > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+
+            {topDivisions.length > 0 && (
+              <Card className="sm:col-span-2">
+                <CardHeader icon="🏆" title="Teams by Division" />
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      <th className="text-left text-xs font-semibold text-slate-400 uppercase tracking-wide px-5 py-2.5">Division</th>
+                      <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-5 py-2.5">Teams</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topDivisions.map(([div, count], i) => (
+                      <tr key={div} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                        <td className="px-5 py-2.5 text-slate-700 font-medium">{div}</td>
+                        <td className="px-5 py-2.5 text-right font-bold text-slate-900">{count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            )}
+
+            <Card className="sm:col-span-3">
+              <CardHeader icon="📅" title="Schedule & Staff" />
+              <div className="px-5 py-4 grid grid-cols-2 gap-6">
+                <BigStat value={games.active}    label="Total Games"      sub={games.canceled > 0 ? `${games.canceled} canceled` : undefined} valueClass="text-sky-600" />
+                <BigStat value={games.divisions} label="Divisions"        valueClass="text-slate-700" />
+                <BigStat value={games.assigned}  label="Assignments"      sub={`~${assignPct}% filled`} valueClass="text-blue-600" />
+                <BigStat value={staff.onRoster}  label="Staff on Roster"  valueClass="text-emerald-600" />
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Financial Health */}
+        {showFinancials && (
+          <section>
+            <SectionTitle>Financial Health</SectionTitle>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+              {/* P&L Summary */}
+              <Card>
+                <CardHeader icon="📈" title="Profit & Loss Summary" />
+                <div className="px-5 py-4 space-y-4">
+                  <div>
+                    <div className="text-xs text-slate-400 mb-0.5">Total Revenue</div>
+                    <div className="text-3xl font-extrabold text-slate-900">{fmt(revenue)}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{fmt(received)} collected</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 mb-0.5">Total Expenses</div>
+                    <div className="text-3xl font-extrabold text-red-500">{fmt(expense)}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{fmt(staff.totalStaffPaid)} paid out</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 mb-0.5">Gross Profit</div>
+                    <div className={`text-3xl font-extrabold ${grossProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(grossProfit)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 mb-0.5">Net Cash Position</div>
+                    <div className={`text-2xl font-bold ${netCash >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(netCash)}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">collected − paid out</div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Revenue Detail */}
+              <Card>
+                <CardHeader icon="💚" title="Revenue" />
+                <div className="px-5 divide-y divide-slate-50">
+                  <DetailRow label={`Registration invoices`} value={fmt(reg.invoiced)} />
+                  {fin.otherIncome > 0 && <DetailRow label="Other income" value={fmt(fin.otherIncome)} />}
+                  <DetailRow label="Total Revenue" value={fmt(revenue)} valueClass="text-slate-900 font-bold" />
+                  <DetailRow label="Collected so far" value={fmt(reg.received)} valueClass="text-emerald-600" />
+                  <DetailRow label="Balance due" value={fmt(reg.balance)} valueClass={reg.balance > 0 ? 'text-amber-600' : 'text-slate-400'} />
+                </div>
+              </Card>
+
+              {/* Expense Detail + margin */}
+              <Card>
+                <CardHeader icon="🔴" title="Expenses" />
+                <div className="px-5 divide-y divide-slate-50">
+                  <DetailRow label={`Referee pay (${staff.refCount} assignments)`} value={fmt(staff.refPayTotal)} valueClass="text-red-500" />
+                  {staff.hourlyPayTotal > 0 && <DetailRow label="Hourly staff pay" value={fmt(staff.hourlyPayTotal)} valueClass="text-red-500" />}
+                  <DetailRow
+                    label={`Scorekeeper pay (${staff.skCount} assignments)`}
+                    value={fmt(Math.max(0, staff.totalStaffExpense - staff.refPayTotal - staff.hourlyPayTotal))}
+                    valueClass="text-red-500"
+                  />
+                  {fin.otherExpenses > 0 && <DetailRow label="Other expenses" value={fmt(fin.otherExpenses)} valueClass="text-red-500" />}
+                  <DetailRow label="Total Expenses" value={fmt(expense)} valueClass="text-red-600 font-bold" />
+                  <DetailRow
+                    label="Staff owed (unpaid)"
+                    value={fmt(Math.max(0, staff.totalStaffExpense - staff.totalStaffPaid))}
+                    valueClass={staff.totalStaffExpense - staff.totalStaffPaid > 0 ? 'text-amber-600' : 'text-slate-400'}
+                  />
+                </div>
+                {revenue > 0 && (
+                  <div className="px-5 py-4 border-t border-slate-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-slate-700">Gross Profit</span>
+                      <span className={`text-sm font-extrabold ${grossProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(grossProfit)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                      <span>Margin ({margin}%)</span>
+                      <span>{fmt(grossProfit)} / {fmt(revenue)}</span>
+                    </div>
+                    <ProgressBar pct={Math.max(0, margin)} color={margin >= 50 ? 'bg-emerald-500' : margin >= 25 ? 'bg-amber-400' : 'bg-red-400'} />
+                    <div className="flex justify-between text-xs text-slate-400 mt-2 mb-1">
+                      <span>Expenses as % of revenue</span>
+                      <span>{expensePct}%</span>
+                    </div>
+                    <ProgressBar pct={expensePct} color={expensePct <= 40 ? 'bg-teal-400' : expensePct <= 65 ? 'bg-amber-400' : 'bg-red-400'} />
+                  </div>
+                )}
+              </Card>
+            </div>
+          </section>
+        )}
 
       </div>
     </div>
