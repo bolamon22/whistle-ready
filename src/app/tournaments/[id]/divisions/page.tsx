@@ -41,6 +41,7 @@ export default function DivisionsPage() {
   const [generating, setGenerating] = useState(false)
   const [genDate, setGenDate] = useState('')
   const [genRefCount, setGenRefCount] = useState('2')
+  const [gamesPerTeam, setGamesPerTeam] = useState('2')
   const [renumbering, setRenumbering] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
@@ -158,7 +159,7 @@ export default function DivisionsPage() {
     setGenerating(true)
     const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), clearExisting: true }),
+      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), gamesPerTeam: Number(gamesPerTeam), clearExisting: true }),
     })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error ?? 'Failed to generate games'); setGenerating(false); return }
@@ -447,6 +448,10 @@ if (loading) return (
                             <option value="2">2</option>
                             <option value="3">3</option>
                           </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Games per team</label>
+                          <input type="number" min="1" max="10" className="input text-sm w-20" value={gamesPerTeam} onChange={e => setGamesPerTeam(e.target.value)} />
                         </div>
                         <button onClick={generateGames} disabled={generating || pools.length === 0}
                           className="btn-primary btn-sm disabled:opacity-50">
