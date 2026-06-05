@@ -32,17 +32,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
 
   // Generate round-robin
   if (body.action === 'generate') {
-    const { date, refCount, clearExisting } = body
+    const { date, refCount, gamesPerTeam, clearExisting } = body
 
     const pools = await prisma.pool.findMany({ where: { tournamentId: params.id, division } })
     if (pools.length === 0) return NextResponse.json({ error: 'No pools found for this division' }, { status: 400 })
 
-    // Optionally clear existing pool games for this division
     if (clearExisting) {
       await prisma.game.deleteMany({ where: { tournamentId: params.id, division, pool: { not: null } } })
     }
 
-    // Find the highest game number across the whole tournament
     const allGames = await prisma.game.findMany({
       where: { tournamentId: params.id },
       select: { gameNumber: true },
@@ -58,24 +56,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       const teamNames: string[] = JSON.parse(pool.teamNames || '[]')
       if (teamNames.length < 2) continue
 
-      // Round-robin: every pair plays once
-      for (let i = 0; i < teamNames.length; i++) {
-        for (let j = i + 1; j < teamNames.length; j++) {
-          const game = await prisma.game.create({
-            data: {
-              tournamentId: params.id,
-              division,
-              pool: pool.name,
-              gameNumber: String(nextNum++),
-              date: date ?? '',
-              startTime: '',
-              location: '',
-              team1: teamNames[i],
-              team2: teamNames[j],
-              refCount: Number(refCount ?? 2),
-            },
-          })
-          created.push({ id: game.id, gameNumber: game.gameNumber, pool: game.pool, team1: game.team1, team2: game.team2 })
+      // Calculate how many rounds to play based on gamesPerTeam
+      const teamsCount = teamNames.length
+      const gpt = Number(gamesPerTeam) > 0 ? Number(gamesPerTeam) : teamsCount - 1
+      const rounds = Math.ceil(gpt / Math.max(1, teamsCount - 1))
+
+      for (let round = 0; round < rounds; round++) {
+        for (let i = 0; i < teamNames.length; i++) {
+          for (let j = i + 1; j < teamNames.length; j++) {
+            const game = await prisma.game.create({
+              data: {
+                tournamentId: params.id,
+                division,
+                pool: pool.name,
+                gameNumber: String(nextNum++),
+                date: date ?? '',
+                startTime: '',
+                location: '',
+                team1: teamNames[i],
+                team2: teamNames[j],
+                refCount: Number(refCount ?? 2),
+              },
+            })
+            created.push({ id: game.id, gameNumber: game.gameNumber, pool: game.pool, team1: game.team1, team2: game.team2 })
+          }
         }
       }
     }
