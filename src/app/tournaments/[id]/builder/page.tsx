@@ -103,7 +103,7 @@ const SECTIONS = [
   { id: 'general',      label: 'General Info',       icon: '🏆' },
   { id: 'divisions',    label: 'Divisions',           icon: '🏅' },
   { id: 'venues',       label: 'Venues & Fields',     icon: '🏟️' },
-  { id: 'registration', label: 'Registration',        icon: '📋' },
+  { id: 'registration', label: 'Team Fees',           icon: '📋' },
   { id: 'staffpay',     label: 'Staff & Pay Rates',   icon: '💵' },
   { id: 'schedule',     label: 'Schedule Rules',      icon: '⏱' },
 ]
