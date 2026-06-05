@@ -15,13 +15,29 @@ interface Venue { id: string; name: string; fields: Field[] }
 const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
 
 const DEFAULT_DIVISIONS = [
-  'Boys High School A','Boys High School B','Boys High School B2',
-  'Boys U14 A and B','Boys U12 A and B',
-  'Boys U10 A and B (7v7)','Boys U10 A and B (10v10)','Boys U8 (7v7)',
-  'Girls High School A','Girls High School B','Girls High School B2',
-  'Girls Middle School A','Girls Middle School B (No 2030s)',
-  'Girls Lower School A (7v7)','Girls Lower School B (7v7 - No 2033s)',
+  'Boys U8',
+  'Boys U10',
+  'Boys U12',
+  'Boys U14',
+  'Boys High School B',
+  'Boys High School A',
+  'Girls Lower School',
+  'Girls Middle School B',
+  'Girls Middle School A',
+  'Girls High School B',
+  'Girls High School A',
 ]
+
+interface DivisionItem { def: string; display: string; checked: boolean }
+function toDivItems(stored: string[]): DivisionItem[] {
+  return DEFAULT_DIVISIONS.map(def => {
+    const match = stored.find(s => s === def) ?? stored.find(s => s.toLowerCase().startsWith(def.toLowerCase().slice(0, 8)))
+    return { def, display: match ?? def, checked: !!match }
+  })
+}
+function fromDivItems(items: DivisionItem[], customs: string[]): string[] {
+  return [...items.filter(i => i.checked).map(i => i.display), ...customs]
+}
 
 const DEFAULT_PRICING = { tier1: 1495, tier1Max: 3, tier2: 1450, tier2Max: 6, tier3: 1395, sevenVSeven: 1095 }
 
@@ -72,8 +88,9 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [breakLength, setBreakLength] = useState('10')
 
   // Divisions
-  const [divisions, setDivisions]     = useState<string[]>([...DEFAULT_DIVISIONS])
-  const [newDivision, setNewDivision] = useState('')
+  const [divItems, setDivItems]         = useState<DivisionItem[]>(DEFAULT_DIVISIONS.map(d => ({ def: d, display: d, checked: false })))
+  const [customDivisions, setCustomDivisions] = useState<string[]>([])
+  const [newDivision, setNewDivision]  = useState('')
 
   // Venues
   const [venues, setVenues]           = useState<Venue[]>([])
@@ -103,7 +120,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       setRates({ ...DEFAULT_PAY_RATES, ...JSON.parse(t.payRates || '{}') })
       setDivRules(JSON.parse(t.divisionRules || '{}'))
       try { const p = JSON.parse(t.registrationPricing || '{}'); if (p.tier1) setPricing(p) } catch {}
-      try { const d = JSON.parse(t.registrationDivisions || '[]'); if (d.length) setDivisions(d) } catch {}
+      try {
+        const d = JSON.parse(t.registrationDivisions || '[]')
+        if (d.length) {
+          setDivItems(toDivItems(d))
+          setCustomDivisions(d.filter((s: string) => !DEFAULT_DIVISIONS.some(def => def === s || s.toLowerCase().startsWith(def.toLowerCase().slice(0, 8)))))
+        }
+      } catch {}
       // Build date list
       if (t.startDate && t.endDate) {
         const dates: string[] = []
@@ -131,7 +154,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           scheduleIncrement: parseInt(scheduleIncrement) || 50,
           payRates: rates, divisionRules: divRules,
           registrationPricing: JSON.stringify(pricing),
-          registrationDivisions: JSON.stringify(divisions),
+          registrationDivisions: JSON.stringify(fromDivItems(divItems, customDivisions)),
         }),
       }),
       fetch(`/api/venues/${params.id}`, {
@@ -188,7 +211,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   // ─── Completion indicators ─────────────────────────────────────────────────
   function isComplete(id: string) {
     if (id === 'general')      return !!(name && startDate && location)
-    if (id === 'divisions')    return divisions.length > 0
+    if (id === 'divisions')    return divItems.some(i => i.checked) || customDivisions.length > 0
     if (id === 'venues')       return venues.length > 0
     if (id === 'registration') return pricing.tier1 > 0
     if (id === 'staffpay')     return Object.values(rates).some(v => v > 0)
@@ -251,42 +274,72 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     // ── Divisions ──
     if (activeSection === 'divisions') return (
       <div>
-        <p className="text-sm text-gray-500 mb-4">Select the divisions offered. Names are editable — check a division then click its name to rename it.</p>
-        <div className="grid grid-cols-2 gap-1.5 mb-5">
-          {DEFAULT_DIVISIONS.map(def => {
-            const checked = divisions.includes(def)
-            return (
-              <div key={def} className={`flex items-center gap-2 rounded-xl px-3 py-2 transition-colors ${checked ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
-                <input type="checkbox" checked={checked} className="w-4 h-4 accent-blue-600 flex-shrink-0"
-                  onChange={e => e.target.checked ? setDivisions(d => [...d, def]) : setDivisions(d => d.filter(v => v !== def))} />
-                {checked
-                  ? <input className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1"
-                      value={divisions.find(d => d === def) || def}
-                      onChange={e => setDivisions(d => d.map(v => v === def ? e.target.value : v))} />
-                  : <span className="text-sm text-gray-400 flex-1 truncate">{def}</span>}
-              </div>
-            )
-          })}
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-gray-500">Check the divisions for this tournament. Click a checked division name to rename it.</p>
+          <div className="flex gap-2 flex-shrink-0 ml-4">
+            <button type="button"
+              onClick={() => {
+                const saved = localStorage.getItem('gameday_div_prefs')
+                if (saved) {
+                  const { items, customs } = JSON.parse(saved)
+                  setDivItems(items); setCustomDivisions(customs)
+                  toast.success('Loaded your saved preferences')
+                } else toast.error('No saved preferences found')
+              }}
+              className="text-xs border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">
+              Load my defaults
+            </button>
+            <button type="button"
+              onClick={() => {
+                localStorage.setItem('gameday_div_prefs', JSON.stringify({ items: divItems, customs: customDivisions }))
+                toast.success('Preferences saved!')
+              }}
+              className="text-xs border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-blue-600 whitespace-nowrap">
+              Save as my defaults
+            </button>
+          </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-1.5 mb-5">
+          {divItems.map((item, idx) => (
+            <div key={item.def} className={`flex items-center gap-2 rounded-xl px-3 py-2 transition-colors ${item.checked ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50 border border-transparent'}`}>
+              <input type="checkbox" checked={item.checked} className="w-4 h-4 accent-blue-600 flex-shrink-0"
+                onChange={e => setDivItems(prev => prev.map((d, i) => i === idx ? { ...d, checked: e.target.checked } : d))} />
+              {item.checked
+                ? <input
+                    className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-800 focus:outline-none border-b border-transparent focus:border-blue-400 px-0.5"
+                    value={item.display}
+                    onChange={e => setDivItems(prev => prev.map((d, i) => i === idx ? { ...d, display: e.target.value } : d))} />
+                : <span className="text-sm text-gray-400 flex-1 truncate">{item.def}</span>
+              }
+            </div>
+          ))}
+        </div>
+
         <div className="border-t border-gray-100 pt-4">
-          <p className="text-xs font-medium text-gray-500 mb-2">Custom division</p>
-          {divisions.filter(d => !DEFAULT_DIVISIONS.includes(d)).map((d, i) => (
+          <p className="text-xs font-medium text-gray-500 mb-2">Custom divisions</p>
+          {customDivisions.map((d, i) => (
             <div key={i} className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 mb-1.5">
               <input type="checkbox" checked readOnly className="w-4 h-4 accent-blue-600 flex-shrink-0" />
-              <input className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-800 focus:outline-none"
-                value={d} onChange={e => setDivisions(divs => divs.map(v => v === d ? e.target.value : v))} />
-              <button type="button" onClick={() => setDivisions(divs => divs.filter(v => v !== d))} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+              <input className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-800 focus:outline-none border-b border-transparent focus:border-blue-400"
+                value={d} onChange={e => setCustomDivisions(prev => prev.map((v, j) => j === i ? e.target.value : v))} />
+              <button type="button" onClick={() => setCustomDivisions(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs">✕</button>
             </div>
           ))}
           <div className="flex gap-2 mt-2">
             <input className="input flex-1" placeholder="e.g. Boys U9 (7v7)" value={newDivision}
               onChange={e => setNewDivision(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (newDivision.trim()) { setDivisions(d => [...d, newDivision.trim()]); setNewDivision('') } } }} />
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (newDivision.trim()) { setCustomDivisions(p => [...p, newDivision.trim()]); setNewDivision('') } } }} />
             <button type="button" className="btn-secondary"
-              onClick={() => { if (newDivision.trim()) { setDivisions(d => [...d, newDivision.trim()]); setNewDivision('') } }}>Add</button>
+              onClick={() => { if (newDivision.trim()) { setCustomDivisions(p => [...p, newDivision.trim()]); setNewDivision('') } }}>Add</button>
           </div>
         </div>
-        <button type="button" onClick={() => setDivisions([...DEFAULT_DIVISIONS])} className="text-xs text-gray-400 hover:text-gray-600 underline mt-3 block">Reset to defaults</button>
+
+        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100">
+          <span className="text-xs text-gray-400">{divItems.filter(i => i.checked).length + customDivisions.length} divisions selected</span>
+          <button type="button" onClick={() => { setDivItems(prev => prev.map(d => ({ ...d, checked: false, display: d.def }))); setCustomDivisions([]) }}
+            className="text-xs text-gray-400 hover:text-gray-600 underline">Clear all</button>
+        </div>
       </div>
     )
 
@@ -393,7 +446,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                             <span className="text-xs text-gray-400">{(field.divRestrictions?.length || 0) === 0 ? 'All divisions' : `${field.divRestrictions!.length} restricted`}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-1">
-                            {divisions.map(div => {
+                            {fromDivItems(divItems, customDivisions).map(div => {
                               const checked = (field.divRestrictions || []).includes(div)
                               return (
                                 <label key={div} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer text-xs transition-colors ${checked ? 'bg-white border border-blue-200 font-medium text-gray-800' : 'text-gray-500 hover:bg-white/60'}`}>
