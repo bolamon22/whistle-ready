@@ -21,6 +21,19 @@ interface Standing {
 
 const fmtDate = (d: string) => { if (!d) return ''; const [y,m,day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}/${y}` }
 
+// Initials avatar with consistent color from team name
+function TeamAvatar({ name, size = 'md' }: { name: string, size?: 'sm' | 'md' }) {
+  const initials = name.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('') || name.substring(0, 2).toUpperCase()
+  const colors = ['#1a3a5c','#8b1a1a','#1a5c3a','#5c3a1a','#3a1a5c','#1a5c5c','#5c1a4a','#2a4a1a']
+  const idx = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length
+  const sz = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-12 h-12 text-sm'
+  return (
+    <div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`} style={{ backgroundColor: colors[idx] }}>
+      {initials}
+    </div>
+  )
+}
+
 function calcStandings(games: Game[], division: string, pool?: string): Standing[] {
   const map: Record<string, Standing> = {}
   const ensure = (t: string) => { if (!map[t]) map[t] = { team: t, w: 0, l: 0, t: 0, gf: 0, ga: 0, pts: 0 } }
@@ -71,42 +84,102 @@ function GameCard({ g, followedTeams, toggleFollow }: { g: Game, followedTeams: 
   )
 }
 
-function PoolTable({ pool, standings, followedTeams }: { pool: string, standings: Standing[], followedTeams: string[] }) {
-  if (!standings.length) return null
+function PoolCard({ division, pool, standings, followedTeams, onScheduleClick }: {
+  division: string; pool: string; standings: Standing[]
+  followedTeams: string[]; onScheduleClick: () => void
+}) {
+  const [view, setView] = useState<'grid' | 'list'>('list')
+  const title = `${division} — Group ${pool}`
+
   return (
-    <div className="border border-gray-200 rounded overflow-hidden">
-      <div className="text-center py-2 font-bold text-sm border-b border-gray-200 bg-white">{pool}</div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="text-left px-3 py-2 font-bold text-xs text-gray-800">Team</th>
-            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-8">W</th>
-            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-8">L</th>
-            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-10">GS</th>
-            <th className="text-center px-2 py-2 font-bold text-xs text-gray-800 w-10">GA</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      {/* Dark header */}
+      <div className="bg-gray-900 px-4 py-3 flex items-center justify-between">
+        <span className="text-white font-bold text-sm uppercase tracking-wide">{title}</span>
+        <div className="flex gap-1">
+          <button onClick={() => setView('grid')}
+            className={`p-1.5 rounded transition-colors ${view === 'grid' ? 'bg-white/20 text-white' : 'text-gray-400 hover:text-white'}`}
+            title="Grid view">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+              <rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/>
+              <rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/>
+            </svg>
+          </button>
+          <button onClick={() => setView('list')}
+            className={`p-1.5 rounded transition-colors ${view === 'list' ? 'bg-white/20 text-white' : 'text-gray-400 hover:text-white'}`}
+            title="Standings view">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+              <rect x="1" y="2" width="14" height="2" rx="1"/><rect x="1" y="7" width="14" height="2" rx="1"/><rect x="1" y="12" width="14" height="2" rx="1"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Grid view — team cards */}
+      {view === 'grid' && (
+        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 bg-white">
           {standings.map((s, i) => (
-            <tr key={s.team} className="border-t border-gray-100">
-              <td className="px-3 py-2">
-                <span className={`text-xs font-medium ${followedTeams.includes(s.team) ? 'text-blue-600' : 'text-rose-700'}`}>{s.team}</span>
-              </td>
-              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.w}</td>
-              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.l}</td>
-              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.gf}</td>
-              <td className="px-2 py-2 text-center text-xs text-gray-700">{s.ga}</td>
-            </tr>
+            <div key={s.team} className="flex flex-col items-center justify-center py-5 px-3 gap-2">
+              <TeamAvatar name={s.team} size="md" />
+              <div className="text-center">
+                <div className="text-xs text-gray-400 mb-0.5">{i + 1}</div>
+                <div className="text-xs font-bold text-gray-800 uppercase leading-tight text-center">{s.team}</div>
+              </div>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      )}
+
+      {/* List / standings view */}
+      {view === 'list' && (
+        <div className="bg-white overflow-x-auto">
+          <table className="w-full text-xs min-w-[280px]">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-3 py-2.5 font-semibold text-gray-500 w-6"></th>
+                <th className="text-left px-2 py-2.5 font-semibold text-gray-500">Team</th>
+                <th className="text-center px-2 py-2.5 font-semibold text-gray-500 w-8">MP</th>
+                <th className="text-center px-2 py-2.5 font-semibold text-gray-500 w-10">W-L</th>
+                <th className="text-center px-2 py-2.5 font-semibold text-gray-500 w-8">GF</th>
+                <th className="text-center px-2 py-2.5 font-semibold text-gray-500 w-8">GA</th>
+                <th className="text-center px-2 py-2.5 font-semibold text-gray-500 w-10">GD</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standings.map((s, i) => {
+                const mp = s.w + s.l + s.t
+                const gd = s.gf - s.ga
+                return (
+                  <tr key={s.team} className={`border-t border-gray-50 ${i === 0 && mp > 0 ? 'bg-gray-50' : ''}`}>
+                    <td className="px-3 py-2.5 text-gray-400 font-medium">{i + 1}</td>
+                    <td className="px-2 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <TeamAvatar name={s.team} size="sm" />
+                        <span className={`font-semibold text-xs uppercase leading-tight ${followedTeams.includes(s.team) ? 'text-blue-600' : 'text-gray-800'}`}>{s.team}</span>
+                      </div>
+                    </td>
+                    <td className="px-2 py-2.5 text-center text-gray-600">{mp}</td>
+                    <td className="px-2 py-2.5 text-center font-semibold text-gray-700">{s.w}-{s.l}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600">{s.gf}</td>
+                    <td className="px-2 py-2.5 text-center text-gray-600">{s.ga}</td>
+                    <td className={`px-2 py-2.5 text-center font-bold ${gd > 0 ? 'text-green-600' : gd < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                      {gd > 0 ? '+' : ''}{gd}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Schedule button */}
+      <button onClick={onScheduleClick}
+        className="w-full bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold uppercase tracking-widest py-3 transition-colors">
+        Schedule
+      </button>
     </div>
   )
-}
-
-function StandingsTable({ standings, followedTeams }: { standings: Standing[], followedTeams: string[] }) {
-  if (!standings.length) return null
-  return <PoolTable pool="" standings={standings} followedTeams={followedTeams} />
 }
 
 export default function PublicTournamentPage() {
@@ -149,10 +222,17 @@ export default function PublicTournamentPage() {
   const divisionGroups = useMemo(() => filterDiv === 'ALL' ? Array.from(new Set(filteredGames.map(g => g.division))).sort() : [filterDiv], [filteredGames, filterDiv])
   const standingDivisions = useMemo(() => Array.from(new Set(games.filter(g => !g.isCanceled).map(g => g.division))).sort(), [games])
 
+  const jumpToSchedule = (div: string, pool: string) => {
+    setTab('schedule')
+    setFilterDiv(div)
+    setTimeout(() => window.scrollTo({ top: 200, behavior: 'smooth' }), 100)
+  }
+
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400">Loading…</div></div>
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3">
           {tournament?.logoUrl && <img src={tournament.logoUrl} alt="logo" className="h-9 w-9 sm:h-10 sm:w-10 object-contain rounded-xl border border-gray-100 flex-shrink-0" />}
@@ -231,6 +311,7 @@ export default function PublicTournamentPage() {
             {filteredGames.length === 0 && <div className="text-center py-16 text-gray-400"><div className="text-4xl mb-3">📅</div><p>No games found.</p></div>}
           </>
         )}
+
         {tab === 'standings' && (
           <div className="space-y-8">
             {standingDivisions.map(div => {
@@ -238,19 +319,29 @@ export default function PublicTournamentPage() {
               const pools = Array.from(new Set(divGames.map(g => g.pool).filter(Boolean))).sort() as string[]
               return (
                 <div key={div}>
-                  <h2 className="text-sm font-extrabold text-gray-700 uppercase tracking-wider mb-1 border-l-4 border-blue-500 pl-3">{div}</h2>
+                  <h2 className="text-sm font-extrabold text-gray-700 uppercase tracking-wider mb-4 border-l-4 border-blue-500 pl-3">{div}</h2>
                   {pools.length > 0 ? (
-                    <>
-                      <p className="text-xs text-gray-400 mb-3 pl-3">Pool Standings</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        {pools.map(pool => {
-                          const standings = calcStandings(games, div, pool)
-                          if (!standings.length) return null
-                          return <PoolTable key={pool} pool={pool} standings={standings} followedTeams={followedTeams} />
-                        })}
-                      </div>
-                    </>
-                  ) : <StandingsTable standings={calcStandings(games, div)} followedTeams={followedTeams} />}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {pools.map(pool => {
+                        const standings = calcStandings(games, div, pool)
+                        if (!standings.length) return null
+                        return (
+                          <PoolCard
+                            key={pool}
+                            division={div}
+                            pool={pool}
+                            standings={standings}
+                            followedTeams={followedTeams}
+                            onScheduleClick={() => jumpToSchedule(div, pool)}
+                          />
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <PoolCard division={div} pool="" standings={calcStandings(games, div)} followedTeams={followedTeams} onScheduleClick={() => jumpToSchedule(div, '')} />
+                    </div>
+                  )}
                 </div>
               )
             })}
