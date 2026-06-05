@@ -11,7 +11,7 @@ interface Tournament {
   _count:{ games:number; teamRegistrations:number; registeredTeams:number; playerRegistrations:number }
 }
 
-const SPORTS = ['Lacrosse','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
+const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
 const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50' }
 
 const ADMIN_LINKS = [
