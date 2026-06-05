@@ -349,6 +349,10 @@ if (loading) return (
                         className="btn-primary btn-sm">
                         Assign Teams to Pools →
                       </Link>
+                      <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/bracket`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors mt-1">
+                        Bracket
+                      </Link>
                     </div>
 
                     {/* Add pool */}
