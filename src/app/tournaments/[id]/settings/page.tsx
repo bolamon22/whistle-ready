@@ -71,6 +71,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [venues, setVenues] = useState<Venue[]>([])
   const [newVenueName, setNewVenueName] = useState('')
   const [newFieldNames, setNewFieldNames] = useState<Record<string, string>>({})
+  const [bulkFieldCounts, setBulkFieldCounts] = useState<Record<string, string>>({})
   const [tName, setTName] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -135,6 +136,19 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
     if (!name) return
     setVenues(v => v.map(x => x.id === venueId ? { ...x, fields: [...x.fields, { id: uid(), name }] } : x))
     setNewFieldNames(f => ({ ...f, [venueId]: '' }))
+  }
+
+  function bulkAddFields(venueId: string) {
+    const count = parseInt(bulkFieldCounts[venueId] || '0')
+    if (!count || count < 1 || count > 50) return
+    const venue = venues.find(v => v.id === venueId)
+    const existing = venue?.fields.length || 0
+    const newFields = Array.from({ length: count }, (_, i) => ({
+      id: uid(),
+      name: String(existing + i + 1),
+    }))
+    setVenues(v => v.map(x => x.id === venueId ? { ...x, fields: [...x.fields, ...newFields] } : x))
+    setBulkFieldCounts(f => ({ ...f, [venueId]: '' }))
   }
 
   function removeField(venueId: string, fieldId: string) {
@@ -224,19 +238,41 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
                   </div>
 
                   {/* Add field row */}
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-t border-gray-100">
-                    <span className="text-xs text-gray-400 w-5" />
-                    <input
-                      className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Field name (e.g. 01, North, Stadium)"
-                      value={newFieldNames[venue.id] || ''}
-                      onChange={e => setNewFieldNames(f => ({ ...f, [venue.id]: e.target.value }))}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addField(venue.id) } }}
-                    />
-                    <button type="button" onClick={() => addField(venue.id)}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                      + Add Field
-                    </button>
+                  <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
+                    {/* Quick bulk add */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 whitespace-nowrap">How many fields?</span>
+                      <input
+                        type="number" min="1" max="50"
+                        className="w-20 text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                        placeholder="e.g. 7"
+                        value={bulkFieldCounts[venue.id] || ''}
+                        onChange={e => setBulkFieldCounts(f => ({ ...f, [venue.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); bulkAddFields(venue.id) } }}
+                      />
+                      <button type="button" onClick={() => bulkAddFields(venue.id)}
+                        disabled={!bulkFieldCounts[venue.id]}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 disabled:opacity-40 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                        Generate Fields
+                      </button>
+                      <span className="text-gray-300 text-xs">·</span>
+                      <span className="text-xs text-gray-400">names editable after</span>
+                    </div>
+                    {/* Manual single add */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 whitespace-nowrap">Or add one:</span>
+                      <input
+                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Field name (e.g. 2A, North, Stadium)"
+                        value={newFieldNames[venue.id] || ''}
+                        onChange={e => setNewFieldNames(f => ({ ...f, [venue.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addField(venue.id) } }}
+                      />
+                      <button type="button" onClick={() => addField(venue.id)}
+                        className="text-xs font-medium text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                        + Add Field
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
