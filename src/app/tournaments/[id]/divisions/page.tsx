@@ -165,7 +165,7 @@ export default function DivisionsPage() {
     if (!res.ok) { toast.error(data.error ?? 'Failed to generate games'); setGenerating(false); return }
     await loadPoolGames(activeDiv)
     setGenerating(false)
-    toast.success(`${data.generated} games generated`)
+    toast.success(`${data.generated} games created — each team plays ${gamesPerTeam} game${Number(gamesPerTeam) !== 1 ? 's' : ''}`)
   }
 
   async function renumberGames() {
@@ -190,7 +190,7 @@ export default function DivisionsPage() {
 
 if (loading) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <p className="text-slate-400 animate-pulse">Loading divisionsÃ¢ÂÂ¦</p>
+      <p className="text-slate-400 animate-pulse">Loading divisions...</p>
     </div>
   )
 
@@ -201,7 +201,7 @@ if (loading) return (
       <div className="max-w-6xl mx-auto px-6 pb-12">
         <div className="flex gap-6">
 
-          {/* Ã¢ÂÂÃ¢ÂÂ Sidebar Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ */}
+          {/* -- Sidebar -------------------------------------------- */}
           <div className="w-56 flex-shrink-0">
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden sticky top-6">
               <div className="bg-slate-800 px-4 py-3">
@@ -210,7 +210,7 @@ if (loading) return (
               {divisions.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs text-slate-400">
                   No divisions yet.
-                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder Ã¢ÂÂ</Link>
+                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder -></Link>
                 </div>
               ) : (
                 <div>
@@ -218,7 +218,7 @@ if (loading) return (
                     <button key={div.name} onClick={() => selectDiv(div.name)}
                       className={`w-full text-left px-4 py-3 border-b border-slate-100 last:border-b-0 transition-colors ${activeDiv === div.name ? 'bg-sky-50 border-l-2 border-l-sky-500' : 'hover:bg-slate-50'}`}>
                       <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{div.teamCount} teams ÃÂ· {div.poolCount} pools</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{div.teamCount} teams · {div.poolCount} pools</p>
                     </button>
                   ))}
                 </div>
@@ -226,14 +226,14 @@ if (loading) return (
             </div>
           </div>
 
-          {/* Ã¢ÂÂÃ¢ÂÂ Main content Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ */}
+          {/* -- Main content --------------------------------------- */}
           <div className="flex-1 min-w-0">
             {!activeDiv ? (
               <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400">
                 Select a division to get started
               </div>
             ) : loadingDiv ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 animate-pulse">LoadingÃ¢ÂÂ¦</div>
+              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 animate-pulse">Loading...</div>
             ) : (
               <>
                 {/* Sub-tabs */}
@@ -246,7 +246,7 @@ if (loading) return (
                   ))}
                 </div>
 
-                {/* Ã¢ÂÂÃ¢ÂÂ TEAMS TAB Ã¢ÂÂÃ¢ÂÂ */}
+                {/* -- TEAMS TAB -- */}
                 {activeTab === 'teams' && (
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                     {/* Header */}
@@ -259,7 +259,7 @@ if (loading) return (
                         {swapA && swapB ? (
                           <button onClick={swapTeams} disabled={swapping}
                             className="btn-primary btn-sm disabled:opacity-50">
-                            {swapping ? 'SwappingÃ¢ÂÂ¦' : `Ã¢ÂÂ Swap ${swapA} Ã¢ÂÂ ${swapB}`}
+                            {swapping ? 'Swapping...' : `<-> Swap ${swapA} <-> ${swapB}`}
                           </button>
                         ) : swapA ? (
                           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
@@ -270,7 +270,7 @@ if (loading) return (
                         )}
                         {(swapA || swapB) && (
                           <button onClick={() => { setSwapA(null); setSwapB(null) }}
-                            className="text-xs text-slate-400 hover:text-slate-600">Ã¢ÂÂ Cancel</button>
+                            className="text-xs text-slate-400 hover:text-slate-600">x Cancel</button>
                         )}
                       </div>
                     </div>
@@ -305,7 +305,7 @@ if (loading) return (
                                 className={`border-b border-slate-50 last:border-0 cursor-pointer transition-colors ${isSwapA || isSwapB ? 'bg-amber-50' : i % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'}`}>
                                 <td className="px-5 py-3 font-semibold text-slate-800">
                                   <div className="flex items-center gap-2">
-                                    {(isSwapA || isSwapB) && <span className="text-amber-500">Ã¢ÂÂ</span>}
+                                    {(isSwapA || isSwapB) && <span className="text-amber-500"><-></span>}
                                     {team.teamName}
                                   </div>
                                 </td>
@@ -318,11 +318,11 @@ if (loading) return (
                                       onClick={e => e.stopPropagation()}
                                       disabled={assigningTeam === team.teamName}
                                       className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50">
-                                      <option value="">Ã¢ÂÂ No pool Ã¢ÂÂ</option>
+                                      <option value="">-- No pool --</option>
                                       {pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                     </select>
                                   ) : (
-                                    <span className="text-xs text-slate-400">Ã¢ÂÂ</span>
+                                    <span className="text-xs text-slate-400">--</span>
                                   )}
                                 </td>
                                 <td className="px-3 py-3">{payBadge(team.paymentStatus)}</td>
@@ -339,7 +339,7 @@ if (loading) return (
                   </div>
                 )}
 
-                {/* Ã¢ÂÂÃ¢ÂÂ POOLS TAB Ã¢ÂÂÃ¢ÂÂ */}
+                {/* -- POOLS TAB -- */}
                 {activeTab === 'pools' && (
                   <div className="space-y-4">
                     {/* Assign teams button */}
@@ -347,7 +347,7 @@ if (loading) return (
                       <p className="text-xs text-slate-400">{teams.filter(t => !t.pool).length > 0 ? `${teams.filter(t => !t.pool).length} teams unassigned` : 'All teams assigned'}</p>
                       <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
                         className="btn-primary btn-sm">
-                        Assign Teams to Pools Ã¢ÂÂ
+                        Assign Teams to Pools ->
                       </Link>
                     </div>
 
@@ -358,7 +358,7 @@ if (loading) return (
                         onKeyDown={e => e.key === 'Enter' && addPool()} />
                       <button onClick={addPool} disabled={!newPoolName.trim() || addingPool}
                         className="btn-primary btn-sm disabled:opacity-50">
-                        {addingPool ? 'AddingÃ¢ÂÂ¦' : '+ Add Pool'}
+                        {addingPool ? 'Adding...' : '+ Add Pool'}
                       </button>
                     </div>
 
@@ -432,7 +432,7 @@ if (loading) return (
                   </div>
                 )}
 
-                {/* ââ POOL GAMES TAB ââ */}
+                {/* -- POOL GAMES TAB -- */}
                 {activeTab === 'pool-games' && (
                   <div className="space-y-4">
                     <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
@@ -455,13 +455,13 @@ if (loading) return (
                         </div>
                         <button onClick={generateGames} disabled={generating || pools.length === 0}
                           className="btn-primary btn-sm disabled:opacity-50">
-                          {generating ? 'Generatingâ¦' : 'â¡ Generate Games'}
+                          {generating ? 'Generating...' : '⚡ Generate Games'}
                         </button>
                         {poolGames.length > 0 && (
                           <>
                             <button onClick={renumberGames} disabled={renumbering}
                               className="btn-sm border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                              {renumbering ? 'Renumberingâ¦' : '# Renumber'}
+                              {renumbering ? 'Renumbering...' : '# Renumber'}
                             </button>
                             {showClearConfirm ? (
                               <div className="flex items-center gap-2">
@@ -476,12 +476,12 @@ if (loading) return (
                         )}
                       </div>
                       {pools.length === 0 && (
-                        <p className="mt-3 text-xs text-amber-600">No pools yet â create pools and assign teams first.</p>
+                        <p className="mt-3 text-xs text-amber-600">No pools yet -- create pools and assign teams first.</p>
                       )}
                     </div>
                     {poolGames.length === 0 ? (
                       <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">
-                        No pool games yet. Add pools with teams, then click â¡ Generate Games.
+                        No pool games yet. Add pools with teams, then click ⚡ Generate Games.
                       </div>
                     ) : (
                       (() => {
@@ -514,9 +514,9 @@ if (loading) return (
                                     <td className="px-5 py-2.5 font-mono text-xs text-slate-500">{g.gameNumber}</td>
                                     <td className="px-3 py-2.5 font-medium text-slate-800">{g.team1}</td>
                                     <td className="px-3 py-2.5 text-slate-600">{g.team2}</td>
-                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.date || 'â'}</td>
-                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.startTime || 'â'}</td>
-                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.location || 'â'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.date || '--'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.startTime || '--'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.location || '--'}</td>
                                   </tr>
                                 ))}
                               </tbody>
