@@ -8,6 +8,11 @@ import TournamentNav from '../TournamentNav'
 
 interface Division { name: string; teamCount: number; poolCount: number }
 interface Pool { id: string; name: string; teamNames: string[] }
+interface PoolGame {
+  id: string; gameNumber: string; pool: string | null
+  team1: string; team2: string; date: string; startTime: string; location: string
+}
+
 interface Team {
   id: string; teamName: string; clubName: string; division: string
   coachName: string; coachPhone: string; coachEmail: string
@@ -25,11 +30,19 @@ export default function DivisionsPage() {
   const [tournament, setTournament] = useState<{ name: string; logoUrl: string } | null>(null)
   const [divisions, setDivisions] = useState<Division[]>([])
   const [activeDiv, setActiveDiv] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'teams' | 'pools'>('teams')
+  const [activeTab, setActiveTab] = useState<'teams' | 'pools' | 'pool-games'>('teams')
   const [teams, setTeams] = useState<Team[]>([])
   const [pools, setPools] = useState<Pool[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingDiv, setLoadingDiv] = useState(false)
+  const [poolGames, setPoolGames] = useState<PoolGame[]>([])
+
+  // Pool games state
+  const [generating, setGenerating] = useState(false)
+  const [genDate, setGenDate] = useState('')
+  const [genRefCount, setGenRefCount] = useState('2')
+  const [renumbering, setRenumbering] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   // Swap teams state
   const [swapA, setSwapA] = useState<string | null>(null)
@@ -53,13 +66,25 @@ export default function DivisionsPage() {
     })
   }, [id])
 
+  async function loadPoolGames(div: string) {
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`)
+    const data = await res.json()
+    setPoolGames(Array.isArray(data) ? data : [])
+  }
+
   const selectDiv = useCallback((div: string) => {
     setActiveDiv(div)
     setLoadingDiv(true)
     setSwapA(null); setSwapB(null)
-    fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/teams`)
-      .then(r => r.json())
-      .then(data => { setTeams(data.teams); setPools(data.pools); setLoadingDiv(false) })
+    Promise.all([
+      fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/teams`).then(r => r.json()),
+      fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`).then(r => r.json()),
+    ]).then(([teamData, gameData]) => {
+      setTeams(teamData.teams ?? [])
+      setPools(teamData.pools ?? [])
+      setPoolGames(Array.isArray(gameData) ? gameData : [])
+      setLoadingDiv(false)
+    })
   }, [id])
 
   async function addPool() {
@@ -173,10 +198,10 @@ export default function DivisionsPage() {
               <>
                 {/* Sub-tabs */}
                 <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
-                  {(['teams', 'pools'] as const).map(tab => (
+                  {(['teams', 'pools', 'pool-games'] as const).map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
                       className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px capitalize transition-colors ${activeTab === tab ? 'border-sky-600 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                      {tab === 'teams' ? `Teams (${teams.length})` : `Pools (${pools.length})`}
+                      {tab === 'teams' ? `Teams (${teams.length})` : tab === 'pools' ? `Pools (${pools.length})` : `Pool Games (${poolGames.length})`}
                     </button>
                   ))}
                 </div>
