@@ -25,7 +25,7 @@ const DEFAULT_DIVISIONS = [
   'Girls Lower School A (7v7)', 'Girls Lower School B (7v7 - No 2033s)',
 ]
 
-interface Field { id: string; name: string }
+interface Field { id: string; name: string; availStart?: string; availEnd?: string; divRestrictions?: string[] }
 interface Venue { id: string; name: string; fields: Field[] }
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
@@ -72,6 +72,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [newVenueName, setNewVenueName] = useState('')
   const [newFieldNames, setNewFieldNames] = useState<Record<string, string>>({})
   const [bulkFieldCounts, setBulkFieldCounts] = useState<Record<string, string>>({})
+  const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({})
   const [tName, setTName] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -136,6 +137,16 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
     if (!name) return
     setVenues(v => v.map(x => x.id === venueId ? { ...x, fields: [...x.fields, { id: uid(), name }] } : x))
     setNewFieldNames(f => ({ ...f, [venueId]: '' }))
+  }
+
+  function updateField(venueId: string, fieldId: string, patch: Partial<Field>) {
+    setVenues(v => v.map(x => x.id === venueId
+      ? { ...x, fields: x.fields.map(f => f.id === fieldId ? { ...f, ...patch } : f) }
+      : x))
+  }
+
+  function toggleFieldExpanded(fieldId: string) {
+    setExpandedFields(e => ({ ...e, [fieldId]: !e[fieldId] }))
   }
 
   function bulkAddFields(venueId: string) {
@@ -223,16 +234,92 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
                   {/* Fields list */}
                   <div className="divide-y divide-gray-100">
                     {venue.fields.map((field, idx) => (
-                      <div key={field.id} className="flex items-center gap-2 px-4 py-2.5">
-                        <span className="text-xs text-gray-400 w-5 text-right">{idx + 1}</span>
-                        <input
-                          className="flex-1 text-sm text-gray-700 border border-transparent focus:border-gray-300 focus:outline-none rounded px-2 py-1 focus:ring-1 focus:ring-blue-400"
-                          value={field.name}
-                          onChange={e => updateFieldName(venue.id, field.id, e.target.value)}
-                          placeholder={`Field ${idx + 1}`}
-                        />
-                        <button type="button" onClick={() => removeField(venue.id, field.id)}
-                          className="text-red-300 hover:text-red-500 text-sm px-1">✕</button>
+                      <div key={field.id}>
+                        {/* Field header row */}
+                        <div className="flex items-center gap-2 px-4 py-2.5">
+                          <span className="text-xs text-gray-400 w-5 text-right">{idx + 1}</span>
+                          <input
+                            className="flex-1 text-sm text-gray-700 border border-transparent focus:border-gray-300 focus:outline-none rounded px-2 py-1 focus:ring-1 focus:ring-blue-400"
+                            value={field.name}
+                            onChange={e => updateFieldName(venue.id, field.id, e.target.value)}
+                            placeholder={`Field ${idx + 1}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => toggleFieldExpanded(field.id)}
+                            className={`text-xs px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${expandedFields[field.id] ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300'}`}
+                            title="Set availability & division restrictions">
+                            {expandedFields[field.id] ? '▲ Availability' : '▼ Availability'}
+                          </button>
+                          <button type="button" onClick={() => removeField(venue.id, field.id)}
+                            className="text-red-300 hover:text-red-500 text-sm px-1">✕</button>
+                        </div>
+                        {/* Expanded availability panel */}
+                        {expandedFields[field.id] && (
+                          <div className="bg-blue-50 border-t border-blue-100 px-6 py-4 space-y-4">
+                            {/* Time availability */}
+                            <div>
+                              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">⏰ Available Hours</p>
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-500">From</label>
+                                  <input type="time"
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={field.availStart || ''}
+                                    onChange={e => updateField(venue.id, field.id, { availStart: e.target.value })}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-500">To</label>
+                                  <input type="time"
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={field.availEnd || ''}
+                                    onChange={e => updateField(venue.id, field.id, { availEnd: e.target.value })}
+                                  />
+                                </div>
+                                {(field.availStart || field.availEnd) && (
+                                  <button type="button"
+                                    onClick={() => updateField(venue.id, field.id, { availStart: '', availEnd: '' })}
+                                    className="text-xs text-gray-400 hover:text-red-500">Clear</button>
+                                )}
+                              </div>
+                            </div>
+                            {/* Division restrictions */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">🏅 Division Restrictions</p>
+                                <span className="text-xs text-gray-400">{(field.divRestrictions?.length || 0) === 0 ? 'All divisions allowed' : `${field.divRestrictions!.length} division${field.divRestrictions!.length !== 1 ? 's' : ''} allowed`}</span>
+                              </div>
+                              <p className="text-xs text-gray-400 mb-2">Leave all unchecked to allow any division. Check specific divisions to restrict this field.</p>
+                              <div className="grid grid-cols-2 gap-1">
+                                {divisions.map(div => {
+                                  const checked = (field.divRestrictions || []).includes(div)
+                                  return (
+                                    <label key={div} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer text-xs transition-colors ${checked ? 'bg-white border border-blue-200 text-gray-800 font-medium' : 'text-gray-500 hover:bg-white/60'}`}>
+                                      <input type="checkbox" checked={checked}
+                                        className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0"
+                                        onChange={e => {
+                                          const current = field.divRestrictions || []
+                                          updateField(venue.id, field.id, {
+                                            divRestrictions: e.target.checked
+                                              ? [...current, div]
+                                              : current.filter(d => d !== div)
+                                          })
+                                        }}
+                                      />
+                                      <span className="truncate">{div}</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                              {(field.divRestrictions?.length || 0) > 0 && (
+                                <button type="button"
+                                  onClick={() => updateField(venue.id, field.id, { divRestrictions: [] })}
+                                  className="text-xs text-gray-400 hover:text-red-500 mt-2">Clear all restrictions</button>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
