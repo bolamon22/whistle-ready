@@ -813,11 +813,11 @@ export default function RegistrationsPage() {
           <div className="fixed inset-0 z-50 flex">
             <div className="flex-1 bg-black/40" onClick={() => setShowIndivForm(false)} />
             <div className="w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
+              <div className="sticky top-0 bg-white border-b px-4 sm:px-6 py-4 flex items-center justify-between z-10 flex-wrap gap-2">
                 <h2 className="text-lg font-semibold text-gray-800">{editingIndivId ? 'Edit Player' : 'Add Individual Player'}</h2>
                 <button onClick={() => setShowIndivForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
               </div>
-              <form onSubmit={handleSaveIndiv} className="px-6 py-6 space-y-5">
+              <form onSubmit={handleSaveIndiv} className="px-4 sm:px-6 py-5 sm:py-6 space-y-5">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">Player Info</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -921,7 +921,7 @@ export default function RegistrationsPage() {
                 <h2 className="text-lg font-semibold text-gray-800">{editingId ? 'Edit Registration' : 'Add Registration'}</h2>
                 <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
               </div>
-              <form onSubmit={handleSave} className="px-6 py-6 space-y-6" autoComplete="on">
+              <form onSubmit={handleSave} className="px-4 sm:px-6 py-5 sm:py-6 space-y-6" autoComplete="on">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Club Name</label>
                     <input autoComplete="organization" value={clubName} onChange={e => setClubName(e.target.value)} className={inputCls} /></div>
@@ -1009,7 +1009,7 @@ export default function RegistrationsPage() {
                 {/* Invoice */}
                 <div className="border border-gray-200 rounded-xl p-4 bg-blue-50 space-y-3">
                   <h3 className="text-sm font-semibold text-gray-700">Invoice</h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Invoice Amount ($)</label>
                       <input type="number" step="0.01" min="0" value={invoiceAmount} onChange={e => setInvoiceAmount(Number(e.target.value))} className={inputCls} />
@@ -1238,7 +1238,7 @@ export default function RegistrationsPage() {
                           <button onClick={() => { setPayingRegId(reg.id); setPayAmount(''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod('check') }}
                             className="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">+ Record Payment</button>
                         </div>
-                        <div className="grid grid-cols-3 gap-3 text-sm mb-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm mb-4">
                           <div><span className="text-gray-500">Invoice: </span><span className="font-medium">{fmt(reg.invoiceAmount)}</span></div>
                           {reg.discountAmount > 0 && (
                             <div><span className="text-gray-500">Discount: </span><span className="font-medium text-orange-600">-{fmt(reg.discountAmount)}{reg.discountNote ? ` (${reg.discountNote})` : ''}</span></div>
