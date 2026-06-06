@@ -6,6 +6,14 @@ function genId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 }
 
+// Format bracket team source into a human-readable label
+function fmtSrc(src: string): string {
+  if (src.startsWith('seed:')) return 'Seed ' + src.slice(5)
+  if (src.startsWith('winner:')) return 'W-B' + src.slice(7)
+  if (src.startsWith('loser:')) return 'L-B' + src.slice(6)
+  return src
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string; division: string } }
@@ -35,9 +43,10 @@ export async function POST(
 
   const template = getTemplate(format, teamCount)
   if (!template)
-    return NextResponse.json({ error: `No template for ${format}-${teamCount}` }, { status: 400 })
+    return NextResponse.json({ error: 'No template for ' + format + '-' + teamCount }, { status: 400 })
 
   try {
+    // Remove existing bracket + its Game records
     const existing = await prisma.bracket.findFirst({
       where: { tournamentId: params.id, division },
     })
@@ -45,6 +54,10 @@ export async function POST(
       await prisma.bracketGame.deleteMany({ where: { bracketId: existing.id } })
       await prisma.bracket.delete({ where: { id: existing.id } })
     }
+    // Delete existing bracket Game records for this division
+    await prisma.game.deleteMany({
+      where: { tournamentId: params.id, division, gameNumber: { startsWith: 'B' } },
+    })
 
     const bracketId = genId()
     await prisma.bracket.create({
@@ -59,6 +72,26 @@ export async function POST(
             gameNumber: g.gameNumber, round: g.round, section: g.section,
             team1Source: g.t1, team2Source: g.t2, label: g.label || '',
             team1: '', team2: '', winner: '', loser: '', field: '', startTime: '', gameDate: '',
+          },
+        })
+      )
+    )
+
+    // Also create Game records so bracket games appear in the scheduler
+    await Promise.all(
+      template.map((g) =>
+        prisma.game.create({
+          data: {
+            tournamentId: params.id,
+            division,
+            gameNumber: 'B' + g.gameNumber,
+            isChampionship: g.section === 'championship',
+            team1: fmtSrc(g.t1),
+            team2: fmtSrc(g.t2),
+            date: '',
+            startTime: '',
+            location: '',
+            refCount: 2,
           },
         })
       )
@@ -97,6 +130,10 @@ export async function DELETE(
     if (!bracket) return NextResponse.json({ ok: true })
     await prisma.bracketGame.deleteMany({ where: { bracketId: bracket.id } })
     await prisma.bracket.delete({ where: { id: bracket.id } })
+    // Also remove bracket Game records
+    await prisma.game.deleteMany({
+      where: { tournamentId: params.id, division, gameNumber: { startsWith: 'B' } },
+    })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Failed to delete bracket' }, { status: 500 })
