@@ -1,3 +1,8 @@
+        <button onClick={renumberPoolGames} disabled={renumberingPools}
+          className="ml-2 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-medium transition-colors disabled:opacity-50">
+          {renumberingPools ? 'Renumbering…' : 'Renumber Pool #s'}
+        </button>
+  const [renumberingPools, setRenumberingPools] = useState(false)
 'use client'
 import { useEffect, useState } from 'react'
 import TournamentNav from '../TournamentNav'
@@ -184,6 +189,23 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const s = next.toISOString().split('T')[0]
     setDates(prev => [...prev, s])
     setActiveDate(s)
+  }
+
+  async function renumberPoolGames() {
+    setRenumberingPools(true)
+    const divisions = [...new Set(games.filter(g => g.pool).map(g => g.division))]
+    await Promise.all(divisions.map(div =>
+      fetch(`/api/tournaments/${params.id}/divisions/${encodeURIComponent(div)}/pool-games`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'renumber' }),
+      })
+    ))
+    const gRes = await fetch(`/api/tournaments/${params.id}/games`)
+    const gData = await gRes.json()
+    setGames(Array.isArray(gData) ? gData : (gData.games ?? []))
+    toast.success(`Renumbered pool games for ${divisions.length} division${divisions.length !== 1 ? 's' : ''}`)
+    setRenumberingPools(false)
   }
 
   const divisions = [...new Set(games.map(g => g.division))].sort()
