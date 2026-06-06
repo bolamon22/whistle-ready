@@ -5,13 +5,13 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// âââ Types âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 interface TimeSlot { start: string; end: string }
 interface DayAvailability { date: string; slots: TimeSlot[] }
 interface Field { id: string; name: string; abbr: string; availStart?: string; availEnd?: string; divRestrictions?: string[] }
 interface Venue { id: string; name: string; fields: Field[] }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// âââ Constants âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
 
 const DEFAULT_DIVISIONS = [
@@ -61,9 +61,9 @@ interface OfficialsConfig {
 }
 
 const DEFAULT_ROLES: StaffRole[] = [
-  { id: 'off_youth',   name: 'Official – Youth Cert',   rate: 50, rateType: 'per_game' },
-  { id: 'off_hs',      name: 'Official – HS Cert',      rate: 60, rateType: 'per_game' },
-  { id: 'off_college', name: 'Official – College Cert', rate: 70, rateType: 'per_game' },
+  { id: 'off_youth',   name: 'Official â Youth Cert',   rate: 50, rateType: 'per_game' },
+  { id: 'off_hs',      name: 'Official â HS Cert',      rate: 60, rateType: 'per_game' },
+  { id: 'off_college', name: 'Official â College Cert', rate: 70, rateType: 'per_game' },
   { id: 'scorekeeper', name: 'Scorekeeper',             rate: 15, rateType: 'per_game' },
   { id: 'atc',         name: 'Athletic Trainer',        rate: 25, rateType: 'hourly'   },
   { id: 'field_ops',   name: 'Field Ops',               rate: 20, rateType: 'hourly'   },
@@ -101,18 +101,18 @@ function serializeStaffConfig(roles: StaffRole[], officialsConfig: OfficialsConf
 }
 
 const SECTIONS = [
-  { id: 'general',      label: 'General Info',       icon: '🏆' },
-  { id: 'divisions',    label: 'Divisions',           icon: '🏅' },
-  { id: 'venues',       label: 'Venues & Fields',     icon: '🏟️' },
-  { id: 'registration', label: 'Team Fees',           icon: '📋' },
-  { id: 'staffpay',     label: 'Staff Pay Rates',   icon: '💵' },
-  { id: 'schedule',     label: 'Schedule Rules',      icon: '⏱' },
+  { id: 'general',      label: 'General Info',       icon: 'ð' },
+  { id: 'divisions',    label: 'Divisions',           icon: 'ð' },
+  { id: 'venues',       label: 'Venues & Fields',     icon: 'ðï¸' },
+  { id: 'registration', label: 'Team Fees',           icon: 'ð' },
+  { id: 'staffpay',     label: 'Staff Pay Rates',   icon: 'ðµ' },
+  { id: 'schedule',     label: 'Schedule Rules',      icon: 'â±' },
 ]
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
 function fieldAbbr(name: string): string {
-  // "Field 1" → "F1", "Field 2A" → "F2A", "North" → "N", "Stadium" → "STD"
+  // "Field 1" â "F1", "Field 2A" â "F2A", "North" â "N", "Stadium" â "STD"
   const stripped = name.replace(/^field\s+/i, 'F').replace(/\s+/g, '')
   if (stripped.length <= 4) return stripped.toUpperCase()
   return name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 5)
@@ -133,7 +133,7 @@ function fmtDate(d: string) {
   return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric', year: 'numeric' })
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// âââ Main component âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export default function BuilderPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -180,7 +180,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [newCount, setNewCount]           = useState('1')
   const [showSaveGlobal, setShowSaveGlobal] = useState(false)
 
-  // ─── Load ──────────────────────────────────────────────────────────────────
+  // âââ Load ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   useEffect(() => {
     fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(t => {
       setName(t.name); setSport(t.sport || 'Lacrosse')
@@ -189,7 +189,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       setScheduleIncrement(String(t.scheduleIncrement || 50))
       const staffParsed = parseStaffConfig(t.payRates || '{}')
       setStaffRoles(staffParsed.roles)
-      // Load officials config — prefer v2 format, fall back to old divisionRules
+      // Load officials config â prefer v2 format, fall back to old divisionRules
       let loadedRules = staffParsed.officialsConfig.rules
       try {
         const dr = JSON.parse(t.divisionRules || '{}')
@@ -235,7 +235,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     }).catch(() => {})
   }, [params.id])
 
-  // ─── Save ──────────────────────────────────────────────────────────────────
+  // âââ Save ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   async function save() {
     setSaving(true)
     await Promise.all([
@@ -259,7 +259,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     setSaving(false)
   }
 
-  // ─── Logo upload ───────────────────────────────────────────────────────────
+  // âââ Logo upload âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return
     setLogoUploading(true)
@@ -270,7 +270,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     setLogoUploading(false)
   }
 
-  // ─── Venue helpers ─────────────────────────────────────────────────────────
+  // âââ Venue helpers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   function addVenue() {
     if (!newVenueName.trim()) return
     setVenues(v => [...v, { id: uid(), name: newVenueName.trim(), fields: [] }])
@@ -301,7 +301,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     setVenues(v => v.map(x => x.id === venueId ? { ...x, fields: x.fields.map(f => f.id === fieldId ? { ...f, ...patch } : f) } : x))
   }
 
-  // ─── Completion indicators ─────────────────────────────────────────────────
+  // âââ Completion indicators âââââââââââââââââââââââââââââââââââââââââââââââââ
   function isComplete(id: string) {
     if (id === 'general')      return !!(name && startDate && location)
     if (id === 'divisions')    return divItems.some(i => i.checked) || customDivisions.length > 0
@@ -312,11 +312,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     return false
   }
 
-  if (loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
+  if (loading) return <div className="p-10 text-center text-gray-400">Loadingâ¦</div>
 
-  // ─── Section panels ────────────────────────────────────────────────────────
+  // âââ Section panels ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   function renderSection() {
-    // ── General Info ──
+    // ââ General Info ââ
     if (activeSection === 'general') return (
       <div className="space-y-5">
         <div>
@@ -349,12 +349,12 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             {logoUrl ? (
               <img src={logoUrl} alt="logo" className="h-20 w-20 object-contain rounded-xl border border-gray-200" />
             ) : (
-              <div className="h-20 w-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-3xl">🏆</div>
+              <div className="h-20 w-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-3xl">ð</div>
             )}
             <div className="space-y-2">
               <button type="button" onClick={() => fileInputRef.current?.click()}
                 className="btn-secondary btn-sm" disabled={logoUploading}>
-                {logoUploading ? 'Uploading…' : logoUrl ? '🔄 Replace Logo' : '📁 Upload Logo'}
+                {logoUploading ? 'Uploadingâ¦' : logoUrl ? 'ð Replace Logo' : 'ð Upload Logo'}
               </button>
               {logoUrl && <button type="button" onClick={() => setLogoUrl('')} className="block text-xs text-red-400 hover:text-red-600">Remove</button>}
             </div>
@@ -364,7 +364,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       </div>
     )
 
-    // ── Divisions ──
+    // ââ Divisions ââ
     if (activeSection === 'divisions') return (
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -416,7 +416,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
               <input type="checkbox" checked readOnly className="w-4 h-4 accent-blue-600 flex-shrink-0" />
               <input className="flex-1 min-w-0 bg-transparent text-sm font-medium text-gray-800 focus:outline-none border-b border-transparent focus:border-blue-400"
                 value={d} onChange={e => setCustomDivisions(prev => prev.map((v, j) => j === i ? e.target.value : v))} />
-              <button type="button" onClick={() => setCustomDivisions(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+              <button type="button" onClick={() => setCustomDivisions(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs">â</button>
             </div>
           ))}
           <div className="flex gap-2 mt-2">
@@ -437,13 +437,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       </div>
     )
 
-    // ── Venues & Fields ──
+    // ââ Venues & Fields ââ
     if (activeSection === 'venues') return (
       <div>
         {/* Default availability */}
         {tournamentDates.length > 0 && (
           <div className="mb-6">
-            <p className="text-sm font-semibold text-gray-700 mb-1">📅 Default Field Availability</p>
+            <p className="text-sm font-semibold text-gray-700 mb-1">ð Default Field Availability</p>
             <p className="text-xs text-gray-400 mb-3">Default hours for all fields. Override per-field using the Availability toggle on each field below.</p>
             <div className="border border-gray-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
@@ -478,7 +478,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                                 <input type="time" className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" value={slot.start} onChange={e => updateSlot(i, 'start', e.target.value)} />
                                 <span className="text-gray-400 text-xs">to</span>
                                 <input type="time" className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" value={slot.end} onChange={e => updateSlot(i, 'end', e.target.value)} />
-                                <button type="button" onClick={() => removeSlot(i)} className="text-red-300 hover:text-red-500 text-xs">✕</button>
+                                <button type="button" onClick={() => removeSlot(i)} className="text-red-300 hover:text-red-500 text-xs">â</button>
                               </div>
                             ))}
                             <button type="button" onClick={addSlot} className="text-xs text-blue-500 hover:text-blue-700 hover:underline">+ Add time slot</button>
@@ -499,10 +499,10 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           {venues.map(venue => (
             <div key={venue.id} className="border border-gray-200 rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <span className="text-gray-400 text-sm">🏟</span>
+                <span className="text-gray-400 text-sm">ð</span>
                 <input className="flex-1 bg-transparent text-sm font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1"
                   value={venue.name} onChange={e => updateVenueName(venue.id, e.target.value)} />
-                <button type="button" onClick={() => removeVenue(venue.id)} className="text-red-400 hover:text-red-600 text-sm">✕</button>
+                <button type="button" onClick={() => removeVenue(venue.id)} className="text-red-400 hover:text-red-600 text-sm">â</button>
               </div>
               <div className="divide-y divide-gray-100">
                 {venue.fields.map((field, idx) => (
@@ -520,14 +520,14 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                       />
                       <button type="button" onClick={() => setExpandedFields(e => ({ ...e, [field.id]: !e[field.id] }))}
                         className={`text-xs px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${expandedFields[field.id] ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-400 hover:text-gray-600'}`}>
-                        {expandedFields[field.id] ? '▲ Availability' : '▼ Availability'}
+                        {expandedFields[field.id] ? 'â² Availability' : 'â¼ Availability'}
                       </button>
-                      <button type="button" onClick={() => removeField(venue.id, field.id)} className="text-red-300 hover:text-red-500 text-sm">✕</button>
+                      <button type="button" onClick={() => removeField(venue.id, field.id)} className="text-red-300 hover:text-red-500 text-sm">â</button>
                     </div>
                     {expandedFields[field.id] && (
                       <div className="bg-blue-50 border-t border-blue-100 px-6 py-4 space-y-4">
                         <div>
-                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">⏰ Available Hours</p>
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">â° Available Hours</p>
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2">
                               <label className="text-xs text-gray-500">From</label>
@@ -543,7 +543,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                         </div>
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">🏅 Division Restrictions</p>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">ð Division Restrictions</p>
                             <span className="text-xs text-gray-400">{(field.divRestrictions?.length || 0) === 0 ? 'All divisions' : `${field.divRestrictions!.length} restricted`}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-1">
@@ -603,14 +603,14 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       </div>
     )
 
-    // ── Registration ──
+    // ââ Registration ââ
     if (activeSection === 'registration') return (
       <div>
         <p className="text-sm text-gray-500 mb-5">Per-team pricing tiers shown on the public registration form.</p>
         <div className="space-y-3">
           {[
-            { label: <>1–<input type="number" min="1" max="10" className="border border-gray-300 rounded px-1.5 py-0.5 w-12 text-center text-sm mx-1 focus:outline-none focus:ring-1 focus:ring-blue-500" value={pricing.tier1Max} onChange={e => setPricing(p => ({ ...p, tier1Max: parseInt(e.target.value) || 3 }))} /> teams</>, price: pricing.tier1, setPrice: (v: number) => setPricing(p => ({ ...p, tier1: v })) },
-            { label: <>{pricing.tier1Max + 1}–<input type="number" min="1" max="20" className="border border-gray-300 rounded px-1.5 py-0.5 w-12 text-center text-sm mx-1 focus:outline-none focus:ring-1 focus:ring-blue-500" value={pricing.tier2Max} onChange={e => setPricing(p => ({ ...p, tier2Max: parseInt(e.target.value) || 6 }))} /> teams</>, price: pricing.tier2, setPrice: (v: number) => setPricing(p => ({ ...p, tier2: v })) },
+            { label: <>1â<input type="number" min="1" max="10" className="border border-gray-300 rounded px-1.5 py-0.5 w-12 text-center text-sm mx-1 focus:outline-none focus:ring-1 focus:ring-blue-500" value={pricing.tier1Max} onChange={e => setPricing(p => ({ ...p, tier1Max: parseInt(e.target.value) || 3 }))} /> teams</>, price: pricing.tier1, setPrice: (v: number) => setPricing(p => ({ ...p, tier1: v })) },
+            { label: <>{pricing.tier1Max + 1}â<input type="number" min="1" max="20" className="border border-gray-300 rounded px-1.5 py-0.5 w-12 text-center text-sm mx-1 focus:outline-none focus:ring-1 focus:ring-blue-500" value={pricing.tier2Max} onChange={e => setPricing(p => ({ ...p, tier2Max: parseInt(e.target.value) || 6 }))} /> teams</>, price: pricing.tier2, setPrice: (v: number) => setPricing(p => ({ ...p, tier2: v })) },
             { label: <>{pricing.tier2Max + 1}+ teams</>,                  price: pricing.tier3,       setPrice: (v: number) => setPricing(p => ({ ...p, tier3: v })) },
             { label: <>7v7 teams</>,                                       price: pricing.sevenVSeven, setPrice: (v: number) => setPricing(p => ({ ...p, sevenVSeven: v })) },
           ].map((row, i) => (
@@ -628,7 +628,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       </div>
     )
 
-    // ── Staff & Pay ──
+    // ââ Staff & Pay ââ
     if (activeSection === 'staffpay') return (
       <div className="space-y-8">
 
@@ -694,7 +694,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                 </div>
                 <div className="col-span-1 flex justify-end">
                   <button type="button" onClick={() => setStaffRoles(r => r.filter((_, i) => i !== idx))}
-                    className="text-red-300 hover:text-red-500 text-sm">✕</button>
+                    className="text-red-300 hover:text-red-500 text-sm">â</button>
                 </div>
               </div>
             ))}
@@ -702,7 +702,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-gray-50 border-t border-gray-100 items-center">
               <div className="col-span-5">
                 <input className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                  placeholder="New role name…" value={newRoleName} onChange={e => setNewRoleName(e.target.value)}
+                  placeholder="New role nameâ¦" value={newRoleName} onChange={e => setNewRoleName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (newRoleName.trim()) { setStaffRoles(r => [...r, { id: uid(), name: newRoleName.trim(), rate: parseFloat(newRoleRate) || 0, rateType: newRoleType }]); setNewRoleName(''); setNewRoleRate('') } } }} />
               </div>
               <div className="col-span-3 flex items-center justify-end gap-1">
@@ -729,7 +729,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         {/* Officials Per Game */}
         <div>
           <h3 className="text-sm font-semibold text-gray-800 mb-0.5">Officials Per Game</h3>
-          <p className="text-xs text-gray-400 mb-4">The standard is <strong>2 officials per game</strong>. Add exceptions below for divisions that use a different number — for example, 1 official for small-field or youth play, or 3 for varsity games.</p>
+          <p className="text-xs text-gray-400 mb-4">The standard is <strong>2 officials per game</strong>. Add exceptions below for divisions that use a different number â for example, 1 official for small-field or youth play, or 3 for varsity games.</p>
 
           {/* Role label + standard count */}
           <div className="grid grid-cols-2 gap-4 mb-5">
@@ -758,13 +758,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           <div className="mb-4">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Exceptions</p>
             {officialsConfig.rules.length === 0
-              ? <p className="text-sm text-gray-400 italic mb-3">No exceptions set — all games use the standard count above.</p>
+              ? <p className="text-sm text-gray-400 italic mb-3">No exceptions set â all games use the standard count above.</p>
               : (
                 <div className="space-y-2 mb-3">
                   {officialsConfig.rules.map((rule, i) => (
                     <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2.5">
                       <span className="text-sm text-gray-700 flex-1">
-                        Divisions containing <strong>"{rule.keyword}"</strong> → <strong>{rule.count} {officialsConfig.roleLabel || 'official'}{rule.count !== 1 ? 's' : ''}</strong>
+                        Divisions containing <strong>"{rule.keyword}"</strong> â <strong>{rule.count} {officialsConfig.roleLabel || 'official'}{rule.count !== 1 ? 's' : ''}</strong>
                       </span>
                       <button type="button" onClick={() => setOfficialsConfig(c => ({ ...c, rules: c.rules.filter((_, j) => j !== i) }))}
                         className="text-red-400 hover:text-red-600 text-xs">Remove</button>
@@ -775,11 +775,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             }
             <div className="flex gap-2 items-end">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-600 mb-1">If division name contains…</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">If division name containsâ¦</label>
                 <input className="input" value={newKeyword} onChange={e => setNewKeyword(e.target.value)} placeholder="e.g. 7v7, U8, Lower School" />
               </div>
               <div className="w-36">
-                <label className="block text-xs font-medium text-gray-600 mb-1">…use this many officials</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">â¦use this many officials</label>
                 <select className="select" value={newCount} onChange={e => setNewCount(e.target.value)}>
                   <option value="1">1 official</option>
                   <option value="2">2 officials</option>
@@ -820,7 +820,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       </div>
     )
 
-    // ── Schedule Rules ──
+    // ââ Schedule Rules ââ
     if (activeSection === 'schedule') return (
       <div className="space-y-5">
         <p className="text-sm text-gray-500">Configure default scheduling parameters used when building or auto-assigning the game schedule.</p>
@@ -850,7 +850,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     return null
   }
 
-  // ─── Layout ────────────────────────────────────────────────────────────────
+  // âââ Layout ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
       <Toaster />
@@ -860,7 +860,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       <div className="max-w-6xl mx-auto px-4 pt-0 pb-2 flex justify-end">
         <button onClick={save} disabled={saving}
           className="bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors">
-          {saving ? 'Saving…' : '💾 Save Changes'}
+          {saving ? 'Savingâ¦' : 'ð¾ Save Changes'}
         </button>
       </div>
 
@@ -881,11 +881,24 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <span className="text-base">{s.icon}</span>
                     <span className={`flex-1 text-sm font-medium ${active ? 'text-blue-700' : ''}`}>{s.label}</span>
-                    <span className={`text-xs ${done ? 'text-emerald-500' : 'text-gray-200'}`}>{done ? '✓' : '○'}</span>
+                    <span className={`text-xs ${done ? 'text-emerald-500' : 'text-gray-200'}`}>{done ? 'â' : 'â'}</span>
                   </button>
                 )
               })}
             </nav>
+          </div>
+
+          {/* Game Scheduler link */}
+          <div className="mt-4">
+            <a href={`/tournaments/${params.id}/scheduler`}
+              className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm hover:bg-blue-50 hover:border-blue-200 transition-colors group">
+              <span className="text-xl">📅</span>
+              <div>
+                <p className="text-sm font-semibold text-gray-700 group-hover:text-blue-700">Game Scheduler</p>
+                <p className="text-xs text-gray-400">Drag &amp; drop games to fields</p>
+              </div>
+              <span className="ml-auto text-gray-300 group-hover:text-blue-400">→</span>
+            </a>
           </div>
 
           {/* Quick stats */}
@@ -912,11 +925,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
               <div className="flex gap-2">
                 {SECTIONS.findIndex(s => s.id === activeSection) > 0 && (
                   <button onClick={() => setActiveSection(SECTIONS[SECTIONS.findIndex(s => s.id === activeSection) - 1].id)}
-                    className="btn-secondary btn-sm">← Prev</button>
+                    className="btn-secondary btn-sm">â Prev</button>
                 )}
                 {SECTIONS.findIndex(s => s.id === activeSection) < SECTIONS.length - 1 && (
                   <button onClick={() => setActiveSection(SECTIONS[SECTIONS.findIndex(s => s.id === activeSection) + 1].id)}
-                    className="btn-primary btn-sm">Next →</button>
+                    className="btn-primary btn-sm">Next â</button>
                 )}
               </div>
             </div>
