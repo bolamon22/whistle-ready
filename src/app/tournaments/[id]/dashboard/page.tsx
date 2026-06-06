@@ -192,7 +192,7 @@ export default function DashboardPage() {
         <section>
           <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Team Registrations</h2>
           {reg.clubs === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-8 text-center">
               <div className="text-3xl mb-2">📋</div>
               <p className="text-slate-500 text-sm mb-3">No registrations yet</p>
               <Link href={`/tournaments/${id}/register`} target="_blank" className="btn-primary btn-sm">Share Registration Form</Link>
@@ -312,7 +312,7 @@ export default function DashboardPage() {
                     <div className="text-xs text-slate-400 mt-0.5">collected − paid out</div>
                   </div>
                 </div>
-                <div className="border-t border-slate-100 px-6 py-4 space-y-3 text-sm">
+                <div className="border-t border-slate-100 px-4 sm:px-6 py-4 space-y-3 text-sm">
                   <div>
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Revenue Breakdown</p>
                     <div className="space-y-1.5">
