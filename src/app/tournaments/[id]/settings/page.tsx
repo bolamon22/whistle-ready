@@ -37,7 +37,7 @@ interface Venue { id: string; name: string; fields: Field[] }
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
-type Section = 'general' | 'fees' | 'divisions' | 'payrates' | 'refrules' | 'venues'
+type Section = 'general' | 'fees' | 'divisions' | 'payrates' | 'refrules' | 'venues' | 'registration'
 
 function SectionCard({ title, description, icon, open, onToggle, children, badge }: {
   title: string; description: string; icon: string; open: boolean
@@ -648,7 +648,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
 
           {/* Registration Types */}
           <SectionCard title="Registration Types" description="Choose which registration forms to offer" icon="📋"
-            open={false} onToggle={() => {}} badge={[teamRegEnabled && 'Teams', indivRegEnabled && 'Individual'].filter(Boolean).join(' + ') || undefined}>
+            open={open === 'registration'} onToggle={() => toggle('registration')} badge={[teamRegEnabled && 'Teams', indivRegEnabled && 'Individual'].filter(Boolean).join(' + ') || undefined}>
             <div className="space-y-5">
               {/* Team Registration */}
               <div className={`p-4 rounded-xl border ${teamRegEnabled ? 'border-teal-300 bg-teal-50' : 'border-gray-200'}`}>
