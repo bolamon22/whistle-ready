@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
 import { prisma } from '@/lib/db'
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -8,11 +7,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-    // For Stripe Organization keys (sk_org_live_...) every call needs Stripe-Context: acct_xxx
-    const stripeOpts = process.env.STRIPE_ACCOUNT_ID
-      ? { stripeAccount: process.env.STRIPE_ACCOUNT_ID }
-      : {}
     const body = await req.json()
     const { regData, tierId, tierName, tierAmount } = body
 
@@ -21,31 +15,42 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const appUrl = process.env.NEXTAUTH_URL || 'https://gameday-staff5.vercel.app'
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `${tournament.name} — ${tierName}`,
-            description: `Player registration: ${regData.firstName} ${regData.lastName}`,
-          },
-          unit_amount: Math.round(tierAmount * 100),
-        },
-        quantity: 1,
-      }],
-      customer_email: regData.email,
-      metadata: {
-        tournamentId: params.id,
-        playerName: `${regData.firstName} ${regData.lastName}`,
-        tierId,
-      },
-      success_url: `${appUrl}/tournaments/${params.id}/individual-register?success=1&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/tournaments/${params.id}/individual-register?cancelled=1`,
-    }, stripeOpts)
+    // Use raw fetch to Stripe REST API so we can set Stripe-Context for org keys
+    const stripeHeaders: Record<string, string> = {
+      'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': '2024-06-20',
+    }
+    if (process.env.STRIPE_ACCOUNT_ID) {
+      stripeHeaders['Stripe-Context'] = process.env.STRIPE_ACCOUNT_ID
+    }
 
-    // Save registration with pending status
+    const formData = new URLSearchParams()
+    formData.append('payment_method_types[]', 'card')
+    formData.append('mode', 'payment')
+    formData.append('line_items[0][price_data][currency]', 'usd')
+    formData.append('line_items[0][price_data][product_data][name]', `${tournament.name} — ${tierName}`)
+    formData.append('line_items[0][price_data][product_data][description]', `Player registration: ${regData.firstName} ${regData.lastName}`)
+    formData.append('line_items[0][price_data][unit_amount]', String(Math.round(tierAmount * 100)))
+    formData.append('line_items[0][quantity]', '1')
+    formData.append('customer_email', regData.email)
+    formData.append('metadata[tournamentId]', params.id)
+    formData.append('metadata[playerName]', `${regData.firstName} ${regData.lastName}`)
+    formData.append('metadata[tierId]', tierId)
+    formData.append('success_url', `${appUrl}/tournaments/${params.id}/individual-register?success=1&session_id={CHECKOUT_SESSION_ID}`)
+    formData.append('cancel_url', `${appUrl}/tournaments/${params.id}/individual-register?cancelled=1`)
+
+    const stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: stripeHeaders,
+      body: formData.toString(),
+    })
+
+    const session = await stripeRes.json()
+    if (!stripeRes.ok) {
+      throw new Error(session?.error?.message || 'Stripe checkout failed')
+    }
+
     await prisma.individualRegistration.create({
       data: {
         tournamentId: params.id,
