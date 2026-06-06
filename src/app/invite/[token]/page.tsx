@@ -5,23 +5,23 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 const ROLES = [
-  { value: 'referee',          label: 'Referee',           icon: '🏃', desc: 'Officiate games on the field' },
-  { value: 'scorekeeper',      label: 'Scorekeeper',        icon: '📋', desc: 'Track scores and game stats' },
-  { value: 'field_ops',        label: 'Field Ops',          icon: '🏗',  desc: 'Field setup and operations' },
-  { value: 'athletic_trainer', label: 'Athletic Trainer',   icon: '🩺', desc: 'Player health and safety' },
+  { value: 'referee', label: 'Referee', icon: '🏃', desc: 'Officiate games on the field' },
+  { value: 'scorekeeper', label: 'Scorekeeper', icon: '📋', desc: 'Track scores and game stats' },
+  { value: 'field_ops', label: 'Field Ops', icon: '🏗', desc: 'Field setup and operations' },
+  { value: 'athletic_trainer', label: 'Athletic Trainer', icon: '🩺', desc: 'Player health and safety' },
 ]
 
 const GENDERS = [
-  { value: 'boys',  label: 'Boys games'        },
-  { value: 'girls', label: 'Girls games'       },
-  { value: 'both',  label: 'Both boys & girls' },
+  { value: 'boys', label: 'Boys' },
+  { value: 'girls', label: 'Girls' },
+  { value: 'both', label: 'Both' },
 ]
 
 const CERT_LEVELS = [
-  { value: 'youth',   label: 'Youth'       },
-  { value: 'hs',      label: 'High School' },
-  { value: 'college', label: 'College'     },
-  { value: 'none',    label: 'N/A'         },
+  { value: 'youth', label: 'Youth' },
+  { value: 'hs', label: 'High School' },
+  { value: 'college', label: 'College' },
+  { value: 'none', label: 'N/A' },
 ]
 
 export default function AcceptInvitePage() {
@@ -83,17 +83,15 @@ export default function AcceptInvitePage() {
     }
   }
 
-  // ── Loading ──
   if (status === 'loading') return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <p className="text-slate-400 animate-pulse">Checking your invite…</p>
     </div>
   )
 
-  // ── Error states ──
   if (status !== 'valid') return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 max-w-sm w-full text-center">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-10 max-w-sm w-full text-center">
         <div className="text-4xl mb-4">{status === 'used' ? '✅' : '⏰'}</div>
         <h1 className="text-lg font-bold text-slate-800 mb-2">
           {status === 'used' ? 'Invite already used' : status === 'expired' ? 'Invite expired' : 'Invalid invite'}
@@ -105,10 +103,9 @@ export default function AcceptInvitePage() {
     </div>
   )
 
-  // ── Success ──
   if (done) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 max-w-sm w-full text-center">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-10 max-w-sm w-full text-center">
         <div className="text-4xl mb-4">🎉</div>
         <h1 className="text-xl font-bold text-slate-800 mb-2">You're all set!</h1>
         <p className="text-sm text-slate-500 mb-6">Your staff profile has been created. Sign in to see your schedule.</p>
@@ -119,12 +116,10 @@ export default function AcceptInvitePage() {
     </div>
   )
 
-  // ── Form ──
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full max-w-md overflow-hidden">
 
-        {/* Header */}
         <div className="bg-[#0f1f3d] px-6 py-5">
           <p className="text-xs text-teal-400 font-medium mb-1">
             {invite?.tournamentName ?? 'GameDay Staff'} · Staff Invite
@@ -135,17 +130,15 @@ export default function AcceptInvitePage() {
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
 
-          {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Your name</label>
             <input
               className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               value={name} onChange={e => setName(e.target.value)}
-              placeholder="Full name" required
+              placeholder="Full name" required autoComplete="name"
             />
           </div>
 
-          {/* Role picker */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-2">What's your role?</label>
             <div className="grid grid-cols-2 gap-2">
@@ -163,16 +156,15 @@ export default function AcceptInvitePage() {
             </div>
           </div>
 
-          {/* Referee-specific fields */}
           {role === 'referee' && (
             <>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Which games can you officiate?</label>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {GENDERS.map(g => (
                     <button key={g.value} type="button"
                       onClick={() => setGender(g.value)}
-                      className={`flex-1 py-2 text-xs font-semibold rounded-xl border transition-all ${gender === g.value ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                      className={`py-2 text-xs font-semibold rounded-xl border transition-all ${gender === g.value ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
                       {g.label}
                     </button>
                   ))}
@@ -180,11 +172,11 @@ export default function AcceptInvitePage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Certification level</label>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {CERT_LEVELS.map(c => (
                     <button key={c.value} type="button"
                       onClick={() => setCertLevel(c.value)}
-                      className={`flex-1 py-2 text-xs font-semibold rounded-xl border transition-all ${certLevel === c.value ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                      className={`py-2 text-xs font-semibold rounded-xl border transition-all ${certLevel === c.value ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
                       {c.label}
                     </button>
                   ))}
@@ -193,24 +185,22 @@ export default function AcceptInvitePage() {
             </>
           )}
 
-          {/* Phone */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone <span className="text-slate-400 font-normal">(optional)</span></label>
             <input
               className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               value={phone} onChange={e => setPhone(e.target.value)}
-              type="tel" placeholder="(555) 000-0000"
+              type="tel" placeholder="(555) 000-0000" autoComplete="tel"
             />
           </div>
 
-          {/* Password */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Password</label>
               <input
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 value={password} onChange={e => setPassword(e.target.value)}
-                type="password" placeholder="Min 6 chars" required
+                type="password" placeholder="Min 6 chars" required autoComplete="new-password"
               />
             </div>
             <div>
@@ -218,7 +208,7 @@ export default function AcceptInvitePage() {
               <input
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 value={confirm} onChange={e => setConfirm(e.target.value)}
-                type="password" placeholder="Repeat password" required
+                type="password" placeholder="Repeat password" required autoComplete="new-password"
               />
             </div>
           </div>
