@@ -372,7 +372,7 @@ export default function StaffPage() {
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
                         <td colSpan={9} className="p-0 border-b border-slate-200">
-                          <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white px-6 py-5">
+                          <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white px-4 sm:px-6 py-4 sm:py-5">
                             <div className="flex items-start gap-5">
                               {/* Avatar */}
                               <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 shadow-lg">
@@ -423,7 +423,7 @@ export default function StaffPage() {
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={9} className="px-6 py-5 bg-sky-50/40 border-b border-slate-200">
+                        <td colSpan={9} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">
                           {/* Photo upload */}
                           <div className="flex items-center gap-4 mb-5 pb-5 border-b border-slate-200">
                             <div className="relative group flex-shrink-0">
