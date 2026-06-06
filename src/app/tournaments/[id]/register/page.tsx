@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
 
 interface TeamRow {
   clubName: string
@@ -24,7 +26,7 @@ const DEFAULT_DIVISIONS = [
   'Boys U10 A and B (7v7)','Boys U10 A and B (10v10)','Boys U8 (7v7)',
   'Girls High School A','Girls High School B','Girls High School B2',
   'Girls Middle School A',"Girls Middle School B (No 2030's)",
-  "Girls Lower School A (7v7)","Girls Lower School B (7v7 – No 2033's)",
+  "Girls Lower School A (7v7)","Girls Lower School B (7v7 - No 2033's)",
 ]
 
 interface Pricing { tier1: number; tier1Max: number; tier2: number; tier2Max: number; tier3: number; sevenVSeven: number }
@@ -54,6 +56,86 @@ async function uploadFile(file: File): Promise<string> {
   return data.url
 }
 
+// Card Payment Form (must be inside <Elements>)
+function CardPayForm({
+  clientSecret, total, clubName, contactEmail, registrationId, onSuccess,
+}: {
+  clientSecret: string; total: number; clubName: string; contactEmail: string
+  registrationId: string; onSuccess: () => void
+}) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [paying, setPaying] = useState(false)
+  const [cardError, setCardError] = useState('')
+
+  async function handlePay(e: React.FormEvent) {
+    e.preventDefault()
+    if (!stripe || !elements) return
+    setPaying(true)
+    setCardError('')
+
+    const card = elements.getElement(CardElement)!
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: {
+        card,
+        billing_details: { name: clubName, email: contactEmail },
+      },
+    })
+
+    if (error) {
+      setCardError(error.message || 'Payment failed')
+      setPaying(false)
+      return
+    }
+
+    if (paymentIntent?.status === 'succeeded') {
+      try {
+        await fetch(`/api/registrations/${registrationId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentStatus: 'paid' }),
+        })
+      } catch {}
+      onSuccess()
+    }
+
+    setPaying(false)
+  }
+
+  return (
+    <form onSubmit={handlePay} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Card Details</label>
+        <div className="border border-gray-200 rounded-xl px-4 py-3.5 bg-white">
+          <CardElement options={{
+            style: {
+              base: {
+                fontSize: '15px',
+                color: '#374151',
+                fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
+                '::placeholder': { color: '#9CA3AF' },
+                iconColor: '#6B7280',
+              },
+              invalid: { color: '#EF4444' },
+            },
+          }} />
+        </div>
+        {cardError && <p className="text-red-500 text-sm mt-1.5">{cardError}</p>}
+      </div>
+      <button
+        type="submit"
+        disabled={paying || !stripe || !elements}
+        className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl text-base transition-colors shadow-sm"
+      >
+        {paying ? 'Processing...' : `Pay $${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+      </button>
+      <p className="text-center text-xs text-gray-400">
+        Secured by Stripe. Your card is never stored on our servers.
+      </p>
+    </form>
+  )
+}
+
 export default function RegisterPage() {
   const { id: tournamentId } = useParams()
   const searchParams = useSearchParams()
@@ -63,6 +145,12 @@ export default function RegisterPage() {
   const [submitted, setSubmitted] = useState(false)
   const paid = searchParams.get('paid') === '1'
   const [loading, setLoading] = useState(false)
+
+  const [step, setStep] = useState<'form' | 'payment' | 'success'>('form')
+  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null)
+  const [clientSecret, setClientSecret] = useState('')
+  const [savedRegistrationId, setSavedRegistrationId] = useState('')
+  const [invoiceTotal, setInvoiceTotal] = useState(0)
 
   const [clubName, setClubName] = useState('')
   const [clubContact, setClubContact] = useState('')
@@ -78,7 +166,6 @@ export default function RegisterPage() {
   const [pricing, setPricing] = useState<Pricing>(DEFAULT_PRICING)
   const [showFees, setShowFees] = useState(false)
 
-  // Club logo state
   const [clubLogoUrl, setClubLogoUrl] = useState('')
   const [clubLogoUploading, setClubLogoUploading] = useState(false)
   const [teamLogoUploading, setTeamLogoUploading] = useState<Record<number, boolean>>({})
@@ -113,7 +200,6 @@ export default function RegisterPage() {
     try {
       const url = await uploadFile(file)
       setClubLogoUrl(url)
-      // Auto-assign to all teams that don't have their own logo
       setTeams(prev => prev.map(t => t.logoUrl ? t : { ...t, logoUrl: url }))
       toast.success('Club logo uploaded!')
     } catch {
@@ -148,15 +234,15 @@ export default function RegisterPage() {
           needsHotel, paymentMethod, notes, teams, clubLogoUrl,
         }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error('Registration failed')
       const registration = await res.json()
 
-      // Redirect to Stripe if paying by credit card
-      const calculatedAmount = calcInvoice(teams, pricing)
-      if (paymentMethod === 'credit_card' && calculatedAmount > 0) {
-        const baseAmount = calculatedAmount
-        const amountWithFee = Math.round(baseAmount * 1.03 * 100) / 100 // +3% to offset Stripe fees
-        const stripeRes = await fetch('/api/stripe/checkout', {
+      if (paymentMethod === 'credit_card') {
+        const baseAmount = calcInvoice(teams, pricing)
+        const amountWithFee = Math.round(baseAmount * 1.03 * 100) / 100
+        setInvoiceTotal(amountWithFee)
+
+        const intentRes = await fetch('/api/stripe/create-team-intent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -164,32 +250,95 @@ export default function RegisterPage() {
             tournamentName,
             clubName,
             registrationId: registration.id,
-            successUrl: `${window.location.origin}/tournaments/${id}/register?paid=1`,
-            cancelUrl: window.location.href,
           }),
         })
-        const { url, error } = await stripeRes.json()
-        if (error) throw new Error(error)
-        window.location.href = url
-        return
-      }
+        const intentData = await intentRes.json()
+        if (!intentRes.ok || !intentData.clientSecret) {
+          throw new Error(intentData.error || 'Failed to initialize payment')
+        }
 
-      setSubmitted(true)
-    } catch {
-      toast.error('Submission failed. Please try again.')
+        const sp = loadStripe(intentData.publishableKey, intentData.accountId ? { stripeAccount: intentData.accountId } : undefined)
+        setStripePromise(sp)
+        setClientSecret(intentData.clientSecret)
+        setSavedRegistrationId(registration.id)
+        setStep('payment')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } else {
+        setSubmitted(true)
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Submission failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  if (submitted || paid) {
+  if (submitted || paid || step === 'success') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-lg text-center">
           {tournamentLogo && <img src={tournamentLogo} alt="logo" className="h-20 w-20 object-contain mx-auto mb-4 rounded-xl" />}
-          <div className="text-5xl mb-4">✅</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">{paid ? 'Payment Complete!' : 'Registration Received!'}</h2>
-          <p className="text-gray-600">Thank you for registering for <strong>{tournamentName}</strong>. {paid ? 'Your payment was successful and ' : ''}We'll be in touch soon with confirmation details.</p>
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{(paid || step === 'success') ? 'Payment Complete!' : 'Registration Received!'}</h2>
+          <p className="text-gray-600">Thank you for registering for <strong>{tournamentName}</strong>. {(paid || step === 'success') ? 'Your payment was successful and ' : ''}We will be in touch soon with confirmation details.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'payment' && stripePromise && clientSecret) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Toaster />
+        <div className="bg-[#0f1f3d] px-4 py-4">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            {tournamentLogo && (
+              <img src={tournamentLogo} alt="logo" className="h-11 w-11 object-contain rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
+            )}
+            <div>
+              <h1 className="text-base font-bold text-white leading-tight">{tournamentName}</h1>
+              <p className="text-[11px] text-blue-300 mt-0.5 font-medium">Team Registration</p>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">Order Summary</h2>
+            <div className="text-sm text-gray-500 mb-3">{clubName} &middot; {teams.length} team{teams.length !== 1 ? 's' : ''}</div>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Registration ({teams.length} team{teams.length !== 1 ? 's' : ''})</span>
+                <span>{fmt(calcInvoice(teams, pricing))}</span>
+              </div>
+              <div className="flex justify-between text-gray-400 text-xs">
+                <span>Processing fee (3%)</span>
+                <span>+{fmt(Math.round(calcInvoice(teams, pricing) * 0.03))}</span>
+              </div>
+              <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2">
+                <span>Total due</span>
+                <span>{fmt(Math.round(invoiceTotal))}</span>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-base font-bold text-gray-800 mb-5 pb-2 border-b border-gray-100">Payment</h2>
+            <Elements stripe={stripePromise}>
+              <CardPayForm
+                clientSecret={clientSecret}
+                total={invoiceTotal}
+                clubName={clubName}
+                contactEmail={contactEmail}
+                registrationId={savedRegistrationId}
+                onSuccess={() => setStep('success')}
+              />
+            </Elements>
+          </div>
+          <button
+            onClick={() => setStep('form')}
+            className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors"
+          >
+            Back to registration
+          </button>
         </div>
       </div>
     )
@@ -198,7 +347,6 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Toaster />
-      {/* Public header */}
       <div className="bg-[#0f1f3d] px-4 py-4">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           {tournamentLogo && (
@@ -213,52 +361,32 @@ export default function RegisterPage() {
       <div className="py-8 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-2xl shadow p-8">
-
           <form onSubmit={handleSubmit} className="space-y-8" autoComplete="on">
-            {/* Club Info */}
             <section>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Name</label>
-                  <input
-                    name="organization" autoComplete="organization"
-                    value={clubName} onChange={e => setClubName(e.target.value)}
-                    className={inputCls} />
+                  <input name="organization" autoComplete="organization" value={clubName} onChange={e => setClubName(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Contact <span className="text-red-500">*</span></label>
-                  <input
-                    required name="name" autoComplete="name"
-                    value={clubContact} onChange={e => setClubContact(e.target.value)}
-                    className={inputCls} />
+                  <input required name="name" autoComplete="name" value={clubContact} onChange={e => setClubContact(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Contact Email <span className="text-red-500">*</span></label>
-                  <input
-                    required type="email" name="email" autoComplete="email"
-                    value={contactEmail} onChange={e => setContactEmail(e.target.value)}
-                    className={inputCls} />
+                  <input required type="email" name="email" autoComplete="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Contact Mobile Phone <span className="text-red-500">*</span></label>
-                  <input
-                    required type="tel" name="tel" autoComplete="tel"
-                    value={contactPhone} onChange={e => setContactPhone(e.target.value)}
-                    className={inputCls} />
+                  <input required type="tel" name="tel" autoComplete="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Based In</label>
-                  <input
-                    placeholder="City and State" name="address-level2" autoComplete="address-level2"
-                    value={clubBasedIn} onChange={e => setClubBasedIn(e.target.value)}
-                    className={inputCls} />
+                  <input placeholder="City and State" name="address-level2" autoComplete="address-level2" value={clubBasedIn} onChange={e => setClubBasedIn(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Website</label>
-                  <input
-                    type="url" placeholder="https://" name="url" autoComplete="url"
-                    value={clubWebsite} onChange={e => setClubWebsite(e.target.value)}
-                    className={inputCls} />
+                  <input type="url" placeholder="https://" name="url" autoComplete="url" value={clubWebsite} onChange={e => setClubWebsite(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Will your club need hotel rooms? <span className="text-red-500">*</span></label>
@@ -269,8 +397,6 @@ export default function RegisterPage() {
                     <option>Maybe</option>
                   </select>
                 </div>
-
-                {/* Club Logo */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Logo</label>
                   <p className="text-xs text-gray-400 mb-2">Automatically applied to all your teams. You can override per team below.</p>
@@ -279,21 +405,17 @@ export default function RegisterPage() {
                       <img src={clubLogoUrl} alt="Club logo" className="h-12 w-12 object-contain rounded-lg border border-gray-200 flex-shrink-0" />
                     )}
                     <label className={`cursor-pointer border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 ${clubLogoUploading ? 'opacity-50' : ''}`}>
-                      {clubLogoUploading ? 'Uploading…' : clubLogoUrl ? 'Change Logo' : 'Upload Logo'}
-                      <input type="file" accept="image/*" className="hidden"
-                        disabled={clubLogoUploading}
-                        onChange={e => e.target.files?.[0] && handleClubLogoUpload(e.target.files[0])} />
+                      {clubLogoUploading ? 'Uploading...' : clubLogoUrl ? 'Change Logo' : 'Upload Logo'}
+                      <input type="file" accept="image/*" className="hidden" disabled={clubLogoUploading} onChange={e => e.target.files?.[0] && handleClubLogoUpload(e.target.files[0])} />
                     </label>
                     {clubLogoUrl && (
-                      <button type="button" onClick={() => { setClubLogoUrl(''); setTeams(prev => prev.map(t => t.logoUrl === clubLogoUrl ? { ...t, logoUrl: '' } : t)) }}
-                        className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                      <button type="button" onClick={() => { setClubLogoUrl(''); setTeams(prev => prev.map(t => t.logoUrl === clubLogoUrl ? { ...t, logoUrl: '' } : t)) }} className="text-xs text-red-400 hover:text-red-600">Remove</button>
                     )}
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Team Information */}
             <section>
               <h2 className="text-lg font-semibold text-gray-800 mb-3">Team Information</h2>
               <div className="space-y-3">
@@ -302,77 +424,59 @@ export default function RegisterPage() {
                     <div className="flex justify-between items-center mb-3">
                       <div className="flex items-center gap-2">
                         {(team.logoUrl || clubLogoUrl) && (
-                          <img src={team.logoUrl || clubLogoUrl} alt="logo"
-                            className="h-8 w-8 object-contain rounded-lg border border-gray-200 flex-shrink-0" />
+                          <img src={team.logoUrl || clubLogoUrl} alt="logo" className="h-8 w-8 object-contain rounded-lg border border-gray-200 flex-shrink-0" />
                         )}
                         <span className="text-sm font-medium text-gray-600">Team {i + 1}</span>
                       </div>
                       {teams.length > 1 && (
-                        <button type="button" onClick={() => removeTeam(i)}
-                          className="text-red-400 hover:text-red-600 text-xs">Remove</button>
+                        <button type="button" onClick={() => removeTeam(i)} className="text-red-400 hover:text-red-600 text-xs">Remove</button>
                       )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Club Name <span className="text-red-500">*</span></label>
-                        <input required autoComplete="organization"
-                          value={team.clubName} onChange={e => updateTeam(i, 'clubName', e.target.value)}
-                          className={smallInputCls} />
+                        <input required autoComplete="organization" value={team.clubName} onChange={e => updateTeam(i, 'clubName', e.target.value)} className={smallInputCls} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Team <span className="text-red-500">*</span></label>
-                        <input required placeholder="IE: Eagles White" autoComplete="off"
-                          value={team.teamName} onChange={e => updateTeam(i, 'teamName', e.target.value)}
-                          className={smallInputCls} />
+                        <input required placeholder="IE: Eagles White" autoComplete="off" value={team.teamName} onChange={e => updateTeam(i, 'teamName', e.target.value)} className={smallInputCls} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Division <span className="text-red-500">*</span></label>
-                        <select required value={team.division} onChange={e => updateTeam(i, 'division', e.target.value)}
-                          className={smallInputCls}>
+                        <select required value={team.division} onChange={e => updateTeam(i, 'division', e.target.value)} className={smallInputCls}>
                           <option value="">Choose Division</option>
                           {divisions.map(d => <option key={d}>{d}</option>)}
                         </select>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Coach Name <span className="text-red-500">*</span></label>
-                        <input required autoComplete="name"
-                          value={team.coachName} onChange={e => updateTeam(i, 'coachName', e.target.value)}
-                          className={smallInputCls} />
+                        <input required autoComplete="name" value={team.coachName} onChange={e => updateTeam(i, 'coachName', e.target.value)} className={smallInputCls} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Coach Phone <span className="text-red-500">*</span></label>
-                        <input required type="tel" autoComplete="tel"
-                          value={team.coachPhone} onChange={e => updateTeam(i, 'coachPhone', e.target.value)}
-                          className={smallInputCls} />
+                        <input required type="tel" autoComplete="tel" value={team.coachPhone} onChange={e => updateTeam(i, 'coachPhone', e.target.value)} className={smallInputCls} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Coach Email <span className="text-red-500">*</span></label>
-                        <input required type="email" autoComplete="email"
-                          value={team.coachEmail} onChange={e => updateTeam(i, 'coachEmail', e.target.value)}
-                          className={smallInputCls} />
+                        <input required type="email" autoComplete="email" value={team.coachEmail} onChange={e => updateTeam(i, 'coachEmail', e.target.value)} className={smallInputCls} />
                       </div>
                     </div>
-
-                    {/* Per-team logo override */}
                     <div className="mt-3 pt-3 border-t border-gray-200">
                       <label className="block text-xs font-medium text-gray-600 mb-1">
                         Team Logo
-                        {clubLogoUrl && !team.logoUrl && <span className="ml-1 text-gray-400 font-normal">(using club logo — upload here to override)</span>}
-                        {team.logoUrl && team.logoUrl !== clubLogoUrl && <span className="ml-1 text-green-600 font-normal">✓ custom logo</span>}
+                        {clubLogoUrl && !team.logoUrl && <span className="ml-1 text-gray-400 font-normal">(using club logo - upload here to override)</span>}
+                        {team.logoUrl && team.logoUrl !== clubLogoUrl && <span className="ml-1 text-green-600 font-normal">custom logo</span>}
                       </label>
                       <div className="flex items-center gap-2">
                         {team.logoUrl && team.logoUrl !== clubLogoUrl && (
                           <img src={team.logoUrl} alt="team logo" className="h-8 w-8 object-contain rounded border border-gray-200 flex-shrink-0" />
                         )}
                         <label className={`cursor-pointer border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-white ${teamLogoUploading[i] ? 'opacity-50' : ''}`}>
-                          {teamLogoUploading[i] ? 'Uploading…' : team.logoUrl && team.logoUrl !== clubLogoUrl ? 'Change' : 'Upload Custom'}
-                          <input type="file" accept="image/*" className="hidden"
-                            disabled={teamLogoUploading[i]}
-                            onChange={e => e.target.files?.[0] && handleTeamLogoUpload(i, e.target.files[0])} />
+                          {teamLogoUploading[i] ? 'Uploading...' : team.logoUrl && team.logoUrl !== clubLogoUrl ? 'Change' : 'Upload Custom'}
+                          <input type="file" accept="image/*" className="hidden" disabled={teamLogoUploading[i]} onChange={e => e.target.files?.[0] && handleTeamLogoUpload(i, e.target.files[0])} />
                         </label>
                         {team.logoUrl && team.logoUrl !== clubLogoUrl && (
-                          <button type="button" onClick={() => updateTeam(i, 'logoUrl', clubLogoUrl)}
-                            className="text-xs text-gray-400 hover:text-gray-600">
+                          <button type="button" onClick={() => updateTeam(i, 'logoUrl', clubLogoUrl)} className="text-xs text-gray-400 hover:text-gray-600">
                             {clubLogoUrl ? 'Use club logo' : 'Remove'}
                           </button>
                         )}
@@ -382,30 +486,28 @@ export default function RegisterPage() {
                 ))}
               </div>
               <div className="mt-3 flex items-center gap-3">
-                <button type="button" onClick={addTeam}
-                  className="inline-flex items-center gap-1 border border-orange-400 text-orange-500 hover:bg-orange-50 rounded-lg px-4 py-2 text-sm font-medium">
+                <button type="button" onClick={addTeam} className="inline-flex items-center gap-1 border border-orange-400 text-orange-500 hover:bg-orange-50 rounded-lg px-4 py-2 text-sm font-medium">
                   + Add Team
                 </button>
                 <span className="text-sm text-gray-500">Total Teams: {teams.length}</span>
               </div>
             </section>
 
-            {/* Estimated Total */}
             <section>
               {teams.length > 0 && calcInvoice(teams, pricing) > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-blue-800">Estimated Total</p>
                     <p className="text-xs text-blue-600 mt-0.5">
-                      {teams.length} team{teams.length !== 1 ? 's' : ''} ·{' '}
+                      {teams.length} team{teams.length !== 1 ? 's' : ''} &middot;{' '}
                       <button type="button" onClick={() => setShowFees(!showFees)} className="underline hover:text-blue-800">
                         {showFees ? 'hide fee schedule' : 'view fee schedule'}
                       </button>
                     </p>
                     {showFees && (
                       <div className="mt-2 text-xs text-blue-700 space-y-0.5">
-                        <div>1–{pricing.tier1Max} teams: {fmt(pricing.tier1)}/team</div>
-                        <div>{pricing.tier1Max + 1}–{pricing.tier2Max} teams: {fmt(pricing.tier2)}/team</div>
+                        <div>1-{pricing.tier1Max} teams: {fmt(pricing.tier1)}/team</div>
+                        <div>{pricing.tier1Max + 1}-{pricing.tier2Max} teams: {fmt(pricing.tier2)}/team</div>
                         <div>{pricing.tier2Max + 1}+ teams: {fmt(pricing.tier3)}/team</div>
                         <div>7v7 teams: {fmt(pricing.sevenVSeven)}/team</div>
                       </div>
@@ -430,21 +532,13 @@ export default function RegisterPage() {
                   { value: 'paypal', label: 'PayPal' },
                 ].map(opt => (
                   <label key={opt.value} className={`flex items-center gap-2 cursor-pointer text-sm border rounded-lg px-4 py-2 transition-colors ${paymentMethod === opt.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
-                    <input type="radio" name="paymentMethod" value={opt.value}
-                      checked={paymentMethod === opt.value}
-                      onChange={e => setPaymentMethod(e.target.value)}
-                      className="hidden" />
-                    {opt.value === 'credit_card' && '💳 '}
-                    {opt.value === 'check' && '✉️ '}
-                    {opt.value === 'zelle' && '⚡ '}
-                    {opt.value === 'ach' && '🏦 '}
-                    {opt.value === 'paypal' && '🅿️ '}
+                    <input type="radio" name="paymentMethod" value={opt.value} checked={paymentMethod === opt.value} onChange={e => setPaymentMethod(e.target.value)} className="hidden" />
                     {opt.label}
                   </label>
                 ))}
               </div>
               {paymentMethod === 'credit_card' && (
-                <p className="text-sm text-blue-600 mt-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">You'll be redirected to a secure Stripe payment page after submitting. A 3% processing fee applies.</p>
+                <p className="text-sm text-blue-600 mt-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">You will enter your card details on the next step. A 3% processing fee applies.</p>
               )}
               {paymentMethod === 'zelle' && (
                 <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Please send Zelle to <strong>info@sunshinelax.com</strong></p>
@@ -460,7 +554,6 @@ export default function RegisterPage() {
               )}
             </section>
 
-            {/* Notes */}
             <section>
               <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} autoComplete="off"
@@ -469,7 +562,9 @@ export default function RegisterPage() {
 
             <button type="submit" disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 text-sm transition-colors">
-              {loading ? 'Submitting...' : 'Submit Registration'}
+              {loading
+                ? (paymentMethod === 'credit_card' ? 'Preparing payment...' : 'Submitting...')
+                : (paymentMethod === 'credit_card' ? 'Continue to Payment' : 'Submit Registration')}
             </button>
           </form>
         </div>
