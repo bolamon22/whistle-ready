@@ -118,10 +118,10 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
       try { const p = JSON.parse(t.registrationPricing || '{}'); if (p.tier1) setPricing(p) } catch {}
       try { const d = JSON.parse(t.registrationDivisions || '[]'); if (d.length > 0) setDivisions(d) } catch {}
       try { const v = JSON.parse(t.venues || '[]'); setVenues(v) } catch {}
-      setTeamRegEnabled(d.teamRegEnabled !== false)
-    setIndivRegEnabled(Boolean(d.individualRegEnabled))
-    setIndivRegDesc(d.individualRegDescription || '')
-    try { setIndivRegTiers(JSON.parse(d.individualRegTiers || '[]')) } catch {}
+      setTeamRegEnabled(t.teamRegEnabled !== false)
+    setIndivRegEnabled(Boolean(t.individualRegEnabled))
+    setIndivRegDesc(t.individualRegDescription || '')
+    try { setIndivRegTiers(JSON.parse(t.individualRegTiers || '[]')) } catch {}
     setLoading(false)
     })
     fetch(`/api/venues/${params.id}`).then(r => r.json()).then(data => {
