@@ -323,7 +323,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           <label className="label">Tournament Name *</label>
           <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Spring Classic 2026" />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label">Sport</label>
             <select className="select" value={sport} onChange={e => setSport(e.target.value)}>
@@ -393,7 +393,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-1.5 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-5">
           {divItems.map((item, idx) => (
             <div key={item.def} className={`flex items-center gap-2 rounded-xl px-3 py-2 transition-colors ${item.checked ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50 border border-transparent'}`}>
               <input type="checkbox" checked={item.checked} className="w-4 h-4 accent-blue-600 flex-shrink-0"
@@ -824,7 +824,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (activeSection === 'schedule') return (
       <div className="space-y-5">
         <p className="text-sm text-gray-500">Configure default scheduling parameters used when building or auto-assigning the game schedule.</p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label">Schedule Increment (min)</label>
             <input className="input" type="number" min="5" max="120" step="5" value={scheduleIncrement} onChange={e => setScheduleIncrement(e.target.value)} />
