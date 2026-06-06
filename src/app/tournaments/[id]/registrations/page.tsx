@@ -173,7 +173,7 @@ export default function RegistrationsPage() {
   const [activeTab, setActiveTab] = useState<'team' | 'individual'>('team')
   const [teamRegEnabled, setTeamRegEnabled] = useState(true)
   const [indivRegEnabled, setIndivRegEnabled] = useState(false)
-  const [indivRegTiers, setIndivRegTiers] = useState<{id:string;name:string;amount:number}[]>([])
+  const [indivRegTiers, setIndivRegTiers] = useState<{id:string;name:string;price:number;description:string}[]>([])
   const [indivRegPositions, setIndivRegPositions] = useState<string[]>([])
   const [individualRegs, setIndividualRegs] = useState<IndividualReg[]>([])
   const [showIndivForm, setShowIndivForm] = useState(false)
@@ -877,10 +877,10 @@ export default function RegistrationsPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Fee Tier *</label>
                         <select required value={indivFeeTierId} onChange={e => {
                           const t = indivRegTiers.find(t => t.id === e.target.value)
-                          if (t) { setIndivFeeTierId(t.id); setIndivFeeTierName(t.name); setIndivFeeTierAmount(t.amount) }
+                          if (t) { setIndivFeeTierId(t.id); setIndivFeeTierName(t.name); setIndivFeeTierAmount(t.price) }
                         }} className={inputCls}>
                           <option value="">Choose tier</option>
-                          {indivRegTiers.map(t => <option key={t.id} value={t.id}>{t.name} — {fmt(t.amount)}</option>)}
+                          {indivRegTiers.map(t => <option key={t.id} value={t.id}>{t.name} — {fmt(t.price)}</option>)}
                         </select>
                       </div>
                     ) : (
