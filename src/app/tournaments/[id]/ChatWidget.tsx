@@ -44,9 +44,14 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
         body: JSON.stringify({ messages: next, tournamentId }),
       })
       const data = await res.json()
-      setMessages(m => [...m, { role: 'assistant', content: data.message ?? 'Sorry, something went wrong.' }])
-    } catch {
-      setMessages(m => [...m, { role: 'assistant', content: 'Network error — please try again.' }])
+      if (!res.ok) {
+        const errMsg = data.error || 'Something went wrong. Please try again.'
+        setMessages(m => [...m, { role: 'assistant', content: errMsg }])
+      } else {
+        setMessages(m => [...m, { role: 'assistant', content: data.message ?? 'Sorry, something went wrong.' }])
+      }
+    } catch (e) {
+      setMessages(m => [...m, { role: 'assistant', content: 'Network error — please check your connection.' }])
     }
     setLoading(false)
   }
