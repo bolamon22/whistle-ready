@@ -207,8 +207,11 @@ export default function RegistrationsPage() {
       setIndividualRegs(Array.isArray(indivRegs) ? indivRegs : [])
       setTournamentName(t.name || '')
       if (t.logoUrl) setTournamentLogo(t.logoUrl)
-      setTeamRegEnabled(t.teamRegEnabled !== false)
-      setIndivRegEnabled(Boolean(t.individualRegEnabled))
+      const tEnabled = t.teamRegEnabled !== false
+      const iEnabled = Boolean(t.individualRegEnabled)
+      setTeamRegEnabled(tEnabled)
+      setIndivRegEnabled(iEnabled)
+      if (!tEnabled && iEnabled) setActiveTab('individual')
       try { const tiers = JSON.parse(t.individualRegTiers || '[]'); if (tiers.length) setIndivRegTiers(tiers) } catch {}
       try { const pos = JSON.parse(t.individualRegPositions || '[]'); if (pos.length) setIndivRegPositions(pos) } catch {}
       try {
