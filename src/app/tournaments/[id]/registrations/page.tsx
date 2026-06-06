@@ -574,7 +574,7 @@ export default function RegistrationsPage() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap justify-end">
-            {activeTab === 'team' ? [
+            {(activeTab === 'team' ? [
               { label: 'Clubs', value: registrations.length, color: 'text-blue-600' },
               { label: 'Teams', value: totalTeams, color: 'text-green-600' },
               { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800' },
@@ -585,7 +585,7 @@ export default function RegistrationsPage() {
               { label: 'Paid', value: individualRegs.filter(r => r.paymentStatus === 'paid').length, color: 'text-green-600' },
               { label: 'Pending', value: individualRegs.filter(r => r.paymentStatus === 'pending').length, color: 'text-orange-500' },
               { label: 'Revenue', value: fmt(individualRegs.filter(r => r.paymentStatus === 'paid').reduce((s, r) => s + r.feeTierAmount, 0)), color: 'text-green-700' },
-            ].map(s => (
+            ]).map(s => (
               <div key={s.label} className="bg-white border rounded-xl px-3 py-2 text-center min-w-[70px]">
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-gray-500">{s.label}</div>
