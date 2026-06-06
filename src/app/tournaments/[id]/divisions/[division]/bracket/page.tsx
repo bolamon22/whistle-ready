@@ -51,9 +51,9 @@ function GameCard({ game, seeds, allGames, onClick, isChamp }: {
           {hasScore && <span className={`ml-1 font-mono text-xs w-5 text-right ${game.winner === t2 ? 'text-green-700 font-bold' : 'text-slate-500'}`}>{game.score2}</span>}
         </div>
         {(game.field || game.startTime || game.gameDate) ? (
-          <div className="mt-1 text-xs text-slate-400 truncate">{[game.gameDate, game.startTime, game.field].filter(Boolean).join(' · ')}</div>
+          <div className="mt-1 text-xs text-slate-400 truncate">{[game.gameDate, game.startTime, game.field].filter(Boolean).join(' Â· ')}</div>
         ) : (
-          <div className="mt-1 text-xs text-slate-300">G{game.gameNumber} · click to edit</div>
+          <div className="mt-1 text-xs text-slate-300">G{game.gameNumber} Â· click to edit</div>
         )}
       </div>
     </button>
@@ -299,6 +299,7 @@ export default function BracketPage() {
   const [resetting, setResetting] = useState(false)
   const [setupFormat, setSetupFormat] = useState<'single' | 'double'>('single')
   const [setupCount, setSetupCount] = useState(8)
+  const [view, setView] = useState<'bracket' | 'games'>('bracket')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -329,6 +330,14 @@ export default function BracketPage() {
 
   function handleGameSaved(updated: BracketGame) {
     setBracket(prev => prev ? { ...prev, games: prev.games.map(g => g.id === updated.id ? updated : g) } : prev)
+  }
+
+  function fmtSrc(src: string) {
+    if (!src) return '—'
+    if (src.startsWith('seed:')) return 'Seed ' + src.slice(5)
+    if (src.startsWith('winner:')) return 'W-B' + src.slice(7)
+    if (src.startsWith('loser:')) return 'L-B' + src.slice(6)
+    return src
   }
 
   if (loading) return (
@@ -391,8 +400,18 @@ export default function BracketPage() {
         <button onClick={() => router.push(`/tournaments/${id}/divisions`)} className="text-sm text-slate-500 hover:text-slate-700">Divisions</button>
         <span className="text-slate-300">/</span><span className="text-slate-600 font-medium">{divName}</span>
         <span className="text-slate-300">/</span><span className="font-semibold text-slate-800">Bracket</span>
+        <div className="ml-4 flex bg-slate-100 rounded-lg p-0.5">
+          <button onClick={() => setView('bracket')}
+            className={`px-3 py-1 text-sm rounded-md font-medium transition-colors ${view === 'bracket' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>
+            Bracket
+          </button>
+          <button onClick={() => setView('games')}
+            className={`px-3 py-1 text-sm rounded-md font-medium transition-colors ${view === 'games' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>
+            Games ({bracket.games.length})
+          </button>
+        </div>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full capitalize">{bracket.format} elim · {bracket.teamCount} teams</span>
+          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full capitalize">{bracket.format} elim Â· {bracket.teamCount} teams</span>
           <button onClick={() => setShowSeeds(true)}
             className={`text-sm px-3 py-1.5 rounded-lg border transition-colors font-medium ${seededCount < bracket.teamCount ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
             Seeds ({seededCount}/{bracket.teamCount})
@@ -403,6 +422,60 @@ export default function BracketPage() {
 
       {champion && <div className="bg-amber-400 text-white text-center py-2 font-bold tracking-wide">Champion: {champion}</div>}
 
+      {view === 'games' ? (
+        <div className="flex-1 overflow-auto">
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 bg-white border-b border-slate-200 z-10">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Game</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Team 1</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Team 2</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date & Time</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Field</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Score</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-100">
+              {bracket.games.slice().sort((a,b) => a.round - b.round || a.gameNumber - b.gameNumber).map(game => {
+                const t1 = game.team1 || resolveTeam(game.team1Source, bracket.seeds, bracket.games)
+                const t2 = game.team2 || resolveTeam(game.team2Source, bracket.seeds, bracket.games)
+                const t1Label = t1 || fmtSrc(game.team1Source)
+                const t2Label = t2 || fmtSrc(game.team2Source)
+                const hasScore = game.score1 !== null && game.score2 !== null
+                const fmtDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' }) : ''
+                const dt = [fmtDate(game.gameDate), game.startTime].filter(Boolean).join(' ') || '—'
+                const isChamp = game.section === 'championship'
+                return (
+                  <tr key={game.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {isChamp && <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Final</span>}
+                        <span className="text-sm font-semibold text-slate-800">Round {game.round} – B{game.gameNumber}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{t1Label ? t1Label : <span className="text-slate-300 italic text-xs">TBD</span>}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{t2Label ? t2Label : <span className="text-slate-300 italic text-xs">TBD</span>}</td>
+                    <td className="px-4 py-3 text-sm text-slate-500">{dt}</td>
+                    <td className="px-4 py-3 text-sm text-slate-500 max-w-[180px] truncate">{game.field || <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 py-3 text-sm font-semibold">
+                      {hasScore
+                        ? <span className={game.winner ? 'text-green-700' : 'text-slate-800'}>{game.score1}–{game.score2}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setSelectedGame(game)}
+                        className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors font-medium">
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <div className="px-6 py-6 overflow-x-auto">
         {bracket.format === 'single' ? (
           <BracketSection games={[...winnerGames, ...champGames]} seeds={bracket.seeds} allGames={bracket.games} onGameClick={setSelectedGame} />
@@ -419,6 +492,7 @@ export default function BracketPage() {
           </div>
         )}
       </div>
+      )}
 
       {selectedGame && <GameModal game={selectedGame} seeds={bracket.seeds} allGames={bracket.games} divisionParam={division} tournamentId={id} onClose={() => setSelectedGame(null)} onSaved={handleGameSaved} />}
       {showSeeds && <SeedPanel teamCount={bracket.teamCount} seeds={bracket.seeds} divisionParam={division} tournamentId={id} onClose={() => setShowSeeds(false)} onSaved={s => setBracket(prev => prev ? { ...prev, seeds: s } : prev)} />}
