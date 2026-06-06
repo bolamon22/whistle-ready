@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         feeTierId: body.feeTierId,
         feeTierName: body.feeTierName,
         feeTierAmount: Number(body.feeTierAmount),
-        paymentStatus: 'pending',
+        paymentStatus: body.paymentStatus || 'pending',
         stripeSessionId: body.stripeSessionId || null,
       },
     })
