@@ -95,6 +95,10 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [newTierName, setNewTierName] = useState('')
   const [newTierPrice, setNewTierPrice] = useState('')
   const [newTierDesc, setNewTierDesc] = useState('')
+  const [indivRegPositions, setIndivRegPositions] = useState<string[]>(['Attack','Midfield','Defense','Goalie','Utility/Other'])
+  const [indivRegSizes, setIndivRegSizes] = useState<string[]>(['YS','YM','YL','S','M','L','XL','XXL'])
+  const [newPosition, setNewPosition] = useState('')
+  const [newSize, setNewSize] = useState('')
   const [open, setOpen] = useState<Section>('general')
 
   const toggle = (s: Section) => setOpen(o => o === s ? ('' as any) : s)
@@ -122,6 +126,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
     setIndivRegEnabled(Boolean(t.individualRegEnabled))
     setIndivRegDesc(t.individualRegDescription || '')
     try { setIndivRegTiers(JSON.parse(t.individualRegTiers || '[]')) } catch {}
+    try { const p = JSON.parse(t.individualRegPositions || '[]'); if(p.length > 0) setIndivRegPositions(p) } catch {}
+    try { const s = JSON.parse(t.individualRegSizes || '[]'); if(s.length > 0) setIndivRegSizes(s) } catch {}
     setLoading(false)
     })
     fetch(`/api/venues/${params.id}`).then(r => r.json()).then(data => {
@@ -146,6 +152,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           individualRegEnabled: indivRegEnabled,
           individualRegDescription: indivRegDesc,
           individualRegTiers: JSON.stringify(indivRegTiers),
+          individualRegPositions: JSON.stringify(indivRegPositions),
+          individualRegSizes: JSON.stringify(indivRegSizes),
         })
       }),
       fetch(`/api/venues/${params.id}`, {
@@ -719,6 +727,38 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
                   </div>
                   <div className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 text-xs text-teal-700">
                     Share this link with players: <strong>{typeof window !== 'undefined' ? window.location.origin : ''}/tournaments/{params.id}/individual-register</strong>
+                  </div>
+                  {/* Positions */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Positions</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {indivRegPositions.map((pos, i) => (
+                        <span key={i} className="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-1 text-sm text-gray-700">
+                          {pos}
+                          <button type="button" onClick={() => setIndivRegPositions(p => p.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 text-xs ml-1">✕</button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Attack" value={newPosition} onChange={e => setNewPosition(e.target.value)} onKeyDown={e => { if(e.key==='Enter'){e.preventDefault(); if(newPosition.trim()){setIndivRegPositions(p=>[...p,newPosition.trim()]);setNewPosition('')}} }} />
+                      <button type="button" onClick={() => { if(newPosition.trim()){setIndivRegPositions(p=>[...p,newPosition.trim()]);setNewPosition('')} }} className="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">+ Add</button>
+                    </div>
+                  </div>
+                  {/* Sizes */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Jersey / Shorts Sizes</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {indivRegSizes.map((sz, i) => (
+                        <span key={i} className="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-1 text-sm text-gray-700">
+                          {sz}
+                          <button type="button" onClick={() => setIndivRegSizes(s => s.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 text-xs ml-1">✕</button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. XL" value={newSize} onChange={e => setNewSize(e.target.value)} onKeyDown={e => { if(e.key==='Enter'){e.preventDefault(); if(newSize.trim()){setIndivRegSizes(s=>[...s,newSize.trim()]);setNewSize('')}} }} />
+                      <button type="button" onClick={() => { if(newSize.trim()){setIndivRegSizes(s=>[...s,newSize.trim()]);setNewSize('')} }} className="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">+ Add</button>
+                    </div>
                   </div>
                 </>
             )}
