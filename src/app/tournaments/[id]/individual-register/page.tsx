@@ -336,7 +336,7 @@ export default function IndividualRegPage() {
           {/* ── Player Info ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">Player Information</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>First Name *</label>
                 <input className={inputCls} value={firstName} onChange={e => setFirstName(e.target.value)} required />
@@ -372,8 +372,8 @@ export default function IndividualRegPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-6">
               <h2 className="text-base font-bold text-gray-800 mb-1 pb-2 border-b border-gray-100">Parent / Guardian</h2>
               <p className="text-xs text-amber-600 mb-4">Required for players under 18</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-1">
                   <label className={labelCls}>Guardian Name *</label>
                   <input className={inputCls} value={guardianName} onChange={e => setGuardianName(e.target.value)} required={isMinor} />
                 </div>
@@ -392,10 +392,10 @@ export default function IndividualRegPage() {
           {/* ── Emergency Contact ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">Emergency Contact</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Name *</label>
-                <input className={inputCls} value={ecName} onChange={e => setEcName(e.target.value)} required />
+                <input className={inputCls} value={ecName} onChange={e => setecName(e.target.value)} required />
               </div>
               <div>
                 <label className={labelCls}>Phone *</label>
@@ -428,7 +428,7 @@ export default function IndividualRegPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Jersey Number Request</label>
                 <input className={inputCls} value={numberRequest} onChange={e => setNumber(e.target.value)} placeholder="e.g. 12" />
