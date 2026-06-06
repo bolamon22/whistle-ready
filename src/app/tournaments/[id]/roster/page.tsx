@@ -226,7 +226,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                 />
               </div>
             </div>
-            <div className="px-6 pb-5 flex gap-3">
+            <div className="px-4 sm:px-6 pb-4 sm:pb-5 flex gap-3">
               <button className="btn-secondary flex-1" onClick={() => { setShowInvite(false); setInviteForm({ email: '', name: '' }) }}>
                 Cancel
               </button>
