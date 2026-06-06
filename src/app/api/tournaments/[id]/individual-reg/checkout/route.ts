@@ -9,6 +9,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+    // For Stripe Organization keys (sk_org_live_...) every call needs Stripe-Context: acct_xxx
+    const stripeOpts = process.env.STRIPE_ACCOUNT_ID
+      ? { headers: { 'Stripe-Context': process.env.STRIPE_ACCOUNT_ID } }
+      : {}
     const body = await req.json()
     const { regData, tierId, tierName, tierAmount } = body
 
@@ -39,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
       success_url: `${appUrl}/tournaments/${params.id}/individual-register?success=1&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/tournaments/${params.id}/individual-register?cancelled=1`,
-    })
+    }, stripeOpts)
 
     // Save registration with pending status
     await prisma.individualRegistration.create({
