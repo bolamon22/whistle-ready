@@ -74,11 +74,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [endH, setEndH]                 = useState(19)
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
+  const [unscheduling, setUnscheduling] = useState(false)
   const [tName, setTName]               = useState('')
   const [dragId, setDragId]             = useState<string | null>(null)
   const [filterDiv, setFilterDiv]       = useState('__all__')
   const [overCell, setOverCell]         = useState<string | null>(null) // "time|field"
-  const [renumberingPools, setRenumberingPools] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -177,6 +177,25 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     }
   }
 
+  async function unscheduleDivision(div: string) {
+    const target = games.filter(g => g.division === div && (g.date || g.startTime || g.location))
+    if (target.length === 0) { toast('No scheduled games in this division'); return }
+    if (!window.confirm(`Unschedule all ${target.length} game${target.length !== 1 ? 's' : ''} for "${div}"?`)) return
+    setUnscheduling(true)
+    await Promise.all(target.map(g =>
+      fetch(`/api/tournaments/${params.id}/games/${g.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: '', startTime: '', location: '' }),
+      })
+    ))
+    setGames(prev => prev.map(g =>
+      g.division === div ? { ...g, date: '', startTime: '', location: '' } : g
+    ))
+    toast.success(`Unscheduled ${target.length} game${target.length !== 1 ? 's' : ''} for ${div}`)
+    setUnscheduling(false)
+  }
+
   function addDay() {
     const last = dates[dates.length - 1]
     if (!last) return
@@ -185,23 +204,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const s = next.toISOString().split('T')[0]
     setDates(prev => [...prev, s])
     setActiveDate(s)
-  }
-
-  async function renumberPoolGames() {
-    setRenumberingPools(true)
-    const divs = [...new Set(games.filter(g => g.pool).map(g => g.division))]
-    await Promise.all(divs.map(div =>
-      fetch(`/api/tournaments/${params.id}/divisions/${encodeURIComponent(div)}/pool-games`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'renumber' }),
-      })
-    ))
-    const gRes = await fetch(`/api/tournaments/${params.id}/games`)
-    const gData = await gRes.json()
-    setGames(Array.isArray(gData) ? gData : (gData.games ?? []))
-    toast.success(`Renumbered pool games for ${divs.length} division${divs.length !== 1 ? 's' : ''}`)
-    setRenumberingPools(false)
   }
 
   const divisions = [...new Set(games.map(g => g.division))].sort()
@@ -214,19 +216,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const cellMap: Record<string, Game> = {}
   dayGames.forEach(g => { cellMap[`${g.startTime}|${g.location}`] = g })
 
-  // Derive pool game display numbers client-side (P1, P2… per division)
-  const poolGameNums: Record<string, string> = {}
-  const byDiv: Record<string, Game[]> = {}
-  games.forEach(g => { if (g.pool) { byDiv[g.division] = byDiv[g.division] ?? []; byDiv[g.division].push(g) } })
-  Object.values(byDiv).forEach(dg => {
-    dg.sort((a, b) => {
-      const na = parseInt(a.gameNumber) || 0, nb = parseInt(b.gameNumber) || 0
-      return na !== nb ? na - nb : a.gameNumber.localeCompare(b.gameNumber)
-    })
-    dg.forEach((g, i) => { poolGameNums[g.id] = `P${i + 1}` })
-  })
-
-  // ── Conflict detection ─────────────────────────────────────────────
+  // ── Conflict detection ──────────────────────────────────────────────────
   const scheduledGames = games.filter(g => g.date && g.startTime)
 
   function slotIndex(time: string) {
@@ -305,11 +295,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               <option key={h} value={h}>{fmtTime(`${String(h).padStart(2,'0')}:00`)}</option>
             ))}
           </select>
-          <button onClick={renumberPoolGames} disabled={renumberingPools}
-          className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-medium transition-colors disabled:opacity-50">
-          {renumberingPools ? 'Renumbering…' : 'Renumber Pool #s'}
-        </button>
-        {saving && <span className="text-blue-500 text-xs animate-pulse">Saving…</span>}
+          {saving && <span className="text-blue-500 text-xs animate-pulse">Saving…</span>}
         </div>
       </div>
 
@@ -319,7 +305,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         onDragOver={e => e.preventDefault()}
         onDrop={handleDropParking}
       >
-        <div className="px-4 sm:px-6 pt-2 pb-1 flex items-center gap-3">
+        <div className="px-4 sm:px-6 pt-2 pb-1 flex items-center gap-3 flex-wrap">
           <span className="text-slate-400 text-xs font-semibold uppercase tracking-widest">
             Parking Lot
           </span>
@@ -331,8 +317,17 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             <option value="__all__">All Divisions</option>
             {divisions.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
+          {filterDiv !== '__all__' && (
+            <button
+              onClick={() => unscheduleDivision(filterDiv)}
+              disabled={unscheduling}
+              className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded px-2 py-0.5 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              {unscheduling ? 'Unscheduling…' : 'Unschedule All'}
+            </button>
+          )}
           <span className="ml-auto text-slate-600 text-xs hidden sm:block">
-            Drag to grid ↓  ·  Drag to here to unschedule
+            Drag to grid ↓  ·  Drag here to unschedule
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -343,8 +338,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               </p>
             ) : filtered.map(g => {
               const color = divColor(g.division, divisions)
-                  const hasConflict = conflictIds.has(g.id)
-                  const hasB2B = !hasConflict && backToBackIds.has(g.id)
+              const hasConflict = conflictIds.has(g.id)
+              const hasB2B = !hasConflict && backToBackIds.has(g.id)
               return (
                 <div
                   key={g.id}
@@ -354,12 +349,12 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   className={`relative ${color} rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing text-white text-xs font-medium whitespace-nowrap select-none flex-shrink-0 shadow transition-opacity ${dragId === g.id ? 'opacity-30' : 'hover:brightness-110'}`}
                 >
                   {hasConflict && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Same-time conflict">⚠️</span>
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Same-time conflict">⚠</span>
                   )}
                   {hasB2B && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Back-to-back game">⇔</span>
+                    <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Back-to-back game">↔</span>
                   )}
-                  <div className="font-bold text-[11px] opacity-80">{poolGameNums[g.id] ?? g.gameNumber}</div>
+                  <div className="font-bold text-[11px] opacity-80">{g.gameNumber}</div>
                   <div className="font-semibold">{g.team1}</div>
                   <div className="opacity-80">vs {g.team2}</div>
                   <div className="opacity-60 text-[10px] mt-0.5">{g.division}{g.pool ? ` · ${g.pool}` : ''}</div>
@@ -407,11 +402,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           <table className="border-collapse" style={{ minWidth: `${80 + fields.length * 160}px` }}>
             <thead className="sticky top-0 z-20">
               <tr>
-                {/* Time header */}
                 <th className="sticky left-0 z-30 w-20 bg-slate-100 border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 text-center">
                   Time
                 </th>
-                {/* Group fields by venue */}
                 {fields.map(f => (
                   <th key={f.fullName}
                     className="bg-slate-100 border border-slate-200 px-3 py-2 text-center min-w-[155px]">
@@ -424,11 +417,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             <tbody>
               {slots.map(slot => (
                 <tr key={slot}>
-                  {/* Time label */}
                   <td className="sticky left-0 z-10 bg-white border border-slate-200 px-2 py-1 text-xs text-slate-500 font-medium text-center whitespace-nowrap w-20">
                     {fmtTime(slot)}
                   </td>
-                  {/* Field cells */}
                   {fields.map(f => {
                     const cellKey = `${slot}|${f.fullName}`
                     const game = cellMap[cellKey]
@@ -446,16 +437,16 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             draggable
                             onDragStart={e => handleDragStart(e, game.id)}
                             onDragEnd={handleDragEnd}
-                            className={`${divColor(game.division, divisions)} relative rounded-md px-2 py-1 cursor-grab active:cursor-grabbing h-full min-h-[52px] flex flex-col justify-between transition-opacity ${dragId === game.id ? 'opacity-30' : 'hover:brightness-110'}`}
+                            className={`relative ${divColor(game.division, divisions)} rounded-md px-2 py-1 cursor-grab active:cursor-grabbing h-full min-h-[52px] flex flex-col justify-between transition-opacity ${dragId === game.id ? 'opacity-30' : 'hover:brightness-110'}`}
                           >
-                              {conflictIds.has(game.id) && (
-                                <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold rounded px-1 leading-tight shadow" title="Same-time conflict">⚠️ Conflict</span>
-                              )}
-                              {!conflictIds.has(game.id) && backToBackIds.has(game.id) && (
-                                <span className="absolute top-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded px-1 leading-tight shadow" title="Back-to-back game">⇔ B2B</span>
-                              )}
+                            {conflictIds.has(game.id) && (
+                              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold rounded px-1 leading-tight shadow" title="Same-time conflict">⚠ Conflict</span>
+                            )}
+                            {!conflictIds.has(game.id) && backToBackIds.has(game.id) && (
+                              <span className="absolute top-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded px-1 leading-tight shadow" title="Back-to-back game">↔ B2B</span>
+                            )}
                             <div>
-                              <div className="text-white text-[10px] font-bold opacity-75">{poolGameNums[game.id] ?? game.gameNumber}</div>
+                              <div className="text-white text-[10px] font-bold opacity-75">{game.gameNumber}</div>
                               <div className="text-white text-xs font-semibold leading-tight truncate">{game.team1}</div>
                               <div className="text-white/70 text-[10px] truncate">vs {game.team2}</div>
                             </div>
