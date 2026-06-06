@@ -1,8 +1,3 @@
-        <button onClick={renumberPoolGames} disabled={renumberingPools}
-          className="ml-2 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-medium transition-colors disabled:opacity-50">
-          {renumberingPools ? 'Renumbering…' : 'Renumber Pool #s'}
-        </button>
-  const [renumberingPools, setRenumberingPools] = useState(false)
 'use client'
 import { useEffect, useState } from 'react'
 import TournamentNav from '../TournamentNav'
@@ -83,6 +78,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [dragId, setDragId]             = useState<string | null>(null)
   const [filterDiv, setFilterDiv]       = useState('__all__')
   const [overCell, setOverCell]         = useState<string | null>(null) // "time|field"
+  const [renumberingPools, setRenumberingPools] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -193,8 +189,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   async function renumberPoolGames() {
     setRenumberingPools(true)
-    const divisions = [...new Set(games.filter(g => g.pool).map(g => g.division))]
-    await Promise.all(divisions.map(div =>
+    const divs = [...new Set(games.filter(g => g.pool).map(g => g.division))]
+    await Promise.all(divs.map(div =>
       fetch(`/api/tournaments/${params.id}/divisions/${encodeURIComponent(div)}/pool-games`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -204,7 +200,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const gRes = await fetch(`/api/tournaments/${params.id}/games`)
     const gData = await gRes.json()
     setGames(Array.isArray(gData) ? gData : (gData.games ?? []))
-    toast.success(`Renumbered pool games for ${divisions.length} division${divisions.length !== 1 ? 's' : ''}`)
+    toast.success(`Renumbered pool games for ${divs.length} division${divs.length !== 1 ? 's' : ''}`)
     setRenumberingPools(false)
   }
 
@@ -297,7 +293,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               <option key={h} value={h}>{fmtTime(`${String(h).padStart(2,'0')}:00`)}</option>
             ))}
           </select>
-          {saving && <span className="text-blue-500 text-xs animate-pulse">Saving…</span>}
+          <button onClick={renumberPoolGames} disabled={renumberingPools}
+          className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-medium transition-colors disabled:opacity-50">
+          {renumberingPools ? 'Renumbering…' : 'Renumber Pool #s'}
+        </button>
+        {saving && <span className="text-blue-500 text-xs animate-pulse">Saving…</span>}
         </div>
       </div>
 
