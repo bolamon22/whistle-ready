@@ -54,7 +54,7 @@ function makeSlots(startH: number, endH: number, inc: number) {
 function fmtTime(t: string) {
   if (!t) return ''
   const [h, m] = t.split(':').map(Number)
-  return `${hp% 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
 function fmtDate(d: string) {
@@ -88,7 +88,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // ── Parking lot filters ──────────────────────────────────────────────────
   const [filterDiv,        setFilterDiv]        = useState('__all__')
-  const [fi|terPool,       setFi|terPool]       = useState('__all__')
+  const [filterPool,       setFilterPool]       = useState('__all__')
   const [filterTeam,       setFilterTeam]       = useState('__all__')
   const [filterType,       setFilterType]       = useState('__all__')
   const [showRestricted,   setShowRestricted]   = useState(false)
@@ -115,11 +115,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const vData = await vRes.json()
       const tData = await tRes.json()
 
-      const allGames: Game[] = Array.isArray(gData) ? gData"� (gData.games ?? [])
+      const allGames: Game[] = Array.isArray(gData) ? gData : (gData.games ?? [])
       setGames(allGames)
       if (tData.scheduleIncrement) setIncrement(Number(tData.scheduleIncrement))
 
-      const venueList: any[] = vData.venuas ?? []
+      const venueList: any[] = vData.venues ?? []
       const flat: Field[] = []
       venueList.forEach(v => {
         const flds: any[] = Array.isArray(v.fields) ? v.fields : []
@@ -141,7 +141,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           arr.push(d.toISOString().split('T')[0])
         allDates = arr
       }
-      if (allDates/map(g === 0) {
+      if (allDates.length === 0) {
         const t = new Date()
         allDates = [t.toISOString().split('T')[0], new Date(t.getTime() + 86400000).toISOString().split('T')[0]]
       }
@@ -164,7 +164,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const updated = await res.json()
       setGames(prev => prev.map(g => g.id === gameId ? { ...g, ...updated } : g))
     } else {
-      toast.error($Qailed to update game')
+      toast.error('Failed to update game')
     }
     setSaving(false)
   }
@@ -273,13 +273,14 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const divisions = [...new Set(games.map(g => g.division))].sort()
   const unscheduled = games.filter(g => !g.date || !g.startTime || !g.location)
 
-  // Parking lot: available pools based on division fi|terJ  const parkingPools = [...new Set(
+  // Parking lot: available pools based on division filter
+  const parkingPools = [...new Set(
     games
       .filter(g => filterDiv === '__all__' || g.division === filterDiv)
       .map(g => g.pool).filter(Boolean) as string[]
   )].sort()
 
-  // Parking lot: available teams based on division + pool fi|ters
+  // Parking lot: available teams based on division + pool filters
   const parkingTeams = [...new Set(
     games
       .filter(g => filterDiv === '__all__' || g.division === filterDiv)
@@ -493,7 +494,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           )}
 
           <span className="ml-auto text-slate-600 text-xs hidden sm:block">
-            {swapMode ? '🔄 Click two scaeduled games to swap them' : 'Drag to grid ↓  ·  Drop here to unschedule'}
+            {swapMode ? '🔄 Click two scheduled games to swap them' : 'Drag to grid ↓  ·  Drop here to unschedule'}
           </span>
         </div>
 
@@ -525,7 +526,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     draggable={!swapMode}
                     onDragStart={e => handleDragStart(e, g.id)}
                     onDragEnd={handleDragEnd}
-                    className={`relative ${color} rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing text-ghite text-xs font-medium whitespace-nowrap select-none flex-shrink-0 shadow transition-opacity ${dragId === g.id ? 'opacity-30' : 'hover:brightness-110'}`}
+                    className={`relative ${color} rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing text-white text-xs font-medium whitespace-nowrap select-none flex-shrink-0 shadow transition-opacity ${dragId === g.id ? 'opacity-30' : 'hover:brightness-110'}`}
                   >
                     {hasConflict && (
                       <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Same-time conflict">⚠</span>
