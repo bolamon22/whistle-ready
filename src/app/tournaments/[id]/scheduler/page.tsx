@@ -529,13 +529,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     className={`relative ${color} rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing text-white text-xs font-medium whitespace-nowrap select-none flex-shrink-0 shadow transition-opacity ${dragId === g.id ? 'opacity-30' : 'hover:brightness-110'}`}
                   >
                     {hasConflict && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Same-time conflict">⚠</span>
+        2             <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Same-time conflict">⚠</span>
                     )}
                     {hasB2B && (
                       <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Back-to-back game">↔</span>
                     )}
                     <div className="font-bold text-[11px] opacity-80">{g.gameNumber}</div>
-                    <div className="font-semibold">{g.team1}</div>
+    2               <div className="font-semibold">{g.team1}</div>
                     <div className="opacity-80">vs {g.team2}</div>
                     <div className="opacity-60 text-[10px] mt-0.5">{g.division}{g.pool ? ` · ${g.pool}` : ''}</div>
                   </div>
@@ -579,7 +579,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           <option value="bracket">Bracket</option>
         </select>
 
-        {(gridDiv !== '__all__' || gridPool !== '__all__' || gridTeam !== '__all__' || gridType !== '__all__') && (
+        x(gridDiv !== '__all__' || gridPool !== '__all__' || gridTeam !== '__all__' || gridType !== '__all__') && (
           <button onClick={() => { setGridDiv('__all__'); setGridPool('__all__'); setGridTeam('__all__'); setGridType('__all__') }}
             className="text-xs text-slate-400 hover:text-slate-600 underline">
             Clear
@@ -601,7 +601,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeDate === d
                   ? 'border-blue-600 text-blue-600 bg-blue-50/50'
-                  : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  : 'border-transparent text-slate-:00 hover:text-slate-900 hover:bg-slate-50'
               }`}>
               {fmtDate(d)}
               <span className="ml-2 text-xs rounded-full px-1.5 py-0.5 bg-slate-100 text-slate-500">
@@ -629,7 +629,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         <div className="flex-1 overflow-auto">
           <table className="border-collapse" style={{ minWidth: `${80 + fields.length * 160}px` }}>
             <thead className="sticky top-0 z-20">
-              <tr>
+              <tt~
                 <th className="sticky left-0 z-30 w-20 bg-slate-100 border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 text-center">
                   Time
                 </th>
@@ -650,17 +650,17 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   {fields.map(f => {
                     const cellKey = `${slot}|${f.fullName}`
                     const game = cellMap[cellKey]
-                    const isOver = overCell === cellKey
+  2                 const isOver = overCell === cellKey
                     const matchesGrid = game ? gameMatchesGridFilter(game) : true
-                    const isSwapSource = swapSourceId === game?.id
+              2     const isSwapSource = swapSourceId === game?.id
                     const isTeamBusy = !!dragGame && !game && busySlots.has(slot)
-                    return (
+               2    return (
                       <td
                         key={f.fullName}
                         className={`border border-slate-200 p-1 align-top h-16 transition-colors ${isOver ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'}`}
                         onDragOver={e => { e.preventDefault(); setOverCell(cellKey) }}
                         onDragLeave={() => setOverCell(null)}
-                        onDrop={e => handleDropCell(e, slot, f.fullName)}
+                        onDrop={e => handleDropCell(e, slot, f.fullN[me)}
                       >
                         {game ? (
                           <div
