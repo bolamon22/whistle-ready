@@ -162,95 +162,59 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     })
     if (res.ok) {
       const updated = await res.json()
-      setGames(prev => prev.map(g => g.id === gameId ? { ...g, ...updated } : g))
-    }
-    setSaving(false)
+      setGa: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: '', startTime: '', location: '' }),
+      })
+    ))
+    setGames(prev => prev.map(g => ({ ...g, date: '', startTime: '', location: '' })))
+    toast.success(`Unscheduled all ${scheduled.length} games`)
+    setUnscheduling(false)
   }
 
-  async function unscheduleAll() {
-    const scheduled = games.filter(g => g.date || g.startTime || g.location)
-    if (scheduled.length === 0) { toast('No scheduled games to unschedule'); return }
-    if (!window.confirm(`Unschedule all ${scheduled.length} games across every division?`)) return
-    if (!window.confirm(`Are you absolutely sure? This will move all ${scheduled.length} games back to the parking lot.`)) return
-    setUnscheduling(true)
+  async function unscheduleDivision(div: string) {
+    const scheduled = games.filter(g => g.division === div && (g.date || g.startTime || g.location))
+    if (scheduled.length === 0) { toast('No scheduled games in this division'); return }
+    if (!window.confirm(`Unschedule all ${scheduled.length} games in ${div}?`)) return
     await Promise.all(scheduled.map(g =>
       fetch(`/api/tournaments/${params.id}/games/${g.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: '', startTime: '', location: '' }),
       })
     ))
-    setGames(prev => prev.map(g => ({ ...g, date: '', startTime: '', location: '' })))
-    toast.success(`mes(prev => prev.map(g => g.id === gameId ? { ...g, ...updated } : g))
-    } else {
-      toast.error('Failed to update game')
-    }
-    setSaving(false)
+    setGames(prev => prev.map(g => g.division === div ? { ...g, date: '', startTime: '', location: '' } : g))
+    toast.success(`Unscheduled ${scheduled.length} games in ${div}`)
   }
 
-  function handleDragStart(e: React.DragEvent, gameId: string) {
-    if (swapMode) return
-    e.dataTransfer.setData('gameId', gameId)
-    e.dataTransfer.effectAllowed = 'move'
-    setDragId(gameId)
-    setDragGame(games.find(g => g.id === gameId) ?? null)
-  }
-  function handleDragEnd() { setDragId(null); setDragGame(null); setOverCell(null) }
+  const divs = [...new Set(games.map(g => g.division))].sort()
+  const pools = [...new Set(games.map(g => g.pool).filter(Boolean))].sort()
+  const teams = [...new Set([...games.map(g => g.team1), ...games.map(g => g.team2)])].sort()
 
-  function handleDropCell(e: React.DragEvent, time: string, field: string) {
-    e.preventDefault()
-    setOverCell(null)
-    const gameId = e.dataTransfer.getData('gameId') || dragId
-    if (!gameId) return
-    patchGame(gameId, { date: activeDate, startTime: time, location: field })
-  }
+  const lotGames = games.filter(g => !g.date && !g.startTime)
+    .filter(g => filterDiv === '__all__' || g.division === filterDiv)
+    .filter(g => filterPool === '__all__' || g.pool === filterPool)
+    .filter(g => filterTeam === '__all__' || g.team1 === filterTeam || g.team2 === filterTeam)
+    .filter(g => filterType === '__all__' || gameType(g) === filterType)
 
-  function handleDropParking(e: React.DragEvent) {
-    e.preventDefault()
-    setOverCell(null)
-    const gameId = e.dataTransfer.getData('gameId') || dragId
-    if (!gameId) return
-    const g = games.find(x => x.id === gameId)
-    if (g && (g.date || g.startTime || g.location)) {
-      patchGame(gameId, { date: '', startTime: '', location: '' })
-    }
-  }
+  const schedGames = games.filter(g => g.date === activeDate && g.startTime)
 
-  function handleSwapClick(gameId: string) {
-    if (!swapMode) return
-    if (!swapSourceId) { setSwapSourceId(gameId); toast('Now click the game to swap with', { icon: '🔄' }); return }
-    if (swapSourceId === gameId) { setSwapSourceId(null); return }
-    const a = games.find(g => g.id === swapSourceId)
-    const b = games.find(g => g.id === gameId)
-    if (!a || !b) { setSwapSourceId(null); return }
-    Promise.all([
-      fetch(`/api/tournaments/${params.id}/games/${a.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: b.date, startTime: b.startTime, location: b.location }),
-      }),
-      fetch(`/api/tournaments/${params.id}/games/${b.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: a.date, startTime: a.startTime, location: a.location }),
-      }),
-    ]).then(() => {
-      setGames(prev => prev.map(g => {
-        if (g.id === a.id) return { ...g, date: b.date, startTime: b.startTime, location: b.location }
-        if (g.id === b.id) return { ...g, date: a.date, startTime: a.startTime, location: a.location }
-        return g
-      }))
-      toast.success('Games swapped!')
-    })
-    setSwapSourceId(null)
-  }
+  if (loading) return <div className="p-8 text-slate-400">Loading schedule…</div>
 
-  async function unscheduleAll() {
-    const scheduled = games.filter(g => g.date || g.startTime || g.location)
-    if (scheduled.length === 0) { toast('No scheduled games to unschedule'); return }
-    if (!window.confirm(`Unschedule all ${scheduled.length} games across every division?`)) return
-    if (!window.confirm(`Are you absolutely sure? This will move all ${scheduled.length} games back to the parking lot.`)) return
-    setUnscheduling(true)
-    await Promise.all(scheduled.map(g =>
-      fetch(`/api/tournaments/${params.id}/games/${g.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+  return (
+    <div className="h-screen flex flex-col bg-slate-950">
+      <TournamentNav tournamentId={params.id} />
+      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+      {*******************************************************************
+          TOP TOOLBAAR
+  ===================================================================> *}
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800">
+        {*****************************************************************
+           DATE TABS * }
+        <div className="flex gap-1 overflow-x-auto">
+          {dates.map(d => (
+            <button key={d} onClick={() => setActiveDate(d)}
+              className={`text-xs px-3 py-1 rounded-lg font-medium whitespace-nowrap transition-colors
+                ${d === activeDate ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+              : 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: '', startTime: '', location: '' }),
       })
     ))
@@ -553,7 +517,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                       <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Back-to-back game">↔</span>
                     )}
                     <div className="font-bold text-[11px] opacity-80">{g.gameNumber}</div>
-     ssName="opacity-80">vs {g.team2}</div>
+                    <div className="font-semibold">{g.team1}</div>
+                    <div className="opacity-80">vs {g.team2}</div>
                     <div className="opacity-60 text-[10px] mt-0.5">{g.division}{g.pool ? ` · ${g.pool}` : ''}</div>
                   </div>
                 )
@@ -675,7 +640,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                       <td
                         key={f.fullName}
                         className={`border border-slate-200 p-1 align-top h-16 transition-colors ${isOver ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'}`}
-                       top h-16 transition-colors ${isOver ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'}`}
                         onDragOver={e => { e.preventDefault(); setOverCell(cellKey) }}
                         onDragLeave={() => setOverCell(null)}
                         onDrop={e => handleDropCell(e, slot, f.fullName)}
