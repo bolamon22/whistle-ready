@@ -103,6 +103,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [lotOrder,     setLotOrder]     = useState<string[]>([])
   const [lotDragOver,  setLotDragOver]  = useState<string | null>(null)
   const [sideStage,    setSideStage]    = useState(false)
+  const [scratchPad,   setScratchPad]   = useState<string[]>([])
 
   // ── Grid filters ─────────────────────────────────────────────────────────
   const [gridDiv,  setGridDiv]  = useState('__all__')
@@ -251,6 +252,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     if (!gameId) return
     const occupied = games.find(g => g.id !== gameId && g.date === activeDate && g.startTime === time && g.location === field)
     if (occupied) { toast.error(`${field} is already booked at ${time}`); return }
+    setScratchPad(prev => prev.filter(id => id !== gameId))
     patchGame(gameId, { date: activeDate, startTime: time, location: field })
   }
 
@@ -260,9 +262,19 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const gameId = e.dataTransfer.getData('gameId') || dragId
     if (!gameId) return
     const g = games.find(x => x.id === gameId)
+    setScratchPad(prev => prev.filter(id => id !== gameId))
     if (g && (g.date || g.startTime || g.location)) {
       patchGame(gameId, { date: '', startTime: '', location: '' })
     }
+  }
+
+  function handleDropScratch(e: React.DragEvent) {
+    e.preventDefault()
+    const gameId = e.dataTransfer.getData('gameId') || dragId
+    if (!gameId) return
+    if (scratchPad.includes(gameId)) return
+    if (scratchPad.length >= 4) { toast.error('Scratch pad is full (max 4)'); return }
+    setScratchPad(prev => [...prev, gameId])
   }
 
   function handleSwapClick(gameId: string) {
@@ -339,7 +351,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const divisions = [...new Set(games.map(g => g.division))].sort()
-  const unscheduled = games.filter(g => !g.date || !g.startTime || !g.location)
+  const unscheduled = games.filter(g => (!g.date || !g.startTime || !g.location) && !scratchPad.includes(g.id))
 
   // Parking lot: available pools based on division filter
   const parkingPools = [...new Set(
@@ -379,7 +391,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     return ai - bi
   })
 
-  const dayGames = games.filter(g => g.date === activeDate && g.startTime && g.location)
+  const dayGames = games.filter(g => g.date === activeDate && g.startTime && g.location && !scratchPad.includes(g.id))
   const slots = makeSlots(startH, endH, increment)
 
   // Slots where either team of the dragged game is already scheduled today
@@ -613,9 +625,48 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             </button>
           )}
 
-          <span className="ml-auto text-slate-600 text-xs hidden sm:block">
-            {swapMode ? '🔄 Click two scheduled games to swap them' : 'Drag to grid ↓  ·  Drop here to unschedule'}
-          </span>
+          {!swapMode && (
+            <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+              <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest whitespace-nowrap hidden sm:block">Scratch</span>
+              <div
+                className="flex gap-1.5"
+                onDragOver={e => { if (scratchPad.length < 4 || scratchPad.includes(e.dataTransfer.getData('gameId') || dragId || '')) e.preventDefault() }}
+                onDrop={handleDropScratch}
+              >
+                {[0,1,2,3].map(i => {
+                  const id = scratchPad[i]
+                  const game = id ? games.find(g => g.id === id) : null
+                  const color = game ? divColor(game.division, divisions) : ''
+                  return (
+                    <div key={i}
+                      className={`w-20 h-11 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors
+                        ${game ? 'border-transparent' : 'border-slate-600 bg-slate-800/30 hover:border-slate-400'}`}
+                    >
+                      {game ? (
+                        <div
+                          draggable
+                          onDragStart={e => handleDragStart(e, game.id)}
+                          onDragEnd={handleDragEnd}
+                          className={`${color} text-white text-[9px] font-semibold px-1.5 py-1 cursor-grab w-full h-full flex flex-col justify-center leading-tight`}
+                        >
+                          <div className="opacity-60 text-[8px]">{game.gameNumber} · {game.division}</div>
+                          <div className="truncate">{game.team1}</div>
+                          <div className="opacity-75 truncate">vs {game.team2}</div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-600 text-[10px] select-none">{i + 1}</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {swapMode && (
+            <span className="ml-auto text-emerald-400 text-xs hidden sm:block">
+              🔄 Click two scheduled games to swap them
+            </span>
+          )}
         </div>
 
         {/* Chips + drop zone */}
@@ -704,6 +755,45 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               {parkingPools.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
+          {/* Scratch pad - side mode */}
+          <div className="px-2 pt-2 pb-2 flex-shrink-0 border-b border-slate-700"
+            onDragOver={e => { if (scratchPad.length < 4 || scratchPad.includes(e.dataTransfer.getData('gameId') || dragId || '')) e.preventDefault() }}
+            onDrop={handleDropScratch}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-widest">Scratch</span>
+              <span className="text-slate-500 text-[9px]">{scratchPad.length}/4</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {[0,1,2,3].map(i => {
+                const id = scratchPad[i]
+                const game = id ? games.find(g => g.id === id) : null
+                const color = game ? divColor(game.division, divisions) : ''
+                return (
+                  <div key={i}
+                    className={`h-11 rounded border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors
+                      ${game ? 'border-transparent' : 'border-slate-600 bg-slate-800/30 hover:border-slate-400'}`}
+                  >
+                    {game ? (
+                      <div
+                        draggable
+                        onDragStart={e => handleDragStart(e, game.id)}
+                        onDragEnd={handleDragEnd}
+                        className={`${color} text-white text-[8px] font-semibold px-1 py-0.5 cursor-grab w-full h-full flex flex-col justify-center leading-tight`}
+                      >
+                        <div className="opacity-60 text-[7px]">{game.gameNumber}</div>
+                        <div className="truncate">{game.team1}</div>
+                        <div className="opacity-70 truncate">vs {game.team2}</div>
+                      </div>
+                    ) : (
+                      <span className="text-slate-600 text-[9px] select-none">{i + 1}</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Drop zone */}
           <div
             className="mx-2 mt-2 mb-1 flex-shrink-0 rounded border-2 border-dashed border-slate-600 bg-slate-800/50 flex items-center justify-center text-slate-500 text-xs font-medium p-1.5 cursor-default select-none"
