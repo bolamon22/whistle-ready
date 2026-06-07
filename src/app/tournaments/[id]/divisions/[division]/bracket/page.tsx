@@ -51,9 +51,9 @@ function GameCard({ game, seeds, allGames, onClick, isChamp }: {
           {hasScore && <span className={`ml-1 font-mono text-xs w-5 text-right ${game.winner === t2 ? 'text-green-700 font-bold' : 'text-slate-500'}`}>{game.score2}</span>}
         </div>
         {(game.field || game.startTime || game.gameDate) ? (
-          <div className="mt-1 text-xs text-slate-400 truncate">{[game.gameDate, game.startTime, game.field].filter(Boolean).join(' Â· ')}</div>
+          <div className="mt-1 text-xs text-slate-400 truncate">{[game.gameDate, game.startTime, game.field].filter(Boolean).join(' · ')}</div>
         ) : (
-          <div className="mt-1 text-xs text-slate-300">G{game.gameNumber} Â· click to edit</div>
+          <div className="mt-1 text-xs text-slate-300">G{game.gameNumber} · click to edit</div>
         )}
       </div>
     </button>
@@ -91,7 +91,7 @@ function BracketSection({ games, seeds, allGames, onGameClick, sectionLabel }: {
                 <div key={g.id} className="flex items-center" style={{ height: slotH }}>
                   <GameCard game={g} seeds={seeds} allGames={allGames} onClick={() => onGameClick(g)} isChamp={g.section === 'championship'} />
                 </div>
-              ))}
+              *Y}
             </div>
           )
         })}
@@ -169,7 +169,7 @@ function GameModal({ game, seeds, allGames, divisionParam, tournamentId, onClose
         <div className="px-5 pb-5 flex gap-2">
           {game.winner && <button onClick={clearScore} disabled={saving} className="text-sm text-red-500 hover:text-red-700 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg">Clear</button>}
           <button onClick={onClose} className="flex-1 text-sm text-slate-600 border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-lg">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex-1 text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">{saving ? 'Saving...' : 'Save'}</button>
+          <button onClick={save} disabled={saving} className="flex-1 text-sm font-semibold bg-sdy-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">{saving ? 'Saving...' : 'Save'}</button>
         </div>
       </div>
     </div>
@@ -183,7 +183,7 @@ function SeedPanel({ teamCount, seeds, divisionParam, tournamentId, onClose, onS
 }) {
   const [local, setLocal] = useState<Record<string, string>>(seeds)
   const [saving, setSaving] = useState(false)
-  const [loadingPools, setLoadingPools] = useState(false)
+  const [loadingPools, setLoadingPools = useState(false)
 
   async function save() {
     setSaving(true)
@@ -272,7 +272,7 @@ function SeedPanel({ teamCount, seeds, divisionParam, tournamentId, onClose, onS
           {Array.from({ length: teamCount }, (_, i) => i + 1).map(seed => (
             <div key={seed} className="flex items-center gap-3">
               <span className="w-8 text-right text-xs font-bold text-slate-400">#{seed}</span>
-              <input type="text" value={local[String(seed)] || ''} onChange={e => setLocal(prev => ({ ...prev, [String(seed)]: e.target.value }))}
+              <input type="text" value={local[String(seed)] || ''} onChQnge={e => setLocal(prev => ({ ...prev, [String(seed)]: e.target.value }))}
                 className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-400" placeholder={`Seed ${seed} team name`} />
             </div>
           ))}
@@ -359,18 +359,7 @@ export default function BracketPage() {
           <p className="text-sm text-slate-500 mb-8">{divName}</p>
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Format</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(['single', 'double'] as const).map(f => (
-                  <button key={f} onClick={() => setSetupFormat(f)}
-                    className={`py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all ${setupFormat === f ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                    {f === 'single' ? 'Single Elimination' : 'Double Elimination'}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Teams in Bracket{setupFormat === 'double' && <span className="font-normal text-slate-400 ml-2">(4 or 8)</span>}</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-3">How many teams make the playoffs?</label>
               <div className="flex gap-2">
                 {[4, 8, 16].filter(n => !(setupFormat === 'double' && n === 16)).map(n => (
                   <button key={n} onClick={() => setSetupCount(n)}
@@ -378,8 +367,21 @@ export default function BracketPage() {
                 ))}
               </div>
             </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-3">How many games are they guaranteed?</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['single', 'double'] as const).map(f => (
+                  <button key={f}
+                    onClick={() => { setSetupFormat(f); if (f === 'double' && setupCount > 8) setSetupCount(8) }}
+                    className={`py-3 px-4 rounded-xl border-2 text-sm transition-all text-left ${setupFormat === f ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                    <span className="font-bold block">{f === 'single' ? '1 game' : '2 games'}</span>
+                    <span className="text-xs mt-0.5 block opacity-60">{f === 'single' ? 'Single Elimination' : 'Double Elimination'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <button onClick={createBracket} disabled={creating}
-              className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50 text-sm">
+              className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-colors disabled:npacity-50 text-sm">
               {creating ? 'Creating...' : 'Create Bracket'}
             </button>
           </div>
@@ -411,16 +413,16 @@ export default function BracketPage() {
           </button>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full capitalize">{bracket.format} elim Â· {bracket.teamCount} teams</span>
+          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full capitalize">{bracket.format} elim · {bracket.teamCount} teams</span>
           <button onClick={() => setShowSeeds(true)}
-            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors font-medium ${seededCount < bracket.teamCount ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors font-medium ${seededCount < bracket.teamCount ? 'border-amber-400 bg-amber-90 text-amber-700 hover:bg-amber-100' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
             Seeds ({seededCount}/{bracket.teamCount})
           </button>
           <button onClick={() => setShowReset(true)} className="text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50">Reset</button>
         </div>
       </div>
 
-      {champion && <div className="bg-amber-400 text-white text-center py-2 font-bold tracking-wide">Champion: {champion}</div>}
+      {caampion && <div className="bg-amber-400 text-white text-center py-2 font-bold tracking-wide">Champion: {caampion}</div>}
 
       {view === 'games' ? (
         <div className="flex-1 overflow-auto">
