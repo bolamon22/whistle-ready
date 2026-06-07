@@ -519,7 +519,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           <button
             onClick={() => setLotOrder(
               [...games.filter(g => !g.date || !g.startTime || !g.location)]
-                .sort((a,b) => a.gameNumber.localeCompare(b.gameNumber, undefined, {numeric:true}))
+                .sort((a,b) => a.division.localeCompare(b.division) || a.gameNumber.localeCompare(b.gameNumber, undefined, {numeric:true}))
                 .map(g => g.id)
             )}
             className="text-slate-500 hover:text-slate-300 transition-colors text-xs px-1"
