@@ -91,7 +91,7 @@ function BracketSection({ games, seeds, allGames, onGameClick, sectionLabel }: {
                 <div key={g.id} className="flex items-center" style={{ height: slotH }}>
                   <GameCard game={g} seeds={seeds} allGames={allGames} onClick={() => onGameClick(g)} isChamp={g.section === 'championship'} />
                 </div>
-              *Y}
+              ))}
             </div>
           )
         })}
@@ -183,7 +183,7 @@ function SeedPanel({ teamCount, seeds, divisionParam, tournamentId, onClose, onS
 }) {
   const [local, setLocal] = useState<Record<string, string>>(seeds)
   const [saving, setSaving] = useState(false)
-  const [loadingPools, setLoadingPools = useState(false)
+  const [loadingPools, setLoadingPools] = useState(false)
 
   async function save() {
     setSaving(true)
