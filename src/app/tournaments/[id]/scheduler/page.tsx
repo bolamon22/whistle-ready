@@ -757,7 +757,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             )}
                             <div className="flex items-center justify-between gap-1">
                               <div className="font-bold text-[10px] text-white leading-none">{game.gameNumber}</div>
-                              <div className="text-[9px] text-white/70 leading-none truncate">{game.division}</div>
+                              <div className="text-[9px] text-white/70 leading-none truncate">{game.division}{game.pool ? ` · ${game.pool}` : ''}</div>
                             </div>
                             <div>
                               <div className="text-white text-xs font-semibold truncate leading-tight">{game.team1}</div>
