@@ -98,6 +98,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [swapMode,       setSwapMode]       = useState(false)
   const [swapSourceId,   setSwapSourceId]   = useState<string | null>(null)
 
+  // ── Parking lot order (for drag-to-reorder) ──────────────────────────────
+  const [lotOrder,     setLotOrder]     = useState<string[]>([])
+  const [lotDragOver,  setLotDragOver]  = useState<string | null>(null)
+
   // ── Grid filters ─────────────────────────────────────────────────────────
   const [gridDiv,  setGridDiv]  = useState('__all__')
   const [gridPool, setGridPool] = useState('__all__')
@@ -153,6 +157,20 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     load()
   }, [params.id])
 
+  // Keep lotOrder in sync: add new unscheduled game IDs, remove scheduled ones
+  useEffect(() => {
+    setLotOrder(prev => {
+      const unscheduledIds = games.filter(g => !g.date || !g.startTime || !g.location).map(g => g.id)
+      const kept  = prev.filter(id => unscheduledIds.includes(id))
+      const added = unscheduledIds.filter(id => !prev.includes(id))
+        .sort((a, b) => {
+          const ga = games.find(x => x.id === a), gb = games.find(x => x.id === b)
+          return (ga?.gameNumber ?? '').localeCompare(gb?.gameNumber ?? '', undefined, { numeric: true })
+        })
+      return [...kept, ...added]
+    })
+  }, [games])
+
   async function patchGame(gameId: string, patch: Partial<Pick<Game, 'date' | 'startTime' | 'location'>>) {
     setSaving(true)
     const res = await fetch(`/api/tournaments/${params.id}/games/${gameId}`, {
@@ -167,6 +185,38 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       toast.error('Failed to update game')
     }
     setSaving(false)
+  }
+
+  async function reorderLot(draggedId: string, overId: string) {
+    if (draggedId === overId) { setLotDragOver(null); return }
+    const next = [...lotOrder]
+    const from = next.indexOf(draggedId)
+    const to   = next.indexOf(overId)
+    if (from === -1 || to === -1) { setLotDragOver(null); return }
+    next.splice(from, 1)
+    next.splice(to, 0, draggedId)
+    setLotOrder(next)
+    setLotDragOver(null)
+
+    // Renumber pool (P1…) and bracket (B1…) games independently in new order
+    const unscheduledNow = games.filter(g => !g.date || !g.startTime || !g.location)
+    let pNum = 1, bNum = 1
+    const patches: { id: string; gameNumber: string }[] = []
+    for (const id of next) {
+      const g = unscheduledNow.find(x => x.id === id)
+      if (!g) continue
+      if (g.gameNumber.startsWith('B'))      patches.push({ id, gameNumber: `B${bNum++}` })
+      else if (g.gameNumber.startsWith('P')) patches.push({ id, gameNumber: `P${pNum++}` })
+    }
+    if (patches.length === 0) return
+    await Promise.all(patches.map(p =>
+      fetch(`/api/tournaments/${params.id}/games/${p.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameNumber: p.gameNumber }),
+      })
+    ))
+    setGames(prev => prev.map(g => { const p = patches.find(x => x.id === g.id); return p ? { ...g, gameNumber: p.gameNumber } : g }))
+    toast.success('Games renumbered')
   }
 
   function handleDragStart(e: React.DragEvent, gameId: string) {
@@ -304,6 +354,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     }
     if (showRestricted && !g.isChampionship) return false
     return true
+  })
+
+  const filteredSorted = [...filtered].sort((a, b) => {
+    const ai = lotOrder.indexOf(a.id), bi = lotOrder.indexOf(b.id)
+    if (ai === -1 && bi === -1) return 0
+    if (ai === -1) return 1; if (bi === -1) return -1
+    return ai - bi
   })
 
   const dayGames = games.filter(g => g.date === activeDate && g.startTime && g.location)
@@ -518,17 +575,32 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                 <p className="text-slate-500 text-sm py-3 italic self-center">
                   {unscheduled.length === 0 ? '🎉 All games scheduled!' : 'No games match filter'}
                 </p>
-              ) : filtered.map(g => {
+              ) : filteredSorted.map(g => {
                 const color = divColor(g.division, divisions)
                 const hasConflict = conflictIds.has(g.id)
                 const hasB2B = !hasConflict && backToBackIds.has(g.id)
+                const isLotOver = lotDragOver === g.id
                 return (
                   <div
                     key={g.id}
                     draggable={!swapMode}
                     onDragStart={e => handleDragStart(e, g.id)}
-                    onDragEnd={handleDragEnd}
-                    className={`relative ${color} rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing text-white text-xs font-medium whitespace-nowrap select-none flex-shrink-0 shadow transition-opacity ${dragId === g.id ? 'opacity-30' : 'hover:brightness-110'}`}
+                    onDragEnd={() => { handleDragEnd(); setLotDragOver(null) }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setLotDragOver(g.id) }}
+                    onDragLeave={() => setLotDragOver(null)}
+                    onDrop={e => {
+                      e.preventDefault(); e.stopPropagation()
+                      const sourceId = e.dataTransfer.getData('gameId') || dragId
+                      if (!sourceId) return
+                      const src = games.find(x => x.id === sourceId)
+                      if (!src) return
+                      if (src.date || src.startTime || src.location) {
+                        patchGame(sourceId, { date: '', startTime: '', location: '' })
+                      } else {
+                        reorderLot(sourceId, g.id)
+                      }
+                    }}
+                    className={`relative ${color} rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing text-white text-xs font-medium whitespace-nowrap select-none flex-shrink-0 shadow transition-all ${dragId === g.id ? 'opacity-30' : 'hover:brightness-110'} ${isLotOver && dragId !== g.id ? 'ring-2 ring-white scale-105' : ''}`}
                   >
                     {hasConflict && (
                       <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Same-time conflict">⚠</span>

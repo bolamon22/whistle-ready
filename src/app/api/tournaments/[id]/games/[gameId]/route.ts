@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   try {
     const body = await req.json()
-    const { date, startTime, location } = body
+    const { date, startTime, location, gameNumber } = body
 
     const updated = await prisma.game.update({
       where: { id: params.gameId, tournamentId: params.id },
@@ -15,6 +15,7 @@ export async function PATCH(
         ...(date !== undefined && { date }),
         ...(startTime !== undefined && { startTime }),
         ...(location !== undefined && { location }),
+        ...(gameNumber !== undefined && { gameNumber }),
       },
     })
 
