@@ -219,6 +219,20 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     toast.success('Games renumbered')
   }
 
+  async function renumberAll() {
+    const divs = [...new Set(games.filter(g => g.pool).map(g => g.division))]
+    await Promise.all(divs.map(div =>
+      fetch(`/api/tournaments/${params.id}/divisions/${encodeURIComponent(div)}/pool-games`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'renumber' }),
+      })
+    ))
+    const res = await fetch(`/api/tournaments/${params.id}/games`)
+    const data = await res.json()
+    setGames(Array.isArray(data) ? data : (data.games ?? []))
+    toast.success('Games renumbered')
+  }
+
   function handleDragStart(e: React.DragEvent, gameId: string) {
     if (swapMode) return
     e.dataTransfer.setData('gameId', gameId)
@@ -478,6 +492,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             ))}
           </select>
           {saving && <span className="text-blue-500 text-xs animate-pulse">Saving…</span>}
+          <button onClick={renumberAll}
+            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg px-3 py-1 transition-colors whitespace-nowrap">
+            ↻ Renumber All
+          </button>
           {games.some(g => g.date || g.startTime || g.location) && (
             <button onClick={unscheduleAll} disabled={unscheduling}
               className="text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg px-3 py-1 disabled:opacity-50 transition-colors whitespace-nowrap">
