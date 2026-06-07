@@ -425,9 +425,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   // ── Conflict detection ────────────────────────────────────────────────────
   const scheduledGames = games.filter(g => g.date && g.startTime)
   function slotIndex(time: string) { const [h, m] = time.split(':').map(Number); return h * 60 + m }
-  const conflictIds = new Set<string>()
-  const backToBackIds = new Set<string>()
-  const longGapIds = new Set<string>()
+  const conflictMsgs = new Map<string, string>()
+  const backToBackMsgs = new Map<string, string>()
+  const longGapMsgs = new Map<string, string>()
   const teamGames: Record<string, Game[]> = {}
   scheduledGames.forEach(g => {
     ;[g.team1, g.team2].forEach(team => {
@@ -436,14 +436,19 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       teamGames[team].push(g)
     })
   })
-  Object.values(teamGames).forEach(tg => {
+  Object.entries(teamGames).forEach(([team, tg]) => {
     // Sort by date+time for gap detection
     const sorted = [...tg].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
     for (let i = 0; i < sorted.length - 1; i++) {
       const a = sorted[i], b = sorted[i + 1]
       if (a.date === b.date) {
         const diff = slotIndex(b.startTime) - slotIndex(a.startTime)
-        if (diff > increment * 2) { longGapIds.add(a.id); longGapIds.add(b.id) }
+        if (diff > increment * 2) {
+          const slots = Math.round(diff / increment) - 1
+          const msg = `${team}: ${slots}-slot gap between ${a.startTime} and ${b.startTime}`
+          if (!longGapMsgs.has(a.id)) longGapMsgs.set(a.id, msg)
+          if (!longGapMsgs.has(b.id)) longGapMsgs.set(b.id, msg)
+        }
       }
     }
     for (let i = 0; i < tg.length; i++) {
@@ -451,8 +456,16 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         const a = tg[i], b = tg[j]
         if (a.date !== b.date) continue
         const diff = Math.abs(slotIndex(a.startTime) - slotIndex(b.startTime))
-        if (diff === 0) { conflictIds.add(a.id); conflictIds.add(b.id) }
-        else if (diff === increment) { backToBackIds.add(a.id); backToBackIds.add(b.id) }
+        if (diff === 0) {
+          const msg = `${team} plays two games at ${a.startTime} — conflict!`
+          if (!conflictMsgs.has(a.id)) conflictMsgs.set(a.id, msg)
+          if (!conflictMsgs.has(b.id)) conflictMsgs.set(b.id, msg)
+        } else if (diff === increment) {
+          const [first, second] = slotIndex(a.startTime) < slotIndex(b.startTime) ? [a, b] : [b, a]
+          const msg = `${team}: back-to-back at ${first.startTime} & ${second.startTime}`
+          if (!backToBackMsgs.has(a.id)) backToBackMsgs.set(a.id, msg)
+          if (!backToBackMsgs.has(b.id)) backToBackMsgs.set(b.id, msg)
+        }
       }
     }
   })
@@ -619,8 +632,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                 </p>
               ) : filteredSorted.map(g => {
                 const color = divColor(g.division, divisions)
-                const hasConflict = conflictIds.has(g.id)
-                const hasB2B = !hasConflict && backToBackIds.has(g.id)
+                const hasConflict = conflictMsgs.has(g.id)
+                const hasB2B = !hasConflict && backToBackMsgs.has(g.id)
                 const isLotOver = lotDragOver === g.id
                 return (
                   <div
@@ -645,10 +658,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     className={`relative ${color} rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing text-white text-xs font-medium whitespace-nowrap select-none flex-shrink-0 shadow transition-all ${dragId === g.id ? 'opacity-30' : 'hover:brightness-110'} ${isLotOver && dragId !== g.id ? 'ring-2 ring-white scale-105' : ''}`}
                   >
                     {hasConflict && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Same-time conflict">⚠</span>
+                      <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title={conflictMsgs.get(g.id) ?? 'Same-time conflict'}>⚠</span>
                     )}
                     {hasB2B && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title="Back-to-back game">↔</span>
+                      <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title={backToBackMsgs.get(g.id) ?? 'Back-to-back game'}>↔</span>
                     )}
                     <div className="font-bold text-[11px] opacity-80">{g.gameNumber}</div>
                     <div className="font-semibold">{g.team1}</div>
@@ -791,14 +804,14 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                               ${isSwapSource ? 'ring-2 ring-white ring-offset-1 brightness-125' : ''}
                             `}
                           >
-                            {conflictIds.has(game.id) && (
-                              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold rounded px-1 leading-tight shadow" title="Same-time conflict">⚠ Conflict</span>
+                            {conflictMsgs.has(game.id) && (
+                              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold rounded px-1 leading-tight shadow" title={conflictMsgs.get(game.id) ?? 'Same-time conflict'}>⚠ Conflict</span>
                             )}
-                            {!conflictIds.has(game.id) && backToBackIds.has(game.id) && (
-                              <span className="absolute top-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded px-1 leading-tight shadow" title="Back-to-back game">⇔</span>
+                            {!conflictMsgs.has(game.id) && backToBackMsgs.has(game.id) && (
+                              <span className="absolute top-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded px-1 leading-tight shadow" title={backToBackMsgs.get(game.id) ?? 'Back-to-back game'}>⇔</span>
                             )}
-                            {!conflictIds.has(game.id) && !backToBackIds.has(game.id) && longGapIds.has(game.id) && (
-                              <span className="absolute top-0.5 right-0.5 bg-blue-400 text-white text-[9px] font-bold rounded px-1 leading-tight shadow" title="Long gap before/after this game">⏱ Gap</span>
+                            {!conflictMsgs.has(game.id) && !backToBackMsgs.has(game.id) && longGapMsgs.has(game.id) && (
+                              <span className="absolute top-0.5 right-0.5 bg-blue-400 text-white text-[9px] font-bold rounded px-1 leading-tight shadow" title={longGapMsgs.get(game.id) ?? 'Long gap'}>⏱ Gap</span>
                             )}
                             <div className="flex items-center justify-between gap-1">
                               <div className="font-bold text-[10px] text-white leading-none">{game.gameNumber}</div>
