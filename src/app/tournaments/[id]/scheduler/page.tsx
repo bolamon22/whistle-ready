@@ -427,6 +427,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   function slotIndex(time: string) { const [h, m] = time.split(':').map(Number); return h * 60 + m }
   const conflictIds = new Set<string>()
   const backToBackIds = new Set<string>()
+  const longGapIds = new Set<string>()
   const teamGames: Record<string, Game[]> = {}
   scheduledGames.forEach(g => {
     ;[g.team1, g.team2].forEach(team => {
@@ -436,6 +437,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     })
   })
   Object.values(teamGames).forEach(tg => {
+    // Sort by date+time for gap detection
+    const sorted = [...tg].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i], b = sorted[i + 1]
+      if (a.date === b.date) {
+        const diff = slotIndex(b.startTime) - slotIndex(a.startTime)
+        if (diff > increment * 2) { longGapIds.add(a.id); longGapIds.add(b.id) }
+      }
+    }
     for (let i = 0; i < tg.length; i++) {
       for (let j = i + 1; j < tg.length; j++) {
         const a = tg[i], b = tg[j]
@@ -786,6 +796,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             )}
                             {!conflictIds.has(game.id) && backToBackIds.has(game.id) && (
                               <span className="absolute top-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded px-1 leading-tight shadow" title="Back-to-back game">⇔</span>
+                            )}
+                            {!conflictIds.has(game.id) && !backToBackIds.has(game.id) && longGapIds.has(game.id) && (
+                              <span className="absolute top-0.5 right-0.5 bg-blue-400 text-white text-[9px] font-bold rounded px-1 leading-tight shadow" title="Long gap before/after this game">⏱ Gap</span>
                             )}
                             <div className="flex items-center justify-between gap-1">
                               <div className="font-bold text-[10px] text-white leading-none">{game.gameNumber}</div>
