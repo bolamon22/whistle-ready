@@ -917,18 +917,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
-        {/* Hint row */}
-        <div className="flex items-center gap-3 px-4 sm:px-6 pb-1">
-          <span className="text-[10px] text-slate-500 italic">↓ Drop any game here to unschedule it</span>
-          <span className="text-slate-600 text-[10px]">·</span>
-          <span className="text-[10px] text-slate-500 italic">Scratch: drag up to 4 games aside while you rearrange</span>
-        </div>
-
-        {/* Chips + drop zone */}
-        <div className="flex gap-0 px-4 sm:px-6 pb-3" onDragOver={e => e.preventDefault()} onDrop={handleDropParking}>
-          {/* Game chips */}
-          <div className={lotExpanded ? 'flex-1 max-h-72 overflow-y-auto' : 'overflow-x-auto flex-1'}>
-            <div className={lotExpanded ? 'flex flex-wrap gap-2' : 'flex gap-2 min-w-max'}>
+        {/* Chips — 2-row wrap by default, full wrap when expanded */}
+        <div className="px-4 sm:px-6 pb-3" onDragOver={e => e.preventDefault()} onDrop={handleDropParking}>
+          <div className={lotExpanded ? 'max-h-72 overflow-y-auto' : ''}>
+            <div className={lotExpanded ? 'flex flex-wrap gap-2' : 'flex flex-wrap gap-2 max-h-[5.5rem] overflow-hidden'}>
               {filtered.length === 0 ? (
                 <p className="text-slate-500 text-sm py-3 italic self-center">
                   {unscheduled.length === 0 ? '🎉 All games scheduled!' : 'No games match filter'}
