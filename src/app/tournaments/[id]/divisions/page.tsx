@@ -11,7 +11,7 @@ const PALETTE = [
   '#14b8a6', '#ef4444', '#f59e0b', '#6366f1', '#06b6d4',
 ]
 
-interface Division { name: string; teamCount: number; poolCount: number }
+interface Division { name: string; teamCount: number; poolCount: number; unassignedTeams: number; gameCount: number }
 interface Pool { id: string; name: string; teamNames: string[] }
 interface PoolGame {
   id: string; gameNumber: string; pool: string | null
@@ -90,7 +90,7 @@ export default function DivisionsPage() {
     ]).then(([t, d, colors]) => {
       setDivColors(colors)
       setTournament(t)
-      setDivisions(d)
+      setDivisions(d.map((div: Division) => ({ unassignedTeams: 0, gameCount: 0, ...div })))
       // Smart defaults based on guarantee
       const g = 4  // default guarantee
       const defaults: Record<string, string> = {}
@@ -470,7 +470,7 @@ if (loading) return (
         <div className="flex gap-6">
 
           {/* -- Sidebar -------------------------------------------- */}
-          <div className="w-72 flex-shrink-0">
+          <div className="w-80 flex-shrink-0">
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden sticky top-6">
               <div className="bg-slate-800 px-4 py-3">
                 <p className="text-xs font-bold text-white uppercase tracking-wider">Divisions</p>
@@ -509,7 +509,22 @@ if (loading) return (
                               />
                               <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
                             </div>
-                            <p className="text-xs text-slate-400 mt-0.5 pl-5">{div.teamCount} teams · {div.poolCount} pools</p>
+                            <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
+                              {div.gameCount > 0 && (
+                                <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{div.gameCount} games</span>
+                              )}
+                              {div.unassignedTeams > 0 && div.poolCount > 0 && (
+                                <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full" title={`${div.unassignedTeams} team${div.unassignedTeams !== 1 ? 's' : ''} not assigned to a pool`}>
+                                  ⚠ {div.unassignedTeams} unassigned
+                                </span>
+                              )}
+                              {div.unassignedTeams > 0 && div.poolCount === 0 && div.teamCount > 0 && (
+                                <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full" title="No pools created yet">
+                                  No pools yet
+                                </span>
+                              )}
+                            </div>
                           </button>
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                             <button

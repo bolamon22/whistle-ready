@@ -3,41 +3,56 @@ import { prisma } from '@/lib/db'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const [teams, tournament] = await Promise.all([
+    const [teams, tournament, games] = await Promise.all([
       prisma.registeredTeam.findMany({
         where: { registration: { tournamentId: params.id } },
         select: { division: true },
       }),
       prisma.tournament.findUnique({ where: { id: params.id }, select: { registrationDivisions: true } }),
+      prisma.game.findMany({
+        where: { tournamentId: params.id, pool: { not: null } },
+        select: { division: true },
+      }),
     ])
 
-    let pools: { division: string }[] = []
+    let pools: { division: string; teamNames: string }[] = []
     try {
       pools = await prisma.pool.findMany({
         where: { tournamentId: params.id },
-        select: { division: true },
+        select: { division: true, teamNames: true },
       })
     } catch { /* Pool table not migrated yet */ }
 
-    const divMap = new Map<string, { teams: number; pools: number }>()
+    const divMap = new Map<string, { teams: number; pools: number; assignedTeams: number; gameCount: number }>()
 
     // Seed from registrationDivisions so empty divisions show up
     const regDivs: string[] = JSON.parse(tournament?.registrationDivisions ?? '[]')
     for (const name of regDivs) {
-      if (!divMap.has(name)) divMap.set(name, { teams: 0, pools: 0 })
+      if (!divMap.has(name)) divMap.set(name, { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 })
     }
 
     for (const t of teams) {
-      const cur = divMap.get(t.division) ?? { teams: 0, pools: 0 }
+      const cur = divMap.get(t.division) ?? { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
       divMap.set(t.division, { ...cur, teams: cur.teams + 1 })
     }
     for (const p of pools) {
-      const cur = divMap.get(p.division) ?? { teams: 0, pools: 0 }
-      divMap.set(p.division, { ...cur, pools: cur.pools + 1 })
+      const cur = divMap.get(p.division) ?? { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
+      const names: string[] = JSON.parse(p.teamNames || '[]')
+      divMap.set(p.division, { ...cur, pools: cur.pools + 1, assignedTeams: cur.assignedTeams + names.length })
+    }
+    for (const g of games) {
+      const cur = divMap.get(g.division) ?? { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
+      divMap.set(g.division, { ...cur, gameCount: cur.gameCount + 1 })
     }
 
     const divisions = [...divMap.entries()]
-      .map(([name, data]) => ({ name, teamCount: data.teams, poolCount: data.pools }))
+      .map(([name, data]) => ({
+        name,
+        teamCount: data.teams,
+        poolCount: data.pools,
+        unassignedTeams: Math.max(0, data.teams - data.assignedTeams),
+        gameCount: data.gameCount,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
     return NextResponse.json(divisions)
