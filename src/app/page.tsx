@@ -45,6 +45,33 @@ export default function HomePage() {
   const [newDivision, setNewDivision] = useState('')
   const [showDivisions, setShowDivisions] = useState(false)
 
+  // Copy state
+  const [copySourceId, setCopySourceId] = useState<string | null>(null)
+  const [copyName, setCopyName] = useState('')
+  const [copyStart, setCopyStart] = useState('')
+  const [copyEnd, setCopyEnd] = useState('')
+  const [copying, setCopying] = useState(false)
+
+  async function copyTournament() {
+    if (!copySourceId || !copyName.trim()) return
+    setCopying(true)
+    const res = await fetch(`/api/tournaments/${copySourceId}/copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: copyName.trim(), startDate: copyStart, endDate: copyEnd }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      toast.success(`"${data.name}" created!`)
+      setCopySourceId(null)
+      const r = await fetch('/api/tournaments')
+      setTournaments(await r.json())
+    } else {
+      toast.error(data.error || 'Failed to copy')
+    }
+    setCopying(false)
+  }
+
   // Edit state
   const [editId, setEditId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name:'', sport:'', startDate:'', endDate:'', location:'' })
@@ -343,6 +370,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button onClick={e=>{e.preventDefault();openEdit(t)}} className="text-xs text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-300 px-2 py-0.5 rounded-md transition-colors">Edit</button>
+                    <button onClick={e=>{e.preventDefault();setCopySourceId(t.id);setCopyName(t.name+' (Copy)');setCopyStart('');setCopyEnd('')}} className="text-xs text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-300 px-2 py-0.5 rounded-md transition-colors">Copy</button>
                     <button onClick={()=>del(t.id,t.name)} className="text-slate-300 hover:text-red-400 transition-colors text-xl leading-none">×</button>
                   </div>
                 </div>
@@ -388,6 +416,44 @@ export default function HomePage() {
           })}
         </div>
        )}
+
+      {/* Copy Tournament Modal */}
+      {copySourceId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-5 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">📋 Copy Tournament</h2>
+              <p className="text-sm text-gray-500 mt-1">Creates a new tournament with the same settings, venues, and staff roster. Games and registrations are not copied.</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Tournament Name</label>
+                <input className="input w-full" value={copyName} onChange={e=>setCopyName(e.target.value)} placeholder="e.g. Spring Invitational 2027"/>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <input type="date" className="input w-full" value={copyStart} onChange={e=>setCopyStart(e.target.value)}/>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                  <input type="date" className="input w-full" value={copyEnd} onChange={e=>setCopyEnd(e.target.value)}/>
+                </div>
+              </div>
+              <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs text-blue-700 space-y-1">
+                <p className="font-semibold">Copies: venues & fields · divisions · pay rates · ref rules · staff roster · registration settings</p>
+                <p className="font-semibold text-slate-500">Leaves behind: games · schedule · registrations · assignments · availability</p>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button className="flex-1 btn-secondary" onClick={()=>setCopySourceId(null)}>Cancel</button>
+                <button className="flex-1 btn-primary disabled:opacity-40" onClick={copyTournament} disabled={!copyName.trim()||copying}>
+                  {copying?'Copying…':'Create Copy'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
