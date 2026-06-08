@@ -1214,7 +1214,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               </tr>
             </thead>
             <tbody>
-              {slots.map(slot => (
+              {slots.map(slot => {
+                const slotHasGame = visibleFields.some(f => !!cellMap[slot + '|' + f.fullName])
+                return (
                 <tr key={slot}>
                   <td className="sticky left-0 z-10 bg-white border border-slate-200 px-2 py-1 text-xs text-slate-500 font-medium text-center whitespace-nowrap w-20">
                     {fmtTime(slot)}
@@ -1229,7 +1231,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     return (
                       <td
                         key={f.fullName}
-                        className={`border border-slate-200 p-1 align-top h-16 transition-colors ${isOver ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'}`}
+                        className={`border border-slate-200 p-1 align-top ${slotHasGame ? 'h-16' : 'h-8'} transition-colors ${isOver ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'}`}
                         onDragOver={e => { e.preventDefault(); setOverCell(cellKey) }}
                         onDragLeave={() => setOverCell(null)}
                         onDrop={e => handleDropCell(e, slot, f.fullName)}
@@ -1273,7 +1275,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     )
                   })}
                 </tr>
-              ))}
+              )
+              })}
             </tbody>
           </table>
         </div>
