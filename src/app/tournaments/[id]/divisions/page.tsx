@@ -22,6 +22,7 @@ interface Team {
   id: string; teamName: string; clubName: string; division: string
   coachName: string; coachPhone: string; coachEmail: string
   pool: string | null; paid: number; owed: number; paymentStatus: 'paid' | 'partial' | 'unpaid'
+  status: 'confirmed' | 'placeholder'
 }
 
 function payBadge(status: Team['paymentStatus']) {
@@ -53,6 +54,12 @@ export default function DivisionsPage() {
   const [divGamesPerTeam, setDivGamesPerTeam] = useState<Record<string, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
   const [guarantee, setGuarantee] = useState('4')
+
+  // Add / Edit team state
+  const [showAddTeam, setShowAddTeam] = useState(false)
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null)
+  const [teamForm, setTeamForm] = useState({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '' })
+  const [savingTeam, setSavingTeam] = useState(false)
 
   // Division management state
   const [renamingDiv, setRenamingDiv] = useState<string | null>(null)
@@ -100,6 +107,45 @@ export default function DivisionsPage() {
     const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`)
     const data = await res.json()
     setPoolGames(Array.isArray(data) ? data : [])
+  }
+
+  async function addTeam() {
+    if (!activeDiv || !teamForm.teamName.trim()) return
+    setSavingTeam(true)
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(teamForm),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast.error(data.error ?? 'Failed to add team'); setSavingTeam(false); return }
+    setTeams(t => [...t, data].sort((a, b) => a.teamName.localeCompare(b.teamName)))
+    setDivisions(d => d.map(x => x.name === activeDiv ? { ...x, teamCount: x.teamCount + 1 } : x))
+    setTeamForm({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '' })
+    setShowAddTeam(false)
+    setSavingTeam(false)
+    toast.success(`${data.teamName} added as placeholder`)
+  }
+
+  async function updateTeam(confirm = false) {
+    if (!editingTeam) return
+    setSavingTeam(true)
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/teams`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId: editingTeam.id, ...teamForm, confirm }),
+    })
+    if (!res.ok) { const d = await res.json(); toast.error(d.error ?? 'Failed to update team'); setSavingTeam(false); return }
+    setTeams(t => t.map(x => x.id === editingTeam.id ? {
+      ...x,
+      teamName: teamForm.teamName || x.teamName,
+      clubName: teamForm.clubName,
+      coachName: teamForm.coachName,
+      coachEmail: teamForm.coachEmail,
+      coachPhone: teamForm.coachPhone,
+      status: confirm ? 'confirmed' : x.status,
+    } : x))
+    setEditingTeam(null)
+    setSavingTeam(false)
+    toast.success(confirm ? 'Team confirmed' : 'Team updated')
   }
 
   async function createDivision() {
@@ -558,6 +604,11 @@ if (loading) return (
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setTeamForm({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '' }); setShowAddTeam(true) }}
+                          className="text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                          + Add Team
+                        </button>
                         {swapA && swapB ? (
                           <button onClick={swapTeams} disabled={swapping}
                             className="btn-primary btn-sm disabled:opacity-50">
@@ -607,9 +658,12 @@ if (loading) return (
                                 }}
                                 className={`border-b border-slate-50 last:border-0 cursor-pointer transition-colors ${isSwapA || isSwapB ? 'bg-amber-50' : i % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'}`}>
                                 <td className="px-5 py-3 font-semibold text-slate-800">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     {(isSwapA || isSwapB) && <span className="text-amber-500">↔</span>}
                                     {team.teamName}
+                                    {team.status === 'placeholder' && (
+                                      <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
+                                    )}
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 text-slate-500 text-xs">{team.clubName}</td>
@@ -634,11 +688,20 @@ if (loading) return (
                                   {team.coachPhone && <div className="text-slate-400">{team.coachPhone}</div>}
                                 </td>
                                 <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
-                                  <button
-                                    onClick={() => { setMovingTeam(team); setMoveTarget('') }}
-                                    className="text-[11px] text-slate-400 hover:text-sky-600 border border-slate-200 hover:border-sky-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
-                                    Move →
-                                  </button>
+                                  <div className="flex items-center gap-1">
+                                    {team.status === 'placeholder' && (
+                                      <button
+                                        onClick={() => { setEditingTeam(team); setTeamForm({ teamName: team.teamName, clubName: team.clubName, coachName: team.coachName, coachEmail: team.coachEmail, coachPhone: team.coachPhone }) }}
+                                        className="text-[11px] text-amber-600 hover:text-amber-800 border border-amber-200 hover:border-amber-400 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
+                                        ✏ Edit
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => { setMovingTeam(team); setMoveTarget('') }}
+                                      className="text-[11px] text-slate-400 hover:text-sky-600 border border-slate-200 hover:border-sky-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
+                                      Move →
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             )
@@ -646,6 +709,108 @@ if (loading) return (
                         </tbody>
                       </table>
                     )}
+                  </div>
+                )}
+
+                {/* ── Add Team modal ── */}
+                {showAddTeam && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddTeam(false)}>
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
+                      <h3 className="font-bold text-slate-800 mb-1">Add Team</h3>
+                      <p className="text-xs text-slate-500 mb-4">Only team name is required — all other details can be filled in later.</p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Team Name <span className="text-red-500">*</span></label>
+                          <input autoFocus value={teamForm.teamName} onChange={e => setTeamForm(f => ({ ...f, teamName: e.target.value }))}
+                            onKeyDown={e => e.key === 'Enter' && addTeam()}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="e.g. Dynasty Elite 2026" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Club Name</label>
+                          <input value={teamForm.clubName} onChange={e => setTeamForm(f => ({ ...f, clubName: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Coach Name</label>
+                            <input value={teamForm.coachName} onChange={e => setTeamForm(f => ({ ...f, coachName: e.target.value }))}
+                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Coach Phone</label>
+                            <input value={teamForm.coachPhone} onChange={e => setTeamForm(f => ({ ...f, coachPhone: e.target.value }))}
+                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Coach Email</label>
+                          <input value={teamForm.coachEmail} onChange={e => setTeamForm(f => ({ ...f, coachEmail: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 mt-5">
+                        <button onClick={() => setShowAddTeam(false)} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancel</button>
+                        <button onClick={addTeam} disabled={!teamForm.teamName.trim() || savingTeam}
+                          className="text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                          {savingTeam ? 'Adding...' : 'Add Team'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Edit Team modal ── */}
+                {editingTeam && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditingTeam(null)}>
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-bold text-slate-800">Edit Team</h3>
+                        <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mb-4">Fill in the details and confirm when ready.</p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Team Name <span className="text-red-500">*</span></label>
+                          <input autoFocus value={teamForm.teamName} onChange={e => setTeamForm(f => ({ ...f, teamName: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Club Name</label>
+                          <input value={teamForm.clubName} onChange={e => setTeamForm(f => ({ ...f, clubName: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Coach Name</label>
+                            <input value={teamForm.coachName} onChange={e => setTeamForm(f => ({ ...f, coachName: e.target.value }))}
+                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Coach Phone</label>
+                            <input value={teamForm.coachPhone} onChange={e => setTeamForm(f => ({ ...f, coachPhone: e.target.value }))}
+                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Coach Email</label>
+                          <input value={teamForm.coachEmail} onChange={e => setTeamForm(f => ({ ...f, coachEmail: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center mt-5">
+                        <button onClick={() => setEditingTeam(null)} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancel</button>
+                        <div className="flex gap-2">
+                          <button onClick={() => updateTeam(false)} disabled={savingTeam}
+                            className="text-sm border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                            Save
+                          </button>
+                          <button onClick={() => updateTeam(true)} disabled={savingTeam}
+                            className="text-sm font-semibold bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                            ✓ Confirm Team
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
