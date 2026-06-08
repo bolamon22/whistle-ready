@@ -954,6 +954,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
+        {/* Parking lot hint */}
+        <div className="px-4 sm:px-6 pt-1 pb-0.5">
+          <span className="text-[10px] text-slate-600 italic">Parking lot — drag games to the grid to schedule · drop a scheduled game here to unschedule · click a game&apos;s time to edit it</span>
+        </div>
+
         {/* Chips — 2-row wrap by default, full wrap when expanded */}
         <div className="px-4 sm:px-6 pb-3" onDragOver={e => e.preventDefault()} onDrop={handleDropParking}>
           <div className={lotExpanded ? 'max-h-72 overflow-y-auto' : ''}>
