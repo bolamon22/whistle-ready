@@ -50,7 +50,7 @@ export default function DivisionsPage() {
   const [gamesPerTeam, setGamesPerTeam] = useState('2')
   const [renumbering, setRenumbering] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [bulkGamesPerTeam, setBulkGamesPerTeam] = useState('3')
+  const [divGamesPerTeam, setDivGamesPerTeam] = useState<Record<string, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
 
   // Swap teams state
@@ -72,6 +72,13 @@ export default function DivisionsPage() {
       setDivColors(colors)
       setTournament(t)
       setDivisions(d)
+      // Smart defaults: 5 teams→4 games, even teams→3, odd teams→2
+      const defaults: Record<string, string> = {}
+      d.forEach((div: Division) => {
+        const n = div.teamCount
+        defaults[div.name] = n === 5 ? '4' : n % 2 === 0 ? '3' : '2'
+      })
+      setDivGamesPerTeam(defaults)
       if (d.length > 0) selectDiv(d[0].name)
       setLoading(false)
     })
@@ -169,13 +176,23 @@ export default function DivisionsPage() {
     setGenerating(true)
     const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), gamesPerTeam: Number(gamesPerTeam), clearExisting: true }),
+      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), gamesPerTeam: Number(divGamesPerTeam[activeDiv] ?? gamesPerTeam), clearExisting: true }),
     })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error ?? 'Failed to generate games'); setGenerating(false); return }
     await loadPoolGames(activeDiv)
     setGenerating(false)
     toast.success(`${data.generated} games created — each team plays ${gamesPerTeam} game${Number(gamesPerTeam) !== 1 ? 's' : ''}`)
+  }
+
+  function applySmartDefaults() {
+    const updated: Record<string, string> = {}
+    divisions.forEach(div => {
+      const n = div.teamCount
+      updated[div.name] = n === 5 ? '4' : n % 2 === 0 ? '3' : '2'
+    })
+    setDivGamesPerTeam(updated)
+    toast.success('Smart defaults applied')
   }
 
   async function generateAllDivisions() {
@@ -187,7 +204,7 @@ export default function DivisionsPage() {
     for (const div of divisionsWithPools) {
       const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(bulkGamesPerTeam), clearExisting: true }),
+        body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[div.name] ?? 3), clearExisting: true }),
       })
       const data = await res.json()
       if (res.ok) totalGames += data.generated ?? 0
@@ -258,16 +275,27 @@ if (loading) return (
                   {divisions.map(div => (
                     <div key={div.name}
                       className={`w-full border-b border-slate-100 last:border-b-0 transition-colors ${activeDiv === div.name ? 'bg-sky-50 border-l-2 border-l-sky-500' : 'hover:bg-slate-50'}`}>
-                      <button onClick={() => selectDiv(div.name)} className="w-full text-left px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm"
-                            style={{ backgroundColor: divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length] }}
+                      <div className="flex items-center pr-3">
+                        <button onClick={() => selectDiv(div.name)} className="flex-1 text-left px-4 py-2.5 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm"
+                              style={{ backgroundColor: divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length] }}
+                            />
+                            <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5 pl-5">{div.teamCount} teams · {div.poolCount} pools</p>
+                        </button>
+                        <div className="flex flex-col items-center flex-shrink-0" onClick={e => e.stopPropagation()}>
+                          <span className="text-[9px] text-slate-400 leading-none mb-0.5">gms</span>
+                          <input
+                            type="number" min="1" max="10"
+                            value={divGamesPerTeam[div.name] ?? '3'}
+                            onChange={e => setDivGamesPerTeam(prev => ({ ...prev, [div.name]: e.target.value }))}
+                            className="w-10 border border-slate-200 rounded text-center text-xs py-0.5 focus:outline-none focus:ring-1 focus:ring-sky-400 bg-white"
                           />
-                          <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
                         </div>
-                        <p className="text-xs text-slate-400 mt-0.5 pl-5">{div.teamCount} teams · {div.poolCount} pools</p>
-                      </button>
+                      </div>
 
                     </div>
                   ))}
@@ -275,17 +303,14 @@ if (loading) return (
               )}
             </div>
             {/* Bulk generator panel */}
-            <div className="border-t border-slate-200 px-4 py-4">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Bulk Generate</p>
-              <div className="flex items-center gap-2 mb-2.5">
-                <span className="text-xs text-slate-500 whitespace-nowrap">Games / team</span>
-                <input
-                  type="number" min="1" max="10"
-                  value={bulkGamesPerTeam}
-                  onChange={e => setBulkGamesPerTeam(e.target.value)}
-                  className="w-14 border border-slate-200 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-sky-400"
-                />
-              </div>
+            <div className="border-t border-slate-200 px-4 py-4 space-y-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bulk Generate</p>
+              <button
+                onClick={applySmartDefaults}
+                className="w-full border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium py-1.5 px-3 rounded-lg transition-colors"
+              >
+                🧠 Smart Defaults
+              </button>
               <button
                 onClick={generateAllDivisions}
                 disabled={generatingAll}
@@ -293,7 +318,7 @@ if (loading) return (
               >
                 {generatingAll ? 'Generating...' : '⚡ Generate All Divisions'}
               </button>
-              <p className="text-[10px] text-slate-400 mt-1.5 text-center">Divisions with pools only</p>
+              <p className="text-[10px] text-slate-400 text-center">Uses each division&apos;s gms setting</p>
             </div>
           </div>
 
