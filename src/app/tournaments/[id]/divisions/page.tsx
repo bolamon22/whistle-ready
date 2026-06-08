@@ -484,7 +484,7 @@ if (loading) return (
                 <div>
                   {divisions.map(div => (
                     <div key={div.name}
-                      className={`w-full border-b border-slate-100 last:border-b-0 transition-colors group ${activeDiv === div.name ? 'bg-sky-50 border-l-2 border-l-sky-500' : div.teamCount === 0 && div.gameCount === 0 ? 'bg-rose-50 hover:bg-rose-100' : 'hover:bg-slate-50'}`}>
+                      className={`w-full border-b border-slate-100 last:border-b-0 transition-colors group ${activeDiv === div.name ? 'bg-sky-50 border-l-2 border-l-sky-500' : div.teamCount === 0 ? 'bg-rose-50 hover:bg-rose-100' : 'hover:bg-slate-50'}`}>
                       {renamingDiv === div.name ? (
                         <div className="flex items-center gap-1 px-2 py-2" onClick={e => e.stopPropagation()}>
                           <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm ml-2"
