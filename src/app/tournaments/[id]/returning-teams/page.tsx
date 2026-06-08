@@ -4,7 +4,7 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 
-interface Tournament { id: string; name: string; startDate: string; endDate: string }
+interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string }
 interface Club {
   id: string; clubName: string; contactName: string; contactEmail: string
   numTeams: number; divisions: string[]; registered: boolean
@@ -123,7 +123,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   return (
     <div className="min-h-screen bg-slate-50 pb-16">
       <Toaster />
-      <TournamentNav id={params.id} name={thisTournament?.name ?? ''} />
+      <TournamentNav id={params.id} name={thisTournament?.name ?? ''} logoUrl={thisTournament?.logoUrl ?? ''} />
 
       <div className="max-w-4xl mx-auto px-6 pt-6">
         <div className="flex items-center justify-between mb-6">
