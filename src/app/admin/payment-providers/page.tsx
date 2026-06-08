@@ -55,7 +55,7 @@ const PROVIDERS = [
   },
 ]
 
-export default function PaymentProvidersPage() {
+function PaymentProvidersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -301,4 +301,9 @@ export default function PaymentProvidersPage() {
       </div>
     </div>
   )
+}
+
+import { Suspense } from 'react'
+export default function PaymentProvidersPageWrapper() {
+  return <Suspense fallback={<div className="p-8 text-slate-400 text-center">Loading…</div>}><PaymentProvidersPage /></Suspense>
 }
