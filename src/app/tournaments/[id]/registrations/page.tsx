@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import toast, { Toaster } from 'react-hot-toast'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
 
 interface RegisteredTeam {
   id: string; clubName: string; teamName: string; division: string
@@ -85,6 +87,84 @@ function downloadCSV(registrations: Registration[]) {
   const blob = new Blob([csv], { type: 'text/csv' })
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
   a.download = `registrations-${today()}.csv`; a.click()
+}
+
+
+const STRIPE_FEE_RATE = 0.029
+const STRIPE_FEE_FIXED = 0.30
+function calcFee(base: number) { return Math.round((base * STRIPE_FEE_RATE + STRIPE_FEE_FIXED) * 100) / 100 }
+
+interface CardFormProps {
+  base: number; registrationId: string; tournamentId: string
+  date: string; notes: string
+  onSuccess: () => void; onCancel: () => void
+}
+function CardPaymentForm({ base, registrationId, tournamentId, date, notes, onSuccess, onCancel }: CardFormProps) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [paying, setPaying] = useState(false)
+  const [err, setErr] = useState('')
+  const fee = calcFee(base)
+  const total = base + fee
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!stripe || !elements) return
+    setPaying(true); setErr('')
+    try {
+      // Create PaymentIntent
+      const res = await fetch('/api/stripe/create-team-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: total, tournamentName: '', clubName: '', registrationId }),
+      })
+      const { clientSecret, publishableKey, accountId, error } = await res.json()
+      if (error) throw new Error(error)
+
+      // Confirm card payment
+      const card = elements.getElement(CardElement)!
+      const { error: stripeErr, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: { card },
+      })
+      if (stripeErr) throw new Error(stripeErr.message)
+      if (paymentIntent?.status !== 'succeeded') throw new Error('Payment did not complete')
+
+      // Record payment
+      const recRes = await fetch('/api/registration-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationId, amount: base, method: 'credit_card', receivedAt: date, notes: notes ? `${notes} (fee: $${fee.toFixed(2)})` : `Processing fee: $${fee.toFixed(2)}` }),
+      })
+      if (!recRes.ok) throw new Error('Payment succeeded but failed to record')
+      toast.success('Card payment recorded!')
+      onSuccess()
+    } catch (e: any) {
+      setErr(e.message || 'Payment failed')
+    } finally { setPaying(false) }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm space-y-1">
+        <div className="flex justify-between text-gray-600"><span>Registration amount</span><span>${base.toFixed(2)}</span></div>
+        <div className="flex justify-between text-gray-500"><span>Processing fee (2.9% + $0.30)</span><span>+${fee.toFixed(2)}</span></div>
+        <div className="flex justify-between font-bold text-gray-900 border-t border-blue-200 pt-1"><span>Total charged</span><span>${total.toFixed(2)}</span></div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Card Details</label>
+        <div className="border border-gray-300 rounded-xl px-3 py-3">
+          <CardElement options={{ style: { base: { fontSize: '15px', color: '#1f2937', '::placeholder': { color: '#9ca3af' } } } }} />
+        </div>
+      </div>
+      {err && <p className="text-xs text-red-500">{err}</p>}
+      <div className="flex gap-3 pt-1">
+        <button type="submit" disabled={paying || !stripe} className="flex-1 bg-green-600 text-white rounded-xl py-2 text-sm font-semibold hover:bg-green-700 disabled:opacity-60">
+          {paying ? 'Processing…' : `Charge $${total.toFixed(2)}`}
+        </button>
+        <button type="button" onClick={onCancel} className="px-4 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+      </div>
+    </form>
+  )
 }
 
 export default function RegistrationsPage() {
@@ -168,6 +248,20 @@ export default function RegistrationsPage() {
   const [payDate, setPayDate] = useState(today())
   const [payNotes, setPayNotes] = useState('')
   const [addingPay, setAddingPay] = useState(false)
+  const [stripePromise, setStripePromise] = useState<any>(null)
+
+  // Load Stripe when credit_card selected
+  useEffect(() => {
+    if (payMethod === 'credit_card' && !stripePromise) {
+      fetch('/api/stripe/create-team-intent', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({amount:1,tournamentName:'',clubName:'',registrationId:''}) })
+        .then(r => r.json()).then(d => {
+          if (d.publishableKey) {
+            const sp = loadStripe(d.publishableKey, d.accountId ? { stripeAccount: d.accountId } : undefined)
+            setStripePromise(sp)
+          }
+        }).catch(() => {})
+    }
+  }, [payMethod])
 
   // Tabs & individual reg
   const [activeTab, setActiveTab] = useState<'team' | 'individual'>('team')
@@ -771,7 +865,7 @@ export default function RegistrationsPage() {
             <div className="absolute inset-0 bg-black/40" onClick={() => setPayingRegId(null)} />
             <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm z-10">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Record Payment</h2>
-              <form onSubmit={handleAddPayment} className="space-y-3">
+              <div className="space-y-3 mb-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Amount *</label>
                   <input required type="number" step="0.01" min="0" placeholder="0.00"
@@ -796,17 +890,40 @@ export default function RegistrationsPage() {
                     <input value={payCheck} onChange={e => setPayCheck(e.target.value)} className={inputCls} />
                   </div>
                 )}
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-                  <input value={payNotes} onChange={e => setPayNotes(e.target.value)} className={inputCls} />
-                </div>
-                <div className="flex gap-3 pt-1">
-                  <button type="submit" disabled={addingPay} className="flex-1 bg-green-600 text-white rounded-xl py-2 text-sm font-semibold hover:bg-green-700 disabled:opacity-60">
-                    {addingPay ? 'Saving...' : 'Record Payment'}
-                  </button>
-                  <button type="button" onClick={() => setPayingRegId(null)} className="px-4 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                </div>
-              </form>
+                {payMethod !== 'credit_card' && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                    <input value={payNotes} onChange={e => setPayNotes(e.target.value)} className={inputCls} />
+                  </div>
+                )}
+              </div>
+
+              {payMethod === 'credit_card' ? (
+                stripePromise ? (
+                  <Elements stripe={stripePromise}>
+                    <CardPaymentForm
+                      base={parseFloat(payAmount) || 0}
+                      registrationId={payingRegId}
+                      tournamentId={String(tournamentId)}
+                      date={payDate}
+                      notes={payNotes}
+                      onSuccess={() => { setPayingRegId(null); setPayAmount(''); load() }}
+                      onCancel={() => setPayingRegId(null)}
+                    />
+                  </Elements>
+                ) : (
+                  <div className="text-center py-4 text-sm text-gray-400">Loading Stripe…</div>
+                )
+              ) : (
+                <form onSubmit={handleAddPayment}>
+                  <div className="flex gap-3 pt-1">
+                    <button type="submit" disabled={addingPay} className="flex-1 bg-green-600 text-white rounded-xl py-2 text-sm font-semibold hover:bg-green-700 disabled:opacity-60">
+                      {addingPay ? 'Saving...' : 'Record Payment'}
+                    </button>
+                    <button type="button" onClick={() => setPayingRegId(null)} className="px-4 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}
