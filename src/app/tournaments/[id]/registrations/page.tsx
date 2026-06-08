@@ -868,8 +868,12 @@ export default function RegistrationsPage() {
               <div className="space-y-3 mb-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Amount *</label>
-                  <input required type="number" step="0.01" min="0" placeholder="0.00"
-                    value={payAmount} onChange={e => setPayAmount(e.target.value)} className={inputCls} />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
+                    <input required type="number" step="0.01" min="0" placeholder="0.00"
+                      value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                      className={`${inputCls} pl-7`} />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Date Received *</label>
