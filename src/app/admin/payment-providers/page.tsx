@@ -78,10 +78,15 @@ function PaymentProvidersPage() {
   }, [session, status])
 
   async function loadProviders() {
-    const res = await fetch('/api/payment-providers')
-    const data = await res.json()
-    if (Array.isArray(data)) setProviders(data)
-    setLoading(false)
+    try {
+      const res = await fetch('/api/payment-providers')
+      const data = await res.json()
+      if (Array.isArray(data)) setProviders(data)
+    } catch {
+      // Table may not exist yet — that's fine, show the page with the migration button
+    } finally {
+      setLoading(false)
+    }
   }
 
   function startEdit(providerKey: string) {
