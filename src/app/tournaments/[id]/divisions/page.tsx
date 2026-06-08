@@ -689,13 +689,11 @@ if (loading) return (
                                 </td>
                                 <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center gap-1">
-                                    {team.status === 'placeholder' && (
-                                      <button
-                                        onClick={() => { setEditingTeam(team); setTeamForm({ teamName: team.teamName, clubName: team.clubName, coachName: team.coachName, coachEmail: team.coachEmail, coachPhone: team.coachPhone }) }}
-                                        className="text-[11px] text-amber-600 hover:text-amber-800 border border-amber-200 hover:border-amber-400 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
-                                        ✏ Edit
-                                      </button>
-                                    )}
+                                    <button
+                                      onClick={() => { setEditingTeam(team); setTeamForm({ teamName: team.teamName, clubName: team.clubName, coachName: team.coachName, coachEmail: team.coachEmail, coachPhone: team.coachPhone }) }}
+                                      className={`text-[11px] border rounded px-1.5 py-0.5 transition-colors whitespace-nowrap ${team.status === 'placeholder' ? 'text-amber-600 hover:text-amber-800 border-amber-200 hover:border-amber-400' : 'text-slate-400 hover:text-slate-700 border-slate-200 hover:border-slate-400'}`}>
+                                      ✏ Edit
+                                    </button>
                                     <button
                                       onClick={() => { setMovingTeam(team); setMoveTarget('') }}
                                       className="text-[11px] text-slate-400 hover:text-sky-600 border border-slate-200 hover:border-sky-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
@@ -765,9 +763,11 @@ if (loading) return (
                     <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-bold text-slate-800">Edit Team</h3>
-                        <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
+                        {editingTeam?.status === 'placeholder' && (
+                          <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-500 mb-4">Fill in the details and confirm when ready.</p>
+                      <p className="text-xs text-slate-500 mb-4">{editingTeam?.status === 'placeholder' ? 'Fill in the details and confirm when ready.' : 'Update team details.'}</p>
                       <div className="space-y-3">
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Team Name <span className="text-red-500">*</span></label>
@@ -801,13 +801,15 @@ if (loading) return (
                         <button onClick={() => setEditingTeam(null)} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancel</button>
                         <div className="flex gap-2">
                           <button onClick={() => updateTeam(false)} disabled={savingTeam}
-                            className="text-sm border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
-                            Save
+                            className="text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                            {savingTeam ? 'Saving...' : 'Save'}
                           </button>
-                          <button onClick={() => updateTeam(true)} disabled={savingTeam}
-                            className="text-sm font-semibold bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
-                            ✓ Confirm Team
-                          </button>
+                          {editingTeam?.status === 'placeholder' && (
+                            <button onClick={() => updateTeam(true)} disabled={savingTeam}
+                              className="text-sm font-semibold bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                              ✓ Confirm Team
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
