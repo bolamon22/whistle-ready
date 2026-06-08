@@ -703,7 +703,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           <span className="text-slate-300">|</span>
           <span className="text-sm font-semibold text-slate-800">Scheduler</span>
           <span className="text-slate-300">|</span>
-          <Link href={`/tournaments/${params.id}/assignments`} className="text-xs text-blue-600 hover:text-blue-800 hover:underline">Assignments →</Link>
+          <Link href={`/tournaments/${params.id}`} className="text-xs text-blue-600 hover:text-blue-800 hover:underline">Assignments →</Link>
           <span className="text-xs text-slate-400">{games.length} · <span className="text-amber-600 font-medium">{unscheduled.length} left</span></span>
         </div>
         <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
