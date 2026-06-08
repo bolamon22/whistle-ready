@@ -622,38 +622,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       <TournamentNav id={params.id} />
       <Toaster position="top-right" />
 
-      {/* ── Draft/Publish status bar ── */}
-      <div className={`flex items-center gap-3 px-4 sm:px-6 py-1.5 text-xs flex-wrap border-b ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-        {!publishedAt ? (
-          <>
-            <span className="inline-flex items-center gap-1 font-semibold text-amber-700">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Draft — never published
-            </span>
-            <span className="text-amber-600 hidden sm:block">Schedule changes are only visible to admins until published.</span>
-          </>
-        ) : hasChanges ? (
-          <>
-            <span className="inline-flex items-center gap-1 font-semibold text-amber-700">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse" /> Draft — {diffChanges.total} unpublished change{diffChanges.total !== 1 ? 's' : ''}
-            </span>
-            <button onClick={() => setShowDiff(true)} className="text-amber-700 underline hover:text-amber-900">View diff</button>
-          </>
-        ) : (
-          <span className="inline-flex items-center gap-1 font-semibold text-green-700">
-            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Published
-            {publishedAt && <span className="font-normal text-green-600 ml-1">· {new Date(publishedAt).toLocaleString()}</span>}
-          </span>
-        )}
-        <button
-          onClick={publishSchedule}
-          disabled={publishing || !hasChanges}
-          className="ml-auto text-xs font-semibold px-3 py-1 rounded-lg border transition-colors disabled:opacity-40
-            bg-green-600 hover:bg-green-700 text-white border-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300"
-        >
-          {publishing ? 'Publishing…' : '🚀 Publish Schedule'}
-        </button>
-      </div>
-
       {/* ── Diff modal ── */}
       {showDiff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowDiff(false)}>
@@ -718,18 +686,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* ── Header ── */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <Link href={`/tournaments/${params.id}/divisions`} className="text-xs text-blue-600 hover:text-blue-800 hover:underline">← Divisions</Link>
-          </div>
-          <h1 className="text-lg font-semibold text-slate-900">Game Scheduler</h1>
-          <p className="text-sm text-slate-500">
-            {games.length} games · <span className="text-amber-600 font-medium">{unscheduled.length} unscheduled</span>
-          </p>
+      {/* ── Header (merged with publish status) ── */}
+      <div className={`border-b px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
+        <div className="flex items-center gap-2 mr-1">
+          <Link href={`/tournaments/${params.id}/divisions`} className="text-xs text-blue-600 hover:text-blue-800 hover:underline">← Divisions</Link>
+          <span className="text-slate-300">|</span>
+          <span className="text-sm font-semibold text-slate-800">Scheduler</span>
+          <span className="text-xs text-slate-400">{games.length} · <span className="text-amber-600 font-medium">{unscheduled.length} left</span></span>
         </div>
-        <div className="flex items-center gap-3 text-sm flex-wrap">
+        <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
           <label className="text-slate-500 text-xs">Increment</label>
           <select value={increment} onChange={e => setIncrement(Number(e.target.value))}
             className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white">
@@ -765,6 +730,32 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               {unscheduling ? 'Unscheduling…' : '🗑 Unschedule All'}
             </button>
           )}
+          <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+            {!publishedAt ? (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /> Draft
+              </span>
+            ) : hasChanges ? (
+              <>
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" /> {diffChanges.total} changes
+                </span>
+                <button onClick={() => setShowDiff(true)} className="text-xs text-amber-700 underline hover:text-amber-900">diff</button>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Published
+              </span>
+            )}
+            <button
+              onClick={publishSchedule}
+              disabled={publishing || !hasChanges}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40
+                bg-green-600 hover:bg-green-700 text-white border-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 whitespace-nowrap"
+            >
+              {publishing ? 'Publishing…' : '🚀 Publish'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1261,7 +1252,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                               <span className="absolute bottom-0.5 right-0.5 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={conflictMsgs.get(game.id) ?? 'Same-time conflict'}>⚠</span>
                             )}
                             {!conflictMsgs.has(game.id) && backToBackMsgs.has(game.id) && (
-                              <span className="absolute top-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded px-1 leading-tight shadow" title={backToBackMsgs.get(game.id) ?? 'Back-to-back game'}>⇔</span>
+                              <span className="absolute bottom-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={backToBackMsgs.get(game.id) ?? 'Back-to-back game'}>⇔</span>
                             )}
                             {!conflictMsgs.has(game.id) && !backToBackMsgs.has(game.id) && longGapMsgs.has(game.id) && (
                               <span className="absolute bottom-0.5 right-0.5 bg-blue-400 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={longGapMsgs.get(game.id) ?? 'Long gap'}>⏱</span>
