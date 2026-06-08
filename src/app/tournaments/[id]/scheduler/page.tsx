@@ -446,6 +446,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const divisions = [...new Set(games.map(g => g.division))].sort()
+  const divGameCounts = divisions.reduce((acc, d) => {
+    acc[d] = games.filter(g => g.division === d).length
+    return acc
+  }, {} as Record<string, number>)
 
   // ── Draft diff vs published snapshot ────────────────────────────────────
   const diffChanges = (() => {
@@ -789,7 +793,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             onChange={e => { setFilterDiv(e.target.value); setFilterPool('__all__'); setFilterTeam('__all__') }}
             className={selectCls}>
             <option value="__all__">All Divisions</option>
-            {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+            {divisions.map(d => <option key={d} value={d}>{d} ({divGameCounts[d] ?? 0})</option>)}
           </select>
 
           <label className="text-slate-500 text-xs">Pool:</label>
@@ -989,7 +993,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               onChange={e => { setFilterDiv(e.target.value); setFilterPool('__all__'); setFilterTeam('__all__') }}
               className="w-full text-xs bg-slate-800 text-slate-200 border border-slate-600 rounded px-2 py-1 mb-1">
               <option value="__all__">All Divisions</option>
-              {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+              {divisions.map(d => <option key={d} value={d}>{d} ({divGameCounts[d] ?? 0})</option>)}
             </select>
             <select value={filterPool}
               onChange={e => { setFilterPool(e.target.value); setFilterTeam('__all__') }}
@@ -1091,7 +1095,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           onChange={e => { setGridDiv(e.target.value); setGridPool('__all__'); setGridTeam('__all__') }}
           className={gridSelectCls}>
           <option value="__all__">All Divisions</option>
-          {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+          {divisions.map(d => <option key={d} value={d}>{d} ({divGameCounts[d] ?? 0})</option>)}
         </select>
 
         <label className="text-slate-500 text-xs">Pool:</label>
