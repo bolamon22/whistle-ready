@@ -160,8 +160,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       data: { registrationDivisions: JSON.stringify(regDivs.filter(d => d !== name)) },
     })
 
-    // Delete pools for this division
+    // Delete pools and games for this division
     await prisma.pool.deleteMany({ where: { tournamentId: params.id, division: name } }).catch(() => {})
+    await prisma.game.deleteMany({ where: { tournamentId: params.id, division: name } }).catch(() => {})
 
     return NextResponse.json({ ok: true })
   } catch (e) {
