@@ -86,6 +86,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [rawVenues, setRawVenues]         = useState<{name:string,fields:string[]}[]>([])
   const [addingField, setAddingField]     = useState(false)
   const [newFieldName, setNewFieldName]   = useState('')
+  const [hideEmptySlots,  setHideEmptySlots]  = useState(false)
+  const [hiddenFields,    setHiddenFields]    = useState<Set<string>>(new Set())
+  const [showFieldPicker, setShowFieldPicker] = useState(false)
   const [dates, setDates]               = useState<string[]>([])
   const [activeDate, setActiveDate]     = useState('')
   const [increment, setIncrement]       = useState(30)
@@ -507,7 +510,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   })
 
   const dayGames = games.filter(g => g.date === activeDate && g.startTime && g.location && !scratchPad.includes(g.id))
-  const slots = makeSlots(startH, endH, increment)
+  const allSlots = makeSlots(startH, endH, increment)
+  const slots = hideEmptySlots
+    ? allSlots.filter(s => dayGames.some(g => g.startTime === s))
+    : allSlots
+  const visibleFields = fields.filter(f => !hiddenFields.has(f.fullName))
 
   // Slots where either team of the dragged game is already scheduled today
   const busySlots = (() => {
@@ -611,7 +618,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   )
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
       <TournamentNav id={params.id} />
       <Toaster position="top-right" />
 
@@ -836,8 +843,42 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             </button>
           )}
 
+          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+            <button
+              onClick={() => setHideEmptySlots(v => !v)}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hideEmptySlots ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
+              title="Hide time rows with no games">
+              ⏱ Compact
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowFieldPicker(v => !v)}
+                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hiddenFields.size > 0 ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
+                title="Show/hide field columns">
+                🏟 Fields{hiddenFields.size > 0 ? ` (${visibleFields.length}/${fields.length})` : ''}
+              </button>
+              {showFieldPicker && (
+                <div className="absolute right-0 top-8 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-3 min-w-[180px]" onClick={e => e.stopPropagation()}>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Show / Hide Fields</p>
+                  {fields.map(f => (
+                    <label key={f.fullName} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-slate-50 rounded px-1">
+                      <input type="checkbox" checked={!hiddenFields.has(f.fullName)}
+                        onChange={() => setHiddenFields(prev => {
+                          const next = new Set(prev)
+                          if (next.has(f.fullName)) next.delete(f.fullName); else next.add(f.fullName)
+                          return next
+                        })}
+                        className="rounded accent-blue-600" />
+                      <span className="text-xs text-slate-700">{f.fieldName}</span>
+                    </label>
+                  ))}
+                  {hiddenFields.size > 0 && <button onClick={() => setHiddenFields(new Set())} className="mt-2 text-[10px] text-blue-600 hover:underline block">Show all</button>}
+                </div>
+              )}
+            </div>
+          </div>
           {!swapMode && (
-            <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest whitespace-nowrap hidden sm:block">Scratch</span>
               <div
                 className="flex gap-1.5"
@@ -946,7 +987,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       </div>}
 
       {/* ── Side staging wrapper ── */}
-      <div className={sideStage ? 'flex flex-1 overflow-hidden' : 'contents'}>
+      <div className="flex flex-1 overflow-hidden">
       {sideStage && (
         <div className="w-56 bg-slate-900 border-r border-slate-700 flex flex-col flex-shrink-0 overflow-hidden">
           {/* Sidebar header + filters */}
@@ -1050,7 +1091,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
-      <div className={sideStage ? 'flex flex-col flex-1 min-w-0 overflow-hidden' : 'contents'}>
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
       {/* ── Grid filter row ── */}
       <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center gap-2 flex-wrap flex-shrink-0">
@@ -1146,13 +1187,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
-          <table className="border-collapse" style={{ minWidth: `${80 + fields.length * 160}px` }}>
+          <table className="border-collapse" style={{ minWidth: `${80 + visibleFields.length * 160}px` }}>
             <thead className="sticky top-0 z-20">
               <tr>
                 <th className="sticky left-0 z-30 w-20 bg-slate-100 border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 text-center">
                   Time
                 </th>
-                {fields.map(f => (
+                {visibleFields.map(f => (
                   <th key={f.fullName} className="bg-slate-100 border border-slate-200 px-3 py-2 text-center min-w-[155px] group relative">
                     <div className="text-[10px] text-slate-400 font-normal">{f.venueName}</div>
                     <div className="text-xs font-semibold text-slate-700">{f.fieldName}</div>
@@ -1189,7 +1230,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   <td className="sticky left-0 z-10 bg-white border border-slate-200 px-2 py-1 text-xs text-slate-500 font-medium text-center whitespace-nowrap w-20">
                     {fmtTime(slot)}
                   </td>
-                  {fields.map(f => {
+                  {visibleFields.map(f => {
                     const cellKey = `${slot}|${f.fullName}`
                     const game = cellMap[cellKey]
                     const isOver = overCell === cellKey
