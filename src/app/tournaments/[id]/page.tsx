@@ -96,7 +96,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [clearConfirm,setClearConfirm]=useState('')
   const [clearName,setClearName]=useState('')
   const [clearSaving,setClearSaving]=useState(false)
-  const [clearCategory,setClearCategory]=useState<'girls-refs'|'boys-refs'|'scorekeepers'|null>(null)
+  const [clearCategories,setClearCategories]=useState<Set<string>>(new Set())
 
   // View mode
   const [viewMode,setViewMode]=useState<'grid'|'list'|'division'|'staff'>('grid')
@@ -430,35 +430,33 @@ export default function GridPage({ params }: { params:{id:string} }) {
               <h2 className="text-lg font-bold text-red-800">Clear Assignments</h2>
               <p className="text-sm text-red-600 mt-1">For <strong>{formatDate(activeDay)}</strong>. This cannot be undone.</p>
             </div>
-            {!clearCategory?(
-              <div className="px-6 py-5 space-y-3">
+            <div className="px-6 py-5 space-y-4">
+              <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">What do you want to clear?</p>
-                <button className="w-full text-left px-4 py-3 rounded-xl border border-pink-200 hover:bg-pink-50 text-sm font-medium text-pink-800 transition-colors" onClick={()=>setClearCategory('girls-refs')}>👧 Girls Referees</button>
-                <button className="w-full text-left px-4 py-3 rounded-xl border border-sky-200 hover:bg-sky-50 text-sm font-medium text-sky-800 transition-colors" onClick={()=>setClearCategory('boys-refs')}>👦 Boys Referees</button>
-                <button className="w-full text-left px-4 py-3 rounded-xl border border-emerald-200 hover:bg-emerald-50 text-sm font-medium text-emerald-800 transition-colors" onClick={()=>setClearCategory('scorekeepers')}>📋 Score Keepers</button>
-                <button className="btn-secondary w-full mt-1" onClick={()=>{setShowClear(false);setClearConfirm('');setClearName('');setClearCategory(null)}}>Cancel</button>
+                {([['girls-refs','👧 Girls Referees','pink'],['boys-refs','👦 Boys Referees','sky'],['scorekeepers','📋 Score Keepers','emerald']] as const).map(([val,label,color])=>(
+                  <label key={val} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${clearCategories.has(val)?`border-${color}-400 bg-${color}-50`:`border-slate-200 hover:bg-slate-50`}`}>
+                    <input type="checkbox" className="w-4 h-4 accent-red-600" checked={clearCategories.has(val)} onChange={e=>{const s=new Set(clearCategories);e.target.checked?s.add(val):s.delete(val);setClearCategories(s)}}/>
+                    <span className="text-sm font-medium text-slate-800">{label}</span>
+                  </label>
+                ))}
               </div>
-            ):(
-              <div className="px-6 py-5 space-y-4">
-                <p className="text-sm text-slate-600">Clearing: <strong className="text-slate-800">{clearCategory==='girls-refs'?'Girls Referees':clearCategory==='boys-refs'?'Boys Referees':'Score Keepers'}</strong></p>
-                <div>
-                  <label className="label">Your name (for the audit log)</label>
-                  <input className="input" placeholder="e.g. John Smith" value={clearName} onChange={e=>setClearName(e.target.value)}/>
-                </div>
-                <div>
-                  <label className="label">Type <strong>DELETE</strong> to confirm</label>
-                  <input className="input font-mono" placeholder="DELETE" value={clearConfirm} onChange={e=>setClearConfirm(e.target.value)}/>
-                </div>
-                <div className="flex gap-3">
-                  <button className="btn-secondary flex-1" onClick={()=>{setClearCategory(null);setClearConfirm('');setClearName('')}}>← Back</button>
-                  <button
-                    className="flex-1 px-4 py-2 rounded-xl font-semibold text-sm transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                    onClick={clearAssignments}
-                    disabled={clearConfirm!=='DELETE'||!clearName.trim()||clearSaving}
-                  >{clearSaving?'Clearing…':'Clear'}</button>
-                </div>
+              <div>
+                <label className="label">Your name (for the audit log)</label>
+                <input className="input" placeholder="e.g. John Smith" value={clearName} onChange={e=>setClearName(e.target.value)}/>
               </div>
-            )}
+              <div>
+                <label className="label">Type <strong>DELETE</strong> to confirm</label>
+                <input className="input font-mono" placeholder="DELETE" value={clearConfirm} onChange={e=>setClearConfirm(e.target.value)}/>
+              </div>
+              <div className="flex gap-3">
+                <button className="btn-secondary flex-1" onClick={()=>{setShowClear(false);setClearConfirm('');setClearName('');setClearCategories(new Set())}}>Cancel</button>
+                <button
+                  className="flex-1 px-4 py-2 rounded-xl font-semibold text-sm transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={clearAssignments}
+                  disabled={clearConfirm!=='DELETE'||!clearName.trim()||clearCategories.size===0||clearSaving}
+                >{clearSaving?'Clearing…':'Clear'}</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -557,7 +555,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         )}
         <div className="flex-1" />
         {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="btn-secondary btn-sm text-purple-600 border-purple-200 hover:bg-purple-50">⚡ Auto-Assign</button>}
-        {dayGames.length > 0 && <button onClick={() => { setShowClear(true); setClearConfirm(''); setClearName('') }} className="btn-secondary btn-sm text-red-500 border-red-200 hover:bg-red-50">🗑 Clear</button>}
+        {dayGames.length > 0 && <button onClick={() => { setShowClear(true); setClearConfirm(''); setClearName(''); setClearCategories(new Set()) }} className="btn-secondary btn-sm text-red-500 border-red-200 hover:bg-red-50">🗑 Clear</button>}
         <button onClick={openAddGame} className="btn-secondary btn-sm">+ Game</button>
         <label className="btn-primary btn-sm cursor-pointer">↑ Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>
       </div>
