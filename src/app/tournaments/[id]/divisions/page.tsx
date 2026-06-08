@@ -52,6 +52,7 @@ export default function DivisionsPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [divGamesPerTeam, setDivGamesPerTeam] = useState<Record<string, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
+  const [guarantee, setGuarantee] = useState('4')
 
   // Swap teams state
   const [swapA, setSwapA] = useState<string | null>(null)
@@ -72,11 +73,14 @@ export default function DivisionsPage() {
       setDivColors(colors)
       setTournament(t)
       setDivisions(d)
-      // Smart defaults: 5 teams→4 games, even teams→3, odd teams→2
+      // Smart defaults based on guarantee
+      const g = 4  // default guarantee
       const defaults: Record<string, string> = {}
       d.forEach((div: Division) => {
         const n = div.teamCount
-        defaults[div.name] = n === 5 ? '4' : n % 2 === 0 ? '3' : '2'
+        if (n <= 1) { defaults[div.name] = '1'; return }
+        if (n - 1 <= g) { defaults[div.name] = String(n - 1); return }
+        defaults[div.name] = n % 2 === 0 ? String(Math.min(n - 1, g - 1)) : String(Math.min(n - 1, g - 2))
       })
       setDivGamesPerTeam(defaults)
       if (d.length > 0) selectDiv(d[0].name)
@@ -185,36 +189,82 @@ export default function DivisionsPage() {
     toast.success(`${data.generated} games created — each team plays ${gamesPerTeam} game${Number(gamesPerTeam) !== 1 ? 's' : ''}`)
   }
 
+  function smartPoolGames(teamCount: number, g: number): number {
+    if (teamCount <= 1) return 1
+    if (teamCount - 1 <= g) return teamCount - 1  // small enough for full round-robin
+    if (teamCount % 2 === 0) return Math.min(teamCount - 1, g - 1)  // even: 1 bracket round
+    return Math.min(teamCount - 1, g - 2)  // odd: 2 bracket rounds
+  }
+
   function applySmartDefaults() {
+    const g = Number(guarantee) || 4
     const updated: Record<string, string> = {}
     divisions.forEach(div => {
-      const n = div.teamCount
-      updated[div.name] = n === 5 ? '4' : n % 2 === 0 ? '3' : '2'
+      updated[div.name] = String(smartPoolGames(div.teamCount, g))
     })
     setDivGamesPerTeam(updated)
     toast.success('Smart defaults applied')
   }
 
   async function generateAllDivisions() {
-    const divisionsWithPools = divisions.filter(d => d.poolCount > 0)
-    if (divisionsWithPools.length === 0) { toast.error('No divisions have pools yet'); return }
+    if (divisions.length === 0) { toast.error('No divisions found'); return }
     setGeneratingAll(true)
     let totalGames = 0
-    let skipped = 0
-    for (const div of divisionsWithPools) {
+    let autoPooled = 0
+
+    for (const div of divisions) {
+      if (div.teamCount === 0) continue
+
+      // Auto-create Pool A and assign all teams if no pools exist
+      let poolCount = div.poolCount
+      if (poolCount === 0) {
+        // Fetch teams for this division
+        const tRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/teams`)
+        const tData = await tRes.json()
+        const teamNames: string[] = (tData.teams ?? []).map((t: { teamName: string }) => t.teamName)
+        if (teamNames.length === 0) continue
+
+        // Create Pool A
+        const pRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'Pool A' }),
+        })
+        const pool = await pRes.json()
+        if (!pRes.ok) continue
+
+        // Assign all teams to Pool A
+        await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ poolId: pool.id, teamNames }),
+        })
+        poolCount = 1
+        autoPooled++
+        setDivisions(d => d.map(x => x.name === div.name ? { ...x, poolCount: 1 } : x))
+      }
+
+      // Generate games
       const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[div.name] ?? 3), clearExisting: true }),
       })
       const data = await res.json()
       if (res.ok) totalGames += data.generated ?? 0
-      else skipped++
     }
-    // reload current division pool games
-    if (activeDiv) await loadPoolGames(activeDiv)
+
+    // reload current division data
+    if (activeDiv) {
+      const [teamData, gameData] = await Promise.all([
+        fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`).then(r => r.json()),
+        fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`).then(r => r.json()),
+      ])
+      setTeams(teamData.teams ?? [])
+      setPools(teamData.pools ?? [])
+      setPoolGames(Array.isArray(gameData) ? gameData : [])
+    }
+
     setGeneratingAll(false)
-    if (skipped > 0) toast.success(`${totalGames} games created across ${divisionsWithPools.length - skipped} divisions (${skipped} skipped)`)
-    else toast.success(`${totalGames} pool games generated across ${divisionsWithPools.length} divisions`)
+    const poolMsg = autoPooled > 0 ? ` (auto-created pools for ${autoPooled} divisions)` : ''
+    toast.success(`${totalGames} pool games generated${poolMsg}`)
   }
 
   async function renumberGames() {
@@ -303,8 +353,17 @@ if (loading) return (
               )}
             </div>
             {/* Bulk generator panel */}
-            <div className="border-t border-slate-200 px-4 py-4 space-y-2">
+            <div className="border-t border-slate-200 px-4 py-4 space-y-2.5">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bulk Generate</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 whitespace-nowrap">Game guarantee</span>
+                <input
+                  type="number" min="1" max="12"
+                  value={guarantee}
+                  onChange={e => setGuarantee(e.target.value)}
+                  className="w-12 border border-slate-200 rounded text-center text-xs py-0.5 focus:outline-none focus:ring-1 focus:ring-sky-400 bg-white"
+                />
+              </div>
               <button
                 onClick={applySmartDefaults}
                 className="w-full border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium py-1.5 px-3 rounded-lg transition-colors"
@@ -318,7 +377,7 @@ if (loading) return (
               >
                 {generatingAll ? 'Generating...' : '⚡ Generate All Divisions'}
               </button>
-              <p className="text-[10px] text-slate-400 text-center">Uses each division&apos;s gms setting</p>
+              <p className="text-[10px] text-slate-400 text-center leading-tight">Auto-creates Pool A if needed</p>
             </div>
           </div>
 
