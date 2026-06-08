@@ -372,6 +372,14 @@ export default function DivisionsPage() {
     let totalGames = 0
     let autoPooled = 0
 
+    // Clean up stale games for 0-team divisions
+    for (const div of divisions) {
+      if (div.teamCount === 0 && div.gameCount > 0) {
+        await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, { method: 'DELETE' })
+        setDivisions(d => d.map(x => x.name === div.name ? { ...x, gameCount: 0 } : x))
+      }
+    }
+
     for (const div of divisions) {
       if (div.teamCount === 0) continue
 
