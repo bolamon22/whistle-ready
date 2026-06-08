@@ -83,6 +83,9 @@ function gameType(g: Game) {
 export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [games, setGames]               = useState<Game[]>([])
   const [fields, setFields]             = useState<Field[]>([])
+  const [rawVenues, setRawVenues]         = useState<{name:string,fields:string[]}[]>([])
+  const [addingField, setAddingField]     = useState(false)
+  const [newFieldName, setNewFieldName]   = useState('')
   const [dates, setDates]               = useState<string[]>([])
   const [activeDate, setActiveDate]     = useState('')
   const [increment, setIncrement]       = useState(30)
@@ -163,6 +166,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           flat.push({ venueName: v.name, fieldName, fullName: `${v.name} - ${fieldName}` })
         })
       })
+      setRawVenues(venueList.map(v => ({ name: v.name, fields: (Array.isArray(v.fields) ? v.fields : []).map((f: any) => typeof f === 'string' ? f : (f.name ?? String(f))) })))
       setFields(flat)
 
       const gameDates = [...new Set(allGames.map(g => g.date).filter(Boolean))].sort() as string[]
@@ -210,6 +214,41 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       return allSorted
     })
   }, [games])
+
+  async function saveVenues(venues: {name:string,fields:string[]}[]) {
+    setRawVenues(venues)
+    const flat: Field[] = []
+    venues.forEach(v => v.fields.forEach(f => flat.push({ venueName: v.name, fieldName: f, fullName: `${v.name} - ${f}` })))
+    setFields(flat)
+    await fetch(`/api/venues/${params.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venues, defaultAvailability: [] }),
+    })
+  }
+
+  async function addField() {
+    const name = newFieldName.trim()
+    if (!name) return
+    const updated = rawVenues.length > 0
+      ? rawVenues.map((v, i) => i === 0 ? { ...v, fields: [...v.fields, name] } : v)
+      : [{ name: 'Fields', fields: [name] }]
+    setAddingField(false)
+    setNewFieldName('')
+    await saveVenues(updated)
+    toast.success(`${name} added`)
+  }
+
+  async function removeField(fullName: string) {
+    const field = fields.find(f => f.fullName === fullName)
+    if (!field) return
+    const hasGames = games.some(g => g.location === fullName && g.date === activeDate)
+    if (hasGames && !confirm(`${field.fieldName} has games scheduled today. Remove anyway?`)) return
+    const updated = rawVenues.map(v =>
+      v.name === field.venueName ? { ...v, fields: v.fields.filter(f => f !== field.fieldName) } : v
+    ).filter(v => v.fields.length > 0)
+    await saveVenues(updated)
+    toast.success(`${field.fieldName} removed`)
+  }
 
   async function patchGame(gameId: string, patch: Partial<Pick<Game, 'date' | 'startTime' | 'location'>>) {
     setSaving(true)
@@ -1085,12 +1124,25 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
       {/* ── Grid ── */}
       {fields.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center flex-col gap-3 text-slate-400 py-20">
+        <div className="flex-1 flex items-center justify-center flex-col gap-4 text-slate-400 py-20">
           <div className="text-4xl">🏟️</div>
           <p className="text-base font-medium text-slate-600">No fields configured yet</p>
-          <p className="text-sm">Add venues and fields in the
-            <a href={`/tournaments/${params.id}/builder`} className="text-blue-500 hover:underline ml-1">Builder</a>
-          </p>
+          {addingField ? (
+            <div className="flex items-center gap-2">
+              <input autoFocus type="text" placeholder="Field name…" value={newFieldName}
+                onChange={e => setNewFieldName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addField(); if (e.key === 'Escape') { setAddingField(false); setNewFieldName('') } }}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" />
+              <button onClick={addField} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">Add</button>
+              <button onClick={() => { setAddingField(false); setNewFieldName('') }} className="text-slate-400 hover:text-slate-600 text-xs px-2">Cancel</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button onClick={() => setAddingField(true)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">+ Add Field</button>
+              <span className="text-slate-400 text-xs">or add in</span>
+              <a href={`/tournaments/${params.id}/builder`} className="text-blue-500 hover:underline text-sm">Builder →</a>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
@@ -1101,11 +1153,34 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   Time
                 </th>
                 {fields.map(f => (
-                  <th key={f.fullName} className="bg-slate-100 border border-slate-200 px-3 py-2 text-center min-w-[155px]">
+                  <th key={f.fullName} className="bg-slate-100 border border-slate-200 px-3 py-2 text-center min-w-[155px] group relative">
                     <div className="text-[10px] text-slate-400 font-normal">{f.venueName}</div>
                     <div className="text-xs font-semibold text-slate-700">{f.fieldName}</div>
+                    <button
+                      onClick={() => removeField(f.fullName)}
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 text-xs leading-none transition-opacity"
+                      title="Remove field">×</button>
                   </th>
                 ))}
+                <th className="bg-slate-100 border border-slate-200 px-2 py-2 text-center w-24">
+                  {addingField ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <input autoFocus type="text" placeholder="Name…" value={newFieldName}
+                        onChange={e => setNewFieldName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addField(); if (e.key === 'Escape') { setAddingField(false); setNewFieldName('') } }}
+                        className="border border-slate-300 rounded px-1.5 py-0.5 text-xs w-20 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <div className="flex gap-1">
+                        <button onClick={addField} className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded">Add</button>
+                        <button onClick={() => { setAddingField(false); setNewFieldName('') }} className="text-slate-400 text-[10px] px-1">✕</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setAddingField(true)}
+                      className="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors whitespace-nowrap">
+                      + Field
+                    </button>
+                  )}
+                </th>
               </tr>
             </thead>
             <tbody>
