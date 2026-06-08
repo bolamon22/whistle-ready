@@ -50,6 +50,8 @@ export default function DivisionsPage() {
   const [gamesPerTeam, setGamesPerTeam] = useState('2')
   const [renumbering, setRenumbering] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [bulkGamesPerTeam, setBulkGamesPerTeam] = useState('3')
+  const [generatingAll, setGeneratingAll] = useState(false)
 
   // Swap teams state
   const [swapA, setSwapA] = useState<string | null>(null)
@@ -176,6 +178,28 @@ export default function DivisionsPage() {
     toast.success(`${data.generated} games created — each team plays ${gamesPerTeam} game${Number(gamesPerTeam) !== 1 ? 's' : ''}`)
   }
 
+  async function generateAllDivisions() {
+    const divisionsWithPools = divisions.filter(d => d.poolCount > 0)
+    if (divisionsWithPools.length === 0) { toast.error('No divisions have pools yet'); return }
+    setGeneratingAll(true)
+    let totalGames = 0
+    let skipped = 0
+    for (const div of divisionsWithPools) {
+      const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(bulkGamesPerTeam), clearExisting: true }),
+      })
+      const data = await res.json()
+      if (res.ok) totalGames += data.generated ?? 0
+      else skipped++
+    }
+    // reload current division pool games
+    if (activeDiv) await loadPoolGames(activeDiv)
+    setGeneratingAll(false)
+    if (skipped > 0) toast.success(`${totalGames} games created across ${divisionsWithPools.length - skipped} divisions (${skipped} skipped)`)
+    else toast.success(`${totalGames} pool games generated across ${divisionsWithPools.length} divisions`)
+  }
+
   async function renumberGames() {
     if (!activeDiv) return
     setRenumbering(true)
@@ -244,23 +268,32 @@ if (loading) return (
                         </div>
                         <p className="text-xs text-slate-400 mt-0.5 pl-5">{div.teamCount} teams · {div.poolCount} pools</p>
                       </button>
-                      {activeDiv === div.name && (
-                        <div className="px-4 pb-2.5 flex items-center gap-2">
-                          <span className="text-xs text-slate-400">Color:</span>
-                          <input
-                            type="color"
-                            value={divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length]}
-                            onChange={e => saveDivColor(div.name, e.target.value)}
-                            className="w-7 h-7 rounded cursor-pointer border border-slate-200 p-0.5"
-                            title="Division color"
-                          />
-                          <span className="text-xs text-slate-400">{divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length]}</span>
-                        </div>
-                      )}
+
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+            {/* Bulk generator panel */}
+            <div className="border-t border-slate-200 px-4 py-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Bulk Generate</p>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="text-xs text-slate-500 whitespace-nowrap">Games / team</span>
+                <input
+                  type="number" min="1" max="10"
+                  value={bulkGamesPerTeam}
+                  onChange={e => setBulkGamesPerTeam(e.target.value)}
+                  className="w-14 border border-slate-200 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-sky-400"
+                />
+              </div>
+              <button
+                onClick={generateAllDivisions}
+                disabled={generatingAll}
+                className="w-full bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
+              >
+                {generatingAll ? 'Generating...' : '⚡ Generate All Divisions'}
+              </button>
+              <p className="text-[10px] text-slate-400 mt-1.5 text-center">Divisions with pools only</p>
             </div>
           </div>
 
@@ -289,9 +322,27 @@ if (loading) return (
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                     {/* Header */}
                     <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
-                      <div>
-                        <h2 className="font-bold text-slate-800">Teams ({teams.length})</h2>
-                        <p className="text-xs text-slate-400 mt-0.5">{activeDiv}</p>
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <h2 className="font-bold text-slate-800">Teams ({teams.length})</h2>
+                          <p className="text-xs text-slate-400 mt-0.5">{activeDiv}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 ml-1">
+                          <label className="relative cursor-pointer" title="Division color">
+                            <span
+                              className="block w-6 h-6 rounded-full border-2 border-white shadow ring-1 ring-slate-200 cursor-pointer"
+                              style={{ backgroundColor: divColors[activeDiv] || PALETTE[divisions.findIndex(d => d.name === activeDiv) % PALETTE.length] }}
+                            />
+                            <input
+                              type="color"
+                              value={divColors[activeDiv] || PALETTE[divisions.findIndex(d => d.name === activeDiv) % PALETTE.length]}
+                              onChange={e => saveDivColor(activeDiv, e.target.value)}
+                              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                              title="Change division color"
+                            />
+                          </label>
+                          <span className="text-[11px] text-slate-400 font-mono">{divColors[activeDiv] || PALETTE[divisions.findIndex(d => d.name === activeDiv) % PALETTE.length]}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {swapA && swapB ? (
