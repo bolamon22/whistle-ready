@@ -1190,7 +1190,7 @@ export default function RegistrationsPage() {
 
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <span className="hidden sm:block bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-full">{reg.teams.length} team{reg.teams.length !== 1 ? 's' : ''}</span>
-                      <button onClick={() => { setPayingRegId(reg.id); setPayAmount(''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod('check') }}
+                      <button onClick={() => { setPayingRegId(reg.id); const _bal1=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal1>0?String(_bal1):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
                         className="text-xs text-green-600 border border-green-300 hover:border-green-500 px-2.5 py-1 rounded-lg">+ Payment</button>
                       <button onClick={() => openEdit(reg)} className="text-xs text-blue-600 border border-blue-200 hover:border-blue-400 px-2.5 py-1 rounded-lg">Edit</button>
                       <button onClick={() => handleDelete(reg.id, reg.clubName || reg.clubContact)} className="text-xs text-red-500 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg">Del</button>
@@ -1238,7 +1238,7 @@ export default function RegistrationsPage() {
                       <div className="bg-white border border-gray-200 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-sm font-semibold text-gray-700">Invoice & Payments</h3>
-                          <button onClick={() => { setPayingRegId(reg.id); setPayAmount(''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod('check') }}
+                          <button onClick={() => { setPayingRegId(reg.id); const _bal2=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal2>0?String(_bal2):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
                             className="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">+ Record Payment</button>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm mb-4">
