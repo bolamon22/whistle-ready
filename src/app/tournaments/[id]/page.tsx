@@ -487,6 +487,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
               className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">
               ← Dashboard
             </Link>
+            <Link href={`/tournaments/${params.id}/scheduler`}
+              className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">
+              📅 Scheduler
+            </Link>
             {/* Staff assignment counts */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5">
               <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Assigned</span>
