@@ -67,7 +67,7 @@ export default function FinancialsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'summary' | 'registrations' | 'staff' | 'other'>('summary')
+  const [activeTab, setActiveTab] = useState<'summary' | 'registrations' | 'other'>('summary')
 
   const load = () => {
     Promise.all([
@@ -146,7 +146,6 @@ export default function FinancialsPage() {
   const tabs = [
     { key: 'summary',       label: '📊 P&L Summary' },
     { key: 'registrations', label: `📋 Team Fees (${registrations.length + individualRegs.length})` },
-    { key: 'staff',         label: `👥 Staff Pay (${staffSummary.length})` },
     { key: 'other',         label: `💰 Other (${transactions.length})` },
   ] as const
 
@@ -185,6 +184,10 @@ export default function FinancialsPage() {
               {tab.label}
             </button>
           ))}
+          <Link href={`/tournaments/${tournamentId}/pay-summary`}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-100">
+            👥 Staff Pay ({staffSummary.length})
+          </Link>
         </div>
 
         {loading ? <div className="text-center py-16 text-gray-400">Loading…</div> : <>
@@ -402,61 +405,6 @@ export default function FinancialsPage() {
           </div>
         )}
 
-        {/* ── STAFF PAY TAB ── */}
-        {activeTab === 'staff' && (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-gray-800">Staff Pay</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{staffSummary.length} staff members</p>
-              </div>
-              <div className="text-right">
-                <div className="text-xl font-bold text-red-500">{fmt(staffOwed)} <span className="text-sm font-normal text-gray-400">total owed</span></div>
-                <div className="text-sm text-gray-500">{fmt(staffPaid)} paid · <span className="text-amber-600">{fmt(staffUnpaid)} remaining</span></div>
-              </div>
-            </div>
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Staff Member</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Method</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Games</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Pay</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {staffSummary.map(ws => {
-                  const isPaid = staffPaidIds.has(ws.worker.id)
-                  return (
-                    <tr key={ws.worker.id} className={`hover:bg-gray-50 ${isPaid ? 'bg-emerald-50/30' : ''}`}>
-                      <td className="px-5 py-3 font-medium text-gray-800">{ws.worker.name}</td>
-                      <td className="px-4 py-3 text-gray-500">
-                        {methodLabel(ws.worker.payMethod)}
-                        {ws.worker.payHandle && <span className="text-gray-400 ml-1">· {ws.worker.payHandle}</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-500">{ws.games.length}</td>
-                      <td className="px-5 py-3 text-right font-bold text-gray-800">{fmt(ws.totalPay)}</td>
-                      <td className="px-4 py-3 text-center">
-                        {isPaid
-                          ? <span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">✓ Paid</span>
-                          : <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium">Unpaid</span>
-                        }
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                <tr>
-                  <td colSpan={3} className="px-5 py-3 font-bold text-gray-800">Total</td>
-                  <td className="px-5 py-3 text-right font-bold text-red-500">{fmt(staffOwed)}</td>
-                  <td className="px-4 py-3 text-center text-xs text-gray-500">{fmt(staffPaid)} paid</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
 
         {/* ── OTHER INCOME & EXPENSES TAB ── */}
         {activeTab === 'other' && (
