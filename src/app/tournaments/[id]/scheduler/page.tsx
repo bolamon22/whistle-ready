@@ -1278,7 +1278,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             </div>
                           </div>
                         ) : isTeamBusy ? (
-                          <div className="h-full rounded-sm bg-orange-900/30 border border-orange-400/40 flex items-center justify-center text-[9px] text-orange-300 font-medium">busy</div>
+                          <div className="h-full rounded-sm bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] text-slate-500 font-semibold tracking-wide">In Use</div>
                         ) : null}
                       </td>
                     )
