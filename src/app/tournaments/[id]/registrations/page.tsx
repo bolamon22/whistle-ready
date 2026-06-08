@@ -576,7 +576,7 @@ export default function RegistrationsPage() {
               </h1>
             </div>
           </div>
-          <Link href={`/tournaments/${params.id}/returning-teams`} className="text-sm font-semibold text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-xl transition-colors">
+          <Link href={`/tournaments/${tournamentId}/returning-teams`} className="text-sm font-semibold text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-xl transition-colors">
             🔄 Returning Teams
           </Link>
           <div className="flex gap-2 flex-wrap justify-end">
