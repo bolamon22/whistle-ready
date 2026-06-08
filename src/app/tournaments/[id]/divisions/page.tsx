@@ -55,6 +55,9 @@ export default function DivisionsPage() {
   const [generatingAll, setGeneratingAll] = useState(false)
   const [guarantee, setGuarantee] = useState('4')
 
+  // Scheduled games warning state
+  const [generateConfirm, setGenerateConfirm] = useState<{div: string; scheduledCount: number; all: boolean} | null>(null)
+
   // Add / Edit team state
   const [showAddTeam, setShowAddTeam] = useState(false)
   const [editingTeam, setEditingTeam] = useState<Team | null>(null)
@@ -302,18 +305,35 @@ export default function DivisionsPage() {
     toast.success('Teams swapped')
   }
 
-    async function generateGames() {
-    if (!activeDiv) return
+  async function checkAndGenerate(div: string, isAll = false) {
+    // Count scheduled games for this division
+    const existing = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`).then(r => r.json())
+    const scheduled = Array.isArray(existing) ? existing.filter((g: {startTime: string}) => g.startTime) : []
+    if (scheduled.length > 0) {
+      setGenerateConfirm({ div, scheduledCount: scheduled.length, all: isAll })
+      return false
+    }
+    return true
+  }
+
+  async function doGenerateGames(div: string) {
     setGenerating(true)
-    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`, {
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), gamesPerTeam: Number(divGamesPerTeam[activeDiv] ?? gamesPerTeam), clearExisting: true }),
+      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), gamesPerTeam: Number(divGamesPerTeam[div] ?? '2'), clearExisting: true }),
     })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error ?? 'Failed to generate games'); setGenerating(false); return }
-    await loadPoolGames(activeDiv)
+    if (div === activeDiv) await loadPoolGames(div)
     setGenerating(false)
-    const gpt = divGamesPerTeam[activeDiv] ?? '2'; toast.success(`${data.generated} games created — each team plays ${gpt} game${Number(gpt) !== 1 ? 's' : ''}`)
+    const gpt = divGamesPerTeam[div] ?? '2'
+    toast.success(`${data.generated} games created for ${div} — ${gpt} games/team · now in parking lot`)
+  }
+
+  async function generateGames() {
+    if (!activeDiv) return
+    const ok = await checkAndGenerate(activeDiv, false)
+    if (ok) await doGenerateGames(activeDiv)
   }
 
   function smartPoolGames(teamCount: number, g: number): number {
@@ -335,6 +355,19 @@ export default function DivisionsPage() {
 
   async function generateAllDivisions() {
     if (divisions.length === 0) { toast.error('No divisions found'); return }
+
+    // Check total scheduled games across all divisions
+    let totalScheduled = 0
+    for (const div of divisions) {
+      if (div.teamCount === 0) continue
+      const existing = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`).then(r => r.json()).catch(() => [])
+      totalScheduled += Array.isArray(existing) ? existing.filter((g: {startTime: string}) => g.startTime).length : 0
+    }
+    if (totalScheduled > 0) {
+      setGenerateConfirm({ div: 'ALL', scheduledCount: totalScheduled, all: true })
+      return
+    }
+
     setGeneratingAll(true)
     let totalGames = 0
     let autoPooled = 0
@@ -811,6 +844,64 @@ if (loading) return (
                             </button>
                           )}
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Generate confirm modal ── */}
+                {generateConfirm && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setGenerateConfirm(null)}>
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-2xl">⚠️</span>
+                        <h3 className="font-bold text-slate-800">Scheduled Games Will Be Replaced</h3>
+                      </div>
+                      <p className="text-sm text-slate-600 mb-2">
+                        <strong>{generateConfirm.scheduledCount} game{generateConfirm.scheduledCount !== 1 ? 's' : ''}</strong> {generateConfirm.scheduledCount !== 1 ? 'are' : 'is'} currently scheduled
+                        {generateConfirm.div === 'ALL' ? ' across divisions' : ` in ${generateConfirm.div}`}.
+                      </p>
+                      <p className="text-sm text-slate-500 mb-5">
+                        Regenerating will remove them from the scheduler grid. New games will appear in the parking lot.
+                      </p>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setGenerateConfirm(null)}
+                          className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancel</button>
+                        <button
+                          onClick={async () => {
+                            const { div, all } = generateConfirm
+                            setGenerateConfirm(null)
+                            if (all) {
+                              setGeneratingAll(true)
+                              // re-run all without the check
+                              let totalGames = 0
+                              for (const d of divisions) {
+                                if (d.teamCount === 0) continue
+                                const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(d.name)}/pool-games`, {
+                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[d.name] ?? 3), clearExisting: true }),
+                                })
+                                const data = await res.json()
+                                if (res.ok) totalGames += data.generated ?? 0
+                              }
+                              if (activeDiv) {
+                                const [teamData, gameData] = await Promise.all([
+                                  fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`).then(r => r.json()),
+                                  fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`).then(r => r.json()),
+                                ])
+                                setTeams(teamData.teams ?? [])
+                                setPools(teamData.pools ?? [])
+                                setPoolGames(Array.isArray(gameData) ? gameData : [])
+                              }
+                              setGeneratingAll(false)
+                              toast.success(`${totalGames} games generated · moved to parking lot`)
+                            } else {
+                              await doGenerateGames(div)
+                            }
+                          }}
+                          className="text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg transition-colors">
+                          Yes, Regenerate
+                        </button>
                       </div>
                     </div>
                   </div>
