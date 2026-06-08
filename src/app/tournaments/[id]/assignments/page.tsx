@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import toast, { Toaster } from 'react-hot-toast'
 
@@ -106,6 +107,9 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
         {/* Header */}
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Link href={`/tournaments/${params.id}/scheduler`} className="text-xs text-blue-600 hover:text-blue-800 hover:underline">← Scheduler</Link>
+            </div>
             <h1 className="text-2xl font-bold text-gray-800">Assignments</h1>
             <p className="text-sm text-gray-400 mt-0.5">
               {filledSlots} of {totalSlots} slots filled
