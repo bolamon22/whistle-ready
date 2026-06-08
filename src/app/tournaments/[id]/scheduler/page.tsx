@@ -66,6 +66,23 @@ function fmtTime(t: string) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
+function parseTimeInput(s: string): string | null {
+  s = s.trim().toUpperCase().replace(/\./, ':')
+  const ampm = /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/.exec(s)
+  if (ampm) {
+    let h = parseInt(ampm[1]); const m = parseInt(ampm[2] ?? '0')
+    if (ampm[3] === 'PM' && h !== 12) h += 12
+    if (ampm[3] === 'AM' && h === 12) h = 0
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+  }
+  const simple = /^(\d{1,2}):(\d{2})$/.exec(s)
+  if (simple) {
+    const h = parseInt(simple[1]); const m = parseInt(simple[2])
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+  }
+  return null
+}
+
 function fmtDate(d: string) {
   if (!d) return d
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
@@ -118,6 +135,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [lotDragOver,  setLotDragOver]  = useState<string | null>(null)
   const [sideStage,    setSideStage]    = useState(false)
   const [scratchPad,   setScratchPad]   = useState<string[]>([])
+  const [editingTimeId, setEditingTimeId] = useState<string | null>(null)
+  const [editingTimeVal, setEditingTimeVal] = useState('')
   const [divColorMap,  setDivColorMap]  = useState<Record<string, string>>({})
 
   // ── Draft/publish versioning ─────────────────────────────────────────────
@@ -490,6 +509,21 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       .flatMap(g => [g.team1, g.team2])
       .filter(t => t && t !== 'TBD')
   )].sort()
+
+  // ── Time editor ──────────────────────────────────────────────────────────
+  function commitTimeEdit(gameId: string) {
+    const parsed = parseTimeInput(editingTimeVal)
+    if (!parsed) { setEditingTimeId(null); return }
+    // Snap to nearest increment slot
+    const [ph, pm] = parsed.split(':').map(Number)
+    const totalMin = ph * 60 + pm
+    const snapped = Math.round(totalMin / increment) * increment
+    const sh = Math.floor(snapped / 60); const sm = snapped % 60
+    const slotStr = `${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}`
+    const game = games.find(g => g.id === gameId)
+    if (game) patchGame(gameId, { date: game.date, startTime: slotStr, location: game.location })
+    setEditingTimeId(null)
+  }
 
   // Apply parking lot filters
   const filtered = unscheduled.filter(g => {
@@ -1250,7 +1284,30 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             )}
                             <div className="flex items-center justify-between gap-1">
                               <div className="font-bold text-[10px] leading-none" style={{ color: 'inherit' }}>{game.gameNumber}</div>
-                              <div className="text-[9px] leading-none truncate" style={{ opacity: 0.75 }}>{game.division}{game.pool ? ` · ${game.pool}` : ''}</div>
+                              <div className="flex items-center gap-1 min-w-0">
+                                <div className="text-[9px] leading-none truncate" style={{ opacity: 0.75 }}>{game.division}{game.pool ? ` · ${game.pool}` : ''}</div>
+                                {editingTimeId === game.id ? (
+                                  <input
+                                    autoFocus
+                                    value={editingTimeVal}
+                                    onChange={e => setEditingTimeVal(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') commitTimeEdit(game.id); if (e.key === 'Escape') setEditingTimeId(null) }}
+                                    onBlur={() => commitTimeEdit(game.id)}
+                                    onClick={e => e.stopPropagation()}
+                                    onDragStart={e => e.stopPropagation()}
+                                    className="w-16 text-[9px] rounded px-1 py-0.5 bg-white/20 border border-white/40 text-white placeholder-white/50 focus:outline-none focus:bg-white/30"
+                                    placeholder="2:10 PM"
+                                  />
+                                ) : (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setEditingTimeId(game.id); setEditingTimeVal(fmtTime(game.startTime)) }}
+                                    onDragStart={e => e.stopPropagation()}
+                                    className="text-[9px] px-1 py-0.5 rounded bg-black/20 hover:bg-black/40 leading-none flex-shrink-0 tabular-nums"
+                                    title="Click to edit time"
+                                    style={{ color: 'inherit' }}
+                                  >{fmtTime(game.startTime)}</button>
+                                )}
+                              </div>
                             </div>
                             <div>
                               <div className="text-xs font-semibold truncate leading-tight">{game.team1}{(teamGames[game.team1]?.length ?? 0) > 0 && <span className="opacity-60 font-normal"> ({teamGames[game.team1]?.length})</span>}</div>
