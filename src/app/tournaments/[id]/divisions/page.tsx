@@ -723,29 +723,29 @@ if (loading) return (
                           <label className="block text-xs font-medium text-slate-600 mb-1">Team Name <span className="text-red-500">*</span></label>
                           <input autoFocus value={teamForm.teamName} onChange={e => setTeamForm(f => ({ ...f, teamName: e.target.value }))}
                             onKeyDown={e => e.key === 'Enter' && addTeam()}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="e.g. Dynasty Elite 2026" />
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" autoComplete="organization" placeholder="e.g. Dynasty Elite 2026" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Club Name</label>
                           <input value={teamForm.clubName} onChange={e => setTeamForm(f => ({ ...f, clubName: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                            autoComplete="organization" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Name</label>
                             <input value={teamForm.coachName} onChange={e => setTeamForm(f => ({ ...f, coachName: e.target.value }))}
-                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                              autoComplete="name" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Phone</label>
                             <input value={teamForm.coachPhone} onChange={e => setTeamForm(f => ({ ...f, coachPhone: e.target.value }))}
-                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                              autoComplete="tel" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
                           </div>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Coach Email</label>
                           <input value={teamForm.coachEmail} onChange={e => setTeamForm(f => ({ ...f, coachEmail: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                            autoComplete="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
                         </div>
                       </div>
                       <div className="flex justify-end gap-2 mt-5">
@@ -777,24 +777,24 @@ if (loading) return (
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Club Name</label>
                           <input value={teamForm.clubName} onChange={e => setTeamForm(f => ({ ...f, clubName: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                            autoComplete="organization" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Name</label>
                             <input value={teamForm.coachName} onChange={e => setTeamForm(f => ({ ...f, coachName: e.target.value }))}
-                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                              autoComplete="name" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Phone</label>
                             <input value={teamForm.coachPhone} onChange={e => setTeamForm(f => ({ ...f, coachPhone: e.target.value }))}
-                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                              autoComplete="tel" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
                           </div>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Coach Email</label>
                           <input value={teamForm.coachEmail} onChange={e => setTeamForm(f => ({ ...f, coachEmail: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                            autoComplete="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
                         </div>
                       </div>
                       <div className="flex justify-between items-center mt-5">
