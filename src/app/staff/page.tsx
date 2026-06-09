@@ -367,7 +367,7 @@ export default function StaffPage() {
                           {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
                         </div>
                       </td>
-                      <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">—</span>}</td>
+                      <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">—</span>}</td><td className="px-4 py-3 text-sm text-slate-600">{w.association||'\u2014'}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{wRoles.includes('ref')?gLabel(w.gender):'—'}</td>
                       <td className="px-4 py-3"><span className="badge bg-slate-100 text-slate-700">{pmLabel(w.payMethod)}</span>{w.payHandle&&<div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{wRoles.some(r=>isHourlyRole(r))?(w.hourlyRate?`$${w.hourlyRate}/hr`:'—'):(w.payRateOverride?`$${w.payRateOverride}/game`:'Default')}</td>
