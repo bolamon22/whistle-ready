@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
 
 interface OrgData {
   id: string
@@ -20,43 +19,19 @@ function getPreviewOrgCookie(): string | null {
 
 export function OrgProvider({ children }: { children: React.ReactNode }) {
   const [org, setOrg] = useState<OrgData | null>(null)
-  const { data: session } = useSession()
-  const isAdmin = (session?.user as any)?.role === 'admin'
 
   useEffect(() => {
-    if (!session?.user) return
-
     const previewOrgId = getPreviewOrgCookie()
-
-    if (isAdmin) {
-      if (previewOrgId) {
-        // Admin is previewing a specific org — fetch that org's data
-        fetch(`/api/admin/orgs/${previewOrgId}`)
-          .then(r => r.json())
-          .then(d => { if (d?.id) setOrg(d); else setOrg(null) })
-          .catch(() => setOrg(null))
-      } else {
-        // Admin with no preview — platform view, no org branding
-        setOrg(null)
-      }
-    } else {
-      // Regular org user — fetch their own org
-      fetch('/api/admin/org')
-        .then(r => r.json())
-        .then(d => { if (d?.id) setOrg(d); else setOrg(null) })
-        .catch(() => setOrg(null))
-    }
-  }, [session, isAdmin])
+    const url = previewOrgId ? `/api/admin/org?view=${previewOrgId}` : '/api/admin/org'
+    fetch(url)
+      .then(r => r.json())
+      .then(d => setOrg(d?.id ? d : null))
+      .catch(() => setOrg(null))
+  }, [])
 
   return <OrgContext.Provider value={org}>{children}</OrgContext.Provider>
 }
 
 export function useOrg() {
   return useContext(OrgContext)
-}
-
-export function usePreviewOrgId(): string | null {
-  if (typeof document === 'undefined') return null
-  const m = document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
-  return m ? decodeURIComponent(m[1]) : null
 }

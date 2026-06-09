@@ -7,20 +7,29 @@ function getClient() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const role = (session.user as any).role
   const userId = (session.user as any).id
   const client = getClient()
   try {
+    // Admin can pass ?view=orgId to get a specific org (for preview mode)
+    if (role === 'admin') {
+      const url = new URL(req.url)
+      const viewId = url.searchParams.get('view')
+      if (viewId) {
+        const res = await client.execute({ sql: `SELECT * FROM "Organization" WHERE id = ? LIMIT 1`, args: [viewId] })
+        return NextResponse.json(res.rows[0] ?? null)
+      }
+      return NextResponse.json(null) // admin with no preview = platform view, no org brand
+    }
+    // Regular user: return their org
     const res = await client.execute({
-      sql: `SELECT o.* FROM "Organization" o
-            INNER JOIN "User" u ON u."orgId" = o.id
-            WHERE u.id = ? LIMIT 1`,
+      sql: `SELECT o.* FROM "Organization" o INNER JOIN "User" u ON u."orgId" = o.id WHERE u.id = ? LIMIT 1`,
       args: [userId],
     })
-    if (!res.rows.length) return NextResponse.json(null)
-    return NextResponse.json(res.rows[0])
+    return NextResponse.json(res.rows[0] ?? null)
   } catch { return NextResponse.json(null) }
 }
 
