@@ -193,7 +193,7 @@ export default function OrgsPage() {
               <tbody className="divide-y divide-gray-100">
                 {orgs.map(o => (
                   <tr key={o.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{o.name}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900"><Link href={`/admin/orgs/${o.id}`} className="text-blue-600 hover:text-blue-800 hover:underline">{o.name}</Link></td>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{o.slug}</td>
                     <td className="px-4 py-3 text-gray-500">{o.contactEmail || '—'}</td>
                     <td className="px-4 py-3">
