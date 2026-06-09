@@ -200,7 +200,16 @@ export default function HomePage() {
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && orgs.length > 0 && (
-            <select value={viewOrgId} onChange={e => setViewOrgId(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select value={viewOrgId} onChange={async e => {
+                const newOrgId = e.target.value
+                setViewOrgId(newOrgId)
+                await fetch('/api/admin/preview-org', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ orgId: newOrgId || null }),
+                })
+                window.dispatchEvent(new CustomEvent('preview-org-changed'))
+              }} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">All Orgs</option>
               {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
