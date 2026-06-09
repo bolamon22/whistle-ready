@@ -64,17 +64,23 @@ export async function middleware(req: NextRequest) {
                  : rawRole === 'viewer' ? 'staff'
                  : rawRole
   const previewCookie = req.cookies.get('preview-role')?.value
+  const previewOrgCookie = req.cookies.get('preview-org')?.value
   const isAdminPreviewing = realRole === 'admin' && !!previewCookie
   const role = isAdminPreviewing ? previewCookie! : realRole
+  // Inject preview-org into request headers so API routes can read it
+  const requestHeaders = new Headers(req.headers)
+  if (realRole === 'admin' && previewOrgCookie) {
+    requestHeaders.set('x-preview-org', previewOrgCookie)
+  }
 
   // All-role routes
-  if (ALL_ROLES_ROUTES.some(r => pathname.startsWith(r))) return NextResponse.next()
+  if (ALL_ROLES_ROUTES.some(r => pathname.startsWith(r))) return NextResponse.next({ request: { headers: requestHeaders } })
 
   // Admin always has access to /admin
-  if (realRole === 'admin' && pathname.startsWith('/admin')) return NextResponse.next()
+  if (realRole === 'admin' && pathname.startsWith('/admin')) return NextResponse.next({ request: { headers: requestHeaders } })
 
   // Real admin (not previewing) — full access
-  if (realRole === 'admin' && !isAdminPreviewing) return NextResponse.next()
+  if (realRole === 'admin' && !isAdminPreviewing) return NextResponse.next({ request: { headers: requestHeaders } })
 
   // Redirect non-privileged roles from home
   if (pathname === '/' && role !== 'admin' && role !== 'director') {
@@ -82,7 +88,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Check permissions
-  if (roleCanAccess(role, pathname)) return NextResponse.next()
+  if (roleCanAccess(role, pathname)) return NextResponse.next({ request: { headers: requestHeaders } })
 
   // Blocked
   return NextResponse.redirect(new URL('/unauthorized', req.url))
