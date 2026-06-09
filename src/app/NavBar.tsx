@@ -39,11 +39,16 @@ export default function NavBar() {
   const { effectiveRole, isPreview, setPreviewRole } = useRole()
 
   useEffect(() => {
-    fetch('/api/tournaments')
+    const previewOrg = document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
+    const previewOrgId = previewOrg ? decodeURIComponent(previewOrg[1]) : null
+    const url = isAdmin && previewOrgId
+      ? `/api/tournaments?viewOrgId=${previewOrgId}`
+      : '/api/tournaments'
+    fetch(url)
       .then(r => r.json())
       .then((data: Tournament[]) => Array.isArray(data) ? setTournaments(data) : [])
       .catch(() => {})
-  }, [])
+  }, [isAdmin])
 
   const realRole = session?.user?.role ?? 'staff'
   const role = effectiveRole
