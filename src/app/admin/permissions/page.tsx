@@ -15,7 +15,7 @@ interface Feature {
 
 type RolePermissions = Record<string, Record<string, boolean>>
 
-const ROLES = ['director', 'club_director', 'assigner', 'coach', 'staff', 'parent']
+const ROLES = ['director', 'assigner', 'staff', 'club_director', 'coach', 'parent']
 
 const ROLE_LABELS: Record<string, string> = {
   director:      'Tournament Dir.',
