@@ -39,10 +39,8 @@ export async function GET(req: Request) {
       })
       return NextResponse.json(res.rows)
     } catch {
-      // orgId column not yet migrated — fall back to all workers so existing
-      // staff pools remain visible until migrate-worker-org.js is run
-      const res = await client.execute(`SELECT * FROM "Worker" ORDER BY name ASC`)
-      return NextResponse.json(res.rows)
+      // orgId column not yet migrated — return empty until migration is run
+      return NextResponse.json([])
     }
   }
 

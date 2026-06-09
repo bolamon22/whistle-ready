@@ -77,6 +77,8 @@ export default function PlatformDashboard() {
   const router = useRouter()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [migrating, setMigrating] = useState(false)
+  const [migrateLog, setMigrateLog] = useState<string[]>([])
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -90,6 +92,18 @@ export default function PlatformDashboard() {
       .then(d => { if (Array.isArray(d?.orgs)) { setStats(d); } setLoading(false) })
       .catch(() => setLoading(false))
   }, [session])
+
+  async function runMigration() {
+    setMigrating(true)
+    setMigrateLog([])
+    const res = await fetch('/api/admin/run-migration', { method: 'POST' })
+    const data = await res.json()
+    setMigrateLog(data.log ?? [data.error ?? 'Unknown error'])
+    setMigrating(false)
+    if (data.success) {
+      fetch('/api/admin/platform-stats').then(r => r.json()).then(d => { if (Array.isArray(d?.orgs)) setStats(d) })
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -115,6 +129,12 @@ export default function PlatformDashboard() {
             <Link href="/admin/users" className="text-sm bg-white border border-slate-200 px-4 py-2 rounded-xl hover:bg-slate-50 text-slate-700 font-medium transition-colors">
               Users
             </Link>
+            <button
+              onClick={runMigration}
+              disabled={migrating}
+              className="text-sm bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-medium transition-colors">
+              {migrating ? 'Running…' : '⚡ Run DB Migration'}
+            </button>
             <Link href="/admin/roadmap" className="text-sm bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl font-medium transition-colors">
               Roadmap
             </Link>
