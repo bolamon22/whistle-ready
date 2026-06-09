@@ -29,6 +29,7 @@ export default function OrgSettingsPage() {
   const [form, setForm] = useState<Partial<Org>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
   const [migrating, setMigrating] = useState(false)
   const [migrated, setMigrated] = useState(false)
 
@@ -43,6 +44,20 @@ export default function OrgSettingsPage() {
 
   function set(field: keyof Org, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  async function uploadLogo(file: File) {
+    setLogoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Upload failed')
+      set('logoUrl', data.url)
+      toast.success('Logo uploaded!')
+    } catch { toast.error('Logo upload failed') }
+    finally { setLogoUploading(false) }
   }
 
   async function save(e: React.FormEvent) {
@@ -135,6 +150,26 @@ export default function OrgSettingsPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Website</label>
                 <input type="url" value={form.website || ''} onChange={e => set('website', e.target.value)} placeholder="https://" className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Organization Logo</label>
+                <div className="flex items-center gap-4">
+                  {form.logoUrl ? (
+                    <img src={form.logoUrl} alt="org logo" className="h-16 w-16 object-contain rounded-xl border border-slate-200 bg-white p-1" />
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xs">Logo</div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <label className="cursor-pointer text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 font-medium">
+                      {logoUploading ? 'Uploading…' : 'Upload Logo'}
+                      <input type="file" accept="image/*" className="hidden" disabled={logoUploading}
+                        onChange={e => { if (e.target.files?.[0]) uploadLogo(e.target.files[0]) }} />
+                    </label>
+                    {form.logoUrl && (
+                      <button type="button" onClick={() => set('logoUrl', '')} className="text-xs text-red-500 hover:text-red-700">Remove</button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
