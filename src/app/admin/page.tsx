@@ -69,6 +69,7 @@ async function switchOrg(orgId: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orgId }),
   })
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('preview-org-changed'))
 }
 
 export default function PlatformDashboard() {

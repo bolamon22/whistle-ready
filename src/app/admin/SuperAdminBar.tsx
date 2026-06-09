@@ -43,6 +43,7 @@ export default function SuperAdminBar() {
     })
     setActiveOrgId(orgId)
     setOpen(false)
+    window.dispatchEvent(new CustomEvent('preview-org-changed'))
     if (navigate) router.push(navigate)
     else router.refresh()
   }

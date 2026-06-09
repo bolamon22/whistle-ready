@@ -21,12 +21,18 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const [org, setOrg] = useState<OrgData | null>(null)
 
   useEffect(() => {
-    const previewOrgId = getPreviewOrgCookie()
-    const url = previewOrgId ? `/api/admin/org?view=${previewOrgId}` : '/api/admin/org'
-    fetch(url)
-      .then(r => r.json())
-      .then(d => setOrg(d?.id ? d : null))
-      .catch(() => setOrg(null))
+    function fetchOrg() {
+      const previewOrgId = getPreviewOrgCookie()
+      const url = previewOrgId ? `/api/admin/org?view=${previewOrgId}` : '/api/admin/org'
+      fetch(url)
+        .then(r => r.json())
+        .then(d => setOrg(d?.id ? d : null))
+        .catch(() => setOrg(null))
+    }
+
+    fetchOrg()
+    window.addEventListener('preview-org-changed', fetchOrg)
+    return () => window.removeEventListener('preview-org-changed', fetchOrg)
   }, [])
 
   return <OrgContext.Provider value={org}>{children}</OrgContext.Provider>

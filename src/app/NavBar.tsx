@@ -48,15 +48,21 @@ export default function NavBar() {
   const hasOrg = !!org?.id
 
   useEffect(() => {
-    const previewOrg = document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
-    const previewOrgId = previewOrg ? decodeURIComponent(previewOrg[1]) : null
-    const url = isAdmin && previewOrgId
-      ? `/api/tournaments?viewOrgId=${previewOrgId}`
-      : '/api/tournaments'
-    fetch(url)
-      .then(r => r.json())
-      .then((data: Tournament[]) => Array.isArray(data) ? setTournaments(data) : [])
-      .catch(() => {})
+    function fetchTournaments() {
+      const previewOrg = document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
+      const previewOrgId = previewOrg ? decodeURIComponent(previewOrg[1]) : null
+      const url = isAdmin && previewOrgId
+        ? `/api/tournaments?viewOrgId=${previewOrgId}`
+        : '/api/tournaments'
+      fetch(url)
+        .then(r => r.json())
+        .then((data: Tournament[]) => Array.isArray(data) ? setTournaments(data) : [])
+        .catch(() => {})
+    }
+
+    fetchTournaments()
+    window.addEventListener('preview-org-changed', fetchTournaments)
+    return () => window.removeEventListener('preview-org-changed', fetchTournaments)
   }, [isAdmin])
 
   // Admin pages use SuperAdminBar as sole header
