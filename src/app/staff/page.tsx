@@ -109,8 +109,19 @@ export default function StaffPage() {
   const [expandMode,setExpandMode]=useState<ExpandMode>('profile')
   const [editForm,setEditForm]=useState<Record<string,unknown>>(EMPTY_FORM)
 
-  const load=async()=>{setWorkers(await (await fetch('/api/workers')).json());setLoading(false)}
-  useEffect(()=>{load()},[])
+  const load=async()=>{
+    const m=document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
+    const previewOrgId=m?decodeURIComponent(m[1]):null
+    const url=previewOrgId?`/api/workers?viewOrgId=${previewOrgId}`:'/api/workers'
+    const data=await (await fetch(url)).json()
+    setWorkers(Array.isArray(data)?data:[])
+    setLoading(false)
+  }
+  useEffect(()=>{
+    load()
+    window.addEventListener('preview-org-changed',load)
+    return ()=>window.removeEventListener('preview-org-changed',load)
+  },[])
 
   function parseRoles(w:Worker):string[]{try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.length?r:[w.defaultRole]}catch{return[w.defaultRole]}}
 

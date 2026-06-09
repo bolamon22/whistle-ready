@@ -32,11 +32,16 @@ export async function GET(req: Request) {
   }
 
   if (orgId) {
-    const res = await client.execute({
-      sql: `SELECT * FROM "Worker" WHERE orgId = ? ORDER BY name ASC`,
-      args: [orgId],
-    })
-    return NextResponse.json(res.rows)
+    try {
+      const res = await client.execute({
+        sql: `SELECT * FROM "Worker" WHERE orgId = ? ORDER BY name ASC`,
+        args: [orgId],
+      })
+      return NextResponse.json(res.rows)
+    } catch {
+      // orgId column not yet migrated — return empty (org has no staff yet)
+      return NextResponse.json([])
+    }
   }
 
   return NextResponse.json([])
