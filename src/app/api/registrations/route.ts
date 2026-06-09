@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       clubBasedIn: clubBasedIn || '',
       clubWebsite: clubWebsite || '',
       numTeams: Number(numTeams) || 1,
-      needsHotel: needsHotel || 'No',
+      needsHotel: needsHotel === true ? 'Yes' : needsHotel === false ? 'No' : (needsHotel || 'No'),
       paymentMethod: paymentMethod || 'check',
       notes: notes || '',
       invoiceAmount: Number(invoiceAmount) || 0,
