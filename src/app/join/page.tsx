@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 const ROLES = [
@@ -35,6 +36,8 @@ export default function JoinStaffPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  const searchParams = useSearchParams()
+  const orgId = searchParams.get('org')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -50,7 +53,7 @@ export default function JoinStaffPage() {
     const wRes = await fetch('/api/workers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone: phone || null, defaultRole: role, roles, certLevel, gender, payMethod: 'check' }),
+      body: JSON.stringify({ name, email, phone: phone || null, defaultRole: role, roles, certLevel, gender, payMethod: 'check', orgId }),
     })
     const wData = await wRes.json()
     if (!wRes.ok) { setError(wData.error || 'Could not create profile'); setSubmitting(false); return }

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
+
+function db() {
+  return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
+}
 
 // GET — validate token
 export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
@@ -31,11 +36,23 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     const email = invite.email
 
-    // Check if worker already exists
-    const existingWorker = await prisma.worker.findFirst({ where: { email } })
+    // Resolve orgId from the tournament this invite belongs to
+    let orgId: string | null = null
+    if (invite.tournamentId) {
+      const client = db()
+      const res = await client.execute({
+        sql: `SELECT orgId FROM "Tournament" WHERE id = ?`,
+        args: [invite.tournamentId],
+      })
+      orgId = (res.rows[0]?.orgId as string) ?? null
+    }
+
+    // Check if worker already exists for this org
+    const existingWorker = orgId
+      ? await prisma.worker.findFirst({ where: { email, orgId } })
+      : await prisma.worker.findFirst({ where: { email } })
     if (existingWorker) return NextResponse.json({ error: 'A staff member with this email already exists' }, { status: 409 })
 
-    // Map role to defaultRole value
     const roleMap: Record<string, string> = {
       referee: 'ref',
       scorekeeper: 'scorekeeper',
@@ -45,18 +62,13 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     const defaultRole = roleMap[role] ?? role
     const roles = JSON.stringify([defaultRole])
 
-    // Create Worker record
-    const worker = await prisma.worker.create({
-      data: {
-        name,
-        email,
-        phone: phone || null,
-        defaultRole,
-        roles,
-        certLevel: certLevel ?? 'youth',
-        gender: gender ?? 'both',
-        payMethod: 'check',
-      },
+    // Create Worker via raw SQL to include orgId
+    const client = db()
+    const workerId = crypto.randomUUID()
+    await client.execute({
+      sql: `INSERT INTO "Worker" (id, name, email, phone, defaultRole, roles, certLevel, gender, isAssigner, payMethod, orgId, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'check', ?, datetime('now'), datetime('now'))`,
+      args: [workerId, name, email, phone || null, defaultRole, roles, certLevel ?? 'youth', gender ?? 'both', orgId],
     })
 
     // Create User account
@@ -71,14 +83,14 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     // If invite was for a specific tournament, add to roster
     if (invite.tournamentId) {
       await prisma.rosterEntry.create({
-        data: { workerId: worker.id, tournamentId: invite.tournamentId, gameTarget: 0 },
-      }).catch(() => {}) // ignore if already exists
+        data: { workerId, tournamentId: invite.tournamentId, gameTarget: 0 },
+      }).catch(() => {})
     }
 
     // Mark invite as used
     await prisma.staffInvite.update({ where: { token: params.token }, data: { usedAt: new Date() } })
 
-    return NextResponse.json({ ok: true, workerId: worker.id })
+    return NextResponse.json({ ok: true, workerId })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to accept invite' }, { status: 500 })

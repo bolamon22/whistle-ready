@@ -75,6 +75,7 @@ model Worker {
   payMethod       String   @default("check")
   payHandle       String?
   notes           String?
+  orgId           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
