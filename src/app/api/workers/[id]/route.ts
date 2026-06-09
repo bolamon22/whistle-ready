@@ -19,7 +19,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.hourlyRate!==undefined&&{hourlyRate:b.hourlyRate??null}),
     ...(b.payMethod!==undefined&&{payMethod:b.payMethod}),
     ...(b.payHandle!==undefined&&{payHandle:b.payHandle||null}),
-    ...(b.notes!==undefined&&{notes:b.notes||null}),
+    ...(b.notes!==undefined&&{notes:b.notes||null}),...(b.association!==undefined&&{association:b.association}),
     ...(b.photoUrl!==undefined&&{photoUrl:b.photoUrl||null}),
     ...(b.roles!==undefined&&{roles:JSON.stringify(b.roles)}),
   }}))
