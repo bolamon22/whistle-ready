@@ -13,7 +13,7 @@ type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'
 type SortDir = 'asc'|'desc'
 type ExpandMode = 'profile'|'edit'
 
-// ââ Inline edit form (defined OUTSIDE component to prevent remount on render) ââ
+// Ã¢ÂÂÃ¢ÂÂ Inline edit form (defined OUTSIDE component to prevent remount on render) Ã¢ÂÂÃ¢ÂÂ
 function StaffEditForm({
   form, setForm, onSubmit, onCancel, saving, submitLabel
 }:{
@@ -70,11 +70,11 @@ function StaffEditForm({
           className="input w-full min-h-[72px] resize-y text-sm"
           value={String(form.notes??'')}
           onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-          placeholder="Certifications, preferences, restrictions, emergency contactâ¦"
+          placeholder="Certifications, preferences, restrictions, emergency contactÃ¢ÂÂ¦"
         />
       </div>
       <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
-        <button type="submit" className="btn-primary" disabled={saving}>{saving?'Savingâ¦':submitLabel}</button>
+        <button type="submit" className="btn-primary" disabled={saving}>{saving?'SavingÃ¢ÂÂ¦':submitLabel}</button>
         <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
@@ -97,6 +97,7 @@ export default function StaffPage() {
   const [sortKey,setSortKey]=useState<SortKey>('name')
   const [sortDir,setSortDir]=useState<SortDir>('asc')
   const [roleFilter,setRoleFilter]=useState('all')
+  const [genderFilter,setGenderFilter]=useState('all')
   const [search,setSearch]=useState('')
 
   const [selected,setSelected]=useState<Set<string>>(new Set())
@@ -114,7 +115,7 @@ export default function StaffPage() {
   function parseRoles(w:Worker):string[]{try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.length?r:[w.defaultRole]}catch{return[w.defaultRole]}}
 
   function toggleSort(k:SortKey){if(sortKey===k)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortKey(k);setSortDir('asc')}}
-  const sortArrow=(k:SortKey)=>sortKey===k?(sortDir==='asc'?'â':'â'):'â'
+  const sortArrow=(k:SortKey)=>sortKey===k?(sortDir==='asc'?'Ã¢ÂÂ':'Ã¢ÂÂ'):'Ã¢ÂÂ'
 
   const filtered=workers
     .filter(w=>roleFilter==='all'||parseRoles(w).includes(roleFilter))
@@ -247,15 +248,15 @@ export default function StaffPage() {
       <div className="page-header">
         <div>
           <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="section-title">Staff Pool</h1></div>
-          <p className="text-sm text-slate-500 mt-1">Global staff database Â· {workers.length} total</p>
+          <p className="text-sm text-slate-500 mt-1">Global staff database ÃÂ· {workers.length} total</p>
         </div>
         <div className="flex gap-2">
-          <button className={`btn-sm ${tab==='import'?'btn-primary':'btn-secondary'}`} onClick={()=>setTab(t=>t==='import'?'roster':'import')}>{tab==='import'?'â Pool':'â Bulk Import'}</button>
+          <button className={`btn-sm ${tab==='import'?'btn-primary':'btn-secondary'}`} onClick={()=>setTab(t=>t==='import'?'roster':'import')}>{tab==='import'?'Ã¢ÂÂ Pool':'Ã¢ÂÂ Bulk Import'}</button>
           {tab==='roster'&&<button className="btn-primary" onClick={()=>{setExpandedId('__new__');setExpandMode('edit');setEditForm(EMPTY_FORM)}}>+ Add Staff</button>}
         </div>
       </div>
 
-      {/* ââ IMPORT ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ IMPORT Ã¢ÂÂÃ¢ÂÂ */}
       {tab==='import'&&(
         <div className="card p-6 mb-6">
           <h2 className="font-semibold mb-4">Bulk Import Staff</h2>
@@ -265,24 +266,24 @@ export default function StaffPage() {
           </div>
           {!importData&&(
             <div className="flex gap-2">
-              <button onClick={downloadTemplate} className="btn-secondary btn-sm">â Download Template</button>
-              <label className={`btn-primary btn-sm cursor-pointer ${importLoading?'opacity-50':''}`}>{importLoading?'Parsingâ¦':'â Upload File'}<input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} disabled={importLoading}/></label>
+              <button onClick={downloadTemplate} className="btn-secondary btn-sm">Ã¢ÂÂ Download Template</button>
+              <label className={`btn-primary btn-sm cursor-pointer ${importLoading?'opacity-50':''}`}>{importLoading?'ParsingÃ¢ÂÂ¦':'Ã¢ÂÂ Upload File'}<input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} disabled={importLoading}/></label>
             </div>
           )}
           {importData&&(
             <div>
-              <p className="text-sm font-semibold mb-3">Map your columns â {importData.rows.length} rows detected</p>
+              <p className="text-sm font-semibold mb-3">Map your columns Ã¢ÂÂ {importData.rows.length} rows detected</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
                 {[{key:'name',label:'Name *'},{key:'email',label:'Email'},{key:'phone',label:'Phone'},...(importType==='refs'?[{key:'certLevel',label:'Cert Level'},{key:'gender',label:'Boys/Girls'},{key:'payRateOverride',label:'Pay Rate ($/game)'}]:[{key:'defaultRole',label:'Role'},{key:'hourlyRate',label:'Hourly Rate ($/hr)'}])].map(f=>(
-                  <div key={f.key}><label className="label">{f.label}</label><select className="select" value={mapping[f.key]??''} onChange={e=>setMapping(m=>({...m,[f.key]:e.target.value}))}><option value="">â not mapped â</option>{importData.headers.map(h=><option key={h} value={h}>{h}</option>)}</select></div>
+                  <div key={f.key}><label className="label">{f.label}</label><select className="select" value={mapping[f.key]??''} onChange={e=>setMapping(m=>({...m,[f.key]:e.target.value}))}><option value="">Ã¢ÂÂ not mapped Ã¢ÂÂ</option>{importData.headers.map(h=><option key={h} value={h}>{h}</option>)}</select></div>
                 ))}
               </div>
-              <p className="text-sm font-medium mb-2">Preview â {preview.length} staff</p>
+              <p className="text-sm font-medium mb-2">Preview Ã¢ÂÂ {preview.length} staff</p>
               <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg text-xs mb-4">
-                <table className="w-full"><thead className="bg-slate-50 sticky top-0"><tr><th className="text-left px-3 py-1.5">Name</th><th className="text-left px-3 py-1.5">Role</th><th className="px-3 py-1.5 text-left">{importType==='refs'?'Cert / Gender':'$/hr'}</th><th className="text-left px-3 py-1.5">Contact</th></tr></thead><tbody className="divide-y divide-slate-100">{preview.slice(0,20).map((s,i)=><tr key={i}><td className="px-3 py-1.5 font-medium">{String(s.name)}</td><td className="px-3 py-1.5">{rLabel(String(s.defaultRole))}</td><td className="px-3 py-1.5">{importType==='refs'?`${certLabel(String(s.certLevel))} Â· ${gLabel(String(s.gender))}`:s.hourlyRate?`$${s.hourlyRate}/hr`:'â'}</td><td className="px-3 py-1.5 text-slate-400">{String(s.phone||s.email||'â')}</td></tr>)}</tbody></table>
+                <table className="w-full"><thead className="bg-slate-50 sticky top-0"><tr><th className="text-left px-3 py-1.5">Name</th><th className="text-left px-3 py-1.5">Role</th><th className="px-3 py-1.5 text-left">{importType==='refs'?'Cert / Gender':'$/hr'}</th><th className="text-left px-3 py-1.5">Contact</th></tr></thead><tbody className="divide-y divide-slate-100">{preview.slice(0,20).map((s,i)=><tr key={i}><td className="px-3 py-1.5 font-medium">{String(s.name)}</td><td className="px-3 py-1.5">{rLabel(String(s.defaultRole))}</td><td className="px-3 py-1.5">{importType==='refs'?`${certLabel(String(s.certLevel))} ÃÂ· ${gLabel(String(s.gender))}`:s.hourlyRate?`$${s.hourlyRate}/hr`:'Ã¢ÂÂ'}</td><td className="px-3 py-1.5 text-slate-400">{String(s.phone||s.email||'Ã¢ÂÂ')}</td></tr>)}</tbody></table>
               </div>
               <div className="flex gap-2">
-                <button onClick={confirmImport} className="btn-primary btn-sm" disabled={saving||!preview.length}>{saving?'Importingâ¦':`Import ${preview.length} Staff`}</button>
+                <button onClick={confirmImport} className="btn-primary btn-sm" disabled={saving||!preview.length}>{saving?'ImportingÃ¢ÂÂ¦':`Import ${preview.length} Staff`}</button>
                 <button onClick={()=>{setImportData(null);setMapping({})}} className="btn-secondary btn-sm">Cancel</button>
               </div>
             </div>
@@ -290,7 +291,7 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* ââ ADD NEW ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ ADD NEW Ã¢ÂÂÃ¢ÂÂ */}
       {tab==='roster'&&expandedId==='__new__'&&(
         <div className="card p-6 mb-4 border-sky-200 border">
           <h2 className="font-semibold text-slate-800 mb-4">Add Staff</h2>
@@ -298,11 +299,11 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* ââ ROSTER ââ */}
-      {tab==='roster'&&(loading?<div className="text-slate-400 text-center py-12">Loadingâ¦</div>:workers.length===0&&expandedId!=='__new__'?<div className="card p-12 text-center text-slate-400"><div className="text-4xl mb-2">ð¥</div><p>No staff yet</p></div>:(
+      {/* Ã¢ÂÂÃ¢ÂÂ ROSTER Ã¢ÂÂÃ¢ÂÂ */}
+      {tab==='roster'&&(loading?<div className="text-slate-400 text-center py-12">LoadingÃ¢ÂÂ¦</div>:workers.length===0&&expandedId!=='__new__'?<div className="card p-12 text-center text-slate-400"><div className="text-4xl mb-2">Ã°ÂÂÂ¥</div><p>No staff yet</p></div>:(
         <div>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <input className="input !w-48 text-sm" placeholder="Search by nameâ¦" value={search} onChange={e=>setSearch(e.target.value)}/>
+            <input className="input !w-48 text-sm" placeholder="Search by nameÃ¢ÂÂ¦" value={search} onChange={e=>setSearch(e.target.value)}/>
             <label className="text-sm text-slate-500">Role:</label>
             <select className="select !w-auto text-sm" value={roleFilter} onChange={e=>{setRoleFilter(e.target.value);setSelected(new Set())}}>
               <option value="all">All roles</option>
@@ -322,15 +323,15 @@ export default function StaffPage() {
           {selected.size>0&&(
             <div className="flex items-center gap-3 mb-3 p-3 bg-sky-50 border border-sky-200 rounded-lg flex-wrap">
               <span className="text-sm font-medium text-sky-700">{selected.size} selected</span>
-              <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}><option value="">â choose field to edit â</option>{BULK_FIELDS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}</select>
+              <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}><option value="">Ã¢ÂÂ choose field to edit Ã¢ÂÂ</option>{BULK_FIELDS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}</select>
               {bulkField&&<>
-                {bulkField==='defaultRole'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pickâ¦</option>{WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>}
-                {bulkField==='certLevel'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pickâ¦</option>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>}
-                {bulkField==='gender'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pickâ¦</option>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select>}
-                {bulkField==='payMethod'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pickâ¦</option>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select>}
-                {bulkField==='isAssigner'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pickâ¦</option><option value="true">Yes</option><option value="false">No</option></select>}
+                {bulkField==='defaultRole'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">PickÃ¢ÂÂ¦</option>{WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>}
+                {bulkField==='certLevel'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">PickÃ¢ÂÂ¦</option>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>}
+                {bulkField==='gender'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">PickÃ¢ÂÂ¦</option>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select>}
+                {bulkField==='payMethod'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">PickÃ¢ÂÂ¦</option>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select>}
+                {bulkField==='isAssigner'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">PickÃ¢ÂÂ¦</option><option value="true">Yes</option><option value="false">No</option></select>}
                 {(bulkField==='payRateOverride'||bulkField==='hourlyRate')&&<input className="input !w-28 text-sm" type="number" min="0" step="0.01" value={bulkValue} onChange={e=>setBulkValue(e.target.value)} placeholder="Amount"/>}
-                <button onClick={applyBulk} className="btn-primary btn-sm" disabled={bulkSaving||!bulkValue}>{bulkSaving?'Savingâ¦':'Apply to Selected'}</button>
+                <button onClick={applyBulk} className="btn-primary btn-sm" disabled={bulkSaving||!bulkValue}>{bulkSaving?'SavingÃ¢ÂÂ¦':'Apply to Selected'}</button>
               </>}
               <button onClick={()=>setSelected(new Set())} className="btn-secondary btn-sm ml-auto">Clear</button>
             </div>
@@ -365,11 +366,11 @@ export default function StaffPage() {
                           {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
                         </div>
                       </td>
-                      <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">â</span>}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{wRoles.includes('ref')?gLabel(w.gender):'â'}</td>
+                      <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">Ã¢ÂÂ</span>}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">{wRoles.includes('ref')?gLabel(w.gender):'Ã¢ÂÂ'}</td>
                       <td className="px-4 py-3"><span className="badge bg-slate-100 text-slate-700">{pmLabel(w.payMethod)}</span>{w.payHandle&&<div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{wRoles.some(r=>isHourlyRole(r))?(w.hourlyRate?`$${w.hourlyRate}/hr`:'â'):(w.payRateOverride?`$${w.payRateOverride}/game`:'Default')}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{w.phone&&<div>{w.phone}</div>}{w.email&&<div>{w.email}</div>}{!w.phone&&!w.email&&'â'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">{wRoles.some(r=>isHourlyRole(r))?(w.hourlyRate?`$${w.hourlyRate}/hr`:'Ã¢ÂÂ'):(w.payRateOverride?`$${w.payRateOverride}/game`:'Default')}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">{w.phone&&<div>{w.phone}</div>}{w.email&&<div>{w.email}</div>}{!w.phone&&!w.email&&'Ã¢ÂÂ'}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={()=>expand(w,'profile')} className={`text-xs mr-2 font-medium transition-colors ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-400 hover:text-slate-700'}`}>Profile</button>
                         <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-sky-800 underline':'text-sky-600 hover:text-sky-800'}`}>Edit</button>
@@ -401,7 +402,7 @@ export default function StaffPage() {
                                       {w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
                                     </div>
                                   </div>
-                                  <button onClick={()=>expand(w,'edit')} className="text-xs text-sky-300 hover:text-white border border-sky-400/40 hover:border-sky-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit â</button>
+                                  <button onClick={()=>expand(w,'edit')} className="text-xs text-sky-300 hover:text-white border border-sky-400/40 hover:border-sky-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit Ã¢ÂÂ</button>
                                 </div>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 mt-4 text-sm">
@@ -411,7 +412,7 @@ export default function StaffPage() {
                                     <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p className="text-white">{certLabel(w.certLevel)}</p></div>
                                     <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p className="text-white">{gLabel(w.gender)}</p></div>
                                   </>}
-                                  <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` Â· ${w.payHandle}`:''}</p></div>
+                                  <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` ÃÂ· ${w.payHandle}`:''}</p></div>
                                   {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p className="text-white">${w.payRateOverride}/game</p></div>}
                                   {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p className="text-white">${w.hourlyRate}/hr</p></div>}
                                 </div>
@@ -442,7 +443,7 @@ export default function StaffPage() {
                               }
                               <button type="button" onClick={()=>photoRef.current?.click()} disabled={photoUploading}
                                 className="absolute inset-0 rounded-2xl bg-black/50 text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                {photoUploading?'â¦':'ð·'}
+                                {photoUploading?'Ã¢ÂÂ¦':'Ã°ÂÂÂ·'}
                               </button>
                             </div>
                             <div className="flex flex-col gap-1">
@@ -450,7 +451,7 @@ export default function StaffPage() {
                               <div className="flex items-center gap-3">
                                 <button type="button" onClick={()=>photoRef.current?.click()} disabled={photoUploading}
                                   className="text-xs text-sky-600 hover:text-sky-800 font-medium border border-sky-200 hover:border-sky-400 px-3 py-1.5 rounded-lg">
-                                  {photoUploading?'Uploadingâ¦':w.photoUrl?'Replace photo':'+ Upload photo'}
+                                  {photoUploading?'UploadingÃ¢ÂÂ¦':w.photoUrl?'Replace photo':'+ Upload photo'}
                                 </button>
                                 {w.photoUrl&&<button type="button" onClick={()=>removePhoto(w.id)} className="text-xs text-red-400 hover:text-red-600 font-medium">Remove</button>}
                               </div>
