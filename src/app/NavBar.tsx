@@ -38,6 +38,12 @@ export default function NavBar() {
   const { data: session } = useSession()
   const { effectiveRole, isPreview, setPreviewRole } = useRole()
 
+  const realRole = session?.user?.role ?? 'staff'
+  const role = effectiveRole
+  const roleColor = ROLE_COLORS[role] || 'bg-slate-100 text-slate-600'
+  const isAdmin = realRole === 'admin'
+  const hasOrg = !!org?.id
+
   useEffect(() => {
     const previewOrg = document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
     const previewOrgId = previewOrg ? decodeURIComponent(previewOrg[1]) : null
@@ -50,11 +56,6 @@ export default function NavBar() {
       .catch(() => {})
   }, [isAdmin])
 
-  const realRole = session?.user?.role ?? 'staff'
-  const role = effectiveRole
-  const roleColor = ROLE_COLORS[role] || 'bg-slate-100 text-slate-600'
-  const isAdmin = realRole === 'admin'
-  const hasOrg = !!org?.id
 
   return (
     <div className="sticky top-0 z-40">
