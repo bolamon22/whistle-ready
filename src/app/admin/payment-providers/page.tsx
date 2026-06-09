@@ -64,6 +64,7 @@ function PaymentProvidersPage() {
   const [editing, setEditing] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const [migrated, setMigrated] = useState(false)
   const [mode, setMode] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -144,6 +145,7 @@ function PaymentProvidersPage() {
         </p>
 
         {/* Run migration button (first-time setup) */}
+        {!migrated && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-amber-800">First-time setup</p>
@@ -153,12 +155,14 @@ function PaymentProvidersPage() {
             onClick={async () => {
               const res = await fetch('/api/admin/migrate', { method: 'PUT' })
               const d = await res.json()
-              d.ok ? toast.success(d.message) : toast.error(d.error)
+              if (d.ok) { toast.success(d.message, { duration: 6000 }); setMigrated(true) }
+              else toast.error(d.error, { duration: 6000 })
             }}
             className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 whitespace-nowrap">
             Run Migration
           </button>
         </div>
+        )}
 
         <div className="space-y-4">
           {PROVIDERS.map(def => {
