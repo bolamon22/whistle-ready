@@ -72,6 +72,7 @@ model Worker {
   email           String?
   phone           String?
   certLevel       String   @default("youth")
+  association      String   @default("")
   defaultRole     String   @default("ref")
   isAssigner      Boolean  @default(false)
   gender          String   @default("both")
