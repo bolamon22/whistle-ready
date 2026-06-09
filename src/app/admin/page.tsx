@@ -144,6 +144,7 @@ export default function AdminDashboard() {
               <h2 className="font-semibold text-gray-800 mb-3">Quick Links</h2>
               <div className="flex flex-wrap gap-2">
                 {[
+                  { href: '/admin/orgs', label: 'Organizations' },
                   { href: '/admin/roadmap', label: 'Roadmap' },
                   { href: '/admin/users', label: 'Users' },
                   { href: '/admin/org-settings', label: 'Org Settings' },
