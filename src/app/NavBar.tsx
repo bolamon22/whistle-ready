@@ -69,7 +69,7 @@ export default function NavBar() {
       {/* Brand */}
       <a href="/" className="flex items-center gap-2.5 text-sky-700 font-bold text-lg tracking-tight flex-shrink-0">
         {org?.logoUrl ? (
-          <img src={org.logoUrl} alt={org.name || 'Logo'} className="w-7 h-7 object-contain rounded-lg border border-slate-200 bg-white" />
+          <img src={org.logoUrl} alt={org.name || 'Logo'} className="w-10 h-10 object-contain rounded-lg border border-slate-200 bg-white" />
         ) : (
           <div className="w-7 h-7 bg-sky-600 rounded-lg flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
