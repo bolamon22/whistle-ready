@@ -81,3 +81,46 @@ export function getUpgradeTiers(current: TierKey): TierKey[] {
   const idx = TIER_ORDER.indexOf(current)
   return TIER_ORDER.slice(idx + 1)
 }
+
+// ─── Feature Gate System ────────────────────────────────────────────────────
+
+export type FeatureKey =
+  | 'unlimited_tournaments'
+  | 'payment_stripe'
+  | 'payment_paypal'
+  | 'payment_ach'
+  | 'ai_assistant'
+  | 'email_notifications'
+  | 'copy_tournament'
+  | 'schedule_versioning'
+  | 'priority_support'
+  | 'white_label'
+  | 'multi_user'
+  | 'api_access'
+
+/** Minimum tier required to access each feature */
+export const FEATURE_TIERS: Record<FeatureKey, TierKey> = {
+  unlimited_tournaments: 'pro',
+  payment_stripe: 'pro',
+  payment_paypal: 'pro',
+  payment_ach: 'pro',
+  ai_assistant: 'pro',
+  email_notifications: 'pro',
+  copy_tournament: 'pro',
+  schedule_versioning: 'pro',
+  priority_support: 'pro',
+  white_label: 'enterprise',
+  multi_user: 'enterprise',
+  api_access: 'enterprise',
+}
+
+/**
+ * Returns true if the given tier has access to the specified feature.
+ * @example hasFeature('pro' 'ai_assistant') // true
+ * @example hasFeature('starter', 'ai_assistant') // false
+ */
+export function hasFeature(tier: TierKey | string | undefined, feature: FeatureKey): boolean {
+  const t = (tier || 'starter') as TierKey
+  const required = FEATURE_TIERS[feature]
+  return TIER_ORDER.indexOf(t) >= TIER_ORDER.indexOf(required)
+}
