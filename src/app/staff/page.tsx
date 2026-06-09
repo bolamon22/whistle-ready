@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { certLabel, CERT_LEVELS, WORKER_ROLES, PAY_METHODS, isHourlyRole } from '@/lib/utils'
 
-interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null }
+interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null }
 
 const GENDERS=[{value:'both',label:'Girls & Boys'},{value:'boys',label:'Boys'},{value:'girls',label:'Girls'}]
 const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',roles:['ref'],isAssigner:false,gender:'both',payRateOverride:'',hourlyRate:'',payMethod:'check',payHandle:'',notes:''}
@@ -56,7 +56,7 @@ function StaffEditForm({
       </div>
 
       {hasRef&&<>
-        <div><label className="label">Cert Level</label><select className="select" value={String(form.certLevel??'youth')} onChange={e=>setForm(f=>({...f,certLevel:e.target.value}))}>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
+        <div><label className="label">Cert Level</label><select className="select" value={String(form.certLevel??'youth')} onChange={e=>setForm(f=>({...f,certLevel:e.target.value}))}>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div><div><label className="label">Association</label><input className="input" value={form.association??''} onChange={e=>setForm(f=>({...f,association:e.target.value}))} placeholder="e.g. SFLOA, Tampa"/></div>
         <div><label className="label">Can Ref</label><select className="select" value={String(form.gender??'both')} onChange={e=>setForm(f=>({...f,gender:e.target.value}))}>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select></div>
         <div><label className="label">Pay Rate Override ($/game)</label><input className="input" type="number" min="0" step="0.01" value={String(form.payRateOverride??'')} onChange={e=>setForm(f=>({...f,payRateOverride:e.target.value}))} placeholder="Leave blank = default"/></div>
       </>}
@@ -130,7 +130,7 @@ export default function StaffPage() {
     if(expandedId===w.id&&expandMode===mode){setExpandedId(null);return}
     setExpandedId(w.id);setExpandMode(mode)
     if(mode==='edit'){
-      setEditForm({name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',notes:w.notes??''})
+      setEditForm({name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,association:w.association??''  ,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',notes:w.notes??''})
     }
   }
 
@@ -345,6 +345,7 @@ export default function StaffPage() {
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('name')}>Name {sortArrow('name')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('defaultRole')}>Roles {sortArrow('defaultRole')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('certLevel')}>Cert {sortArrow('certLevel')}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('association')}>Association {sortArrow('association')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('gender')}>Can Ref {sortArrow('gender')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Rate</th>
@@ -409,7 +410,7 @@ export default function StaffPage() {
                                   {w.phone&&<div><p className="text-slate-400 text-xs mb-0.5">Phone</p><p className="text-white">{w.phone}</p></div>}
                                   {w.email&&<div><p className="text-slate-400 text-xs mb-0.5">Email</p><p className="text-white truncate">{w.email}</p></div>}
                                   {wRoles.includes('ref')&&<>
-                                    <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p className="text-white">{certLabel(w.certLevel)}</p></div>
+                                    <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p className="text-white">{certLabel(w.certLevel)}</p></div><div><p className="text-slate-400 text-xs mb-0.5">Association</p><p className="text-white">{w.association||'\u2014'}</p></div>
                                     <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p className="text-white">{gLabel(w.gender)}</p></div>
                                   </>}
                                   <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
