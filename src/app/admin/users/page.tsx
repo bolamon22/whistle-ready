@@ -12,7 +12,7 @@ interface ClubLink { id: string; tournamentId: string; clubName: string }
 interface Tournament { id: string; name: string }
 interface Registration { clubName: string; tournamentId: string }
 
-const ROLES = ['admin','director','club_director','assigner','coach','ref','scorekeeper','parent','viewer']
+const ROLES = ['admin','director','club_director','assigner','coach','staff','parent']
 
 const ROLE_LABELS: Record<string, string> = {
   admin:         'Admin',
@@ -20,10 +20,8 @@ const ROLE_LABELS: Record<string, string> = {
   club_director: 'Club Director',
   assigner:      'Assigner',
   coach:         'Coach',
-  ref:           'Referee',
-  scorekeeper:   'Scorekeeper',
+  staff:         'Staff',
   parent:        'Parent',
-  viewer:        'Viewer',
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -32,10 +30,8 @@ const ROLE_COLORS: Record<string, string> = {
   club_director: 'bg-violet-100 text-violet-700',
   assigner:      'bg-indigo-100 text-indigo-700',
   coach:         'bg-blue-100 text-blue-700',
-  ref:           'bg-green-100 text-green-700',
-  scorekeeper:   'bg-yellow-100 text-yellow-700',
+  staff:         'bg-teal-100 text-teal-700',
   parent:        'bg-pink-100 text-pink-700',
-  viewer:        'bg-gray-100 text-gray-600',
 }
 
 export default function AdminUsersPage() {

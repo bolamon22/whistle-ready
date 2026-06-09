@@ -15,10 +15,8 @@ const ROLE_HOME: Record<string, string> = {
   club_director: '/dashboard/club-director',
   assigner:      '/dashboard/assigner',
   coach:         '/dashboard/coach',
-  ref:           '/dashboard/ref',
-  scorekeeper:   '/dashboard/scorekeeper',
+  staff:         '/dashboard/staff',
   parent:        '/dashboard/parent',
-  viewer:        '/dashboard/viewer',
 }
 
 const ALWAYS_ADMIN_ONLY = ['/admin']
@@ -60,7 +58,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  const realRole = (token.role as string) ?? 'viewer'
+  const rawRole = (token.role as string) ?? 'staff'
+  // Backward compat: existing users with old role values
+  const realRole = rawRole === 'ref' || rawRole === 'scorekeeper' ? 'staff'
+                 : rawRole === 'viewer' ? 'staff'
+                 : rawRole
   const previewCookie = req.cookies.get('preview-role')?.value
   const isAdminPreviewing = realRole === 'admin' && !!previewCookie
   const role = isAdminPreviewing ? previewCookie! : realRole
@@ -76,7 +78,7 @@ export async function middleware(req: NextRequest) {
 
   // Redirect non-privileged roles from home
   if (pathname === '/' && role !== 'admin' && role !== 'director') {
-    return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/dashboard/viewer', req.url))
+    return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/dashboard/staff', req.url))
   }
 
   // Check permissions

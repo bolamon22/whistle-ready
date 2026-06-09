@@ -58,7 +58,7 @@ export default function JoinStaffPage() {
     const uRes = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, role: 'staff' }),
     })
     const uData = await uRes.json()
     if (!uRes.ok) { setError(uData.error || 'Could not create account'); setSubmitting(false); return }

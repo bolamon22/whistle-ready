@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password } = await req.json()
+    const { name, email, password, role } = await req.json()
     if (!name || !email || !password) return NextResponse.json({ error: 'All fields required' }, { status: 400 })
     if (password.length < 6) return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
 
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
     const hashed = await bcrypt.hash(password, 12)
     const user = await prisma.user.create({
-      data: { name, email: email.toLowerCase(), password: hashed, role: 'viewer' },
+      data: { name, email: email.toLowerCase(), password: hashed, role: role ?? 'staff' },
     })
     return NextResponse.json({ id: user.id, name: user.name, email: user.email }, { status: 201 })
   } catch (e) {
