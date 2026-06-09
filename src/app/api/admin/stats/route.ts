@@ -27,7 +27,7 @@ export async function GET() {
       select: { id: true, name: true, sport: true, startDate: true, endDate: true, createdAt: true },
     }),
     prisma.teamRegistration.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, OR: [{ numTeams: { gt: 0 } }, { invoiceAmount: { gt: 0 } }] },
       take: 8,
       orderBy: { createdAt: 'desc' },
       select: {
