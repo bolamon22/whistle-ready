@@ -13,6 +13,60 @@ function fmtSrc(src: string): string {
   return src
 }
 
+
+// ── Algorithmic bracket generator (any team count) ─────────────────────────
+type Sect = 'winners' | 'losers' | 'consolation' | 'championship'
+interface Gen { gameNumber: number; round: number; section: Sect; t1: string; t2: string; label: string }
+
+function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
+  const n = Math.max(2, teamCount)
+  const games: Gen[] = []
+  let gn = 1
+
+  if (n === 2) {
+    games.push({ gameNumber: gn++, round: 1, section: 'championship', t1: 'seed:1', t2: 'seed:2', label: 'Championship' })
+  } else {
+    // Find smallest power of 2 >= n; byes go to top seeds
+    let slots = 2
+    while (slots < n) slots *= 2
+    const byes = slots - n
+    const byeSeeds = Array.from({ length: byes }, (_, i) => `seed:${i + 1}`)
+    const r1Seeds = Array.from({ length: n - byes }, (_, i) => i + byes + 1)
+
+    // Round 1: pair highest vs lowest remaining
+    const r1Winners: string[] = []
+    for (let i = 0; i < r1Seeds.length / 2; i++) {
+      const s1 = r1Seeds[i], s2 = r1Seeds[r1Seeds.length - 1 - i]
+      games.push({ gameNumber: gn, round: 1, section: 'winners', t1: `seed:${s1}`, t2: `seed:${s2}`, label: '' })
+      r1Winners.push(`winner:${gn}`)
+      gn++
+    }
+
+    // Subsequent rounds: byes slot in first (best seeds), then r1 winners
+    let sources: string[] = [...byeSeeds, ...r1Winners]
+    let round = 2
+    while (sources.length > 1) {
+      const next: string[] = []
+      for (let i = 0; i < Math.floor(sources.length / 2); i++) {
+        const s1 = sources[i], s2 = sources[sources.length - 1 - i]
+        const isChamp = sources.length === 2
+        games.push({ gameNumber: gn, round, section: isChamp ? 'championship' : 'winners', t1: s1, t2: s2, label: isChamp ? 'Championship' : '' })
+        next.push(`winner:${gn}`)
+        gn++
+      }
+      sources = next
+      round++
+    }
+  }
+
+  // Consolation slots
+  for (let i = 0; i < consolationCount; i++) {
+    games.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: '', t2: '', label: consolationCount > 1 ? `Consolation ${i + 1}` : 'Consolation' })
+  }
+
+  return games
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string; division: string } }
@@ -38,10 +92,17 @@ export async function POST(
   { params }: { params: { id: string; division: string } }
 ) {
   const division = decodeURIComponent(params.division)
-  const { format, teamCount, seeds } = await req.json()
+  const { format, teamCount, consolationCount = 0, seeds } = await req.json()
 
-  // Template is optional — no template = empty bracket, user adds games manually
-  const template = getTemplate(format, teamCount) ?? []
+  // Use predefined template if available; otherwise generate algorithmically
+  const rawTemplate = getTemplate(format, teamCount)
+  const template: Gen[] = rawTemplate
+    ? rawTemplate.map((g, _) => ({
+        gameNumber: g.gameNumber, round: g.round,
+        section: g.section as Sect,
+        t1: g.t1, t2: g.t2, label: g.label || '',
+      }))
+    : generateSEGames(teamCount, consolationCount)
 
   try {
     const existing = await prisma.bracket.findFirst({
@@ -69,7 +130,7 @@ export async function POST(
           data: {
             id: genId(), bracketId,
             gameNumber: g.gameNumber, round: g.round, section: g.section,
-            team1Source: g.t1, team2Source: g.t2, label: g.label || '',
+            team1Source: g.t1, team2Source: g.t2, label: g.label,
             team1: '', team2: '', winner: '', loser: '', field: '', startTime: '', gameDate: '',
           },
         })

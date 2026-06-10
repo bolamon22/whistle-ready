@@ -73,7 +73,8 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [selFormat, setSelFormat] = useState<'single' | 'double' | '2gg'>('single')
-  const [selCount, setSelCount] = useState<number>(8)
+  const [selCountInput, setSelCountInput] = useState('4')
+  const [consolationInput, setConsolationInput] = useState('0')
   const [creating, setCreating] = useState(false)
 
   // Add-game form state
@@ -111,7 +112,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
       const r = await fetch(apiBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format: selFormat, teamCount: selCount, seeds: {} }),
+        body: JSON.stringify({ format: selFormat, teamCount: Math.max(2, parseInt(selCountInput) || 2), consolationCount: Math.max(0, parseInt(consolationInput) || 0), seeds: {} }),
       })
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Failed to create') }
       await loadBracket()
@@ -241,10 +242,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
   // ── Setup wizard ───────────────────────────────────────────────────────
 
   if (!bracket) {
-    const validCounts = [...new Set(
-      TEMPLATE_CATALOG.filter(t => t.format === selFormat).map(t => t.teamCount)
-    )].sort((a, b) => a - b)
-    if (!validCounts.includes(selCount)) setSelCount(validCounts[1] ?? validCounts[0])
+    const selCount = Math.max(2, parseInt(selCountInput) || 2)
     const entry = TEMPLATE_CATALOG.find(t => t.key === `${selFormat}-${selCount}`)
 
     return (
@@ -278,38 +276,57 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
           </div>
         </div>
 
-        <div className="mb-6">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Teams in bracket</p>
-          <div className="flex gap-2 flex-wrap">
-            {validCounts.map(n => (
-              <button
-                key={n}
-                onClick={() => setSelCount(n)}
-                className={`w-14 py-2.5 rounded-lg border text-sm font-bold transition-all ${
-                  selCount === n
-                    ? 'bg-teal-600 border-teal-500 text-white'
-                    : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-slate-500 hover:text-white'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
+        <div className="mb-5 grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
+              Teams in bracket
+            </label>
+            <input
+              type="number" min="2" max="64"
+              value={selCountInput}
+              onChange={e => setSelCountInput(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-teal-500"
+              placeholder="e.g. 2"
+            />
+            <p className="text-xs text-slate-600 mt-1">Top N seeds advance to bracket</p>
           </div>
-          <p className="text-xs text-slate-600 mt-2">
-            Different count? Start with any option — you can add or remove games manually after creating.
-          </p>
+          <div>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
+              Consolation games
+            </label>
+            <input
+              type="number" min="0" max="20"
+              value={consolationInput}
+              onChange={e => setConsolationInput(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-teal-500"
+              placeholder="0"
+            />
+            <p className="text-xs text-slate-600 mt-1">Extra consolation game slots</p>
+          </div>
         </div>
 
-        {entry && (
-          <div className="mb-5 bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm">
-            <div className="font-semibold text-white">{entry.label} · {entry.teamCount} teams</div>
-            <div className="text-slate-400 mt-0.5">{entry.description}</div>
-          </div>
-        )}
+        <div className="mb-5 bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm">
+          {entry ? (
+            <>
+              <div className="font-semibold text-white">{entry.label} · {entry.teamCount} teams</div>
+              <div className="text-slate-400 mt-0.5">{entry.description}</div>
+            </>
+          ) : (
+            <>
+              <div className="font-semibold text-white">
+                {FORMAT_LABELS[selFormat]} · {selCount} team{selCount !== 1 ? 's' : ''}
+              </div>
+              <div className="text-slate-400 mt-0.5">
+                {selCount - 1} game{selCount - 2 !== 0 ? 's' : ''} · bracket generated automatically
+                {parseInt(consolationInput) > 0 && ` · ${consolationInput} consolation slot${parseInt(consolationInput) > 1 ? 's' : ''}`}
+              </div>
+            </>
+          )}
+        </div>
 
         <button
           onClick={handleCreate}
-          disabled={creating || !entry}
+          disabled={creating}
           className="w-full py-3 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white font-semibold rounded-xl transition-colors text-sm"
         >
           {creating ? 'Creating…' : 'Generate Bracket'}
