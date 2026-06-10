@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
+import BracketBuilder from './BracketBuilder'
 
 const PALETTE = [
   '#3b82f6', '#10b981', '#a855f7', '#f97316', '#ec4899',
@@ -36,7 +37,7 @@ export default function DivisionsPage() {
   const [tournament, setTournament] = useState<{ name: string; logoUrl: string } | null>(null)
   const [divisions, setDivisions] = useState<Division[]>([])
   const [activeDiv, setActiveDiv] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'teams' | 'pools' | 'pool-games'>('teams')
+  const [activeTab, setActiveTab] = useState<'teams' | 'pools' | 'pool-games' | 'bracket'>('teams')
   const [teams, setTeams] = useState<Team[]>([])
   const [pools, setPools] = useState<Pool[]>([])
   const [loading, setLoading] = useState(true)
@@ -327,7 +328,7 @@ export default function DivisionsPage() {
     if (div === activeDiv) await loadPoolGames(div)
     setGenerating(false)
     const gpt = divGamesPerTeam[div] ?? '2'
-    toast.success(`${data.generated} games created for ${div} — ${gpt} games/team · now in parking lot`)
+    toast.success(`${data.generated} games created for ${div} â ${gpt} games/team Â· now in parking lot`)
   }
 
   async function generateGames() {
@@ -486,7 +487,7 @@ if (loading) return (
               {divisions.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs text-slate-400">
                   No divisions yet.
-                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder →</Link>
+                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder â</Link>
                 </div>
               ) : (
                 <div>
@@ -504,8 +505,8 @@ if (loading) return (
                             onKeyDown={e => { if (e.key === 'Enter') renameDiv(div.name); if (e.key === 'Escape') setRenamingDiv(null) }}
                             className="flex-1 min-w-0 text-xs border border-sky-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-400"
                           />
-                          <button onClick={() => renameDiv(div.name)} className="text-sky-600 hover:text-sky-800 text-xs font-bold px-1">✓</button>
-                          <button onClick={() => setRenamingDiv(null)} className="text-slate-400 hover:text-slate-600 text-xs px-1">✕</button>
+                          <button onClick={() => renameDiv(div.name)} className="text-sky-600 hover:text-sky-800 text-xs font-bold px-1">â</button>
+                          <button onClick={() => setRenamingDiv(null)} className="text-slate-400 hover:text-slate-600 text-xs px-1">â</button>
                         </div>
                       ) : (
                         <div className="flex items-center pr-1">
@@ -518,13 +519,13 @@ if (loading) return (
                               <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
                             </div>
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
-                              <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
+                              <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} Â· {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
                               {div.gameCount > 0 && (
                                 <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{div.gameCount} games</span>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount > 0 && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full" title={`${div.unassignedTeams} team${div.unassignedTeams !== 1 ? 's' : ''} not assigned to a pool`}>
-                                  ⚠ {div.unassignedTeams} unassigned
+                                  â  {div.unassignedTeams} unassigned
                                 </span>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount === 0 && div.teamCount > 0 && (
@@ -538,12 +539,12 @@ if (loading) return (
                             <button
                               onClick={() => { setRenamingDiv(div.name); setRenameValue(div.name) }}
                               className="p-1 text-slate-400 hover:text-sky-600 rounded" title="Rename">
-                              ✏
+                              â
                             </button>
                             <button
                               onClick={() => deleteDiv(div.name)}
                               className="p-1 text-slate-400 hover:text-red-500 rounded" title="Delete">
-                              ×
+                              Ã
                             </button>
                           </div>
                           <div className="flex flex-col items-center flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
@@ -570,8 +571,8 @@ if (loading) return (
                         placeholder="Division name..."
                         className="flex-1 min-w-0 text-xs border border-sky-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-400"
                       />
-                      <button onClick={createDivision} className="text-sky-600 hover:text-sky-800 text-xs font-bold px-1">✓</button>
-                      <button onClick={() => { setAddingDivInput(false); setNewDivName('') }} className="text-slate-400 text-xs px-1">✕</button>
+                      <button onClick={createDivision} className="text-sky-600 hover:text-sky-800 text-xs font-bold px-1">â</button>
+                      <button onClick={() => { setAddingDivInput(false); setNewDivName('') }} className="text-slate-400 text-xs px-1">â</button>
                     </div>
                   ) : (
                     <button
@@ -608,14 +609,14 @@ if (loading) return (
                 onClick={applySmartDefaults}
                 className="w-full border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium py-1.5 px-3 rounded-lg transition-colors"
               >
-                🧠 Smart Defaults
+                ð§  Smart Defaults
               </button>
               <button
                 onClick={generateAllDivisions}
                 disabled={generatingAll}
                 className="w-full bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
               >
-                {generatingAll ? 'Generating...' : '⚡ Generate All Divisions'}
+                {generatingAll ? 'Generating...' : 'â¡ Generate All Divisions'}
               </button>
               <p className="text-[10px] text-slate-400 text-center leading-tight">Auto-creates Pool A if needed</p>
             </div>
@@ -633,10 +634,10 @@ if (loading) return (
               <>
                 {/* Sub-tabs */}
                 <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
-                  {(['teams', 'pools', 'pool-games'] as const).map(tab => (
+                  {(['teams', 'pools', 'pool-games', 'bracket'] as const).map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
                       className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px capitalize transition-colors ${activeTab === tab ? 'border-sky-600 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                      {tab === 'teams' ? `Teams (${teams.length})` : tab === 'pools' ? `Pools (${pools.length})` : `Pool Games (${poolGames.length})`}
+                      {tab === 'teams' ? `Teams (${teams.length})` : tab === 'pools' ? `Pools (${pools.length})` : tab === 'pool-games' ? `Pool Games (${poolGames.length})` : `Bracket`}
                     </button>
                   ))}
                 </div>
@@ -677,7 +678,7 @@ if (loading) return (
                         {swapA && swapB ? (
                           <button onClick={swapTeams} disabled={swapping}
                             className="btn-primary btn-sm disabled:opacity-50">
-                            {swapping ? 'Swapping...' : `↔ Swap ${swapA} ↔ ${swapB}`}
+                            {swapping ? 'Swapping...' : `â Swap ${swapA} â ${swapB}`}
                           </button>
                         ) : swapA ? (
                           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
@@ -724,7 +725,7 @@ if (loading) return (
                                 className={`border-b border-slate-50 last:border-0 cursor-pointer transition-colors ${isSwapA || isSwapB ? 'bg-amber-50' : i % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'}`}>
                                 <td className="px-5 py-3 font-semibold text-slate-800">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    {(isSwapA || isSwapB) && <span className="text-amber-500">↔</span>}
+                                    {(isSwapA || isSwapB) && <span className="text-amber-500">â</span>}
                                     {team.teamName}
                                     {team.status === 'placeholder' && (
                                       <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
@@ -757,12 +758,12 @@ if (loading) return (
                                     <button
                                       onClick={() => { setEditingTeam(team); setTeamForm({ teamName: team.teamName, clubName: team.clubName, coachName: team.coachName, coachEmail: team.coachEmail, coachPhone: team.coachPhone }) }}
                                       className={`text-[11px] border rounded px-1.5 py-0.5 transition-colors whitespace-nowrap ${team.status === 'placeholder' ? 'text-amber-600 hover:text-amber-800 border-amber-200 hover:border-amber-400' : 'text-slate-400 hover:text-slate-700 border-slate-200 hover:border-slate-400'}`}>
-                                      ✏ Edit
+                                      â Edit
                                     </button>
                                     <button
                                       onClick={() => { setMovingTeam(team); setMoveTarget('') }}
                                       className="text-[11px] text-slate-400 hover:text-sky-600 border border-slate-200 hover:border-sky-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
-                                      Move →
+                                      Move â
                                     </button>
                                   </div>
                                 </td>
@@ -775,12 +776,12 @@ if (loading) return (
                   </div>
                 )}
 
-                {/* ── Add Team modal ── */}
+                {/* ââ Add Team modal ââ */}
                 {showAddTeam && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddTeam(false)}>
                     <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
                       <h3 className="font-bold text-slate-800 mb-1">Add Team</h3>
-                      <p className="text-xs text-slate-500 mb-4">Only team name is required — all other details can be filled in later.</p>
+                      <p className="text-xs text-slate-500 mb-4">Only team name is required â all other details can be filled in later.</p>
                       <div className="space-y-3">
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Team Name <span className="text-red-500">*</span></label>
@@ -822,7 +823,7 @@ if (loading) return (
                   </div>
                 )}
 
-                {/* ── Edit Team modal ── */}
+                {/* ââ Edit Team modal ââ */}
                 {editingTeam && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditingTeam(null)}>
                     <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
@@ -872,7 +873,7 @@ if (loading) return (
                           {editingTeam?.status === 'placeholder' && (
                             <button onClick={() => updateTeam(true)} disabled={savingTeam}
                               className="text-sm font-semibold bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
-                              ✓ Confirm Team
+                              â Confirm Team
                             </button>
                           )}
                         </div>
@@ -881,12 +882,12 @@ if (loading) return (
                   </div>
                 )}
 
-                {/* ── Generate confirm modal ── */}
+                {/* ââ Generate confirm modal ââ */}
                 {generateConfirm && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setGenerateConfirm(null)}>
                     <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-2xl">⚠️</span>
+                        <span className="text-2xl">â ï¸</span>
                         <h3 className="font-bold text-slate-800">Scheduled Games Will Be Replaced</h3>
                       </div>
                       <p className="text-sm text-slate-600 mb-2">
@@ -926,7 +927,7 @@ if (loading) return (
                                 setPoolGames(Array.isArray(gameData) ? gameData : [])
                               }
                               setGeneratingAll(false)
-                              toast.success(`${totalGames} games generated · moved to parking lot`)
+                              toast.success(`${totalGames} games generated Â· moved to parking lot`)
                             } else {
                               await doGenerateGames(div)
                             }
@@ -939,7 +940,7 @@ if (loading) return (
                   </div>
                 )}
 
-                {/* ── Move Team modal ── */}
+                {/* ââ Move Team modal ââ */}
                 {movingTeam && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setMovingTeam(null)}>
                     <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={e => e.stopPropagation()}>
@@ -952,7 +953,7 @@ if (loading) return (
                         value={moveTarget}
                         onChange={e => setMoveTarget(e.target.value)}
                         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 mb-4">
-                        <option value="">— Select division —</option>
+                        <option value="">â Select division â</option>
                         {divisions.filter(d => d.name !== activeDiv).map(d => (
                           <option key={d.name} value={d.name}>{d.name}</option>
                         ))}
@@ -979,7 +980,7 @@ if (loading) return (
                       <p className="text-xs text-slate-400">{teams.filter(t => !t.pool).length > 0 ? `${teams.filter(t => !t.pool).length} teams unassigned` : 'All teams assigned'}</p>
                       <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
                         className="btn-primary btn-sm">
-                        Assign Teams to Pools →
+                        Assign Teams to Pools â
                       </Link>
                       <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/bracket`}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors mt-1">
@@ -1091,7 +1092,7 @@ if (loading) return (
                         </div>
                         <button onClick={generateGames} disabled={generating || pools.length === 0}
                           className="btn-primary btn-sm disabled:opacity-50">
-                          {generating ? 'Generating...' : '⚡ Generate Games'}
+                          {generating ? 'Generating...' : 'â¡ Generate Games'}
                         </button>
                         {poolGames.length > 0 && (
                           <>
@@ -1117,7 +1118,7 @@ if (loading) return (
                     </div>
                     {poolGames.length === 0 ? (
                       <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">
-                        No pool games yet. Add pools with teams, then click ⚡ Generate Games.
+                        No pool games yet. Add pools with teams, then click â¡ Generate Games.
                       </div>
                     ) : (
                       (() => {
@@ -1163,6 +1164,9 @@ if (loading) return (
                     )}
                   </div>
                 )}
+              {activeTab === 'bracket' && activeDiv && (
+                <BracketBuilder tournamentId={id} division={activeDiv} />
+              )}
               </>
             )}
           </div>
