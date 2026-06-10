@@ -44,7 +44,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     { href: `${base}/settings`,      label: 'Settings'      },
     { href: `${base}/scheduler`,     label: 'Scheduler',    dropdown: [
       { href: `${base}/scheduler`,   label: 'Schedule'      },
-      { href: `${base}/assignments`, label: 'Assigner'      },
+      { href: `${base}`,             label: 'Assigner'      },
       { href: `${base}/divisions`,   label: 'Divisions'     },
     ]},
     { href: `${base}/financials`,    label: 'Financials'    },
