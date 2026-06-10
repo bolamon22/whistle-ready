@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { certLabel, WORKER_ROLES, isHourlyRole, PAY_METHODS, CERT_LEVELS } from '@/lib/utils'
+import { Users, Calendar, Clock, Wallet, Mail, UserPlus } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
@@ -51,8 +52,8 @@ function EditForm({ form, setForm, onSubmit, onCancel, saving }: {
         <label className="label">Roles (select all that apply)</label>
         <div className="flex flex-wrap gap-2 mt-1">
           {WORKER_ROLES.map(r=>(
-            <label key={r.value} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors ${roles.includes(r.value)?'bg-sky-50 border-sky-300 text-sky-800':'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-              <input type="checkbox" className="accent-sky-600" checked={roles.includes(r.value)} onChange={()=>toggleRole(r.value)}/>
+            <label key={r.value} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors ${roles.includes(r.value)?'bg-teal-50 border-teal-300 text-teal-800':'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+              <input type="checkbox" className="accent-teal-600" checked={roles.includes(r.value)} onChange={()=>toggleRole(r.value)}/>
               {r.label}
             </label>
           ))}
@@ -251,7 +252,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   }
                 }}
               >
-                {inviteSending ? 'Sending…' : '✉️ Send Invite'}
+                {inviteSending ? 'Sending…' : <><Mail size={15} className="inline align-text-bottom mr-1.5" />Send Invite</>}
               </button>
             </div>
           </div>
@@ -263,20 +264,20 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       {/* Staff sub-nav */}
       <div className="flex items-center gap-1 mb-6 border-b border-slate-200">
         <Link href={`/tournaments/${params.id}/roster`}
-          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-sky-600 text-sky-700">
-          👥 Staff Roster
+          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-teal-600 text-teal-700">
+          <Users size={15} className="inline align-text-bottom mr-1.5" />Staff Roster
         </Link>
         <Link href={`/tournaments/${params.id}/availability`}
           className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
-          🗓 Availability
+          <Calendar size={15} className="inline align-text-bottom mr-1.5" />Availability
         </Link>
         <Link href={`/tournaments/${params.id}/time-entries`}
           className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
-          ⏱ Time Entries
+          <Clock size={15} className="inline align-text-bottom mr-1.5" />Time Entries
         </Link>
         <Link href={`/tournaments/${params.id}/pay-summary`}
           className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
-          💰 Pay Summary
+          <Wallet size={15} className="inline align-text-bottom mr-1.5" />Pay Summary
         </Link>
       </div>
 
@@ -287,7 +288,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
         </div>
         <button onClick={() => setShowInvite(true)}
           className="btn-primary btn-sm flex items-center gap-2">
-          ✉️ Invite Staff
+          <UserPlus size={15} />Invite Staff
         </button>
       </div>
 
@@ -310,8 +311,8 @@ export default function RosterPage({ params }: { params:{id:string} }) {
           </div>
 
           {selected.size>0&&(
-            <div className="flex items-center gap-3 mb-3 p-3 bg-sky-50 border border-sky-200 rounded-lg flex-wrap">
-              <span className="text-sm font-medium text-sky-700">{selected.size} selected</span>
+            <div className="flex items-center gap-3 mb-3 p-3 bg-teal-50 border border-teal-200 rounded-lg flex-wrap">
+              <span className="text-sm font-medium text-teal-700">{selected.size} selected</span>
               <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}>
                 <option value="">— choose field to edit —</option>
                 {BULK_FIELDS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
@@ -347,9 +348,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   const isExpanded=expandedId===w.id
                   return(
                   <>
-                    <tr key={w.id} className={`border-b border-slate-100 ${selected.has(w.id)?'bg-sky-50':isExpanded?'bg-slate-50 border-b-0':'hover:bg-slate-50'}`}>
+                    <tr key={w.id} className={`border-b border-slate-100 ${selected.has(w.id)?'bg-teal-50':isExpanded?'bg-slate-50 border-b-0':'hover:bg-slate-50'}`}>
                       <td className="px-4 py-3"><input type="checkbox" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/></td>
-                      <td className="px-4 py-3 font-semibold text-slate-900 cursor-pointer hover:text-sky-600 transition-colors" onClick={()=>expand(w,'profile')}>
+                      <td className="px-4 py-3 font-semibold text-slate-900 cursor-pointer hover:text-teal-600 transition-colors" onClick={()=>expand(w,'profile')}>
                         {w.name}{w.isAssigner&&<span className="ml-2 badge bg-amber-100 text-amber-700">Assigner</span>}
                       </td>
                       <td className="px-4 py-3">
@@ -360,7 +361,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                       <td className="px-4 py-3">
                         {wRoles.includes('ref')
                           ? <div className="flex flex-col gap-0.5">
-                              <span className={`badge w-fit ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                              <span className={`badge w-fit ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
                               <span className="text-xs text-slate-400">{gLabel(w.gender)}</span>
                             </div>
                           : <span className="text-slate-400">—</span>}
@@ -385,7 +386,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={()=>expand(w,'profile')} className={`text-xs mr-2 font-medium transition-colors ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-400 hover:text-slate-700'}`}>Profile</button>
-                        <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-sky-800 underline':'text-sky-600 hover:text-sky-800'}`}>Edit</button>
+                        <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-teal-800 underline':'text-teal-600 hover:text-teal-800'}`}>Edit</button>
                         <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="text-xs text-red-400 hover:text-red-600 transition-colors">Remove</button>
                       </td>
                     </tr>
@@ -399,7 +400,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                               <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 shadow-lg">
                                 {w.photoUrl
                                   ? <img src={w.photoUrl} alt={w.name} className="w-14 h-14 object-cover"/>
-                                  : <div className="w-14 h-14 bg-sky-500 flex items-center justify-center font-bold text-2xl text-white">{w.name[0].toUpperCase()}</div>
+                                  : <div className="w-14 h-14 bg-teal-500 flex items-center justify-center font-bold text-2xl text-white">{w.name[0].toUpperCase()}</div>
                                 }
                               </div>
                               <div className="flex-1 min-w-0">
@@ -408,12 +409,12 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                                     <h3 className="text-lg font-bold">{w.name}</h3>
                                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                                       {wRoles.map(r=>(
-                                        <span key={r} className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${r==='ref'?'bg-sky-500/30 text-sky-200':r==='scorekeeper'?'bg-emerald-500/30 text-emerald-200':'bg-slate-500/40 text-slate-300'}`}>{rLabel(r)}</span>
+                                        <span key={r} className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${r==='ref'?'bg-teal-500/30 text-teal-200':r==='scorekeeper'?'bg-emerald-500/30 text-emerald-200':'bg-slate-500/40 text-slate-300'}`}>{rLabel(r)}</span>
                                       ))}
                                       {w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
                                     </div>
                                   </div>
-                                  <button onClick={()=>expand(w,'edit')} className="text-xs text-sky-300 hover:text-white border border-sky-400/40 hover:border-sky-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
+                                  <button onClick={()=>expand(w,'edit')} className="text-xs text-teal-300 hover:text-white border border-teal-400/40 hover:border-teal-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
                                 </div>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 mt-4 text-sm">
                                   {w.phone&&<div><p className="text-slate-400 text-xs mb-0.5">Phone</p><p>{w.phone}</p></div>}
@@ -443,7 +444,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={8} className="px-6 py-5 bg-sky-50/40 border-b border-slate-200">
+                        <td colSpan={8} className="px-6 py-5 bg-teal-50/40 border-b border-slate-200">
                           <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving}/>
                         </td>
                       </tr>
@@ -473,7 +474,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">{wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}</div>
                   </td>
-                  <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">—</span>}</td>
+                  <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">—</span>}</td>
                   <td className="px-4 py-3 text-xs text-slate-400">{w.phone||w.email||'—'}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="btn-primary btn-sm">+ Add</button>
@@ -488,7 +489,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       {allWorkers.length===0 && (
         <div className="card p-12 text-center text-slate-400">
           <p className="font-medium">No staff in the database yet.</p>
-          <Link href="/staff" className="text-sky-600 hover:underline text-sm mt-1 block">Add staff first →</Link>
+          <Link href="/staff" className="text-teal-600 hover:underline text-sm mt-1 block">Add staff first →</Link>
         </div>
       )}
       </div>
