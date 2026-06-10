@@ -328,7 +328,7 @@ export default function DivisionsPage() {
     if (div === activeDiv) await loadPoolGames(div)
     setGenerating(false)
     const gpt = divGamesPerTeam[div] ?? '2'
-    toast.success(`${data.generated} games created for ${div} â ${gpt} games/team Â· now in parking lot`)
+    toast.success(`${data.generated} games created for ${div} → ${gpt} games/team · now in parking lot`)
   }
 
   async function generateGames() {
@@ -519,13 +519,13 @@ if (loading) return (
                               <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
                             </div>
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
-                              <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} Â· {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
+                              <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
                               {div.gameCount > 0 && (
                                 <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{div.gameCount} games</span>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount > 0 && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full" title={`${div.unassignedTeams} team${div.unassignedTeams !== 1 ? 's' : ''} not assigned to a pool`}>
-                                  â  {div.unassignedTeams} unassigned
+                                  ⚠ {div.unassignedTeams} unassigned
                                 </span>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount === 0 && div.teamCount > 0 && (
@@ -539,12 +539,12 @@ if (loading) return (
                             <button
                               onClick={() => { setRenamingDiv(div.name); setRenameValue(div.name) }}
                               className="p-1 text-slate-400 hover:text-sky-600 rounded" title="Rename">
-                              â
+                              ✏️
                             </button>
                             <button
                               onClick={() => deleteDiv(div.name)}
                               className="p-1 text-slate-400 hover:text-red-500 rounded" title="Delete">
-                              Ã
+                              ×
                             </button>
                           </div>
                           <div className="flex flex-col items-center flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
@@ -616,7 +616,7 @@ if (loading) return (
                 disabled={generatingAll}
                 className="w-full bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
               >
-                {generatingAll ? 'Generating...' : 'â¡ Generate All Divisions'}
+        {generatingAll ? 'Generating...' : '⚡ Generate All Divisions'}
               </button>
               <p className="text-[10px] text-slate-400 text-center leading-tight">Auto-creates Pool A if needed</p>
             </div>
@@ -927,7 +927,7 @@ if (loading) return (
                                 setPoolGames(Array.isArray(gameData) ? gameData : [])
                               }
                               setGeneratingAll(false)
-                              toast.success(`${totalGames} games generated Â· moved to parking lot`)
+                              toast.success(`${totalGames} games generated · moved to parking lot`)
                             } else {
                               await doGenerateGames(div)
                             }
