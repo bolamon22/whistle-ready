@@ -300,6 +300,29 @@ export default function BracketPage() {
   const [setupFormat, setSetupFormat] = useState<'single' | 'double'>('single')
   const [setupCount, setSetupCount] = useState(8)
   const [view, setView] = useState<'bracket' | 'games'>('bracket')
+  const [wizardStep, setWizardStep] = useState<1|2|3>(1)
+  const [wizardPools, setWizardPools] = useState<{name:string;teamNames:string[]}[]>([])
+  const [wizardPoolsLoading, setWizardPoolsLoading] = useState(false)
+  const [setupTeamsPerPool, setSetupTeamsPerPool] = useState(2)
+  const [setupSeedMethod, setSetupSeedMethod] = useState<'cross-pool'|'by-record'|'manual'>('cross-pool')
+
+  function validBracketSize(n: number): number {
+    if (n <= 4) return 4
+    if (n <= 8) return 8
+    return 16
+  }
+
+  async function loadPoolsForWizard() {
+    setWizardPoolsLoading(true)
+    try {
+      const r = await fetch(`/api/tournaments/${id}/divisions/${division}/pools`)
+      if (r.ok) {
+        const data = await r.json()
+        setWizardPools(Array.isArray(data) ? data : [])
+      }
+    } catch {}
+    setWizardPoolsLoading(false)
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -309,16 +332,57 @@ export default function BracketPage() {
   }, [id, division])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => { if (!bracket && !loading) loadPoolsForWizard() }, [bracket, loading])
 
   async function createBracket() {
     setCreating(true)
+    let seeds: Record<string,string> = {}
+    const targetCount = wizardPools.length > 0 ? validBracketSize(wizardPools.length * setupTeamsPerPool) : setupCount
+    if (setupSeedMethod !== 'manual' && wizardPools.length > 0) {
+      try {
+        const gamesRes = await fetch(`/api/tournaments/${id}/divisions/${division}/pool-games`)
+        const poolGames: any[] = gamesRes.ok ? await gamesRes.json() : []
+        const stats: Record<string,{W:number;L:number;T:number;GF:number;GA:number}> = {}
+        for (const pool of wizardPools) {
+          for (const t of (pool.teamNames || [])) stats[t] = {W:0,L:0,T:0,GF:0,GA:0}
+        }
+        for (const g of poolGames) {
+          if (g.score1 == null || g.score2 == null) continue
+          const s1 = Number(g.score1), s2 = Number(g.score2)
+          if (stats[g.team1]) { if(s1>s2)stats[g.team1].W++;else if(s1<s2)stats[g.team1].L++;else stats[g.team1].T++;stats[g.team1].GF+=s1;stats[g.team1].GA+=s2 }
+          if (stats[g.team2]) { if(s2>s1)stats[g.team2].W++;else if(s2<s1)stats[g.team2].L++;else stats[g.team2].T++;stats[g.team2].GF+=s2;stats[g.team2].GA+=s1 }
+        }
+        const sortTeam = (a:string,b:string) => {
+          const sa=stats[a]||{W:0,L:0,T:0,GF:0,GA:0}, sb=stats[b]||{W:0,L:0,T:0,GF:0,GA:0}
+          if(sb.W!==sa.W)return sb.W-sa.W
+          if((sb.GF-sb.GA)!==(sa.GF-sa.GA))return(sb.GF-sb.GA)-(sa.GF-sa.GA)
+          return sb.GF-sa.GF
+        }
+        if (setupSeedMethod === 'cross-pool') {
+          const ranked: Record<string,string[]> = {}
+          for (const pool of wizardPools) ranked[pool.name] = (pool.teamNames||[]).slice().sort(sortTeam)
+          let seedNum = 1
+          for (let place = 0; place < setupTeamsPerPool; place++) {
+            for (const pool of wizardPools) {
+              const team = ranked[pool.name][place]
+              if (team && seedNum <= targetCount) seeds[String(seedNum++)] = team
+            }
+          }
+        } else {
+          const all = Object.keys(stats).sort(sortTeam).slice(0, targetCount)
+          all.forEach((t,i) => { seeds[String(i+1)] = t })
+        }
+      } catch {}
+    }
     const res = await fetch(`/api/tournaments/${id}/divisions/${division}/bracket`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ format: setupFormat, teamCount: setupCount, seeds: {} }),
+      body: JSON.stringify({ format: setupFormat, teamCount: targetCount, seeds }),
     })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error || 'Failed'); setCreating(false); return }
-    setBracket(data); setCreating(false); setShowSeeds(true); toast.success('Bracket created')
+    setBracket(data); setCreating(false)
+    if (setupSeedMethod === 'manual') setShowSeeds(true)
+    toast.success('Bracket created')
   }
 
   async function resetBracket() {
@@ -349,42 +413,138 @@ export default function BracketPage() {
   if (!bracket) return (
     <div className="min-h-screen bg-slate-50">
       <div className="border-b border-slate-200 bg-white px-6 py-3 flex items-center gap-2">
-        <button onClick={() => router.push(`/tournaments/${id}/divisions`)} className="text-sm text-slate-500 hover:text-slate-700">Divisions</button>
-        <span className="text-slate-300">/</span><span className="text-slate-500">{divName}</span>
-        <span className="text-slate-300">/</span><span className="font-semibold text-slate-700">Bracket</span>
+        <button onClick={() => router.push(`/tournaments/${id}/divisions`)} className="text-sm text-slate-500 hover:text-slate-700">← Divisions</button>
+        <span className="text-slate-300">/</span><span className="text-slate-500 text-sm">{divName}</span>
+        <span className="text-slate-300">/</span><span className="font-semibold text-slate-700 text-sm">Bracket</span>
       </div>
-      <div className="max-w-lg mx-auto px-6 py-12">
+      <div className="max-w-lg mx-auto px-6 py-10">
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {([1,2,3] as const).map(s => (
+            <div key={s} className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                s < wizardStep ? 'bg-blue-600 text-white' : s === wizardStep ? 'bg-blue-600 text-white ring-4 ring-blue-100' : 'bg-slate-200 text-slate-500'
+              }`}>
+                {s < wizardStep ? '✓' : s}
+              </div>
+              {s < 3 && <div className={`w-8 h-0.5 ${s < wizardStep ? 'bg-blue-400' : 'bg-slate-200'}`} />}
+            </div>
+          ))}
+        </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-          <h1 className="text-2xl font-bold text-slate-800 mb-1">Create Bracket</h1>
-          <p className="text-sm text-slate-500 mb-8">{divName}</p>
-          <div className="space-y-6">
+          {wizardStep === 1 && (
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-3">How many teams make the playoffs?</label>
-              <div className="flex gap-2">
-                {[4, 8, 16].filter(n => !(setupFormat === 'double' && n === 16)).map(n => (
-                  <button key={n} onClick={() => setSetupCount(n)}
-                    className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${setupCount === n ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>{n}</button>
-                ))}
+              <h1 className="text-xl font-bold text-slate-800 mb-1">How many teams advance?</h1>
+              <p className="text-sm text-slate-500 mb-6">{divName}</p>
+              {wizardPoolsLoading ? (
+                <div className="text-center py-8 text-slate-400 animate-pulse">Loading pools…</div>
+              ) : wizardPools.length > 0 ? (
+                <div className="space-y-5">
+                  <div className="bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-600">
+                    <span className="font-semibold">{wizardPools.length} pools</span> in this division
+                    {' · '}avg {Math.round(wizardPools.reduce((s,p) => s+(p.teamNames||[]).length,0)/wizardPools.length)} teams/pool
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-3">Teams advancing per pool</label>
+                    <div className="flex gap-2">
+                      {[1,2,3,4].map(n => (
+                        <button key={n} onClick={() => setSetupTeamsPerPool(n)}
+                          className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                            setupTeamsPerPool === n ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}>{n}</button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500">
+                      = <span className="font-semibold text-slate-700">{validBracketSize(wizardPools.length * setupTeamsPerPool)}</span> team bracket
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    No pools found — enter total bracket teams manually.
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-3">Total teams in bracket</label>
+                    <div className="flex gap-2">
+                      {[4,8,16].map(n => (
+                        <button key={n} onClick={() => setSetupCount(n)}
+                          className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                            setupCount === n ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}>{n}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <button onClick={() => { if(wizardPools.length>0)setSetupCount(validBracketSize(wizardPools.length*setupTeamsPerPool)); setWizardStep(2) }}
+                className="w-full mt-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors">
+                Next →
+              </button>
+            </div>
+          )}
+          {wizardStep === 2 && (
+            <div>
+              <h1 className="text-xl font-bold text-slate-800 mb-1">Elimination format</h1>
+              <p className="text-sm text-slate-500 mb-6">{setupCount}-team bracket · {divName}</p>
+              <div className="space-y-3">
+                {(['single','double'] as const).map(f => {
+                  const games = f === 'single' ? setupCount - 1 : setupCount === 4 ? 5 : setupCount === 8 ? 13 : 25
+                  const guar = f === 'single' ? 1 : 2
+                  return (
+                    <button key={f} onClick={() => { setSetupFormat(f); if(f==='double'&&setupCount>8)setSetupCount(8) }}
+                      className={`w-full text-left p-4 rounded-xl border-2 transition-all ${setupFormat===f?'border-blue-500 bg-blue-50':'border-slate-200 hover:border-slate-300'}`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-800 capitalize">{f} Elimination</p>
+                          <p className="text-sm text-slate-500 mt-0.5">{f==='single'?'Lose once and you're out':'Every team gets a second chance — must lose twice'}</p>
+                          <p className="text-xs text-slate-400 mt-1">{guar} guaranteed game{guar>1?'s':''} per team · {games} total games</p>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 mt-0.5 ml-3 ${setupFormat===f?'border-blue-500 bg-blue-500':'border-slate-300'}`} />
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex gap-3 mt-8">
+                <button onClick={() => setWizardStep(1)} className="px-5 py-3 text-slate-600 font-medium rounded-xl border border-slate-200 hover:bg-slate-50">← Back</button>
+                <button onClick={() => setWizardStep(3)} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors">Next →</button>
               </div>
             </div>
+          )}
+          {wizardStep === 3 && (
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-3">How many games are they guaranteed?</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(['single', 'double'] as const).map(f => (
-                  <button key={f}
-                    onClick={() => { setSetupFormat(f); if (f === 'double' && setupCount > 8) setSetupCount(8) }}
-                    className={`py-3 px-4 rounded-xl border-2 text-sm transition-all text-left ${setupFormat === f ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                    <span className="font-bold block">{f === 'single' ? '1 game' : '2 games'}</span>
-                    <span className="text-xs mt-0.5 block opacity-60">{f === 'single' ? 'Single Elimination' : 'Double Elimination'}</span>
+              <h1 className="text-xl font-bold text-slate-800 mb-1">How should teams be seeded?</h1>
+              <p className="text-sm text-slate-500 mb-6">{setupCount}-team {setupFormat} elimination · {divName}</p>
+              <div className="space-y-3">
+                {(wizardPools.length > 0 ? [
+                  {id:'cross-pool', label:'Cross-pool (Recommended)', desc:'Seeds by pool finish · avoids pool rematches in round 1', detail:`1st Pool A, 1st Pool B, 2nd Pool B, 2nd Pool A…`},
+                  {id:'by-record', label:'By overall record', desc:'Best win % across all pools gets top seed', detail:'Win % → goal differential → goals scored'},
+                  {id:'manual', label:'Manual', desc:'Assign seeds yourself after creating the bracket', detail:'Seed entry panel opens after creation'},
+                ] : [
+                  {id:'manual', label:'Manual', desc:'Assign seeds yourself after creating the bracket', detail:'Seed entry panel opens after creation'},
+                ]).map(opt => (
+                  <button key={opt.id} onClick={() => setSetupSeedMethod(opt.id as any)}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${setupSeedMethod===opt.id?'border-blue-500 bg-blue-50':'border-slate-200 hover:border-slate-300'}`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-800">{opt.label}</p>
+                        <p className="text-sm text-slate-500 mt-0.5">{opt.desc}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{opt.detail}</p>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 mt-0.5 ml-3 ${setupSeedMethod===opt.id?'border-blue-500 bg-blue-500':'border-slate-300'}`} />
+                    </div>
                   </button>
                 ))}
               </div>
+              <div className="flex gap-3 mt-8">
+                <button onClick={() => setWizardStep(2)} className="px-5 py-3 text-slate-600 font-medium rounded-xl border border-slate-200 hover:bg-slate-50">← Back</button>
+                <button onClick={createBracket} disabled={creating}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors">
+                  {creating ? 'Creating…' : 'Create Bracket →'}
+                </button>
+              </div>
             </div>
-            <button onClick={createBracket} disabled={creating}
-              className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-colors disabled:npacity-50 text-sm">
-              {creating ? 'Creating...' : 'Create Bracket'}
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </div>
