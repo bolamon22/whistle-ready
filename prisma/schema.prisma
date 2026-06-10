@@ -357,3 +357,14 @@ model AppSetting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+model Pool {
+  id           String   @id @default(cuid())
+  tournamentId String
+  division     String
+  name         String
+  teamNames    String   @default("[]")
+  createdAt    DateTime @default(now())
+
+  @@index([tournamentId, division])
+}
