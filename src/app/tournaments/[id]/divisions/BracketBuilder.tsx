@@ -207,6 +207,18 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
     }
   }
 
+
+  async function handleLabelChange(gameNumber: number, label: string) {
+    try {
+      await fetch(apiBase, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updateLabel: { gameNumber, label } }),
+      })
+      setBracket(prev => prev ? { ...prev, games: prev.games.map(g => g.gameNumber === gameNumber ? { ...g, label } : g) } : prev)
+    } catch { /* ignore */ }
+  }
+
   function quickAddConsolation() {
     if (!bracket) return
     const mainGames = bracket.games.filter(g =>
@@ -566,6 +578,8 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
             label: g.label || undefined,
           }))}
           seeds={seeds}
+          division={division}
+          onLabelChange={handleLabelChange}
         />
       )}
     </div>
@@ -583,7 +597,14 @@ function resolveLabel(src: string, seeds: Record<string, string>): string {
   return src
 }
 
-function BracketPreview({ template, seeds }: { template: GameTemplate[]; seeds: Record<string, string> }) {
+function BracketPreview({ template, seeds, division, onLabelChange }: {
+  template: GameTemplate[]
+  seeds: Record<string, string>
+  division?: string
+  onLabelChange?: (gameNumber: number, label: string) => void
+}) {
+  const [editingLabel, setEditingLabel] = useState<{ gameNumber: number; value: string } | null>(null)
+
   const mainGames = template.filter(g => g.section === 'winners' || g.section === 'championship')
   const sideGames = template.filter(g => g.section === 'consolation' || g.section === 'losers')
   const mainRounds = [...new Set(mainGames.map(g => g.round))].sort((a, b) => a - b)
@@ -666,12 +687,35 @@ function BracketPreview({ template, seeds }: { template: GameTemplate[]; seeds: 
                 className={`rounded-lg border text-xs flex flex-col overflow-hidden ${isChamp ? 'border-amber-400/60 bg-gradient-to-b from-amber-950/60 to-slate-900 shadow-lg shadow-amber-900/20' : 'border-slate-600/80 bg-slate-800/90'}`}>
                 <div className={`px-2 py-0.5 flex items-center justify-between ${isChamp ? 'bg-amber-500/10' : 'bg-black/20'}`}>
                   <span className="text-[10px] font-mono text-slate-500">B{game.gameNumber}</span>
-                  {isChamp && <span className="text-[10px] text-amber-400 font-semibold">🏆 Final</span>}
-                  {game.label && !isChamp && <span className="text-[10px] text-amber-400">{game.label}</span>}
+                  {(() => {
+                    const displayLabel = game.label || (isChamp ? (division ? `${division} Champion` : 'Champion') : undefined)
+                    if (!displayLabel) return null
+                    if (editingLabel?.gameNumber === game.gameNumber) {
+                      return (
+                        <input
+                          autoFocus
+                          value={editingLabel.value}
+                          onChange={e => setEditingLabel({ gameNumber: game.gameNumber, value: e.target.value })}
+                          onBlur={() => { onLabelChange?.(game.gameNumber, editingLabel.value); setEditingLabel(null) }}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { onLabelChange?.(game.gameNumber, editingLabel.value); setEditingLabel(null) } }}
+                          className="text-[10px] bg-transparent border-b border-amber-400 text-amber-300 outline-none w-28 text-right"
+                        />
+                      )
+                    }
+                    return (
+                      <button
+                        onClick={() => setEditingLabel({ gameNumber: game.gameNumber, value: displayLabel })}
+                        title="Click to edit label"
+                        className={`text-[10px] font-semibold hover:opacity-70 cursor-text text-right ${isChamp ? 'text-amber-400' : 'text-amber-400/70'}`}
+                      >
+                        {isChamp && '🏆 '}{displayLabel}
+                      </button>
+                    )
+                  })()}
                 </div>
                 {[game.t1, game.t2].map((src, i) => (
                   <div key={i} className={`flex-1 flex items-center px-2.5 ${i === 0 ? 'border-b border-slate-700/80' : ''}`}>
-                    <span className={`truncate text-[11px] ${resolveLabel(src, seeds).startsWith('W-') || resolveLabel(src, seeds).startsWith('L-') ? 'text-slate-500 italic' : 'text-slate-200'}`}>
+                    <span className={`truncate text-xs font-medium ${resolveLabel(src, seeds).startsWith('W-') || resolveLabel(src, seeds).startsWith('L-') ? 'text-slate-400 italic' : 'text-white'}`}>
                       {resolveLabel(src, seeds)}
                     </span>
                   </div>
@@ -692,11 +736,31 @@ function BracketPreview({ template, seeds }: { template: GameTemplate[]; seeds: 
               <div key={game.gameNumber} className="rounded-lg border border-slate-600/80 bg-slate-800/90 text-xs overflow-hidden">
                 <div className="px-2 py-0.5 bg-black/20 flex items-center justify-between">
                   <span className="text-[10px] font-mono text-slate-500">B{game.gameNumber}</span>
-                  {game.label && <span className="text-[10px] text-slate-400">{game.label}</span>}
+                  {(() => {
+                    const displayLabel = game.label
+                    if (!displayLabel) return null
+                    if (editingLabel?.gameNumber === game.gameNumber) {
+                      return (
+                        <input autoFocus value={editingLabel.value}
+                          onChange={e => setEditingLabel({ gameNumber: game.gameNumber, value: e.target.value })}
+                          onBlur={() => { onLabelChange?.(game.gameNumber, editingLabel.value); setEditingLabel(null) }}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { onLabelChange?.(game.gameNumber, editingLabel.value); setEditingLabel(null) } }}
+                          className="text-[10px] bg-transparent border-b border-slate-400 text-slate-200 outline-none w-24 text-right"
+                        />
+                      )
+                    }
+                    return (
+                      <button onClick={() => setEditingLabel({ gameNumber: game.gameNumber, value: displayLabel })}
+                        title="Click to edit label"
+                        className="text-[10px] text-amber-400/70 hover:text-amber-400 cursor-text">
+                        {displayLabel}
+                      </button>
+                    )
+                  })()}
                 </div>
                 {[game.t1, game.t2].map((src, i) => (
                   <div key={i} className={`px-2 py-1 flex items-center ${i === 0 ? 'border-b border-slate-700' : ''}`}>
-                    <span className={`truncate text-[11px] ${resolveLabel(src, seeds).startsWith('W-') || resolveLabel(src, seeds).startsWith('L-') ? 'text-slate-500 italic' : 'text-slate-300'}`}>
+                    <span className={`truncate text-xs font-medium ${resolveLabel(src, seeds).startsWith('W-') || resolveLabel(src, seeds).startsWith('L-') ? 'text-slate-400 italic' : 'text-slate-100'}`}>
                       {resolveLabel(src, seeds)}
                     </span>
                   </div>
