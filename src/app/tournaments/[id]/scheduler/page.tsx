@@ -80,6 +80,20 @@ function gameType(g: Game) {
   return 'regular'
 }
 
+function divAbbr(div: string) {
+  const abbr = div.split(/\s+/)
+    .map(w => w.replace(/[^a-zA-Z]/g, ''))
+    .filter(w => w.length > 0)
+    .map(w => w[0].toUpperCase())
+    .join('')
+  return abbr.slice(0, 4) || div.slice(0, 3).toUpperCase()
+}
+
+function bracketFeeders(team: string): string | null {
+  const m = team.match(/^[WL]-(B\d+)$/i)
+  return m ? m[1].toUpperCase() : null
+}
+
 export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [games, setGames]               = useState<Game[]>([])
   const [fields, setFields]             = useState<Field[]>([])
@@ -615,6 +629,30 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     }
   })
 
+  // ── Bracket dependency-order detection ──────────────────────────────────────────
+  const bracketOrderMsgs = new Map<string, string>()
+  scheduledGames.filter(g => g.gameNumber.startsWith('B')).forEach(g => {
+    const feeders = [g.team1, g.team2].map(bracketFeeders).filter((f): f is string => f !== null)
+    feeders.forEach(feederNum => {
+      const feeder = games.find(x => x.gameNumber === feederNum && x.division === g.division)
+      if (!feeder) return
+      let msg = ''
+      if (!feeder.date || !feeder.startTime) {
+        msg = `${divAbbr(g.division)}-${feederNum} is not yet scheduled (must play before ${g.gameNumber})`
+      } else {
+        const feederTime = feeder.date + 'T' + feeder.startTime
+        const gameTime = g.date + 'T' + g.startTime
+        if (feederTime >= gameTime) {
+          const when = feeder.date === g.date
+            ? (feeder.startTime === g.startTime ? 'at the same time as' : `after (${feeder.startTime})`)
+            : 'on a later date than'
+          msg = `${divAbbr(g.division)}-${feederNum} scheduled ${when} ${g.gameNumber} — bracket out of order!`
+        }
+      }
+      if (msg) bracketOrderMsgs.set(g.id, bracketOrderMsgs.has(g.id) ? bracketOrderMsgs.get(g.id)! + '\n' + msg : msg)
+    })
+  })
+
   const selectCls = 'text-xs bg-slate-800 text-slate-200 border border-slate-600 rounded px-2 py-0.5'
   const gridSelectCls = 'text-xs bg-white text-slate-700 border border-slate-300 rounded px-2 py-1'
 
@@ -970,7 +1008,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     {hasB2B && (
                       <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center shadow-sm" title={backToBackMsgs.get(g.id) ?? 'Back-to-back game'}>↔</span>
                     )}
-                    <div className="font-bold leading-none mb-0.5"><span className="opacity-60 text-[9px] mr-1">{g.gameNumber}</span>{g.team1}</div>
+                    <div className="font-bold leading-none mb-0.5"><span className="opacity-60 text-[9px] mr-1">{g.gameNumber.startsWith('B') ? `${divAbbr(g.division)}-${g.gameNumber}` : g.gameNumber}</span>{g.team1}</div>
                     <div className="opacity-75 text-[10px] leading-none">vs {g.team2} <span className="opacity-60">· {g.division}{g.pool ? ` ${g.pool}` : ''}</span></div>
                   </div>
                 )
@@ -1068,7 +1106,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   {hasB2B && (
                     <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-900 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm" title={backToBackMsgs.get(g.id) ?? 'Back-to-back game'}>↔</span>
                   )}
-                  <div className="font-bold text-[10px] opacity-70 mb-0.5">{g.gameNumber} · {g.division}{g.pool ? ` · ${g.pool}` : ''}</div>
+                  <div className="font-bold text-[10px] opacity-70 mb-0.5">{g.gameNumber.startsWith('B') ? `${divAbbr(g.division)}-${g.gameNumber}` : g.gameNumber} · {g.division}{g.pool ? ` · ${g.pool}` : ''}</div>
                   <div className="font-semibold truncate">{g.team1}</div>
                   <div className="opacity-80 truncate">vs {g.team2}</div>
                 </div>
@@ -1256,8 +1294,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             {!conflictMsgs.has(game.id) && !backToBackMsgs.has(game.id) && longGapMsgs.has(game.id) && (
                               <span className="absolute bottom-0.5 right-0.5 bg-blue-400 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={longGapMsgs.get(game.id) ?? 'Long gap'}>⏱</span>
                             )}
+                            {!conflictMsgs.has(game.id) && !backToBackMsgs.has(game.id) && !longGapMsgs.has(game.id) && bracketOrderMsgs.has(game.id) && (
+                              <span className="absolute bottom-0.5 right-0.5 bg-orange-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={bracketOrderMsgs.get(game.id) ?? 'Bracket order issue'}>⚡</span>
+                            )}
                             <div className="flex items-center justify-between gap-1">
-                              <div className="font-bold text-[10px] leading-none" style={{ color: 'inherit' }}>{game.gameNumber}</div>
+                              <div className="font-bold text-[10px] leading-none" style={{ color: 'inherit' }}>{game.gameNumber.startsWith('B') ? `${divAbbr(game.division)}-${game.gameNumber}` : game.gameNumber}</div>
                               <div className="text-[9px] leading-none truncate" style={{ opacity: 0.75 }}>{game.division}{game.pool ? ` · ${game.pool}` : ''}</div>
                             </div>
                             <div>
