@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { ClipboardList, Globe, MapPin } from 'lucide-react'
 
 interface Props {
   id: string
@@ -110,7 +111,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${countdown.color}`}>{countdown.label}</span>
                 )}
                 {dateStr && <span className="text-[10px] text-slate-400">{dateStr}</span>}
-                {meta?.location && <span className="text-[10px] text-slate-500 hidden sm:inline truncate max-w-[200px]">📍 {meta.location}</span>}
+                {meta?.location && <span className="text-[10px] text-slate-500 hidden sm:flex items-center gap-1 truncate max-w-[200px]"><MapPin size={11} className="flex-shrink-0" />{meta.location}</span>}
                 {stats && (
                   <>
                     <span className="text-slate-600 text-[10px]">·</span>
@@ -124,12 +125,12 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
           {/* Action buttons */}
           <div className="flex gap-2 flex-shrink-0">
             <Link href={`${base}/register`}
-              className="text-xs text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">
-              📋 Register
+              className="text-xs text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5">
+              <ClipboardList size={14} /> Register
             </Link>
             <Link href={`${base}/public`} target="_blank"
-              className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">
-              🌐 Public
+              className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5">
+              <Globe size={14} /> Public
             </Link>
           </div>
         </div>
