@@ -59,9 +59,11 @@ function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
     }
   }
 
-  // Consolation slots
+  // Consolation slots — auto-fill with seeds starting at teamCount + 1
   for (let i = 0; i < consolationCount; i++) {
-    games.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: '', t2: '', label: consolationCount > 1 ? `Consolation ${i + 1}` : 'Consolation' })
+    const s1 = n + 1 + i * 2
+    const s2 = n + 2 + i * 2
+    games.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `seed:${s1}`, t2: `seed:${s2}`, label: consolationCount > 1 ? `Consolation ${i + 1}` : 'Consolation' })
   }
 
   return games
@@ -174,6 +176,13 @@ export async function PATCH(
       include: { games: { orderBy: { gameNumber: 'asc' } } },
     })
     if (!bracket) return NextResponse.json({ error: 'No bracket found' }, { status: 404 })
+
+    // ── Update label ──────────────────────────────────────────────────
+    if (body.updateLabel !== undefined) {
+      const { gameNumber, label } = body.updateLabel
+      await prisma.bracketGame.updateMany({ where: { bracketId: bracket.id, gameNumber }, data: { label } })
+      return NextResponse.json({ ok: true })
+    }
 
     // ── Add a single game ──────────────────────────────────────────────
     if (body.addGame) {
