@@ -1,0 +1,52 @@
+# GameDay Staff — project guide & working philosophy
+
+This file is read automatically at the start of any Claude / Cowork session that has
+this repo connected. It is the project's memory: what the app is, how we work, and the
+standards to follow. Keep it updated as things evolve — editing this file is how you
+"teach" future sessions, on any computer.
+
+## The app
+GameDay Staff — tournament management for Sunshine Events Group (lacrosse and other
+sports): tournaments, divisions, pools, brackets, team & player registration, staff
+assignment, payroll, and financials.
+
+- Stack: Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS ·
+  Prisma + Turso (libSQL) · NextAuth · Stripe · hosted on Vercel.
+- Repo: github.com/bolamon22/gameday-staff5 (public). Live: gameday-staff5.vercel.app.
+
+## How we ship (workflow)
+- Local working copy lives at `C:\Users\lacro\Downloads\gameday-staff5` — connect this
+  folder in Cowork to work on it.
+- Verify before shipping: type-check (`tsc --noEmit`) and/or an esbuild parse; preview
+  UI changes before deploying.
+- Deploy: commit → push to `master` in GitHub Desktop → Vercel auto-builds and redeploys.
+- Make small, reviewable changes. Fix root causes, not symptoms.
+- Secrets live in `.env` (gitignored) and Vercel env vars — never in the repo or in chat.
+
+## Design standard (UI consistency)
+- Icons: lucide-react only — never emoji.
+- Palette: neutral slate base + teal as the single accent; semantic green / red / amber
+  only for meaning (money, status).
+- Cards: one style — `bg-white border border-slate-200 rounded-xl`.
+- Use the shared primitives in `src/components/ui` (Card, SectionHeader, StatCard,
+  ActionButton) instead of ad-hoc markup. See `src/components/ui/README.md`.
+- Sentence case; avoid heavy bold.
+
+## In progress — app-wide consistency pass
+Roll the design standard across every page (replace emoji with lucide icons, unify
+palette and cards), in this order:
+1. Core workspace — Assigner, Scheduler, Divisions, Registrations, Financials, Settings,
+   Scores, Roster, Assignments, Results, Pay summary, Staff view, Availability,
+   Returning teams, Time entries.
+2. Public / registration — Public page, Register, Individual register, Join, Invite.
+3. Role dashboards — club-director, parent, coach, ref, scorekeeper, director, viewer.
+4. Admin / system pages.
+
+Done so far: shared UI components, Dashboard redesign, TournamentNav header,
+UTF-8 encoding fixes, builder year-regex fix.
+
+## Build philosophy
+- Diagnose before changing; verify after.
+- Preview visual changes before deploying — keep Bo in the loop with a preview.
+- Prefer shared components and conventions so the codebase stays consistent over time.
+- Be careful with secrets and with irreversible actions (deletes, pushes, payments).
