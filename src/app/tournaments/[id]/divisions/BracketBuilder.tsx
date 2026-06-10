@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { TEMPLATE_CATALOG, BRACKET_TEMPLATES, type GameTemplate, type TemplateCatalogEntry } from '@/lib/bracketTemplates'
 
-// ── Types ─────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 
 interface BracketGame {
   id: string
@@ -27,13 +27,14 @@ interface Props {
   division: string
 }
 
-// ── Layout constants ──────────────────────────────────────────────────
+// ── Layout constants ─────────────────────────────────────────────────────────
 
 const GAME_H = 72
-const GAME_W = 210
-const CONN_W = 44
-const GAME_GAP = 12
+const GAME_W = 216
+const CONN_W = 48
+const GAME_GAP = 16
 const UNIT = GAME_H + GAME_GAP
+const LABEL_H = 28
 
 function gameTop(round: number, idx: number): number {
   const spacing = UNIT * Math.pow(2, round - 1)
@@ -41,13 +42,11 @@ function gameTop(round: number, idx: number): number {
   return firstCenter + idx * spacing - GAME_H / 2
 }
 
-function srcLabel(src: string): string {
-  if (!src) return 'TBD'
-  const [type, n] = src.split(':')
-  if (type === 'seed') return `Seed ${n}`
-  if (type === 'winner') return `W-B${n}`
-  if (type === 'loser') return `L-B${n}`
-  return src
+function roundLabel(round: number, maxRound: number): string {
+  if (round === maxRound) return 'Final'
+  if (round === maxRound - 1 && maxRound >= 3) return 'Semifinals'
+  if (round === maxRound - 2 && maxRound >= 4) return 'Quarterfinals'
+  return `Round ${round}`
 }
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -56,7 +55,7 @@ const FORMAT_LABELS: Record<string, string> = {
   '2gg': '2-Game Guarantee',
 }
 
-// ── Main component ────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function BracketBuilder({ tournamentId, division }: Props) {
   const [loading, setLoading] = useState(true)
@@ -100,6 +99,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
       })
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Failed to create') }
       await loadBracket()
+      setTab('seeding')
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -137,7 +137,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
     } finally { setDeleting(false) }
   }
 
-  // ── Loading ──────────────────────────────────────────────────────
+  // ── Loading ──────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -147,7 +147,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
     )
   }
 
-  // ── Setup wizard ─────────────────────────────────────────────────
+  // ── Setup wizard ─────────────────────────────────────────────────────────
 
   if (!bracket) {
     const validCounts = [...new Set(
@@ -222,7 +222,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
     )
   }
 
-  // ── Bracket exists ────────────────────────────────────────────────
+  // ── Bracket exists ────────────────────────────────────────────────────────
 
   const entry = TEMPLATE_CATALOG.find(e => e.key === `${bracket.format}-${bracket.teamCount}`)
   const template = BRACKET_TEMPLATES[`${bracket.format}-${bracket.teamCount}`] ?? []
@@ -270,7 +270,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
         </div>
       )}
 
-      {/* ── Seeds tab ─────────────────────────────────────────── */}
+      {/* ── Seeds tab ─────────────────────────────────────────────────────── */}
       {tab === 'seeding' && (
         <div>
           <p className="text-sm text-slate-400 mb-4">
@@ -301,7 +301,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
         </div>
       )}
 
-      {/* ── Preview tab ───────────────────────────────────────── */}
+      {/* ── Preview tab ───────────────────────────────────────────────────── */}
       {tab === 'preview' && (
         <BracketPreview template={template} seeds={seeds} />
       )}
@@ -309,7 +309,7 @@ export default function BracketBuilder({ tournamentId, division }: Props) {
   )
 }
 
-// ── Visual Bracket Preview ────────────────────────────────────────────
+// ── Visual Bracket Preview ────────────────────────────────────────────────────
 
 function resolveLabel(src: string, seeds: Record<string, string>): string {
   if (!src) return 'TBD'
@@ -337,8 +337,8 @@ function BracketPreview({ template, seeds }: { template: GameTemplate[]; seeds: 
     })
   })
 
-  const canvasW = colLeft(maxRound) + GAME_W + 20
-  const canvasH = Math.max(...mainGames.map(g => (positions[g.gameNumber]?.y ?? 0) + GAME_H)) + 20
+  const canvasW = colLeft(maxRound) + GAME_W + 24
+  const canvasH = Math.max(...mainGames.map(g => (positions[g.gameNumber]?.y ?? 0) + GAME_H)) + 24
 
   const connectors: JSX.Element[] = []
   mainGames.forEach(game => {
@@ -353,19 +353,32 @@ function BracketPreview({ template, seeds }: { template: GameTemplate[]; seeds: 
       const f1 = positions[feeders[0]], f2 = positions[feeders[1]]
       if (f1 && f2) {
         const midX = f1.x + GAME_W + CONN_W / 2
-        connectors.push(<path key={`a-${game.gameNumber}`} d={`M${f1.x+GAME_W},${f1.cy} H${midX}`} fill="none" stroke="#334155" strokeWidth="1.5"/>)
-        connectors.push(<path key={`b-${game.gameNumber}`} d={`M${f2.x+GAME_W},${f2.cy} H${midX}`} fill="none" stroke="#334155" strokeWidth="1.5"/>)
-        connectors.push(<line key={`c-${game.gameNumber}`} x1={midX} y1={f1.cy} x2={midX} y2={f2.cy} stroke="#334155" strokeWidth="1.5"/>)
-        connectors.push(<path key={`d-${game.gameNumber}`} d={`M${midX},${pos.cy} H${pos.x}`} fill="none" stroke="#334155" strokeWidth="1.5"/>)
+        connectors.push(<path key={`a-${game.gameNumber}`} d={`M${f1.x+GAME_W},${f1.cy} H${midX}`} fill="none" stroke="#475569" strokeWidth="1.5"/>)
+        connectors.push(<path key={`b-${game.gameNumber}`} d={`M${f2.x+GAME_W},${f2.cy} H${midX}`} fill="none" stroke="#475569" strokeWidth="1.5"/>)
+        connectors.push(<line key={`c-${game.gameNumber}`} x1={midX} y1={f1.cy} x2={midX} y2={f2.cy} stroke="#475569" strokeWidth="1.5"/>)
+        connectors.push(<path key={`d-${game.gameNumber}`} d={`M${midX},${pos.cy} H${pos.x}`} fill="none" stroke="#475569" strokeWidth="1.5"/>)
       }
     } else if (feeders.length === 1) {
       const f = positions[feeders[0]]
-      if (f) connectors.push(<path key={`sf-${game.gameNumber}`} d={`M${f.x+GAME_W},${f.cy} H${pos.x}`} fill="none" stroke="#334155" strokeWidth="1.5"/>)
+      if (f) connectors.push(<path key={`sf-${game.gameNumber}`} d={`M${f.x+GAME_W},${f.cy} H${pos.x}`} fill="none" stroke="#475569" strokeWidth="1.5"/>)
     }
   })
 
   return (
     <div>
+      {/* Round column labels */}
+      <div style={{ position: 'relative', width: canvasW, height: LABEL_H }} className="mb-1">
+        {mainRounds.map(r => (
+          <div
+            key={r}
+            style={{ position: 'absolute', left: colLeft(r), width: GAME_W, textAlign: 'center' }}
+            className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider"
+          >
+            {roundLabel(r, maxRound)}
+          </div>
+        ))}
+      </div>
+
       <div className="overflow-x-auto pb-2">
         <div style={{ position: 'relative', width: canvasW, height: canvasH, minHeight: 120 }}>
           <svg style={{ position: 'absolute', top: 0, left: 0, width: canvasW, height: canvasH, pointerEvents: 'none' }} viewBox={`0 0 ${canvasW} ${canvasH}`}>
@@ -377,14 +390,17 @@ function BracketPreview({ template, seeds }: { template: GameTemplate[]; seeds: 
             const isChamp = game.section === 'championship'
             return (
               <div key={game.gameNumber} style={{ position: 'absolute', left: pos.x, top: pos.y, width: GAME_W, height: GAME_H }}
-                className={`rounded-lg border text-xs flex flex-col overflow-hidden ${isChamp ? 'border-amber-500/50 bg-amber-500/10' : 'border-slate-600 bg-slate-800'}`}>
-                <div className="px-2 py-0.5 bg-black/20 flex items-center justify-between">
+                className={`rounded-lg border text-xs flex flex-col overflow-hidden ${isChamp ? 'border-amber-400/60 bg-gradient-to-b from-amber-950/60 to-slate-900 shadow-lg shadow-amber-900/20' : 'border-slate-600/80 bg-slate-800/90'}`}>
+                <div className={`px-2 py-0.5 flex items-center justify-between ${isChamp ? 'bg-amber-500/10' : 'bg-black/20'}`}>
                   <span className="text-[10px] font-mono text-slate-500">B{game.gameNumber}</span>
-                  {game.label && <span className="text-[10px] text-amber-400">{game.label}</span>}
+                  {isChamp && <span className="text-[10px] text-amber-400 font-semibold">🏆 Final</span>}
+                  {game.label && !isChamp && <span className="text-[10px] text-amber-400">{game.label}</span>}
                 </div>
                 {[game.t1, game.t2].map((src, i) => (
-                  <div key={i} className={`flex-1 flex items-center px-2 ${i === 0 ? 'border-b border-slate-700' : ''}`}>
-                    <span className="truncate text-slate-200 text-[11px]">{resolveLabel(src, seeds)}</span>
+                  <div key={i} className={`flex-1 flex items-center px-2.5 ${i === 0 ? 'border-b border-slate-700/80' : ''}`}>
+                    <span className={`truncate text-[11px] ${resolveLabel(src, seeds).startsWith('W-') || resolveLabel(src, seeds).startsWith('L-') ? 'text-slate-500 italic' : 'text-slate-200'}`}>
+                      {resolveLabel(src, seeds)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -400,14 +416,16 @@ function BracketPreview({ template, seeds }: { template: GameTemplate[]; seeds: 
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {sideGames.map(game => (
-              <div key={game.gameNumber} className="rounded-lg border border-slate-600 bg-slate-800 text-xs overflow-hidden">
+              <div key={game.gameNumber} className="rounded-lg border border-slate-600/80 bg-slate-800/90 text-xs overflow-hidden">
                 <div className="px-2 py-0.5 bg-black/20 flex items-center justify-between">
                   <span className="text-[10px] font-mono text-slate-500">B{game.gameNumber}</span>
                   {game.label && <span className="text-[10px] text-slate-400">{game.label}</span>}
                 </div>
                 {[game.t1, game.t2].map((src, i) => (
                   <div key={i} className={`px-2 py-1 flex items-center ${i === 0 ? 'border-b border-slate-700' : ''}`}>
-                    <span className="truncate text-slate-300 text-[11px]">{resolveLabel(src, seeds)}</span>
+                    <span className={`truncate text-[11px] ${resolveLabel(src, seeds).startsWith('W-') || resolveLabel(src, seeds).startsWith('L-') ? 'text-slate-500 italic' : 'text-slate-300'}`}>
+                      {resolveLabel(src, seeds)}
+                    </span>
                   </div>
                 ))}
               </div>
