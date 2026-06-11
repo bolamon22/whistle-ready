@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import BracketBuilder from './BracketBuilder'
-import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight } from 'lucide-react'
+import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical } from 'lucide-react'
 
 const PALETTE = [
   '#3b82f6', '#10b981', '#a855f7', '#f97316', '#ec4899',
@@ -40,6 +40,8 @@ export default function DivisionsPage() {
   const [activeDiv, setActiveDiv] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'teams' | 'pools' | 'pool-games' | 'bracket'>('teams')
   const [groupByPool, setGroupByPool] = useState(false)
+  const [poolDragging, setPoolDragging] = useState<string | null>(null)
+  const [poolDragOver, setPoolDragOver] = useState<string | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [pools, setPools] = useState<Pool[]>([])
   const [loading, setLoading] = useState(true)
@@ -899,6 +901,39 @@ if (loading) return (
                       <div className="px-5 py-12 text-center text-slate-400 text-sm">
                         No teams registered in this division yet.
                       </div>
+                    ) : groupByPool ? (
+                      <div className="p-5">
+                        <div className="grid gap-5" style={{ gridTemplateColumns: `repeat(${Math.min(pools.length + (teams.some(t => !t.pool) ? 1 : 0), 4)}, minmax(180px, 1fr))` }}>
+                          {[...pools.map(p => ({ key: p.name, label: p.name, list: teams.filter(t => t.pool === p.name) })),
+                            ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', label: 'No Pool', list: teams.filter(t => !t.pool) }] : [])
+                          ].map(col => (
+                            <div key={col.key}>
+                              <p className="text-sm font-semibold text-slate-600 mb-2">{col.label}<span className="ml-1.5 text-xs font-normal text-slate-400">({col.list.length})</span></p>
+                              <div
+                                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setPoolDragOver(col.key) }}
+                                onDragLeave={e => { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) setPoolDragOver(null) }}
+                                onDrop={e => { e.preventDefault(); setPoolDragOver(null); const team = poolDragging; setPoolDragging(null); if (team) { const tgt = col.key === '__unassigned' ? null : col.label; const cur = teams.find(t => t.teamName === team)?.pool ?? null; if (cur !== tgt) assignTeamToPool(team, tgt) } }}
+                                className={`min-h-52 rounded-xl border-2 p-2 space-y-2 transition-all ${poolDragOver === col.key ? 'border-teal-400 bg-teal-50 scale-[1.01]' : 'border-slate-200 bg-slate-50/60'}`}>
+                                {col.list.length === 0 ? (
+                                  <div className={`flex items-center justify-center h-32 text-xs text-center px-3 pointer-events-none ${poolDragOver === col.key ? 'text-teal-500' : 'text-slate-400'}`}>{poolDragOver === col.key ? 'Drop here' : 'Drag teams here'}</div>
+                                ) : (
+                                  col.list.map(team => (
+                                    <div key={team.id} draggable
+                                      onDragStart={() => setPoolDragging(team.teamName)}
+                                      onDragEnd={() => { setPoolDragging(null); setPoolDragOver(null) }}
+                                      className={`flex items-center gap-2.5 bg-white border border-slate-200 rounded-lg px-3 py-2.5 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:shadow-sm transition-all select-none ${poolDragging === team.teamName || assigningTeam === team.teamName ? 'opacity-40' : ''}`}>
+                                      <GripVertical size={14} className="text-slate-300 flex-shrink-0 pointer-events-none" />
+                                      <span className="text-sm font-medium text-slate-700 truncate pointer-events-none">{team.teamName}</span>
+                                      {team.clubName && <span className="text-xs text-slate-400 truncate pointer-events-none ml-auto">{team.clubName}</span>}
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-4 text-xs text-slate-400">Drag teams between pools to reassign. Switch to <strong className="text-slate-500">List view</strong> to edit team details.</p>
+                      </div>
                     ) : (
                       <table className="w-full text-sm">
                         <thead>
@@ -912,21 +947,7 @@ if (loading) return (
                           </tr>
                         </thead>
                         <tbody>
-                          {(groupByPool
-                            ? [
-                                ...pools.map(p => ({ key: p.name, label: p.name as string | null, list: teams.filter(t => t.pool === p.name) })),
-                                ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', label: 'Unassigned' as string | null, list: teams.filter(t => !t.pool) }] : []),
-                              ]
-                            : [{ key: '__all', label: null as string | null, list: teams }]
-                          ).flatMap(group => [
-                            ...(group.label !== null ? [(
-                              <tr key={`grp-${group.key}`} className="bg-slate-100/70 border-b border-slate-200">
-                                <td colSpan={6} className="px-5 py-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                                  {group.label} <span className="text-slate-400 font-medium">· {group.list.length}</span>
-                                </td>
-                              </tr>
-                            )] : []),
-                            ...group.list.map((team, i) => {
+                          {teams.map((team, i) => {
                             const isSwapA = swapA === team.teamName
                             const isSwapB = swapB === team.teamName
                             return (
@@ -984,8 +1005,7 @@ if (loading) return (
                                 </td>
                               </tr>
                             )
-                            })
-                          ])}
+                          })}
                         </tbody>
                       </table>
                     )}
