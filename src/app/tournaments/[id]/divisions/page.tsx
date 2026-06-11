@@ -396,31 +396,31 @@ export default function DivisionsPage() {
     for (const div of divisions) {
       if (div.teamCount === 0) continue
 
-      // Auto-create Pool A and assign all teams if no pools exist
+      // Auto-create the planned number of pools and split teams across them, if no pools exist
       let poolCount = div.poolCount
       if (poolCount === 0) {
-        // Fetch teams for this division
         const tRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/teams`)
         const tData = await tRes.json()
         const teamNames: string[] = (tData.teams ?? []).map((t: { teamName: string }) => t.teamName)
         if (teamNames.length === 0) continue
-
-        // Create Pool A
-        const pRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'Pool A' }),
-        })
-        const pool = await pRes.json()
-        if (!pRes.ok) continue
-
-        // Assign all teams to Pool A
-        await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ poolId: pool.id, teamNames }),
-        })
-        poolCount = 1
+        const wantPools = Math.max(1, Math.min(smartTable[div.teamCount]?.pools ?? 1, teamNames.length))
+        const buckets: string[][] = Array.from({ length: wantPools }, () => [])
+        teamNames.forEach((t, i) => buckets[i % wantPools].push(t))
+        for (let p = 0; p < wantPools; p++) {
+          const pRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Pool ' + String.fromCharCode(65 + p) }),
+          })
+          const pool = await pRes.json()
+          if (!pRes.ok) continue
+          await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ poolId: pool.id, teamNames: buckets[p] }),
+          })
+        }
+        poolCount = wantPools
         autoPooled++
-        setDivisions(d => d.map(x => x.name === div.name ? { ...x, poolCount: 1 } : x))
+        setDivisions(d => d.map(x => x.name === div.name ? { ...x, poolCount: wantPools } : x))
       }
 
       // Generate games
@@ -1246,7 +1246,14 @@ if (loading) return (
                   </div>
                 )}
               {activeTab === 'bracket' && activeDiv && (
-                <BracketBuilder tournamentId={id} division={activeDiv} />
+                (() => {
+                  const tc = divisions.find(d => d.name === activeDiv)?.teamCount ?? teams.length
+                  const planB = smartTable[tc]?.bracket || ''
+                  const fmt = planB === 'double' ? 'double' : planB === '2gg' ? '2gg' : (planB === 'single' || planB === 'single-con') ? 'single' : undefined
+                  const sizes = fmt === 'double' ? [4, 8] : [4, 8, 16]
+                  const cnt = fmt ? String(sizes.filter(z => z <= tc).pop() ?? sizes[0]) : undefined
+                  return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={planB === 'single-con' ? '1' : undefined} />
+                })()
               )}
               </>
             )}
