@@ -445,7 +445,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
             <div className="mb-5 rounded-xl border border-slate-700 overflow-hidden bg-slate-800">
               <div className="flex items-center justify-between px-3 py-2 bg-slate-900">
                 <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Pool standings</span>
-                <button onClick={() => { const next = { ...seeds }; standings.slice(0, bracket.teamCount).forEach((r, i) => { next[String(i + 1)] = r.team }); setSeeds(next) }}
+                <button onClick={() => { const next = { ...seeds }; standings.forEach((r, i) => { next[String(i + 1)] = r.team }); setSeeds(next) }}
                   className="text-[11px] text-teal-300 hover:text-teal-200">Seed from standings ↓</button>
               </div>
               <table className="w-full text-xs">
@@ -475,7 +475,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
-            {Array.from({ length: bracket.teamCount }, (_, i) => i + 1).map(n => (
+            {Array.from({ length: Math.max(bracket.teamCount, ...bracket.games.flatMap(g => [g.team1Source, g.team2Source]).filter(x => !!x && x.startsWith('seed:')).map(x => parseInt(x.split(':')[1]) || 0)) }, (_, i) => i + 1).map(n => (
               <div key={n} className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-slate-500 w-12 text-right shrink-0">#{n}</span>
                 <input
