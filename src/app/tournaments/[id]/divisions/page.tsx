@@ -347,8 +347,32 @@ export default function DivisionsPage() {
     return Math.min(teamCount - 1, g - 2)  // odd: 2 bracket rounds
   }
 
+  // Recommended championship size + consolation games per team count (Bo verifies/overrides).
+  function defaultBracketPlan(n: number, poolGames: number, g: number): { advance: number; consolation: number } {
+    const owes = g - poolGames
+    if (owes >= 2) return { advance: n, consolation: 0 }  // everyone in; loser-fed fills the guarantee
+    let adv: number
+    if (n <= 4) adv = n
+    else if (n <= 7) adv = 4
+    else if (n === 8) adv = 8
+    else if (n <= 13) adv = 6
+    else if (n === 16) adv = 16
+    else adv = 8
+    return { advance: adv, consolation: Math.max(0, Math.floor((n - adv) / 2)) }
+  }
+
   function saveSmartTable() {
-    try { localStorage.setItem('smartDefaults:' + id, JSON.stringify(smartTable)) } catch {}
+    const g = Number(guarantee) || 4
+    const maxN = Math.max(smartMax, ...divisions.map(d => d.teamCount), 2)
+    const filled: typeof smartTable = { ...smartTable }
+    for (let n = 2; n <= maxN; n++) {
+      const row = filled[n] || {}
+      const games = row.games ?? smartPoolGames(n, g)
+      const def = defaultBracketPlan(n, games, g)
+      filled[n] = { games, pools: row.pools ?? 1, bracket: row.bracket ?? 'single', advance: row.advance ?? def.advance, consolation: row.consolation ?? def.consolation }
+    }
+    setSmartTable(filled)
+    try { localStorage.setItem('smartDefaults:' + id, JSON.stringify(filled)) } catch {}
     toast.success('Smart defaults saved')
     setShowSmartEditor(false)
   }
@@ -664,7 +688,10 @@ if (loading) return (
                             const row = smartTable[n] || {}
                             const games = row.games ?? smartPoolGames(n, g)
                             const pools = row.pools ?? 1
-                            const bracket = row.bracket ?? ''
+                            const def = defaultBracketPlan(n, games, g)
+                            const bracket = row.bracket ?? 'single'
+                            const advance = row.advance ?? def.advance
+                            const consolation = row.consolation ?? def.consolation
                             return (
                               <tr key={n} className="border-t border-slate-50">
                                 <td className="py-1 text-slate-600 font-medium">{n} teams</td>
@@ -685,12 +712,12 @@ if (loading) return (
                                   </select>
                                 </td>
                                 <td className="py-1 text-center">
-                                  <input type="number" min="2" max={n} value={row.advance ?? ''} placeholder="auto"
+                                  <input type="number" min="2" max={n} value={advance}
                                     onChange={e => setField(n, 'advance', e.target.value === '' ? undefined : Math.max(2, Math.min(Number(e.target.value) || 2, n)))}
                                     className="w-12 border border-slate-200 rounded text-center py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
                                 </td>
                                 <td className="py-1 text-center">
-                                  <input type="number" min="0" value={row.consolation ?? ''} placeholder="0"
+                                  <input type="number" min="0" value={consolation}
                                     onChange={e => setField(n, 'consolation', e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0))}
                                     className="w-12 border border-slate-200 rounded text-center py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
                                 </td>
@@ -1251,10 +1278,10 @@ if (loading) return (
                   const owes2 = (guar - poolG) >= 2
                   const planB = smartTable[tc]?.bracket || ''
                   const fmt = planB === 'double' ? 'double' : planB === '2gg' ? '2gg' : (planB === 'single' || planB === 'single-con') ? 'single' : undefined
-                  let pow2 = 1; while (pow2 * 2 <= tc) pow2 *= 2
                   const sd = smartTable[tc] || {}
-                  const cnt = owes2 ? String(tc) : (sd.advance != null ? String(sd.advance) : String(pow2))
-                  const cons = owes2 ? undefined : (sd.consolation != null ? String(sd.consolation) : (tc - pow2 > 0 ? String(Math.floor((tc - pow2) / 2)) : (planB === 'single-con' ? '1' : undefined)))
+                  const def = defaultBracketPlan(tc, poolG, guar)
+                  const cnt = owes2 ? String(tc) : String(sd.advance ?? def.advance)
+                  const cons = owes2 ? undefined : String(sd.consolation ?? def.consolation)
                   return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} />
                 })()
               )}
