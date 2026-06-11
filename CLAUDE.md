@@ -95,6 +95,32 @@ the sandbox can't push to GitHub (push via GitHub Desktop on master). Some per-u
 (Assigner lock, games-per-ref, Divisions smart-defaults plan) persist in localStorage per
 tournament, not the DB.
 
+## Session handoff (Jun 11, 2026 - afternoon)
+Shipped (deployed to master):
+- BRACKETS Stage 1 complete: generator handles odd/in-between team counts with byes + real
+  consolation/playback; owes rule (guarantee - pool games): owes<=1 -> top-N advance + seed-paired
+  consolation (7v8, 9v10); owes>=2 -> everyone in bracket + loser-fed consolation + "if needed"
+  games. Smart Defaults recommends advance/consolation per team count. One-click "generate all
+  divisions" (pools + pool games + brackets) with an "Include brackets" toggle. Bracket Preview
+  supports inline rename/add/remove and a pool-standings table on the Seeds tab.
+- Consolidations: (1) Bracket builder slimmed to TWO tabs - Seeds + Preview; the old Games tab is
+  gone, its add/remove panel now toggles from the Preview's "+ Add game". (2) Divisions page merged
+  Pools INTO the Teams tab - now "Teams & Pools": an inline pools bar (chips w/ live counts, add,
+  delete x, unassigned badge, Auto-assign) + a "Group by pool" toggle on the table. Tabs are now
+  Teams & Pools / Pool Games / Bracket.
+
+Open / next:
+- Stage 2 flighting (2 champions in one division): needs a data-model change - currently ONE bracket
+  per tournamentId+division (bracket route + DB assume this). To support Flight B/B2: store multiple
+  brackets per division + UI to define flights + run the generator per seed-slice.
+- Bracket games schedule on the Preview: bracket games ARE already created as schedulable Game rows
+  (gameNumber B1, B2...) and the Scheduler surfaces them (type 'bracket', parking lot, drag to
+  field/time, out-of-order check). But the Bracket Preview only reads the bracket STRUCTURE
+  (BracketGame), so it shows no times/fields. Plan: fetch the division's B-games and show each game's
+  date/time/field on its preview card (read-only; "Not scheduled" when blank). May need a tiny
+  endpoint to expose B-game times to the builder.
+- Consistency pass remaining pages: Scores, Assignments, Results, Staff view, Returning teams.
+
 ## Build philosophy
 - Diagnose before changing; verify after.
 - Preview visual changes before deploying — keep Bo in the loop with a preview.
