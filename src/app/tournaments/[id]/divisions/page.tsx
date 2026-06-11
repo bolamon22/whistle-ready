@@ -42,6 +42,7 @@ export default function DivisionsPage() {
   const [groupByPool, setGroupByPool] = useState(false)
   const [poolDragging, setPoolDragging] = useState<string | null>(null)
   const [poolDragOver, setPoolDragOver] = useState<string | null>(null)
+  const [autoAssigning, setAutoAssigning] = useState(false)
   const [teams, setTeams] = useState<Team[]>([])
   const [pools, setPools] = useState<Pool[]>([])
   const [loading, setLoading] = useState(true)
@@ -306,6 +307,27 @@ export default function DivisionsPage() {
     setPools(newPools)
     setTeams(t => t.map(x => x.teamName === teamName ? { ...x, pool: poolName } : x))
     setAssigningTeam(null)
+  }
+
+  async function autoAssignPools() {
+    if (!activeDiv || pools.length === 0) return
+    setAutoAssigning(true)
+    const all = [...teams.map(t => t.teamName)].sort(() => Math.random() - 0.5)
+    const newPools = pools.map(p => ({ ...p, teamNames: [] as string[] }))
+    all.forEach((name, i) => newPools[i % newPools.length].teamNames.push(name))
+    await Promise.all(newPools.map(p =>
+      fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pools`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ poolId: p.id, teamNames: p.teamNames }),
+      })
+    ))
+    setPools(newPools)
+    setTeams(ts => ts.map(t => {
+      const np = newPools.find(p => p.teamNames.includes(t.teamName))
+      return { ...t, pool: np ? np.name : null }
+    }))
+    setAutoAssigning(false)
+    toast.success('Teams auto-assigned to pools')
   }
 
   async function swapTeams() {
@@ -834,16 +856,17 @@ if (loading) return (
                         {teams.filter(t => !t.pool).length > 0 && (
                           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{teams.filter(t => !t.pool).length} unassigned</span>
                         )}
-                        {pools.length > 0 && (
-                          <button onClick={() => setGroupByPool(v => !v)}
-                            className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${groupByPool ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'}`}>
-                            {groupByPool ? 'List view' : 'View Pools'}
+                        {pools.length > 0 && (groupByPool ? (
+                          <button onClick={() => setGroupByPool(false)}
+                            className="text-xs font-medium px-2.5 py-1 rounded-lg border bg-white border-slate-200 text-slate-500 hover:text-slate-700 transition-colors">
+                            List view
                           </button>
-                        )}
-                        <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 px-2.5 py-1 rounded-lg transition-colors">
-                          <Sparkles size={12} /> Assign Pools
-                        </Link>
+                        ) : (
+                          <button onClick={() => setGroupByPool(true)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 px-2.5 py-1 rounded-lg transition-colors">
+                            <Sparkles size={12} /> Assign Pools
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -903,6 +926,13 @@ if (loading) return (
                       </div>
                     ) : groupByPool ? (
                       <div className="p-5">
+                        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                          <p className="text-xs text-slate-400">Drag teams between pools to reassign, or auto-assign to spread them evenly.</p>
+                          <button onClick={autoAssignPools} disabled={autoAssigning}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-40 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
+                            <Sparkles size={13} /> {autoAssigning ? 'Assigning…' : 'Auto-assign teams'}
+                          </button>
+                        </div>
                         <div className="grid gap-5" style={{ gridTemplateColumns: `repeat(${Math.min(pools.length + (teams.some(t => !t.pool) ? 1 : 0), 4)}, minmax(180px, 1fr))` }}>
                           {[...pools.map(p => ({ key: p.name, label: p.name, list: teams.filter(t => t.pool === p.name) })),
                             ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', label: 'No Pool', list: teams.filter(t => !t.pool) }] : [])
@@ -932,7 +962,7 @@ if (loading) return (
                             </div>
                           ))}
                         </div>
-                        <p className="mt-4 text-xs text-slate-400">Drag teams between pools to reassign. Switch to <strong className="text-slate-500">List view</strong> to edit team details.</p>
+                        <p className="mt-4 text-xs text-slate-400">Switch to <strong className="text-slate-500">List view</strong> to edit team details.</p>
                       </div>
                     ) : (
                       <table className="w-full text-sm">
