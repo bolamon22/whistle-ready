@@ -56,7 +56,7 @@ export default function DivisionsPage() {
   const [divGamesPerTeam, setDivGamesPerTeam] = useState<Record<string, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
   const [guarantee, setGuarantee] = useState('4')
-  const [smartTable, setSmartTable] = useState<Record<number, number>>({})
+  const [smartTable, setSmartTable] = useState<Record<number, { games?: number; pools?: number; bracket?: string }>>({})
   const [showSmartEditor, setShowSmartEditor] = useState(false)
   useEffect(() => { try { const raw = localStorage.getItem('smartDefaults:' + id); if (raw) setSmartTable(JSON.parse(raw)) } catch {} }, [id])
 
@@ -358,7 +358,7 @@ export default function DivisionsPage() {
     const g = Number(guarantee) || 4
     const updated: Record<string, string> = {}
     divisions.forEach(div => {
-      const v = smartTable[div.teamCount] ?? smartPoolGames(div.teamCount, g)
+      const v = smartTable[div.teamCount]?.games ?? smartPoolGames(div.teamCount, g)
       updated[div.name] = String(Math.max(1, Math.min(v, Math.max(1, div.teamCount - 1))))
     })
     setDivGamesPerTeam(updated)
@@ -640,30 +640,56 @@ if (loading) return (
               const maxN = Math.max(12, ...divisions.map(d => d.teamCount), 2)
               const counts: number[] = []; for (let n = 2; n <= maxN; n++) counts.push(n)
               const g = Number(guarantee) || 4
+              const BRACKETS = [{ v: '', l: 'None' }, { v: 'single', l: 'Single elim' }, { v: 'single-con', l: 'Single elim + 3rd' }, { v: 'double', l: 'Double elim' }, { v: '2gg', l: '2-game guarantee' }]
+              const setField = (n: number, k: 'games' | 'pools' | 'bracket', val: number | string) => setSmartTable(prev => ({ ...prev, [n]: { ...prev[n], [k]: val } }))
               return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowSmartEditor(false)}>
-                  <div className="bg-white rounded-xl shadow-xl w-full max-w-sm max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                  <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
                     <div className="px-5 py-4 border-b border-slate-100">
                       <h3 className="font-bold text-slate-800 flex items-center gap-1.5"><Sparkles size={15} className="text-teal-500" /> Smart defaults</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">Games per team to use for a division, by how many teams it has. The Smart defaults button applies these.</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Your preferred setup for a division by how many teams it has. Smart defaults applies games/team; pools and bracket are saved as your plan.</p>
                     </div>
-                    <div className="px-5 py-3 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                        {counts.map(n => {
-                          const val = smartTable[n] ?? smartPoolGames(n, g)
-                          return (
-                            <div key={n} className="flex items-center justify-between gap-2">
-                              <span className="text-xs text-slate-500">{n} teams</span>
-                              <input type="number" min="1" max={Math.max(1, n - 1)} value={val}
-                                onChange={e => setSmartTable(prev => ({ ...prev, [n]: Math.max(1, Math.min(Number(e.target.value) || 1, Math.max(1, n - 1))) }))}
-                                className="w-14 border border-slate-200 rounded text-center text-xs py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
-                            </div>
-                          )
-                        })}
-                      </div>
+                    <div className="px-5 py-2 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-slate-400 text-[10px] uppercase tracking-wide">
+                          <th className="text-left font-semibold py-1">Teams</th>
+                          <th className="font-semibold py-1">Games/team</th>
+                          <th className="font-semibold py-1">Pools</th>
+                          <th className="text-left font-semibold py-1 pl-3">Bracket</th>
+                        </tr></thead>
+                        <tbody>
+                          {counts.map(n => {
+                            const row = smartTable[n] || {}
+                            const games = row.games ?? smartPoolGames(n, g)
+                            const pools = row.pools ?? 1
+                            const bracket = row.bracket ?? ''
+                            return (
+                              <tr key={n} className="border-t border-slate-50">
+                                <td className="py-1 text-slate-600 font-medium">{n} teams</td>
+                                <td className="py-1 text-center">
+                                  <input type="number" min="1" max={Math.max(1, n - 1)} value={games}
+                                    onChange={e => setField(n, 'games', Math.max(1, Math.min(Number(e.target.value) || 1, Math.max(1, n - 1))))}
+                                    className="w-12 border border-slate-200 rounded text-center py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                                </td>
+                                <td className="py-1 text-center">
+                                  <input type="number" min="1" max={n} value={pools}
+                                    onChange={e => setField(n, 'pools', Math.max(1, Math.min(Number(e.target.value) || 1, n)))}
+                                    className="w-12 border border-slate-200 rounded text-center py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                                </td>
+                                <td className="py-1 pl-3">
+                                  <select value={bracket} onChange={e => setField(n, 'bracket', e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400">
+                                    {BRACKETS.map(b => <option key={b.v} value={b.v}>{b.l}</option>)}
+                                  </select>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                     <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <button onClick={() => { const t: Record<number, number> = {}; counts.forEach(n => { t[n] = smartPoolGames(n, g) }); setSmartTable(t) }} className="text-xs text-slate-500 hover:text-slate-700">Reset from guarantee ({g})</button>
+                      <button onClick={() => setSmartTable(prev => { const t = { ...prev }; counts.forEach(n => { t[n] = { ...t[n], games: smartPoolGames(n, g) } }); return t })} className="text-xs text-slate-500 hover:text-slate-700">Reset games from guarantee ({g})</button>
                       <div className="flex gap-2">
                         <button onClick={() => setShowSmartEditor(false)} className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5">Close</button>
                         <button onClick={saveSmartTable} className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-1.5 rounded-lg transition-colors">Save</button>
