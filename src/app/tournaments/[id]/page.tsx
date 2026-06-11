@@ -799,7 +799,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
             const pG=Math.max(0,...dayReqs.map(d=>Math.ceil(d.girls/gamesPerRef)))
             const pBoth=Math.max(0,...dayReqs.map(d=>Math.ceil(d.both/gamesPerRef)))
             const pS=Math.max(0,...dayReqs.map(d=>d.fields))
+            const rc={boys:0,girls:0,both:0,sk:0}
+            for(const w of rosterWorkers){const r=staffRank(w);if(r===0)rc.boys++;else if(r===1)rc.girls++;else if(r===2)rc.both++;else rc.sk++}
             return(
+              <>
               <div className="flex items-center gap-2 flex-wrap text-xs">
                 <ClipboardList size={14} className="text-sky-500 shrink-0"/>
                 <span className="font-semibold text-slate-700">Min staff (busiest day):</span>
@@ -810,6 +813,12 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 </label>
                 <button type="button" onClick={()=>setReqsOpen(v=>!v)} className="flex items-center gap-0.5 text-slate-500 hover:text-slate-700">{reqsOpen?<ChevronUp size={13}/>:<ChevronDown size={13}/>}<span>By day</span></button>
               </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs mt-1">
+                <span className="font-semibold text-slate-700">On roster:</span>
+                <span className="text-slate-600">{rc.boys} boys · {rc.girls} girls{rc.both?` · ${rc.both} both`:''} refs · {rc.sk} scorekeeper{rc.sk!==1?'s':''}</span>
+                <span className="text-slate-400">({rosterWorkers.length} total)</span>
+              </div>
+              </>
             )
           })()}
           {reqsOpen&&(
