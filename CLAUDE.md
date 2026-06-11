@@ -49,8 +49,13 @@ sentence case; team + individual tabs, import panel, pricing/payment modals), an
 Settings (lucide SectionCard icons, slate/teal palette, sentence case; venues/fields,
 fees, divisions, pay rates, ref rules, registration types, copy-tournament modal), and
 Scheduler (lucide icons for toolbar + status badges, blue→teal accent, sentence case;
-drag-drop grid, parking lot, swap mode, publish/diff, conflict/back-to-back/bracket badges).
-Next up: Assigner, Divisions, then the remaining pages.
+drag-drop grid, parking lot, swap mode, publish/diff, conflict/back-to-back/bracket badges),
+and Assigner (drag staff onto game role-slots via shared GameGrid mirroring the Scheduler;
+staff tray sorted + color-coded by type with key; per-game ref-count -/+ and tournament
+default; lock-editing toggle persisted per-tournament; staffing-requirements panel —
+min officials vs current roster, scorekeepers = one per field). Shared component:
+src/components/GameGrid.tsx.
+Next up: Divisions, then the remaining pages.
 Tracking: Roadmap #57 (consistency pass) and #58 (page consolidation review).
 
 ## Build philosophy
