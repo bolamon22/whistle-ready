@@ -39,6 +39,7 @@ export default function DivisionsPage() {
   const [divisions, setDivisions] = useState<Division[]>([])
   const [activeDiv, setActiveDiv] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'teams' | 'pools' | 'pool-games' | 'bracket'>('teams')
+  const [groupByPool, setGroupByPool] = useState(false)
   const [teams, setTeams] = useState<Team[]>([])
   const [pools, setPools] = useState<Pool[]>([])
   const [loading, setLoading] = useState(true)
@@ -784,16 +785,54 @@ if (loading) return (
               <>
                 {/* Sub-tabs */}
                 <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
-                  {(['teams', 'pools', 'pool-games', 'bracket'] as const).map(tab => (
+                  {(['teams', 'pool-games', 'bracket'] as const).map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
                       className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px capitalize transition-colors ${activeTab === tab ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                      {tab === 'teams' ? `Teams (${teams.length})` : tab === 'pools' ? `Pools (${pools.length})` : tab === 'pool-games' ? `Pool Games (${poolGames.length})` : `Bracket`}
+                      {tab === 'teams' ? `Teams & Pools (${teams.length})` : tab === 'pool-games' ? `Pool Games (${poolGames.length})` : `Bracket`}
                     </button>
                   ))}
                 </div>
 
                 {/* -- TEAMS TAB -- */}
                 {activeTab === 'teams' && (
+                  <div className="space-y-4">
+                    {/* ── Pools bar (manage pools inline) ── */}
+                    <div className="bg-white rounded-xl border border-slate-200 px-5 py-3 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-1">Pools</span>
+                      {pools.map(pool => (
+                        <span key={pool.id} className="inline-flex items-center gap-1.5 text-xs bg-slate-100 border border-slate-200 rounded-full pl-2.5 pr-1 py-1">
+                          <span className="font-medium text-slate-700">{pool.name}</span>
+                          <span className="text-slate-400">· {teams.filter(t => t.pool === pool.name).length}</span>
+                          <button onClick={() => deletePool(pool.id)} title="Delete pool"
+                            className="text-slate-300 hover:text-red-500 rounded-full p-0.5 transition-colors"><X size={11} /></button>
+                        </span>
+                      ))}
+                      <div className="inline-flex items-center gap-1">
+                        <input className="border border-slate-200 rounded-lg px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                          placeholder="Add pool…" value={newPoolName} onChange={e => setNewPoolName(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && addPool()} />
+                        <button onClick={addPool} disabled={!newPoolName.trim() || addingPool}
+                          className="text-xs font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-40 px-1.5 py-1">
+                          {addingPool ? '…' : '+ Add'}
+                        </button>
+                      </div>
+                      <div className="ml-auto flex items-center gap-2">
+                        {teams.filter(t => !t.pool).length > 0 && (
+                          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{teams.filter(t => !t.pool).length} unassigned</span>
+                        )}
+                        {pools.length > 0 && (
+                          <button onClick={() => setGroupByPool(v => !v)}
+                            className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${groupByPool ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'}`}>
+                            {groupByPool ? 'List view' : 'Group by pool'}
+                          </button>
+                        )}
+                        <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 px-2.5 py-1 rounded-lg transition-colors">
+                          <Sparkles size={12} /> Auto-assign
+                        </Link>
+                      </div>
+                    </div>
+
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                     {/* Header */}
                     <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
@@ -861,7 +900,21 @@ if (loading) return (
                           </tr>
                         </thead>
                         <tbody>
-                          {teams.map((team, i) => {
+                          {(groupByPool
+                            ? [
+                                ...pools.map(p => ({ key: p.name, label: p.name as string | null, list: teams.filter(t => t.pool === p.name) })),
+                                ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', label: 'Unassigned' as string | null, list: teams.filter(t => !t.pool) }] : []),
+                              ]
+                            : [{ key: '__all', label: null as string | null, list: teams }]
+                          ).flatMap(group => [
+                            ...(group.label !== null ? [(
+                              <tr key={`grp-${group.key}`} className="bg-slate-100/70 border-b border-slate-200">
+                                <td colSpan={6} className="px-5 py-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                                  {group.label} <span className="text-slate-400 font-medium">· {group.list.length}</span>
+                                </td>
+                              </tr>
+                            )] : []),
+                            ...group.list.map((team, i) => {
                             const isSwapA = swapA === team.teamName
                             const isSwapB = swapB === team.teamName
                             return (
@@ -919,10 +972,12 @@ if (loading) return (
                                 </td>
                               </tr>
                             )
-                          })}
+                            })
+                          ])}
                         </tbody>
                       </table>
                     )}
+                  </div>
                   </div>
                 )}
 
@@ -1121,103 +1176,6 @@ if (loading) return (
                         </button>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* -- POOLS TAB -- */}
-                {activeTab === 'pools' && (
-                  <div className="space-y-4">
-                    {/* Assign teams button */}
-                    <div className="flex justify-between items-center">
-                      <p className="text-xs text-slate-400">{teams.filter(t => !t.pool).length > 0 ? `${teams.filter(t => !t.pool).length} teams unassigned` : 'All teams assigned'}</p>
-                      <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
-                        className="btn-primary btn-sm">
-                        <span className="inline-flex items-center gap-1.5">Assign teams to pools <ArrowRight size={12} /></span>
-                      </Link>
-                      <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/bracket`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors mt-1">
-                        Bracket
-                      </Link>
-                    </div>
-
-                    {/* Add pool */}
-                    <div className="bg-white rounded-xl border border-slate-200 px-5 py-4 flex items-center gap-3">
-                      <input className="input flex-1 text-sm" placeholder="Pool name (e.g. Pool A, Pool 1)"
-                        value={newPoolName} onChange={e => setNewPoolName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addPool()} />
-                      <button onClick={addPool} disabled={!newPoolName.trim() || addingPool}
-                        className="btn-primary btn-sm disabled:opacity-50">
-                        {addingPool ? 'Adding...' : '+ Add Pool'}
-                      </button>
-                    </div>
-
-                    {pools.length === 0 ? (
-                      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">
-                        No pools yet. Add a pool above to get started.
-                      </div>
-                    ) : (
-                      pools.map(pool => {
-                        const poolTeams = teams.filter(t => t.pool === pool.name)
-                        const unassigned = teams.filter(t => !t.pool)
-                        return (
-                          <div key={pool.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                              <h3 className="font-semibold text-slate-700">{pool.name}</h3>
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-400">{poolTeams.length} teams</span>
-                                <button onClick={() => deletePool(pool.id)}
-                                  className="text-xs text-red-400 hover:text-red-600">Delete</button>
-                              </div>
-                            </div>
-                            {poolTeams.length === 0 ? (
-                              <p className="px-5 py-4 text-sm text-slate-400">No teams assigned yet. Use the Teams tab to assign.</p>
-                            ) : (
-                              <table className="w-full text-sm">
-                                <tbody>
-                                  {poolTeams.map((team, i) => (
-                                    <tr key={team.id} className={`border-b border-slate-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
-                                      <td className="px-5 py-2.5 font-medium text-slate-800">{team.teamName}</td>
-                                      <td className="px-3 py-2.5 text-xs text-slate-400">{team.clubName}</td>
-                                      <td className="px-3 py-2.5">{payBadge(team.paymentStatus)}</td>
-                                      <td className="px-3 py-2.5 text-right">
-                                        <button onClick={() => assignTeamToPool(team.teamName, null)}
-                                          className="text-xs text-slate-400 hover:text-red-500">Remove</button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            )}
-                            {/* Quick-add unassigned teams */}
-                            {unassigned.length > 0 && (
-                              <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-                                <p className="text-xs text-slate-400 mb-2">Add team to this pool:</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {unassigned.map(t => (
-                                    <button key={t.id} onClick={() => assignTeamToPool(t.teamName, pool.name)}
-                                      className="text-xs bg-white border border-slate-200 hover:border-teal-300 hover:bg-teal-50 text-slate-600 hover:text-teal-700 px-2.5 py-1 rounded-lg transition-colors">
-                                      + {t.teamName}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })
-                    )}
-
-                    {/* Unassigned summary */}
-                    {pools.length > 0 && teams.filter(t => !t.pool).length > 0 && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
-                        <p className="text-sm font-medium text-amber-700">
-                          {teams.filter(t => !t.pool).length} team{teams.filter(t => !t.pool).length !== 1 ? 's' : ''} not assigned to a pool
-                        </p>
-                        <p className="text-xs text-amber-600 mt-0.5">
-                          {teams.filter(t => !t.pool).map(t => t.teamName).join(', ')}
-                        </p>
-                      </div>
-                    )}
                   </div>
                 )}
 
