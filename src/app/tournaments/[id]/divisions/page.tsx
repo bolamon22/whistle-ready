@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import BracketBuilder from './BracketBuilder'
+import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight } from 'lucide-react'
 
 const PALETTE = [
   '#3b82f6', '#10b981', '#a855f7', '#f97316', '#ec4899',
@@ -472,7 +473,7 @@ if (loading) return (
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
       <TournamentNav id={id} name={tournament?.name ?? ''} logoUrl={tournament?.logoUrl} />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
@@ -487,13 +488,13 @@ if (loading) return (
               {divisions.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs text-slate-400">
                   No divisions yet.
-                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-sky-500 hover:underline">Set up in Builder →</Link>
+                  <Link href={`/tournaments/${id}/builder`} className="block mt-1 text-teal-500 hover:underline">Set up in Builder <ArrowRight size={12} className="inline -mt-0.5" /></Link>
                 </div>
               ) : (
                 <div>
                   {divisions.map(div => (
                     <div key={div.name}
-                      className={`w-full border-b border-slate-100 last:border-b-0 transition-colors group ${activeDiv === div.name ? 'bg-sky-50 border-l-2 border-l-sky-500' : div.teamCount === 0 ? 'bg-rose-50 hover:bg-rose-100' : 'hover:bg-slate-50'}`}>
+                      className={`w-full border-b border-slate-100 last:border-b-0 transition-colors group ${activeDiv === div.name ? 'bg-teal-50 border-l-2 border-l-sky-500' : div.teamCount === 0 ? 'bg-rose-50 hover:bg-rose-100' : 'hover:bg-slate-50'}`}>
                       {renamingDiv === div.name ? (
                         <div className="flex items-center gap-1 px-2 py-2" onClick={e => e.stopPropagation()}>
                           <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm ml-2"
@@ -503,10 +504,10 @@ if (loading) return (
                             value={renameValue}
                             onChange={e => setRenameValue(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') renameDiv(div.name); if (e.key === 'Escape') setRenamingDiv(null) }}
-                            className="flex-1 min-w-0 text-xs border border-sky-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                            className="flex-1 min-w-0 text-xs border border-teal-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400"
                           />
-                          <button onClick={() => renameDiv(div.name)} className="text-sky-600 hover:text-sky-800 text-xs font-bold px-1">✓</button>
-                          <button onClick={() => setRenamingDiv(null)} className="text-slate-400 hover:text-slate-600 text-xs px-1">✕</button>
+                          <button onClick={() => renameDiv(div.name)} className="text-teal-600 hover:text-teal-800 text-xs font-bold px-1"><Check size={14} /></button>
+                          <button onClick={() => setRenamingDiv(null)} className="text-slate-400 hover:text-slate-600 text-xs px-1"><X size={14} /></button>
                         </div>
                       ) : (
                         <div className="flex items-center pr-1">
@@ -516,7 +517,7 @@ if (loading) return (
                                 className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm"
                                 style={{ backgroundColor: divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length] }}
                               />
-                              <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-sky-700' : 'text-slate-700'}`}>{div.name}</p>
+                              <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-teal-700' : 'text-slate-700'}`}>{div.name}</p>
                             </div>
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
@@ -525,7 +526,7 @@ if (loading) return (
                               )}
                               {div.unassignedTeams > 0 && div.poolCount > 0 && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full" title={`${div.unassignedTeams} team${div.unassignedTeams !== 1 ? 's' : ''} not assigned to a pool`}>
-                                  ⚠ {div.unassignedTeams} unassigned
+                                  <AlertTriangle size={11} className="inline -mt-0.5" /> {div.unassignedTeams} unassigned
                                 </span>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount === 0 && div.teamCount > 0 && (
@@ -538,13 +539,13 @@ if (loading) return (
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                             <button
                               onClick={() => { setRenamingDiv(div.name); setRenameValue(div.name) }}
-                              className="p-1 text-slate-400 hover:text-sky-600 rounded" title="Rename">
-                              ✏️
+                              className="p-1 text-slate-400 hover:text-teal-600 rounded" title="Rename">
+                              <Pencil size={13} />
                             </button>
                             <button
                               onClick={() => deleteDiv(div.name)}
                               className="p-1 text-slate-400 hover:text-red-500 rounded" title="Delete">
-                              ✕
+                              <X size={13} />
                             </button>
                           </div>
                           <div className="flex flex-col items-center flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
@@ -553,7 +554,7 @@ if (loading) return (
                               type="number" min="1" max="10"
                               value={divGamesPerTeam[div.name] ?? '3'}
                               onChange={e => setDivGamesPerTeam(prev => ({ ...prev, [div.name]: e.target.value }))}
-                              className="w-10 border border-slate-200 rounded text-center text-xs py-0.5 focus:outline-none focus:ring-1 focus:ring-sky-400 bg-white"
+                              className="w-10 border border-slate-200 rounded text-center text-xs py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400 bg-white"
                             />
                           </div>
                         </div>
@@ -569,15 +570,15 @@ if (loading) return (
                         onChange={e => setNewDivName(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') createDivision(); if (e.key === 'Escape') { setAddingDivInput(false); setNewDivName('') } }}
                         placeholder="Division name..."
-                        className="flex-1 min-w-0 text-xs border border-sky-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                        className="flex-1 min-w-0 text-xs border border-teal-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400"
                       />
-                      <button onClick={createDivision} className="text-sky-600 hover:text-sky-800 text-xs font-bold px-1">✓</button>
-                      <button onClick={() => { setAddingDivInput(false); setNewDivName('') }} className="text-slate-400 text-xs px-1">✕</button>
+                      <button onClick={createDivision} className="text-teal-600 hover:text-teal-800 text-xs font-bold px-1"><Check size={14} /></button>
+                      <button onClick={() => { setAddingDivInput(false); setNewDivName('') }} className="text-slate-400 text-xs px-1"><X size={14} /></button>
                     </div>
                   ) : (
                     <button
                       onClick={() => setAddingDivInput(true)}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-400 hover:text-sky-600 hover:bg-slate-50 border-t border-slate-100 transition-colors">
+                      className="w-full text-left px-4 py-2 text-xs text-slate-400 hover:text-teal-600 hover:bg-slate-50 border-t border-slate-100 transition-colors">
                       + Add Division
                     </button>
                   )}
@@ -602,21 +603,21 @@ if (loading) return (
                   type="number" min="1" max="12"
                   value={guarantee}
                   onChange={e => setGuarantee(e.target.value)}
-                  className="w-12 border border-slate-200 rounded text-center text-xs py-0.5 focus:outline-none focus:ring-1 focus:ring-sky-400 bg-white"
+                  className="w-12 border border-slate-200 rounded text-center text-xs py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400 bg-white"
                 />
               </div>
               <button
                 onClick={applySmartDefaults}
-                className="w-full border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium py-1.5 px-3 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium py-1.5 px-3 rounded-lg transition-colors"
               >
-                🧠 Smart Defaults
+                <Sparkles size={13} /> Smart defaults
               </button>
               <button
                 onClick={generateAllDivisions}
                 disabled={generatingAll}
-                className="w-full bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
               >
-        {generatingAll ? 'Generating...' : '⚡ Generate All Divisions'}
+        {generatingAll ? 'Generating...' : <><Zap size={13} /> Generate all divisions</>}
               </button>
               <p className="text-[10px] text-slate-400 text-center leading-tight">Auto-creates Pool A if needed</p>
             </div>
@@ -636,7 +637,7 @@ if (loading) return (
                 <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
                   {(['teams', 'pools', 'pool-games', 'bracket'] as const).map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
-                      className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px capitalize transition-colors ${activeTab === tab ? 'border-sky-600 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                      className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px capitalize transition-colors ${activeTab === tab ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                       {tab === 'teams' ? `Teams (${teams.length})` : tab === 'pools' ? `Pools (${pools.length})` : tab === 'pool-games' ? `Pool Games (${poolGames.length})` : `Bracket`}
                     </button>
                   ))}
@@ -672,13 +673,13 @@ if (loading) return (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => { setTeamForm({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '' }); setShowAddTeam(true) }}
-                          className="text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                          className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors">
                           + Add Team
                         </button>
                         {swapA && swapB ? (
                           <button onClick={swapTeams} disabled={swapping}
                             className="btn-primary btn-sm disabled:opacity-50">
-                            {swapping ? 'Swapping...' : `↔ Swap ${swapA} ↔ ${swapB}`}
+                            {swapping ? 'Swapping...' : <span className="inline-flex items-center gap-1.5"><ArrowLeftRight size={12} /> Swap {swapA} ↔ {swapB}</span>}
                           </button>
                         ) : swapA ? (
                           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
@@ -725,7 +726,7 @@ if (loading) return (
                                 className={`border-b border-slate-50 last:border-0 cursor-pointer transition-colors ${isSwapA || isSwapB ? 'bg-amber-50' : i % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'}`}>
                                 <td className="px-5 py-3 font-semibold text-slate-800">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    {(isSwapA || isSwapB) && <span className="text-amber-500">↔</span>}
+                                    {(isSwapA || isSwapB) && <ArrowLeftRight size={12} className="text-amber-500" />}
                                     {team.teamName}
                                     {team.status === 'placeholder' && (
                                       <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
@@ -740,7 +741,7 @@ if (loading) return (
                                       onChange={e => { e.stopPropagation(); assignTeamToPool(team.teamName, e.target.value || null) }}
                                       onClick={e => e.stopPropagation()}
                                       disabled={assigningTeam === team.teamName}
-                                      className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50">
+                                      className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400 disabled:opacity-50">
                                       <option value="">-- No pool --</option>
                                       {pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                     </select>
@@ -757,13 +758,13 @@ if (loading) return (
                                   <div className="flex items-center gap-1">
                                     <button
                                       onClick={() => { setEditingTeam(team); setTeamForm({ teamName: team.teamName, clubName: team.clubName, coachName: team.coachName, coachEmail: team.coachEmail, coachPhone: team.coachPhone }) }}
-                                      className={`text-[11px] border rounded px-1.5 py-0.5 transition-colors whitespace-nowrap ${team.status === 'placeholder' ? 'text-amber-600 hover:text-amber-800 border-amber-200 hover:border-amber-400' : 'text-slate-400 hover:text-slate-700 border-slate-200 hover:border-slate-400'}`}>
-                                      ✏ Edit
+                                      className={`inline-flex items-center gap-1 text-[11px] border rounded px-1.5 py-0.5 transition-colors whitespace-nowrap ${team.status === 'placeholder' ? 'text-amber-600 hover:text-amber-800 border-amber-200 hover:border-amber-400' : 'text-slate-400 hover:text-slate-700 border-slate-200 hover:border-slate-400'}`}>
+                                      <Pencil size={11} /> Edit
                                     </button>
                                     <button
                                       onClick={() => { setMovingTeam(team); setMoveTarget('') }}
-                                      className="text-[11px] text-slate-400 hover:text-sky-600 border border-slate-200 hover:border-sky-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
-                                      Move →
+                                      className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-teal-600 border border-slate-200 hover:border-teal-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
+                                      Move <ArrowRight size={11} />
                                     </button>
                                   </div>
                                 </td>
@@ -787,35 +788,35 @@ if (loading) return (
                           <label className="block text-xs font-medium text-slate-600 mb-1">Team Name <span className="text-red-500">*</span></label>
                           <input autoFocus value={teamForm.teamName} onChange={e => setTeamForm(f => ({ ...f, teamName: e.target.value }))}
                             onKeyDown={e => e.key === 'Enter' && addTeam()}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" autoComplete="organization" placeholder="e.g. Dynasty Elite 2026" />
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" autoComplete="organization" placeholder="e.g. Dynasty Elite 2026" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Club Name</label>
                           <input value={teamForm.clubName} onChange={e => setTeamForm(f => ({ ...f, clubName: e.target.value }))}
-                            autoComplete="organization" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                            autoComplete="organization" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" placeholder="Optional" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Name</label>
                             <input value={teamForm.coachName} onChange={e => setTeamForm(f => ({ ...f, coachName: e.target.value }))}
-                              autoComplete="name" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                              autoComplete="name" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" placeholder="Optional" />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Phone</label>
                             <input value={teamForm.coachPhone} onChange={e => setTeamForm(f => ({ ...f, coachPhone: e.target.value }))}
-                              autoComplete="tel" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                              autoComplete="tel" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" placeholder="Optional" />
                           </div>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Coach Email</label>
                           <input value={teamForm.coachEmail} onChange={e => setTeamForm(f => ({ ...f, coachEmail: e.target.value }))}
-                            autoComplete="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="Optional" />
+                            autoComplete="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" placeholder="Optional" />
                         </div>
                       </div>
                       <div className="flex justify-end gap-2 mt-5">
                         <button onClick={() => setShowAddTeam(false)} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancel</button>
                         <button onClick={addTeam} disabled={!teamForm.teamName.trim() || savingTeam}
-                          className="text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                          className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
                           {savingTeam ? 'Adding...' : 'Add Team'}
                         </button>
                       </div>
@@ -838,42 +839,42 @@ if (loading) return (
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Team Name <span className="text-red-500">*</span></label>
                           <input autoFocus value={teamForm.teamName} onChange={e => setTeamForm(f => ({ ...f, teamName: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Club Name</label>
                           <input value={teamForm.clubName} onChange={e => setTeamForm(f => ({ ...f, clubName: e.target.value }))}
-                            autoComplete="organization" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                            autoComplete="organization" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Name</label>
                             <input value={teamForm.coachName} onChange={e => setTeamForm(f => ({ ...f, coachName: e.target.value }))}
-                              autoComplete="name" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                              autoComplete="name" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Coach Phone</label>
                             <input value={teamForm.coachPhone} onChange={e => setTeamForm(f => ({ ...f, coachPhone: e.target.value }))}
-                              autoComplete="tel" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                              autoComplete="tel" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
                           </div>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Coach Email</label>
                           <input value={teamForm.coachEmail} onChange={e => setTeamForm(f => ({ ...f, coachEmail: e.target.value }))}
-                            autoComplete="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                            autoComplete="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
                         </div>
                       </div>
                       <div className="flex justify-between items-center mt-5">
                         <button onClick={() => setEditingTeam(null)} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancel</button>
                         <div className="flex gap-2">
                           <button onClick={() => updateTeam(false)} disabled={savingTeam}
-                            className="text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                            className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
                             {savingTeam ? 'Saving...' : 'Save'}
                           </button>
                           {editingTeam?.status === 'placeholder' && (
                             <button onClick={() => updateTeam(true)} disabled={savingTeam}
-                              className="text-sm font-semibold bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
-                              ✓ Confirm Team
+                              className="inline-flex items-center gap-1.5 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                              <Check size={14} /> Confirm team
                             </button>
                           )}
                         </div>
@@ -887,7 +888,7 @@ if (loading) return (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setGenerateConfirm(null)}>
                     <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-2xl">⚠️</span>
+                        <AlertTriangle size={22} className="text-amber-500" />
                         <h3 className="font-bold text-slate-800">Scheduled Games Will Be Replaced</h3>
                       </div>
                       <p className="text-sm text-slate-600 mb-2">
@@ -952,7 +953,7 @@ if (loading) return (
                       <select
                         value={moveTarget}
                         onChange={e => setMoveTarget(e.target.value)}
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 mb-4">
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 mb-4">
                         <option value="">— Select division —</option>
                         {divisions.filter(d => d.name !== activeDiv).map(d => (
                           <option key={d.name} value={d.name}>{d.name}</option>
@@ -964,7 +965,7 @@ if (loading) return (
                         <button
                           onClick={() => moveTarget && moveTeam(movingTeam, moveTarget)}
                           disabled={!moveTarget}
-                          className="text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+                          className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
                           Move Team
                         </button>
                       </div>
@@ -980,10 +981,10 @@ if (loading) return (
                       <p className="text-xs text-slate-400">{teams.filter(t => !t.pool).length > 0 ? `${teams.filter(t => !t.pool).length} teams unassigned` : 'All teams assigned'}</p>
                       <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
                         className="btn-primary btn-sm">
-                        Assign Teams to Pools →
+                        <span className="inline-flex items-center gap-1.5">Assign teams to pools <ArrowRight size={12} /></span>
                       </Link>
                       <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/bracket`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors mt-1">
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors mt-1">
                         Bracket
                       </Link>
                     </div>
@@ -1043,7 +1044,7 @@ if (loading) return (
                                 <div className="flex flex-wrap gap-1.5">
                                   {unassigned.map(t => (
                                     <button key={t.id} onClick={() => assignTeamToPool(t.teamName, pool.name)}
-                                      className="text-xs bg-white border border-slate-200 hover:border-sky-300 hover:bg-sky-50 text-slate-600 hover:text-sky-700 px-2.5 py-1 rounded-lg transition-colors">
+                                      className="text-xs bg-white border border-slate-200 hover:border-teal-300 hover:bg-teal-50 text-slate-600 hover:text-teal-700 px-2.5 py-1 rounded-lg transition-colors">
                                       + {t.teamName}
                                     </button>
                                   ))}
@@ -1092,7 +1093,7 @@ if (loading) return (
                         </div>
                         <button onClick={generateGames} disabled={generating || pools.length === 0}
                           className="btn-primary btn-sm disabled:opacity-50">
-                          {generating ? 'Generating...' : '⚡ Generate Games'}
+                          {generating ? 'Generating...' : <span className="inline-flex items-center gap-1.5"><Zap size={13} /> Generate games</span>}
                         </button>
                         {poolGames.length > 0 && (
                           <>
@@ -1118,7 +1119,7 @@ if (loading) return (
                     </div>
                     {poolGames.length === 0 ? (
                       <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">
-                        No pool games yet. Add pools with teams, then click ⚡ Generate Games.
+                        No pool games yet. Add pools with teams, then click Generate Games.
                       </div>
                     ) : (
                       (() => {

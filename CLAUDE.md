@@ -54,8 +54,11 @@ and Assigner (drag staff onto game role-slots via shared GameGrid mirroring the 
 staff tray sorted + color-coded by type with key; per-game ref-count -/+ and tournament
 default; lock-editing toggle persisted per-tournament; staffing-requirements panel —
 min officials vs current roster, scorekeepers = one per field). Shared component:
-src/components/GameGrid.tsx.
-Next up: Divisions, then the remaining pages.
+src/components/GameGrid.tsx — and Divisions (sky→teal accent, lucide icons, sentence case;
+divisions list, teams/pools/pool-games/bracket tabs, swap mode, generate flows). Also
+flipped the GLOBAL accent in globals.css from sky to teal (btn-primary, .input/.select
+focus, .card-hover) so primary buttons + inputs are teal app-wide.
+Next up: Scores, Assignments, Results, Staff view, Returning teams.
 Tracking: Roadmap #57 (consistency pass) and #58 (page consolidation review).
 
 ## Build philosophy
