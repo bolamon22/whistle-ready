@@ -17,10 +17,17 @@ interface GapEntry { gameNumber:string;division:string;location:string;missingRo
 
 const FIELD_LABELS=[{key:'gameNumber',label:'Game Number',required:true},{key:'date',label:'Game Date',required:true},{key:'startTime',label:'Start Time',required:true},{key:'division',label:'Division',required:true},{key:'location',label:'Location / Field',required:true},{key:'team1',label:'Team 1',required:true},{key:'team2',label:'Team 2',required:true},{key:'pool',label:'Pool',required:false}]
 
+function staffKind(w:Worker):{label:string;dot:string}{
+  if(w.defaultRole==='scorekeeper')return{label:'Scorekeeper',dot:'bg-emerald-500'}
+  if(w.gender==='boys')return{label:'Boys ref',dot:'bg-blue-500'}
+  if(w.gender==='girls')return{label:'Girls ref',dot:'bg-pink-500'}
+  return{label:'Boys & girls ref',dot:'bg-violet-500'}
+}
+
 // Searchable dropdown component
 function SearchSelect({ value, onChange, options, placeholder, assigned, disabled }: {
   value: string; onChange: (v:string)=>void
-  options: {id:string;label:string;sublabel?:string;warning?:boolean}[]
+  options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string}[]
   placeholder: string; assigned: boolean; disabled: boolean
 }) {
   const [open,setOpen]=useState(false)
@@ -47,7 +54,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
         {open?(
           <input ref={inputRef} className="w-full bg-transparent outline-none text-[10px] text-slate-800" value={search} onChange={e=>setSearch(e.target.value)} placeholder="type to search…" onClick={e=>e.stopPropagation()}/>
         ):(
-          <span className={`truncate ${assigned?'text-sky-800':'text-slate-400'}`}>{selected?.label||placeholder}</span>
+          <span className={`flex items-center gap-1 truncate ${assigned?'text-sky-800':'text-slate-400'}`}>{selected?.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected.dot}`}/>}{selected?.label||placeholder}</span>
         )}
       </div>
       {open&&(
@@ -57,7 +64,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
             {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>(
               <div key={o.id} onClick={()=>{onChange(o.id);setOpen(false);setSearch('')}}
                 className={`px-2 py-1.5 cursor-pointer hover:bg-sky-50 ${o.id===value?'bg-sky-100':''}`}>
-                <div className={`text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.warning?'⚠ ':''}{o.label}</div>
+                <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}{o.warning?'⚠ ':''}{o.label}</div>
                 {o.sublabel&&<div className="text-[10px] text-slate-400">{o.sublabel}</div>}
               </div>
             ))}
@@ -300,12 +307,6 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const rosterWorkers=workers.filter(w=>rosterIds.has(w.id))
   function workerRoles(w:Worker):string[]{try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.length?r:[w.defaultRole]}catch{return[w.defaultRole]}}
   function canScorekeeper(w:Worker):boolean{return w.defaultRole==='scorekeeper'||(w.defaultRole==='ref'&&workerRoles(w).includes('scorekeeper'))}
-  function staffKind(w:Worker):{label:string;dot:string}{
-    if(w.defaultRole==='scorekeeper')return{label:'Scorekeeper',dot:'bg-emerald-500'}
-    if(w.gender==='boys')return{label:'Boys ref',dot:'bg-blue-500'}
-    if(w.gender==='girls')return{label:'Girls ref',dot:'bg-pink-500'}
-    return{label:'Boys & girls ref',dot:'bg-violet-500'}
-  }
 
   if(loading)return<div className="text-slate-400 text-center py-16">Loading…</div>
   if(!tournament)return<div className="text-red-500">Not found</div>
@@ -1091,13 +1092,13 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
 
   const options=eligible.map(w=>{
     const count=getGameCount(w.id)
-    const countEmoji=count>=8?'🔴':count>=5?'🟡':'🟢'
     const avail=availableIds.has(w.id)
     const isDoubled=doubled.has(w.id)
     const isRefAsSK=slotType==='scorekeeper'&&w.defaultRole==='ref'
     return{
       id:w.id,
-      label:`${w.name}${isRefAsSK?' (Ref→SK)':''} ${countEmoji}${count}`,
+      label:`${w.name}${isRefAsSK?' (Ref→SK)':''} ${count}`,
+      dot:staffKind(w).dot,
       sublabel:`${certLabel(w.certLevel)}${!avail?' · ⚠ unavailable':''}${isDoubled?' · ⚠ double-booked':''}`,
       warning:!avail||isDoubled,
     }
