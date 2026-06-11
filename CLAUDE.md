@@ -55,7 +55,9 @@ staff tray sorted + color-coded by type with key; per-game ref-count -/+ and tou
 default; lock-editing toggle persisted per-tournament; staffing-requirements panel —
 min officials vs current roster, scorekeepers = one per field). Shared component:
 src/components/GameGrid.tsx — and Divisions (sky→teal accent, lucide icons, sentence case;
-divisions list, teams/pools/pool-games/bracket tabs, swap mode, generate flows). Also
+divisions list, teams/pools/pool-games/bracket tabs, swap mode, generate flows; editable
+Smart Defaults plan per team count — games/team, pools, bracket format, saved per tournament,
+applied on generate). Also
 flipped the GLOBAL accent in globals.css from sky to teal (btn-primary, .input/.select
 focus, .card-hover) so primary buttons + inputs are teal app-wide.
 Next up: Scores, Assignments, Results, Staff view, Returning teams.
