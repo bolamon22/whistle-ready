@@ -755,9 +755,15 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
       {viewMode==='grid'&&dayGames.length>0&&(
         <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <Users size={14} className="text-slate-400"/>
             <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Staff — drag a name onto a game&apos;s R1 / R2 / R3 / SK slot</span>
+            <span className="ml-auto flex items-center gap-2.5 text-[10px] text-slate-400">
+              <span className="font-semibold text-slate-500">Game load:</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/> 0–4</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/> 5–7</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"/> 8+ games</span>
+            </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {rosterWorkers.length===0?(
