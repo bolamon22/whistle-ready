@@ -84,6 +84,39 @@ function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
   return games
 }
 
+
+// ── Owes-2 generator: everyone in the bracket + loser-fed consolation + if-needed ──
+// Used when (guarantee - pool games) >= 2: pool play gives fewer games, so the
+// bracket must guarantee 2 — first-round losers get a 2nd game; bye seeds get a
+// conditional "if needed" game. Reuses generateSEGames for the winners bracket.
+function generateOwes2(teamCount: number): Gen[] {
+  const games = generateSEGames(teamCount, 0)
+  let gn = games.length + 1
+  const isSeed = (x: string) => x.startsWith('seed:')
+  const seedNum = (x: string) => parseInt(x.split(':')[1])
+  const twoSeed = games.filter(g => isSeed(g.t1) && isSeed(g.t2))   // both entered fresh -> loser is short
+  const mixed = games.filter(g => isSeed(g.t1) !== isSeed(g.t2))    // bye seed vs play-in winner -> if needed
+  const extra: Gen[] = []
+  const consTotal = Math.floor(twoSeed.length / 2)
+  let cn = 1
+  for (let i = 0; i + 1 < twoSeed.length; i += 2) {
+    extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${twoSeed[i].gameNumber}`, t2: `loser:${twoSeed[i + 1].gameNumber}`, label: consTotal > 1 ? `Consolation ${cn++}` : 'Consolation' })
+  }
+  const leftoverTwo = twoSeed.length % 2 === 1 ? twoSeed[twoSeed.length - 1] : null
+  const strongestTwo = [...twoSeed].sort((a, b) => Math.min(seedNum(a.t1), seedNum(a.t2)) - Math.min(seedNum(b.t1), seedNum(b.t2)))[0]
+  for (let j = 0; j + 1 < mixed.length; j += 2) {
+    extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${mixed[j].gameNumber}`, t2: `loser:${mixed[j + 1].gameNumber}`, label: 'If needed' })
+  }
+  const leftoverMixed = mixed.length % 2 === 1 ? mixed[mixed.length - 1] : null
+  if (leftoverMixed && strongestTwo) {
+    extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${leftoverMixed.gameNumber}`, t2: `loser:${strongestTwo.gameNumber}`, label: 'If needed' })
+  }
+  if (leftoverTwo) {
+    extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${leftoverTwo.gameNumber}`, t2: leftoverMixed ? `loser:${leftoverMixed.gameNumber}` : 'seed:0', label: 'Consolation (check)' })
+  }
+  return [...games, ...extra]
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string; division: string } }
@@ -109,11 +142,14 @@ export async function POST(
   { params }: { params: { id: string; division: string } }
 ) {
   const division = decodeURIComponent(params.division)
-  const { format, teamCount, consolationCount = 0, seeds } = await req.json()
+  const { format, teamCount, consolationCount = 0, seeds, loserConsolation = false } = await req.json()
 
-  // Use predefined template if available; otherwise generate algorithmically
-  const rawTemplate = getTemplate(format, teamCount)
-  const template: Gen[] = rawTemplate
+  // loserConsolation = the "owes 2" mode (everyone in + loser-fed consolation + if-needed).
+  // Otherwise: predefined template if available, else algorithmic single-elim (+ seed-paired consolation).
+  const rawTemplate = loserConsolation ? null : getTemplate(format, teamCount)
+  const template: Gen[] = loserConsolation
+    ? generateOwes2(teamCount)
+    : rawTemplate
     ? rawTemplate.map((g, _) => ({
         gameNumber: g.gameNumber, round: g.round,
         section: g.section as Sect,

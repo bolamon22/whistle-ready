@@ -78,6 +78,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   const [selFormat, setSelFormat] = useState<'single' | 'double' | '2gg'>(planFormat ?? 'single')
   const [selCountInput, setSelCountInput] = useState(planCount ?? '4')
   const [consolationInput, setConsolationInput] = useState(planConsolation ?? '0')
+  const [loserConsolation, setLoserConsolation] = useState(false)
   const [creating, setCreating] = useState(false)
 
   // Add-game form state
@@ -115,7 +116,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       const r = await fetch(apiBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format: selFormat, teamCount: Math.max(2, parseInt(selCountInput) || 2), consolationCount: Math.max(0, parseInt(consolationInput) || 0), seeds: {} }),
+        body: JSON.stringify({ format: selFormat, teamCount: Math.max(2, parseInt(selCountInput) || 2), consolationCount: Math.max(0, parseInt(consolationInput) || 0), loserConsolation, seeds: {} }),
       })
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Failed to create') }
       await loadBracket()
@@ -318,6 +319,14 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
             <p className="text-xs text-slate-600 mt-1">Extra consolation game slots</p>
           </div>
         </div>
+
+        <label className="mb-5 flex items-start gap-3 bg-slate-800 border border-slate-700 rounded-xl p-4 cursor-pointer">
+          <input type="checkbox" checked={loserConsolation} onChange={e => setLoserConsolation(e.target.checked)} className="mt-0.5 accent-teal-500" />
+          <span className="text-sm">
+            <span className="font-semibold text-white">Everyone in the bracket · guarantee a 2nd game</span>
+            <span className="block text-slate-400 mt-0.5">For 2 pool-game divisions. All teams play; first-round losers get a loser-fed consolation game (plus auto &ldquo;if needed&rdquo; games), so the bracket fills the 4-game guarantee. Set &ldquo;Teams in bracket&rdquo; to the full team count.</span>
+          </span>
+        </label>
 
         <div className="mb-5 bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm">
           {entry ? (
