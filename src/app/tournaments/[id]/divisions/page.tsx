@@ -48,8 +48,6 @@ export default function DivisionsPage() {
 
   // Pool games state
   const [generating, setGenerating] = useState(false)
-  const [genDate, setGenDate] = useState('')
-  const [genRefCount, setGenRefCount] = useState('2')
   const [gamesPerTeam, setGamesPerTeam] = useState('2')
   const [renumbering, setRenumbering] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -326,7 +324,7 @@ export default function DivisionsPage() {
     setGenerating(true)
     const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'generate', date: genDate, refCount: Number(genRefCount), gamesPerTeam: Number(divGamesPerTeam[div] ?? '2'), clearExisting: true }),
+      body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[div] ?? '2'), clearExisting: true }),
     })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error ?? 'Failed to generate games'); setGenerating(false); return }
@@ -1155,18 +1153,6 @@ if (loading) return (
                   <div className="space-y-4">
                     <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
                       <div className="flex flex-wrap items-end gap-3">
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">Date (optional)</label>
-                          <input type="date" className="input text-sm" value={genDate} onChange={e => setGenDate(e.target.value)} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">Refs per game</label>
-                          <select className="input text-sm" value={genRefCount} onChange={e => setGenRefCount(e.target.value)}>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                          </select>
-                        </div>
                         <div>
                           <label className="block text-xs text-slate-500 mb-1">Games per team</label>
                           <input type="number" min="1" max="10" className="input text-sm w-20" value={activeDiv ? (divGamesPerTeam[activeDiv] ?? '2') : '2'} onChange={e => activeDiv && setDivGamesPerTeam(prev => ({ ...prev, [activeDiv]: e.target.value }))} />
