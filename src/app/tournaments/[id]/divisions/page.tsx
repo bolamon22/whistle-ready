@@ -835,12 +835,12 @@ if (loading) return (
                         {pools.length > 0 && (
                           <button onClick={() => setGroupByPool(v => !v)}
                             className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${groupByPool ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'}`}>
-                            {groupByPool ? 'List view' : 'Group by pool'}
+                            {groupByPool ? 'List view' : 'View Pools'}
                           </button>
                         )}
                         <Link href={`/tournaments/${id}/divisions/${encodeURIComponent(activeDiv!)}/assign-pools`}
                           className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 px-2.5 py-1 rounded-lg transition-colors">
-                          <Sparkles size={12} /> Auto-assign
+                          <Sparkles size={12} /> Assign Pools
                         </Link>
                       </div>
                     </div>
