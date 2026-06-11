@@ -655,40 +655,6 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
             </div>
           </SectionCard>
 
-          <SectionCard title="Ref Count Rules" description="Auto-assign number of refs per division keyword" icon={Users}
-            open={open === 'refrules'} onToggle={() => toggle('refrules')}
-            badge={`${Object.keys(divRules).length} rules`}>
-            <div className="space-y-2 mb-4">
-              {Object.entries(divRules).length === 0 && (
-                <p className="text-sm text-slate-400 italic">No rules yet.</p>
-              )}
-              {Object.entries(divRules).map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2">
-                  <span className="text-sm text-slate-700">Division contains <strong>"{k}"</strong> → <strong>{v} ref{v !== 1 ? 's' : ''}</strong></span>
-                  <button type="button" onClick={() => removeRule(k)} className="text-red-400 hover:text-red-600 text-xs ml-4">Remove</button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 items-end border-t border-slate-100 pt-4">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Division keyword</label>
-                <input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  value={newKeyword} onChange={e => setNewKeyword(e.target.value)} placeholder="e.g. 7v7, U8, Lower School" />
-              </div>
-              <div className="w-28">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Ref count</label>
-                <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  value={newCount} onChange={e => setNewCount(e.target.value)}>
-                  <option value="1">1 ref</option>
-                  <option value="2">2 refs</option>
-                  <option value="3">3 refs</option>
-                </select>
-              </div>
-              <button type="button" onClick={addRule}
-                className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium mb-0.5">Add</button>
-            </div>
-          </SectionCard>
-
           {/* Registration Types */}
           <SectionCard title="Registration Types" description="Choose which registration forms to offer" icon={ClipboardList}
             open={open === 'registration'} onToggle={() => toggle('registration')} badge={[teamRegEnabled && 'Teams', indivRegEnabled && 'Individual'].filter(Boolean).join(' + ') || undefined}>
