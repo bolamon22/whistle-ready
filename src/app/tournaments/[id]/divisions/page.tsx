@@ -1239,9 +1239,10 @@ if (loading) return (
                   const owes2 = (guar - poolG) >= 2
                   const planB = smartTable[tc]?.bracket || ''
                   const fmt = planB === 'double' ? 'double' : planB === '2gg' ? '2gg' : (planB === 'single' || planB === 'single-con') ? 'single' : undefined
-                  const sizes = fmt === 'double' ? [4, 8] : [4, 8, 16]
-                  const cnt = owes2 ? String(tc) : (fmt ? String(sizes.filter(z => z <= tc).pop() ?? sizes[0]) : undefined)
-                  return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={planB === 'single-con' ? '1' : undefined} planLoserConsolation={owes2} />
+                  let pow2 = 1; while (pow2 * 2 <= tc) pow2 *= 2
+                  const cnt = owes2 ? String(tc) : String(pow2)
+                  const cons = owes2 ? undefined : (tc - pow2 > 0 ? String(Math.floor((tc - pow2) / 2)) : (planB === 'single-con' ? '1' : undefined))
+                  return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} />
                 })()
               )}
               </>

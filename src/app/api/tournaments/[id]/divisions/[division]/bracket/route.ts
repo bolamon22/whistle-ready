@@ -152,11 +152,19 @@ export async function POST(
   const template: Gen[] = loserConsolation
     ? generateOwes2(teamCount)
     : rawTemplate
-    ? rawTemplate.map((g, _) => ({
-        gameNumber: g.gameNumber, round: g.round,
-        section: g.section as Sect,
-        t1: g.t1, t2: g.t2, label: g.label || '',
-      }))
+    ? (() => {
+        const base: Gen[] = rawTemplate.map((g) => ({
+          gameNumber: g.gameNumber, round: g.round,
+          section: g.section as Sect,
+          t1: g.t1, t2: g.t2, label: g.label || '',
+        }))
+        let gn = base.length + 1
+        const cons: Gen[] = []
+        for (let i = 0; i < consolationCount; i++) {
+          cons.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `seed:${teamCount + 1 + i * 2}`, t2: `seed:${teamCount + 2 + i * 2}`, label: consolationCount > 1 ? `Consolation ${i + 1}` : 'Consolation' })
+        }
+        return [...base, ...cons]
+      })()
     : generateSEGames(teamCount, consolationCount)
 
   try {
