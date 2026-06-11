@@ -63,6 +63,38 @@ focus, .card-hover) so primary buttons + inputs are teal app-wide.
 Next up: Scores, Assignments, Results, Staff view, Returning teams.
 Tracking: Roadmap #57 (consistency pass) and #58 (page consolidation review).
 
+## Session handoff (Jun 11, 2026)
+What shipped to live this session (all deployed):
+- Restyled to the design standard: Registrations, Settings, Scheduler, Divisions. Flipped the
+  GLOBAL accent in globals.css from sky to teal (btn-primary, .input/.select focus, .card-hover)
+  so primary buttons + inputs are teal app-wide.
+- Assigner: full redesign — drag staff onto game role-slots, staff tray sorted/color-coded by
+  type with a key, per-game ref-count -/+ and a tournament "Refs per game" default, a
+  Lock-editing toggle (persists per tournament, disables drag/assign/ref/score edits), and a
+  staffing-requirements panel (min officials vs roster; scorekeepers = one per field).
+- Retired the old ref machinery: removed Settings "Ref Count Rules" and the Staff Roster
+  "Game Target" column. Ref counts now live per-game on the Assigner; pool-game generation
+  defaults to 2 refs; Assigner grid + List/Division read each game's own refCount.
+- Divisions Smart Defaults: editable per-tournament plan (team count -> games/team, pools,
+  bracket format), saved in the browser. Generate-all creates the planned # of pools and splits
+  teams; the chosen bracket format pre-selects on each division's Bracket tab.
+
+Open / next:
+- Consistency pass remaining: Scores, Assignments, Results, Staff view, Returning teams.
+- BRACKETS (next project, not built): templates in src/lib/bracketTemplates.ts only cover 4/8/16
+  for single / single+3rd / double / 2-game-guarantee. Odd/in-between counts (5,6,7,9...) fall
+  back to single-elim and do NOT honor the labeled guarantee (a 7-team "2GG" gives first-round
+  losers only one game). In lacrosse the guarantee normally comes from POOL PLAY (2-3 pool games)
+  with single-elim on top. Need: proper byes for odd counts + real consolation/playback
+  structures. Bo is filling in a per-division planning sheet (team count -> pool play?/#pools,
+  advance count, bracket format, placement/guarantee); build templates from that. A one-page
+  "Tournament Bracket Formats - Reference & Planning" .docx was generated to capture this.
+
+Working notes: writes to this folder via the editor tool can truncate (write via shell instead);
+the sandbox can't push to GitHub (push via GitHub Desktop on master). Some per-user settings
+(Assigner lock, games-per-ref, Divisions smart-defaults plan) persist in localStorage per
+tournament, not the DB.
+
 ## Build philosophy
 - Diagnose before changing; verify after.
 - Preview visual changes before deploying — keep Bo in the loop with a preview.
