@@ -23,6 +23,12 @@ function staffKind(w:Worker):{label:string;dot:string}{
   if(w.gender==='girls')return{label:'Girls ref',dot:'bg-pink-500'}
   return{label:'Boys & girls ref',dot:'bg-violet-500'}
 }
+function staffRank(w:Worker):number{
+  if(w.defaultRole==='scorekeeper')return 3
+  if(w.gender==='boys')return 0
+  if(w.gender==='girls')return 1
+  return 2
+}
 
 // Searchable dropdown component
 function SearchSelect({ value, onChange, options, placeholder, assigned, disabled }: {
@@ -804,7 +810,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
           <div className="flex flex-wrap gap-1.5">
             {rosterWorkers.length===0?(
               <span className="text-xs text-slate-400 italic">No staff on the roster yet.</span>
-            ):rosterWorkers.map(w=>{
+            ):[...rosterWorkers].sort((a,b)=>staffRank(a)-staffRank(b)||a.name.localeCompare(b.name)).map(w=>{
               const count=getGameCount(w.id)
               const kind=staffKind(w)
               return(
