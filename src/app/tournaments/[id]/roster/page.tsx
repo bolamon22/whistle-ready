@@ -337,7 +337,6 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('defaultRole')}>Roles {sortArrow('defaultRole')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('certLevel')}>Cert {sortArrow('certLevel')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Game Target</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Contact</th>
                   <th className="px-4 py-3"/>
                 </tr>
@@ -369,15 +368,6 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                       <td className="px-4 py-3">
                         <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}</span>
                         {w.payHandle && <div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {!wRoles.every(r=>isHourlyRole(r)) ? (
-                          <input type="number" min="0" max="20"
-                            className="input w-16 text-center py-1"
-                            value={targets[w.id]??'0'}
-                            onChange={e=>updateTarget(w.id,e.target.value)}
-                          />
-                        ) : <span className="text-slate-400 text-xs">Hourly</span>}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {w.phone&&<div>{w.phone}</div>}
@@ -426,7 +416,6 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                                   <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p>{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
                                   {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p>${w.payRateOverride}/game</p></div>}
                                   {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p>${w.hourlyRate}/hr</p></div>}
-                                  {!wRoles.every(r=>isHourlyRole(r))&&<div><p className="text-slate-400 text-xs mb-0.5">Game Target</p><p>{targets[w.id]??'0'} games</p></div>}
                                 </div>
                                 {w.notes&&(
                                   <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">

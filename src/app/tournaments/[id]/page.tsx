@@ -636,7 +636,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                     const sk=g.assignments.find(a=>a.role==='scorekeeper')
                     const isAssignOpen=assignExpandId===g.id
                     const doubled=getDoubleBookedWorkers(g.startTime,g.date)
-                    const refCount=getRefCount(g)
+                    const refCount=g.isChampionship?Math.max(g.refCount,3):g.refCount
                     return(<>
                       <tr key={g.id} className={`border-b border-slate-100 cursor-pointer ${isAssignOpen?'bg-sky-50/40 border-b-0':'hover:bg-slate-50'} ${g.isCanceled?'opacity-50':''}`} onClick={()=>setAssignExpandId(isAssignOpen?null:g.id)}>
                         <td className="px-4 py-3 font-mono text-slate-500 text-xs">{g.gameNumber}</td>
