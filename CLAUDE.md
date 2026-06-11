@@ -126,3 +126,5 @@ Open / next:
 - Preview visual changes before deploying — keep Bo in the loop with a preview.
 - Prefer shared components and conventions so the codebase stays consistent over time.
 - Be careful with secrets and with irreversible actions (deletes, pushes, payments).
+
+<!-- redeploy nudge: 2026-06-11T21:51Z -->
