@@ -53,6 +53,7 @@ export default function DivisionsPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [divGamesPerTeam, setDivGamesPerTeam] = useState<Record<string, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
+  const [includeBrackets, setIncludeBrackets] = useState(true)
   const [guarantee, setGuarantee] = useState('4')
   const [smartTable, setSmartTable] = useState<Record<number, { games?: number; pools?: number; bracket?: string; advance?: number; consolation?: number }>>({})
   const [showSmartEditor, setShowSmartEditor] = useState(false)
@@ -478,7 +479,7 @@ export default function DivisionsPage() {
       if (res.ok) totalGames += data.generated ?? 0
 
       // Generate the bracket structure from this division's Smart Defaults plan
-      if (await generateBracketForDivision(div.name, div.teamCount)) bracketsCreated++
+      if (includeBrackets && await generateBracketForDivision(div.name, div.teamCount)) bracketsCreated++
     }
 
     // reload current division data
@@ -677,6 +678,10 @@ if (loading) return (
                   <Pencil size={13} />
                 </button>
               </div>
+              <label className="flex items-center justify-center gap-2 text-[11px] text-slate-600 mb-2 cursor-pointer">
+                <input type="checkbox" checked={includeBrackets} onChange={e => setIncludeBrackets(e.target.checked)} className="accent-teal-600" />
+                Include brackets
+              </label>
               <button
                 onClick={generateAllDivisions}
                 disabled={generatingAll}
@@ -684,7 +689,7 @@ if (loading) return (
               >
         {generatingAll ? 'Generating...' : <><Zap size={13} /> Generate all divisions</>}
               </button>
-              <p className="text-[10px] text-slate-400 text-center leading-tight">Pools, pool games & brackets · auto-creates Pool A if needed · skips existing brackets</p>
+              <p className="text-[10px] text-slate-400 text-center leading-tight">{includeBrackets ? 'Pools, pool games & brackets' : 'Pool games only'} · auto-creates Pool A if needed{includeBrackets ? ' · skips existing brackets' : ''}</p>
             </div>
             {showSmartEditor && (() => {
               const maxN = Math.max(smartMax, ...divisions.map(d => d.teamCount), 2)
@@ -1062,7 +1067,7 @@ if (loading) return (
                                 })
                                 const data = await res.json()
                                 if (res.ok) totalGames += data.generated ?? 0
-                                if (await generateBracketForDivision(d.name, d.teamCount)) bracketsCreated++
+                                if (includeBrackets && await generateBracketForDivision(d.name, d.teamCount)) bracketsCreated++
                               }
                               if (activeDiv) {
                                 const [teamData, gameData] = await Promise.all([
