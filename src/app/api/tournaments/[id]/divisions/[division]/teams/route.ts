@@ -167,7 +167,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
 // PUT: update team details (and optionally confirm)
 export async function PUT(req: NextRequest, { params }: { params: { id: string; division: string } }) {
   try {
-    const { teamId, teamName, clubName, coachName, coachEmail, coachPhone, confirm } = await req.json()
+    const { teamId, teamName, clubName, coachName, coachEmail, coachPhone, logoUrl, confirm } = await req.json()
     if (!teamId) return NextResponse.json({ error: 'teamId required' }, { status: 400 })
 
     // Update known fields via Prisma
@@ -177,6 +177,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
     if (coachName !== undefined) data.coachName = coachName.trim()
     if (coachEmail !== undefined) data.coachEmail = coachEmail.trim()
     if (coachPhone !== undefined) data.coachPhone = coachPhone.trim()
+    if (logoUrl !== undefined) data.logoUrl = logoUrl
 
     if (Object.keys(data).length > 0) {
       await prisma.registeredTeam.update({ where: { id: teamId }, data })

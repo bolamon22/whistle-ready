@@ -22,7 +22,7 @@ interface PoolGame {
 
 interface Team {
   id: string; teamName: string; clubName: string; division: string
-  coachName: string; coachPhone: string; coachEmail: string
+  coachName: string; coachPhone: string; coachEmail: string; logoUrl: string
   pool: string | null; paid: number; owed: number; paymentStatus: 'paid' | 'partial' | 'unpaid'
   status: 'confirmed' | 'placeholder'
 }
@@ -71,7 +71,8 @@ export default function DivisionsPage() {
   // Add / Edit team state
   const [showAddTeam, setShowAddTeam] = useState(false)
   const [editingTeam, setEditingTeam] = useState<Team | null>(null)
-  const [teamForm, setTeamForm] = useState({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '' })
+  const [teamForm, setTeamForm] = useState({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '', logoUrl: '' })
+  const [teamLogoUploading, setTeamLogoUploading] = useState(false)
   const [savingTeam, setSavingTeam] = useState(false)
 
   // Division management state
@@ -141,10 +142,44 @@ export default function DivisionsPage() {
     if (!res.ok) { toast.error(data.error ?? 'Failed to add team'); setSavingTeam(false); return }
     setTeams(t => [...t, data].sort((a, b) => a.teamName.localeCompare(b.teamName)))
     setDivisions(d => d.map(x => x.name === activeDiv ? { ...x, teamCount: x.teamCount + 1 } : x))
-    setTeamForm({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '' })
+    setTeamForm({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '', logoUrl: '' })
     setShowAddTeam(false)
     setSavingTeam(false)
     toast.success(`${data.teamName} added as placeholder`)
+  }
+
+  const compressImage = (file: File, maxDim = 512): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const img = new Image()
+        img.onload = () => {
+          let { width, height } = img
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) { height = Math.round((height * maxDim) / width); width = maxDim }
+            else { width = Math.round((width * maxDim) / height); height = maxDim }
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = width; canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) { reject(new Error('Canvas not supported')); return }
+          ctx.drawImage(img, 0, 0, width, height)
+          let url = canvas.toDataURL('image/png')
+          if (url.length > 200000) url = canvas.toDataURL('image/jpeg', 0.85)
+          resolve(url)
+        }
+        img.onerror = () => reject(new Error('Could not read image'))
+        img.src = reader.result as string
+      }
+      reader.onerror = () => reject(new Error('Could not read file'))
+      reader.readAsDataURL(file)
+    })
+
+  async function pickTeamLogo(file: File) {
+    setTeamLogoUploading(true)
+    try { const url = await compressImage(file); setTeamForm(fm => ({ ...fm, logoUrl: url })) }
+    catch { toast.error('Logo upload failed') }
+    finally { setTeamLogoUploading(false) }
   }
 
   async function updateTeam(confirm = false) {
@@ -162,6 +197,7 @@ export default function DivisionsPage() {
       coachName: teamForm.coachName,
       coachEmail: teamForm.coachEmail,
       coachPhone: teamForm.coachPhone,
+      logoUrl: teamForm.logoUrl,
       status: confirm ? 'confirmed' : x.status,
     } : x))
     setEditingTeam(null)
@@ -898,7 +934,7 @@ if (loading) return (
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => { setTeamForm({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '' }); setShowAddTeam(true) }}
+                          onClick={() => { setTeamForm({ teamName: '', clubName: '', coachName: '', coachEmail: '', coachPhone: '', logoUrl: '' }); setShowAddTeam(true) }}
                           className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors">
                           + Add Team
                         </button>
@@ -1023,7 +1059,7 @@ if (loading) return (
                                 <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center gap-1">
                                     <button
-                                      onClick={() => { setEditingTeam(team); setTeamForm({ teamName: team.teamName, clubName: team.clubName, coachName: team.coachName, coachEmail: team.coachEmail, coachPhone: team.coachPhone }) }}
+                                      onClick={() => { setEditingTeam(team); setTeamForm({ teamName: team.teamName, clubName: team.clubName, coachName: team.coachName, coachEmail: team.coachEmail, coachPhone: team.coachPhone, logoUrl: (team as any).logoUrl || '' }) }}
                                       className={`inline-flex items-center gap-1 text-[11px] border rounded px-1.5 py-0.5 transition-colors whitespace-nowrap ${team.status === 'placeholder' ? 'text-amber-600 hover:text-amber-800 border-amber-200 hover:border-amber-400' : 'text-slate-400 hover:text-slate-700 border-slate-200 hover:border-slate-400'}`}>
                                       <Pencil size={11} /> Edit
                                     </button>
@@ -1129,6 +1165,21 @@ if (loading) return (
                           <label className="block text-xs font-medium text-slate-600 mb-1">Coach Email</label>
                           <input value={teamForm.coachEmail} onChange={e => setTeamForm(f => ({ ...f, coachEmail: e.target.value }))}
                             autoComplete="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Team Logo</label>
+                          <div className="flex items-center gap-3">
+                            {teamForm.logoUrl
+                              ? <img src={teamForm.logoUrl} alt="" className="h-12 w-12 rounded-lg object-contain border border-slate-200 bg-white" />
+                              : <span className="h-12 w-12 rounded-lg bg-slate-100 border border-slate-200 text-slate-400 text-sm font-semibold flex items-center justify-center">{(teamForm.teamName || '?').charAt(0).toUpperCase()}</span>}
+                            <label className={`cursor-pointer border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 ${teamLogoUploading ? 'opacity-50' : ''}`}>
+                              {teamLogoUploading ? 'Uploading…' : teamForm.logoUrl ? 'Change logo' : 'Upload logo'}
+                              <input type="file" accept="image/*" className="hidden" disabled={teamLogoUploading}
+                                onChange={e => { const fl = e.target.files?.[0]; if (fl) pickTeamLogo(fl) }} />
+                            </label>
+                            {teamForm.logoUrl && <button type="button" onClick={() => setTeamForm(f => ({ ...f, logoUrl: '' }))} className="text-xs text-red-400 hover:text-red-600">Remove</button>}
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1">PNG or JPG recommended.</p>
                         </div>
                       </div>
                       <div className="flex justify-between items-center mt-5">
