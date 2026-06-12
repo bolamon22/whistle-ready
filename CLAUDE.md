@@ -38,6 +38,15 @@ phantom-deletes hundreds of files). Mitigations: prefer single-file commits; if 
 rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A broken
 `ORIG_HEAD` ref blocks `merge --ff-only`; `rm .git/ORIG_HEAD` then `git reset --hard origin/master`.
 
+### Tooling gotcha — editor tool truncates; GitHub Desktop can crash
+- The Read/Edit/Write file tools can TRUNCATE files in this Downloads folder (and their view can
+  diverge from what git/bash see). **Write/patch files via the shell** (python / sed / cat heredoc);
+  restore a clobbered file with `git show HEAD:path > path`. Verify with `wc -l` + esbuild after.
+- GitHub Desktop's window occasionally hard-crashes to a black screen — a PC restart fixes it. The
+  sandbox cannot reach github.com, so pushes go through GitHub Desktop on the Windows side.
+- Chrome stealing frontmost focus blocks clicks on GitHub Desktop (it's read-tier) — re-open GHD or
+  use Ctrl+P. GHD may open on a different monitor — use `switch_display`.
+
 ## Design standard (UI consistency)
 - Icons: lucide-react only — never emoji.
 - Palette: neutral slate base + teal as the single accent; semantic green / red / amber
@@ -75,6 +84,18 @@ scores → public. Highlights shipped to live:
 - **Bracket redesign (CFP "rail" style)** on the builder preview and the scoring `/bracket` page:
   each team on its own bar with a teal seed chip, team logo, and name; amber for byes/champion;
   feeder-graph layout drives straight right-angle connectors (byes offset to pair with their feeder).
+- **Public bracket = light rail** (matches the builder, kept light for spectators): each team on its own
+  bar with a seed chip, logo, scores and a date/time/field caption; feeder-graph layout fixed the old
+  bye overlap; **orange seed chips** mark bye teams and bye games are offset so the winner-feeder lines
+  up with its feeder; champion caps sit ABOVE the finals; a **Zoom** control shrinks it to fit.
+- **Consolation (both-ways) tournament bracket** — the format formerly "2-Game Guarantee" is now
+  **"Consolation (both-ways)"** (builder picker + Smart Defaults + template catalog). When chosen it
+  renders as a MIRROR: round-1 down the centre, winners flow RIGHT to the **Champion**, first-round
+  losers drop LEFT through a consolation bracket to the **Consolation Champion** (two champions). On the
+  public view and the builder Preview (dark); the 3rd-place game shows as a separate "Placement" card;
+  champion caps above their finals + zoom; the builder mirror supports per-game × delete + "+ Add game".
+  Opt-in — only the 2gg format renders the mirror, everything else is unchanged. Detection ignores
+  bracket placeholder names (Seed/W-B), which repeat across divisions.
 - **Logos/crests**: `RegisteredTeam.logoUrl` (uploaded + client-compressed ≤512px on the Divisions
   Edit-Team and Registrations forms); `/teams` returns logoUrl; `team-logos` endpoint feeds crests
   on brackets and public pages.
@@ -92,16 +113,30 @@ scores → public. Highlights shipped to live:
   Time Entries, Pay Summary, Registrations, Settings, Scheduler, Assigner (drag staff to role-slots,
   per-game ref counts, lock-editing toggle, staffing-requirements panel), Scores, Assignments, Results.
 
+- **Scheduler — Auto-fill (assists the drag-and-drop)**: a teal **Auto-fill** button + a pure, tested
+  engine in `src/lib/autoSchedule.ts`. Places parking-lot games (after your filters) onto the grid by
+  the rules: no team/field double-book, bracket games after their feeders, max 3/team/day, **spread a
+  division across fields** (parallel play + rest) while keeping each team on consistent fields, and
+  **one-on-one-off** rest spacing (~2 slots; penalise back-to-back). Pool games → day 1, bracket → day 2
+  automatically (Game-Type filter lets you run them separately). A **grid Zoom** control shows more games.
+  Placeholder names (Seed/W-B/L-B/TBD) are NOT real teams (`isRealTeam`) — they repeat across divisions;
+  the scheduler's conflict checker uses the same filter. Refs/scorekeepers are scheduled LATER on the Assigner.
+- **Scheduling memory**: `SCHEDULING-PATTERNS.md` records patterns learned from real manually-scheduled
+  tournaments (CSV exports or TourneyMachine public links — any sport, rendered via Claude-in-Chrome and
+  parsed). Samples #1 (Sunshine State) + #2 (Monster Mash) confirm spread + one-on-one-off rest and show
+  the day-split varies. Feed more → fold findings into that doc AND the autoSchedule weights.
+
 ## Open / next
 - **Consistency pass — remaining pages**: Staff view, Returning teams. (Done: the full Staff hub,
   Registrations, Settings, Scheduler, Assigner, Divisions, Scores, Assignments, Results, Public.)
-- **Bracket game times/fields on the cards**: B-games already carry schedule once placed on the
-  Scheduler; show date/time/field on each bracket-preview and public-bracket card (read-only).
+- **Scheduler auto-fill — next layers** (calibrate from `SCHEDULING-PATTERNS.md` as more examples land):
+  make the day-split a CHOICE (pool/bracket-by-day vs pool-across-all-days — it varies); game-duration /
+  slot-length per division; field designations (which divisions/formats a field allows, e.g. 7v7 fields)
+  honoured in auto-fill; identify a team by **division+name** (club names repeat across divisions); then
+  ref/scorekeeper auto-assignment on the Assigner.
 - **Double-elim / 3rd flight (B2)**: data model already supports >2 flights via the `flight` column.
 
 ## Known cruft / cleanup
-- Dead `gameTop()` in BracketBuilder (feeder-graph layout replaced it).
-- Stray `seed-flag-football.js` at repo root (harmless local seed script) — can be removed.
 - `next.config.js` sets `typescript.ignoreBuildErrors` + `eslint.ignoreDuringBuilds`; ~40 pre-existing
   TS errors exist (e.g. Prisma model types not in schema) and are non-blocking.
 - Some per-user settings (Assigner lock, games-per-ref, Divisions Smart-Defaults plan) persist in

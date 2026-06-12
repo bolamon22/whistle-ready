@@ -37,3 +37,9 @@ so identify a team by (division + name), not name alone.
 4. Identify teams by **(division + name)** to avoid conflating same-named club teams across divisions.
 
 _Confirmed by sample #1: spread across fields ✓, one-on-one-off rest target ✓, max ~3/day ✓._
+
+### Monster Mash 2025 (sample #2 — via TourneyMachine public link)
+Lacrosse · Oct 25–26 · 8 divisions. Source: tourneymachine.com public results (rendered in-browser, parsed per-division Division.aspx pages — confirms public links are analyzable, incl. other sports on the same platform).
+- **Day split:** pool day 1 (Sat), bracket day 2 (Sun) — e.g. Boys 12U: P1–P6 Sat, B1–B3 Sun. **Opposite of sample #1**, which pooled both days → confirms day-split must be a per-tournament CHOICE.
+- Small divisions (4 teams) = 6 pool games (round-robin, 3 each) on ~2 fields; bracket = 4-team single-elim (2 semis + final) next day.
+- Bracket times: semis same slot (1:00), final later (2:40) — feeders before dependents (matches our bracket-order rule).
