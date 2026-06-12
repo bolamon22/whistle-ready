@@ -866,14 +866,49 @@ function BracketPreview({ template, seeds, division, numberOffset = 0, onLabelCh
   const maxRound = mainRounds.length > 0 ? Math.max(...mainRounds) : 1
 
   function colLeft(r: number) { return (r - 1) * (GAME_W + CONN_W) }
-  function gamesInRound(r: number) { return mainGames.filter(g => g.round === r).sort((a, b) => a.gameNumber - b.gameNumber) }
+
+  // ── Feeder-graph layout ──────────────────────────────────────────────
+  // Position each game from the games that feed it rather than a fixed
+  // per-round formula. A game fed by a single round-N game (because its other
+  // slot is a BYE) sits in line with that feeder, so the connector is straight
+  // and the winner's next game is directly to the right. A game fed by two
+  // games centers between them.
+  const mainByNum: Record<number, GameTemplate> = {}
+  mainGames.forEach(g => { mainByNum[g.gameNumber] = g })
+  const feederOf = (g: GameTemplate): (number | null)[] =>
+    [g.t1, g.t2].map(src => {
+      const [type, n] = (src || '').split(':')
+      const num = parseInt(n)
+      return (type === 'winner' || type === 'loser') && mainByNum[num] ? num : null
+    })
+  const referenced = new Set<number>()
+  mainGames.forEach(g => feederOf(g).forEach(fn => { if (fn) referenced.add(fn) }))
+  const roots = mainGames
+    .filter(g => !referenced.has(g.gameNumber))
+    .sort((a, b) => b.round - a.round || a.gameNumber - b.gameNumber)
+  const yByNum: Record<number, number> = {}
+  let leafSlot = 0
+  const placeY = (num: number): number => {
+    if (yByNum[num] !== undefined) return yByNum[num]
+    const g = mainByNum[num]
+    if (!g) return 0
+    const [f1, f2] = feederOf(g)
+    const childYs: number[] = []
+    if (f1) childYs.push(placeY(f1))
+    if (f2) childYs.push(placeY(f2))
+    const y = childYs.length > 0
+      ? childYs.reduce((a, b) => a + b, 0) / childYs.length
+      : (leafSlot++ * UNIT)
+    yByNum[num] = y
+    return y
+  }
+  roots.forEach(r => placeY(r.gameNumber))
+  mainGames.forEach(g => { if (yByNum[g.gameNumber] === undefined) yByNum[g.gameNumber] = leafSlot++ * UNIT })
 
   const positions: Record<number, { x: number; y: number; cy: number }> = {}
-  mainRounds.forEach(r => {
-    gamesInRound(r).forEach((g, idx) => {
-      const y = gameTop(r, idx)
-      positions[g.gameNumber] = { x: colLeft(r), y, cy: y + GAME_H / 2 }
-    })
+  mainGames.forEach(g => {
+    const y = yByNum[g.gameNumber]
+    positions[g.gameNumber] = { x: colLeft(g.round), y, cy: y + GAME_H / 2 }
   })
 
   const canvasW = colLeft(maxRound) + GAME_W + 24
@@ -902,9 +937,9 @@ function BracketPreview({ template, seeds, division, numberOffset = 0, onLabelCh
     } else if (feeders.length === 1) {
       const f = positions[feeders[0]]
       if (f) {
-        const midX = f.x + GAME_W + CONN_W / 2
+        // Single feeder (other slot is a bye) — the next game is aligned, so draw a straight line.
         connectors.push(
-          <path key={`sf-${game.gameNumber}`} d={`M${f.x+GAME_W},${f.cy} C${midX},${f.cy} ${midX},${pos.cy} ${pos.x},${pos.cy}`} fill="none" stroke="#475569" strokeWidth="1.5"/>
+          <path key={`sf-${game.gameNumber}`} d={`M${f.x+GAME_W},${f.cy} H${pos.x}`} fill="none" stroke="#475569" strokeWidth="1.5"/>
         )
       }
     }
