@@ -115,7 +115,7 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
                   <Fragment key={s.team}>
                     <tr className={`border-t border-slate-50 ${i===0&&mp>0?'bg-amber-50/40':''}`}>
                       <td className="px-3 py-2.5 text-slate-400 font-semibold">{i+1}</td>
-                      <td className="px-2 py-2.5"><div className="flex items-center gap-2"><TeamAvatar name={s.team} size="sm"/><span className={`font-semibold text-xs leading-tight ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</span></div></td>
+                      <td className="px-2 py-2.5"><div className="flex items-center gap-2"><TeamAvatar name={s.team} size="sm"/><button onClick={()=>onTeamClick(s.team)} className={`font-semibold text-xs leading-tight text-left hover:underline ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</button></div></td>
                       <td className="px-2 py-2.5 text-center font-semibold text-slate-700">{s.w}</td>
                       <td className="px-2 py-2.5 text-center text-slate-600">{s.l}</td>
                       <td className="px-2 py-2.5 text-center text-slate-600">{s.ga}</td>
@@ -191,7 +191,9 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
       {divTab==='schedule' && (() => {
         const now = Date.now()
         const all = [...divGames].sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):((parseStartMs(a.date,a.startTime)||0)-(parseStartMs(b.date,b.startTime)||0)))
-        const teamsInDiv = [...new Set(divGames.flatMap(g=>[g.team1,g.team2]).filter(Boolean))].sort()
+        const isPlaceholder = (n:string)=>/^(seed\s|w-b|l-b|bracket\b|winner\b|loser\b|tbd$)/i.test((n||'').trim())
+        const teamsInDiv = [...new Set(divGames.filter(g=>!g.isChampionship).flatMap(g=>[g.team1,g.team2]).filter(n=>!!n&&!isPlaceholder(n)))].sort()
+        const realTeams = new Set(teamsInDiv)
         const fieldsInDiv = [...new Set(divGames.map(g=>g.location).filter(Boolean))].sort()
         const isLive = (g:Game)=>{ if(g.score1!=null) return false; const st=parseStartMs(g.date,g.startTime); return st!=null && now>=st && now<=st+90*60000 }
         const crest = (name:string)=> schedLogos[name]
@@ -227,7 +229,9 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
               <div className="flex-1 flex items-center gap-1.5 min-w-0">
                 <div className="flex-1 flex items-center justify-end gap-1.5 min-w-0">
                   <button onClick={()=>toggleFollow(g.team1)} className="flex-shrink-0">{followedTeams.includes(g.team1)?<Star size={12} className="text-amber-500" fill="currentColor"/>:<Star size={12} className="text-slate-300"/>}</button>
-                  <span className={`text-[12.5px] truncate ${t1w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team1||'TBD'}</span>
+                  {realTeams.has(g.team1)
+                    ? <button onClick={()=>setSelectedTeam(g.team1)} className={`text-[12.5px] truncate text-right hover:underline ${t1w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team1}</button>
+                    : <span className={`text-[12.5px] truncate ${t1w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team1||'TBD'}</span>}
                   {crest(g.team1)}
                 </div>
                 {hs ? (
@@ -239,7 +243,9 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
                 ) : <span className="text-[11px] text-slate-400 font-medium flex-shrink-0">vs</span>}
                 <div className="flex-1 flex items-center gap-1.5 min-w-0">
                   {crest(g.team2)}
-                  <span className={`text-[12.5px] truncate ${t2w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team2||'TBD'}</span>
+                  {realTeams.has(g.team2)
+                    ? <button onClick={()=>setSelectedTeam(g.team2)} className={`text-[12.5px] truncate text-left hover:underline ${t2w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team2}</button>
+                    : <span className={`text-[12.5px] truncate ${t2w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team2||'TBD'}</span>}
                   <button onClick={()=>toggleFollow(g.team2)} className="flex-shrink-0">{followedTeams.includes(g.team2)?<Star size={12} className="text-amber-500" fill="currentColor"/>:<Star size={12} className="text-slate-300"/>}</button>
                 </div>
               </div>
