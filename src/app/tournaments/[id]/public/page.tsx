@@ -1,6 +1,8 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useContext, createContext } from 'react'
 import { useParams } from 'next/navigation'
+
+const LogosContext = createContext<Record<string, string>>({})
 import Link from 'next/link'
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
@@ -11,10 +13,13 @@ const fmtDate = (d:string) => { if(!d) return ''; const[y,m,day]=d.split('-'); r
 const fmtDateTime = (d:string) => { if(!d) return ''; const dt=new Date(d); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) }
 
 function TeamAvatar({name,size='md'}:{name:string,size?:'sm'|'md'|'lg'}) {
+  const logos=useContext(LogosContext)
+  const sz=size==='lg'?'w-16 h-16 text-lg':size==='sm'?'w-8 h-8 text-xs':'w-11 h-11 text-sm'
+  const url=logos[name]
+  if(url) return <div className={`${sz} rounded-full overflow-hidden bg-white border border-slate-200 flex-shrink-0`}><img src={url} alt="" className="w-full h-full object-contain"/></div>
   const initials = name.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0].toUpperCase()).join('')||name.substring(0,2).toUpperCase()
   const colors=['#1a3a5c','#8b1a1a','#1a5c3a','#5c3a1a','#3a1a5c','#1a5c5c','#5c1a4a','#2a4a1a']
   const idx=name.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%colors.length
-  const sz=size==='lg'?'w-16 h-16 text-lg':size==='sm'?'w-8 h-8 text-xs':'w-11 h-11 text-sm'
   return <div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`} style={{backgroundColor:colors[idx]}}>{initials}</div>
 }
 
@@ -215,6 +220,7 @@ function DivisionView({division,games,followedTeams,toggleFollow}:{division:stri
 export default function PublicTournamentPage() {
   const {id}=useParams()
   const [tournament,setTournament]=useState<Tournament|null>(null)
+  const [logos,setLogos]=useState<Record<string,string>>({})
   const [games,setGames]=useState<Game[]>([])
   const [loading,setLoading]=useState(true)
   const [selectedDiv,setSelectedDiv]=useState<string|null>(null)
@@ -228,7 +234,8 @@ export default function PublicTournamentPage() {
     Promise.all([
       fetch(`/api/tournaments/${id}`).then(r=>r.json()),
       fetch(`/api/tournaments/${id}/games`).then(r=>r.json()),
-    ]).then(([t,g])=>{setTournament(t);setGames(Array.isArray(g)?g:[]);setLoading(false)})
+      fetch(`/api/tournaments/${id}/team-logos`).then(r=>r.ok?r.json():{}).catch(()=>({})),
+    ]).then(([t,g,lg])=>{setTournament(t);setGames(Array.isArray(g)?g:[]);setLogos(lg||{});setLoading(false)})
     try{const saved=JSON.parse(localStorage.getItem(`follows-${id}`)||'[]');setFollowedTeams(saved)}catch{}
   },[id])
 
@@ -291,6 +298,7 @@ export default function PublicTournamentPage() {
   if(loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400">Loading…</div></div>
 
   return (
+    <LogosContext.Provider value={logos}>
     <div className="min-h-screen bg-gray-50">
       {/* Notification modal */}
       {showNotifyModal && (
@@ -497,5 +505,6 @@ export default function PublicTournamentPage() {
         )}
       </div>
     </div>
+    </LogosContext.Provider>
   )
 }
