@@ -432,7 +432,8 @@ export default function DivisionsPage() {
     const planFmt = sd.bracket ?? ''
     if (!planFmt || tc < 2) return false
     const existing = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(divName)}/bracket`).then(r => r.ok ? r.json() : null).catch(() => null)
-    if (existing) return false
+    const hasBracket = Array.isArray(existing) ? existing.length > 0 : !!(existing && existing.id)
+    if (hasBracket) return false
     const g = Number(guarantee) || 4
     const poolG = Number(divGamesPerTeam[divName] ?? sd.games ?? smartPoolGames(tc, g)) || 2
     const owes2 = (g - poolG) >= 2 || planFmt === '2gg'

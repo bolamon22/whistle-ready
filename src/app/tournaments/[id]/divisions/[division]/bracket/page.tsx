@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { resolveTeam } from '@/lib/bracketTemplates'
@@ -16,6 +16,7 @@ interface BracketGame {
 
 interface Bracket {
   id: string; format: string; teamCount: number
+  flight?: string; numberOffset?: number
   seeds: Record<string, string>; games: BracketGame[]
 }
 
@@ -291,6 +292,10 @@ export default function BracketPage() {
   const router = useRouter()
   const divName = decodeURIComponent(division)
   const [bracket, setBracket] = useState<Bracket | null>(null)
+  const [flights, setFlights] = useState<Bracket[]>([])
+  const [activeFlight, setActiveFlight] = useState<string>('A')
+  const activeFlightRef = useRef('A')
+  useEffect(() => { activeFlightRef.current = activeFlight }, [activeFlight])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [selectedGame, setSelectedGame] = useState<BracketGame | null>(null)
@@ -327,7 +332,15 @@ export default function BracketPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const res = await fetch(`/api/tournaments/${id}/divisions/${division}/bracket`)
-    if (res.ok) { const data = await res.json(); setBracket(data) }
+    if (res.ok) {
+      const data = await res.json()
+      const list: Bracket[] = Array.isArray(data) ? data : (data && data.id ? [data] : [])
+      setFlights(list)
+      const keep = list.find(f => (f.flight || 'A') === activeFlightRef.current)
+      const active = keep || list[0] || null
+      setActiveFlight(active ? (active.flight || 'A') : 'A')
+      setBracket(active)
+    }
     setLoading(false)
   }, [id, division])
 
@@ -380,7 +393,7 @@ export default function BracketPage() {
     })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error || 'Failed'); setCreating(false); return }
-    setBracket(data); setCreating(false)
+    setBracket(data); setFlights([data]); setActiveFlight('A'); setCreating(false)
     if (setupSeedMethod === 'manual') setShowSeeds(true)
     toast.success('Bracket created')
   }
@@ -388,7 +401,7 @@ export default function BracketPage() {
   async function resetBracket() {
     setResetting(true)
     const res = await fetch(`/api/tournaments/${id}/divisions/${division}/bracket`, { method: 'DELETE' })
-    if (res.ok) { setBracket(null); toast.success('Bracket reset') } else { toast.error('Failed') }
+    if (res.ok) { setBracket(null); setFlights([]); toast.success('Bracket reset') } else { toast.error('Failed') }
     setResetting(false); setShowReset(false)
   }
 
@@ -583,6 +596,19 @@ export default function BracketPage() {
         <button onClick={() => router.push(`/tournaments/${id}/divisions`)} className="text-sm text-slate-500 hover:text-slate-700">Divisions</button>
         <span className="text-slate-300">/</span><span className="text-slate-600 font-medium">{divName}</span>
         <span className="text-slate-300">/</span><span className="font-semibold text-slate-800">Bracket</span>
+        {flights.length > 1 && (
+          <div className="ml-2 flex bg-slate-100 rounded-lg p-0.5">
+            {flights.map(f => {
+              const fl = f.flight || 'A'
+              return (
+                <button key={fl} onClick={() => { setActiveFlight(fl); setBracket(f) }}
+                  className={`px-2.5 py-1 text-sm rounded-md font-medium transition-colors ${activeFlight === fl ? 'bg-white shadow text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}>
+                  Flight {fl}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <div className="ml-4 flex bg-slate-100 rounded-lg p-0.5">
           <button onClick={() => setView('bracket')}
             className={`px-3 py-1 text-sm rounded-md font-medium transition-colors ${view === 'bracket' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>

@@ -375,6 +375,8 @@ model Bracket {
   division     String
   format       String
   teamCount    Int
+  flight       String        @default("A")
+  numberOffset Int           @default(0)
   seeds        String        @default("{}")
   createdAt    DateTime      @default(now())
   games        BracketGame[]

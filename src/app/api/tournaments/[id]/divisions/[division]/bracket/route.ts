@@ -13,7 +13,6 @@ function fmtSrc(src: string): string {
   return src
 }
 
-
 // ── Algorithmic bracket generator (any team count) ─────────────────────────
 type Sect = 'winners' | 'losers' | 'consolation' | 'championship'
 interface Gen { gameNumber: number; round: number; section: Sect; t1: string; t2: string; label: string }
@@ -26,17 +25,13 @@ function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
   if (n === 2) {
     games.push({ gameNumber: gn++, round: 1, section: 'championship', t1: 'seed:1', t2: 'seed:2', label: 'Championship' })
   } else {
-    // Find smallest power of 2 >= n; byes go to top seeds
     let slots = 2
     while (slots < n) slots *= 2
     const byes = slots - n
     const byeSeeds = Array.from({ length: byes }, (_, i) => `seed:${i + 1}`)
     const r1Seeds = Array.from({ length: n - byes }, (_, i) => i + byes + 1)
-    // equalByes: same number of byes and R1 games — use standard bracket seeding layout
     const equalByes = byes === r1Seeds.length / 2
 
-    // Round 1: when equalByes, pair inner-to-outer (weakest game first, adjacent to Seed 1)
-    // Otherwise outer-to-inner (highest seed vs lowest)
     const r1Winners: string[] = []
     const mid = r1Seeds.length / 2
     for (let i = 0; i < r1Seeds.length / 2; i++) {
@@ -47,7 +42,6 @@ function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
       gn++
     }
 
-    // Subsequent rounds: interleave byes+r1Winners when equalByes (no crossing lines)
     let sources: string[]
     if (equalByes) {
       sources = []
@@ -74,7 +68,6 @@ function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
     }
   }
 
-  // Consolation slots — auto-fill with seeds starting at teamCount + 1
   for (let i = 0; i < consolationCount; i++) {
     const s1 = n + 1 + i * 2
     const s2 = n + 2 + i * 2
@@ -84,18 +77,13 @@ function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
   return games
 }
 
-
-// ── Owes-2 generator: everyone in the bracket + loser-fed consolation + if-needed ──
-// Used when (guarantee - pool games) >= 2: pool play gives fewer games, so the
-// bracket must guarantee 2 — first-round losers get a 2nd game; bye seeds get a
-// conditional "if needed" game. Reuses generateSEGames for the winners bracket.
 function generateOwes2(teamCount: number): Gen[] {
   const games = generateSEGames(teamCount, 0)
   let gn = games.length + 1
   const isSeed = (x: string) => x.startsWith('seed:')
   const seedNum = (x: string) => parseInt(x.split(':')[1])
-  const twoSeed = games.filter(g => isSeed(g.t1) && isSeed(g.t2))   // both entered fresh -> loser is short
-  const mixed = games.filter(g => isSeed(g.t1) !== isSeed(g.t2))    // bye seed vs play-in winner -> if needed
+  const twoSeed = games.filter(g => isSeed(g.t1) && isSeed(g.t2))
+  const mixed = games.filter(g => isSeed(g.t1) !== isSeed(g.t2))
   const extra: Gen[] = []
   const consTotal = Math.floor(twoSeed.length / 2)
   let cn = 1
@@ -109,8 +97,6 @@ function generateOwes2(teamCount: number): Gen[] {
   }
   const leftoverMixed = mixed.length % 2 === 1 ? mixed[mixed.length - 1] : null
   if (leftoverTwo) {
-    // odd number of definite-loser games: give the leftover a guaranteed 2nd game by pairing it
-    // with a bye-seed game (which doubles as that bye seed's if-needed), else the strongest other loser
     const opp = leftoverMixed ?? strongestTwo
     if (opp) extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${leftoverTwo.gameNumber}`, t2: `loser:${opp.gameNumber}`, label: 'Consolation' })
   } else if (leftoverMixed && strongestTwo) {
@@ -119,18 +105,95 @@ function generateOwes2(teamCount: number): Gen[] {
   return [...games, ...extra]
 }
 
+// Build a bracket template for one bracket (single flight or whole division).
+function buildTemplate(format: string, teamCount: number, consolationCount: number, loserConsolation: boolean): Gen[] {
+  if (loserConsolation) return generateOwes2(teamCount)
+  const rawTemplate = getTemplate(format, teamCount)
+  if (rawTemplate) {
+    const base: Gen[] = rawTemplate.map((g) => ({
+      gameNumber: g.gameNumber, round: g.round,
+      section: g.section as Sect, t1: g.t1, t2: g.t2, label: g.label || '',
+    }))
+    let gn = base.length + 1
+    const cons: Gen[] = []
+    for (let i = 0; i < consolationCount; i++) {
+      cons.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `seed:${teamCount + 1 + i * 2}`, t2: `seed:${teamCount + 2 + i * 2}`, label: consolationCount > 1 ? `Consolation ${i + 1}` : 'Consolation' })
+    }
+    return [...base, ...cons]
+  }
+  return generateSEGames(teamCount, consolationCount)
+}
+
+// Persist one bracket (Bracket row + BracketGame rows + schedulable Game rows).
+// numberOffset shifts the schedulable "B#" so flights never collide (Flight A
+// uses B1..Ba, Flight B continues B(a+1)..).
+async function createBracketRecords(opts: {
+  tournamentId: string; division: string; flight: string; numberOffset: number;
+  format: string; teamCount: number; seeds: Record<string, string>; template: Gen[]
+}) {
+  const { tournamentId, division, flight, numberOffset, format, teamCount, seeds, template } = opts
+  const bracketId = genId()
+  await prisma.bracket.create({
+    data: {
+      id: bracketId, tournamentId, division, format, teamCount,
+      flight, numberOffset, seeds: JSON.stringify(seeds || {}),
+    },
+  })
+  const games = await Promise.all(
+    template.map((g) =>
+      prisma.bracketGame.create({
+        data: {
+          id: genId(), bracketId,
+          gameNumber: g.gameNumber, round: g.round, section: g.section,
+          team1Source: g.t1, team2Source: g.t2, label: g.label,
+          team1: '', team2: '', winner: '', loser: '', field: '', startTime: '', gameDate: '',
+        },
+      })
+    )
+  )
+  await Promise.all(
+    template.map((g) =>
+      prisma.game.create({
+        data: {
+          tournamentId, division,
+          gameNumber: 'B' + (numberOffset + g.gameNumber),
+          isChampionship: g.section === 'championship',
+          team1: fmtSrc(g.t1), team2: fmtSrc(g.t2),
+          date: '', startTime: '', location: '', refCount: 2,
+        },
+      })
+    )
+  )
+  return { bracketId, games }
+}
+
+// Wipe every bracket + schedulable B-game for a division (full reset).
+async function clearDivision(tournamentId: string, division: string) {
+  const brackets = await prisma.bracket.findMany({ where: { tournamentId, division } })
+  for (const b of brackets) {
+    await prisma.bracketGame.deleteMany({ where: { bracketId: b.id } })
+    await prisma.bracket.delete({ where: { id: b.id } })
+  }
+  await prisma.game.deleteMany({
+    where: { tournamentId, division, gameNumber: { startsWith: 'B' } },
+  })
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string; division: string } }
 ) {
   const division = decodeURIComponent(params.division)
   try {
-    const bracket = await prisma.bracket.findFirst({
+    const brackets = await prisma.bracket.findMany({
       where: { tournamentId: params.id, division },
       include: { games: { orderBy: { gameNumber: 'asc' } } },
+      orderBy: { flight: 'asc' },
     })
-    if (!bracket) return NextResponse.json(null)
-    return NextResponse.json({ ...bracket, seeds: JSON.parse(bracket.seeds || '{}') })
+    // Always return an array of flights (empty when none).
+    return NextResponse.json(
+      brackets.map((b) => ({ ...b, seeds: JSON.parse(b.seeds || '{}') }))
+    )
   } catch {
     return NextResponse.json(
       { error: 'Bracket tables not yet created. Run DB migration.' },
@@ -144,79 +207,51 @@ export async function POST(
   { params }: { params: { id: string; division: string } }
 ) {
   const division = decodeURIComponent(params.division)
-  const { format, teamCount, consolationCount = 0, seeds, loserConsolation = false } = await req.json()
-
-  // loserConsolation = the "owes 2" mode (everyone in + loser-fed consolation + if-needed).
-  // Otherwise: predefined template if available, else algorithmic single-elim (+ seed-paired consolation).
-  const rawTemplate = loserConsolation ? null : getTemplate(format, teamCount)
-  const template: Gen[] = loserConsolation
-    ? generateOwes2(teamCount)
-    : rawTemplate
-    ? (() => {
-        const base: Gen[] = rawTemplate.map((g) => ({
-          gameNumber: g.gameNumber, round: g.round,
-          section: g.section as Sect,
-          t1: g.t1, t2: g.t2, label: g.label || '',
-        }))
-        let gn = base.length + 1
-        const cons: Gen[] = []
-        for (let i = 0; i < consolationCount; i++) {
-          cons.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `seed:${teamCount + 1 + i * 2}`, t2: `seed:${teamCount + 2 + i * 2}`, label: consolationCount > 1 ? `Consolation ${i + 1}` : 'Consolation' })
-        }
-        return [...base, ...cons]
-      })()
-    : generateSEGames(teamCount, consolationCount)
+  const body = await req.json()
 
   try {
-    const existing = await prisma.bracket.findFirst({
-      where: { tournamentId: params.id, division },
-    })
-    if (existing) {
-      await prisma.bracketGame.deleteMany({ where: { bracketId: existing.id } })
-      await prisma.bracket.delete({ where: { id: existing.id } })
+    // ── Split a division into flights (cutoff on the seed list) ──────────
+    if (body.split) {
+      const { cutoff, total, flightA, flightB, seeds = {} } = body.split
+      const cut = Math.max(1, Math.min(Number(cutoff) || 1, Number(total) - 1))
+      const tot = Math.max(cut + 1, Number(total) || cut + 1)
+      const aCount = cut
+      const bCount = tot - cut
+
+      const aSeeds: Record<string, string> = {}
+      for (let i = 1; i <= aCount; i++) if (seeds[String(i)]) aSeeds[String(i)] = seeds[String(i)]
+      const bSeeds: Record<string, string> = {}
+      for (let i = 1; i <= bCount; i++) if (seeds[String(cut + i)]) bSeeds[String(i)] = seeds[String(cut + i)]
+
+      const aTemplate = buildTemplate(flightA?.format || 'single', aCount, Math.max(0, Number(flightA?.consolationCount) || 0), !!flightA?.loserConsolation)
+      const bTemplate = buildTemplate(flightB?.format || 'single', bCount, Math.max(0, Number(flightB?.consolationCount) || 0), !!flightB?.loserConsolation)
+
+      await clearDivision(params.id, division)
+      await createBracketRecords({ tournamentId: params.id, division, flight: 'A', numberOffset: 0, format: flightA?.format || 'single', teamCount: aCount, seeds: aSeeds, template: aTemplate })
+      await createBracketRecords({ tournamentId: params.id, division, flight: 'B', numberOffset: aTemplate.length, format: flightB?.format || 'single', teamCount: bCount, seeds: bSeeds, template: bTemplate })
+
+      const brackets = await prisma.bracket.findMany({
+        where: { tournamentId: params.id, division },
+        include: { games: { orderBy: { gameNumber: 'asc' } } },
+        orderBy: { flight: 'asc' },
+      })
+      return NextResponse.json(brackets.map((b) => ({ ...b, seeds: JSON.parse(b.seeds || '{}') })))
     }
-    await prisma.game.deleteMany({
-      where: { tournamentId: params.id, division, gameNumber: { startsWith: 'B' } },
+
+    // ── Single bracket (Flight A) — replaces any existing brackets ───────
+    const { format, teamCount, consolationCount = 0, seeds, loserConsolation = false } = body
+    const tc = Math.max(2, Number(teamCount) || 2)
+    const template = buildTemplate(format, tc, Math.max(0, Number(consolationCount) || 0), !!loserConsolation)
+
+    await clearDivision(params.id, division)
+    const { bracketId, games } = await createBracketRecords({
+      tournamentId: params.id, division, flight: 'A', numberOffset: 0,
+      format, teamCount: tc, seeds: seeds || {}, template,
     })
-
-    const bracketId = genId()
-    await prisma.bracket.create({
-      data: {
-        id: bracketId, tournamentId: params.id, division, format,
-        teamCount, seeds: JSON.stringify(seeds || {}),
-      },
-    })
-
-    const games = await Promise.all(
-      template.map((g) =>
-        prisma.bracketGame.create({
-          data: {
-            id: genId(), bracketId,
-            gameNumber: g.gameNumber, round: g.round, section: g.section,
-            team1Source: g.t1, team2Source: g.t2, label: g.label,
-            team1: '', team2: '', winner: '', loser: '', field: '', startTime: '', gameDate: '',
-          },
-        })
-      )
-    )
-
-    await Promise.all(
-      template.map((g) =>
-        prisma.game.create({
-          data: {
-            tournamentId: params.id, division,
-            gameNumber: 'B' + g.gameNumber,
-            isChampionship: g.section === 'championship',
-            team1: fmtSrc(g.t1), team2: fmtSrc(g.t2),
-            date: '', startTime: '', location: '', refCount: 2,
-          },
-        })
-      )
-    )
 
     return NextResponse.json({
-      id: bracketId, tournamentId: params.id, division, format, teamCount,
-      seeds: seeds || {}, games,
+      id: bracketId, tournamentId: params.id, division, format, teamCount: tc,
+      flight: 'A', numberOffset: 0, seeds: seeds || {}, games,
     })
   } catch (e) {
     console.error(e)
@@ -229,23 +264,23 @@ export async function PATCH(
   { params }: { params: { id: string; division: string } }
 ) {
   const division = decodeURIComponent(params.division)
+  const flight = new URL(req.url).searchParams.get('flight') || 'A'
   const body = await req.json()
 
   try {
     const bracket = await prisma.bracket.findFirst({
-      where: { tournamentId: params.id, division },
+      where: { tournamentId: params.id, division, flight },
       include: { games: { orderBy: { gameNumber: 'asc' } } },
     })
     if (!bracket) return NextResponse.json({ error: 'No bracket found' }, { status: 404 })
+    const offset = bracket.numberOffset || 0
 
-    // ── Update label ──────────────────────────────────────────────────
     if (body.updateLabel !== undefined) {
       const { gameNumber, label } = body.updateLabel
       await prisma.bracketGame.updateMany({ where: { bracketId: bracket.id, gameNumber }, data: { label } })
       return NextResponse.json({ ok: true })
     }
 
-    // ── Add a single game ──────────────────────────────────────────────
     if (body.addGame) {
       const { gameNumber, round, section, t1Source, t2Source, label } = body.addGame
       await prisma.bracketGame.create({
@@ -256,11 +291,10 @@ export async function PATCH(
           team1: '', team2: '', winner: '', loser: '', field: '', startTime: '', gameDate: '',
         },
       })
-      // Also create the scheduler Game record
       await prisma.game.create({
         data: {
           tournamentId: params.id, division,
-          gameNumber: 'B' + gameNumber,
+          gameNumber: 'B' + (offset + gameNumber),
           isChampionship: section === 'championship',
           team1: fmtSrc(t1Source), team2: fmtSrc(t2Source),
           date: '', startTime: '', location: '', refCount: 2,
@@ -273,12 +307,11 @@ export async function PATCH(
       return NextResponse.json({ ...updated, seeds: JSON.parse(updated!.seeds || '{}') })
     }
 
-    // ── Remove a single game ───────────────────────────────────────────
     if (body.removeGame !== undefined) {
       const gameNum = Number(body.removeGame)
       await prisma.bracketGame.deleteMany({ where: { bracketId: bracket.id, gameNumber: gameNum } })
       await prisma.game.deleteMany({
-        where: { tournamentId: params.id, division, gameNumber: 'B' + gameNum },
+        where: { tournamentId: params.id, division, gameNumber: 'B' + (offset + gameNum) },
       })
       const updated = await prisma.bracket.findFirst({
         where: { id: bracket.id },
@@ -287,7 +320,6 @@ export async function PATCH(
       return NextResponse.json({ ...updated, seeds: JSON.parse(updated!.seeds || '{}') })
     }
 
-    // ── Update seeds ───────────────────────────────────────────────────
     if (body.seeds !== undefined) {
       await prisma.bracket.update({
         where: { id: bracket.id },
@@ -309,13 +341,7 @@ export async function DELETE(
 ) {
   const division = decodeURIComponent(params.division)
   try {
-    const bracket = await prisma.bracket.findFirst({ where: { tournamentId: params.id, division } })
-    if (!bracket) return NextResponse.json({ ok: true })
-    await prisma.bracketGame.deleteMany({ where: { bracketId: bracket.id } })
-    await prisma.bracket.delete({ where: { id: bracket.id } })
-    await prisma.game.deleteMany({
-      where: { tournamentId: params.id, division, gameNumber: { startsWith: 'B' } },
-    })
+    await clearDivision(params.id, division)
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Failed to delete bracket' }, { status: 500 })

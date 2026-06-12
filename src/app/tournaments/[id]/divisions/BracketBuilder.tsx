@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { TEMPLATE_CATALOG, BRACKET_TEMPLATES, type GameTemplate } from '@/lib/bracketTemplates'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -18,6 +18,8 @@ interface BracketData {
   id: string
   format: string
   teamCount: number
+  flight?: string
+  numberOffset?: number
   seeds: Record<string, string>
   games: BracketGame[]
 }
@@ -84,6 +86,17 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   const [loserConsolation, setLoserConsolation] = useState(planLoserConsolation ?? false)
   const [creating, setCreating] = useState(false)
 
+  // Flighting (Stage 2): a division can hold multiple brackets (Flight A/B)
+  const [flights, setFlights] = useState<BracketData[]>([])
+  const [activeFlight, setActiveFlight] = useState<string>('A')
+  const activeRef = useRef('A')
+  useEffect(() => { activeRef.current = activeFlight }, [activeFlight])
+  const [showSplit, setShowSplit] = useState(false)
+  const [cutoffInput, setCutoffInput] = useState('8')
+  const [fmtA, setFmtA] = useState<'single' | 'double' | '2gg'>('single')
+  const [fmtB, setFmtB] = useState<'single' | 'double' | '2gg'>('single')
+  const [splitting, setSplitting] = useState(false)
+
   // Add-game form state
   const [addSection, setAddSection] = useState('consolation')
   const [addRound, setAddRound] = useState(1)
@@ -94,19 +107,21 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   const [removingGame, setRemovingGame] = useState<number | null>(null)
 
   const apiBase = `/api/tournaments/${tournamentId}/divisions/${division}/bracket`
+  const flightApi = `${apiBase}?flight=${activeFlight}`
 
   const loadBracket = useCallback(async () => {
     setLoading(true)
     try {
       const r = await fetch(apiBase)
-      if (r.ok) {
-        const d = await r.json()
-        setBracket(d)
-        setSeeds(d.seeds || {})
-      } else {
-        setBracket(null)
-      }
-    } catch { /* ignore */ } finally {
+      const raw = r.ok ? await r.json() : []
+      const list: BracketData[] = Array.isArray(raw) ? raw : (raw && raw.id ? [raw] : [])
+      setFlights(list)
+      const keep = list.find(f => (f.flight || 'A') === activeRef.current)
+      const active = keep || list[0] || null
+      setActiveFlight(active ? (active.flight || 'A') : 'A')
+      setBracket(active)
+      setSeeds(active?.seeds || {})
+    } catch { setFlights([]); setBracket(null) } finally {
       setLoading(false)
     }
   }, [apiBase])
@@ -154,7 +169,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
     if (!bracket) return
     setSaving(true); setError(null)
     try {
-      const r = await fetch(apiBase, {
+      const r = await fetch(flightApi, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ seeds }),
@@ -163,6 +178,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       const d = await r.json()
       setBracket(prev => prev ? { ...prev, seeds: d.seeds || {} } : prev)
       setSeeds(d.seeds || {})
+      setFlights(prev => prev.map(f => f.id === bracket.id ? { ...f, seeds: d.seeds || {} } : f))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -187,7 +203,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       ? Math.max(...bracket.games.map(g => g.gameNumber))
       : 0
     try {
-      const r = await fetch(apiBase, {
+      const r = await fetch(flightApi, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -205,6 +221,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       const updated = await r.json()
       setBracket(updated)
       setSeeds(updated.seeds || {})
+      setFlights(prev => prev.map(f => f.id === updated.id ? updated : f))
       setAddT1(''); setAddT2(''); setAddLabel('')
     } catch (e: any) {
       setError(e.message)
@@ -218,8 +235,8 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
     setSeeds(next)
     if (!bracket) return
     try {
-      const r = await fetch(apiBase, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seeds: next }) })
-      if (r.ok) { const d = await r.json(); setBracket(prev => prev ? { ...prev, seeds: d.seeds || {} } : prev); setSeeds(d.seeds || {}) }
+      const r = await fetch(flightApi, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seeds: next }) })
+      if (r.ok) { const d = await r.json(); setBracket(prev => prev ? { ...prev, seeds: d.seeds || {} } : prev); setSeeds(d.seeds || {}); setFlights(prev => prev.map(f => f.id === bracket.id ? { ...f, seeds: d.seeds || {} } : f)) }
     } catch { /* ignore */ }
   }
 
@@ -227,7 +244,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
     if (!confirm(`Remove game B${gameNumber} from the bracket?`)) return
     setRemovingGame(gameNumber)
     try {
-      const r = await fetch(apiBase, {
+      const r = await fetch(flightApi, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ removeGame: gameNumber }),
@@ -236,6 +253,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       const updated = await r.json()
       setBracket(updated)
       setSeeds(updated.seeds || {})
+      setFlights(prev => prev.map(f => f.id === updated.id ? updated : f))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -245,12 +263,13 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
 
   async function handleLabelChange(gameNumber: number, label: string) {
     try {
-      await fetch(apiBase, {
+      await fetch(flightApi, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updateLabel: { gameNumber, label } }),
       })
       setBracket(prev => prev ? { ...prev, games: prev.games.map(g => g.gameNumber === gameNumber ? { ...g, label } : g) } : prev)
+      setFlights(prev => prev.map(f => (f.flight || 'A') === activeRef.current ? { ...f, games: f.games.map(g => g.gameNumber === gameNumber ? { ...g, label } : g) } : f))
     } catch { /* ignore */ }
   }
 
@@ -276,6 +295,83 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
     }
   }
 
+  function switchFlight(fl: string) {
+    const target = flights.find(x => (x.flight || 'A') === fl)
+    if (!target) return
+    setActiveFlight(fl)
+    setBracket(target)
+    setSeeds(target.seeds || {})
+  }
+
+  async function handleSplit() {
+    setSplitting(true); setError(null)
+    try {
+      const total = standings.length || (bracket?.teamCount ?? 0)
+      if (total < 3) throw new Error('Need at least 3 ranked teams to split into flights.')
+      const cut = Math.max(1, Math.min(parseInt(cutoffInput) || 1, total - 1))
+      const seedMap: Record<string, string> = {}
+      if (standings.length) standings.forEach((r, i) => { seedMap[String(i + 1)] = r.team })
+      else Object.assign(seedMap, seeds)
+      const r = await fetch(apiBase, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ split: {
+          cutoff: cut, total,
+          flightA: { format: fmtA, consolationCount: 0, loserConsolation: false },
+          flightB: { format: fmtB, consolationCount: 0, loserConsolation: false },
+          seeds: seedMap,
+        } }),
+      })
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Failed to split') }
+      setShowSplit(false)
+      activeRef.current = 'A'
+      await loadBracket()
+      setTab('preview')
+    } catch (e: any) { setError(e.message) } finally { setSplitting(false) }
+  }
+
+  const totalTeams = standings.length || (bracket?.teamCount ?? 0)
+  const cutPreview = Math.max(1, Math.min(parseInt(cutoffInput) || 1, Math.max(1, totalTeams - 1)))
+  const splitPanel = (
+    <div className="mb-5 rounded-xl border border-teal-500/30 bg-teal-950/20 p-4">
+      <p className="text-sm font-semibold text-white mb-1">Split into flights</p>
+      <p className="text-xs text-slate-400 mb-3">
+        Two brackets, each with its own champion. Teams rank by pool standings, then split at the cutoff.
+      </p>
+      <div className="flex items-center gap-2 mb-3 text-sm flex-wrap">
+        <span className="text-slate-300">Top</span>
+        <input type="number" min={1} value={cutoffInput} onChange={e => setCutoffInput(e.target.value)}
+          className="w-16 bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5 text-center focus:outline-none focus:border-teal-500" />
+        <span className="text-slate-300">seeds &rarr; <span className="text-teal-300 font-semibold">Flight A</span>, rest &rarr; <span className="text-teal-300 font-semibold">Flight B</span></span>
+        {totalTeams > 0 && (
+          <span className="text-[11px] text-slate-500">({cutPreview} + {Math.max(0, totalTeams - cutPreview)} of {totalTeams})</span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        {([['Flight A', fmtA, setFmtA], ['Flight B', fmtB, setFmtB]] as [string, string, (v: 'single' | 'double' | '2gg') => void][]).map(([lbl, val, set]) => (
+          <div key={lbl}>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">{lbl} format</p>
+            <div className="grid grid-cols-3 gap-1">
+              {(['single', 'double', '2gg'] as const).map(ff => (
+                <button key={ff} onClick={() => set(ff)}
+                  className={`py-1.5 rounded-lg text-[11px] border transition-colors ${val === ff ? 'bg-teal-600 border-teal-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-white'}`}>
+                  {ff === 'single' ? 'Single' : ff === 'double' ? 'Double' : '2GG'}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <button onClick={handleSplit} disabled={splitting}
+        className="px-5 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+        {splitting ? 'Splitting…' : 'Split into flights'}
+      </button>
+      {standings.length === 0 && (
+        <p className="text-[11px] text-amber-400/80 mt-2">No pool standings yet — finish pool play (or seed manually) so flights split by rank.</p>
+      )}
+    </div>
+  )
+
   // ── Loading ────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -297,6 +393,14 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         <p className="text-sm text-slate-400 mb-6">
           No bracket yet. Choose a format and team count, then add or remove games as needed.
         </p>
+
+        <div className="mb-5">
+          <button onClick={() => setShowSplit(v => !v)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-teal-300 border border-slate-700 hover:border-teal-500 transition-colors">
+            {showSplit ? '← Single bracket' : 'Split into flights (2 champions)'}
+          </button>
+        </div>
+        {showSplit && splitPanel}
 
         {error && (
           <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
@@ -430,6 +534,31 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         </div>
       </div>
 
+      {/* Flight switcher / split control */}
+      <div className="mb-4 flex items-center gap-2 flex-wrap">
+        {flights.length > 1 ? (
+          <>
+            <span className="text-[11px] text-slate-500 uppercase tracking-wider mr-1">Flights</span>
+            {flights.map(f => {
+              const fl = f.flight || 'A'
+              return (
+                <button key={fl} onClick={() => switchFlight(fl)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${activeFlight === fl ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'}`}>
+                  Flight {fl} · {f.teamCount}
+                </button>
+              )
+            })}
+          </>
+        ) : (
+          <button onClick={() => setShowSplit(v => !v)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-teal-300 border border-slate-700 hover:border-teal-500 transition-colors">
+            {showSplit ? 'Cancel split' : 'Split into flights (2 champions)'}
+          </button>
+        )}
+      </div>
+
+      {showSplit && flights.length <= 1 && splitPanel}
+
       {error && (
         <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
           {error}
@@ -531,7 +660,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
                             key={g.gameNumber}
                             className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2"
                           >
-                            <span className="text-xs font-mono text-slate-500 w-8 shrink-0">B{g.gameNumber}</span>
+                            <span className="text-xs font-mono text-slate-500 w-8 shrink-0">B{(bracket.numberOffset || 0) + g.gameNumber}</span>
                             <span className="text-xs text-slate-500 shrink-0">R{g.round}</span>
                             <span className="flex-1 text-xs text-slate-300 truncate font-mono">
                               {g.team1Source} <span className="text-slate-600 font-sans">vs</span> {g.team2Source}
@@ -645,6 +774,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       {/* ── Preview tab ───────────────────────────────────────────────────── */}
       {tab === 'preview' && (
         <BracketPreview
+          numberOffset={bracket.numberOffset || 0}
           template={bracket.games.map(g => ({
             gameNumber: g.gameNumber,
             round: g.round,
@@ -667,19 +797,20 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
 
 // ── Visual Bracket Preview ─────────────────────────────────────────────────
 
-function resolveLabel(src: string, seeds: Record<string, string>): string {
+function resolveLabel(src: string, seeds: Record<string, string>, offset = 0): string {
   if (!src) return 'TBD'
   const [type, n] = src.split(':')
   if (type === 'seed') return seeds[n] || `Seed ${n}`
-  if (type === 'winner') return `W-B${n}`
-  if (type === 'loser') return `L-B${n}`
+  if (type === 'winner') return `W-B${offset + Number(n)}`
+  if (type === 'loser') return `L-B${offset + Number(n)}`
   return src
 }
 
-function BracketPreview({ template, seeds, division, onLabelChange, onRemoveGame, onRenameSeed, onAddGame }: {
+function BracketPreview({ template, seeds, division, numberOffset = 0, onLabelChange, onRemoveGame, onRenameSeed, onAddGame }: {
   template: GameTemplate[]
   seeds: Record<string, string>
   division?: string
+  numberOffset?: number
   onLabelChange?: (gameNumber: number, label: string) => void
   onRemoveGame?: (gameNumber: number) => void
   onRenameSeed?: (seedNum: number, value: string) => void
@@ -689,7 +820,7 @@ function BracketPreview({ template, seeds, division, onLabelChange, onRemoveGame
   const [editingSeat, setEditingSeat] = useState<{ gameNumber: number; slot: number; value: string } | null>(null)
 
   function renderSlot(gameNumber: number, src: string, slot: number) {
-    const label = resolveLabel(src, seeds)
+    const label = resolveLabel(src, seeds, numberOffset)
     const computed = label.startsWith('W-') || label.startsWith('L-')
     if (src.startsWith('seed:') && onRenameSeed) {
       const seedNum = parseInt(src.split(':')[1])
@@ -802,7 +933,7 @@ function BracketPreview({ template, seeds, division, onLabelChange, onRemoveGame
               <div key={game.gameNumber} style={{ position: 'absolute', left: pos.x, top: pos.y, width: GAME_W, height: GAME_H }}
                 className={`rounded-lg border text-xs flex flex-col overflow-hidden ${isChamp ? 'border-amber-400/60 bg-gradient-to-b from-amber-950/60 to-slate-900 shadow-lg shadow-amber-900/20' : 'border-slate-600/80 bg-slate-800/90'}`}>
                 <div className={`px-2 py-0.5 flex items-center justify-between ${isChamp ? 'bg-amber-500/10' : 'bg-black/20'}`}>
-                  <span className="text-[10px] font-mono text-teal-300">B{game.gameNumber}</span>
+                  <span className="text-[10px] font-mono text-teal-300">B{numberOffset + game.gameNumber}</span>
                   {(() => {
                     const displayLabel = game.label || (isChamp ? (division ? `${division} Champion` : 'Champion') : undefined)
                     if (!displayLabel) return null
@@ -850,7 +981,7 @@ function BracketPreview({ template, seeds, division, onLabelChange, onRemoveGame
             {sideGames.map(game => (
               <div key={game.gameNumber} className="rounded-lg border border-slate-600/80 bg-slate-800/90 text-xs overflow-hidden">
                 <div className="px-2 py-0.5 bg-black/20 flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-teal-300">B{game.gameNumber}</span>
+                  <span className="text-[10px] font-mono text-teal-300">B{numberOffset + game.gameNumber}</span>
                   {(() => {
                     const displayLabel = game.label
                     if (!displayLabel) return null

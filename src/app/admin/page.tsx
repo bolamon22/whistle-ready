@@ -105,6 +105,15 @@ export default function PlatformDashboard() {
     }
   }
 
+  async function runFlightsMigration() {
+    setMigrating(true)
+    setMigrateLog([])
+    const res = await fetch('/api/admin/migrate-flights', { method: 'POST' })
+    const data = await res.json()
+    setMigrateLog(data.log ?? [data.error ?? 'Unknown error'])
+    setMigrating(false)
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-6xl mx-auto px-6 py-8">
@@ -134,6 +143,12 @@ export default function PlatformDashboard() {
               disabled={migrating}
               className="text-sm bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-medium transition-colors">
               {migrating ? 'Running…' : '⚡ Run DB Migration'}
+            </button>
+            <button
+              onClick={runFlightsMigration}
+              disabled={migrating}
+              className="text-sm bg-teal-500 hover:bg-teal-600 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-medium transition-colors">
+              {migrating ? 'Running…' : 'Migrate: Flights'}
             </button>
             <Link href="/admin/roadmap" className="text-sm bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl font-medium transition-colors">
               Roadmap
