@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import toast, { Toaster } from 'react-hot-toast'
+import { autoFill } from '@/lib/autoSchedule'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap } from 'lucide-react'
 
 interface Game {
@@ -115,6 +116,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [dragId, setDragId]             = useState<string | null>(null)
   const [dragGame, setDragGame]         = useState<Game | null>(null)
   const [overCell, setOverCell]         = useState<string | null>(null)
+  const [autoFilling, setAutoFilling]   = useState(false)
 
   // ── Parking lot filters ──────────────────────────────────────────────────
   const [filterDiv,        setFilterDiv]        = useState('__all__')
@@ -541,6 +543,27 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     : allSlots
   const visibleFields = fields.filter(f => !hiddenFields.has(f.fullName))
 
+  async function autoFillDay() {
+    if (!activeDate) return
+    const toPlace = filtered.map(g => ({ id: g.id, gameNumber: g.gameNumber, division: g.division, pool: g.pool, team1: g.team1, team2: g.team2 }))
+    if (toPlace.length === 0) { toast('Nothing in the parking lot to place'); return }
+    const placed = dayGames.map(g => ({ game: { id: g.id, gameNumber: g.gameNumber, division: g.division, pool: g.pool, team1: g.team1, team2: g.team2 }, time: g.startTime, location: g.location }))
+    const af = autoFill({ toPlace, placed, fields: visibleFields.map(f => ({ fullName: f.fullName })), slots: allSlots })
+    if (af.placements.length === 0) { toast.error('No room to place games — add fields/time or clear some slots'); return }
+    setAutoFilling(true)
+    try {
+      await Promise.all(af.placements.map(p =>
+        fetch(`/api/tournaments/${params.id}/games/${p.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: activeDate, startTime: p.time, location: p.location }),
+        })
+      ))
+      const byId = new Map(af.placements.map(p => [p.id, p]))
+      setGames(prev => prev.map(g => { const p = byId.get(g.id); return p ? { ...g, date: activeDate, startTime: p.time, location: p.location } : g }))
+      toast.success(`Placed ${af.placements.length} game${af.placements.length !== 1 ? 's' : ''} on ${fmtDate(activeDate)}` + (af.unplaceable.length ? ` · ${af.unplaceable.length} couldn't fit` : ''))
+    } catch { toast.error('Auto-fill failed') } finally { setAutoFilling(false) }
+  }
+
   // Slots where either team of the dragged game is already scheduled today
   const busySlots = (() => {
     if (!dragGame) return new Set<string>()
@@ -798,6 +821,14 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Published
               </span>
             )}
+            <button
+              onClick={autoFillDay}
+              disabled={autoFilling || filtered.length === 0}
+              title="Place the parking-lot games (after your filters) onto this day, following the rules. You can still drag to adjust."
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 bg-teal-600 hover:bg-teal-700 text-white border-teal-700 whitespace-nowrap"
+            >
+              {autoFilling ? 'Filling…' : <span className="inline-flex items-center gap-1"><Zap size={13} /> Auto-fill</span>}
+            </button>
             <button
               onClick={publishSchedule}
               disabled={publishing || !hasChanges}
