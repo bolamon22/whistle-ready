@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
-import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight } from 'lucide-react'
+import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TimeSlot { start: string; end: string }
@@ -108,7 +108,16 @@ const SECTIONS = [
   { id: 'registration', label: 'Team fees',       icon: DollarSign },
   { id: 'staffpay',     label: 'Staff pay rates', icon: Banknote },
   { id: 'schedule',     label: 'Schedule rules',  icon: Clock },
+  { id: 'tiebreakers',  label: 'Standings tiebreakers', icon: ClipboardList },
 ]
+const TB_OPTS = [
+  { v:'record', l:'Record' }, { v:'win_pct', l:'Winning Percentage' },
+  { v:'head_to_head', l:'Head to Head' }, { v:'h2h_two', l:'Head to Head Two Teams Only' },
+  { v:'h2h_gd', l:'Head to Head Goal Diff' }, { v:'goal_diff', l:'Goal Diff' },
+  { v:'goals_for', l:'Goals Scored' }, { v:'goals_against', l:'Goals Allowed' },
+]
+const DEFAULT_TB = ['record','goal_diff','goals_for']
+const pad6 = (a:string[]) => { const n=[...a]; while(n.length<6) n.push(''); return n.slice(0,6) }
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
@@ -180,6 +189,9 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [newKeyword, setNewKeyword]       = useState('')
   const [newCount, setNewCount]           = useState('1')
   const [showSaveGlobal, setShowSaveGlobal] = useState(false)
+  const [poolTb, setPoolTb] = useState<string[]>(pad6(DEFAULT_TB))
+  const [divTb, setDivTb] = useState<string[]>(pad6(DEFAULT_TB))
+  const [savingDefault, setSavingDefault] = useState(false)
 
   // ─── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -188,6 +200,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       setStartDate(t.startDate || ''); setEndDate(t.endDate || '')
       setLocation(t.location || ''); setLogoUrl(t.logoUrl || '')
       setScheduleIncrement(String(t.scheduleIncrement || 50))
+      try { const obj = JSON.parse(t.tiebreakers || '{}'); const pool = Array.isArray(obj)?obj:(obj.pool||[]); const division = Array.isArray(obj)?obj:(obj.division||[]); setPoolTb(pad6(pool.length?pool:DEFAULT_TB)); setDivTb(pad6(division.length?division:DEFAULT_TB)) } catch {}
       const staffParsed = parseStaffConfig(t.payRates || '{}')
       setStaffRoles(staffParsed.roles)
       // Load officials config — prefer v2 format, fall back to old divisionRules
@@ -237,6 +250,15 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   }, [params.id])
 
   // ─── Save ──────────────────────────────────────────────────────────────────
+  async function saveAsDefault() {
+    setSavingDefault(true)
+    try {
+      const res = await fetch('/api/tiebreaker-default', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) }) })
+      if (!res.ok) throw new Error()
+      toast.success('Saved as default for new tournaments')
+    } catch { toast.error('Failed to save default') }
+    finally { setSavingDefault(false) }
+  }
   async function save() {
     setSaving(true)
     await Promise.all([
@@ -249,6 +271,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           divisionRules: JSON.stringify(Object.fromEntries(officialsConfig.rules.map(r => [r.keyword, r.count]))),
           registrationPricing: JSON.stringify(pricing),
           registrationDivisions: JSON.stringify(fromDivItems(divItems, customDivisions)),
+          tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
         }),
       }),
       fetch(`/api/venues/${params.id}`, {
@@ -310,6 +333,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (id === 'registration') return pricing.tier1 > 0
     if (id === 'staffpay')     return staffRoles.length > 0
     if (id === 'schedule')     return !!(scheduleIncrement)
+    if (id === 'tiebreakers')  return true
     return false
   }
 
@@ -317,6 +341,35 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
 
   // ─── Section panels ────────────────────────────────────────────────────────
   function renderSection() {
+    // ── Standings tiebreakers ──
+    if (activeSection === 'tiebreakers') return (
+      <div className="space-y-5">
+        <p className="text-sm text-slate-500">Set how teams that are level on points are ranked. Tie breaker #1 is applied first, then #2, and so on. Head-to-head currently compares two tied teams directly.</p>
+        {[{ t:'Tie breakers within pools', d:'Applied when breaking ties within a pool.', arr: poolTb, set: setPoolTb },
+          { t:'Tie breakers within divisions', d:'Applied when ranking teams across pools in a division (for seeding).', arr: divTb, set: setDivTb }].map(sec => (
+          <div key={sec.t}>
+            <p className="text-sm font-semibold text-slate-700">{sec.t}</p>
+            <p className="text-xs text-slate-400 mb-2.5">{sec.d}</p>
+            <div className="space-y-2 max-w-lg">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-slate-500 w-24 flex-shrink-0">Tie breaker #{i + 1}</span>
+                  <select value={sec.arr[i] || ''} onChange={e => { const n = pad6(sec.arr); n[i] = e.target.value; sec.set(n) }}
+                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
+                    <option value="">—</option>
+                    {TB_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button type="button" onClick={saveAsDefault} disabled={savingDefault}
+          className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 rounded-lg px-3 py-2 disabled:opacity-40">
+          {savingDefault ? 'Saving…' : 'Save as default for new tournaments'}
+        </button>
+      </div>
+    )
     // ── General Info ──
     if (activeSection === 'general') return (
       <div className="space-y-5">
