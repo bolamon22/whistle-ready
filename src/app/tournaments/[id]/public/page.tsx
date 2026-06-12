@@ -95,15 +95,15 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
       )}
       {pview==='list' && (
         <div className="bg-white overflow-x-auto">
-          <table className="w-full text-xs min-w-[370px]">
+          <table className="w-full text-xs min-w-[400px]">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
               <th className="px-3 py-2.5 w-6 text-slate-400 font-semibold"></th>
               <th className="text-left px-2 py-2.5 text-slate-500 font-semibold">Team</th>
-              <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-8">MP</th>
-              <th className="text-center px-2 py-2.5 text-slate-500 font-semibold">W-L-T</th>
+              <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-7">W</th>
+              <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-7">L</th>
               <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-8">GA</th>
+              <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-8">GF</th>
               <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-10">GD</th>
-              <th className="text-center px-2 py-2.5 text-teal-700 font-bold w-9">PTS</th>
               <th className="text-center px-2 py-2.5 text-slate-500 font-semibold">Last 3</th>
             </tr></thead>
             <tbody>
@@ -114,11 +114,11 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
                     <tr className={`border-t border-slate-50 ${i===0&&mp>0?'bg-amber-50/40':''}`}>
                       <td className="px-3 py-2.5 text-slate-400 font-semibold">{i+1}</td>
                       <td className="px-2 py-2.5"><div className="flex items-center gap-2"><TeamAvatar name={s.team} size="sm"/><span className={`font-semibold text-xs leading-tight ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</span></div></td>
-                      <td className="px-2 py-2.5 text-center text-slate-600">{mp}</td>
-                      <td className="px-2 py-2.5 text-center font-semibold text-slate-700">{s.w}-{s.l}-{s.t}</td>
+                      <td className="px-2 py-2.5 text-center font-semibold text-slate-700">{s.w}</td>
+                      <td className="px-2 py-2.5 text-center text-slate-600">{s.l}</td>
                       <td className="px-2 py-2.5 text-center text-slate-600">{s.ga}</td>
+                      <td className="px-2 py-2.5 text-center text-slate-600">{s.gf}</td>
                       <td className={`px-2 py-2.5 text-center font-bold ${gd>0?'text-emerald-600':gd<0?'text-red-500':'text-slate-400'}`}>{gd>0?'+':''}{gd}</td>
-                      <td className="px-2 py-2.5 text-center font-extrabold text-teal-700 text-sm">{s.pts}</td>
                       <td className="px-2 py-2.5"><div className="flex items-center justify-center gap-1">{form.length===0?<span className="text-slate-300">—</span>:form.map((r,fi)=><span key={fi} className={`w-4 h-4 rounded-full text-[8px] font-bold text-white flex items-center justify-center ${r==='W'?'bg-emerald-500':r==='L'?'bg-red-500':'bg-slate-400'}`}>{r}</span>)}</div></td>
                     </tr>
                     {cutoff>0 && cutoff<standings.length && i===cutoff-1 && (
