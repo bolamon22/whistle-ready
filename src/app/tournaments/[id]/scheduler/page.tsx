@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import toast, { Toaster } from 'react-hot-toast'
-import { autoFill } from '@/lib/autoSchedule'
+import { autoFill, isRealTeam } from '@/lib/autoSchedule'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap } from 'lucide-react'
 
 interface Game {
@@ -614,7 +614,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const teamGames: Record<string, Game[]> = {}
   scheduledGames.forEach(g => {
     ;[g.team1, g.team2].forEach(team => {
-      if (!team || team === 'TBD') return
+      if (!isRealTeam(team)) return // ignore bracket placeholders that repeat across divisions
       teamGames[team] = teamGames[team] ?? []
       teamGames[team].push(g)
     })

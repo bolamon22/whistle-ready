@@ -60,6 +60,15 @@ export function bracketFeeders(team: string): string | null {
   return m ? m[1].toUpperCase() : null
 }
 
+// A "real" team is an actual registered team — not a bracket placeholder slot
+// ("Seed 4", "W-B3", "L-B2", "TBD"). Placeholders repeat across divisions, so they
+// must NOT be treated as the same team for double-book / rest-spacing / per-day caps.
+export function isRealTeam(team: string): boolean {
+  const t = (team || '').trim()
+  if (!t) return false
+  return !/^(seed\s|w-b\d|l-b\d|tbd$)/i.test(t)
+}
+
 const isBracket = (g: AGame) => g.gameNumber.startsWith('B')
 
 // Faint younger-earlier nudge: extract a leading age number from the division.
@@ -81,7 +90,7 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
   const gameStartIdx = new Map<string, number>() // gameNumber -> slot index (for feeder ordering)
 
   const addTeamSlot = (team: string, i: number) => {
-    if (!team) return
+    if (!isRealTeam(team)) return // skip bracket placeholders ("Seed 4", "W-B3"…)
     const a = teamSlots.get(team) ?? []
     a.push(i)
     teamSlots.set(team, a)
