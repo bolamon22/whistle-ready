@@ -332,29 +332,45 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
 
   const totalTeams = standings.length || (bracket?.teamCount ?? 0)
   const cutPreview = Math.max(1, Math.min(parseInt(cutoffInput) || 1, Math.max(1, totalTeams - 1)))
+  const flightBCount = Math.max(0, totalTeams - cutPreview)
+  const splitFormatPickers = ([['Flight A', fmtA, setFmtA], ['Flight B', fmtB, setFmtB]] as [string, string, (v: 'single' | 'double' | '2gg') => void][])
   const splitPanel = (
-    <div className="mb-5 rounded-xl border border-teal-500/30 bg-teal-950/20 p-4">
-      <p className="text-sm font-semibold text-white mb-1">Split into flights</p>
-      <p className="text-xs text-slate-400 mb-3">
+    <div className="mb-5 rounded-xl border border-teal-500/40 bg-slate-800/80 p-5">
+      <p className="text-base font-semibold text-white mb-1">Split into flights</p>
+      <p className="text-sm text-slate-300 mb-4">
         Two brackets, each with its own champion. Teams rank by pool standings, then split at the cutoff.
       </p>
-      <div className="flex items-center gap-2 mb-3 text-sm flex-wrap">
-        <span className="text-slate-300">Top</span>
+
+      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Cutoff</label>
+      <div className="flex items-center gap-3 mb-4">
         <input type="number" min={1} value={cutoffInput} onChange={e => setCutoffInput(e.target.value)}
-          className="w-16 bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5 text-center focus:outline-none focus:border-teal-500" />
-        <span className="text-slate-300">seeds &rarr; <span className="text-teal-300 font-semibold">Flight A</span>, rest &rarr; <span className="text-teal-300 font-semibold">Flight B</span></span>
-        {totalTeams > 0 && (
-          <span className="text-[11px] text-slate-500">({cutPreview} + {Math.max(0, totalTeams - cutPreview)} of {totalTeams})</span>
-        )}
+          className="w-20 bg-slate-900 border border-slate-600 text-white text-base rounded-lg px-3 py-2 text-center focus:outline-none focus:border-teal-500" />
+        <span className="text-sm text-slate-300">top seeds go to <span className="font-semibold text-teal-300">Flight A</span> · the rest to <span className="font-semibold text-teal-300">Flight B</span></span>
       </div>
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        {([['Flight A', fmtA, setFmtA], ['Flight B', fmtB, setFmtB]] as [string, string, (v: 'single' | 'double' | '2gg') => void][]).map(([lbl, val, set]) => (
+
+      {totalTeams > 0 && (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2.5">
+            <p className="text-xs font-semibold text-teal-300 uppercase tracking-wider">Flight A</p>
+            <p className="text-sm text-white mt-1">{cutPreview} {cutPreview === 1 ? 'team' : 'teams'}</p>
+            <p className="text-xs text-slate-400 mt-0.5">seeds 1–{cutPreview}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2.5">
+            <p className="text-xs font-semibold text-teal-300 uppercase tracking-wider">Flight B</p>
+            <p className="text-sm text-white mt-1">{flightBCount} {flightBCount === 1 ? 'team' : 'teams'}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{flightBCount > 0 ? `seeds ${cutPreview + 1}–${totalTeams}` : '—'}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {splitFormatPickers.map(([lbl, val, set]) => (
           <div key={lbl}>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">{lbl} format</p>
-            <div className="grid grid-cols-3 gap-1">
+            <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">{lbl} format</p>
+            <div className="grid grid-cols-3 gap-1.5">
               {(['single', 'double', '2gg'] as const).map(ff => (
                 <button key={ff} onClick={() => set(ff)}
-                  className={`py-1.5 rounded-lg text-[11px] border transition-colors ${val === ff ? 'bg-teal-600 border-teal-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-white'}`}>
+                  className={`py-2 rounded-lg text-xs font-medium border transition-colors ${val === ff ? 'bg-teal-600 border-teal-500 text-white' : 'bg-slate-900 border-slate-600 text-slate-300 hover:text-white hover:border-slate-500'}`}>
                   {ff === 'single' ? 'Single' : ff === 'double' ? 'Double' : '2GG'}
                 </button>
               ))}
@@ -362,12 +378,13 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
           </div>
         ))}
       </div>
+
       <button onClick={handleSplit} disabled={splitting}
-        className="px-5 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
-        {splitting ? 'Splitting…' : 'Split into flights'}
+        className="w-full py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+        {splitting ? 'Splitting…' : (totalTeams > 0 ? `Split into ${cutPreview} + ${flightBCount} flights` : 'Split into flights')}
       </button>
       {standings.length === 0 && (
-        <p className="text-[11px] text-amber-400/80 mt-2">No pool standings yet — finish pool play (or seed manually) so flights split by rank.</p>
+        <p className="text-xs text-amber-400/90 mt-3">No pool standings yet — finish pool play (or seed manually) so flights split by rank.</p>
       )}
     </div>
   )
@@ -408,6 +425,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
           </div>
         )}
 
+        {!showSplit && (<>
         <div className="mb-5">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Format</p>
           <div className="grid grid-cols-3 gap-2">
@@ -490,6 +508,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         >
           {creating ? 'Creating…' : 'Generate Bracket'}
         </button>
+        </>)}
       </div>
     )
   }
