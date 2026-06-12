@@ -45,12 +45,6 @@ const BAR_H = 28
 const BAR_GAP = 8
 const TOP_PAD = 16
 
-function gameTop(round: number, idx: number): number {
-  const spacing = UNIT * Math.pow(2, round - 1)
-  const firstCenter = GAME_H / 2 + (spacing - UNIT) / 2
-  return firstCenter + idx * spacing - GAME_H / 2
-}
-
 function roundLabel(round: number, maxRound: number): string {
   if (round === maxRound) return 'Final'
   if (round === maxRound - 1 && maxRound >= 3) return 'Semifinals'
@@ -80,6 +74,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   const [showAddGame, setShowAddGame] = useState(false)
   const [seeds, setSeeds] = useState<Record<string, string>>({})
   const [standings, setStandings] = useState<{ team: string; w: number; l: number; t: number; gf: number; ga: number }[]>([])
+  const [schedule, setSchedule] = useState<Record<number, { date: string; startTime: string; location: string }>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -160,6 +155,20 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   }, [tournamentId, division])
 
   useEffect(() => { loadStandings() }, [loadStandings])
+
+  const loadSchedule = useCallback(async () => {
+    try {
+      const bg = await fetch(`/api/tournaments/${tournamentId}/divisions/${division}/pool-games?scope=bracket`).then(r => r.ok ? r.json() : [])
+      const map: Record<number, { date: string; startTime: string; location: string }> = {}
+      for (const g of (Array.isArray(bg) ? bg : [])) {
+        const n = parseInt(String(g.gameNumber).replace(/^B/, ''))
+        if (!isNaN(n)) map[n] = { date: g.date || '', startTime: g.startTime || '', location: g.location || '' }
+      }
+      setSchedule(map)
+    } catch { setSchedule({}) }
+  }, [tournamentId, division])
+
+  useEffect(() => { loadSchedule() }, [loadSchedule])
 
   async function handleCreate() {
     setCreating(true); setError(null)
@@ -809,6 +818,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         <BracketPreview
           logos={logos}
           numberOffset={bracket.numberOffset || 0}
+          schedule={schedule}
           template={bracket.games.map(g => ({
             gameNumber: g.gameNumber,
             round: g.round,
@@ -840,12 +850,13 @@ function resolveLabel(src: string, seeds: Record<string, string>, offset = 0): s
   return src
 }
 
-function BracketPreview({ template, seeds, division, numberOffset = 0, logos = {}, onLabelChange, onRemoveGame, onRenameSeed, onAddGame }: {
+function BracketPreview({ template, seeds, division, numberOffset = 0, logos = {}, schedule = {}, onLabelChange, onRemoveGame, onRenameSeed, onAddGame }: {
   template: GameTemplate[]
   seeds: Record<string, string>
   division?: string
   numberOffset?: number
   logos?: Record<string, string>
+  schedule?: Record<number, { date: string; startTime: string; location: string }>
   onLabelChange?: (gameNumber: number, label: string) => void
   onRemoveGame?: (gameNumber: number) => void
   onRenameSeed?: (seedNum: number, value: string) => void
@@ -853,6 +864,13 @@ function BracketPreview({ template, seeds, division, numberOffset = 0, logos = {
 }) {
   const [editingLabel, setEditingLabel] = useState<{ gameNumber: number; value: string } | null>(null)
   const [editingSeat, setEditingSeat] = useState<{ gameNumber: number; slot: number; value: string } | null>(null)
+
+  const schedText = (n: number, short: boolean) => {
+    const sc = schedule[n]
+    if (!sc) return ''
+    const parts = short ? [sc.startTime, sc.location] : [sc.date, sc.startTime, sc.location]
+    return parts.map(x => (x || '').trim()).filter(Boolean).join(' · ')
+  }
 
   function renderSlot(gameNumber: number, src: string, slot: number) {
     const label = resolveLabel(src, seeds, numberOffset)
@@ -1057,8 +1075,9 @@ function BracketPreview({ template, seeds, division, numberOffset = 0, logos = {
               <div key={game.gameNumber}>
                 <div style={{ position: 'absolute', left: pos.x, top: pos.cy - BAR_GAP / 2 - BAR_H - 14, width: GAME_W, height: 13 }}
                   className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono text-teal-300/80 px-0.5">B{numberOffset + game.gameNumber}</span>
-                  <span className="flex items-center gap-1">
+                  <span className="text-[9px] font-mono text-teal-300/80 px-0.5 shrink-0">B{numberOffset + game.gameNumber}</span>
+                  <span className="flex-1 text-center text-[8px] truncate px-1 text-slate-400">{schedText(numberOffset + game.gameNumber, true) || <span className="text-slate-600">TBD</span>}</span>
+                  <span className="flex items-center gap-1 shrink-0">
                     {displayLabel && (editingLabel?.gameNumber === game.gameNumber
                       ? <input autoFocus value={editingLabel.value}
                           onChange={e => setEditingLabel({ gameNumber: game.gameNumber, value: e.target.value })}
@@ -1126,6 +1145,9 @@ function BracketPreview({ template, seeds, division, numberOffset = 0, logos = {
                     {renderSlot(game.gameNumber, src, i)}
                   </div>
                 ))}
+                <div className="px-2 py-0.5 border-t border-slate-700 text-[9px] text-slate-500 truncate">
+                  {schedText(numberOffset + game.gameNumber, false) || <span className="text-slate-600">Not scheduled</span>}
+                </div>
               </div>
             ))}
           </div>
