@@ -193,6 +193,27 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
         const referenced=new Set<number>()
         mainGames.forEach(g=>feederOf(g).forEach(fn=>{if(fn!=null)referenced.add(fn)}))
         const roots=mainGames.filter(g=>!referenced.has(g.gameNumber)).sort((a,b)=>b.round-a.round||a.gameNumber-b.gameNumber)
+        const HALF_BAR=(BK_BAR_H+BK_BAR_GAP)/2
+        // Pass 1: rough positions (byes centred) to learn which half of the bracket each game is in.
+        const rough:Record<number,number>={}
+        let ls0=0
+        const roughY=(num:number):number=>{
+          if(rough[num]!==undefined)return rough[num]
+          const g=byNum[num];if(!g)return 0
+          const[a,b]=feederOf(g)
+          const cs:number[]=[]
+          if(a!=null)cs.push(roughY(a))
+          if(b!=null)cs.push(roughY(b))
+          const y=cs.length?cs.reduce((p,q)=>p+q,0)/cs.length:(ls0++*BK_ROW)
+          rough[num]=y;return y
+        }
+        roots.forEach(r=>roughY(r.gameNumber))
+        mainGames.forEach(g=>{if(rough[g.gameNumber]===undefined)rough[g.gameNumber]=ls0++*BK_ROW})
+        const rv=mainGames.map(g=>rough[g.gameNumber])
+        const mid=rv.length?(Math.min(...rv)+Math.max(...rv))/2:0
+        // Pass 2: a bye game is offset half a bar so its winner-feeder slot aligns with its feeder
+        // (winner toward the outer edge, bye toward centre) instead of sitting straight on the feeder line.
+        const winnerTopOf:Record<number,boolean>={}
         const yByNum:Record<number,number>={}
         let leaf=0
         const placeY=(num:number):number=>{
@@ -201,7 +222,7 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
           const[f1,f2]=feederOf(g)
           let y:number
           if(f1!=null&&f2!=null)y=(placeY(f1)+placeY(f2))/2
-          else if(f1!=null||f2!=null)y=placeY((f1!=null?f1:f2) as number)
+          else if(f1!=null||f2!=null){const fNum=(f1!=null?f1:f2) as number;const wt=rough[fNum]<=mid;winnerTopOf[num]=wt;y=placeY(fNum)+(wt?HALF_BAR:-HALF_BAR)}
           else y=leaf++*BK_ROW
           yByNum[num]=y;return y
         }
@@ -285,10 +306,12 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
                   const hasSched=sg&&(sg.date||sg.startTime||sg.location)
                   const cap=hasSched?`${fmtShortDate(sg!.date)} ${fmt12bk(sg!.startTime)} · ${(sg!.location||'').split(' - ').pop()||sg!.location}`:(isChamp?(bg.label||'Championship'):'Not scheduled')
                   const w0=!!hasScore&&sg!.score1!>sg!.score2!, w1=!!hasScore&&sg!.score2!>sg!.score1!
-                  const rows=[
-                    {src:bg.team1Source,team:resolveTeam(bg.team1Source,sg?.team1),score:sg?.score1,win:w0},
-                    {src:bg.team2Source,team:resolveTeam(bg.team2Source,sg?.team2),score:sg?.score2,win:w1},
-                  ]
+                  const r1={src:bg.team1Source,team:resolveTeam(bg.team1Source,sg?.team1),score:sg?.score1,win:w0}
+                  const r2={src:bg.team2Source,team:resolveTeam(bg.team2Source,sg?.team2),score:sg?.score2,win:w1}
+                  const[fa,fb]=feederOf(bg)
+                  const isByeGame=(fa!=null)!==(fb!=null)
+                  let rows=[r1,r2]
+                  if(isByeGame){const feederRow=fa!=null?r1:r2;const byeRow=fa!=null?r2:r1;rows=winnerTopOf[bg.gameNumber]?[feederRow,byeRow]:[byeRow,feederRow]}
                   return(
                     <div key={bg.gameNumber}>
                       {/* Caption (schedule / round) */}
@@ -303,7 +326,7 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
                         return(
                           <div key={idx} style={{position:'absolute',left:pos.x,top,width:BK_W,height:BK_BAR_H}}
                             className={`flex items-center rounded-lg border shadow-sm overflow-hidden ${r.win?'border-blue-300 bg-blue-50':isChamp?'border-amber-300 bg-white':'border-gray-200 bg-white'}`}>
-                            <span className={`h-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${isSeed?'bg-teal-600 text-white':'bg-gray-100 text-gray-400'}`} style={{width:26}}>{isSeed?r.src.slice(5):''}</span>
+                            <span className={`h-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${isSeed?(isByeGame?'bg-amber-500 text-white':'bg-teal-600 text-white'):'bg-gray-100 text-gray-400'}`} style={{width:26}}>{isSeed?r.src.slice(5):''}</span>
                             <div className="pl-2 pr-1.5 flex-shrink-0"><TeamAv name={r.team.name} isTbd={r.team.isTbd}/></div>
                             <span className={`flex-1 text-[12px] truncate ${r.team.isTbd?'text-gray-400 italic':r.win?'font-bold text-gray-900':'font-medium text-gray-700'}`}>{r.team.name}</span>
                             {!r.team.isTbd&&hasScore&&<span className={`text-[14px] font-bold px-2 ${r.win?'text-blue-600':'text-gray-400'}`}>{r.score}</span>}
