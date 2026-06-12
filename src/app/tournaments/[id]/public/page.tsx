@@ -139,6 +139,211 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
   )
 }
 
+
+// ── Bracket visual constants ───────────────────────────────────────────────
+const BK_H=82, BK_W=220, BK_CONN=48, BK_GAP=14, BK_UNIT=BK_H+BK_GAP
+function bkTop(round:number,idx:number){const sp=BK_UNIT*Math.pow(2,round-1);const fc=BK_H/2+(sp-BK_UNIT)/2;return fc+idx*sp-BK_H/2}
+function bkLeft(round:number){return(round-1)*(BK_W+BK_CONN)}
+function bkRoundLabel(r:number,max:number){if(r===max)return'Championship';if(r===max-1&&max>=3)return'Semifinals';if(r===max-2&&max>=4)return'Quarterfinals';return`Round ${r}`}
+function fmt12bk(t:string){if(!t)return'';const[h,m]=t.split(':').map(Number);return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`}
+function fmtShortDate(d:string){if(!d)return'';const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+const isPlaceholderTeam=(n:string)=>/^(seed\s|w-b\d|l-b\d|bracket|winner|loser|tbd$)/i.test((n||'').trim())
+
+interface BkBracketGame{gameNumber:number;round:number;section:string;team1Source:string;team2Source:string;label:string|null}
+interface BkBracket{id:string;format:string;teamCount:number;flight?:string;numberOffset?:number;games:BkBracketGame[];seeds:Record<string,string>}
+
+function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];scheduledGames:Game[]}){
+  const [showCons,setShowCons]=useState(false)
+  const logos=useContext(LogosContext)
+
+  function TeamAv({name,isTbd}:{name:string;isTbd:boolean}){
+    const sz='w-7 h-7'
+    if(!isTbd&&logos[name])return<div className={`${sz} rounded-full overflow-hidden bg-white border border-slate-200 flex-shrink-0`}><img src={logos[name]} alt="" className="w-full h-full object-contain"/></div>
+    if(isTbd)return<div className={`${sz} rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0`}><span className="text-gray-300 text-[9px]">?</span></div>
+    const initials=name.split(' ').filter((w:string)=>w.length>2).slice(0,2).map((w:string)=>w[0].toUpperCase()).join('')||name.substring(0,2).toUpperCase()
+    const colors=['#1a3a5c','#8b1a1a','#1a5c3a','#5c3a1a','#3a1a5c','#1a5c5c','#5c1a4a','#2a4a1a']
+    const idx=name.split('').reduce((a:number,c:string)=>a+c.charCodeAt(0),0)%colors.length
+    return<div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 text-[9px]`} style={{backgroundColor:colors[idx]}}>{initials}</div>
+  }
+
+  if(bracketList.length===0)return(
+    <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-gray-200">
+      <div className="text-3xl mb-2">🏆</div>
+      <p className="font-medium">Bracket games will appear here once pool play concludes.</p>
+    </div>
+  )
+
+  return(
+    <div className="space-y-6">
+      {bracketList.map(bracket=>{
+        const offset=bracket.numberOffset??0
+        const schedByNum=new Map(scheduledGames.map(g=>[g.gameNumber,g]))
+        const mainGames=bracket.games.filter(g=>g.section==='winners'||g.section==='championship')
+        const consGames=bracket.games.filter(g=>g.section==='consolation'||g.section==='losers')
+        const maxRound=Math.max(0,...mainGames.map(g=>g.round))
+        const roundGroups=new Map<number,BkBracketGame[]>()
+        mainGames.forEach(g=>{if(!roundGroups.has(g.round))roundGroups.set(g.round,[]);roundGroups.get(g.round)!.push(g)})
+        interface BkPos{x:number;y:number;cy:number}
+        const positions=new Map<number,BkPos>()
+        mainGames.forEach(g=>{
+          const rg=roundGroups.get(g.round)||[];const idx=rg.indexOf(g)
+          const y=bkTop(g.round,idx)
+          positions.set(g.gameNumber,{x:bkLeft(g.round),y,cy:y+BK_H/2})
+        })
+        const allPos=[...positions.values()]
+        const canvasW=bkLeft(maxRound)+BK_W+24
+        const canvasH=allPos.length?Math.max(...allPos.map(p=>p.y+BK_H))+24:200
+
+        // SVG connectors
+        const connectors:JSX.Element[]=[]
+        mainGames.forEach(g=>{
+          const pos=positions.get(g.gameNumber);if(!pos)return
+          const feeders:[string,string][]=[g.team1Source,g.team2Source].map(src=>{const m=src.match(/^winner:(\d+)$/);return m?[m[1],'']:null}).filter(Boolean) as [string,string][]
+          const feederPositions=feeders.map(([n])=>positions.get(parseInt(n))).filter(Boolean) as BkPos[]
+          if(feederPositions.length===2){
+            const[f1,f2]=feederPositions
+            const midX=f1.x+BK_W+BK_CONN/2
+            connectors.push(<path key={`a-${g.gameNumber}`} d={`M${f1.x+BK_W},${f1.cy} H${midX}`} fill="none" stroke="#e5e7eb" strokeWidth="1.5"/>)
+            connectors.push(<path key={`b-${g.gameNumber}`} d={`M${f2.x+BK_W},${f2.cy} H${midX}`} fill="none" stroke="#e5e7eb" strokeWidth="1.5"/>)
+            connectors.push(<line key={`c-${g.gameNumber}`} x1={midX} y1={f1.cy} x2={midX} y2={f2.cy} stroke="#e5e7eb" strokeWidth="1.5"/>)
+            connectors.push(<path key={`d-${g.gameNumber}`} d={`M${midX},${pos.cy} H${pos.x}`} fill="none" stroke="#e5e7eb" strokeWidth="1.5"/>)
+          }else if(feederPositions.length===1){
+            const f=feederPositions[0]
+            connectors.push(<path key={`sf-${g.gameNumber}`} d={`M${f.x+BK_W},${f.cy} H${pos.x}`} fill="none" stroke="#e5e7eb" strokeWidth="1.5"/>)
+          }
+        })
+
+        function resolveTeam(src:string,sched:string|undefined):{name:string;isTbd:boolean}{
+          if(sched&&!isPlaceholderTeam(sched))return{name:sched,isTbd:false}
+          if(src.startsWith('seed:')){const sn=src.slice(5);const t=bracket.seeds?.[sn];return t?{name:t,isTbd:false}:{name:`Seed ${sn}`,isTbd:true}}
+          if(src.startsWith('winner:'))return{name:`W-B${parseInt(src.slice(7))+offset}`,isTbd:true}
+          if(src.startsWith('loser:'))return{name:`L-B${parseInt(src.slice(6))+offset}`,isTbd:true}
+          return{name:sched||'TBD',isTbd:true}
+        }
+
+        // Progress: how many rounds are complete
+        const totalRounds=maxRound
+        const completedRounds=[...roundGroups.entries()].filter(([r,gs])=>gs.every(bg=>{const sg=schedByNum.get(`B${bg.gameNumber+offset}`);return sg&&sg.score1!=null})).map(([r])=>r)
+        const roundsDone=completedRounds.length
+
+        return(
+          <div key={bracket.id}>
+            {bracketList.length>1&&<p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Flight {bracket.flight||'A'}</p>}
+
+            {/* Progress bar */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex gap-1">
+                {Array.from({length:totalRounds},(_,i)=>(
+                  <div key={i} className={`h-1.5 w-8 rounded-full ${i<roundsDone?'bg-blue-500':'bg-gray-200'}`}/>
+                ))}
+              </div>
+              <span className="text-xs text-gray-500">{roundsDone} of {totalRounds} {totalRounds===1?'round':'rounds'} complete</span>
+            </div>
+
+            {/* Round labels */}
+            <div style={{position:'relative',height:18,width:canvasW,marginBottom:6}}>
+              {[...roundGroups.keys()].map(r=>(
+                <div key={r} style={{position:'absolute',left:bkLeft(r),width:BK_W,textAlign:'center'}}
+                  className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                  {bkRoundLabel(r,maxRound)}
+                </div>
+              ))}
+            </div>
+
+            {/* Bracket canvas */}
+            <div style={{overflowX:'auto',paddingBottom:8}}>
+              <div style={{position:'relative',width:canvasW,height:canvasH}}>
+                <svg style={{position:'absolute',top:0,left:0,width:canvasW,height:canvasH,pointerEvents:'none'}} viewBox={`0 0 ${canvasW} ${canvasH}`}>
+                  {connectors}
+                </svg>
+                {mainGames.map(bg=>{
+                  const pos=positions.get(bg.gameNumber);if(!pos)return null
+                  const sgNum=`B${bg.gameNumber+offset}`
+                  const sg=schedByNum.get(sgNum)
+                  const isChamp=bg.section==='championship'||(bg.label||'').toLowerCase().includes('championship')
+                  const hasScore=sg&&sg.score1!=null&&sg.score2!=null
+                  const t1=resolveTeam(bg.team1Source,sg?.team1)
+                  const t2=resolveTeam(bg.team2Source,sg?.team2)
+                  const t1w=hasScore&&sg!.score1!>sg!.score2!
+                  const t2w=hasScore&&sg!.score2!>sg!.score1!
+                  return(
+                    <div key={bg.gameNumber} style={{position:'absolute',left:pos.x,top:pos.y,width:BK_W}}>
+                      <div className={`bg-white rounded-xl overflow-hidden border shadow-sm ${isChamp?'border-amber-200':'border-gray-200'}`}>
+                        {/* Team 1 */}
+                        <div className={`flex items-center gap-2 px-3 py-2.5 ${t1w?'bg-blue-50':t2w?'bg-gray-50':''}`}>
+                          <TeamAv name={t1.name} isTbd={t1.isTbd}/>
+                          <span className={`flex-1 text-[12px] truncate ${t1.isTbd?'text-gray-400 italic':t1w?'font-bold text-gray-900':'font-medium text-gray-700'}`}>{t1.name}</span>
+                          {!t1.isTbd&&hasScore&&<span className={`text-[15px] font-bold ${t1w?'text-blue-600':'text-gray-400'}`}>{sg!.score1}</span>}
+                          {t1w&&<Trophy size={11} className="text-amber-500 flex-shrink-0"/>}
+                        </div>
+                        <div className="border-t border-gray-100"/>
+                        {/* Team 2 */}
+                        <div className={`flex items-center gap-2 px-3 py-2.5 ${t2w?'bg-blue-50':t1w?'bg-gray-50':''}`}>
+                          <TeamAv name={t2.name} isTbd={t2.isTbd}/>
+                          <span className={`flex-1 text-[12px] truncate ${t2.isTbd?'text-gray-400 italic':t2w?'font-bold text-gray-900':'font-medium text-gray-700'}`}>{t2.name}</span>
+                          {!t2.isTbd&&hasScore&&<span className={`text-[15px] font-bold ${t2w?'text-blue-600':'text-gray-400'}`}>{sg!.score2}</span>}
+                          {t2w&&<Trophy size={11} className="text-amber-500 flex-shrink-0"/>}
+                        </div>
+                        {/* Meta */}
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-100 ${isChamp?'bg-amber-50':'bg-gray-50'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasScore?'bg-green-500':'bg-gray-300'}`}/>
+                          <span className="text-[10px] text-gray-500 truncate">
+                            {sg?`${fmtShortDate(sg.date)} ${fmt12bk(sg.startTime)} · ${(sg.location||'').split(' - ').pop()||sg.location}`:isChamp?'Championship':sgNum}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Consolation */}
+            {consGames.length>0&&(
+              <div className="mt-3">
+                <button onClick={()=>setShowCons(v=>!v)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-2">
+                  <span className="font-semibold uppercase tracking-wide">3rd place / consolation</span>
+                  <span>{showCons?'▲':'▼'}</span>
+                </button>
+                {showCons&&(
+                  <div className="flex flex-wrap gap-3">
+                    {consGames.map(bg=>{
+                      const sgNum=`B${bg.gameNumber+offset}`;const sg=schedByNum.get(sgNum)
+                      const hasScore=sg&&sg.score1!=null&&sg.score2!=null
+                      const t1w=hasScore&&sg!.score1!>sg!.score2!,t2w=hasScore&&sg!.score2!>sg!.score1!
+                      const t1=resolveTeam(bg.team1Source,sg?.team1)
+                      const t2=resolveTeam(bg.team2Source,sg?.team2)
+                      return(
+                        <div key={bg.gameNumber} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm" style={{width:BK_W}}>
+                          <div className={`flex items-center gap-2 px-3 py-2.5 ${t1w?'bg-blue-50':t2w?'bg-gray-50':''}`}>
+                            <TeamAv name={t1.name} isTbd={t1.isTbd}/>
+                            <span className={`flex-1 text-[12px] truncate ${t1.isTbd?'text-gray-400 italic':t1w?'font-bold text-gray-900':'font-medium text-gray-700'}`}>{t1.name}</span>
+                            {hasScore&&<span className={`text-[15px] font-bold ${t1w?'text-blue-600':'text-gray-400'}`}>{sg!.score1}</span>}
+                          </div>
+                          <div className="border-t border-gray-100"/>
+                          <div className={`flex items-center gap-2 px-3 py-2.5 ${t2w?'bg-blue-50':t1w?'bg-gray-50':''}`}>
+                            <TeamAv name={t2.name} isTbd={t2.isTbd}/>
+                            <span className={`flex-1 text-[12px] truncate ${t2.isTbd?'text-gray-400 italic':t2w?'font-bold text-gray-900':'font-medium text-gray-700'}`}>{t2.name}</span>
+                            {hasScore&&<span className={`text-[15px] font-bold ${t2w?'text-blue-600':'text-gray-400'}`}>{sg!.score2}</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-100 bg-gray-50">
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasScore?'bg-green-500':'bg-gray-300'}`}/>
+                            <span className="text-[10px] text-gray-500 truncate">{sg?`${fmtShortDate(sg.date)} · ${(sg.location||'').split(' - ').pop()||sg.location}`:bg.label||sgNum}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 type DivTab = 'standings'|'schedule'|'bracket'
 
 function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,tiebreakers}:{division:string;games:Game[];followedTeams:string[];toggleFollow:(t:string)=>void;tournamentId:string;tiebreakers:string[]}) {
@@ -149,11 +354,13 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   const [schedGroup,setSchedGroup]=useState<'time'|'field'>('time')
   const schedLogos=useContext(LogosContext)
   const [advanceCount,setAdvanceCount]=useState(0)
+  const [bracketList,setBracketList]=useState<BkBracket[]>([])
   useEffect(()=>{
     fetch(`/api/tournaments/${tournamentId}/divisions/${encodeURIComponent(division)}/bracket`).then(r=>r.ok?r.json():[]).then(b=>{
-      const fl=Array.isArray(b)?b:(b&&b.id?[b]:[])
+      const fl:BkBracket[]=Array.isArray(b)?b:(b&&b.id?[b]:[])
+      setBracketList(fl)
       setAdvanceCount(fl.reduce((acc:number,x:any)=>acc+(x.teamCount||0),0))
-    }).catch(()=>setAdvanceCount(0))
+    }).catch(()=>{setBracketList([]);setAdvanceCount(0)})
   },[tournamentId,division])
   const handleTeamClick=(team:string)=>{setSelectedTeam(team);setDivTab('schedule')}
   const divGames=games.filter(g=>g.division===division&&!g.isCanceled)
@@ -293,36 +500,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
       })()}
 
       {divTab==='bracket' && (
-        <div>
-          {bracketGames.length===0 ? (
-            <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-gray-200">
-              <div className="text-3xl mb-2">🏆</div>
-              <p className="font-medium">Bracket games will appear here once pool play concludes.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {bracketGames.map(g=>{
-                const hasScore=g.score1!==null&&g.score2!==null
-                return (
-                  <div key={g.id} className="bg-white border border-yellow-200 rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-yellow-50 px-4 py-2 border-b border-yellow-100 flex items-center gap-2">
-                      <span className="text-yellow-600">🏆</span>
-                      <span className="text-xs font-bold text-yellow-700 uppercase tracking-wide">Championship · {fmtDate(g.date)} {g.startTime} · {g.location}</span>
-                    </div>
-                    <div className="px-4 py-3 space-y-1.5">
-                      {[{team:g.team1,score:g.score1,opp:g.score2},{team:g.team2,score:g.score2,opp:g.score1}].map(({team,score,opp})=>(
-                        <div key={team} className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${hasScore&&score!>opp!?'bg-yellow-50':hasScore&&score!<opp!?'bg-gray-50':'bg-gray-50'}`}>
-                          <div className="flex items-center gap-2"><TeamAvatar name={team} size="sm"/><span className="font-bold text-sm text-gray-800">{team}</span>{hasScore&&score!>opp!&&<span className="text-yellow-500">🏆</span>}</div>
-                          {hasScore&&<span className={`text-2xl font-black ml-2 ${score!>opp!?'text-yellow-600':'text-gray-400'}`}>{score}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        <BracketView bracketList={bracketList} scheduledGames={bracketGames}/>
       )}
     </div>
   )
