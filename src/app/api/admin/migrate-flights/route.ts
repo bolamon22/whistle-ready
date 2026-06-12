@@ -20,6 +20,7 @@ export async function POST() {
   try {
     await addCol(`ALTER TABLE "Bracket" ADD COLUMN "flight" TEXT NOT NULL DEFAULT 'A'`, 'Bracket.flight', log)
     await addCol(`ALTER TABLE "Bracket" ADD COLUMN "numberOffset" INTEGER NOT NULL DEFAULT 0`, 'Bracket.numberOffset', log)
+    await addCol(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`, 'TeamRegistration.clubLogoUrl', log)
     return NextResponse.json({ ok: true, log })
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: err?.message || String(err), log }, { status: 500 })

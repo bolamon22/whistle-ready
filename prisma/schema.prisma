@@ -177,6 +177,7 @@ model TeamRegistration {
   invoiceAmount   Float     @default(0)
   discountAmount  Float     @default(0)
   discountNote    String    @default("")
+  clubLogoUrl     String    @default("")
   createdAt       DateTime  @default(now())
   deletedAt       DateTime?
 
