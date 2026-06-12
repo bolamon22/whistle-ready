@@ -274,12 +274,40 @@ export default function RegistrationsPage() {
   const [clubLogoUploading, setClubLogoUploading] = useState(false)
   const [logoUploading, setLogoUploading] = useState<number | null>(null)
 
+  // Shrink logos in the browser before storing them. Logos are kept as data URLs on
+  // the registration, so a full-resolution image becomes a multi-MB string that exceeds
+  // the request/database size limit and makes Save fail. Cap to 512px and compress.
+  const compressImage = (file: File, maxDim = 512): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const img = new Image()
+        img.onload = () => {
+          let { width, height } = img
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) { height = Math.round((height * maxDim) / width); width = maxDim }
+            else { width = Math.round((width * maxDim) / height); height = maxDim }
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = width; canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) { reject(new Error('Canvas not supported')); return }
+          ctx.drawImage(img, 0, 0, width, height)
+          let url = canvas.toDataURL('image/png')
+          if (url.length > 200000) url = canvas.toDataURL('image/jpeg', 0.85)
+          resolve(url)
+        }
+        img.onerror = () => reject(new Error('Could not read image'))
+        img.src = reader.result as string
+      }
+      reader.onerror = () => reject(new Error('Could not read file'))
+      reader.readAsDataURL(file)
+    })
+
   const uploadTeamLogo = async (i: number, file: File) => {
     setLogoUploading(i)
     try {
-      const fd = new FormData(); fd.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const { url } = await res.json()
+      const url = await compressImage(file)
       setTeams(prev => prev.map((t, idx) => idx === i ? { ...t, logoUrl: url } : t))
       toast.success('Logo uploaded!')
     } catch { toast.error('Upload failed') }
@@ -289,9 +317,7 @@ export default function RegistrationsPage() {
   const uploadClubLogo = async (file: File) => {
     setClubLogoUploading(true)
     try {
-      const fd = new FormData(); fd.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const { url } = await res.json()
+      const url = await compressImage(file)
       setClubLogoUrl(url)
       setTeams(prev => prev.map(t => t.logoUrl ? t : { ...t, logoUrl: url }))
       toast.success('Club logo uploaded!')
