@@ -714,6 +714,8 @@ export default function PublicTournamentPage() {
   const [showNotifyModal,setShowNotifyModal]=useState(false)
   const [notifyEmail,setNotifyEmail]=useState('')
   const [notifySent,setNotifySent]=useState(false)
+  const [showInfo,setShowInfo]=useState(false)
+  const [infoSections,setInfoSections]=useState<any[]>([])
   const [dark,setDark]=useState(false)
   useEffect(()=>{ try{ setDark(localStorage.getItem(`theme-${id}`)==='dark') }catch{} },[id])
   useEffect(()=>{ try{ localStorage.setItem(`theme-${id}`, dark?'dark':'light') }catch{} },[dark,id])
