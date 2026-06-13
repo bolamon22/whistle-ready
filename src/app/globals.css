@@ -23,3 +23,19 @@
   .breadcrumb { @apply flex items-center gap-1.5 text-sm text-slate-400 mb-2; }
   .section-title { @apply text-2xl font-bold text-slate-900; }
 }
+
+/* ---- Staff dark theme ----
+   Applied to signed-in routes only via <ThemeShell> (which toggles `gd-dark`
+   on <body>). Excludes the public tournament page (own light/dark toggle) and
+   the login/register pages. Recolors the shared light classes; fully reversible. */
+body.gd-dark { background:#0b0f17 !important; color:#e5e7eb; }
+body.gd-dark .card, body.gd-dark .bg-white { background:#111827 !important; }
+body.gd-dark .bg-slate-50, body.gd-dark .bg-gray-50 { background:#0b0f17 !important; }
+body.gd-dark .bg-slate-100, body.gd-dark .bg-gray-100, body.gd-dark .bg-slate-200, body.gd-dark .bg-gray-200, body.gd-dark .bg-yellow-50, body.gd-dark .bg-purple-100 { background:#1f2937 !important; }
+body.gd-dark .text-slate-900, body.gd-dark .text-gray-900, body.gd-dark .text-slate-800, body.gd-dark .text-gray-800, body.gd-dark .text-slate-700, body.gd-dark .text-gray-700 { color:#f1f5f9 !important; }
+body.gd-dark .text-slate-600, body.gd-dark .text-gray-600, body.gd-dark .text-slate-500, body.gd-dark .text-gray-500 { color:#cbd5e1 !important; }
+body.gd-dark .text-slate-400, body.gd-dark .text-gray-400, body.gd-dark .text-slate-300, body.gd-dark .text-gray-300 { color:#94a3b8 !important; }
+body.gd-dark .border-slate-200, body.gd-dark .border-gray-200, body.gd-dark .border-slate-100, body.gd-dark .border-gray-100, body.gd-dark .border-slate-300, body.gd-dark .border-gray-300 { border-color:#1f2937 !important; }
+body.gd-dark .input, body.gd-dark .select, body.gd-dark input, body.gd-dark select, body.gd-dark textarea { background:#1f2937 !important; color:#f1f5f9 !important; border-color:#374151 !important; }
+body.gd-dark .btn-secondary { background:#1f2937 !important; color:#e5e7eb !important; border-color:#374151 !important; }
+body.gd-dark .shadow-sm, body.gd-dark .shadow-md, body.gd-dark .shadow-lg, body.gd-dark .shadow-xl { box-shadow:0 1px 0 rgba(255,255,255,0.05) !important; }

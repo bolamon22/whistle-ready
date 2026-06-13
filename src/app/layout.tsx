@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import NavBar from './NavBar'
 import DynamicTitle from './DynamicTitle'
 import Providers from './providers'
+import ThemeShell from './ThemeShell'
 
 export const metadata: Metadata = {
   title: 'Gameday Blueprint',
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen">
         <Providers>
+          <ThemeShell />
           <NavBar />
           <DynamicTitle />
           <main className="p-6 max-w-screen-2xl mx-auto">{children}</main>
