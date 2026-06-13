@@ -683,6 +683,24 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   )
 }
 
+// Scoped dark-mode override: recolors the light utility classes used on this page
+// when the root carries `.gd-dark`. Keeps the markup untouched; fully reversible.
+const GD_DARK_CSS = `
+.gd-dark{background:#0b0f17}
+.gd-dark .bg-gray-50{background:#0b0f17!important}
+.gd-dark .bg-white{background:#111827!important}
+.gd-dark .bg-gray-100,.gd-dark .bg-slate-100,.gd-dark .bg-slate-50,.gd-dark .bg-gray-200,.gd-dark .bg-yellow-50{background:#1f2937!important}
+.gd-dark .bg-gray-300,.gd-dark .bg-slate-200,.gd-dark .bg-slate-300{background:#374151!important}
+.gd-dark .text-gray-900,.gd-dark .text-slate-900,.gd-dark .text-gray-800,.gd-dark .text-slate-800,.gd-dark .text-gray-700,.gd-dark .text-slate-700{color:#f1f5f9!important}
+.gd-dark .text-gray-600,.gd-dark .text-slate-600,.gd-dark .text-gray-500,.gd-dark .text-slate-500{color:#cbd5e1!important}
+.gd-dark .text-gray-400,.gd-dark .text-slate-400,.gd-dark .text-gray-300,.gd-dark .text-slate-300{color:#94a3b8!important}
+.gd-dark .border-slate-200,.gd-dark .border-gray-200,.gd-dark .border-slate-100,.gd-dark .border-gray-100,.gd-dark .border-slate-50,.gd-dark .border-gray-50,.gd-dark .border-slate-300,.gd-dark .border-gray-300{border-color:#1f2937!important}
+.gd-dark .divide-slate-100>:not([hidden])~:not([hidden]),.gd-dark .divide-y>:not([hidden])~:not([hidden]),.gd-dark .divide-x>:not([hidden])~:not([hidden]){border-color:#1f2937!important}
+.gd-dark .shadow-sm,.gd-dark .shadow-xl{box-shadow:0 1px 0 rgba(255,255,255,0.04)!important}
+.gd-dark [class*="bg-amber-50"]{background:rgba(120,53,15,0.30)!important}
+.gd-dark input,.gd-dark textarea{background:#1f2937!important;color:#f1f5f9!important}
+`
+
 export default function PublicTournamentPage() {
   const {id}=useParams()
   const [tournament,setTournament]=useState<Tournament|null>(null)
@@ -696,6 +714,9 @@ export default function PublicTournamentPage() {
   const [showNotifyModal,setShowNotifyModal]=useState(false)
   const [notifyEmail,setNotifyEmail]=useState('')
   const [notifySent,setNotifySent]=useState(false)
+  const [dark,setDark]=useState(false)
+  useEffect(()=>{ try{ setDark(localStorage.getItem(`theme-${id}`)==='dark') }catch{} },[id])
+  useEffect(()=>{ try{ localStorage.setItem(`theme-${id}`, dark?'dark':'light') }catch{} },[dark,id])
 
   useEffect(()=>{
     Promise.all([
@@ -774,7 +795,8 @@ export default function PublicTournamentPage() {
 
   return (
     <LogosContext.Provider value={logos}>
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen bg-gray-50 ${dark ? 'gd-dark' : ''}`}>
+      <style>{GD_DARK_CSS}</style>
       {/* Notification modal */}
       {showNotifyModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setShowNotifyModal(false)}>
@@ -825,6 +847,8 @@ export default function PublicTournamentPage() {
       <div className="bg-[#0f1f3d] text-white px-4 py-2.5 flex items-center gap-2">
         <span className="text-sm">{sportIcon}</span>
         <span className="text-xs font-bold uppercase tracking-widest text-gray-300">{tournament?.sport||'Flag Football'}</span>
+        <button onClick={()=>setDark(d=>!d)} title="Toggle light / dark" aria-label="Toggle light or dark mode"
+          className="ml-auto text-base leading-none hover:opacity-80 transition-opacity">{dark?'☀️':'🌙'}</button>
       </div>
 
       {/* Tournament card */}
