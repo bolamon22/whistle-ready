@@ -36,6 +36,8 @@ body.gd-dark .bg-slate-100, body.gd-dark .bg-gray-100, body.gd-dark .bg-slate-20
 body.gd-dark .bg-teal-50, body.gd-dark .bg-teal-100, body.gd-dark .bg-green-50, body.gd-dark .bg-green-100, body.gd-dark .bg-emerald-50, body.gd-dark .bg-emerald-100 { background:rgba(20,184,166,0.15) !important; }
 body.gd-dark .bg-blue-50, body.gd-dark .bg-blue-100, body.gd-dark .bg-sky-50, body.gd-dark .bg-indigo-50, body.gd-dark .bg-violet-50 { background:rgba(59,130,246,0.15) !important; }
 body.gd-dark .border-teal-100, body.gd-dark .border-teal-200, body.gd-dark .border-green-100, body.gd-dark .border-green-200, body.gd-dark .border-emerald-100, body.gd-dark .border-emerald-200 { border-color:rgba(20,184,166,0.45) !important; }
+/* Hover backgrounds (e.g. collapsible section headers) must darken too, or the header text washes out on hover. */
+body.gd-dark .hover\:bg-slate-50:hover, body.gd-dark .hover\:bg-gray-50:hover, body.gd-dark .hover\:bg-slate-100:hover, body.gd-dark .hover\:bg-gray-100:hover { background:#1f2937 !important; }
 body.gd-dark .text-slate-900, body.gd-dark .text-gray-900, body.gd-dark .text-slate-800, body.gd-dark .text-gray-800, body.gd-dark .text-slate-700, body.gd-dark .text-gray-700 { color:#f1f5f9 !important; }
 body.gd-dark .text-slate-600, body.gd-dark .text-gray-600, body.gd-dark .text-slate-500, body.gd-dark .text-gray-500 { color:#cbd5e1 !important; }
 body.gd-dark .text-slate-400, body.gd-dark .text-gray-400, body.gd-dark .text-slate-300, body.gd-dark .text-gray-300 { color:#94a3b8 !important; }
