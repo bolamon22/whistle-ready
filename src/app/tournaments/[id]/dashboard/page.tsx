@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import {
   Target, ClipboardList, Eye, Wrench, Users, Flag, SlidersHorizontal,
   Settings, Medal, Calendar, FileText, MapPin, Banknote, BarChart3,
-  Wallet, Trophy, ChevronDown, Contact, type LucideIcon,
+  Wallet, Trophy, ChevronDown, Contact, Radio, Megaphone, type LucideIcon,
 } from 'lucide-react'
 import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
@@ -179,6 +179,11 @@ export default function DashboardPage() {
             <Hub icon={SlidersHorizontal} label="Management" count={2}>
               <HubItem href={`/tournaments/${id}/financials`} icon={BarChart3} label="Financials" />
               <HubItem href={`/tournaments/${id}/settings`}   icon={Settings}  label="Tournament settings" />
+            </Hub>
+
+            <Hub icon={Radio} label="Communications" count={2}>
+              <HubItem href={`/tournaments/${id}/ops`}       icon={Radio}     label="Ops board" />
+              <HubItem href={`/tournaments/${id}/broadcast`} icon={Megaphone} label="Broadcast" />
             </Hub>
 
           </div>
