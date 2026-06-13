@@ -42,43 +42,33 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-sky-600 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="2.5" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">GameDay Staff</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
+    <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4 select-none">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🥍</div>
+          <h1 className="text-3xl font-bold text-white">GameDay Staff</h1>
+          <p className="text-sm text-gray-500 mt-1">Tournament staff sign-in</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input required type="email" value={email} onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              placeholder="you@example.com" autoComplete="email" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input required type="password" value={password} onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              placeholder="••••••••" autoComplete="current-password" />
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input required type="email" value={email} onChange={e => setEmail(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="you@email.com" autoComplete="email" />
+          <input required type="password" value={password} onChange={e => setPassword(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="••••••••" autoComplete="current-password" />
 
-          {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="text-sm text-red-400 bg-red-950/50 border border-red-900/40 rounded-xl px-3 py-2">{error}</p>}
 
           <button type="submit" disabled={loading}
-            className="w-full bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white font-semibold rounded-xl py-2.5 text-sm transition-colors">
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold rounded-xl py-3 text-sm transition-colors">
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-5">
-          Don't have an account?{' '}
-          <Link href="/register" className="text-sky-600 hover:underline font-medium">Create one</Link>
+        <p className="text-center text-sm text-gray-500 mt-6">
+          Don&apos;t have an account?{' '}
+          <Link href="/register" className="text-blue-400 hover:underline font-medium">Create one</Link>
         </p>
       </div>
     </div>
