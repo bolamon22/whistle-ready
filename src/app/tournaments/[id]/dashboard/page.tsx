@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   Target, ClipboardList, Eye, Radio, TriangleAlert, ClipboardCheck, Contact,
-  Megaphone, Wallet, ArrowRight, type LucideIcon,
+  Megaphone, Wallet, ArrowRight, Trophy, type LucideIcon,
 } from 'lucide-react'
 import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
@@ -73,6 +73,7 @@ export default function DashboardPage() {
   const { tournament: t, games, staff, registrations: reg, financials: fin } = data
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
   const collectPct = reg.invoiced > 0 ? Math.round((reg.received / reg.invoiced) * 100) : 0
+  const topDivisions = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1]).slice(0, 8)
 
   // Is the event happening today (for emphasising the Game Day console)?
   const isLive = (() => {
@@ -167,6 +168,24 @@ export default function DashboardPage() {
                 <Wallet size={15} /> View full financials <ArrowRight size={14} />
               </div>
             </Link>
+          </section>
+        )}
+
+        {/* ── Teams by division ─────────────────────────────────────────── */}
+        {topDivisions.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Teams by division</h2>
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h3 className="text-sm font-medium text-slate-700 mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400" /> Registered teams</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {topDivisions.map(([div, count]) => (
+                  <div key={div} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                    <span className="text-xs text-slate-600 truncate mr-2">{div}</span>
+                    <span className="text-sm font-semibold text-slate-800 flex-shrink-0">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </section>
         )}
 
