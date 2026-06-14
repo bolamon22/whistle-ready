@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   Target, ClipboardList, Eye, Radio, TriangleAlert, ClipboardCheck, Contact,
-  Megaphone, Wallet, ArrowRight, Trophy, type LucideIcon,
+  Megaphone, Wallet, ArrowRight, Trophy, ChevronDown, type LucideIcon,
 } from 'lucide-react'
 import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
@@ -55,16 +55,39 @@ function GameDayCard({ href, icon: Icon, label, hint, accent }: { href: string; 
   )
 }
 
+type DivTeam = { teamName: string; clubName: string; logoUrl: string }
+
 export default function DashboardPage() {
   const { id } = useParams()
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [teamsByDiv, setTeamsByDiv] = useState<Record<string, DivTeam[]>>({})
+  const [openDiv, setOpenDiv] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}/dashboard`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
+  }, [id])
+
+  // Teams grouped by division (for the expandable Registered teams list).
+  useEffect(() => {
+    fetch(`/api/registrations?tournamentId=${id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((regs: any[]) => {
+        const map: Record<string, DivTeam[]> = {}
+        ;(Array.isArray(regs) ? regs : []).forEach(reg => {
+          ;(reg.teams || []).forEach((t: any) => {
+            const div = t.division || 'Unassigned'
+            if (!map[div]) map[div] = []
+            map[div].push({ teamName: t.teamName || t.clubName || 'Team', clubName: t.clubName || reg.clubName || '', logoUrl: t.logoUrl || '' })
+          })
+        })
+        Object.values(map).forEach(list => list.sort((a, b) => a.teamName.localeCompare(b.teamName)))
+        setTeamsByDiv(map)
+      })
+      .catch(() => {})
   }, [id])
 
   if (loading) return <div className="text-slate-400 text-center py-20">Loading…</div>
@@ -127,6 +150,57 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* ── Teams by division ─────────────────────────────────────────── */}
+        {topDivisions.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Registered teams</h2>
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h3 className="text-sm font-medium text-slate-700 mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400" /> Teams by division <span className="text-xs font-normal text-slate-400">· tap a division to see teams</span></h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {topDivisions.map(([div, count]) => {
+                  const open = openDiv === div
+                  return (
+                    <button key={div} type="button" onClick={() => setOpenDiv(o => o === div ? null : div)}
+                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-left transition-colors ${open ? 'bg-teal-50 border border-teal-200' : 'bg-slate-50 border border-transparent hover:border-slate-200'}`}>
+                      <span className="flex items-center gap-1 min-w-0">
+                        <ChevronDown size={13} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                        <span className="text-xs text-slate-600 truncate">{div}</span>
+                      </span>
+                      <span className="text-sm font-semibold text-slate-800 flex-shrink-0">{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {openDiv && (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-slate-700">{openDiv}</span>
+                    <span className="text-xs text-slate-400">{(teamsByDiv[openDiv] || []).length} teams</span>
+                  </div>
+                  {(teamsByDiv[openDiv] || []).length === 0 ? (
+                    <p className="text-sm text-slate-400">No team details found.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {(teamsByDiv[openDiv] || []).map((tm, i) => (
+                        <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                          {tm.logoUrl
+                            ? <img src={tm.logoUrl} alt="" className="w-6 h-6 rounded object-contain bg-white border border-slate-200 flex-shrink-0" />
+                            : <span className="w-6 h-6 rounded bg-slate-200 text-slate-500 text-[11px] font-bold flex items-center justify-center flex-shrink-0">{tm.teamName.charAt(0).toUpperCase()}</span>}
+                          <span className="min-w-0">
+                            <span className="block text-sm text-slate-800 truncate">{tm.teamName}</span>
+                            {tm.clubName && tm.clubName !== tm.teamName && <span className="block text-[11px] text-slate-400 truncate">{tm.clubName}</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* ── Money snapshot ────────────────────────────────────────────── */}
         {hasMoney && (
           <section>
@@ -168,24 +242,6 @@ export default function DashboardPage() {
                 <Wallet size={15} /> View full financials <ArrowRight size={14} />
               </div>
             </Link>
-          </section>
-        )}
-
-        {/* ── Teams by division ─────────────────────────────────────────── */}
-        {topDivisions.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Teams by division</h2>
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <h3 className="text-sm font-medium text-slate-700 mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400" /> Registered teams</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {topDivisions.map(([div, count]) => (
-                  <div key={div} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-600 truncate mr-2">{div}</span>
-                    <span className="text-sm font-semibold text-slate-800 flex-shrink-0">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </section>
         )}
 
