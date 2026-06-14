@@ -8,7 +8,7 @@ import ThemeShell from './ThemeShell'
 import EnvBadge from './EnvBadge'
 
 export const metadata: Metadata = {
-  title: 'Gameday Blueprint',
+  title: 'Whistle Ready',
   description: 'The Sports Management Master Plan',
 }
 

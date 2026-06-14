@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { Resend } from 'resend'
 
-const APP_URL = process.env.NEXTAUTH_URL || 'https://gameday-staff5.vercel.app'
+const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
 const FROM_EMAIL = process.env.INVITE_FROM_EMAIL || 'invites@gamedaystaff.com'
 
 function applyVars(template: string, vars: Record<string, string>): string {
@@ -51,12 +51,12 @@ Please don't hesitate to reach out with any questions.
 
 Best regards,
 Bo Lamon
-GameDay Staff`
+Whistle Ready`
 
   const subjectTemplate = body.subjectTemplate ?? defaultSubject
   const bodyTemplate = body.bodyTemplate ?? defaultBody
 
-  const fromName = tournament.name || 'GameDay Staff'
+  const fromName = tournament.name || 'Whistle Ready'
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   let sent = 0

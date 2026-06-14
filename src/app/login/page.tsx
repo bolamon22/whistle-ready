@@ -47,7 +47,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">🥍</div>
-          <h1 className="text-3xl font-bold text-white">GameDay Staff</h1>
+          <h1 className="text-3xl font-bold text-white">Whistle Ready</h1>
           <p className="text-sm text-gray-500 mt-1">Tournament staff sign-in</p>
         </div>
 
@@ -69,9 +69,4 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-blue-400 hover:underline font-medium">Create one</Link>
-        </p>
-      </div>
-    </div>
-  )
-}
+          <Link href="/register" className="text-blue-400 hover:underline font-medium">Create one</Link>

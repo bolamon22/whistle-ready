@@ -1093,7 +1093,7 @@ export default function PublicTournamentPage() {
       </div>
       <footer className="border-t border-slate-200 mt-6 py-6 text-center">
         <p className="text-xs text-slate-400">{tournament?.name ? `${tournament.name} · ` : ''}Sunshine Events Group</p>
-        <p className="text-xs text-slate-400 mt-1">Powered by <span className="font-semibold text-slate-500">Gameday Blueprint</span></p>
+        <p className="text-xs text-slate-400 mt-1">Powered by <span className="font-semibold text-slate-500">Whistle Ready</span></p>
       </footer>
     </div>
     </LogosContext.Provider>

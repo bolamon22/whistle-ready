@@ -14,7 +14,7 @@ export default function TourneyMachineGuidePage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Migrating from TourneyMachine</h1>
         <p className="text-slate-500">
-          This guide covers how to move your team registration data from TourneyMachine into GameDay Staff.
+          This guide covers how to move your team registration data from TourneyMachine into Whistle Ready.
           The whole process takes about 5 minutes per event.
         </p>
       </div>
@@ -33,8 +33,8 @@ export default function TourneyMachineGuidePage() {
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-sky-600 text-white flex items-center justify-center text-xs font-bold">2</span>
             <div>
-              <p className="font-semibold">Upload to GameDay Staff</p>
-              <p className="text-slate-500 mt-0.5">Use the CSV import tool on any tournament's registration page. GameDay Staff auto-detects TourneyMachine column names.</p>
+              <p className="font-semibold">Upload to Whistle Ready</p>
+              <p className="text-slate-500 mt-0.5">Use the CSV import tool on any tournament's registration page. Whistle Ready auto-detects TourneyMachine column names.</p>
             </div>
           </li>
           <li className="flex gap-3">
@@ -71,7 +71,7 @@ export default function TourneyMachineGuidePage() {
           </ol>
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700">
             <p className="font-semibold mb-1">💡 Tip</p>
-            <p>Include as many columns as possible in your export. GameDay Staff will auto-map them and skip anything it doesn&apos;t recognize — extra columns won&apos;t cause errors.</p>
+            <p>Include as many columns as possible in your export. Whistle Ready will auto-map them and skip anything it doesn&apos;t recognize — extra columns won&apos;t cause errors.</p>
           </div>
         </div>
       </div>
@@ -79,15 +79,15 @@ export default function TourneyMachineGuidePage() {
       {/* Step 2 */}
       <div className="card overflow-hidden mb-6">
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
-          <h2 className="font-bold text-slate-900">Step 2 — Upload to GameDay Staff</h2>
+          <h2 className="font-bold text-slate-900">Step 2 — Upload to Whistle Ready</h2>
         </div>
         <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
           <ol className="list-decimal list-inside space-y-2 text-slate-600">
-            <li>Open your tournament in GameDay Staff</li>
+            <li>Open your tournament in Whistle Ready</li>
             <li>Go to <strong>Registrations</strong> in the tournament nav</li>
             <li>Click the <strong>Import from TourneyMachine</strong> button (top right)</li>
             <li>Drag and drop your CSV or Excel file, or click to browse</li>
-            <li>GameDay Staff will auto-detect your columns and show a mapping screen</li>
+            <li>Whistle Ready will auto-detect your columns and show a mapping screen</li>
           </ol>
 
           <div className="p-4 bg-slate-50 rounded-lg">
@@ -118,7 +118,7 @@ export default function TourneyMachineGuidePage() {
         </div>
         <div className="px-6 py-5 space-y-4 text-sm text-slate-700">
           <p>
-            GameDay Staff groups all rows by club name. Each club becomes one registration entry with multiple teams inside it — matching how team registrations are structured in GameDay Staff.
+            Whistle Ready groups all rows by club name. Each club becomes one registration entry with multiple teams inside it — matching how team registrations are structured in Whistle Ready.
           </p>
           <p>
             The preview screen shows:

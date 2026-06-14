@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const tournament = await prisma.tournament.findUnique({ where: { id: params.id } })
     if (!tournament) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
 
-    const appUrl = process.env.NEXTAUTH_URL || 'https://gameday-staff5.vercel.app'
+    const appUrl = process.env.NEXTAUTH_URL || 'https://whistleready.app'
 
     // Use raw fetch to Stripe REST API so we can set Stripe-Context for org keys
     const stripeHeaders: Record<string, string> = {

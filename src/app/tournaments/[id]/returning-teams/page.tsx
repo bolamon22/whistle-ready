@@ -25,7 +25,7 @@ Please don't hesitate to reach out with any questions.
 
 Best regards,
 Bo Lamon
-GameDay Staff`
+Whistle Ready`
 
 function applyVars(template: string, vars: Record<string, string>) {
   return Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), template)
@@ -70,7 +70,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
       contactName: club?.contactName ?? '[Contact Name]',
       tournamentName: thisTournament?.name ?? '[Tournament]',
       dates: dateStr,
-      registerUrl: `${typeof window !== 'undefined' ? window.location.origin : 'https://gameday-staff5.vercel.app'}/tournaments/${params.id}/register`,
+      registerUrl: `${typeof window !== 'undefined' ? window.location.origin : 'https://whistleready.app'}/tournaments/${params.id}/register`,
       lastYearTeams: String(club?.numTeams ?? '—'),
       lastYearDivisions: club?.divisions?.join(', ') ?? '—',
     }

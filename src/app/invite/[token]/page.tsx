@@ -122,7 +122,7 @@ export default function AcceptInvitePage() {
 
         <div className="bg-[#0f1f3d] px-6 py-5">
           <p className="text-xs text-teal-400 font-medium mb-1">
-            {invite?.tournamentName ?? 'GameDay Staff'} · Staff Invite
+            {invite?.tournamentName ?? 'Whistle Ready'} · Staff Invite
           </p>
           <h1 className="text-lg font-bold text-white">Welcome aboard</h1>
           <p className="text-xs text-slate-400 mt-1">{invite?.email}</p>

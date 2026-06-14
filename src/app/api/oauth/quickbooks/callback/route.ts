@@ -4,7 +4,7 @@ import { encryptConfig } from '@/lib/encrypt'
 
 const QBO_CLIENT_ID = process.env.QBO_CLIENT_ID || ''
 const QBO_CLIENT_SECRET = process.env.QBO_CLIENT_SECRET || ''
-const APP_URL = process.env.NEXTAUTH_URL || 'https://gameday-staff5.vercel.app'
+const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
 const REDIRECT_URI = `${APP_URL}/api/oauth/quickbooks/callback`
 
 export async function GET(req: Request) {

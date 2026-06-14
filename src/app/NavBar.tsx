@@ -102,14 +102,14 @@ export default function NavBar() {
             </span>
           </a>
         ) : (
-          /* Admin / no-org: Gameday Blueprint brand */
+          /* Admin / no-org: Whistle Ready brand */
           <a href="/" className="flex items-center gap-2 text-sky-700 font-bold text-lg tracking-tight flex-shrink-0">
             <div className="w-7 h-7 bg-sky-600 rounded-lg flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="2.5" strokeLinecap="round"/>
               </svg>
             </div>
-            Gameday Blueprint
+            Whistle Ready
           </a>
         )}
 
@@ -164,7 +164,7 @@ export default function NavBar() {
         {/* ── RIGHT: GameDay badge (org users only) + auth ── */}
         <div className="ml-auto flex items-center gap-3 flex-shrink-0">
 
-          {/* Gameday Blueprint platform badge — shown to org users */}
+          {/* Whistle Ready platform badge — shown to org users */}
           {hasOrg && (
             <div className="hidden sm:flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50">
               <div className="w-4 h-4 bg-sky-600 rounded flex items-center justify-center flex-shrink-0">
@@ -172,7 +172,7 @@ export default function NavBar() {
                   <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="2.5" strokeLinecap="round"/>
                 </svg>
               </div>
-              <span className="text-xs font-semibold text-slate-500 tracking-tight">Gameday Blueprint</span>
+              <span className="text-xs font-semibold text-slate-500 tracking-tight">Whistle Ready</span>
             </div>
           )}
 
@@ -218,11 +218,4 @@ export default function NavBar() {
           ) : (
             <>
               <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors">Sign in</Link>
-              <Link href="/register" className="text-sm font-medium bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg transition-colors">Register</Link>
-            </>
-          )}
-        </div>
-      </nav>
-    </div>
-  )
-}
+              <Link href="/register" className="text-sm font-medium bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg t

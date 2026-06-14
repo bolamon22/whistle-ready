@@ -13,7 +13,7 @@ export default function EnvBadge() {
     const h = window.location.hostname
     const vEnv = process.env.NEXT_PUBLIC_VERCEL_ENV
     const isLocal = h === 'localhost' || h.startsWith('127.') || h.startsWith('192.168.')
-    const isProd = vEnv === 'production' || h === 'gameday-staff5.vercel.app'
+    const isProd = vEnv === 'production' || h === 'gameday-staff5.vercel.app' || h === 'whistleready.app' || h === 'www.whistleready.app'
     if (isProd) return
     setLabel(isLocal ? 'LOCAL DEV' : 'SANDBOX PREVIEW')
     setShow(true)
@@ -25,7 +25,4 @@ export default function EnvBadge() {
       <div className="flex items-center gap-1.5 bg-amber-500 text-black text-[11px] font-bold px-3 py-1.5 rounded-full shadow-lg border border-amber-600">
         <span className="w-2 h-2 rounded-full bg-black/70" />
         {label} — not the live site
-      </div>
-    </div>
-  )
-}
+   

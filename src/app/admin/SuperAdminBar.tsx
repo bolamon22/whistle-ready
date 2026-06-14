@@ -63,7 +63,7 @@ export default function SuperAdminBar() {
 
         {/* Brand */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs font-black tracking-widest text-white/40 uppercase">GameDay</span>
+          <span className="text-xs font-black tracking-widest text-white/40 uppercase">Whistle Ready</span>
           <span className="w-px h-4 bg-white/20" />
           <span className="text-xs font-semibold text-white/80">Super Admin</span>
         </div>

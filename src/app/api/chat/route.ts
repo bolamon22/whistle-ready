@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   try {
     const { messages, tournamentId } = await req.json()
 
-    let context = 'You are a helpful assistant for GameDay Staff, a tournament management app. Be concise.'
+    let context = 'You are a helpful assistant for Whistle Ready, a tournament management app. Be concise.'
 
     if (tournamentId) {
       try {
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
           const indivPaid = indivRegs.filter((r: { paymentStatus: string }) => r.paymentStatus === 'paid')
             .reduce((s: number, r: { feeTierAmount: number }) => s + r.feeTierAmount, 0)
 
-          context = `You are a smart assistant for GameDay Staff. Be concise and use the live data below.
+          context = `You are a smart assistant for Whistle Ready. Be concise and use the live data below.
 
 TOURNAMENT: ${tournament.name} | Sport: ${tournament.sport || 'N/A'} | Dates: ${dates.join(', ')} | Location: ${tournament.location || 'N/A'}
 GAMES: ${active.length} total | ${assigned.length} assigned | ${unscheduled.length} unscheduled

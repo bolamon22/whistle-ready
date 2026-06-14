@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { Resend } from 'resend'
 import crypto from 'crypto'
 
-const APP_URL = process.env.NEXTAUTH_URL || 'https://gameday-staff5.vercel.app'
+const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
 const FROM_EMAIL = process.env.INVITE_FROM_EMAIL || 'invites@gamedaystaff.com'
 
 export async function POST(req: NextRequest) {

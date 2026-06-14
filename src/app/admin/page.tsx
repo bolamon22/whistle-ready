@@ -127,7 +127,7 @@ export default function PlatformDashboard() {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">GameDay Staff</h1>
+              <h1 className="text-xl font-bold text-slate-900">Whistle Ready</h1>
               <p className="text-xs text-slate-500">Platform Dashboard</p>
             </div>
           </div>

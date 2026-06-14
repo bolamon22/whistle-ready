@@ -305,7 +305,7 @@ function PaymentProvidersPage() {
         </div>
 
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
-          <strong>Multi-tenant note:</strong> Each organization that uses GameDay Staff will connect their own credentials here.
+          <strong>Multi-tenant note:</strong> Each organization that uses Whistle Ready will connect their own credentials here.
           Credentials are AES-256 encrypted before storage. Add <code className="bg-blue-100 px-1 rounded">ENCRYPTION_KEY</code> to your Vercel env vars for production security.
         </div>
       </div>

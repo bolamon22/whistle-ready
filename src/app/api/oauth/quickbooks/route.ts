@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
 const QBO_CLIENT_ID = process.env.QBO_CLIENT_ID || ''
-const APP_URL = process.env.NEXTAUTH_URL || 'https://gameday-staff5.vercel.app'
+const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
 const REDIRECT_URI = `${APP_URL}/api/oauth/quickbooks/callback`
 const SCOPE = 'com.intuit.quickbooks.payment com.intuit.quickbooks.accounting openid profile email'
 
