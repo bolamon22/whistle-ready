@@ -58,7 +58,7 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Jun 12, 2026)
+## Current state (as of Jun 14, 2026)
 Core flow: tournaments → divisions → pools → pool games → brackets → scheduler → assigner →
 scores → public. Highlights shipped to live:
 
@@ -113,6 +113,30 @@ scores → public. Highlights shipped to live:
   Time Entries, Pay Summary, Registrations, Settings, Scheduler, Assigner (drag staff to role-slots,
   per-game ref counts, lock-editing toggle, staffing-requirements panel), Scores, Assignments, Results.
 
+- **Staff game-day app (LIVE, Jun 14 — tag `stable-2026-06-14-staff-ops`)**: the prototype staff
+  features ported into the real app and merged to production from branch `staff-ops-messaging`. All
+  AppSetting-backed (no schema migration), staff-only (external roles = coach/parent/club_director
+  excluded via `isStaff`), mobile-first, slate/teal standard.
+  - **Ops board** (`/tournaments/[id]/ops`, api `ops-messages`): ANY staff can send quick game-day
+    messages ("ball to Field 5", "trainer to Field 7") with a field input + templates + group target
+    (all/fieldops/medical/refs/scorekeepers/assigners); live feed polls ~15s; delete (director any,
+    others own). Delivery is in-app for now (SMS later).
+  - **Role home dashboards** rebuilt to standard: `/dashboard/director` and `/dashboard/assigner` —
+    per-tournament cards with quick actions (Manage/Scores/Ops/Broadcast + public link; Schedule/
+    Assign/Avail/Ops).
+  - **Staff directory** (`/tournaments/[id]/directory`, reads `roster`): searchable, role-grouped,
+    tap-to-call (`tel:`) / tap-to-text (`sms:`).
+  - **Incidents** (`/tournaments/[id]/incidents`, api `incidents`): log medical/safety/facility/
+    weather/other w/ severity + field; Open vs Resolved lists; resolve/delete.
+  - **Setup checklist** (`/tournaments/[id]/checklist`, api `checklists`): a SINGLE SHARED
+    tournament-setup list (not per-field) — any staff can check items off and ADD/REMOVE their own;
+    GET returns stored items or seeded defaults, **PUT replaces the whole list** and stamps
+    done-by/done-at for items that just flipped done; 100-item cap. Linked from the dashboard
+    "Field Ops" hub as "Setup checklist".
+  - **Sandbox badge** (`src/app/EnvBadge.tsx`, in `layout.tsx`): amber "SANDBOX PREVIEW" pill bottom-
+    right on previews/local; auto-hides on production (`gameday-staff5.vercel.app` or
+    `NEXT_PUBLIC_VERCEL_ENV==='production'`) so a test copy is never mistaken for live.
+
 - **Scheduler — Auto-fill (assists the drag-and-drop)**: a teal **Auto-fill** button + a pure, tested
   engine in `src/lib/autoSchedule.ts`. Places parking-lot games (after your filters) onto the grid by
   the rules: no team/field double-book, bracket games after their feeders, max 3/team/day, **spread a
@@ -133,6 +157,9 @@ scores → public. Highlights shipped to live:
   choice = #1), not re-weighting. Full table + takeaways in `SCHEDULING-PATTERNS.md`.
 
 ## Open / next
+- **Staff app — Phase 3**: two-way team/coach messaging (in-app + email). **Phase 4**: SMS/Twilio
+  delivery for ops messages + push/PWA. (Done & live: ops board, role dashboards, staff directory,
+  incidents, setup checklist, sandbox badge — see "Staff game-day app" above.)
 - **Consistency pass — remaining pages**: Staff view, Returning teams. (Done: the full Staff hub,
   Registrations, Settings, Scheduler, Assigner, Divisions, Scores, Assignments, Results, Public.)
 - **Scheduler auto-fill — next layers** (calibrate from `SCHEDULING-PATTERNS.md` as more examples land):
