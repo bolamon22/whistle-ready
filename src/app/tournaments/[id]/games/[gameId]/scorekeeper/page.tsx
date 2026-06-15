@@ -77,9 +77,11 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   const [editMin, setEditMin] = useState(0)
   const [editSec, setEditSec] = useState(0)
 
-  // rules slide-over (viewer) + rules link input (configured in Settings)
+  // rules slide-over (viewer) + shared scoring config (rules text + no-ties)
   const [showRules, setShowRules] = useState(false)
-  const [rulesInput, setRulesInput] = useState('')
+  const [rulesText, setRulesText] = useState('')
+  const [noTies, setNoTies] = useState(false)
+  const [savingCfg, setSavingCfg] = useState(false)
 
   // settings + goal-scorer
   const [showSettings, setShowSettings] = useState(false)
@@ -102,6 +104,13 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     })
     return () => { if (clockRef.current) clearInterval(clockRef.current) }
   }, [params.gameId])
+
+  // shared scoring config (rules text + no-ties flag), tournament-wide
+  useEffect(() => {
+    fetch(`/api/tournaments/${tid}/rules`).then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setRulesText(d.rules || ''); setNoTies(!!d.noTies) }
+    }).catch(() => {})
+  }, [tid])
 
   // tick: clock + penalties count down (skip paused)
   useEffect(() => {
@@ -148,13 +157,17 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     setTimeout(() => setSaved(false), 2000)
   }
 
-  function openSettings() { setRulesInput(defaults.rulesUrl || ''); setShowSettings(true) }
+  function openSettings() { setShowSettings(true) }
   function openRules() { setShowRules(true) }
-  function saveRules() {
-    if (!game) return
-    const url = rulesInput.trim()
-    setDefaults(saveDefaults(game.tournamentId ?? tid, { rulesUrl: url }))
-    toast.success(url ? 'Rules link saved for tournament' : 'Rules link cleared')
+  async function saveConfig(patch: { rules?: string; noTies?: boolean }) {
+    setSavingCfg(true)
+    try {
+      const res = await fetch(`/api/tournaments/${tid}/rules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+      })
+      if (res.ok) toast.success('Saved for tournament')
+      else toast.error('Failed to save')
+    } catch { toast.error('Failed to save') } finally { setSavingCfg(false) }
   }
 
   function setAskScorer(val: boolean) {
@@ -342,41 +355,32 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
       {/* End game */}
       <div className="px-4 pb-6 pt-3 border-t border-gray-800">
-        <button onClick={() => { saveScore(); setGameEnded(true); setClockRunning(false) }}
+        <button onClick={() => {
+            if (noTies && score1 === score2) toast('Ties aren’t allowed — please enter a winner', { icon: '⚠️', duration: 4000 })
+            saveScore(); setGameEnded(true); setClockRunning(false)
+          }}
           className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-base active:scale-[.98] transition-all">End Game &amp; Save Score</button>
         {gameEnded && (<p className="text-center text-xs text-emerald-400 mt-2">Final: {game.team1} {score1} – {score2} {game.team2}</p>)}
+        {noTies && score1 === score2 && (<p className="text-center text-xs text-amber-400 mt-2">⚠️ This tournament doesn’t allow ties — enter a winner.</p>)}
         <button onClick={openRules} className="w-full mt-3 text-xs text-gray-400 hover:text-gray-200 flex items-center justify-center gap-1.5">
-          📖 Rules{defaults.rulesUrl ? '' : ' — tap to set link'}
+          📖 Rules
         </button>
       </div>
 
-      {/* Rules slide-over panel (viewer — link is configured in Settings) */}
+      {/* Rules reference slide-over — in-app tournament rules, ✕ returns to scoring */}
       {showRules && (
-        <div className="fixed inset-0 z-[65] flex flex-col" style={{ background: 'rgba(0,0,0,0.85)' }}>
+        <div className="fixed inset-0 z-[65] flex flex-col" style={{ background: 'rgba(0,0,0,0.92)' }}>
           <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800">
-            <h3 className="font-bold text-white">📖 Rules</h3>
-            <div className="flex items-center gap-2">
-              {defaults.rulesUrl && (
-                <a href={defaults.rulesUrl} target="_blank" rel="noopener noreferrer"
-                  className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-semibold">Open in new tab ↗</a>
-              )}
-              <button onClick={() => setShowRules(false)} className="text-gray-400 hover:text-white text-lg px-2">✕</button>
-            </div>
+            <h3 className="font-bold text-white">📖 Tournament rules</h3>
+            <button onClick={() => setShowRules(false)} className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg font-semibold">✕ Back to scoring</button>
           </div>
-          <div className="flex-1 overflow-auto">
-            {defaults.rulesUrl ? (
-              <iframe src={defaults.rulesUrl} title="Rules" className="w-full h-full bg-white" style={{ border: 0, minHeight: '100%' }} />
+          <div className="flex-1 overflow-auto p-5">
+            {rulesText.trim() ? (
+              <div className="max-w-2xl mx-auto text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{rulesText}</div>
             ) : (
-              <div className="p-6 text-center text-sm text-gray-400">
-                No rules link set yet.<br />Add one in ⚙ Settings (or the tournament builder page).
-              </div>
+              <div className="p-6 text-center text-sm text-gray-400">No rules added yet.<br />Add them in ⚙ Settings.</div>
             )}
           </div>
-          {defaults.rulesUrl && (
-            <p className="text-center text-[11px] text-gray-500 py-2 bg-gray-900 border-t border-gray-800">
-              If the document doesn&apos;t load here, use “Open in new tab”.
-            </p>
-          )}
         </div>
       )}
 
@@ -390,14 +394,17 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
               <span className="text-sm text-gray-200">Ask for player&nbsp;# when a goal is scored</span>
               <input type="checkbox" checked={defaults.askScorer} onChange={e => setAskScorer(e.target.checked)} className="accent-emerald-600 w-5 h-5" />
             </label>
+            <label className="flex items-center justify-between gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 cursor-pointer mt-3">
+              <span className="text-sm text-gray-200">No ties — warn at final if the score is tied</span>
+              <input type="checkbox" checked={noTies} onChange={e => { setNoTies(e.target.checked); saveConfig({ noTies: e.target.checked }) }} className="accent-emerald-600 w-5 h-5" />
+            </label>
             <div className="mt-4">
-              <label className="block text-xs text-gray-400 mb-1">Tournament rules link</label>
-              <div className="flex gap-2">
-                <input value={rulesInput} onChange={e => setRulesInput(e.target.value)} placeholder="https://example.com/rules"
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <button onClick={saveRules} className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-sm">Save</button>
-              </div>
-              <p className="text-[11px] text-gray-500 mt-1">The scoring app links to this from the 📖 Rules button.</p>
+              <label className="block text-xs text-gray-400 mb-1">Tournament rules (shown in the 📖 Rules reference)</label>
+              <textarea value={rulesText} onChange={e => setRulesText(e.target.value)} rows={6} placeholder="Paste or type the playing rules here…"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button onClick={() => saveConfig({ rules: rulesText })} disabled={savingCfg}
+                className="mt-2 w-full px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-sm disabled:opacity-50">Save rules</button>
+              <p className="text-[11px] text-gray-500 mt-1">Saved for the whole tournament. Scorers open it from 📖 Rules without leaving the game.</p>
             </div>
             <button onClick={() => setShowSettings(false)} className="w-full mt-4 py-3 rounded-xl bg-gray-800 text-gray-300 hover:bg-gray-700 font-semibold">Done</button>
           </div>
