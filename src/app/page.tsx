@@ -333,7 +333,7 @@ export default function HomePage() {
               </div>
               <div>
                 <label className="label">Team registration fee ($)</label>
-                <input className="input" type="number" min="0" step="25" value={form.teamFee} onChange={e=>setF('teamFee',e.target.value)} placeholder="1495"/>
+                <input className="input" type="number" min="0" step="any" value={form.teamFee} onChange={e=>setF('teamFee',e.target.value)} placeholder="1495"/>
                 <p className="text-[11px] text-gray-400 mt-1">Suggested base fee. Add volume discounts &amp; 7v7 pricing later in Settings.</p>
               </div>
               <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3 flex-wrap">
