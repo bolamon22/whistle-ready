@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer } from 'lucide-react'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface Assignment { id: string; role: string; payRate: number; game: Game }
@@ -65,7 +65,7 @@ export default function RefDashboard() {
     ? mine
     : allGames.filter(g => g.tournamentId === selTournament)
 
-  const roleLabel = (session?.user as any)?.role === 'scorekeeper' ? 'Scorekeeper' : 'Referee'
+  const roleLabel = 'Staff'
 
   function GameCard({ g }: { g: any }) {
     const isScorekeeper = g.role === 'scorekeeper'
@@ -109,10 +109,11 @@ export default function RefDashboard() {
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Game day</p>
           <div className="grid grid-cols-2 gap-2">
             <Link href={`/tournaments/${selTournament}/communications`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Radio size={18} className="text-teal-600" /> Field Request</Link>
+            <Link href={`/tournaments/${selTournament}/scoring`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Timer size={18} className="text-teal-600" /> Live scoring</Link>
             <Link href={`/tournaments/${selTournament}/scores`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Target size={18} className="text-teal-600" /> Post scores</Link>
             <Link href={`/tournaments/${selTournament}/directory`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Users size={18} className="text-teal-600" /> Staff contacts</Link>
             <Link href={`/tournaments/${selTournament}/checklist`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><ClipboardCheck size={18} className="text-teal-600" /> Setup checklist</Link>
-            <Link href={`/tournaments/${selTournament}/incidents`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300 col-span-2"><TriangleAlert size={18} className="text-teal-600" /> Incidents</Link>
+            <Link href={`/tournaments/${selTournament}/incidents`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><TriangleAlert size={18} className="text-teal-600" /> Incidents</Link>
           </div>
         </div>
       )}

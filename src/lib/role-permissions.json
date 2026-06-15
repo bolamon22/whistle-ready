@@ -149,7 +149,8 @@
       "label": "Scorekeeper (Live Game)",
       "group": "Tournaments",
       "routes": [
-        "/tournaments/*/games/*/scorekeeper"
+        "/tournaments/*/games/*/scorekeeper",
+        "/tournaments/*/scoring"
       ]
     },
     {
