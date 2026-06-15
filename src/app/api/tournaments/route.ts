@@ -56,9 +56,9 @@ export async function GET(req: Request) {
     return NextResponse.json(tournaments.map(shape))
   }
 
-  // No session / no orgId — return all (temporary until all users are org-assigned)
-  const all = await prisma.tournament.findMany({ orderBy: { startDate: 'desc' }, include: INCLUDE })
-  return NextResponse.json(all.map(shape))
+  // Logged in but not assigned to any organization — show nothing (prevents
+  // cross-org leakage). Assign the user to an org (Admin → Orgs) to grant access.
+  return NextResponse.json([])
 }
 
 export async function POST(req: Request) {
