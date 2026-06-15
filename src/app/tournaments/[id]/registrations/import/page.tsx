@@ -156,7 +156,7 @@ export default function TourneyMachineImportPage() {
             numTeams: g.teams.length,
             needsHotel: 'No',
             paymentMethod: 'check',
-            notes: 'Imported from TourneyMachine',
+            notes: 'Imported via spreadsheet upload',
             invoiceAmount: 0,
             discountAmount: 0,
             discountNote: '',
@@ -194,7 +194,7 @@ export default function TourneyMachineImportPage() {
       <div className="max-w-3xl">
         <div className="breadcrumb">
           <Link href={`/tournaments/${params.id}/registrations`} className="hover:text-sky-600">Registrations</Link>
-          <span>/</span><span className="text-slate-700">Import from TourneyMachine</span>
+          <span>/</span><span className="text-slate-700">Import teams</span>
         </div>
 
         {/* Step indicator */}
@@ -218,8 +218,8 @@ export default function TourneyMachineImportPage() {
         {/* Step 1: Upload */}
         {step === 'upload' && (
           <div className="card p-8">
-            <h1 className="text-xl font-bold text-slate-900 mb-1">Import from TourneyMachine</h1>
-            <p className="text-sm text-slate-500 mb-6">Upload a TourneyMachine Quick Report export (.csv or .xlsx) to bulk-import team registrations.</p>
+            <h1 className="text-xl font-bold text-slate-900 mb-1">Import teams from a spreadsheet</h1>
+            <p className="text-sm text-slate-500 mb-6">Upload a CSV or Excel file to bulk-import team registrations — works great with a TourneyMachine Quick Report export, or any spreadsheet with team names and divisions.</p>
 
             <div
               onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -230,14 +230,14 @@ export default function TourneyMachineImportPage() {
               onClick={() => fileRef.current?.click()}
             >
               <div className="text-4xl mb-3">📋</div>
-              <p className="font-semibold text-slate-700 mb-1">Drop your TourneyMachine export here</p>
+              <p className="font-semibold text-slate-700 mb-1">Drop your spreadsheet here</p>
               <p className="text-sm text-slate-400">or click to browse — .csv or .xlsx files</p>
               <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}/>
             </div>
 
             <div className="mt-6 p-4 bg-slate-50 rounded-lg text-sm text-slate-600">
-              <p className="font-semibold mb-2">How to export from TourneyMachine:</p>
+              <p className="font-semibold mb-2">Coming from TourneyMachine?</p>
               <ol className="list-decimal list-inside space-y-1 text-slate-500">
                 <li>Log into TourneyMachine and open your event</li>
                 <li>Go to <strong>Teams</strong> → <strong>Quick Report</strong></li>
