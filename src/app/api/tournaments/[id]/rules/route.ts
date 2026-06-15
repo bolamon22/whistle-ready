@@ -18,7 +18,7 @@ const key = (id: string) => `scoringConfig:${id}`
 const EXTERNAL_ROLES = ['coach', 'parent', 'club_director']
 const isStaff = (role?: string) => !!role && !EXTERNAL_ROLES.includes(role)
 const PERIOD_FORMATS = ['halves', 'quarters', 'periods', 'running']
-const DEFAULT_CONFIG = { rules: '', noTies: false, periodFormat: 'halves', officialTimeOnField: true }
+const DEFAULT_CONFIG = { rules: '', noTies: false, periodFormat: 'halves', periodBreakMin: 10, officialTimeOnField: true }
 
 async function readConfig(id: string) {
   try {
@@ -29,6 +29,7 @@ async function readConfig(id: string) {
       rules: typeof v.rules === 'string' ? v.rules : '',
       noTies: !!v.noTies,
       periodFormat: PERIOD_FORMATS.includes(v.periodFormat) ? v.periodFormat : 'halves',
+      periodBreakMin: Number.isFinite(v.periodBreakMin) ? Math.max(0, Math.min(60, Math.round(v.periodBreakMin))) : 10,
       officialTimeOnField: v.officialTimeOnField === undefined ? true : !!v.officialTimeOnField,
     }
   } catch { return { ...DEFAULT_CONFIG } }
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       rules: typeof body.rules === 'string' ? body.rules : current.rules,
       noTies: typeof body.noTies === 'boolean' ? body.noTies : current.noTies,
       periodFormat: PERIOD_FORMATS.includes(body.periodFormat) ? body.periodFormat : current.periodFormat,
+      periodBreakMin: Number.isFinite(body.periodBreakMin) ? Math.max(0, Math.min(60, Math.round(body.periodBreakMin))) : current.periodBreakMin,
       officialTimeOnField: typeof body.officialTimeOnField === 'boolean' ? body.officialTimeOnField : current.officialTimeOnField,
     }
     await prisma.appSetting.upsert({

@@ -82,6 +82,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   const [rulesText, setRulesText] = useState('')
   const [noTies, setNoTies] = useState(false)
   const [periodFormat, setPeriodFormat] = useState('halves')
+  const [periodBreakMin, setPeriodBreakMin] = useState(0)
   const [officialTimeOnField, setOfficialTimeOnField] = useState(true)
   const [currentPeriod, setCurrentPeriod] = useState(1)
   const [savingCfg, setSavingCfg] = useState(false)
@@ -115,6 +116,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
       if (d) {
         setRulesText(d.rules || ''); setNoTies(!!d.noTies)
         if (d.periodFormat) setPeriodFormat(d.periodFormat)
+        if (d.periodBreakMin != null) setPeriodBreakMin(d.periodBreakMin)
         setOfficialTimeOnField(d.officialTimeOnField !== false)
       }
     }).catch(() => {})
@@ -354,6 +356,9 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
             <span className="text-sm font-bold text-emerald-400 uppercase tracking-wide min-w-[90px] text-center">{periodLabelFor(currentPeriod)}</span>
             <button onClick={() => changePeriod(1)} className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-lg font-bold">+</button>
           </div>
+        )}
+        {periodFormat !== 'running' && periodBreakMin > 0 && (
+          <p className="text-[11px] text-gray-500 mb-2">{periodFormat === 'quarters' ? 'Between quarters' : 'Halftime'}: {periodBreakMin} min</p>
         )}
         <div className={`text-6xl font-mono font-bold tracking-wider mb-1 ${low ? 'text-red-400' : 'text-white'}`}>{clockStr}</div>
         <button onClick={() => { setSetupMin(Math.floor(periodSecs / 60)); setSetupSec(periodSecs % 60); setSaveClockDefault(true); setShowClockSetup(true) }}

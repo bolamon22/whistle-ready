@@ -107,7 +107,7 @@ const SECTIONS = [
   { id: 'venues',       label: 'Venues & fields', icon: MapPin },
   { id: 'registration', label: 'Team fees',       icon: DollarSign },
   { id: 'staffpay',     label: 'Staff pay rates', icon: Banknote },
-  { id: 'schedule',     label: 'Schedule rules',  icon: Clock },
+  { id: 'schedule',     label: 'Game Timing & Format',  icon: Clock },
   { id: 'tiebreakers',  label: 'Standings tiebreakers', icon: ClipboardList },
 ]
 const TB_OPTS = [
@@ -162,6 +162,8 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [scheduleIncrement, setScheduleIncrement] = useState('50')
   const [gameLength, setGameLength]   = useState('50')
   const [breakLength, setBreakLength] = useState('10')
+  const [periodFormat, setPeriodFormat] = useState('halves')
+  const [periodBreak, setPeriodBreak]   = useState('10')
 
   // Divisions
   const [divItems, setDivItems]         = useState<DivisionItem[]>(DEFAULT_DIVISIONS.map(d => ({ def: d, display: d, abbr: divAbbr(d), checked: false })))
@@ -247,6 +249,12 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         if (data.defaultAvailability) setDefaultAvailability(data.defaultAvailability)
       }
     }).catch(() => {})
+    fetch(`/api/tournaments/${params.id}/rules`).then(r => r.ok ? r.json() : null).then(d => {
+      if (d) {
+        if (d.periodFormat) setPeriodFormat(d.periodFormat)
+        if (d.periodBreakMin != null) setPeriodBreak(String(d.periodBreakMin))
+      }
+    }).catch(() => {})
   }, [params.id])
 
   // ─── Save ──────────────────────────────────────────────────────────────────
@@ -277,6 +285,10 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       fetch(`/api/venues/${params.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ venues, defaultAvailability }),
+      }),
+      fetch(`/api/tournaments/${params.id}/rules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ periodFormat, periodBreakMin: parseInt(periodBreak) || 0 }),
       }),
     ])
     toast.success('Saved!')
@@ -893,6 +905,29 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             <label className="label">Break Between Games (min)</label>
             <input className="input" type="number" min="0" max="60" step="5" value={breakLength} onChange={e => setBreakLength(e.target.value)} />
             <p className="text-xs text-slate-400 mt-1">Buffer between consecutive games</p>
+          </div>
+        </div>
+        <div className="border-t border-slate-200 pt-5">
+          <h3 className="text-sm font-semibold text-slate-700 mb-1">Game format</h3>
+          <p className="text-xs text-slate-400 mb-3">Used by the live scorekeeper app for period labels and the break shown between periods.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Period format</label>
+              <select className="input" value={periodFormat} onChange={e => setPeriodFormat(e.target.value)}>
+                <option value="halves">Halves</option>
+                <option value="quarters">Quarters</option>
+                <option value="periods">Periods</option>
+                <option value="running">Running clock</option>
+              </select>
+              <p className="text-xs text-slate-400 mt-1">How the game is divided</p>
+            </div>
+            {periodFormat !== 'running' && (
+              <div>
+                <label className="label">Time between {periodFormat === 'quarters' ? 'quarters' : periodFormat === 'periods' ? 'periods' : 'halves'} (min)</label>
+                <input className="input" type="number" min="0" max="60" step="1" value={periodBreak} onChange={e => setPeriodBreak(e.target.value)} />
+                <p className="text-xs text-slate-400 mt-1">Halftime / break length shown on the scorer</p>
+              </div>
+            )}
           </div>
         </div>
         <div className="bg-teal-50 border border-teal-100 rounded-xl px-4 py-3 text-sm text-teal-700">

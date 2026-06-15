@@ -36,14 +36,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     const email = invite.email
 
-    // Resolve orgId from the tournament this invite belongs to
+    // Resolve orgId: prefer the invite's own org (org-level invite), else the tournament's.
     let orgId: string | null = null
-    if (invite.tournamentId) {
-      const client = db()
-      const res = await client.execute({
-        sql: `SELECT orgId FROM "Tournament" WHERE id = ?`,
-        args: [invite.tournamentId],
-      })
+    const oc = db()
+    try {
+      const inv = await oc.execute({ sql: `SELECT orgId FROM "StaffInvite" WHERE token = ?`, args: [params.token] })
+      orgId = (inv.rows[0]?.orgId as string) ?? null
+    } catch { /* column may not exist yet */ }
+    if (!orgId && invite.tournamentId) {
+      const res = await oc.execute({ sql: `SELECT orgId FROM "Tournament" WHERE id = ?`, args: [invite.tournamentId] })
       orgId = (res.rows[0]?.orgId as string) ?? null
     }
 
@@ -79,6 +80,8 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         data: { name, email, password: hashed, role: 'staff' },
       })
     }
+    // Scope the new/linked user to the invite's org so they only see that org.
+    if (orgId) { try { await oc.execute({ sql: `UPDATE "User" SET orgId = ? WHERE lower(email) = ?`, args: [orgId, email] }) } catch {} }
 
     // If invite was for a specific tournament, add to roster
     if (invite.tournamentId) {
