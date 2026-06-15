@@ -27,6 +27,13 @@ export default function OrgEditPage() {
   const [saving, setSaving] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // Team & owner
+  const [teamUsers, setTeamUsers] = useState<any[]>([])
+  const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
+  const [newEmail, setNewEmail] = useState('')
+  const [newRole, setNewRole] = useState('staff')
+  const [newOwner, setNewOwner] = useState(false)
+  const [teamBusy, setTeamBusy] = useState(false)
 
   useEffect(() => {
     if (status === 'loading') return
@@ -35,7 +42,31 @@ export default function OrgEditPage() {
       .then(r => r.json())
       .then(data => { setForm(data); setLoading(false) })
       .catch(() => setLoading(false))
+    loadTeam()
   }, [session, status, id])
+
+  async function loadTeam() {
+    try { const d = await fetch(`/api/admin/orgs/${id}/users`).then(r => r.ok ? r.json() : null); if (d) { setTeamUsers(d.users || []); setOwnerUserId(d.ownerUserId ?? null) } } catch {}
+  }
+  async function addMember() {
+    if (!newEmail.trim()) return
+    setTeamBusy(true)
+    try {
+      const res = await fetch(`/api/admin/orgs/${id}/users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: newEmail.trim(), role: newRole, makeOwner: newOwner }) })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success('User added to org'); setNewEmail(''); setNewOwner(false); loadTeam() }
+      else toast.error(d.error || 'Failed')
+    } catch { toast.error('Failed') } finally { setTeamBusy(false) }
+  }
+  async function makeOwner(email: string) {
+    setTeamBusy(true)
+    try { const res = await fetch(`/api/admin/orgs/${id}/users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, makeOwner: true }) }); if (res.ok) { toast.success('Owner updated'); loadTeam() } else toast.error('Failed') } catch { toast.error('Failed') } finally { setTeamBusy(false) }
+  }
+  async function removeMember(userId: string) {
+    if (!window.confirm('Remove this user from the organization?')) return
+    setTeamBusy(true)
+    try { const res = await fetch(`/api/admin/orgs/${id}/users?userId=${encodeURIComponent(userId)}`, { method: 'DELETE' }); if (res.ok) loadTeam(); else toast.error('Failed') } catch { toast.error('Failed') } finally { setTeamBusy(false) }
+  }
 
   function set(field: keyof Org, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -193,6 +224,48 @@ export default function OrgEditPage() {
                 </select>
               </div>
             </div>
+          </section>
+
+          {/* Team & owner */}
+          <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Team &amp; owner</h2>
+
+            <div className="flex flex-wrap items-end gap-3 mb-2">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Add user by email</label>
+                <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="person@example.com" className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Role</label>
+                <select value={newRole} onChange={e => setNewRole(e.target.value)} className={inp}>
+                  {['director', 'scheduler', 'assigner', 'coach', 'staff'].map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 pb-2 whitespace-nowrap">
+                <input type="checkbox" checked={newOwner} onChange={e => setNewOwner(e.target.checked)} className="accent-blue-600 w-4 h-4" /> Make primary owner
+              </label>
+              <button onClick={addMember} disabled={teamBusy || !newEmail.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">Add</button>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-4">The user must already have an account. The primary owner gets director access to run the organization.</p>
+
+            {teamUsers.length === 0 ? (
+              <p className="text-sm text-slate-400">No users assigned to this org yet.</p>
+            ) : (
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-lg">
+                {teamUsers.map(u => (
+                  <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{u.name}{u.id === ownerUserId && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Owner</span>}</p>
+                      <p className="text-xs text-slate-400 truncate">{u.email} · {u.role}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {u.id !== ownerUserId && <button onClick={() => makeOwner(u.email)} disabled={teamBusy} className="text-xs font-medium text-blue-600 hover:text-blue-800">Make owner</button>}
+                      <button onClick={() => removeMember(u.id)} disabled={teamBusy} className="text-xs font-medium text-red-500 hover:text-red-700">Remove</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
 
