@@ -16,12 +16,17 @@ const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Bas
 const fmtDate = (d: string) => { if (!d) return ''; const [y,m,day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}/${y}` }
 
 const DEFAULT_DIVISIONS = [
-  'Boys High School A', 'Boys High School B', 'Boys High School B2',
-  'Boys U14 A and B', 'Boys U12 A and B',
-  'Boys U10 A and B (7v7)', 'Boys U10 A and B (10v10)', 'Boys U8 (7v7)',
-  'Girls High School A', 'Girls High School B', 'Girls High School B2',
-  'Girls Middle School A', 'Girls Middle School B (No 2030s)',
-  'Girls Lower School A (7v7)', 'Girls Lower School B (7v7 - No 2033s)',
+  'Boys U8',
+  'Boys U10',
+  'Boys U12',
+  'Boys U14',
+  'Boys High School B',
+  'Boys High School A',
+  'Girls Lower School',
+  'Girls Middle School B',
+  'Girls Middle School A',
+  'Girls High School B',
+  'Girls High School A',
 ]
 
 const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50', numFields:'', dayStart:'08:00', dayEnd:'18:00', regMode:'builtin', teamFee:'1495' }
@@ -52,7 +57,7 @@ export default function HomePage() {
   const [saving, setSaving] = useState(false)
   const [createLogoUrl, setCreateLogoUrl] = useState('')
   const [createLogoUploading, setCreateLogoUploading] = useState(false)
-  const [divisions, setDivisions] = useState<string[]>([...DEFAULT_DIVISIONS])
+  const [divisions, setDivisions] = useState<string[]>([])
   const [newDivision, setNewDivision] = useState('')
   const [showDivisions, setShowDivisions] = useState(false)
 
@@ -168,7 +173,7 @@ export default function HomePage() {
       }
       setForm(EMPTY_FORM)
       setCreateLogoUrl('')
-      setDivisions([...DEFAULT_DIVISIONS])
+      setDivisions([])
       setShowForm(false)
       setShowDivisions(false)
       load()
