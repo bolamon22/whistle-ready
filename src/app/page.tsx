@@ -24,7 +24,7 @@ const DEFAULT_DIVISIONS = [
   'Girls Lower School A (7v7)', 'Girls Lower School B (7v7 - No 2033s)',
 ]
 
-const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50' }
+const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50', numFields:'' }
 
 const ADMIN_LINKS = [
   { label: '👥 User Management',    href: '/admin/users',              desc: 'Add, edit, delete users and assign roles' },
@@ -130,6 +130,19 @@ export default function HomePage() {
       })
     })
     if (r.ok) {
+      // Pre-create the requested number of fields so the schedule grid is ready.
+      const created = await r.json().catch(() => null)
+      const n = parseInt(form.numFields)
+      if (created?.id && n > 0) {
+        const venueName = (form.location.split(',')[0] || '').trim() || 'Main Site'
+        const fields = Array.from({ length: Math.min(n, 30) }, (_, i) => `Field ${i + 1}`)
+        try {
+          await fetch(`/api/venues/${created.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ venues: [{ id: Math.random().toString(36).slice(2, 10), name: venueName, fields }], defaultAvailability: [] }),
+          })
+        } catch { /* non-fatal */ }
+      }
       toast.success('Tournament created')
       setForm(EMPTY_FORM)
       setDivisions([...DEFAULT_DIVISIONS])
@@ -268,9 +281,14 @@ export default function HomePage() {
                 <label className="label">Schedule Increment (minutes)</label>
                 <input className="input" type="number" min="5" max="120" step="5" value={form.scheduleIncrement} onChange={e=>setF('scheduleIncrement',e.target.value)} placeholder="50"/>
               </div>
-              <div className="sm:col-span-2 lg:col-span-3">
+              <div className="sm:col-span-2 lg:col-span-2">
                 <label className="label">Location</label>
                 <input className="input" placeholder="e.g. Village Park, Pleasanton CA" value={form.location} onChange={e=>setF('location',e.target.value)}/>
+              </div>
+              <div>
+                <label className="label">Number of fields</label>
+                <input className="input" type="number" min="0" max="30" step="1" value={form.numFields} onChange={e=>setF('numFields',e.target.value)} placeholder="e.g. 6"/>
+                <p className="text-[11px] text-gray-400 mt-1">We'll set up Field 1–N so your schedule grid is ready (edit later in Settings).</p>
               </div>
             </div>
 
