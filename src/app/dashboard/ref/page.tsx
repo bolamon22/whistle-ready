@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square } from 'lucide-react'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface Assignment { id: string; role: string; payRate: number; game: Game }
@@ -25,6 +25,9 @@ export default function RefDashboard() {
   const [view, setView] = useState<'mine' | 'all'>('mine')
   const [loading, setLoading] = useState(true)
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set())
+  const [punch, setPunch] = useState<any>(null)      // { worker, open, entries }
+  const [punchBusy, setPunchBusy] = useState(false)
+  const [, setNowTick] = useState(0)                  // re-render the elapsed timer
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -51,6 +54,44 @@ export default function RefDashboard() {
     toast.success('Checked in ✓')
   }
 
+  // ── Punch clock (hourly staff: field ops + trainers) ──
+  async function loadPunch(tid: string) {
+    try { const d = await fetch(`/api/tournaments/${tid}/punch`).then(r => r.ok ? r.json() : null); setPunch(d) } catch {}
+  }
+  useEffect(() => {
+    if (!selTournament) return
+    loadPunch(selTournament)
+    const t = setInterval(() => setNowTick(n => n + 1), 30000) // refresh elapsed display
+    return () => clearInterval(t)
+  }, [selTournament])
+
+  const nowHHMM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+  const todayYMD = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+  function teHours(e: any): number {
+    if (e.hoursManual != null) return e.hoursManual
+    if (e.clockIn && e.clockOut) { const [ih, im] = e.clockIn.split(':').map(Number); const [oh, om] = e.clockOut.split(':').map(Number); return Math.max(0, (oh * 60 + om - (ih * 60 + im)) / 60) }
+    return 0
+  }
+  function elapsedLabel(clockIn: string): string {
+    const [h, m] = clockIn.split(':').map(Number)
+    const start = new Date(); start.setHours(h, m, 0, 0)
+    let mins = Math.floor((Date.now() - start.getTime()) / 60000); if (mins < 0) mins = 0
+    return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`
+  }
+  const friendlyRole = (r?: string) => r === 'field_ops' ? 'Field Ops' : r === 'athletic_trainer' ? 'Athletic Trainer' : r === 'scorekeeper' ? 'Scorekeeper' : r === 'ref' ? 'Referee' : 'Staff'
+  async function punchAction(action: 'in' | 'out') {
+    if (!selTournament) return
+    setPunchBusy(true)
+    try {
+      const res = await fetch(`/api/tournaments/${selTournament}/punch`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, time: nowHHMM(), date: todayYMD() }),
+      })
+      if (res.ok) { toast.success(action === 'in' ? 'Clocked in ✓' : 'Clocked out ✓'); await loadPunch(selTournament) }
+      else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Failed') }
+    } catch { toast.error('Failed') } finally { setPunchBusy(false) }
+  }
+
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
 
   const myGameIds = new Set(assignments.map(a => a.game.id))
@@ -65,7 +106,7 @@ export default function RefDashboard() {
     ? mine
     : allGames.filter(g => g.tournamentId === selTournament)
 
-  const roleLabel = 'Staff'
+  const roleLabel = punch?.worker?.defaultRole ? friendlyRole(punch.worker.defaultRole) : 'Staff'
 
   function GameCard({ g }: { g: any }) {
     const isScorekeeper = g.role === 'scorekeeper'
@@ -102,6 +143,28 @@ export default function RefDashboard() {
         <p className="text-sm text-gray-400">{roleLabel}</p>
         <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'} 👋</h1>
       </div>
+
+      {/* Time clock — hourly staff (field ops & athletic trainers) */}
+      {punch?.worker && (punch.worker.defaultRole === 'field_ops' || punch.worker.defaultRole === 'athletic_trainer') && (() => {
+        const open = punch.open
+        const todayHrs = (punch.entries || []).filter((e: any) => e.date === todayYMD()).reduce((s: number, e: any) => s + teHours(e), 0)
+        return (
+          <div className="rounded-2xl border border-gray-200 bg-white card p-4 mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1.5"><Clock size={14} className="text-teal-600" /> Time clock</span>
+              {todayHrs > 0 && <span className="text-xs text-gray-500">{todayHrs.toFixed(2)}h today</span>}
+            </div>
+            {open ? (
+              <>
+                <p className="text-sm text-gray-600 mb-2">Clocked in at <span className="font-semibold text-gray-800">{open.clockIn}</span> · <span className="text-emerald-600 font-semibold">{elapsedLabel(open.clockIn)}</span></p>
+                <button onClick={() => punchAction('out')} disabled={punchBusy} className="w-full py-3 rounded-xl text-base font-bold bg-red-600 hover:bg-red-500 text-white disabled:opacity-60 inline-flex items-center justify-center gap-2"><Square size={16} /> Clock Out</button>
+              </>
+            ) : (
+              <button onClick={() => punchAction('in')} disabled={punchBusy} className="w-full py-3 rounded-xl text-base font-bold bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-60 inline-flex items-center justify-center gap-2"><Play size={16} /> Clock In</button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Game day tools */}
       {selTournament && (
