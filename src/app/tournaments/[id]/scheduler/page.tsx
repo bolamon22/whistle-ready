@@ -113,6 +113,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [increment, setIncrement]       = useState(30)
   const [startH, setStartH]             = useState(8)
   const [endH, setEndH]                 = useState(19)
+  const [storedVenuesRaw, setStoredVenuesRaw] = useState<any[]>([])
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
   const [unscheduling, setUnscheduling] = useState(false)
@@ -194,6 +195,18 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       })
       setRawVenues(venueList.map(v => ({ name: v.name, fields: (Array.isArray(v.fields) ? v.fields : []).map((f: any) => typeof f === 'string' ? f : (f.name ?? String(f))) })))
       setFields(flat)
+      setStoredVenuesRaw(venueList)
+      // Initialize the day window from saved daily availability (set at creation / in Setup)
+      const avail: any[] = vData.defaultAvailability ?? []
+      let minS = 24, maxE = 0
+      avail.forEach((d: any) => (d.slots ?? []).forEach((sl: any) => {
+        const sh = parseInt(String(sl.start || '').split(':')[0])
+        const ep = String(sl.end || '').split(':'); const eh = parseInt(ep[0]); const emn = parseInt(ep[1] || '0')
+        if (!isNaN(sh)) minS = Math.min(minS, sh)
+        if (!isNaN(eh)) maxE = Math.max(maxE, emn > 0 ? eh + 1 : eh)
+      }))
+      if (minS <= 23) setStartH(minS)
+      if (maxE >= 1) setEndH(maxE)
 
       const gameDates = [...new Set(allGames.map(g => g.date).filter(Boolean))].sort() as string[]
       let allDates = gameDates
@@ -241,14 +254,26 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     })
   }, [games])
 
+  async function persistDayWindow(sH: number, eH: number) {
+    const list = dates.length ? dates : [activeDate].filter(Boolean)
+    const da = list.map(date => ({ date, slots: [{ start: `${String(sH).padStart(2, '0')}:00`, end: `${String(eH).padStart(2, '0')}:00` }] }))
+    try {
+      await fetch(`/api/venues/${params.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venues: storedVenuesRaw, defaultAvailability: da }),
+      })
+    } catch { /* non-fatal */ }
+  }
+
   async function saveVenues(venues: {name:string,fields:string[]}[]) {
     setRawVenues(venues)
+    setStoredVenuesRaw(venues)
     const flat: Field[] = []
     venues.forEach(v => v.fields.forEach(f => flat.push({ venueName: v.name, fieldName: f, fullName: `${v.name} - ${f}` })))
     setFields(flat)
     await fetch(`/api/venues/${params.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venues, defaultAvailability: [] }),
+      body: JSON.stringify({ venues, defaultAvailability: (dates.length ? dates : [activeDate].filter(Boolean)).map(date => ({ date, slots: [{ start: `${String(startH).padStart(2, '0')}:00`, end: `${String(endH).padStart(2, '0')}:00` }] })) }),
     })
   }
 
@@ -822,15 +847,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white">
             {[10, 15, 20, 30, 45, 60].map(m => <option key={m} value={m}>{m} min</option>)}
           </select>
-          <label className="text-slate-500 text-xs">Start</label>
-          <select value={startH} onChange={e => setStartH(Number(e.target.value))}
+          <label className="text-slate-500 text-xs">Day start</label>
+          <select value={startH} onChange={e => { const v = Number(e.target.value); setStartH(v); persistDayWindow(v, endH) }}
             className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white">
             {Array.from({ length: 14 }, (_, i) => i + 5).map(h => (
               <option key={h} value={h}>{fmtTime(`${String(h).padStart(2,'0')}:00`)}</option>
             ))}
           </select>
-          <label className="text-slate-500 text-xs">End</label>
-          <select value={endH} onChange={e => setEndH(Number(e.target.value))}
+          <label className="text-slate-500 text-xs">Day end</label>
+          <select value={endH} onChange={e => { const v = Number(e.target.value); setEndH(v); persistDayWindow(startH, v) }}
             className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white">
             {Array.from({ length: 14 }, (_, i) => i + 12).map(h => (
               <option key={h} value={h}>{fmtTime(`${String(h).padStart(2,'0')}:00`)}</option>
