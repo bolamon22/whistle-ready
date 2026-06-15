@@ -170,7 +170,10 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     setClockRunning(r => !r)
     if (starting) pushLive({ live: true })
   }
-  function resetClock() { setClockRunning(false); setClockMs(periodSecs * 1000) }
+  function resetClock() {
+    if (!window.confirm('Reset the clock back to the full period? This clears the current running time.')) return
+    setClockRunning(false); setClockMs(periodSecs * 1000)
+  }
 
   function applyClockSetup() {
     if (!game) return
@@ -411,10 +414,11 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
       {/* End game */}
       <div className="px-4 pb-6 pt-3 border-t border-gray-800">
         <button onClick={() => {
-            if (noTies && score1 === score2) toast('Ties aren’t allowed — please enter a winner', { icon: '⚠️', duration: 4000 })
+            if (noTies && score1 === score2) { if (!window.confirm('The score is tied and this tournament doesn’t allow ties. Post it as a tie anyway?')) return }
+            if (!window.confirm(`Post the final score?\n\n${game.team1} ${score1} – ${score2} ${game.team2}`)) return
             saveScore(); setGameEnded(true); setClockRunning(false); pushLive({ live: false })
           }}
-          className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-base active:scale-[.98] transition-all">End Game &amp; Save Score</button>
+          className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-base active:scale-[.98] transition-all">End Game &amp; Post Score</button>
         {gameEnded && (<p className="text-center text-xs text-emerald-400 mt-2">Final: {game.team1} {score1} – {score2} {game.team2}</p>)}
         {noTies && score1 === score2 && (<p className="text-center text-xs text-amber-400 mt-2">⚠️ This tournament doesn’t allow ties — enter a winner.</p>)}
         <button onClick={openRules} className="w-full mt-3 text-xs text-gray-400 hover:text-gray-200 flex items-center justify-center gap-1.5">
