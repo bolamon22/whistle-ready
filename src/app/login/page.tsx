@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import WhistleMark from '../WhistleMark'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -46,7 +47,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4 select-none">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🥍</div>
+          <div className="flex justify-center mb-3"><WhistleMark className="w-16 h-11" /></div>
           <h1 className="text-3xl font-bold text-white">Whistle Ready</h1>
           <p className="text-sm text-gray-500 mt-1">Tournament staff sign-in</p>
         </div>
