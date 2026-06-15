@@ -99,14 +99,14 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
       )}
       {pview==='list' && (
         <div className="bg-white overflow-x-auto">
-          <table className="w-full text-xs min-w-[400px]">
+          <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
               <th className="px-3 py-2.5 w-6 text-slate-400 font-semibold"></th>
               <th className="text-left px-2 py-2.5 text-slate-500 font-semibold">Team</th>
               <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-7">W</th>
               <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-7">L</th>
-              <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-8">GA</th>
-              <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-8">GF</th>
+              <th className="hidden sm:table-cell text-center px-2 py-2.5 text-slate-500 font-semibold w-8">GA</th>
+              <th className="hidden sm:table-cell text-center px-2 py-2.5 text-slate-500 font-semibold w-8">GF</th>
               <th className="text-center px-2 py-2.5 text-slate-500 font-semibold w-10">GD</th>
               <th className="text-center px-2 py-2.5 text-slate-500 font-semibold">Last 3</th>
             </tr></thead>
@@ -120,8 +120,8 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
                       <td className="px-2 py-2.5"><div className="flex items-center gap-2"><TeamAvatar name={s.team} size="sm"/><button onClick={()=>onTeamClick(s.team)} className={`font-semibold text-xs leading-tight text-left hover:underline ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</button></div></td>
                       <td className="px-2 py-2.5 text-center font-semibold text-slate-700">{s.w}</td>
                       <td className="px-2 py-2.5 text-center text-slate-600">{s.l}</td>
-                      <td className="px-2 py-2.5 text-center text-slate-600">{s.ga}</td>
-                      <td className="px-2 py-2.5 text-center text-slate-600">{s.gf}</td>
+                      <td className="hidden sm:table-cell px-2 py-2.5 text-center text-slate-600">{s.ga}</td>
+                      <td className="hidden sm:table-cell px-2 py-2.5 text-center text-slate-600">{s.gf}</td>
                       <td className={`px-2 py-2.5 text-center font-bold ${gd>0?'text-emerald-600':gd<0?'text-red-500':'text-slate-400'}`}>{gd>0?'+':''}{gd}</td>
                       <td className="px-2 py-2.5"><div className="flex items-center justify-center gap-1">{form.length===0?<span className="text-slate-300">—</span>:form.map((r,fi)=><span key={fi} className={`w-4 h-4 rounded-full text-[8px] font-bold text-white flex items-center justify-center ${r==='W'?'bg-emerald-500':r==='L'?'bg-red-500':'bg-slate-400'}`}>{r}</span>)}</div></td>
                     </tr>
