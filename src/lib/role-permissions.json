@@ -151,6 +151,18 @@
       "routes": [
         "/tournaments/*/games/*/scorekeeper"
       ]
+    },
+    {
+      "key": "staff_gameday",
+      "label": "Staff Game Day Tools",
+      "group": "Tournaments",
+      "routes": [
+        "/tournaments/*/communications",
+        "/tournaments/*/ops",
+        "/tournaments/*/incidents",
+        "/tournaments/*/checklist",
+        "/tournaments/*/directory"
+      ]
     }
   ],
   "roles": {
@@ -305,8 +317,9 @@
       "cd_players": false,
       "cd_schedule": false,
       "cd_billing": false,
-      "tournament_scores": false,
-      "game_scorekeeper": true
+      "tournament_scores": true,
+      "game_scorekeeper": true,
+      "staff_gameday": true
     }
   }
 }

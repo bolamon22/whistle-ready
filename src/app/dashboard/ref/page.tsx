@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert } from 'lucide-react'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface Assignment { id: string; role: string; payRate: number; game: Game }
@@ -100,6 +102,20 @@ export default function RefDashboard() {
         <p className="text-sm text-gray-400">{roleLabel}</p>
         <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'} 👋</h1>
       </div>
+
+      {/* Game day tools */}
+      {selTournament && (
+        <div className="mb-5">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Game day</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Link href={`/tournaments/${selTournament}/communications`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Radio size={18} className="text-teal-600" /> Field Request</Link>
+            <Link href={`/tournaments/${selTournament}/scores`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Target size={18} className="text-teal-600" /> Post scores</Link>
+            <Link href={`/tournaments/${selTournament}/directory`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Users size={18} className="text-teal-600" /> Staff contacts</Link>
+            <Link href={`/tournaments/${selTournament}/checklist`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><ClipboardCheck size={18} className="text-teal-600" /> Setup checklist</Link>
+            <Link href={`/tournaments/${selTournament}/incidents`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300 col-span-2"><TriangleAlert size={18} className="text-teal-600" /> Incidents</Link>
+          </div>
+        </div>
+      )}
 
       {/* Up next */}
       {upNext ? (
