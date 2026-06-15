@@ -13,7 +13,7 @@ const ROLE_LABELS: Record<string, string> = {
   athletic_trainer: 'Athletic Trainers', field_ops: 'Field Ops', director: 'Directors',
 }
 const roleLabel = (r?: string) => ROLE_LABELS[r || ''] || (r ? r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g, ' ') : 'Staff')
-const ROLE_ORDER = ['Assigners', 'Directors', 'Referees', 'Scorekeepers', 'Athletic Trainers', 'Field Ops', 'Staff']
+const ROLE_ORDER = ['Field Ops', 'Athletic Trainers', 'Scorekeepers', 'Assigners', 'Referees', 'Directors', 'Staff']
 
 export default function DirectoryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { id } = useParams()

@@ -41,7 +41,7 @@ export default function DirectorDashboard() {
             const actions = [
               { href: `/tournaments/${t.id}/dashboard`, Icon: LayoutDashboard, label: 'Manage' },
               { href: `/tournaments/${t.id}/scores`, Icon: Target, label: 'Scores' },
-              { href: `/tournaments/${t.id}/ops`, Icon: Radio, label: 'Ops' },
+              { href: `/tournaments/${t.id}/ops`, Icon: Radio, label: 'Field Req' },
               { href: `/tournaments/${t.id}/broadcast`, Icon: Megaphone, label: 'Broadcast' },
             ]
             return (

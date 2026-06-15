@@ -54,19 +54,45 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const text = String(body.text || '').trim()
     if (!text) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
 
-    const entry = {
+    const entry: any = {
       id: Math.random().toString(36).slice(2, 10),
       text,
       group: String(body.group || 'all'),
       from: session.user?.name || session.user?.email || 'Staff',
       fromRole: role || 'staff',
       createdAt: new Date().toISOString(),
+      acks: [],
     }
+    if (body.urgency) entry.urgency = String(body.urgency)
     const list = await readList(params.id)
     await writeList(params.id, [entry, ...list].slice(0, 60))
     return NextResponse.json({ ok: true, message: entry })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to post' }, { status: 500 })
+  }
+}
+
+// Toggle the current user's "on my way" acknowledgement on a message.
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = await getServerSession(authOptions)
+    const role = (session?.user as any)?.role as string | undefined
+    if (!session || !isStaff(role)) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
+    await ensureTable()
+    const body = await req.json().catch(() => ({}))
+    const mid = req.nextUrl.searchParams.get('id') || body.id
+    const me = session.user?.name || session.user?.email || 'Staff'
+    const list = await readList(params.id)
+    const next = list.map((m: any) => {
+      if (m.id !== mid) return m
+      const acks = Array.isArray(m.acks) ? m.acks : []
+      const has = acks.some((a: any) => a.by === me)
+      return { ...m, acks: has ? acks.filter((a: any) => a.by !== me) : [...acks, { by: me, at: new Date().toISOString() }] }
+    })
+    await writeList(params.id, next)
+    return NextResponse.json({ ok: true })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Failed to update' }, { status: 500 })
   }
 }
 

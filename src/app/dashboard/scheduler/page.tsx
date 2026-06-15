@@ -38,7 +38,7 @@ export default function SchedulerDashboard() {
               { href: `/tournaments/${t.id}/scheduler`, Icon: Calendar,   label: 'Schedule' },
               { href: `/tournaments/${t.id}/divisions`, Icon: Trophy,     label: 'Divisions' },
               { href: `/tournaments/${t.id}/dashboard`, Icon: LayoutGrid, label: 'Manage' },
-              { href: `/tournaments/${t.id}/ops`,       Icon: Radio,      label: 'Ops' },
+              { href: `/tournaments/${t.id}/ops`,       Icon: Radio,      label: 'Field Req' },
             ]
             return (
               <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">

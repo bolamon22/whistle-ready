@@ -38,7 +38,7 @@ export default function AssignerDashboard() {
               { href: `/tournaments/${t.id}`, Icon: Calendar, label: 'Schedule' },
               { href: `/tournaments/${t.id}/assignments`, Icon: MapPin, label: 'Assign' },
               { href: `/tournaments/${t.id}/availability`, Icon: Clock, label: 'Avail' },
-              { href: `/tournaments/${t.id}/ops`, Icon: Radio, label: 'Ops' },
+              { href: `/tournaments/${t.id}/ops`, Icon: Radio, label: 'Field Req' },
             ]
             return (
               <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
