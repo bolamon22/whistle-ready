@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 
 const LogosContext = createContext<Record<string, string>>({})
 import Link from 'next/link'
-import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Sun, Moon, MapPin, ClipboardList, Bell, Share2, X, Info, HeartPulse, Shirt, SquareParking, ScrollText, Utensils, Phone, CloudLightning, Megaphone } from 'lucide-react'
+import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Sun, Moon, MapPin, ClipboardList, Bell, Share2, X, Info, HeartPulse, Shirt, SquareParking, ScrollText, Utensils, Phone, CloudLightning, Megaphone, LogIn } from 'lucide-react'
 
 const INFO_ICONS: Record<string, any> = { 'heart-pulse': HeartPulse, 'shirt': Shirt, 'square-parking': SquareParking, 'scroll-text': ScrollText, 'utensils': Utensils, 'phone': Phone, 'cloud-lightning': CloudLightning, 'info': Info }
 
@@ -918,6 +918,10 @@ export default function PublicTournamentPage() {
               <button onClick={()=>setShowInfo(true)} className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs font-bold px-3 py-2 rounded hover:bg-gray-200 transition-colors">
                 <Info size={14}/> Info
               </button>
+              <Link href="/login"
+                className="flex items-center gap-1.5 bg-[#0f1f3d] hover:bg-[#16294a] text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
+                <LogIn size={14}/> Log in
+              </Link>
             </div>
           </div>
         </div>
