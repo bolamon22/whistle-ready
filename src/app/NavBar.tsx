@@ -104,11 +104,7 @@ export default function NavBar() {
         ) : (
           /* Admin / no-org: Whistle Ready brand */
           <a href="/" className="flex items-center gap-2 text-sky-700 font-bold text-lg tracking-tight flex-shrink-0">
-            <div className="w-7 h-7 bg-sky-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="2.5" strokeLinecap="round"/>
-              </svg>
-            </div>
+            <img src="/whistle-ready-icon.png" alt="" className="w-8 h-8 rounded-lg object-contain flex-shrink-0" />
             Whistle Ready
           </a>
         )}
