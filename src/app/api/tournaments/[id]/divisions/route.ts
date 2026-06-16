@@ -10,8 +10,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       }),
       prisma.tournament.findUnique({ where: { id: params.id }, select: { registrationDivisions: true } }),
       prisma.game.findMany({
-        where: { tournamentId: params.id, pool: { not: null } },
-        select: { division: true },
+        where: { tournamentId: params.id },
+        select: { division: true, gameNumber: true, pool: true },
       }),
     ])
 
@@ -40,9 +40,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       const names: string[] = JSON.parse(p.teamNames || '[]')
       divMap.set(p.division, { ...cur, pools: cur.pools + 1, assignedTeams: cur.assignedTeams + names.length })
     }
+    const bracketCount = new Map<string, number>()
     for (const g of games) {
       const cur = divMap.get(g.division) ?? { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
-      divMap.set(g.division, { ...cur, gameCount: cur.gameCount + 1 })
+      const isBracket = (g.gameNumber || '').startsWith('B')
+      if (isBracket) {
+        divMap.set(g.division, cur)
+        bracketCount.set(g.division, (bracketCount.get(g.division) ?? 0) + 1)
+      } else if (g.pool != null) {
+        divMap.set(g.division, { ...cur, gameCount: cur.gameCount + 1 })
+      }
     }
 
     const divisions = [...divMap.entries()]
@@ -52,6 +59,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         poolCount: data.pools,
         unassignedTeams: Math.max(0, data.teams - data.assignedTeams),
         gameCount: data.gameCount,
+        poolGameCount: data.gameCount,
+        bracketGameCount: bracketCount.get(name) ?? 0,
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
 

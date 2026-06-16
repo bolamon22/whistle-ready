@@ -13,7 +13,7 @@ const PALETTE = [
   '#14b8a6', '#ef4444', '#f59e0b', '#6366f1', '#06b6d4',
 ]
 
-interface Division { name: string; teamCount: number; poolCount: number; unassignedTeams: number; gameCount: number }
+interface Division { name: string; teamCount: number; poolCount: number; unassignedTeams: number; gameCount: number; bracketGameCount?: number }
 interface Pool { id: string; name: string; teamNames: string[] }
 interface PoolGame {
   id: string; gameNumber: string; pool: string | null
@@ -101,7 +101,7 @@ export default function DivisionsPage() {
     ]).then(([t, d, colors]) => {
       setDivColors(colors)
       setTournament(t)
-      setDivisions(d.map((div: Division) => ({ unassignedTeams: 0, gameCount: 0, ...div })))
+      setDivisions(d.map((div: Division) => ({ unassignedTeams: 0, gameCount: 0, bracketGameCount: 0, ...div })))
       // Smart defaults based on guarantee
       const g = 4  // default guarantee
       const defaults: Record<string, string> = {}
@@ -671,7 +671,10 @@ if (loading) return (
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
                               {div.gameCount > 0 && (
-                                <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{div.gameCount} games</span>
+                                <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full" title="Pool games">{div.gameCount} pool</span>
+                              )}
+                              {(div.bracketGameCount ?? 0) > 0 && (
+                                <span className="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full" title="Bracket games">{div.bracketGameCount} bracket</span>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount > 0 && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full" title={`${div.unassignedTeams} team${div.unassignedTeams !== 1 ? 's' : ''} not assigned to a pool`}>
