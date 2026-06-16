@@ -63,7 +63,11 @@ export default function DivisionsPage() {
   const [smartTable, setSmartTable] = useState<Record<number, { games?: number; pools?: number; bracket?: string; advance?: number; consolation?: number }>>({})
   const [showSmartEditor, setShowSmartEditor] = useState(false)
   const [smartMax, setSmartMax] = useState(16)
-  useEffect(() => { try { const raw = localStorage.getItem('smartDefaults:' + id); if (raw) setSmartTable(JSON.parse(raw)) } catch {} }, [id])
+  const [saveGlobal, setSaveGlobal] = useState(false)
+  useEffect(() => {
+    try { const raw = localStorage.getItem('smartDefaults:' + id); if (raw) { setSmartTable(JSON.parse(raw)); return } } catch {}
+    fetch('/api/smart-defaults-default').then(r => r.ok ? r.json() : null).then(d => { if (d && d.table && Object.keys(d.table).length) { setSmartTable(d.table); if (d.guarantee) setGuarantee(String(d.guarantee)) } }).catch(() => {})
+  }, [id])
 
   // Scheduled games warning state
   const [generateConfirm, setGenerateConfirm] = useState<{div: string; scheduledCount: number; all: boolean} | null>(null)
@@ -459,6 +463,9 @@ export default function DivisionsPage() {
     }
     setSmartTable(filled)
     try { localStorage.setItem('smartDefaults:' + id, JSON.stringify(filled)) } catch {}
+    if (saveGlobal) {
+      fetch('/api/smart-defaults-default', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table: filled, guarantee: g }) }).then(r => { if (r.ok) toast.success('Saved as global default for new tournaments') }).catch(() => {})
+    }
     toast.success('Smart defaults saved')
     setShowSmartEditor(false)
   }
@@ -786,7 +793,7 @@ if (loading) return (
               const maxN = Math.max(smartMax, ...divisions.map(d => d.teamCount), 2)
               const counts: number[] = []; for (let n = 2; n <= maxN; n++) counts.push(n)
               const g = Number(guarantee) || 4
-              const BRACKETS = [{ v: '', l: 'None' }, { v: 'single', l: 'Single elim' }, { v: 'single-con', l: 'Single elim + 3rd' }, { v: 'double', l: 'Double elim' }, { v: '2gg', l: 'Consolation (both-ways)' }]
+              const BRACKETS = [{ v: '', l: 'None' }, { v: 'single', l: 'Single elim' }, { v: 'single-con', l: 'Single elim + 3rd' }, { v: 'double', l: 'Double elim' }, { v: '2gg', l: '2-Game Guarantee (both-ways)' }]
               const setField = (n: number, k: 'games' | 'pools' | 'bracket' | 'advance' | 'consolation', val: number | string | undefined) => setSmartTable(prev => ({ ...prev, [n]: { ...prev[n], [k]: val } }))
               return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowSmartEditor(false)}>
@@ -852,7 +859,11 @@ if (loading) return (
                     </div>
                     <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
                       <button onClick={() => setSmartTable(prev => { const t = { ...prev }; counts.forEach(n => { t[n] = { ...t[n], games: smartPoolGames(n, g) } }); return t })} className="text-xs text-slate-500 hover:text-slate-700">Reset games from guarantee ({g})</button>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none" title="Save this plan as the default for new tournaments">
+                          <input type="checkbox" checked={saveGlobal} onChange={e => setSaveGlobal(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-400" />
+                          Save as global default
+                        </label>
                         <button onClick={() => setShowSmartEditor(false)} className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5">Close</button>
                         <button onClick={saveSmartTable} className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-1.5 rounded-lg transition-colors">Save</button>
                       </div>
