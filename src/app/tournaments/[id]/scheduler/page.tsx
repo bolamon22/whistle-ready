@@ -855,11 +855,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           <span className="text-xs text-slate-400">{games.length} · <span className="text-amber-600 font-medium">{unscheduled.length} left</span></span>
         </div>
         <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
-          <label className="text-slate-500 text-xs">Increment</label>
-          <select value={increment} onChange={e => { const v = Number(e.target.value); setIncrement(v); fetch(`/api/tournaments/${params.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduleIncrement: v }) }).catch(() => {}) }}
-            className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white">
-            {[10, 15, 20, 30, 45, 60].map(m => <option key={m} value={m}>{m} min</option>)}
-          </select>
           <label className="text-slate-500 text-xs">Day start</label>
           <input type="time" value={minToHM(dayWin.s)} onChange={e => { if (e.target.value) persistDayWindow(e.target.value, minToHM(dayWin.e)) }}
             className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white" title="Applies to the selected day"/>
