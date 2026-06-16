@@ -4,7 +4,7 @@ import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam } from '@/lib/autoSchedule'
-import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap } from 'lucide-react'
+import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, Bookmark, Eye } from 'lucide-react'
 
 interface Game {
   id: string
@@ -147,6 +147,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // ── Draft/publish versioning ─────────────────────────────────────────────
   const [snapshot,       setSnapshot]       = useState<Record<string, {date:string,startTime:string,location:string}>>({})
+  const [checkpoint, setCheckpoint] = useState<Record<string, {date:string,startTime:string,location:string}> | null>(null)
+  const [viewingCheckpoint, setViewingCheckpoint] = useState(false)
   const [publishedAt,    setPublishedAt]    = useState<string | null>(null)
   const [publishing,     setPublishing]     = useState(false)
   const [showDiff,       setShowDiff]       = useState(false)
@@ -365,13 +367,31 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   }
 
   function handleDragStart(e: React.DragEvent, gameId: string) {
-    if (swapMode) return
+    if (swapMode || viewingCheckpoint) { e.preventDefault(); return }
     e.dataTransfer.setData('gameId', gameId)
     e.dataTransfer.effectAllowed = 'move'
     setDragId(gameId)
     setDragGame(games.find(g => g.id === gameId) ?? null)
   }
   function handleDragEnd() { setDragId(null); setDragGame(null); setOverCell(null) }
+
+  function saveCheckpoint() {
+    const snap: Record<string, {date:string,startTime:string,location:string}> = {}
+    games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
+    setCheckpoint(snap); setViewingCheckpoint(false)
+    toast.success('Checkpoint saved — experiment freely, then Compare, Keep, or Revert')
+  }
+  async function revertToCheckpoint() {
+    if (!checkpoint) return
+    setViewingCheckpoint(false)
+    for (const g of games) {
+      const cp = checkpoint[g.id]
+      if (cp && (cp.date !== g.date || cp.startTime !== g.startTime || cp.location !== g.location))
+        await patchGame(g.id, { date: cp.date, startTime: cp.startTime, location: cp.location })
+    }
+    toast.success('Reverted to the saved checkpoint')
+  }
+  function discardCheckpoint() { setCheckpoint(null); setViewingCheckpoint(false); toast.success('Checkpoint cleared — current schedule kept') }
 
   function handleDropCell(e: React.DragEvent, time: string, field: string) {
     e.preventDefault()
@@ -568,6 +588,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   })
 
   const dayGames = games.filter(g => g.date === activeDate && g.startTime && g.location && !scratchPad.includes(g.id))
+  // checkpoint compare: when viewing, render the grid from the saved snapshot (read-only)
+  const cpSrc = (viewingCheckpoint && checkpoint) ? games.map(g => checkpoint[g.id] ? { ...g, ...checkpoint[g.id] } : g) : games
+  const dayGamesView = cpSrc.filter(g => g.date === activeDate && g.startTime && g.location && !scratchPad.includes(g.id))
+  const cpChanges = (() => {
+    if (!checkpoint) return 0
+    let c = 0
+    games.forEach(g => { const cp = checkpoint[g.id]; if (!cp) { if (g.date && g.startTime && g.location) c++; return } if (cp.date !== g.date || cp.startTime !== g.startTime || cp.location !== g.location) c++ })
+    return c
+  })()
   // Per-day grid window, minute-precise, derived from the saved field availability
   // (so the Scheduler shows the exact same hours as Setup/Settings, e.g. 8:10).
   function windowForDate(date: string) {
@@ -582,7 +611,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const dayWin = windowForDate(activeDate)
   const allSlots = makeSlots(dayWin.s, dayWin.e, increment)
   const slots = hideEmptySlots
-    ? allSlots.filter(s => dayGames.some(g => g.startTime === s))
+    ? allSlots.filter(s => dayGamesView.some(g => g.startTime === s))
     : allSlots
   const visibleFields = fields.filter(f => !hiddenFields.has(f.fullName))
 
@@ -689,7 +718,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // slot+field → game lookup
   const cellMap: Record<string, Game> = {}
-  dayGames.forEach(g => { cellMap[`${g.startTime}|${g.location}`] = g })
+  dayGamesView.forEach(g => { cellMap[`${g.startTime}|${g.location}`] = g })
 
   // ── Conflict detection ────────────────────────────────────────────────────
   const scheduledGames = games.filter(g => g.date && g.startTime)
@@ -867,6 +896,33 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             title={sideStage ? 'Switch to top bar layout' : 'Switch to side panel layout'}>
             {sideStage ? <span className="inline-flex items-center gap-1"><PanelRight size={13} /> Side panel</span> : <span className="inline-flex items-center gap-1"><PanelLeft size={13} /> Side panel</span>}
           </button>
+          {!checkpoint ? (
+            <button onClick={saveCheckpoint}
+              className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg px-3 py-1 transition-colors whitespace-nowrap"
+              title="Save a checkpoint of this schedule. Experiment freely, then compare, keep, or revert.">
+              <span className="inline-flex items-center gap-1"><Bookmark size={13} /> Checkpoint</span>
+            </button>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2 py-1">
+              <span className="text-[11px] font-semibold text-violet-700">Checkpoint</span>
+              <button onClick={() => setViewingCheckpoint(v => !v)}
+                className={`text-xs px-2 py-0.5 rounded border transition-colors ${viewingCheckpoint ? 'bg-violet-600 text-white border-violet-700' : 'bg-white text-violet-700 border-violet-300 hover:bg-violet-100'}`}
+                title="Flip between your working version and the saved checkpoint to compare">
+                <span className="inline-flex items-center gap-1"><Eye size={12} /> {viewingCheckpoint ? 'Viewing saved' : 'Compare'}</span>
+              </button>
+              {cpChanges > 0 && <span className="text-[11px] text-violet-600">{cpChanges} changed</span>}
+              <button onClick={revertToCheckpoint} disabled={viewingCheckpoint}
+                className="text-xs px-2 py-0.5 rounded border bg-white text-amber-700 border-amber-300 hover:bg-amber-50 disabled:opacity-40 transition-colors"
+                title="Discard your changes and restore the checkpoint">
+                <span className="inline-flex items-center gap-1"><RotateCw size={12} /> Revert</span>
+              </button>
+              <button onClick={discardCheckpoint}
+                className="text-xs px-2 py-0.5 rounded border bg-white text-green-700 border-green-300 hover:bg-green-50 transition-colors"
+                title="Keep your current changes and clear the checkpoint">
+                <span className="inline-flex items-center gap-1"><Check size={12} /> Keep</span>
+              </button>
+            </div>
+          )}
           {games.some(g => g.date || g.startTime || g.location) && (
             <button onClick={unscheduleAll} disabled={unscheduling}
               className="text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg px-3 py-1 disabled:opacity-50 transition-colors whitespace-nowrap">
@@ -919,6 +975,12 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       </div>
+
+      {viewingCheckpoint && (
+        <div className="bg-violet-600 text-white text-xs font-medium px-4 sm:px-6 py-1.5 flex items-center gap-2">
+          <Eye size={13} /> Viewing the saved checkpoint (read-only). Click &quot;Viewing saved&quot; again to return to your working version.
+        </div>
+      )}
 
       {/* ── Parking Lot ── */}
       {!sideStage && <div className="bg-slate-900 border-b border-slate-700 flex-shrink-0">
