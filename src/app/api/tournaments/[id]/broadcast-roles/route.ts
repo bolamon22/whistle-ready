@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const session = await getServerSession(authOptions)
     const role = (session?.user as any)?.role as string | undefined
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (role !== 'director') return NextResponse.json({ error: 'Only the tournament director can change broadcast permissions' }, { status: 403 })
+    if (role !== 'director' && role !== 'admin') return NextResponse.json({ error: 'Only the tournament director can change broadcast permissions' }, { status: 403 })
 
     await ensureTable()
     const body = await req.json()
