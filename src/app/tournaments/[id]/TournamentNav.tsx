@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ClipboardList, Globe, MapPin, ChevronDown } from 'lucide-react'
+import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Props {
   id: string
@@ -35,6 +35,9 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const [meta, setMeta] = useState<TournamentMeta | null>(null)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const navRef = useRef<HTMLDivElement>(null)
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => { try { setCollapsed(localStorage.getItem('gdNavCollapsed') === '1') } catch {} }, [])
+  function toggleCollapsed() { setCollapsed(c => { const n = !c; try { localStorage.setItem('gdNavCollapsed', n ? '1' : '0') } catch {} ; return n }) }
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}`)
@@ -111,6 +114,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-0">
 
         {/* Header row */}
+        {!collapsed && (
         <div className="flex items-center justify-between gap-4 pb-4">
           <div className="flex items-center gap-3 min-w-0">
 
@@ -162,9 +166,13 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
             </Link>
           </div>
         </div>
+        )}
 
         {/* Tab bar */}
-        <div className="flex gap-0 flex-wrap">
+        <div className="flex gap-0 flex-wrap items-center">
+          {collapsed && (
+            <Link href={`${base}/dashboard`} className="text-xs font-semibold text-white truncate max-w-[160px] mr-3 py-3">{name}</Link>
+          )}
           {groups.map(g =>
             g.items ? (
               <div key={g.label} className="relative">
@@ -194,6 +202,10 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
               </Link>
             )
           )}
+          <button onClick={toggleCollapsed} title={collapsed ? 'Expand header' : 'Minimize header'}
+            className="ml-auto px-3 py-3 text-slate-400 hover:text-white transition-colors flex items-center">
+            {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+          </button>
         </div>
       </div>
     </div>
