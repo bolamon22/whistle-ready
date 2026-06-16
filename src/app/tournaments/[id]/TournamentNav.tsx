@@ -171,7 +171,10 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         {/* Tab bar */}
         <div className="flex gap-0 flex-wrap items-center">
           {collapsed && (
-            <Link href={`${base}/dashboard`} className="text-xs font-semibold text-white truncate max-w-[160px] mr-3 py-3">{name}</Link>
+            <Link href={`${base}/dashboard`} className="flex items-center gap-2 mr-3 py-2 min-w-0">
+              {logo && <img src={logo} alt="" className="h-7 w-7 object-contain rounded-lg border border-white/10 bg-white/5 flex-shrink-0" />}
+              <span className="text-xs font-semibold text-white truncate max-w-[160px]">{name}</span>
+            </Link>
           )}
           {groups.map(g =>
             g.items ? (
