@@ -130,6 +130,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [wxDelay, setWxDelay]         = useState(30)
   const [wxFrom, setWxFrom]           = useState('')
   const [wxBusy, setWxBusy]           = useState(false)
+  const [wxMode, setWxMode]           = useState<'delay' | 'shorten'>('delay')
+  const [wxSlot, setWxSlot]           = useState(40)
 
   // ── Parking lot filters ──────────────────────────────────────────────────
   const [filterDiv,        setFilterDiv]        = useState('__all__')
@@ -599,6 +601,31 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const wxCutoff = wxFrom ? hmToMin(wxFrom) : -1
   const wxMovable = dayGames.filter(g => !gameDone(g) && hmToMin(g.startTime) >= wxCutoff)
   const wxOverflow = wxMovable.filter(g => hmToMin(g.startTime) + wxDelay + increment > dayWin.e)
+  const wxAnchor = wxFrom ? hmToMin(wxFrom) : (wxMovable.length ? Math.min(...wxMovable.map(g => hmToMin(g.startTime))) : 0)
+  const wxShortenOver = (() => {
+    const byField: Record<string, Game[]> = {}
+    wxMovable.forEach(g => { (byField[g.location] = byField[g.location] || []).push(g) })
+    let over = 0
+    Object.values(byField).forEach(list => list.slice().sort((a, b) => hmToMin(a.startTime) - hmToMin(b.startTime)).forEach((_, i) => { if (wxAnchor + i * wxSlot + wxSlot > dayWin.e) over++ }))
+    return over
+  })()
+  async function applyShorten() {
+    const L = wxSlot
+    if (!wxMovable.length || L <= 0) return
+    setWxBusy(true)
+    const anchor = wxFrom ? hmToMin(wxFrom) : Math.min(...wxMovable.map(g => hmToMin(g.startTime)))
+    const byField: Record<string, Game[]> = {}
+    wxMovable.forEach(g => { (byField[g.location] = byField[g.location] || []).push(g) })
+    for (const loc of Object.keys(byField)) {
+      const list = byField[loc].slice().sort((a, b) => hmToMin(a.startTime) - hmToMin(b.startTime))
+      for (let i = 0; i < list.length; i++) {
+        await patchGame(list[i].id, { startTime: minToHM(anchor + i * L) })
+      }
+    }
+    setIncrement(L)
+    setWxBusy(false); setShowWeather(false)
+    toast.success(`Re-stacked ${wxMovable.length} game${wxMovable.length === 1 ? '' : 's'} at ${L}-min slots — review & publish`)
+  }
   async function applyWeatherDelay() {
     if (!wxMovable.length || wxDelay <= 0) return
     setWxBusy(true)
@@ -867,38 +894,68 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* ── Weather delay modal ── */}
+      {/* ── Weather modal (delay / shorten) ── */}
       {showWeather && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowWeather(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2"><CloudRain size={18} className="text-amber-500" /> Weather delay</h2>
+              <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2"><CloudRain size={18} className="text-amber-500" /> Weather adjust</h2>
               <button onClick={() => setShowWeather(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-slate-500">Push back the rest of {fmtDate(activeDate)}. Played games (with a score) and canceled games stay put.</p>
-              <div>
-                <label className="text-xs font-semibold text-slate-600">Delay by</label>
-                <div className="flex items-center gap-2 mt-1">
-                  {[15, 30, 45, 60].map(m => (
-                    <button key={m} onClick={() => setWxDelay(m)} className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${wxDelay === m ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'}`}>{m}m</button>
-                  ))}
-                  <input type="number" min="5" step="5" value={wxDelay} onChange={e => setWxDelay(Math.max(0, Number(e.target.value) || 0))} className="w-16 text-sm border border-slate-300 rounded-lg px-2 py-1.5" />
-                  <span className="text-xs text-slate-500">min</span>
-                </div>
+              <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+                {(['delay', 'shorten'] as const).map(m => (
+                  <button key={m} onClick={() => setWxMode(m)} className={`text-sm font-semibold px-3 py-1.5 rounded-md transition-colors ${wxMode === m ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>{m === 'delay' ? 'Delay' : 'Shorten'}</button>
+                ))}
               </div>
+              <p className="text-sm text-slate-500">{wxMode === 'delay' ? 'Push back' : 'Re-stack'} the rest of {fmtDate(activeDate)}. Played games (with a score) and canceled games stay put.</p>
+
+              {wxMode === 'delay' ? (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Delay by</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    {[15, 30, 45, 60].map(m => (
+                      <button key={m} onClick={() => setWxDelay(m)} className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${wxDelay === m ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'}`}>{m}m</button>
+                    ))}
+                    <input type="number" min="5" step="5" value={wxDelay} onChange={e => setWxDelay(Math.max(0, Number(e.target.value) || 0))} className="w-16 text-sm border border-slate-300 rounded-lg px-2 py-1.5" />
+                    <span className="text-xs text-slate-500">min</span>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">New time-slot length</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    {[30, 35, 40, 45].map(m => (
+                      <button key={m} onClick={() => setWxSlot(m)} className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${wxSlot === m ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'}`}>{m}m</button>
+                    ))}
+                    <input type="number" min="10" step="5" value={wxSlot} onChange={e => setWxSlot(Math.max(5, Number(e.target.value) || 0))} className="w-16 text-sm border border-slate-300 rounded-lg px-2 py-1.5" />
+                    <span className="text-xs text-slate-500">min</span>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-semibold text-slate-600">Affect games starting at or after</label>
                 <input type="time" value={wxFrom} onChange={e => setWxFrom(e.target.value)} className="block mt-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5" />
               </div>
+
               <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm">
-                <div className="text-slate-700"><span className="font-semibold">{wxMovable.length}</span> game{wxMovable.length === 1 ? '' : 's'} will move +{wxDelay} min.</div>
-                {wxOverflow.length > 0 && <div className="text-amber-700 mt-1 inline-flex items-center gap-1"><AlertTriangle size={13} /> {wxOverflow.length} would pass the day&apos;s end ({fmtTime(minToHM(dayWin.e))}) — may need shortening or another day.</div>}
+                {wxMode === 'delay' ? (
+                  <>
+                    <div className="text-slate-700"><span className="font-semibold">{wxMovable.length}</span> game{wxMovable.length === 1 ? '' : 's'} will move +{wxDelay} min.</div>
+                    {wxOverflow.length > 0 && <div className="text-amber-700 mt-1 inline-flex items-center gap-1"><AlertTriangle size={13} /> {wxOverflow.length} would pass the day&apos;s end ({fmtTime(minToHM(dayWin.e))}).</div>}
+                  </>
+                ) : (
+                  <>
+                    <div className="text-slate-700">Re-stack <span className="font-semibold">{wxMovable.length}</span> game{wxMovable.length === 1 ? '' : 's'} per field at <span className="font-semibold">{wxSlot}-min</span> slots from {wxFrom ? fmtTime(wxFrom) : 'the first game'}.</div>
+                    {wxShortenOver > 0 && <div className="text-amber-700 mt-1 inline-flex items-center gap-1"><AlertTriangle size={13} /> {wxShortenOver} would still pass the day&apos;s end ({fmtTime(minToHM(dayWin.e))}).</div>}
+                  </>
+                )}
               </div>
             </div>
             <div className="px-6 py-4 border-t flex justify-end gap-2">
               <button onClick={() => setShowWeather(false)} className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
-              <button onClick={applyWeatherDelay} disabled={wxBusy || !wxMovable.length || wxDelay <= 0} className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40">{wxBusy ? 'Applying…' : 'Apply delay'}</button>
+              <button onClick={() => wxMode === 'delay' ? applyWeatherDelay() : applyShorten()} disabled={wxBusy || !wxMovable.length || (wxMode === 'delay' ? wxDelay <= 0 : wxSlot <= 0)} className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40">{wxBusy ? 'Applying…' : (wxMode === 'delay' ? 'Apply delay' : 'Apply shorten')}</button>
             </div>
           </div>
         </div>
