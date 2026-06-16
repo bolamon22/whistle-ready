@@ -24,6 +24,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.startDate!==undefined&&{startDate:b.startDate}),
     ...(b.endDate!==undefined&&{endDate:b.endDate}),
     ...(b.location!==undefined&&{location:b.location}),
+    ...(b.scheduleIncrement!==undefined&&{scheduleIncrement:Number(b.scheduleIncrement)}),
     ...(b.logoUrl!==undefined&&{logoUrl:b.logoUrl}),
     ...(b.dates!==undefined&&{dates:JSON.stringify(b.dates)}),
     ...(b.payRates!==undefined&&{payRates:JSON.stringify(b.payRates)}),

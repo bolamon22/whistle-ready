@@ -114,6 +114,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [startH, setStartH]             = useState(8)
   const [endH, setEndH]                 = useState(19)
   const [storedVenuesRaw, setStoredVenuesRaw] = useState<any[]>([])
+  const [dayAvail, setDayAvail] = useState<any[]>([])  // saved per-day field availability (source of truth = venue record)
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
   const [unscheduling, setUnscheduling] = useState(false)
@@ -198,6 +199,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       setStoredVenuesRaw(venueList)
       // Initialize the day window from saved daily availability (set at creation / in Setup)
       const avail: any[] = vData.defaultAvailability ?? []
+      setDayAvail(avail)
       let minS = 24, maxE = 0
       avail.forEach((d: any) => (d.slots ?? []).forEach((sl: any) => {
         const sh = parseInt(String(sl.start || '').split(':')[0])
@@ -254,13 +256,20 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     })
   }, [games])
 
+  // Update ONLY the active day's window — never flatten or clobber the other days'
+  // saved availability (which may carry per-day, minute-level hours set in Setup/Settings).
   async function persistDayWindow(sH: number, eH: number) {
-    const list = dates.length ? dates : [activeDate].filter(Boolean)
-    const da = list.map(date => ({ date, slots: [{ start: `${String(sH).padStart(2, '0')}:00`, end: `${String(eH).padStart(2, '0')}:00` }] }))
+    const target = activeDate || dates[0] || ''
+    if (!target) return
+    const newSlot = { start: `${String(sH).padStart(2, '0')}:00`, end: `${String(eH).padStart(2, '0')}:00` }
+    const next = dayAvail.some((d: any) => d.date === target)
+      ? dayAvail.map((d: any) => d.date === target ? { ...d, slots: [newSlot] } : d)
+      : [...dayAvail, { date: target, slots: [newSlot] }]
+    setDayAvail(next)
     try {
       await fetch(`/api/venues/${params.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venues: storedVenuesRaw, defaultAvailability: da }),
+        body: JSON.stringify({ venues: storedVenuesRaw, defaultAvailability: next }),
       })
     } catch { /* non-fatal */ }
   }
@@ -271,9 +280,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const flat: Field[] = []
     venues.forEach(v => v.fields.forEach(f => flat.push({ venueName: v.name, fieldName: f, fullName: `${v.name} - ${f}` })))
     setFields(flat)
+    // Preserve the saved per-day availability — only venues/fields change here.
     await fetch(`/api/venues/${params.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venues, defaultAvailability: (dates.length ? dates : [activeDate].filter(Boolean)).map(date => ({ date, slots: [{ start: `${String(startH).padStart(2, '0')}:00`, end: `${String(endH).padStart(2, '0')}:00` }] })) }),
+      body: JSON.stringify({ venues, defaultAvailability: dayAvail }),
     })
   }
 
@@ -843,7 +853,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         </div>
         <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
           <label className="text-slate-500 text-xs">Increment</label>
-          <select value={increment} onChange={e => setIncrement(Number(e.target.value))}
+          <select value={increment} onChange={e => { const v = Number(e.target.value); setIncrement(v); fetch(`/api/tournaments/${params.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduleIncrement: v }) }).catch(() => {}) }}
             className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white">
             {[10, 15, 20, 30, 45, 60].map(m => <option key={m} value={m}>{m} min</option>)}
           </select>

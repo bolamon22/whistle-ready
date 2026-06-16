@@ -230,6 +230,11 @@ scores → public. Highlights shipped to live:
   choice = #1), not re-weighting. Full table + takeaways in `SCHEDULING-PATTERNS.md`.
 
 ## Open / next
+- **Help & support (NEW — requested Jun 16)**: add a persistent **help icon** in the app chrome
+  (likely in `TournamentNav`) that opens **support documentation** (in-app help center / docs), plus
+  **some form of chat** (live support or an assistant chatbot). Scope TBD — could start with a docs
+  drawer + a contact/chat widget and grow into in-product help. Note there is already a `ChatWidget`
+  component in `tournaments/[id]` to build on or reconcile with.
 - **Staff app — Phase 3**: two-way team/coach messaging (in-app + email). **Phase 4**: SMS/Twilio
   delivery for ops messages + push/PWA. (Done & live: ops board, role dashboards, staff directory,
   incidents, setup checklist, sandbox badge — see "Staff game-day app" above.)
