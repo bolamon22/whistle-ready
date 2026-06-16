@@ -97,6 +97,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [roleFilter, setRoleFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [addSearch, setAddSearch] = useState('')
+  const [addRole, setAddRole] = useState('all')
+  const [addCert, setAddCert] = useState('all')
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkField, setBulkField] = useState('')
@@ -181,6 +184,11 @@ export default function RosterPage({ params }: { params:{id:string} }) {
 
   const onRoster = allWorkers.filter(w=>isOnRoster(w.id))
   const notOnRoster = allWorkers.filter(w=>!isOnRoster(w.id))
+  const filteredNotOnRoster = notOnRoster
+    .filter(w=>addRole==='all'||parseRoles(w).includes(addRole))
+    .filter(w=>addCert==='all'||w.certLevel===addCert)
+    .filter(w=>!addSearch||w.name.toLowerCase().includes(addSearch.toLowerCase()))
+    .sort((a,b)=>a.name.localeCompare(b.name))
 
   const filteredOnRoster = onRoster
     .filter(w=>roleFilter==='all'||parseRoles(w).includes(roleFilter))
@@ -449,13 +457,26 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       {/* ── Not on roster ── */}
       {notOnRoster.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+          <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-3 flex-wrap">
             <span className="w-2 h-2 rounded-full bg-slate-300"/>
             <span className="font-semibold text-slate-600 text-sm">Available to Add ({notOnRoster.length})</span>
+            <input className="input !w-48 text-sm ml-2" placeholder="Search by name…" value={addSearch} onChange={e=>setAddSearch(e.target.value)}/>
+            <label className="text-sm text-slate-500">Role:</label>
+            <select className="select !w-auto text-sm" value={addRole} onChange={e=>setAddRole(e.target.value)}>
+              <option value="all">All roles</option>
+              {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+            <label className="text-sm text-slate-500">Level:</label>
+            <select className="select !w-auto text-sm" value={addCert} onChange={e=>setAddCert(e.target.value)}>
+              <option value="all">All levels</option>
+              {CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+            <span className="text-xs text-slate-400">{filteredNotOnRoster.length} shown</span>
+            {(addSearch||addRole!=='all'||addCert!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setAddSearch('');setAddRole('all');setAddCert('all')}}>Clear</button>}
           </div>
           <table className="w-full text-sm">
             <tbody className="divide-y divide-slate-100">
-              {notOnRoster.map(w=>{
+              {filteredNotOnRoster.map(w=>{
                 const wRoles=parseRoles(w)
                 return(
                 <tr key={w.id} className="hover:bg-slate-50">
@@ -470,6 +491,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   </td>
                 </tr>
               )})}
+              {filteredNotOnRoster.length===0 && (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400 text-sm">No staff match these filters.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
