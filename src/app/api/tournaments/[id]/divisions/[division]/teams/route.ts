@@ -200,3 +200,48 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
     return NextResponse.json({ error: 'Failed to update team' }, { status: 500 })
   }
 }
+
+// DELETE: remove a team from the division. Also cleans it out of any pool and
+// removes the parent registration when it has no teams left (so a team deleted
+// here also disappears from the Registrations list). Multi-team club
+// registrations are kept and their team count is decremented.
+export async function DELETE(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  try {
+    const { teamId } = await req.json()
+    if (!teamId) return NextResponse.json({ error: 'teamId required' }, { status: 400 })
+    const division = decodeURIComponent(params.division)
+
+    const team = await prisma.registeredTeam.findUnique({ where: { id: teamId } })
+    if (!team) return NextResponse.json({ ok: true })
+
+    await prisma.registeredTeam.delete({ where: { id: teamId } })
+
+    // Drop the team name from any pool in this division
+    try {
+      const pools = await prisma.pool.findMany({ where: { tournamentId: params.id, division } })
+      for (const p of pools) {
+        const names: string[] = JSON.parse(p.teamNames || '[]')
+        if (names.includes(team.teamName)) {
+          await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(names.filter(n => n !== team.teamName)) } })
+        }
+      }
+    } catch { /* pools optional */ }
+
+    // Clean up the parent registration
+    if (team.registrationId) {
+      try {
+        const remaining = await prisma.registeredTeam.count({ where: { registrationId: team.registrationId } })
+        if (remaining === 0) {
+          await prisma.teamRegistration.delete({ where: { id: team.registrationId } })
+        } else {
+          await prisma.teamRegistration.update({ where: { id: team.registrationId }, data: { numTeams: remaining } })
+        }
+      } catch { /* registration may have linked records; non-fatal */ }
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ error: 'Failed to delete team' }, { status: 500 })
+  }
+}

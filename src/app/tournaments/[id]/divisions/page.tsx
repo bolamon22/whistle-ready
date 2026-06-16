@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import BracketBuilder from './BracketBuilder'
-import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical } from 'lucide-react'
+import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2 } from 'lucide-react'
 
 const PALETTE = [
   '#3b82f6', '#10b981', '#a855f7', '#f97316', '#ec4899',
@@ -276,6 +276,20 @@ export default function DivisionsPage() {
     }))
     setMovingTeam(null)
     toast.success(`${team.teamName} moved to ${newDivision}`)
+  }
+
+  async function deleteTeam(team: Team) {
+    if (!activeDiv) return
+    if (!confirm(`Delete "${team.teamName}" from ${activeDiv}? This also removes it from registrations.`)) return
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId: team.id }),
+    })
+    if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error ?? 'Failed to delete team'); return }
+    setTeams(t => t.filter(x => x.id !== team.id))
+    setPools(ps => ps.map(p => ({ ...p, teamNames: p.teamNames.filter(n => n !== team.teamName) })))
+    setDivisions(d => d.map(x => x.name === activeDiv ? { ...x, teamCount: Math.max(0, x.teamCount - 1) } : x))
+    toast.success(`${team.teamName} deleted`)
   }
 
   const selectDiv = useCallback((div: string) => {
@@ -1070,6 +1084,12 @@ if (loading) return (
                                       onClick={() => { setMovingTeam(team); setMoveTarget('') }}
                                       className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-teal-600 border border-slate-200 hover:border-teal-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
                                       Move <ArrowRight size={11} />
+                                    </button>
+                                    <button
+                                      onClick={() => deleteTeam(team)}
+                                      title="Delete team"
+                                      className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-red-600 border border-slate-200 hover:border-red-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
+                                      <Trash2 size={11} /> Delete
                                     </button>
                                   </div>
                                 </td>
