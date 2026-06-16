@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import BracketBuilder from './BracketBuilder'
-import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2, Calendar } from 'lucide-react'
 
 const PALETTE = [
   '#3b82f6', '#10b981', '#a855f7', '#f97316', '#ec4899',
@@ -789,6 +789,13 @@ if (loading) return (
               </button>
               <p className="text-[10px] text-slate-400 text-center leading-tight">{includeBrackets ? 'Pools, pool games & brackets' : 'Pool games only'} · auto-creates Pool A if needed{includeBrackets ? ' · skips existing brackets' : ''}</p>
             </div>
+            <Link href={`/tournaments/${id}/scheduler`} className="mt-3 flex items-center justify-between gap-2 bg-white border border-slate-200 hover:border-teal-300 rounded-xl px-4 py-3 transition-colors group">
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Calendar size={15} className="text-teal-600" /> Game Scheduler</span>
+                <span className="block text-[11px] text-slate-400 mt-0.5 pl-6">Drag &amp; drop games onto fields</span>
+              </span>
+              <ArrowRight size={15} className="text-slate-300 group-hover:text-teal-500 flex-shrink-0" />
+            </Link>
             {showSmartEditor && (() => {
               const maxN = Math.max(smartMax, ...divisions.map(d => d.teamCount), 2)
               const counts: number[] = []; for (let n = 2; n <= maxN; n++) counts.push(n)
@@ -1443,32 +1450,3 @@ if (loading) return (
                             </tbody>
                           </table>
                           <p className="px-5 py-2 text-[11px] text-slate-400 border-t border-slate-100">Set dates, times and fields on the Scheduler (these games appear in the parking lot as B#).</p>
-                        </div>
-                      )}
-                      </>
-                    )}
-                  </div>
-                )}
-              {activeTab === 'bracket' && activeDiv && (
-                (() => {
-                  const tc = divisions.find(d => d.name === activeDiv)?.teamCount ?? teams.length
-                  const poolG = parseInt(divGamesPerTeam[activeDiv] ?? gamesPerTeam ?? '2') || 2
-                  const guar = parseInt(guarantee) || 4
-                  const owes2 = (guar - poolG) >= 2 || smartTable[tc]?.bracket === '2gg'
-                  const planB = smartTable[tc]?.bracket || ''
-                  const fmt = planB === 'double' ? 'double' : planB === '2gg' ? '2gg' : (planB === 'single' || planB === 'single-con') ? 'single' : undefined
-                  const sd = smartTable[tc] || {}
-                  const def = defaultBracketPlan(tc, poolG, guar)
-                  const cnt = owes2 ? String(tc) : String(sd.advance ?? def.advance)
-                  const cons = owes2 ? undefined : String(sd.consolation ?? def.consolation)
-                  return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} />
-                })()
-              )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
