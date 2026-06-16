@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
 import ChatWidget from './ChatWidget'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X } from 'lucide-react'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
@@ -503,102 +503,66 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
 
-      {/* ── Assigner header ────────────────────────────────────────── */}
-      <div className="bg-[#0f1f3d] -mx-6 px-6 pt-4 pb-0 mb-0">
-        {/* Row 1: logo + title + nav links */}
-        <div className="flex items-center justify-between gap-4 pb-3">
-          <div className="flex items-center gap-3">
-            <Link href={`/tournaments/${params.id}/dashboard`} className="flex-shrink-0">
-              {tournament.logoUrl
-                ? <img src={tournament.logoUrl} alt="logo" className="h-11 w-11 object-contain rounded-xl border border-white/10 bg-white/5 hover:border-white/30 transition-colors" />
-                : null}
-            </Link>
-            <div>
-              <div className="text-[11px] text-slate-400 mb-0.5">
-                <Link href="/" className="hover:text-teal-400 transition-colors">Tournaments</Link>
-                <span className="mx-1 opacity-40">/</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Link href={`/tournaments/${params.id}/dashboard`} className="text-lg font-bold text-white leading-tight hover:text-teal-300 transition-colors">{tournament.name}</Link>
-                <span className="text-[10px] font-semibold bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-full tracking-wide">ASSIGNER</span>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[11px] text-slate-400">{games.length} games</span>
-                <span className="text-slate-600">·</span>
-                <span className="text-[11px] text-sky-400">{assignedCount} assigned</span>
-                {games.length > 0 && (
-                  <span className={`text-[11px] font-semibold ${Math.round(assignedCount/Math.max(games.length,1)*100) >= 90 ? 'text-emerald-400' : Math.round(assignedCount/Math.max(games.length,1)*100) >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
-                    {Math.round(assignedCount / Math.max(games.length, 1) * 100)}%
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-            <Link href={`/tournaments/${params.id}/dashboard`} className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">← Dashboard</Link>
-            <Link href={`/tournaments/${params.id}/scheduler`} className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">📅 Scheduler</Link>
-            <Link href={`/tournaments/${params.id}/roster`} className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">👥 Staff Roster</Link>
-            <Link href={`/tournaments/${params.id}/pay-summary`} className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">💰 Pay</Link>
-            <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/tournaments/${params.id}/public`);toast.success('Link copied!')}} className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors">🔗 Share</button>
-          </div>
-        </div>
+      {/* ── Page header: shared nav + light toolbar ─────────────────── */}
+      <TournamentNav
+        id={params.id}
+        name={tournament.name}
+        logoUrl={tournament.logoUrl}
+        stats={{ games: games.length, assigned: assignedCount, pct: Math.round(assignedCount / Math.max(games.length, 1) * 100) }}
+      />
 
-        {/* Row 2: stats + view switcher + actions — all in dark bar */}
-        <div className="flex items-center gap-3 py-2 border-t border-white/10 flex-wrap">
-          {/* Assignment counts */}
-          <div className="flex items-center gap-2 text-[11px] font-semibold">
-            <span className="text-sky-300">{assignedBoysRefs} Boys Refs</span>
-            <span className="text-white/20">·</span>
-            <span className="text-pink-300">{assignedGirlsRefs} Girls Refs</span>
-            {assignedBothRefs > 0 && <><span className="text-white/20">·</span><span className="text-slate-300">{assignedBothRefs} Both</span></>}
-            <span className="text-white/20">·</span>
-            <span className="text-emerald-300">{assignedSKs} SKs</span>
-          </div>
-          <div className="flex-1"/>
-          {/* View switcher */}
-          {games.length > 0 && (
-            <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-1">
-              {(['grid','list','division','staff'] as const).map(v => (
-                <button key={v} onClick={() => setViewMode(v)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${viewMode === v ? 'bg-white text-slate-800 shadow' : 'text-slate-300 hover:text-white'}`}>
-                  {v === 'grid' ? '⊞ Grid' : v === 'list' ? '≡ List' : v === 'division' ? '⬡ Division' : '👤 Staff'}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Action buttons */}
-          <div className="flex items-center gap-1.5">
-            {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="text-xs font-semibold text-purple-200 border border-purple-400/40 hover:bg-purple-500/20 px-3 py-1.5 rounded-lg transition-colors">⚡ Auto-Assign</button>}
-            {dayGames.length > 0 && <button onClick={() => { setShowClear(true); setClearConfirm(''); setClearName(''); setClearCategories(new Set()) }} className="text-xs font-semibold text-red-300 border border-red-400/40 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-colors">🗑 Clear</button>}
-            <button onClick={openAddGame} className="text-xs font-semibold text-slate-200 border border-white/20 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors">+ Game</button>
-            <label className="text-xs font-semibold text-teal-200 border border-teal-400/40 hover:bg-teal-500/20 px-3 py-1.5 rounded-lg transition-colors cursor-pointer">↑ Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>
-          </div>
+      {/* Toolbar: counts + view switcher + actions */}
+      <div className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          <span className="text-sky-600">{assignedBoysRefs} Boys refs</span>
+          <span className="text-slate-300">·</span>
+          <span className="text-pink-600">{assignedGirlsRefs} Girls refs</span>
+          {assignedBothRefs > 0 && <><span className="text-slate-300">·</span><span className="text-slate-600">{assignedBothRefs} Both</span></>}
+          <span className="text-slate-300">·</span>
+          <span className="text-emerald-600">{assignedSKs} SKs</span>
         </div>
-
-        {/* Row 3: Day tabs */}
-        {dates.length > 0 && viewMode !== 'staff' && (
-          <div className="flex gap-0 mt-1">
-            {dates.map(d => (
-              <button key={d} onClick={() => setActiveDay(d)}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeDay === d ? 'border-teal-400 text-teal-300' : 'border-transparent text-slate-400 hover:text-white hover:border-white/20'}`}>
-                {formatDate(d)}
+        <div className="flex-1" />
+        {games.length > 0 && (
+          <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-1">
+            {(['grid','list','division','staff'] as const).map(v => (
+              <button key={v} onClick={() => setViewMode(v)}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors ${viewMode === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+                {v === 'grid' ? <><LayoutGrid size={13} /> Grid</> : v === 'list' ? <><List size={13} /> List</> : v === 'division' ? <><Rows3 size={13} /> Division</> : <><User size={13} /> Staff</>}
               </button>
             ))}
           </div>
         )}
+        <div className="flex items-center gap-1.5">
+          {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="text-xs font-semibold text-purple-700 border border-purple-200 hover:bg-purple-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Zap size={13} /> Auto-assign</button>}
+          {dayGames.length > 0 && <button onClick={() => { setShowClear(true); setClearConfirm(''); setClearName(''); setClearCategories(new Set()) }} className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Trash2 size={13} /> Clear</button>}
+          <button onClick={openAddGame} className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Plus size={13} /> Game</button>
+          <label className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"><Upload size={13} /> Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>
+        </div>
       </div>
+
+      {/* Day tabs */}
+      {dates.length > 0 && viewMode !== 'staff' && (
+        <div className="flex gap-0 border-b border-slate-200 mb-4 flex-wrap">
+          {dates.map(d => (
+            <button key={d} onClick={() => setActiveDay(d)}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeDay === d ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+              {formatDate(d)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Sub-bar: filters (only for grid/list/division views) ─────── */}
       {viewMode !== 'staff' && (
-        <div className="bg-slate-800 -mx-6 px-6 py-2 mb-5 flex items-center gap-3 flex-wrap border-b border-slate-700">
+        <div className="bg-white border border-slate-200 rounded-xl px-4 py-2 mb-5 flex items-center gap-3 flex-wrap">
           <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Filter</span>
-          <span className="text-slate-600 text-xs">|</span>
-          <select className="bg-slate-700 text-white border border-slate-600 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" value={listDivFilter} onChange={e=>setListDivFilter(e.target.value)}>
-            <option value="all">All Divisions</option>
+          <span className="text-slate-300 text-xs">|</span>
+          <select className="bg-white text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" value={listDivFilter} onChange={e=>setListDivFilter(e.target.value)}>
+            <option value="all">All divisions</option>
             {[...new Set(games.map(g=>g.division))].sort().map(d=><option key={d} value={d}>{d}</option>)}
           </select>
-          <input className="bg-slate-700 text-white border border-slate-600 rounded-lg px-2.5 py-1 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 w-44" placeholder="Search team, game…" value={listSearch} onChange={e=>setListSearch(e.target.value)}/>
-          {(listSearch||listDivFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-white transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all')}}>✕ Clear</button>}
+          <input className="bg-white text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 w-44" placeholder="Search team, game…" value={listSearch} onChange={e=>setListSearch(e.target.value)}/>
+          {(listSearch||listDivFilter!=='all')&&<button className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all')}}><X size={12} /> Clear</button>}
         </div>
       )}
       {viewMode === 'staff' && <div className="mb-5"/>}

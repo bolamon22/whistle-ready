@@ -834,12 +834,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       {/* ── Header (merged with publish status) ── */}
       <div className={`border-b px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
         <div className="flex items-center gap-2 mr-1">
-          <Link href={`/tournaments/${params.id}/divisions`} className="text-xs text-teal-600 hover:text-teal-800 hover:underline"><span className="inline-flex items-center gap-1"><ArrowLeft size={12} /> Divisions</span></Link>
-          <span className="text-slate-300">|</span>
           <span className="text-sm font-semibold text-slate-800">Scheduler</span>
-          <span className="text-slate-300">|</span>
-          <Link href={`/tournaments/${params.id}`} className="text-xs text-teal-600 hover:text-teal-800 hover:underline"><span className="inline-flex items-center gap-1">Staff schedule <ArrowRight size={12} /></span></Link>
-          <span className="text-xs text-slate-400">{games.length} · <span className="text-amber-600 font-medium">{unscheduled.length} left</span></span>
+          <span className="text-xs text-slate-400">{games.length} games · <span className="text-amber-600 font-medium">{unscheduled.length} unscheduled</span></span>
         </div>
         <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
           <label className="text-slate-500 text-xs">Increment</label>
