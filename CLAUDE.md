@@ -230,6 +230,17 @@ scores → public. Highlights shipped to live:
   choice = #1), not re-weighting. Full table + takeaways in `SCHEDULING-PATTERNS.md`.
 
 ## Open / next
+- **Forms library (in progress on `org-forms-library`)**: org Admin → Forms = reusable **templates**;
+  each tournament gets a working copy. Three planned: **Player Waivers** (built — editable waiver text +
+  optional fields + confirmation + Resend email; public per-tournament form at `/tournaments/[id]/player-waiver`
+  with team dropdown from that tournament's registrations + a public-page button; staff entries list at
+  `/tournaments/[id]/player-waivers`), **Team Registration**, **Vendor Request**. Submissions stored in
+  AppSetting `orgFormSubmissions:{orgId}` tagged with tournamentId.
+- **Post-submission email = invite to create a player profile (REMEMBER — requested Jun 17)**: Jotform emails
+  registrants a formatted PDF receipt of their entry. We need to (a) email a receipt of the submitted details,
+  and (b) **craft an invite letter prompting them to log into the app to create a Player Profile and more**.
+  Ties to the future **player profiles + individual registration (with payment)** work — do that letter when
+  player profiles exist. Current waiver email is plain confirmation text only.
 - **Help & support (NEW — requested Jun 16)**: add a persistent **help icon** in the app chrome
   (likely in `TournamentNav`) that opens **support documentation** (in-app help center / docs), plus
   **some form of chat** (live support or an assistant chatbot). Scope TBD — could start with a docs
