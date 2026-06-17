@@ -8,12 +8,14 @@ import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, Plus, Trash2, ExternalLink, ImagePlus, Save } from 'lucide-react'
 
 type Sponsor = { name: string; logoUrl: string; url: string }
+type Page = { title: string; slug: string; body: string }
 type Content = {
   hero: { headline: string; subtext: string; imageUrl: string }
   about: { heading: string; body: string }
   sponsors: Sponsor[]
   contact: { email: string; phone: string; hours: string; address: string }
   socials: { facebook: string; instagram: string; website: string }
+  pages: Page[]
 }
 const EMPTY: Content = {
   hero: { headline: '', subtext: '', imageUrl: '' },
@@ -21,7 +23,10 @@ const EMPTY: Content = {
   sponsors: [],
   contact: { email: '', phone: '', hours: '', address: '' },
   socials: { facebook: '', instagram: '', website: '' },
+  pages: [],
 }
+
+const slugify = (t: string) => t.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 
 async function uploadImage(file: File): Promise<string | null> {
   const fd = new FormData(); fd.append('file', file)
@@ -53,7 +58,7 @@ function OrgSiteEditorInner() {
         if (qOrg) { setOrg({ name: qName, slug: qSlug }) }
         else { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrg({ name: o.name, slug: o.slug }) }
         const d = await fetch(`/api/org-site${apiQ}`).then(r => r.ok ? r.json() : {})
-        setC({ ...EMPTY, ...d, hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [] })
+        setC({ ...EMPTY, ...d, hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], pages: Array.isArray(d.pages) ? d.pages : [] })
       } catch {} finally { setLoading(false) }
     })()
   }, [status, session, role])
@@ -128,6 +133,31 @@ function OrgSiteEditorInner() {
               </div>
               <label className="text-xs border border-slate-300 rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer whitespace-nowrap">Logo<input type="file" accept="image/*" className="hidden" onChange={e => sponLogo(i, e.target.files?.[0])} /></label>
               <button onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Custom pages */}
+      <section className="card p-5 mb-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold text-slate-800">Info pages</h2>
+          <button onClick={() => setC(v => ({ ...v, pages: [...v.pages, { title: '', slug: '', body: '' }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add page</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Add pages like Directions, Refund policy, Hotels or FAQ. They appear in your site's top navigation.</p>
+        {c.pages.length === 0 && <p className="text-sm text-slate-400">No pages yet.</p>}
+        <div className="space-y-3">
+          {c.pages.map((pg, i) => (
+            <div key={i} className="border border-slate-200 rounded-xl p-3">
+              <div className="flex items-center gap-2">
+                <input className="input flex-1" value={pg.title} onChange={e => { const title = e.target.value; setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, title, slug: x.slug || slugify(title) } : x) })) }} placeholder="Page title (e.g. Directions & parking)" />
+                <button onClick={() => setC(v => ({ ...v, pages: v.pages.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+              </div>
+              <div className="flex items-center gap-1 mt-2 text-xs text-slate-400">
+                <span>/o/{org?.slug || 'your-org'}/</span>
+                <input className="input py-1 text-xs flex-1" value={pg.slug} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, slug: slugify(e.target.value) } : x) }))} placeholder="directions" />
+              </div>
+              <textarea className="input min-h-[100px] mt-2" value={pg.body} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: e.target.value } : x) }))} placeholder="Page content…" />
             </div>
           ))}
         </div>

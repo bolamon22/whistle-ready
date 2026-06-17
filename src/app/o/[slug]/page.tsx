@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@libsql/client'
-import { MapPin, CalendarDays, ArrowRight, Trophy, Facebook, Instagram, Globe } from 'lucide-react'
+import { MapPin, CalendarDays, ArrowRight, Trophy } from 'lucide-react'
+import { OrgHeader, OrgFooter, PageLink } from './_chrome'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +74,8 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const sponsors: any[] = Array.isArray(content.sponsors) ? content.sponsors : []
   const contact = content.contact || {}
   const socials = content.socials || {}
+  const pages: any[] = Array.isArray(content.pages) ? content.pages : []
+  const navPages: PageLink[] = pages.filter(p => p.title && p.slug).map(p => ({ title: p.title, slug: p.slug }))
 
   const tRes = await client.execute({
     sql: 'SELECT id, name, startDate, endDate, location, logoUrl, sport, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate',
@@ -85,17 +88,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {org.logoUrl && <img src={org.logoUrl} alt="" className="w-9 h-9 rounded-lg object-contain bg-white border border-slate-100" />}
-            <span className="font-bold text-slate-900 text-lg">{org.name}</span>
-          </div>
-          {upcoming[0] && (
-            <Link href={`/tournaments/${upcoming[0].id}/register`} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors">Register a team</Link>
-          )}
-        </div>
-      </header>
+      <OrgHeader org={org} slug={params.slug} pages={navPages} registerHref={upcoming[0] ? `/tournaments/${upcoming[0].id}/register` : undefined} />
 
       {/* Hero */}
       <section className="relative bg-[#0f1f3d] text-white overflow-hidden">
@@ -152,27 +145,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
         </section>
       )}
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-sm text-slate-500">
-          <div>
-            <span className="font-semibold text-slate-700">{org.name}</span>
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              {(contact.email || org.contactEmail) && <a href={`mailto:${contact.email || org.contactEmail}`} className="hover:text-teal-700">{contact.email || org.contactEmail}</a>}
-              {contact.phone && <a href={`tel:${contact.phone}`} className="hover:text-teal-700">{contact.phone}</a>}
-              {contact.hours && <span>{contact.hours}</span>}
-              {contact.address && <span>{contact.address}</span>}
-            </div>
-            {(socials.facebook || socials.instagram || socials.website) && (
-              <div className="flex gap-3 mt-2 text-slate-400">
-                {socials.facebook && <a href={socials.facebook} target="_blank" rel="noreferrer" className="hover:text-teal-700" aria-label="Facebook"><Facebook size={18} /></a>}
-                {socials.instagram && <a href={socials.instagram} target="_blank" rel="noreferrer" className="hover:text-teal-700" aria-label="Instagram"><Instagram size={18} /></a>}
-                {socials.website && <a href={socials.website} target="_blank" rel="noreferrer" className="hover:text-teal-700" aria-label="Website"><Globe size={18} /></a>}
-              </div>
-            )}
-          </div>
-          <span className="text-xs text-slate-400">Powered by Whistle Ready</span>
-        </div>
-      </footer>
+      <OrgFooter org={org} contact={contact} socials={socials} />
     </div>
   )
 }
