@@ -57,6 +57,7 @@ function OrgSiteEditorInner() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [openPages, setOpenPages] = useState<Record<number, boolean>>({})
+  const [openSec, setOpenSec] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (status === 'loading') return
@@ -90,6 +91,20 @@ function OrgSiteEditorInner() {
   const galleryAdd = async (files?: FileList | null) => { if (!files || !files.length) return; for (const f of Array.from(files)) { const u = await uploadImage(f); if (u) setC(v => ({ ...v, gallery: [...v.gallery, { url: u, caption: '' }] })); else toast.error('Upload failed') } }
   const sponLogo = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: u } : s) })); else toast.error('Upload failed') }
 
+  function Sec({ k, title, summary, children }: { k: string; title: string; summary?: string; children: React.ReactNode }) {
+    const isOpen = !!openSec[k]
+    return (
+      <section className="card mb-4 overflow-hidden">
+        <button type="button" onClick={() => setOpenSec(o => ({ ...o, [k]: !o[k] }))} className="w-full flex items-center gap-3 p-4 text-left">
+          <h2 className="font-semibold text-slate-800 flex-1">{title}</h2>
+          {summary ? <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">{summary}</span> : null}
+          <ChevronDown size={18} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {isOpen && <div className="px-5 pb-5 border-t border-slate-100 pt-4">{children}</div>}
+      </section>
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto pb-16">
       <Toaster position="top-right" />
@@ -105,20 +120,18 @@ function OrgSiteEditorInner() {
         </div>
       </div>
 
-      {/* Branding */}
-      <section className="card p-5 mb-5">
-        <h2 className="font-semibold text-slate-800 mb-3">Logo</h2>
+      {/* Logo */}
+      <Sec k="logo" title="Logo" summary={c.logo ? 'Set' : 'None'}>
         <div className="flex items-center gap-3">
           {c.logo ? <img src={c.logo} alt="" className="h-16 w-16 object-contain rounded-xl border border-slate-200 bg-white" /> : <div className="h-16 w-16 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
           <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">Upload<input type="file" accept="image/*" className="hidden" onChange={e => logoImg(e.target.files?.[0])} /></label>
           {c.logo && <button onClick={() => setC(v => ({ ...v, logo: '' }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
         </div>
         <p className="text-xs text-slate-400 mt-2">Shown in your site header and hero.</p>
-      </section>
+      </Sec>
 
       {/* Hero */}
-      <section className="card p-5 mb-5">
-        <h2 className="font-semibold text-slate-800 mb-3">Hero</h2>
+      <Sec k="hero" title="Hero" summary={c.hero.headline ? 'Headline set' : 'Empty'}>
         <label className="label">Headline</label>
         <input className="input" value={c.hero.headline} onChange={e => setC(v => ({ ...v, hero: { ...v.hero, headline: e.target.value } }))} placeholder={org?.name || 'Your organization'} />
         <label className="label mt-3">Subtext</label>
@@ -129,21 +142,19 @@ function OrgSiteEditorInner() {
           <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">Upload<input type="file" accept="image/*" className="hidden" onChange={e => heroImg(e.target.files?.[0])} /></label>
           {c.hero.imageUrl && <button onClick={() => setC(v => ({ ...v, hero: { ...v.hero, imageUrl: '' } }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
         </div>
-      </section>
+      </Sec>
 
       {/* About */}
-      <section className="card p-5 mb-5">
-        <h2 className="font-semibold text-slate-800 mb-3">About</h2>
+      <Sec k="about" title="About" summary={c.about.body ? 'Set' : 'Empty'}>
         <label className="label">Heading</label>
         <input className="input" value={c.about.heading} onChange={e => setC(v => ({ ...v, about: { ...v.about, heading: e.target.value } }))} placeholder="About us" />
         <label className="label mt-3">Body</label>
         <textarea className="input min-h-[120px]" value={c.about.body} onChange={e => setC(v => ({ ...v, about: { ...v.about, body: e.target.value } }))} placeholder="Tell visitors about your organization…" />
-      </section>
+      </Sec>
 
       {/* Sponsors */}
-      <section className="card p-5 mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-slate-800">Sponsors &amp; partners</h2>
+      <Sec k="sponsors" title="Sponsors & partners" summary={`${c.sponsors.length}`}>
+        <div className="flex justify-end mb-2">
           <button onClick={() => setC(v => ({ ...v, sponsors: [...v.sponsors, { name: '', logoUrl: '', url: '' }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add</button>
         </div>
         {c.sponsors.length === 0 && <p className="text-sm text-slate-400">No sponsors yet.</p>}
@@ -160,17 +171,16 @@ function OrgSiteEditorInner() {
             </div>
           ))}
         </div>
-      </section>
+      </Sec>
 
-      {/* Custom pages */}
-      <section className="card p-5 mb-5">
+      {/* Info pages */}
+      <Sec k="pages" title="Info pages" summary={`${c.pages.length} page${c.pages.length === 1 ? '' : 's'}`}>
         <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold text-slate-800">Info pages</h2>
-          <button onClick={() => setC(v => { const idx = v.pages.length; setOpenPages(o => ({ ...o, [idx]: true })); return { ...v, pages: [...v.pages, { title: '', slug: '', body: '', group: '' }] } })} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add page</button>
+          <p className="text-xs text-slate-400">Pages like Directions, Refund policy, Hotels or FAQ. Same Menu group nests them under a dropdown. Arrows reorder. Body supports Markdown.</p>
+          <button onClick={() => setC(v => { const idx = v.pages.length; setOpenPages(o => ({ ...o, [idx]: true })); return { ...v, pages: [...v.pages, { title: '', slug: '', body: '', group: '' }] } })} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 flex-shrink-0 ml-3"><Plus size={14} /> Add page</button>
         </div>
-        <p className="text-xs text-slate-400 mb-3">Add pages like Directions, Refund policy, Hotels or FAQ. Give pages the same Menu group to nest them under a dropdown. Use the arrows to reorder. Body supports Markdown (# heading, **bold**, - bullets, [links](https://…)).</p>
-        {c.pages.length === 0 && <p className="text-sm text-slate-400">No pages yet.</p>}
-        <div className="space-y-3">
+        {c.pages.length === 0 && <p className="text-sm text-slate-400 mt-2">No pages yet.</p>}
+        <div className="space-y-3 mt-2">
           {c.pages.map((pg, i) => (
             <div key={i} className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 p-3">
@@ -198,15 +208,13 @@ function OrgSiteEditorInner() {
             </div>
           ))}
         </div>
-      </section>
+      </Sec>
 
       {/* Photo gallery */}
-      <section className="card p-5 mb-5">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold text-slate-800">Photo gallery</h2>
+      <Sec k="gallery" title="Photo gallery" summary={`${c.gallery.length} photo${c.gallery.length === 1 ? '' : 's'}`}>
+        <div className="flex justify-end mb-2">
           <label className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 cursor-pointer"><Plus size={14} /> Add photos<input type="file" accept="image/*" multiple className="hidden" onChange={e => galleryAdd(e.target.files)} /></label>
         </div>
-        <p className="text-xs text-slate-400 mb-3">Photos appear in a grid on your site. You can add several at once.</p>
         {c.gallery.length === 0 && <p className="text-sm text-slate-400">No photos yet.</p>}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {c.gallery.map((ph, i) => (
@@ -219,21 +227,19 @@ function OrgSiteEditorInner() {
             </div>
           ))}
         </div>
-      </section>
+      </Sec>
 
       {/* Instagram feed */}
-      <section className="card p-5 mb-5">
-        <h2 className="font-semibold text-slate-800 mb-1">Instagram feed</h2>
+      <Sec k="instagram" title="Instagram feed" summary={c.instagram.token ? 'Connected' : 'Off'}>
         <p className="text-xs text-slate-400 mb-3">Shows your latest Instagram posts across the bottom of your site. Requires an Instagram <b>Business or Creator</b> account and an access token (see setup guide). Leave blank to hide.</p>
         <div className="grid sm:grid-cols-2 gap-3">
           <div><label className="label">Username (for the “Follow” link)</label><input className="input" value={c.instagram.username} onChange={e => setC(v => ({ ...v, instagram: { ...v.instagram, username: e.target.value } }))} placeholder="@yourhandle" /></div>
           <div><label className="label">Access token</label><input type="password" className="input" value={c.instagram.token} onChange={e => setC(v => ({ ...v, instagram: { ...v.instagram, token: e.target.value } }))} placeholder="Long-lived Instagram token" /></div>
         </div>
-      </section>
+      </Sec>
 
       {/* Contact + socials */}
-      <section className="card p-5">
-        <h2 className="font-semibold text-slate-800 mb-3">Contact &amp; social</h2>
+      <Sec k="contact" title="Contact & social" summary={(c.contact.email || c.contact.phone) ? 'Set' : 'Empty'}>
         <div className="grid sm:grid-cols-2 gap-3">
           <div><label className="label">Email</label><input className="input" value={c.contact.email} onChange={e => setC(v => ({ ...v, contact: { ...v.contact, email: e.target.value } }))} placeholder="info@…" /></div>
           <div><label className="label">Phone</label><input className="input" value={c.contact.phone} onChange={e => setC(v => ({ ...v, contact: { ...v.contact, phone: e.target.value } }))} placeholder="(555) 555-5555" /></div>
@@ -243,7 +249,7 @@ function OrgSiteEditorInner() {
           <div><label className="label">Instagram URL</label><input className="input" value={c.socials.instagram} onChange={e => setC(v => ({ ...v, socials: { ...v.socials, instagram: e.target.value } }))} placeholder="https://instagram.com/…" /></div>
           <div className="sm:col-span-2"><label className="label">Website URL</label><input className="input" value={c.socials.website} onChange={e => setC(v => ({ ...v, socials: { ...v.socials, website: e.target.value } }))} placeholder="https://…" /></div>
         </div>
-      </section>
+      </Sec>
     </div>
   )
 }
