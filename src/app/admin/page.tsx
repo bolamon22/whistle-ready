@@ -235,6 +235,12 @@ export default function PlatformDashboard() {
                           View Portal →
                         </button>
                         <Link
+                          href={`/dashboard/org/site?org=${org.id}&slug=${encodeURIComponent(org.slug)}&name=${encodeURIComponent(org.name)}`}
+                          className="text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-lg font-medium transition-colors"
+                        >
+                          Website
+                        </Link>
+                        <Link
                           href={`/admin/orgs/${org.id}`}
                           className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg font-medium transition-colors"
                         >

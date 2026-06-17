@@ -9,10 +9,19 @@ async function ensureTable() {
   } catch { /* ignore */ }
 }
 
+// Resolve which org this request targets. Admins may pass ?org=<id> to edit any
+// org; everyone else is scoped to their own org from the session.
+function targetOrgId(req: NextRequest, session: any): string | null {
+  const role = session?.user?.role
+  const paramOrg = new URL(req.url).searchParams.get('org')
+  if (role === 'admin' && paramOrg) return paramOrg
+  return session?.user?.orgId ?? null
+}
+
 // Editable content for an org's public website (/o/[slug]). Stored per-org in AppSetting.
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  const orgId = (session?.user as any)?.orgId
+  const orgId = targetOrgId(req, session)
   if (!orgId) return NextResponse.json({})
   try {
     await ensureTable()
@@ -25,10 +34,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  const orgId = (session?.user as any)?.orgId
   const role = (session?.user as any)?.role
-  if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 403 })
   if (role !== 'admin' && role !== 'director') return NextResponse.json({ error: 'Only an admin or director can edit the website' }, { status: 403 })
+  const orgId = targetOrgId(req, session)
+  if (!orgId) return NextResponse.json({ error: 'No organization selected' }, { status: 403 })
   try {
     await ensureTable()
     const value = JSON.stringify(await req.json() || {})

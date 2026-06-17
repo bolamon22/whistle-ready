@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, Plus, Trash2, ExternalLink, ImagePlus, Save } from 'lucide-react'
@@ -34,6 +34,11 @@ export default function OrgSiteEditor() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const role = (session?.user as any)?.role
+  const sp = useSearchParams()
+  const qOrg = sp.get('org') || ''
+  const qSlug = sp.get('slug') || ''
+  const qName = sp.get('name') || ''
+  const apiQ = qOrg ? `?org=${encodeURIComponent(qOrg)}` : ''
   const [org, setOrg] = useState<{ name: string; slug: string } | null>(null)
   const [c, setC] = useState<Content>(EMPTY)
   const [loading, setLoading] = useState(true)
@@ -45,8 +50,9 @@ export default function OrgSiteEditor() {
     if (role !== 'director' && role !== 'admin') { router.replace('/'); return }
     ;(async () => {
       try {
-        const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrg({ name: o.name, slug: o.slug })
-        const d = await fetch('/api/org-site').then(r => r.ok ? r.json() : {})
+        if (qOrg) { setOrg({ name: qName, slug: qSlug }) }
+        else { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrg({ name: o.name, slug: o.slug }) }
+        const d = await fetch(`/api/org-site${apiQ}`).then(r => r.ok ? r.json() : {})
         setC({ ...EMPTY, ...d, hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [] })
       } catch {} finally { setLoading(false) }
     })()
@@ -55,7 +61,7 @@ export default function OrgSiteEditor() {
   async function save() {
     setSaving(true)
     try {
-      const res = await fetch('/api/org-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })
+      const res = await fetch(`/api/org-site${apiQ}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })
       if (res.ok) toast.success('Website saved')
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Save failed') }
     } catch { toast.error('Save failed') } finally { setSaving(false) }
