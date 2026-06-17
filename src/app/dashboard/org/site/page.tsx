@@ -10,6 +10,7 @@ import { ChevronLeft, Plus, Trash2, ExternalLink, ImagePlus, Save } from 'lucide
 type Sponsor = { name: string; logoUrl: string; url: string }
 type Page = { title: string; slug: string; body: string }
 type Photo = { url: string; caption: string }
+type Insta = { username: string; token: string }
 type Content = {
   logo: string
   hero: { headline: string; subtext: string; imageUrl: string }
@@ -19,6 +20,7 @@ type Content = {
   socials: { facebook: string; instagram: string; website: string }
   pages: Page[]
   gallery: Photo[]
+  instagram: Insta
 }
 const EMPTY: Content = {
   logo: '',
@@ -29,6 +31,7 @@ const EMPTY: Content = {
   socials: { facebook: '', instagram: '', website: '' },
   pages: [],
   gallery: [],
+  instagram: { username: '', token: '' },
 }
 
 const slugify = (t: string) => t.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
@@ -63,7 +66,7 @@ function OrgSiteEditorInner() {
         if (qOrg) { setOrg({ name: qName, slug: qSlug }) }
         else { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrg({ name: o.name, slug: o.slug }) }
         const d = await fetch(`/api/org-site${apiQ}`).then(r => r.ok ? r.json() : {})
-        setC({ ...EMPTY, ...d, logo: d.logo || '', hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], pages: Array.isArray(d.pages) ? d.pages : [], gallery: Array.isArray(d.gallery) ? d.gallery : [] })
+        setC({ ...EMPTY, ...d, logo: d.logo || '', hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], pages: Array.isArray(d.pages) ? d.pages : [], gallery: Array.isArray(d.gallery) ? d.gallery : [], instagram: { ...EMPTY.instagram, ...(d.instagram || {}) } })
       } catch {} finally { setLoading(false) }
     })()
   }, [status, session, role])
@@ -199,6 +202,16 @@ function OrgSiteEditorInner() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Instagram feed */}
+      <section className="card p-5 mb-5">
+        <h2 className="font-semibold text-slate-800 mb-1">Instagram feed</h2>
+        <p className="text-xs text-slate-400 mb-3">Shows your latest Instagram posts across the bottom of your site. Requires an Instagram <b>Business or Creator</b> account and an access token (see setup guide). Leave blank to hide.</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><label className="label">Username (for the “Follow” link)</label><input className="input" value={c.instagram.username} onChange={e => setC(v => ({ ...v, instagram: { ...v.instagram, username: e.target.value } }))} placeholder="@yourhandle" /></div>
+          <div><label className="label">Access token</label><input type="password" className="input" value={c.instagram.token} onChange={e => setC(v => ({ ...v, instagram: { ...v.instagram, token: e.target.value } }))} placeholder="Long-lived Instagram token" /></div>
         </div>
       </section>
 

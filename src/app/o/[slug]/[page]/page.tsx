@@ -23,6 +23,8 @@ export default async function OrgInfoPage({ params }: { params: { slug: string; 
   const pages: any[] = Array.isArray(content.pages) ? content.pages : []
   const page = pages.find(p => p.slug === params.page)
   const navPages: PageLink[] = pages.filter(p => p.title && p.slug).map(p => ({ title: p.title, slug: p.slug }))
+  const gallery: any[] = Array.isArray(content.gallery) ? content.gallery : []
+  if (gallery.length > 0) navPages.unshift({ title: 'Gallery', slug: 'gallery' })
   if (content.logo) org.logoUrl = content.logo
   const contact = content.contact || {}
   const socials = content.socials || {}
