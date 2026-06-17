@@ -6,6 +6,7 @@ import DynamicTitle from './DynamicTitle'
 import Providers from './providers'
 import ThemeShell from './ThemeShell'
 import EnvBadge from './EnvBadge'
+import AppMain from './AppMain'
 
 export const metadata: Metadata = {
   title: 'Whistle Ready',
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <EnvBadge />
           <NavBar />
           <DynamicTitle />
-          <main className="p-6 max-w-screen-2xl mx-auto">{children}</main>
+          <AppMain>{children}</AppMain>
           <Toaster position="top-right" toastOptions={{ style: { borderRadius: '10px', fontFamily: 'inherit', fontSize: '14px' } }}/>
         </Providers>
       </body>

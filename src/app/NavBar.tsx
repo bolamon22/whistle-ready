@@ -68,7 +68,7 @@ export default function NavBar() {
   }, [isAdmin])
 
   // Admin pages use SuperAdminBar as sole header
-  if (pathname?.startsWith('/admin')) return null
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/o/')) return null
 
   return (
     <div className="sticky top-0 z-40">
