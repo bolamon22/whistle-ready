@@ -255,6 +255,7 @@ export default function HomePage() {
           <p className="text-sm text-slate-500 mt-1">Manage staff scheduling for each tournament</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/dashboard/org/site" className="border px-4 py-2 rounded-lg text-sm font-medium bg-white text-slate-700 border-slate-300 hover:bg-slate-50 transition-colors">🌐 Website</Link>
           {isAdmin && orgs.length > 0 && (
             <select value={viewOrgId} onChange={async e => {
                 const newOrgId = e.target.value
