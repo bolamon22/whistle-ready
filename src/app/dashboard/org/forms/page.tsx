@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, FileText, Save, ClipboardList } from 'lucide-react'
+import { ChevronLeft, FileText, Save, ClipboardList, ExternalLink, Link2, Inbox } from 'lucide-react'
 
 const DEFAULT_WAIVER = `## 1. Acknowledgment of Risk
 I understand that lacrosse is a high-intensity sport involving aggressive play and physical contact. I acknowledge that participation carries inherent risks, including but not limited to:
@@ -56,9 +56,13 @@ function FormsInner() {
   const sp = useSearchParams()
   const qOrg = sp.get('org') || ''
   const qName = sp.get('name') || ''
+  const qSlug = sp.get('slug') || ''
   const apiQ = qOrg ? `?org=${encodeURIComponent(qOrg)}` : ''
   const [orgName, setOrgName] = useState(qName)
+  const [slug, setSlug] = useState(qSlug)
   const [f, setF] = useState<Forms>(EMPTY)
+  const [subs, setSubs] = useState<any[]>([])
+  const [showSubs, setShowSubs] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -68,10 +72,12 @@ function FormsInner() {
     if (role !== 'director' && role !== 'admin') { router.replace('/'); return }
     ;(async () => {
       try {
-        if (!qOrg) { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrgName(o.name) }
+        if (!qOrg) { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) { setOrgName(o.name); setSlug(o.slug) } }
         const d = await fetch(`/api/org-forms${apiQ}`).then(r => r.ok ? r.json() : {})
         const p = d.player || {}
         setF({ player: { ...EMPTY.player, ...p, fields: { ...EMPTY.player.fields, ...(p.fields || {}) } } })
+        const sj = await fetch(`/api/org-forms/submit${apiQ}`).then(r => r.ok ? r.json() : { submissions: [] })
+        setSubs(Array.isArray(sj.submissions) ? sj.submissions : [])
       } catch {} finally { setLoading(false) }
     })()
   }, [status, session, role])
@@ -83,6 +89,13 @@ function FormsInner() {
       if (res.ok) toast.success('Forms saved')
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Save failed') }
     } catch { toast.error('Save failed') } finally { setSaving(false) }
+  }
+
+  const formPath = slug ? `/o/${slug}/register/player` : ''
+  const copyLink = () => {
+    if (!formPath) { toast.error('No link yet'); return }
+    const url = `${window.location.origin}${formPath}`
+    navigator.clipboard?.writeText(url).then(() => toast.success('Link copied')).catch(() => toast.error('Copy failed'))
   }
 
   if (loading) return <div className="text-slate-400 text-center py-16">Loading…</div>
@@ -105,8 +118,18 @@ function FormsInner() {
         <div className="flex items-center gap-2 mb-1">
           <span className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center"><FileText size={16} /></span>
           <h2 className="font-semibold text-slate-800">Player registration &amp; waiver</h2>
+          {formPath && <a href={formPath} target="_blank" rel="noreferrer" className="ml-auto text-sm border border-slate-300 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"><ExternalLink size={14} /> View form</a>}
         </div>
         <p className="text-xs text-slate-400 mb-4">The waiver and optional fields used on the player registration form.</p>
+
+        {/* Public link */}
+        {formPath && (
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4">
+            <Link2 size={14} className="text-slate-400 flex-shrink-0" />
+            <code className="text-xs text-slate-600 truncate flex-1">{formPath}</code>
+            <button onClick={copyLink} className="text-xs font-medium text-teal-700 hover:text-teal-900 flex-shrink-0">Copy link</button>
+          </div>
+        )}
 
         <label className="label">Waiver title</label>
         <input className="input" value={pf.waiverTitle} onChange={e => setF(v => ({ ...v, player: { ...v.player, waiverTitle: e.target.value } }))} />
@@ -123,6 +146,26 @@ function FormsInner() {
               <span><span className="text-sm text-slate-700 font-medium">{fl.label}</span><br /><span className="text-xs text-slate-400">{fl.hint}</span></span>
             </label>
           ))}
+        </div>
+
+        {/* Submissions */}
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          <button onClick={() => setShowSubs(s => !s)} className="text-sm font-medium text-slate-700 inline-flex items-center gap-1.5">
+            <Inbox size={15} className="text-slate-400" /> {subs.length} submission{subs.length === 1 ? '' : 's'} {subs.length > 0 && <span className="text-teal-700">· {showSubs ? 'hide' : 'view'}</span>}
+          </button>
+          {showSubs && subs.length > 0 && (
+            <div className="mt-3 border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-72 overflow-y-auto">
+              {subs.slice().reverse().map((s, i) => (
+                <div key={s.id || i} className="px-3 py-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-slate-800">{s.data?.playerName || 'Player'}</span>
+                    <span className="text-xs text-slate-400">{new Date(s.submittedAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="text-xs text-slate-500">{[s.data?.teamName, s.data?.grade && `Grade ${s.data.grade}`, s.data?.parentEmail].filter(Boolean).join(' · ')}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
