@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -30,7 +30,7 @@ async function uploadImage(file: File): Promise<string | null> {
   const d = await r.json().catch(() => ({})); return d.url || null
 }
 
-export default function OrgSiteEditor() {
+function OrgSiteEditorInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const role = (session?.user as any)?.role
@@ -147,5 +147,13 @@ export default function OrgSiteEditor() {
         </div>
       </section>
     </div>
+  )
+}
+
+export default function OrgSiteEditor() {
+  return (
+    <Suspense fallback={null}>
+      <OrgSiteEditorInner />
+    </Suspense>
   )
 }
