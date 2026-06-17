@@ -34,21 +34,22 @@ export async function POST(req: NextRequest) {
 
     // Confirmation email (non-blocking) — uses the org's configured confirmation text.
     try {
-      const to = String(data.playerEmail || data.parentEmail || '').trim()
+      const to = String((formType === 'vendor' ? data.email : (data.playerEmail || data.parentEmail)) || '').trim()
       if (to && process.env.RESEND_API_KEY) {
         const cfgRow = await prisma.appSetting.findUnique({ where: { key: `orgForms:${orgId}` } })
-        const cfg = cfgRow ? (JSON.parse(cfgRow.value || '{}').player || {}) : {}
+        const allCfg = cfgRow ? JSON.parse(cfgRow.value || '{}') : {}
+        const cfg = (formType === 'vendor' ? allCfg.vendor : allCfg.player) || {}
         if (cfg.emailConfirmation !== false) {
           const orgRows = await prisma.$queryRawUnsafe<any[]>('SELECT name FROM "Organization" WHERE id = ?', orgId)
           const orgName = orgRows?.[0]?.name || 'the tournament'
-          const title = cfg.confirmationTitle || "You're registered!"
+          const title = cfg.confirmationTitle || (formType === 'vendor' ? 'Vendor request received!' : "You're registered!")
           const bodyHtml = mdToHtml(cfg.confirmationMessage || "Thanks for registering. We've received your information and signed waiver.")
           const resend = new Resend(process.env.RESEND_API_KEY)
           await resend.emails.send({
             from: process.env.INVITE_FROM_EMAIL || 'noreply@gamedaystaff.com',
             to,
-            subject: `Registration received \u2014 ${orgName}`,
-            html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto"><h1 style="font-size:20px;color:#0f172a">${title}</h1><div style="color:#475569;font-size:15px;line-height:1.6">${bodyHtml}</div><p style="color:#94a3b8;font-size:12px;margin-top:24px">${orgName} \u00b7 Player registration confirmation</p></div>`,
+            subject: `${formType === 'vendor' ? 'Vendor request received' : 'Registration received'} \u2014 ${orgName}`,
+            html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto"><h1 style="font-size:20px;color:#0f172a">${title}</h1><div style="color:#475569;font-size:15px;line-height:1.6">${bodyHtml}</div><p style="color:#94a3b8;font-size:12px;margin-top:24px">${orgName} \u00b7 ${formType === 'vendor' ? 'Vendor request' : 'Player registration'} confirmation</p></div>`,
           })
         }
       }

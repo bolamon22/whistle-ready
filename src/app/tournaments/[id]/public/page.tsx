@@ -913,6 +913,10 @@ export default function PublicTournamentPage() {
                 className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
                 <ScrollText size={14}/> Player Waiver
               </Link>
+              <Link href={`/tournaments/${id}/vendor-request`} target="_blank"
+                className="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
+                <Utensils size={14}/> Vendor Request
+              </Link>
               <button className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold px-3 py-2 rounded hover:bg-green-200 transition-colors">
                 <Bell size={14}/> Get Notified
               </button>

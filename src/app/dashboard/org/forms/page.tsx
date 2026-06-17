@@ -34,7 +34,15 @@ type PlayerForm = {
   confirmationMessage: string
   emailConfirmation: boolean
 }
-type Forms = { player: PlayerForm }
+type VendorForm = {
+  disclaimer: string
+  levels: string[]
+  paymentOptions: string[]
+  confirmationTitle: string
+  confirmationMessage: string
+  emailConfirmation: boolean
+}
+type Forms = { player: PlayerForm; vendor: VendorForm }
 const EMPTY: Forms = {
   player: {
     waiverTitle: 'Player Participation Waiver & Release of Liability',
@@ -42,6 +50,14 @@ const EMPTY: Forms = {
     fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false },
     confirmationTitle: "You're registered!",
     confirmationMessage: "Thanks for registering. We've received your information and signed waiver. We'll be in touch with event details — see you on the field!",
+    emailConfirmation: true,
+  },
+  vendor: {
+    disclaimer: "Vendors are not allowed to sell tournament merchandise unless receiving prior approval from the organizer. Items not pre-approved on this application must be removed from the booth or may result in denied future access. Products that do not fit the mission of the event or are deemed not family-friendly will not be allowed to be sold.",
+    levels: ['Food Vendor', 'Merchandise Vendor', 'Bronze Sponsor', 'Silver Sponsor', 'Gold Sponsor'],
+    paymentOptions: ['Check', 'Venmo', 'Zelle', 'Invoice me'],
+    confirmationTitle: 'Vendor request received!',
+    confirmationMessage: "Thanks! We've received your vendor request and will be in touch about next steps and payment.",
     emailConfirmation: true,
   },
 }
@@ -81,7 +97,11 @@ function FormsInner() {
         if (!qOrg) { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) { setOrgName(o.name); setSlug(o.slug) } }
         const d = await fetch(`/api/org-forms${apiQ}`).then(r => r.ok ? r.json() : {})
         const p = d.player || {}
-        setF({ player: { ...EMPTY.player, ...p, fields: { ...EMPTY.player.fields, ...(p.fields || {}) } } })
+        const vv = d.vendor || {}
+        setF({
+          player: { ...EMPTY.player, ...p, fields: { ...EMPTY.player.fields, ...(p.fields || {}) } },
+          vendor: { ...EMPTY.vendor, ...vv, levels: Array.isArray(vv.levels) ? vv.levels : EMPTY.vendor.levels, paymentOptions: Array.isArray(vv.paymentOptions) ? vv.paymentOptions : EMPTY.vendor.paymentOptions },
+        })
         const sj = await fetch(`/api/org-forms/submit${apiQ}`).then(r => r.ok ? r.json() : { submissions: [] })
         setSubs(Array.isArray(sj.submissions) ? sj.submissions : [])
       } catch {} finally { setLoading(false) }
@@ -106,6 +126,11 @@ function FormsInner() {
 
   if (loading) return <div className="text-slate-400 text-center py-16">Loading…</div>
   const pf = f.player
+  const vf = f.vendor
+  const playerSubs = subs.filter(s => s.formType !== 'vendor')
+  const vendorSubs = subs.filter(s => s.formType === 'vendor')
+  const vendorPath = slug ? `/o/${slug}/register/vendor` : ''
+  const copyVendorLink = () => { if (!vendorPath) return; navigator.clipboard?.writeText(`${window.location.origin}${vendorPath}`).then(() => toast.success('Link copied')).catch(() => toast.error('Copy failed')) }
 
   return (
     <div className="max-w-3xl mx-auto pb-16">
@@ -171,11 +196,11 @@ function FormsInner() {
         {/* Submissions */}
         <div className="mt-5 pt-4 border-t border-slate-100">
           <button onClick={() => setShowSubs(s => !s)} className="text-sm font-medium text-slate-700 inline-flex items-center gap-1.5">
-            <Inbox size={15} className="text-slate-400" /> {subs.length} submission{subs.length === 1 ? '' : 's'} {subs.length > 0 && <span className="text-teal-700">· {showSubs ? 'hide' : 'view'}</span>}
+            <Inbox size={15} className="text-slate-400" /> {playerSubs.length} submission{playerSubs.length === 1 ? '' : 's'} {playerSubs.length > 0 && <span className="text-teal-700">· {showSubs ? 'hide' : 'view'}</span>}
           </button>
-          {showSubs && subs.length > 0 && (
+          {showSubs && playerSubs.length > 0 && (
             <div className="mt-3 border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-72 overflow-y-auto">
-              {subs.slice().reverse().map((s, i) => (
+              {playerSubs.slice().reverse().map((s, i) => (
                 <div key={s.id || i} className="px-3 py-2 text-sm">
                   <div className="flex justify-between">
                     <span className="font-medium text-slate-800">{s.data?.playerName || 'Player'}</span>
@@ -189,12 +214,47 @@ function FormsInner() {
         </div>
       </section>
 
-      {/* Coming soon: Vendor */}
-      <section className="card p-5 opacity-70">
-        <div className="flex items-center gap-2">
-          <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center"><ClipboardList size={16} /></span>
-          <h2 className="font-semibold text-slate-500">Vendor registration</h2>
-          <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 ml-auto">Coming next</span>
+      {/* Vendor request */}
+      <section className="card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center"><ClipboardList size={16} /></span>
+          <h2 className="font-semibold text-slate-800">Vendor request</h2>
+          {vendorPath && <a href={vendorPath} target="_blank" rel="noreferrer" className="ml-auto text-sm border border-slate-300 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"><ExternalLink size={14} /> View form</a>}
+        </div>
+        <p className="text-xs text-slate-400 mb-4">Vendors &amp; sponsors apply to sell or sponsor at your events.</p>
+
+        {vendorPath && (
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4">
+            <Link2 size={14} className="text-slate-400 flex-shrink-0" />
+            <code className="text-xs text-slate-600 truncate flex-1">{vendorPath}</code>
+            <button onClick={copyVendorLink} className="text-xs font-medium text-teal-700 hover:text-teal-900 flex-shrink-0">Copy link</button>
+          </div>
+        )}
+
+        <label className="label">Vendor / sponsor levels <span className="text-slate-400 font-normal">(comma separated)</span></label>
+        <input className="input" value={vf.levels.join(', ')} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, levels: e.target.value.split(',').map(x => x.trim()).filter(Boolean) } }))} placeholder="Food Vendor, Bronze Sponsor, Gold Sponsor" />
+
+        <label className="label mt-3">Payment options <span className="text-slate-400 font-normal">(comma separated)</span></label>
+        <input className="input" value={vf.paymentOptions.join(', ')} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, paymentOptions: e.target.value.split(',').map(x => x.trim()).filter(Boolean) } }))} placeholder="Check, Venmo, Zelle, Invoice me" />
+
+        <label className="label mt-3">Vendor disclaimer</label>
+        <textarea className="input min-h-[120px]" value={vf.disclaimer} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, disclaimer: e.target.value } }))} />
+        <p className="text-xs text-slate-400 mt-1">Supports Markdown. Vendors must agree to this before submitting.</p>
+
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">After submitting</h3>
+          <label className="label">Confirmation title</label>
+          <input className="input" value={vf.confirmationTitle} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, confirmationTitle: e.target.value } }))} />
+          <label className="label mt-3">Confirmation message</label>
+          <textarea className="input min-h-[80px]" value={vf.confirmationMessage} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, confirmationMessage: e.target.value } }))} />
+          <label className="flex items-start gap-2 mt-3 cursor-pointer">
+            <input type="checkbox" className="mt-0.5 accent-teal-500" checked={vf.emailConfirmation} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, emailConfirmation: e.target.checked } }))} />
+            <span className="text-sm text-slate-700">Email a confirmation to the vendor <span className="text-xs text-slate-400">(sent to the contact email)</span></span>
+          </label>
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          <span className="text-sm font-medium text-slate-700 inline-flex items-center gap-1.5"><Inbox size={15} className="text-slate-400" /> {vendorSubs.length} vendor request{vendorSubs.length === 1 ? '' : 's'}</span>
         </div>
       </section>
     </div>
