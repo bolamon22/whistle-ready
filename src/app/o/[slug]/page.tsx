@@ -48,7 +48,7 @@ function Card({ t }: { t: Tourn }) {
 
 export default async function OrgSite({ params }: { params: { slug: string } }) {
   const client = db()
-  const orgRes = await client.execute({ sql: 'SELECT id, name, contactEmail FROM "Organization" WHERE slug = ?', args: [params.slug] })
+  const orgRes = await client.execute({ sql: 'SELECT id, name, contactEmail, logoUrl FROM "Organization" WHERE slug = ?', args: [params.slug] })
   if (orgRes.rows.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-center px-6">
@@ -87,7 +87,10 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="font-bold text-slate-900 text-lg">{org.name}</span>
+          <div className="flex items-center gap-3">
+            {org.logoUrl && <img src={org.logoUrl} alt="" className="w-9 h-9 rounded-lg object-contain bg-white border border-slate-100" />}
+            <span className="font-bold text-slate-900 text-lg">{org.name}</span>
+          </div>
           {upcoming[0] && (
             <Link href={`/tournaments/${upcoming[0].id}/register`} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors">Register a team</Link>
           )}
@@ -101,6 +104,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
           <div className="absolute inset-0 bg-[#0f1f3d]/70" />
         </>}
         <div className="relative max-w-6xl mx-auto px-6 py-16">
+          {org.logoUrl && <img src={org.logoUrl} alt="" className="h-16 w-16 rounded-xl object-contain bg-white/95 p-1.5 mb-4 shadow-sm" />}
           <p className="text-teal-300 font-semibold tracking-wide text-sm uppercase">Tournaments</p>
           <h1 className="text-4xl sm:text-5xl font-extrabold mt-2 leading-tight">{hero.headline || org.name}</h1>
           <p className="text-slate-200 mt-3 max-w-2xl text-lg">{hero.subtext || 'Upcoming events, schedules, standings and team registration — all in one place.'}</p>
