@@ -14,12 +14,12 @@ import { resolveBlocks, Block } from '@/lib/eventBlocks'
 type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string }
 type Contact = { name: string; role: string; phone: string; email: string }
 type Content = {
-  overview: string; feesText: string; divisionsText: string; ageChartUrl: string
+  overview: string; feesText: string; divisionsText: string; ageChartUrl: string; heroImage: string
   locations: Loc[]; hotels: string; hotelsUrl: string; rules: string; contacts: Contact[]
   sectionOrder?: string[]; hiddenSections?: string[]
   blocks?: Block[]
 }
-const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', locations: [], hotels: '', hotelsUrl: '', rules: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [] }
+const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '', rules: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [] }
 
 const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-3 mb-1'
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -95,6 +95,15 @@ export default function EventPageEditor() {
             <button onClick={save} disabled={saving} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 inline-flex items-center gap-1.5 disabled:opacity-50"><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
           </div>
         </div>
+
+        <Sec title="Hero banner" summary={c.heroImage ? 'Set' : 'Empty'} isOpen={!!open.hero} onToggle={() => toggle('hero')}>
+          <p className="text-xs text-slate-500 mb-3">Optional background image shown behind the tournament name at the top of the event page (and the register / waiver / rules headers). A dark overlay keeps the white text readable.</p>
+          <div className="flex items-center gap-3">
+            {c.heroImage ? <img src={c.heroImage} alt="" className="h-20 w-36 object-cover rounded-lg border border-slate-200" /> : <div className="h-20 w-36 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
+            <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">{c.heroImage ? 'Replace' : 'Upload'}<input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, heroImage: u })); else toast.error('Upload failed') }} /></label>
+            {c.heroImage && <button type="button" onClick={() => setC(v => ({ ...v, heroImage: '' }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
+          </div>
+        </Sec>
 
         <Sec title="Page builder" summary="Drag, add, hide" isOpen={!!open.layout} onToggle={() => toggle('layout')}>
           <p className="text-xs text-slate-500 mb-3">Drag to reorder how blocks appear on the public event page, hide ones you don&apos;t need, or add custom blocks. Built-in sections pull their content from the fields below; custom blocks are edited right here. Empty sections never show.</p>
