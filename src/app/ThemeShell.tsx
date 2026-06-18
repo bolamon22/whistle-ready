@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation'
 // localStorage. Renders a small floating toggle on staff routes.
 export default function ThemeShell() {
   const pathname = usePathname() || ''
-  const isPublic = /\/public(\/|$)/.test(pathname) || /^\/tournaments\/[^/]+\/(event|rules|player-waiver|vendor-request|register|player-register)(\/|$)/.test(pathname)
+  const isPublic = /\/public(\/|$)/.test(pathname) || /^\/tournaments\/[^/]+\/(event|rules|p|player-waiver|vendor-request|register|player-register)(\/|$)/.test(pathname)
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register')
   const isSite = pathname.startsWith('/o/')  // public org website = fixed light theme
   const isStaff = !isPublic && !isAuthPage && !isSite

@@ -7,6 +7,19 @@ import { Block, blockTypeLabel, isBuiltin, newBlock, CUSTOM_BLOCK_LABELS, CUSTOM
 const lbl = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-2 mb-1'
 const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
 
+function DisplayPicker({ b, updateProps }: { b: Block; updateProps: (id: string, patch: any) => void }) {
+  const p = b.props || {}
+  return (
+    <>
+      <label className={lbl}>Show this block</label>
+      <select className={inp} value={p.display || 'inline'} onChange={e => updateProps(b.id, { display: e.target.value })}>
+        <option value="inline">On the event page</option>
+        <option value="page">Its own page (linked in the Event info menu)</option>
+      </select>
+    </>
+  )
+}
+
 function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch: any) => void }) {
   const p = b.props || {}
   if (b.type === 'custom') return (
@@ -15,6 +28,7 @@ function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch:
       <input className={inp} value={p.title || ''} onChange={e => updateProps(b.id, { title: e.target.value })} placeholder="Section title" />
       <label className={lbl}>Content</label>
       <MarkdownField value={p.body || ''} onChange={v => updateProps(b.id, { body: v })} minHeight={120} placeholder="Write anything — parking, food trucks, awards…" />
+      <DisplayPicker b={b} updateProps={updateProps} />
     </>
   )
   if (b.type === 'cta') return (
@@ -35,19 +49,22 @@ function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch:
     const setItems = (it: any[]) => updateProps(b.id, { items: it })
     return (
       <>
-        <label className={lbl}>Title</label>
-        <input className={inp} value={p.title || ''} onChange={e => updateProps(b.id, { title: e.target.value })} placeholder="FAQ" />
-        <label className={lbl}>Questions</label>
+        <label className={lbl}>Title (optional)</label>
+        <input className={inp} value={p.title || ''} onChange={e => updateProps(b.id, { title: e.target.value })} placeholder="e.g. Frequently asked questions, Travel info…" />
+        <label className={lbl}>Collapsible sections</label>
         <div className="space-y-2">
           {items.map((it, idx) => (
             <div key={idx} className="border border-slate-200 rounded-lg p-2">
-              <input className={inp} value={it.q || ''} onChange={e => setItems(items.map((x, j) => j === idx ? { ...x, q: e.target.value } : x))} placeholder="Question" />
-              <textarea className={`${inp} mt-1.5`} value={it.a || ''} onChange={e => setItems(items.map((x, j) => j === idx ? { ...x, a: e.target.value } : x))} placeholder="Answer" rows={2} />
+              <input className={inp} value={it.q || ''} onChange={e => setItems(items.map((x, j) => j === idx ? { ...x, q: e.target.value } : x))} placeholder="Heading (what people tap to expand)" />
+              <div className="mt-1.5">
+                <MarkdownField value={it.a || ''} onChange={v => setItems(items.map((x, j) => j === idx ? { ...x, a: v } : x))} minHeight={90} placeholder="Content — supports bold, bullets, links…" />
+              </div>
               <button type="button" onClick={() => setItems(items.filter((_, j) => j !== idx))} className="text-xs text-slate-400 hover:text-red-600 mt-1">Remove</button>
             </div>
           ))}
-          <button type="button" onClick={() => setItems([...items, { q: '', a: '' }])} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add question</button>
+          <button type="button" onClick={() => setItems([...items, { q: '', a: '' }])} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add section</button>
         </div>
+        <DisplayPicker b={b} updateProps={updateProps} />
       </>
     )
   }

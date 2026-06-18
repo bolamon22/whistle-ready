@@ -1,8 +1,9 @@
 'use client'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { mdToHtml } from '@/app/o/[slug]/_md'
 
-// Collapsible question/answer list.
+// Collapsible heading/content list. Content supports Markdown (bold, bullets, links).
 export default function FaqBlock({ items }: { items: { q: string; a: string }[] }) {
   const list = (items || []).filter(it => it && it.q)
   const [open, setOpen] = useState<number | null>(0)
@@ -15,7 +16,7 @@ export default function FaqBlock({ items }: { items: { q: string; a: string }[] 
             <span className="flex-1 font-semibold text-slate-800">{it.q}</span>
             <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform ${open === i ? 'rotate-180' : ''}`} />
           </button>
-          {open === i && it.a && <p className="text-sm text-slate-600 leading-relaxed pb-4 whitespace-pre-line">{it.a}</p>}
+          {open === i && it.a && <div className="prose-body pb-4" dangerouslySetInnerHTML={{ __html: mdToHtml(it.a) }} />}
         </div>
       ))}
     </div>

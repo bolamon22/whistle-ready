@@ -11,7 +11,7 @@ export type Block = { id: string; type: string; hidden?: boolean; props?: any }
 export const CUSTOM_BLOCK_LABELS: Record<string, string> = {
   custom: 'Custom text',
   cta: 'Call-to-action button',
-  faq: 'FAQ',
+  faq: 'Collapsible sections',
   countdown: 'Countdown',
 }
 
@@ -32,9 +32,9 @@ export function newBlockId(): string {
 export function newBlock(type: string): Block {
   const id = newBlockId()
   switch (type) {
-    case 'custom': return { id, type, props: { title: 'New section', body: '' } }
+    case 'custom': return { id, type, props: { title: 'New section', body: '', display: 'inline' } }
     case 'cta': return { id, type, props: { label: 'Register now', url: '', style: 'primary' } }
-    case 'faq': return { id, type, props: { title: 'FAQ', items: [{ q: '', a: '' }] } }
+    case 'faq': return { id, type, props: { title: '', items: [{ q: '', a: '' }], display: 'inline' } }
     case 'countdown': return { id, type, props: { title: 'Countdown to kickoff' } }
     default: return { id, type, props: {} }
   }

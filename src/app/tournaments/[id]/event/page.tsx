@@ -168,7 +168,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     if (b.type === 'faq') {
       const items = (Array.isArray(p.items) ? p.items : []).filter((it: any) => it && it.q)
       return items.length ? (
-        <EventSection id={b.id} title={p.title || 'FAQ'}>
+        <EventSection id={b.id} title={p.title || 'Details'}>
           <FaqBlock items={items} />
         </EventSection>
       ) : null
@@ -177,15 +177,16 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     return null
   }
 
+  const isPageMode = (b: any) => (b.type === 'custom' || b.type === 'faq') && b.props && b.props.display === 'page'
   const rendered = resolveBlocks(c)
     .filter((b: any) => !b.hidden)
-    .map((b: any) => ({ b, el: isBuiltin(b.type) ? sectionMap[b.type] : customContent(b) }))
+    .map((b: any) => ({ b, el: isBuiltin(b.type) ? sectionMap[b.type] : customContent(b), page: isPageMode(b) }))
     .filter((x: any) => x.el)
 
-  const navLabel = (b: any) => isBuiltin(b.type) ? (SECTION_LABELS[b.type] || b.type) : ((b.props && b.props.title) || 'Section')
+  const navLabel = (b: any) => isBuiltin(b.type) ? (SECTION_LABELS[b.type] || b.type) : ((b.props && b.props.title) || (b.type === 'faq' ? 'Details' : 'Section'))
   const infoItems = rendered
     .filter((x: any) => x.b.type !== 'cta' && x.b.type !== 'countdown')
-    .map((x: any) => ({ href: x.b.type === 'rules' ? `${base}/rules` : `#${x.b.id}`, label: navLabel(x.b) }))
+    .map((x: any) => ({ href: x.b.type === 'rules' ? `${base}/rules` : (x.page ? `${base}/p/${x.b.id}` : `#${x.b.id}`), label: navLabel(x.b) }))
 
   const actions = [
     Number(t.teamRegEnabled) ? { href: `${base}/register`, label: 'Register', icon: <ClipboardList size={15} />, primary: true } : null,
@@ -217,7 +218,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
       </section>
 
       <main className="max-w-4xl mx-auto px-6 py-12 space-y-4">
-        {rendered.filter((x: any) => x.b.type !== 'rules').map((x: any) => <div key={x.b.id}>{x.el}</div>)}
+        {rendered.filter((x: any) => x.b.type !== 'rules' && !x.page).map((x: any) => <div key={x.b.id}>{x.el}</div>)}
       </main>
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
     </div>

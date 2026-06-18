@@ -51,7 +51,7 @@ export async function middleware(req: NextRequest) {
   // Public tournament pages (divisions, schedule, standings, bracket, rules) — no login required
   if (/^\/tournaments\/[^/]+\/public(\/|$)/.test(pathname)) return NextResponse.next()
   // Public registration (teams/players can register without an account)
-  if (/^\/tournaments\/[^/]+\/(register|player-register|player-waiver|vendor-request|event|rules)(\/|$)/.test(pathname)) return NextResponse.next()
+  if (/^\/tournaments\/[^/]+\/(register|player-register|player-waiver|vendor-request|event|rules|p)(\/|$)/.test(pathname)) return NextResponse.next()
 
   const token = await getToken({
     req,
