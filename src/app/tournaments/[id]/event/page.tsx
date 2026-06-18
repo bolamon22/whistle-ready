@@ -4,6 +4,7 @@ import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, List
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventInfoNav from '@/components/EventInfoNav'
+import EventSection from '@/components/EventSection'
 import { OrgHeader, OrgFooter, buildNav } from '@/app/o/[slug]/_chrome'
 
 export const dynamic = 'force-dynamic'
@@ -49,7 +50,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     (c.feesText || divisions.length) && { href: '#fees', label: 'Fees & divisions' },
     locations.length && { href: '#locations', label: 'Locations & field maps' },
     (c.hotelsUrl || c.hotels) && { href: '#hotels', label: 'Hotels' },
-    c.rules && { href: '#rules', label: 'Rules & policies' },
+    c.rules && { href: `/tournaments/${params.id}/rules`, label: 'Rules & policies' },
     contacts.length && { href: '#contacts', label: 'Contacts' },
     sponsors.length && { href: '#sponsors', label: 'Sponsors & partners' },
   ].filter(Boolean) as { href: string; label: string }[]
@@ -84,21 +85,35 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         </div>
       </section>
 
-      <main className="max-w-4xl mx-auto px-6 py-12 space-y-12">
-        {c.overview && <Block id="overview" title="Overview"><div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.overview) }} /></Block>}
+      <main className="max-w-4xl mx-auto px-6 py-12 space-y-4">
+        {c.overview && (
+          <EventSection id="overview" title="Overview" defaultOpen>
+            <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.overview) }} />
+          </EventSection>
+        )}
 
-        <div id="fees" className="scroll-mt-24 grid sm:grid-cols-2 gap-8">
-          {c.feesText && <Block title="Tournament fees"><div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{c.feesText}</div></Block>}
-          {divisions.length > 0 && (
-            <Block title="Divisions">
-              <ul className="text-sm text-slate-600 space-y-1">{divisions.map((d, i) => <li key={i}>{d}</li>)}</ul>
-              {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
-            </Block>
-          )}
-        </div>
+        {(c.feesText || divisions.length > 0) && (
+          <EventSection id="fees" title="Fees & divisions" defaultOpen>
+            <div className="grid sm:grid-cols-2 gap-8">
+              {c.feesText && (
+                <div>
+                  <h3 className="font-bold text-slate-900 mb-2">Tournament fees</h3>
+                  <div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{c.feesText}</div>
+                </div>
+              )}
+              {divisions.length > 0 && (
+                <div>
+                  <h3 className="font-bold text-slate-900 mb-2">Divisions</h3>
+                  <ul className="text-sm text-slate-600 space-y-1">{divisions.map((d, i) => <li key={i}>{d}</li>)}</ul>
+                  {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
+                </div>
+              )}
+            </div>
+          </EventSection>
+        )}
 
         {locations.length > 0 && (
-          <Block id="locations" title="Locations & field maps">
+          <EventSection id="locations" title="Locations & field maps" defaultOpen>
             <div className="grid sm:grid-cols-2 gap-5">
               {locations.map((l, i) => (
                 <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
@@ -120,19 +135,29 @@ export default async function TournamentEventPage({ params }: { params: { id: st
                 </div>
               ))}
             </div>
-          </Block>
+          </EventSection>
         )}
 
         {(c.hotelsUrl || c.hotels) && (
-          <Block id="hotels" title="Hotels">
+          <EventSection id="hotels" title="Hotels">
             {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full mb-4"><Hotel size={15} /> Book hotels</a>}
             {c.hotels && <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />}
-          </Block>
+          </EventSection>
         )}
-        {c.rules && <Block id="rules" title="Rules & policies"><div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.rules) }} /></Block>}
+
+        {c.rules && (
+          <Link href={`${base}/rules`} className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 hover:bg-slate-50/60 transition-colors">
+            <ScrollText size={18} className="text-slate-400 shrink-0" />
+            <div className="flex-1">
+              <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Rules &amp; policies</h2>
+              <p className="text-sm text-slate-500">Read the full tournament rules, format and policies</p>
+            </div>
+            <span className="text-teal-700 text-sm font-semibold inline-flex items-center gap-1 shrink-0">View <ExternalLink size={14} /></span>
+          </Link>
+        )}
 
         {contacts.length > 0 && (
-          <Block id="contacts" title="Contacts">
+          <EventSection id="contacts" title="Contacts" defaultOpen>
             <div className="grid sm:grid-cols-2 gap-4">
               {contacts.map((ct, i) => (
                 <div key={i} className="bg-white border border-slate-200 rounded-2xl p-4">
@@ -145,30 +170,21 @@ export default async function TournamentEventPage({ params }: { params: { id: st
                 </div>
               ))}
             </div>
-          </Block>
+          </EventSection>
         )}
 
         {sponsors.length > 0 && (
-          <Block id="sponsors" title="Sponsors & partners">
+          <EventSection id="sponsors" title="Sponsors & partners" defaultOpen>
             <div className="flex flex-wrap items-center gap-x-10 gap-y-6">
               {sponsors.map((s, i) => {
                 const img = s.logoUrl ? <img src={s.logoUrl} alt={s.name || ''} className="h-12 object-contain" /> : <span className="text-slate-600 font-medium">{s.name}</span>
                 return s.url ? <a key={i} href={s.url} target="_blank" rel="noreferrer">{img}</a> : <div key={i}>{img}</div>
               })}
             </div>
-          </Block>
+          </EventSection>
         )}
       </main>
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
     </div>
-  )
-}
-
-function Block({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
-  return (
-    <section id={id} className="scroll-mt-24">
-      <h2 className="text-xl font-extrabold tracking-tight text-slate-900 mb-4">{title}</h2>
-      {children}
-    </section>
   )
 }
