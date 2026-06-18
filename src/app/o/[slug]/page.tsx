@@ -158,22 +158,19 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
         </section>
       )}
 
-      {/* Sponsors marquee */}
+      {/* Sponsors */}
       {sponsors.length > 0 && (
-        <section className="bg-slate-50 border-t border-slate-200 overflow-hidden">
-          <div className="max-w-6xl mx-auto px-6 pt-14">
+        <section className="bg-slate-50 border-t border-slate-200">
+          <div className="max-w-6xl mx-auto px-6 py-14">
             <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400 text-center">Sponsors &amp; partners</h2>
-          </div>
-          <style dangerouslySetInnerHTML={{ __html: '@keyframes wrMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}.wr-marquee{animation:wrMarquee 32s linear infinite;width:max-content}' }} />
-          <div className="py-12 overflow-hidden">
-            <div className="wr-marquee flex items-center gap-16">
-              {[...sponsors, ...sponsors].map((s, i) => {
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-12 gap-y-8">
+              {sponsors.map((s, i) => {
                 const img = s.logoUrl
                   ? <img src={s.logoUrl} alt={s.name || ''} title={s.name || ''} className="h-14 object-contain grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
                   : <span className="text-slate-500 font-semibold whitespace-nowrap">{s.name}</span>
                 return s.url
-                  ? <a key={i} href={s.url} target="_blank" rel="noreferrer" className="flex-shrink-0">{img}</a>
-                  : <div key={i} className="flex-shrink-0">{img}</div>
+                  ? <a key={i} href={s.url} target="_blank" rel="noreferrer">{img}</a>
+                  : <div key={i}>{img}</div>
               })}
             </div>
           </div>
