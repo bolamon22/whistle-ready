@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@libsql/client'
 import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
+import { OrgHeader, OrgFooter, buildNav } from '@/app/o/[slug]/_chrome'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,17 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   let c: any = {}
   try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${params.id}`] }); if (r.rows.length) c = JSON.parse(((r.rows[0] as any).value as string) || '{}') } catch {}
   let sponsors: any[] = []
-  if (t.orgId) { try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${t.orgId}`] }); if (s.rows.length) { const oc = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (Array.isArray(oc.sponsors)) sponsors = oc.sponsors; if (oc.logo && !t.logoUrl) t.logoUrl = oc.logo } } catch {} }
+  let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
+  let navPages: any[] = []; let hasGallery = false; let contact: any = {}; let socials: any = {}; let orgLogo = ''
+  if (t.orgId) {
+    try { const oRes = await client.execute({ sql: 'SELECT id, name, slug, contactEmail, logoUrl FROM "Organization" WHERE id = ?', args: [t.orgId] }); if (oRes.rows.length) org = oRes.rows[0] } catch {}
+    try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${t.orgId}`] }); if (s.rows.length) { const oc = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (Array.isArray(oc.sponsors)) sponsors = oc.sponsors; orgLogo = oc.logo || ''; navPages = Array.isArray(oc.pages) ? oc.pages : []; hasGallery = Array.isArray(oc.gallery) && oc.gallery.length > 0; contact = oc.contact || {}; socials = oc.socials || {} } } catch {}
+  }
+  const headerLogo = orgLogo || org.logoUrl || ''
+  if (!t.logoUrl) t.logoUrl = headerLogo
+  const orgForChrome = { name: org.name, logoUrl: headerLogo, contactEmail: org.contactEmail }
+  const nav = org.slug ? buildNav(org.slug, navPages, hasGallery) : []
+  const registerHref = Number(t.teamRegEnabled) ? `/tournaments/${params.id}/register` : undefined
 
   const divisions: string[] = String(c.divisionsText || '').split('\n').map((x: string) => x.trim()).filter(Boolean)
   const locations: any[] = Array.isArray(c.locations) ? c.locations : []
@@ -42,6 +53,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
       <section className="relative overflow-hidden text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]">
         <div className="max-w-4xl mx-auto px-6 py-14">
           <div className="flex items-center gap-4">
@@ -126,6 +138,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
           </Block>
         )}
       </main>
+      {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
     </div>
   )
 }

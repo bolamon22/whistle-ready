@@ -70,7 +70,8 @@ function OrgSiteEditorInner() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [openPages, setOpenPages] = useState<Record<number, boolean>>({})
-  const [openSec, setOpenSec] = useState<Record<string, boolean>>({})
+  const [openSec, setOpenSec] = useState<Record<string, boolean>>({ events: true })
+  const [tournaments, setTournaments] = useState<any[]>([])
 
   useEffect(() => {
     if (status === 'loading') return
@@ -81,6 +82,7 @@ function OrgSiteEditorInner() {
         if (qOrg) { setOrg({ name: qName, slug: qSlug }) }
         else { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrg({ name: o.name, slug: o.slug }) }
         const d = await fetch(`/api/org-site${apiQ}`).then(r => r.ok ? r.json() : {})
+        fetch(`/api/tournaments${qOrg ? `?viewOrgId=${encodeURIComponent(qOrg)}` : ''}`).then(r => r.ok ? r.json() : []).then(ts => setTournaments(Array.isArray(ts) ? ts : [])).catch(() => {})
         setC({ ...EMPTY, ...d, logo: d.logo || '', hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], pages: Array.isArray(d.pages) ? d.pages : [], gallery: Array.isArray(d.gallery) ? d.gallery : [], instagram: { ...EMPTY.instagram, ...(d.instagram || {}) } })
       } catch {} finally { setLoading(false) }
     })()
@@ -118,6 +120,21 @@ function OrgSiteEditorInner() {
           <button onClick={save} disabled={saving} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 inline-flex items-center gap-1.5 disabled:opacity-50"><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
+
+      {/* Tournament event pages */}
+      <Sec isOpen={!!openSec.events} onToggle={() => setOpenSec(o => ({ ...o, events: !o.events }))} title="Tournament event pages" summary={`${tournaments.length}`}>
+        <p className="text-xs text-slate-400 mb-3">Each tournament has its own public event page. Edit its content here.</p>
+        {tournaments.length === 0 && <p className="text-sm text-slate-400">No tournaments yet.</p>}
+        <div className="space-y-2">
+          {tournaments.map((t: any) => (
+            <div key={t.id} className="flex items-center gap-2 border border-slate-200 rounded-lg p-3">
+              <span className="flex-1 text-sm font-medium text-slate-700 truncate">{t.name}</span>
+              <a href={`/tournaments/${t.id}/event`} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"><ExternalLink size={12} /> View</a>
+              <Link href={`/tournaments/${t.id}/event-page`} className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-lg px-3 py-1.5 hover:bg-teal-100">Edit event page</Link>
+            </div>
+          ))}
+        </div>
+      </Sec>
 
       {/* Logo */}
       <Sec isOpen={!!openSec.logo} onToggle={() => setOpenSec(o => ({ ...o, logo: !o.logo }))} title="Logo" summary={c.logo ? 'Set' : 'None'}>
