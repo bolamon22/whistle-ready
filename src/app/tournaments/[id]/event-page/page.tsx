@@ -7,14 +7,16 @@ import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import { ChevronDown, Plus, Trash2, Save, ExternalLink, ImagePlus } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
+import SectionReorder from '@/components/SectionReorder'
 
 type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string }
 type Contact = { name: string; role: string; phone: string; email: string }
 type Content = {
   overview: string; feesText: string; divisionsText: string; ageChartUrl: string
   locations: Loc[]; hotels: string; hotelsUrl: string; rules: string; contacts: Contact[]
+  sectionOrder?: string[]; hiddenSections?: string[]
 }
-const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', locations: [], hotels: '', hotelsUrl: '', rules: '', contacts: [] }
+const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', locations: [], hotels: '', hotelsUrl: '', rules: '', contacts: [], sectionOrder: [], hiddenSections: [] }
 
 const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-3 mb-1'
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -44,7 +46,7 @@ export default function EventPageEditor() {
   const [name, setName] = useState('Tournament')
   const [logo, setLogo] = useState<string | undefined>(undefined)
   const [c, setC] = useState<Content>(EMPTY)
-  const [open, setOpen] = useState<Record<string, boolean>>({ overview: true })
+  const [open, setOpen] = useState<Record<string, boolean>>({ layout: true, overview: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [regDivs, setRegDivs] = useState<string[]>([])
@@ -90,6 +92,11 @@ export default function EventPageEditor() {
             <button onClick={save} disabled={saving} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 inline-flex items-center gap-1.5 disabled:opacity-50"><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
           </div>
         </div>
+
+        <Sec title="Page layout" summary="Drag to reorder" isOpen={!!open.layout} onToggle={() => toggle('layout')}>
+          <p className="text-xs text-slate-500 mb-3">Drag sections to set the order they appear on the public event page, or hide ones you don&apos;t need. Sections with no content never show, regardless of this list.</p>
+          <SectionReorder order={c.sectionOrder} hidden={c.hiddenSections} onChange={(order, hidden) => setC(v => ({ ...v, sectionOrder: order, hiddenSections: hidden }))} />
+        </Sec>
 
         <Sec title="Overview" summary={c.overview ? 'Set' : 'Empty'} isOpen={!!open.overview} onToggle={() => toggle('overview')}>
           <label className={labelCls}>Summary</label>

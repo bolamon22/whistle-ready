@@ -5,6 +5,7 @@ import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventInfoNav from '@/components/EventInfoNav'
 import EventSection from '@/components/EventSection'
+import { resolveSectionOrder, SECTION_LABELS } from '@/lib/eventSections'
 import { OrgHeader, OrgFooter, buildNav } from '@/app/o/[slug]/_chrome'
 
 export const dynamic = 'force-dynamic'
@@ -41,22 +42,113 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const orgForChrome = { name: org.name, logoUrl: headerLogo, contactEmail: org.contactEmail }
   const nav = org.slug ? buildNav(org.slug, navPages, hasGallery) : []
   const registerHref = Number(t.teamRegEnabled) ? `/tournaments/${params.id}/register` : undefined
+  const base = `/tournaments/${params.id}`
 
   const setupDivisions: string[] = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const manualDivisions: string[] = String(c.divisionsText || '').split('\n').map((x: string) => x.trim()).filter(Boolean)
   const divisions: string[] = setupDivisions.length ? setupDivisions : manualDivisions
   const locations: any[] = Array.isArray(c.locations) ? c.locations : []
   const contacts: any[] = Array.isArray(c.contacts) ? c.contacts : []
-  const infoItems = [
-    c.overview && { href: '#overview', label: 'Overview' },
-    (c.feesText || divisions.length) && { href: '#fees', label: 'Fees & divisions' },
-    locations.length && { href: '#locations', label: 'Locations & field maps' },
-    (c.hotelsUrl || c.hotels) && { href: '#hotels', label: 'Hotels' },
-    c.rules && { href: `/tournaments/${params.id}/rules`, label: 'Rules & policies' },
-    contacts.length && { href: '#contacts', label: 'Contacts' },
-    sponsors.length && { href: '#sponsors', label: 'Sponsors & partners' },
-  ].filter(Boolean) as { href: string; label: string }[]
-  const base = `/tournaments/${params.id}`
+
+  // Section content map — each key renders its block or null if it has no content.
+  const sectionMap: Record<string, JSX.Element | null> = {
+    overview: c.overview ? (
+      <EventSection id="overview" title="Overview">
+        <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.overview) }} />
+      </EventSection>
+    ) : null,
+    fees: (c.feesText || divisions.length > 0) ? (
+      <EventSection id="fees" title="Fees & divisions">
+        <div className="grid sm:grid-cols-2 gap-8">
+          {c.feesText && (
+            <div>
+              <h3 className="font-bold text-slate-900 mb-2">Tournament fees</h3>
+              <div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{c.feesText}</div>
+            </div>
+          )}
+          {divisions.length > 0 && (
+            <div>
+              <h3 className="font-bold text-slate-900 mb-2">Divisions</h3>
+              <ul className="text-sm text-slate-600 space-y-1">{divisions.map((d, i) => <li key={i}>{d}</li>)}</ul>
+              {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
+            </div>
+          )}
+        </div>
+      </EventSection>
+    ) : null,
+    locations: locations.length > 0 ? (
+      <EventSection id="locations" title="Locations & field maps">
+        <div className="grid sm:grid-cols-2 gap-5">
+          {locations.map((l, i) => (
+            <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+              {l.fieldMapUrl && <FieldMap src={l.fieldMapUrl} label={l.name} />}
+              <div className="p-4">
+                <h3 className="font-bold text-slate-900">{l.name}</h3>
+                {l.address && <p className="text-sm text-slate-500 mt-0.5">{l.address}</p>}
+                {l.address && (
+                  <iframe
+                    title={`Map of ${l.name || 'venue'}`}
+                    src={`https://www.google.com/maps?q=${encodeURIComponent(l.address)}&output=embed`}
+                    className="w-full h-48 rounded-xl border border-slate-200 mt-3"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                )}
+                {(l.mapUrl || l.address) && <a href={l.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.address)}`} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-2"><MapPin size={13} /> Directions</a>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </EventSection>
+    ) : null,
+    hotels: (c.hotelsUrl || c.hotels) ? (
+      <EventSection id="hotels" title="Hotels">
+        {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full mb-4"><Hotel size={15} /> Book hotels</a>}
+        {c.hotels && <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />}
+      </EventSection>
+    ) : null,
+    rules: c.rules ? (
+      <Link href={`${base}/rules`} className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 hover:bg-slate-50/60 transition-colors">
+        <ScrollText size={18} className="text-slate-400 shrink-0" />
+        <div className="flex-1">
+          <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Rules &amp; policies</h2>
+          <p className="text-sm text-slate-500">Read the full tournament rules, format and policies</p>
+        </div>
+        <span className="text-teal-700 text-sm font-semibold inline-flex items-center gap-1 shrink-0">View <ExternalLink size={14} /></span>
+      </Link>
+    ) : null,
+    contacts: contacts.length > 0 ? (
+      <EventSection id="contacts" title="Contacts">
+        <div className="grid sm:grid-cols-2 gap-4">
+          {contacts.map((ct, i) => (
+            <div key={i} className="bg-white border border-slate-200 rounded-2xl p-4">
+              <div className="font-bold text-slate-900">{ct.name}</div>
+              {ct.role && <div className="text-sm text-slate-500">{ct.role}</div>}
+              <div className="mt-2 flex flex-col gap-1 text-sm">
+                {ct.phone && <a href={`tel:${ct.phone}`} className="text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><Phone size={13} /> {ct.phone}</a>}
+                {ct.email && <a href={`mailto:${ct.email}`} className="text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><Mail size={13} /> {ct.email}</a>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </EventSection>
+    ) : null,
+    sponsors: sponsors.length > 0 ? (
+      <EventSection id="sponsors" title="Sponsors & partners">
+        <div className="flex flex-wrap items-center gap-x-10 gap-y-6">
+          {sponsors.map((s, i) => {
+            const img = s.logoUrl ? <img src={s.logoUrl} alt={s.name || ''} className="h-12 object-contain" /> : <span className="text-slate-600 font-medium">{s.name}</span>
+            return s.url ? <a key={i} href={s.url} target="_blank" rel="noreferrer">{img}</a> : <div key={i}>{img}</div>
+          })}
+        </div>
+      </EventSection>
+    ) : null,
+  }
+
+  const order = resolveSectionOrder(c.sectionOrder)
+  const hidden = new Set(Array.isArray(c.hiddenSections) ? c.hiddenSections : [])
+  const visibleKeys = order.filter(k => !hidden.has(k) && sectionMap[k])
+  const infoItems = visibleKeys.map(k => ({ href: k === 'rules' ? `${base}/rules` : `#${k}`, label: SECTION_LABELS[k] || k }))
 
   const actions = [
     Number(t.teamRegEnabled) ? { href: `${base}/register`, label: 'Register', icon: <ClipboardList size={15} />, primary: true } : null,
@@ -88,103 +180,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
       </section>
 
       <main className="max-w-4xl mx-auto px-6 py-12 space-y-4">
-        {c.overview && (
-          <EventSection id="overview" title="Overview">
-            <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.overview) }} />
-          </EventSection>
-        )}
-
-        {(c.feesText || divisions.length > 0) && (
-          <EventSection id="fees" title="Fees & divisions">
-            <div className="grid sm:grid-cols-2 gap-8">
-              {c.feesText && (
-                <div>
-                  <h3 className="font-bold text-slate-900 mb-2">Tournament fees</h3>
-                  <div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{c.feesText}</div>
-                </div>
-              )}
-              {divisions.length > 0 && (
-                <div>
-                  <h3 className="font-bold text-slate-900 mb-2">Divisions</h3>
-                  <ul className="text-sm text-slate-600 space-y-1">{divisions.map((d, i) => <li key={i}>{d}</li>)}</ul>
-                  {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
-                </div>
-              )}
-            </div>
-          </EventSection>
-        )}
-
-        {locations.length > 0 && (
-          <EventSection id="locations" title="Locations & field maps">
-            <div className="grid sm:grid-cols-2 gap-5">
-              {locations.map((l, i) => (
-                <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                  {l.fieldMapUrl && <FieldMap src={l.fieldMapUrl} label={l.name} />}
-                  <div className="p-4">
-                    <h3 className="font-bold text-slate-900">{l.name}</h3>
-                    {l.address && <p className="text-sm text-slate-500 mt-0.5">{l.address}</p>}
-                    {l.address && (
-                      <iframe
-                        title={`Map of ${l.name || 'venue'}`}
-                        src={`https://www.google.com/maps?q=${encodeURIComponent(l.address)}&output=embed`}
-                        className="w-full h-48 rounded-xl border border-slate-200 mt-3"
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade"
-                      />
-                    )}
-                    {(l.mapUrl || l.address) && <a href={l.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.address)}`} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-2"><MapPin size={13} /> Directions</a>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </EventSection>
-        )}
-
-        {(c.hotelsUrl || c.hotels) && (
-          <EventSection id="hotels" title="Hotels">
-            {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full mb-4"><Hotel size={15} /> Book hotels</a>}
-            {c.hotels && <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />}
-          </EventSection>
-        )}
-
-        {c.rules && (
-          <Link href={`${base}/rules`} className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 hover:bg-slate-50/60 transition-colors">
-            <ScrollText size={18} className="text-slate-400 shrink-0" />
-            <div className="flex-1">
-              <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Rules &amp; policies</h2>
-              <p className="text-sm text-slate-500">Read the full tournament rules, format and policies</p>
-            </div>
-            <span className="text-teal-700 text-sm font-semibold inline-flex items-center gap-1 shrink-0">View <ExternalLink size={14} /></span>
-          </Link>
-        )}
-
-        {contacts.length > 0 && (
-          <EventSection id="contacts" title="Contacts">
-            <div className="grid sm:grid-cols-2 gap-4">
-              {contacts.map((ct, i) => (
-                <div key={i} className="bg-white border border-slate-200 rounded-2xl p-4">
-                  <div className="font-bold text-slate-900">{ct.name}</div>
-                  {ct.role && <div className="text-sm text-slate-500">{ct.role}</div>}
-                  <div className="mt-2 flex flex-col gap-1 text-sm">
-                    {ct.phone && <a href={`tel:${ct.phone}`} className="text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><Phone size={13} /> {ct.phone}</a>}
-                    {ct.email && <a href={`mailto:${ct.email}`} className="text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><Mail size={13} /> {ct.email}</a>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </EventSection>
-        )}
-
-        {sponsors.length > 0 && (
-          <EventSection id="sponsors" title="Sponsors & partners">
-            <div className="flex flex-wrap items-center gap-x-10 gap-y-6">
-              {sponsors.map((s, i) => {
-                const img = s.logoUrl ? <img src={s.logoUrl} alt={s.name || ''} className="h-12 object-contain" /> : <span className="text-slate-600 font-medium">{s.name}</span>
-                return s.url ? <a key={i} href={s.url} target="_blank" rel="noreferrer">{img}</a> : <div key={i}>{img}</div>
-              })}
-            </div>
-          </EventSection>
-        )}
+        {visibleKeys.map(k => <div key={k}>{sectionMap[k]}</div>)}
       </main>
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
     </div>
