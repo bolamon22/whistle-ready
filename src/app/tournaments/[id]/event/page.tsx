@@ -5,7 +5,10 @@ import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventInfoNav from '@/components/EventInfoNav'
 import EventSection from '@/components/EventSection'
-import { resolveSectionOrder, SECTION_LABELS } from '@/lib/eventSections'
+import CountdownBlock from '@/components/CountdownBlock'
+import FaqBlock from '@/components/FaqBlock'
+import { SECTION_LABELS } from '@/lib/eventSections'
+import { resolveBlocks, isBuiltin } from '@/lib/eventBlocks'
 import { OrgHeader, OrgFooter, buildNav } from '@/app/o/[slug]/_chrome'
 
 export const dynamic = 'force-dynamic'
@@ -50,7 +53,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const locations: any[] = Array.isArray(c.locations) ? c.locations : []
   const contacts: any[] = Array.isArray(c.contacts) ? c.contacts : []
 
-  // Section content map — each key renders its block or null if it has no content.
+  // Built-in section content (singletons), keyed by type.
   const sectionMap: Record<string, JSX.Element | null> = {
     overview: c.overview ? (
       <EventSection id="overview" title="Overview">
@@ -145,10 +148,44 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     ) : null,
   }
 
-  const order = resolveSectionOrder(c.sectionOrder)
-  const hidden = new Set(Array.isArray(c.hiddenSections) ? c.hiddenSections : [])
-  const visibleKeys = order.filter(k => !hidden.has(k) && sectionMap[k])
-  const infoItems = visibleKeys.map(k => ({ href: k === 'rules' ? `${base}/rules` : `#${k}`, label: SECTION_LABELS[k] || k }))
+  // Custom block content (repeatable), rendered from the block's props.
+  const customContent = (b: any): JSX.Element | null => {
+    const p = b.props || {}
+    if (b.type === 'custom') return (p.body && String(p.body).trim()) ? (
+      <EventSection id={b.id} title={p.title || 'Section'}>
+        <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(p.body) }} />
+      </EventSection>
+    ) : null
+    if (b.type === 'cta') return (p.label && p.url) ? (
+      <div className="flex justify-center py-2">
+        <a href={p.url} target="_blank" rel="noreferrer" className={p.style === 'secondary'
+          ? 'inline-flex items-center gap-1.5 border-2 border-teal-600 text-teal-700 hover:bg-teal-50 font-semibold px-6 py-3 rounded-full'
+          : 'inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-3 rounded-full shadow-lg shadow-teal-600/20'}>
+          {p.label} <ExternalLink size={16} />
+        </a>
+      </div>
+    ) : null
+    if (b.type === 'faq') {
+      const items = (Array.isArray(p.items) ? p.items : []).filter((it: any) => it && it.q)
+      return items.length ? (
+        <EventSection id={b.id} title={p.title || 'FAQ'}>
+          <FaqBlock items={items} />
+        </EventSection>
+      ) : null
+    }
+    if (b.type === 'countdown') return t.startDate ? <CountdownBlock title={p.title} target={t.startDate} /> : null
+    return null
+  }
+
+  const rendered = resolveBlocks(c)
+    .filter((b: any) => !b.hidden)
+    .map((b: any) => ({ b, el: isBuiltin(b.type) ? sectionMap[b.type] : customContent(b) }))
+    .filter((x: any) => x.el)
+
+  const navLabel = (b: any) => isBuiltin(b.type) ? (SECTION_LABELS[b.type] || b.type) : ((b.props && b.props.title) || 'Section')
+  const infoItems = rendered
+    .filter((x: any) => x.b.type !== 'cta' && x.b.type !== 'countdown')
+    .map((x: any) => ({ href: x.b.type === 'rules' ? `${base}/rules` : `#${x.b.id}`, label: navLabel(x.b) }))
 
   const actions = [
     Number(t.teamRegEnabled) ? { href: `${base}/register`, label: 'Register', icon: <ClipboardList size={15} />, primary: true } : null,
@@ -180,7 +217,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
       </section>
 
       <main className="max-w-4xl mx-auto px-6 py-12 space-y-4">
-        {visibleKeys.map(k => <div key={k}>{sectionMap[k]}</div>)}
+        {rendered.map((x: any) => <div key={x.b.id}>{x.el}</div>)}
       </main>
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
     </div>

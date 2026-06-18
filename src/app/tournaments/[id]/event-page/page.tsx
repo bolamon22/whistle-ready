@@ -7,7 +7,8 @@ import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import { ChevronDown, Plus, Trash2, Save, ExternalLink, ImagePlus } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
-import SectionReorder from '@/components/SectionReorder'
+import BlockBuilder from '@/components/BlockBuilder'
+import { resolveBlocks, Block } from '@/lib/eventBlocks'
 
 type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string }
 type Contact = { name: string; role: string; phone: string; email: string }
@@ -15,8 +16,9 @@ type Content = {
   overview: string; feesText: string; divisionsText: string; ageChartUrl: string
   locations: Loc[]; hotels: string; hotelsUrl: string; rules: string; contacts: Contact[]
   sectionOrder?: string[]; hiddenSections?: string[]
+  blocks?: Block[]
 }
-const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', locations: [], hotels: '', hotelsUrl: '', rules: '', contacts: [], sectionOrder: [], hiddenSections: [] }
+const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', locations: [], hotels: '', hotelsUrl: '', rules: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [] }
 
 const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-3 mb-1'
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -93,9 +95,9 @@ export default function EventPageEditor() {
           </div>
         </div>
 
-        <Sec title="Page layout" summary="Drag to reorder" isOpen={!!open.layout} onToggle={() => toggle('layout')}>
-          <p className="text-xs text-slate-500 mb-3">Drag sections to set the order they appear on the public event page, or hide ones you don&apos;t need. Sections with no content never show, regardless of this list.</p>
-          <SectionReorder order={c.sectionOrder} hidden={c.hiddenSections} onChange={(order, hidden) => setC(v => ({ ...v, sectionOrder: order, hiddenSections: hidden }))} />
+        <Sec title="Page builder" summary="Drag, add, hide" isOpen={!!open.layout} onToggle={() => toggle('layout')}>
+          <p className="text-xs text-slate-500 mb-3">Drag to reorder how blocks appear on the public event page, hide ones you don&apos;t need, or add custom blocks. Built-in sections pull their content from the fields below; custom blocks are edited right here. Empty sections never show.</p>
+          <BlockBuilder blocks={resolveBlocks(c)} onChange={(blocks) => setC(v => ({ ...v, blocks }))} />
         </Sec>
 
         <Sec title="Overview" summary={c.overview ? 'Set' : 'Empty'} isOpen={!!open.overview} onToggle={() => toggle('overview')}>
