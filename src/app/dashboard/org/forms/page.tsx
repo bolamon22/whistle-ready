@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, FileText, ClipboardList, Save, ExternalLink, Link2, Inbox, Pencil, X } from 'lucide-react'
+import MarkdownField from '@/components/MarkdownField'
 
 const DEFAULT_WAIVER = `## 1. Acknowledgment of Risk
 I understand that lacrosse is a high-intensity sport involving aggressive play and physical contact. I acknowledge that participation carries inherent risks, including but not limited to:
@@ -182,7 +183,7 @@ function FormsInner() {
                 <label className={labelCls}>Waiver title</label>
                 <input className={inputCls} value={pf.waiverTitle} onChange={e => setF(v => ({ ...v, player: { ...v.player, waiverTitle: e.target.value } }))} />
                 <label className={labelCls}>Waiver text</label>
-                <textarea className={`${inputCls} min-h-[240px] font-mono text-xs leading-relaxed`} value={pf.waiverText} onChange={e => setF(v => ({ ...v, player: { ...v.player, waiverText: e.target.value } }))} />
+                <MarkdownField value={pf.waiverText} onChange={val => setF(v => ({ ...v, player: { ...v.player, waiverText: val } }))} minHeight={240} mono placeholder="Waiver text…" />
                 <p className="text-xs text-slate-400 mt-1">Supports Markdown (## headings, **bold**, - bullets).</p>
                 <label className={labelCls}>Optional fields</label>
                 <div className="grid sm:grid-cols-2 gap-2">
@@ -196,7 +197,7 @@ function FormsInner() {
                 <label className={labelCls}>Confirmation title</label>
                 <input className={inputCls} value={pf.confirmationTitle} onChange={e => setF(v => ({ ...v, player: { ...v.player, confirmationTitle: e.target.value } }))} />
                 <label className={labelCls}>Confirmation message</label>
-                <textarea className={`${inputCls} min-h-[80px]`} value={pf.confirmationMessage} onChange={e => setF(v => ({ ...v, player: { ...v.player, confirmationMessage: e.target.value } }))} />
+                <MarkdownField value={pf.confirmationMessage} onChange={val => setF(v => ({ ...v, player: { ...v.player, confirmationMessage: val } }))} minHeight={80} />
                 <label className="flex items-start gap-2 mt-3 cursor-pointer">
                   <input type="checkbox" className="mt-0.5 accent-teal-500" checked={pf.emailConfirmation} onChange={e => setF(v => ({ ...v, player: { ...v.player, emailConfirmation: e.target.checked } }))} />
                   <span className="text-sm text-slate-700">Email a confirmation to the registrant</span>
@@ -230,11 +231,11 @@ function FormsInner() {
                 <label className={labelCls}>Payment options (comma separated)</label>
                 <input className={inputCls} value={vf.paymentOptions.join(', ')} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, paymentOptions: e.target.value.split(',').map(x => x.trim()).filter(Boolean) } }))} />
                 <label className={labelCls}>Vendor disclaimer</label>
-                <textarea className={`${inputCls} min-h-[120px]`} value={vf.disclaimer} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, disclaimer: e.target.value } }))} />
+                <MarkdownField value={vf.disclaimer} onChange={val => setF(v => ({ ...v, vendor: { ...v.vendor, disclaimer: val } }))} minHeight={120} />
                 <label className={labelCls}>Confirmation title</label>
                 <input className={inputCls} value={vf.confirmationTitle} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, confirmationTitle: e.target.value } }))} />
                 <label className={labelCls}>Confirmation message</label>
-                <textarea className={`${inputCls} min-h-[80px]`} value={vf.confirmationMessage} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, confirmationMessage: e.target.value } }))} />
+                <MarkdownField value={vf.confirmationMessage} onChange={val => setF(v => ({ ...v, vendor: { ...v.vendor, confirmationMessage: val } }))} minHeight={80} />
                 <label className="flex items-start gap-2 mt-3 cursor-pointer">
                   <input type="checkbox" className="mt-0.5 accent-teal-500" checked={vf.emailConfirmation} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, emailConfirmation: e.target.checked } }))} />
                   <span className="text-sm text-slate-700">Email a confirmation to the vendor</span>

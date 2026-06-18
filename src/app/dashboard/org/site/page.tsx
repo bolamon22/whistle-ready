@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save } from 'lucide-react'
+import MarkdownField from '@/components/MarkdownField'
 
 type Sponsor = { name: string; logoUrl: string; url: string }
 type Page = { title: string; slug: string; body: string; group: string }
@@ -218,7 +219,7 @@ function OrgSiteEditorInner() {
                     </div>
                     <input className="input py-1 text-xs sm:w-48" value={pg.group || ''} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, group: e.target.value } : x) }))} placeholder="Menu group (optional)" />
                   </div>
-                  <textarea className="input min-h-[160px] mt-2" value={pg.body} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: e.target.value } : x) }))} placeholder="Page content…" />
+                  <div className="mt-2"><MarkdownField value={pg.body} onChange={val => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: val } : x) }))} minHeight={160} placeholder="Page content…" /></div>
                 </div>
               )}
             </div>

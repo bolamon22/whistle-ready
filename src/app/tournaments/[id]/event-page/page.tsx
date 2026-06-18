@@ -6,6 +6,7 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import { ChevronDown, Plus, Trash2, Save, ExternalLink, ImagePlus } from 'lucide-react'
+import MarkdownField from '@/components/MarkdownField'
 
 type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string }
 type Contact = { name: string; role: string; phone: string; email: string }
@@ -95,7 +96,7 @@ export default function EventPageEditor() {
 
         <Sec title="Overview" summary={c.overview ? 'Set' : 'Empty'} isOpen={!!open.overview} onToggle={() => toggle('overview')}>
           <label className={labelCls}>Summary</label>
-          <textarea className={`${inputCls} min-h-[140px]`} value={c.overview} onChange={e => setC(v => ({ ...v, overview: e.target.value }))} placeholder="Welcome blurb about this tournament…" />
+          <MarkdownField value={c.overview} onChange={val => setC(v => ({ ...v, overview: val }))} minHeight={140} placeholder="Welcome blurb about this tournament…" />
           <p className="text-xs text-slate-400 mt-1">Supports Markdown (## headings, **bold**, - bullets).</p>
         </Sec>
 
@@ -138,12 +139,12 @@ export default function EventPageEditor() {
           <input className={inputCls} value={c.hotelsUrl} onChange={e => setC(v => ({ ...v, hotelsUrl: e.target.value }))} placeholder="https://book.housingcompany.com/…" />
           <p className="text-xs text-slate-400 mt-1">Shows as a “Book hotels” button on the event page.</p>
           <label className={labelCls}>Details (optional)</label>
-          <textarea className={`${inputCls} min-h-[120px]`} value={c.hotels} onChange={e => setC(v => ({ ...v, hotels: e.target.value }))} placeholder="Stay-to-play info, room blocks, notes…" />
+          <MarkdownField value={c.hotels} onChange={val => setC(v => ({ ...v, hotels: val }))} minHeight={120} placeholder="Stay-to-play info, room blocks, notes…" />
           <p className="text-xs text-slate-400 mt-1">Supports Markdown, including [links](https://…).</p>
         </Sec>
 
         <Sec title="Rules & policies" summary={c.rules ? 'Set' : 'Empty'} isOpen={!!open.rules} onToggle={() => toggle('rules')}>
-          <textarea className={`${inputCls} min-h-[120px]`} value={c.rules} onChange={e => setC(v => ({ ...v, rules: e.target.value }))} placeholder="Rules, policies, or links…" />
+          <MarkdownField value={c.rules} onChange={val => setC(v => ({ ...v, rules: val }))} minHeight={120} placeholder="Rules, policies, or links…" />
           <p className="text-xs text-slate-400 mt-1">Supports Markdown.</p>
         </Sec>
 
