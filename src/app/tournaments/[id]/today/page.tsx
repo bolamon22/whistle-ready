@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Star, Clock, MapPin, Navigation, AlertTriangle, Megaphone, Map, ParkingCircle, Trophy, ListOrdered, Calendar, Phone, ChevronRight, CalendarDays } from 'lucide-react'
+import { Star, Clock, MapPin, Navigation, AlertTriangle, Megaphone, Map, ParkingCircle, Calendar, ChevronRight, CalendarDays, Users, ScrollText, ShoppingBag } from 'lucide-react'
 import { Game } from '@/lib/standings'
 
 type T = { id: string; name: string; startDate: string; endDate: string; location: string; logoUrl: string }
@@ -59,12 +59,12 @@ export default function TodayPage() {
   const venueQuery = t?.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.location)}` : null
 
   const tiles = [
-    { icon: <Map size={21} />, label: 'Field maps', href: `/tournaments/${id}/event#locations` },
-    { icon: <ParkingCircle size={21} />, label: 'Parking', href: `/tournaments/${id}/event#locations` },
-    { icon: <Trophy size={21} />, label: 'Scores', href: `/tournaments/${id}/public` },
-    { icon: <ListOrdered size={21} />, label: 'Standings', href: `/tournaments/${id}/public` },
+    { icon: <Users size={21} />, label: 'My Teams', href: `/tournaments/${id}/public` },
     { icon: <Navigation size={21} />, label: 'Directions', href: venueQuery || `/tournaments/${id}/event#locations` },
-    { icon: <Phone size={21} />, label: 'Contacts', href: `/tournaments/${id}/event#contacts` },
+    { icon: <Map size={21} />, label: 'Field maps', href: `/tournaments/${id}/event#locations` },
+    { icon: <ScrollText size={21} />, label: 'Rules', href: `/tournaments/${id}/rules` },
+    { icon: <ShoppingBag size={21} />, label: 'Merchandise', href: `/tournaments/${id}/event` },
+    { icon: <ParkingCircle size={21} />, label: 'Parking', href: `/tournaments/${id}/event#locations` },
   ]
 
   return (
