@@ -59,9 +59,9 @@ export default async function EventChrome({ tournamentId, children }: { tourname
     <>
       {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
       {t.name && (
-        <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
-          {cs.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${cs.heroImage})` }} aria-hidden />}
-          {cs.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55" aria-hidden />}
+        <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white mx-3 sm:mx-5 mt-4 rounded-3xl shadow-xl">
+          {cs.heroImage && <div className="absolute inset-0 bg-center bg-cover rounded-3xl" style={{ backgroundImage: `url(${cs.heroImage})` }} aria-hidden />}
+          {cs.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55 rounded-3xl" aria-hidden />}
           <div className="relative max-w-4xl mx-auto px-6 py-8">
             <Link href={`${base}/event`} className="flex items-center gap-4 w-fit">
               {heroLogo && <img src={heroLogo} alt="" className="w-16 h-16 rounded-xl object-contain bg-white/95 p-1.5" />}
