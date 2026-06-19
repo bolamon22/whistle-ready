@@ -229,9 +229,9 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const minFee = (() => { const m = String(c.feesText || '').match(/\$\s?[\d,]+/g); if (!m) return ''; const nums = m.map((x: string) => parseInt(x.replace(/[^\d]/g, ''))).filter((n: number) => n > 0); return nums.length ? `from $${Math.min(...nums).toLocaleString()}` : '' })()
   const quickFacts = [
     t.startDate && { icon: <CalendarDays size={22} />, label: 'DATES', value: fmtRangeShort(t.startDate, t.endDate) },
-    t.location && { icon: <MapPin size={22} />, label: 'LOCATION', value: shortLocation(t.location) },
-    divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}` },
-    minFee && { icon: <DollarSign size={22} />, label: 'TEAM FEE', value: minFee },
+    t.location && { icon: <MapPin size={22} />, label: 'LOCATION', value: shortLocation(t.location), href: locations.length > 0 ? '#locations' : undefined },
+    divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}`, href: '#fees' },
+    minFee && { icon: <DollarSign size={22} />, label: 'TEAM FEE', value: minFee, href: registerHref || '#fees' },
     (c.hotelsUrl || c.hotels) && { icon: <Hotel size={22} />, label: 'HOTELS', value: 'Book hotels', href: c.hotelsUrl || '#hotels' },
   ].filter(Boolean) as any[]
   const factCols = ({ 1: 'sm:grid-cols-2', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5' } as any)[quickFacts.length] || 'sm:grid-cols-4' 
