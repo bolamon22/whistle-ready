@@ -241,6 +241,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   return (
     <div className="min-h-screen bg-slate-50">
       {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
+      <div className="bg-white">
       <section className="relative text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] rounded-t-3xl">
         {c.heroImage && <div className="absolute inset-0 bg-center bg-cover rounded-t-3xl" style={{ backgroundImage: `url(${c.heroImage})` }} aria-hidden />}
         {c.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55 rounded-t-3xl" aria-hidden />}
@@ -260,6 +261,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
           </div>
         </div>
       </section>
+      </div>
 
       {quickFacts.length > 0 && (
         <div className="bg-white border-b border-slate-200">

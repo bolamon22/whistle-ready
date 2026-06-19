@@ -59,6 +59,7 @@ export default async function EventChrome({ tournamentId, children }: { tourname
     <>
       {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
       {t.name && (
+        <div className="bg-white">
         <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white rounded-t-3xl">
           {cs.heroImage && <div className="absolute inset-0 bg-center bg-cover rounded-t-3xl" style={{ backgroundImage: `url(${cs.heroImage})` }} aria-hidden />}
           {cs.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55 rounded-t-3xl" aria-hidden />}
@@ -78,6 +79,7 @@ export default async function EventChrome({ tournamentId, children }: { tourname
             </div>
           </div>
         </section>
+        </div>
       )}
       {children}
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
