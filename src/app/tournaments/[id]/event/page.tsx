@@ -8,6 +8,7 @@ import EventInfoNav from '@/components/EventInfoNav'
 import EventSection from '@/components/EventSection'
 import CountdownBlock from '@/components/CountdownBlock'
 import FaqBlock from '@/components/FaqBlock'
+import ExpandableContent from '@/components/ExpandableContent'
 import ScheduleBlock from '@/components/ScheduleBlock'
 import StandingsBlock from '@/components/StandingsBlock'
 import { SECTION_LABELS } from '@/lib/eventSections'
@@ -24,6 +25,22 @@ function fmtRange(s: string, e: string) {
   if (s && e && s !== e) return `${fmtDay(s)} – ${fmtDay(e)}, ${yr(e)}`
   if (s) return `${fmtDay(s)}, ${yr(s)}`
   return 'Dates TBA'
+}
+const fmtDayShort = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); return new Date(+y, +m - 1, +day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+function fmtRangeShort(s: string, e: string) {
+  if (!s) return 'TBA'
+  if (e && e !== s) {
+    const [sy, sm] = s.split('-'); const [ey, em] = e.split('-')
+    if (sy === ey && sm === em) return `${fmtDayShort(s)}–${parseInt(e.split('-')[2])}`
+    return `${fmtDayShort(s)} – ${fmtDayShort(e)}`
+  }
+  return fmtDayShort(s)
+}
+function shortLocation(loc: string) {
+  if (!loc) return ''
+  const m = loc.match(/([A-Za-z .'-]+),\s*([A-Z]{2})(?:\s*\d{5})?/)
+  if (m) return `${m[1].trim()}, ${m[2]}`
+  return loc.split(',')[0].trim()
 }
 
 export default async function TournamentEventPage({ params }: { params: { id: string } }) {
@@ -60,22 +77,22 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const sectionMap: Record<string, JSX.Element | null> = {
     overview: c.overview ? (
       <EventSection id="overview" title="Overview">
-        <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.overview) }} />
+        <ExpandableContent html={mdToHtml(c.overview)} />
       </EventSection>
     ) : null,
     fees: (c.feesText || divisions.length > 0) ? (
       <EventSection id="fees" title="Fees & divisions">
-        <div className="grid sm:grid-cols-2 gap-8">
+        <div className="grid sm:grid-cols-2 gap-4">
           {c.feesText && (
-            <div>
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
               <h3 className="font-bold text-slate-900 mb-2">Tournament fees</h3>
               <div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{c.feesText}</div>
             </div>
           )}
           {divisions.length > 0 && (
-            <div>
-              <h3 className="font-bold text-slate-900 mb-2">Divisions</h3>
-              <ul className="text-sm text-slate-600 space-y-1">{divisions.map((d, i) => <li key={i}>{d}</li>)}</ul>
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+              <h3 className="font-bold text-slate-900 mb-2.5">Divisions</h3>
+              <div className="flex flex-wrap gap-1.5">{divisions.map((d, i) => <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-2.5 py-1 rounded-full">{d}</span>)}</div>
               {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
             </div>
           )}
@@ -87,20 +104,15 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         <div className="grid sm:grid-cols-2 gap-5">
           {locations.map((l, i) => (
             <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-              {l.fieldMapUrl && <FieldMap src={l.fieldMapUrl} label={l.name} />}
+              {l.fieldMapUrl
+                ? <FieldMap src={l.fieldMapUrl} label={l.name} />
+                : l.address
+                  ? <iframe title={`Map of ${l.name || 'venue'}`} src={`https://www.google.com/maps?q=${encodeURIComponent(l.address)}&output=embed`} className="w-full h-44 border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+                  : null}
               <div className="p-4">
                 <h3 className="font-bold text-slate-900">{l.name}</h3>
                 {l.address && <p className="text-sm text-slate-500 mt-0.5">{l.address}</p>}
-                {l.address && (
-                  <iframe
-                    title={`Map of ${l.name || 'venue'}`}
-                    src={`https://www.google.com/maps?q=${encodeURIComponent(l.address)}&output=embed`}
-                    className="w-full h-48 rounded-xl border border-slate-200 mt-3"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                )}
-                {(l.mapUrl || l.address) && <a href={l.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.address)}`} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-2"><MapPin size={13} /> Directions</a>}
+                {(l.mapUrl || l.address) && <a href={l.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.address)}`} target="_blank" rel="noreferrer" className="text-sm font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3"><MapPin size={13} /> Get directions</a>}
               </div>
             </div>
           ))}
@@ -216,8 +228,8 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const eyebrow = ((t.sport ? String(t.sport) + ' ' : '') + 'tournament')
   const minFee = (() => { const m = String(c.feesText || '').match(/\$\s?[\d,]+/g); if (!m) return ''; const nums = m.map((x: string) => parseInt(x.replace(/[^\d]/g, ''))).filter((n: number) => n > 0); return nums.length ? `from $${Math.min(...nums).toLocaleString()}` : '' })()
   const quickFacts = [
-    t.startDate && { icon: <CalendarDays size={22} />, label: 'DATES', value: fmtRange(t.startDate, t.endDate) },
-    t.location && { icon: <MapPin size={22} />, label: 'LOCATION', value: t.location },
+    t.startDate && { icon: <CalendarDays size={22} />, label: 'DATES', value: fmtRangeShort(t.startDate, t.endDate) },
+    t.location && { icon: <MapPin size={22} />, label: 'LOCATION', value: shortLocation(t.location) },
     divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}` },
     minFee && { icon: <DollarSign size={22} />, label: 'TEAM FEE', value: minFee },
   ].filter(Boolean) as any[]
