@@ -63,7 +63,7 @@ export default function TodayPage() {
     { icon: <ParkingCircle size={21} />, label: 'Parking', href: `/tournaments/${id}/event#locations` },
     { icon: <Trophy size={21} />, label: 'Scores', href: `/tournaments/${id}/public` },
     { icon: <ListOrdered size={21} />, label: 'Standings', href: `/tournaments/${id}/public` },
-    { icon: <Calendar size={21} />, label: 'Schedule', href: `/tournaments/${id}/public` },
+    { icon: <Navigation size={21} />, label: 'Directions', href: venueQuery || `/tournaments/${id}/event#locations` },
     { icon: <Phone size={21} />, label: 'Contacts', href: `/tournaments/${id}/event#contacts` },
   ]
 
@@ -99,7 +99,7 @@ export default function TodayPage() {
                 {next.g.location && <span className="inline-flex items-center gap-1"><MapPin size={14} /> {next.g.location}</span>}
               </div>
               {next.g.division && <div className="text-xs text-slate-400 mt-0.5">{next.g.division}</div>}
-              {venueQuery && <a href={venueQuery} target="_blank" rel="noreferrer" className="mt-3 w-full bg-teal-600 hover:bg-teal-700 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5"><Navigation size={15} /> Get directions</a>}
+              <Link href={`/tournaments/${id}/public`} className="mt-3 w-full bg-teal-600 hover:bg-teal-700 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5"><Calendar size={15} /> View full schedule</Link>
               {after && <div className="mt-2.5 pt-2.5 border-t border-slate-100 text-xs text-slate-500">Then {after.g.startTime}{after.g.location ? ` · ${after.g.location}` : ''} · {after.g.team1} vs {after.g.team2}</div>}
             </div>
           ) : (
