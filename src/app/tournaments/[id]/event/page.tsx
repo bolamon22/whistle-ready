@@ -5,6 +5,7 @@ import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, List
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventInfoNav from '@/components/EventInfoNav'
+import EventTabs from '@/components/EventTabs'
 import EventSection from '@/components/EventSection'
 import CountdownBlock from '@/components/CountdownBlock'
 import FaqBlock from '@/components/FaqBlock'
@@ -238,6 +239,21 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   ].filter(Boolean) as any[]
   const factCols = ({ 1: 'sm:grid-cols-2', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6' } as any)[quickFacts.length] || 'sm:grid-cols-4' 
 
+  // Tabbed content: fact-linked sections (reached via the facts bar) stay OUT of
+  // the tab strip to avoid duplicating the facts; everything else is a tab.
+  const FACT_LINKED = ['locations', 'fees', 'hotels']
+  const eventPanels: Record<string, JSX.Element> = {}
+  rendered.forEach((x: any) => { if (!x.page && x.b.type !== 'rules' && x.el) eventPanels[x.b.id] = x.el })
+  const eventTabs = rendered
+    .filter((x: any) => (x.b.type === 'rules' || x.page) ? true : !FACT_LINKED.includes(x.b.type))
+    .map((x: any) => ({
+      id: x.b.id,
+      label: navLabel(x.b),
+      href: x.b.type === 'rules' ? `${base}/rules` : (x.page ? `${base}/p/${x.b.id}` : undefined),
+    }))
+  const firstPanelTab = eventTabs.find((t: any) => !t.href)
+  const eventDefaultId = eventPanels['overview'] ? 'overview' : (firstPanelTab ? firstPanelTab.id : (eventTabs[0] ? eventTabs[0].id : 'overview'))
+
   return (
     <div className="min-h-screen bg-slate-50">
       {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
@@ -280,9 +296,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         </div>
       )}
 
-      <main className="max-w-4xl mx-auto px-6 py-12 space-y-10">
-        {rendered.filter((x: any) => x.b.type !== 'rules' && !x.page).map((x: any) => <div key={x.b.id}>{x.el}</div>)}
-      </main>
+      <EventTabs tabs={eventTabs} panels={eventPanels} defaultId={eventDefaultId} />
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
     </div>
   )
