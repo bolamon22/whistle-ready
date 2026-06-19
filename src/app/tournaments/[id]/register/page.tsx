@@ -29,13 +29,14 @@ const DEFAULT_DIVISIONS = [
   "Girls Lower School A (7v7)","Girls Lower School B (7v7 - No 2033's)",
 ]
 
-interface Pricing { tier1: number; tier1Max: number; tier2: number; tier2Max: number; tier3: number; sevenVSeven: number }
+interface Pricing { tier1: number; tier1Max: number; tier2: number; tier2Max: number; tier3: number; sevenVSeven: number | null }
 const DEFAULT_PRICING: Pricing = { tier1: 1495, tier1Max: 3, tier2: 1450, tier2Max: 6, tier3: 1395, sevenVSeven: 1095 }
 
 function calcInvoice(teams: TeamRow[], pricing: Pricing): number {
-  const sevenV = teams.filter(t => t.division.toLowerCase().includes('7v7') || t.division.toLowerCase().includes('7 v 7'))
-  const regular = teams.filter(t => !t.division.toLowerCase().includes('7v7') && !t.division.toLowerCase().includes('7 v 7'))
-  let total = sevenV.length * pricing.sevenVSeven
+  const has7v7 = pricing.sevenVSeven != null
+  const sevenV = has7v7 ? teams.filter(t => t.division.toLowerCase().includes('7v7') || t.division.toLowerCase().includes('7 v 7')) : []
+  const regular = has7v7 ? teams.filter(t => !t.division.toLowerCase().includes('7v7') && !t.division.toLowerCase().includes('7 v 7')) : teams
+  let total = sevenV.length * (pricing.sevenVSeven || 0)
   const n = regular.length
   const rate = n <= pricing.tier1Max ? pricing.tier1 : n <= pricing.tier2Max ? pricing.tier2 : pricing.tier3
   total += n * rate
@@ -489,7 +490,7 @@ export default function RegisterPage() {
                         <div>1-{pricing.tier1Max} teams: {fmt(pricing.tier1)}/team</div>
                         <div>{pricing.tier1Max + 1}-{pricing.tier2Max} teams: {fmt(pricing.tier2)}/team</div>
                         <div>{pricing.tier2Max + 1}+ teams: {fmt(pricing.tier3)}/team</div>
-                        <div>7v7 teams: {fmt(pricing.sevenVSeven)}/team</div>
+                        {pricing.sevenVSeven != null && <div>7v7 teams: {fmt(pricing.sevenVSeven)}/team</div>}
                       </div>
                     )}
                   </div>

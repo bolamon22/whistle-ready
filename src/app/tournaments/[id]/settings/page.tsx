@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
 import { DEFAULT_PAY_RATES, PayRates } from '@/lib/utils'
 import TournamentNav from '../TournamentNav'
-import { Trophy, MapPin, DollarSign, Award, Banknote, Users, ClipboardList, ChevronUp, ChevronDown, Copy, Calendar, X, Clock, Lightbulb, Check, Info, Megaphone, type LucideIcon } from 'lucide-react'
+import { Trophy, MapPin, DollarSign, Award, Banknote, Users, ClipboardList, ChevronUp, ChevronDown, Copy, Calendar, X, Clock, Lightbulb, Check, Info, Megaphone, Plus, type LucideIcon } from 'lucide-react'
 
 const RATE_FIELDS = [
   { key: 'youth', label: 'Referee – Youth Cert' },
@@ -612,7 +612,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
                 { label: `1 – `, fieldMax: 'tier1Max', fieldPrice: 'tier1', suffix: ' teams' },
                 { label: ``, fieldMax: 'tier2Max', fieldPrice: 'tier2', prefix: true },
                 { label: `${pricing.tier2Max + 1}+ teams`, fieldMax: null, fieldPrice: 'tier3' },
-                { label: '7v7 teams', fieldMax: null, fieldPrice: 'sevenVSeven' },
+                ...(pricing.sevenVSeven != null ? [{ label: '7v7 teams', fieldMax: null, fieldPrice: 'sevenVSeven' }] : []),
               ].map((row, i) => (
                 <div key={i} className="flex items-center justify-between gap-4 py-2 border-b border-slate-100 last:border-0">
                   <p className="text-sm font-medium text-slate-700 flex items-center gap-1">
@@ -634,11 +634,16 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
                         else if (i === 2) setPricing(p => ({ ...p, tier3: v }))
                         else setPricing(p => ({ ...p, sevenVSeven: v }))
                       }} />
+                    {row.fieldPrice === 'sevenVSeven' && <button type="button" title="Remove tier" onClick={() => setPricing(p => ({ ...p, sevenVSeven: null as any }))} className="text-slate-300 hover:text-red-500 ml-1"><X size={15} /></button>}
                   </div>
                 </div>
               ))}
+              {pricing.sevenVSeven == null && (
+                <button type="button" onClick={() => setPricing(p => ({ ...p, sevenVSeven: 1095 as any }))}
+                  className="text-sm text-teal-700 hover:text-teal-900 font-medium inline-flex items-center gap-1"><Plus size={14} /> Add 7v7 tier</button>
+              )}
               <button type="button" onClick={() => setPricing(DEFAULT_PRICING)}
-                className="text-xs text-slate-400 hover:text-slate-600 underline">Reset to defaults</button>
+                className="text-xs text-slate-400 hover:text-slate-600 underline block">Reset to defaults</button>
             </div>
           </SectionCard>
 
