@@ -20,6 +20,7 @@ function fmtRange(s: string, e: string) {
 export default async function EventChrome({ tournamentId, children }: { tournamentId: string; children: React.ReactNode }) {
   const client = db()
   const base = `/tournaments/${tournamentId}`
+  const eyebrow = ((t.sport ? String(t.sport) + ' ' : '') + 'tournament')
   let t: any = {}
   try { const r = await client.execute({ sql: 'SELECT id, name, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions FROM "Tournament" WHERE id = ?', args: [tournamentId] }); if (r.rows.length) t = r.rows[0] } catch {}
   let cs: any = {}
@@ -65,14 +66,15 @@ export default async function EventChrome({ tournamentId, children }: { tourname
             <Link href={`${base}/event`} className="flex items-center gap-4 w-fit">
               {heroLogo && <img src={heroLogo} alt="" className="w-16 h-16 rounded-xl object-contain bg-white/95 p-1.5" />}
               <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t.name}</h1>
+                <div className="text-teal-300 text-[10px] sm:text-[11px] font-semibold tracking-[0.18em] uppercase">{eyebrow}</div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">{t.name}</h1>
                 <p className="text-teal-200 text-sm font-medium mt-1 inline-flex items-center gap-1.5"><CalendarDays size={14} /> {fmtRange(t.startDate, t.endDate)}</p>
                 {t.location && <p className="text-slate-200 text-sm inline-flex items-center gap-1.5"><MapPin size={13} /> {t.location}</p>}
               </div>
             </Link>
             <div className="mt-6 flex flex-wrap gap-2">
               {actions.map((a, i) => (
-                <Link key={i} href={a.href} className={`inline-flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-full transition-colors ${a.primary ? 'bg-teal-500 hover:bg-teal-400 text-white shadow-lg shadow-teal-500/20' : 'bg-white/95 hover:bg-white text-[#0b1f3a]'}`}>{a.icon} {a.label}</Link>
+                <Link key={i} href={a.href} className={`inline-flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-full transition-colors ${a.primary ? 'bg-[#16b886] hover:bg-[#13a87b] text-[#04241b] shadow-lg shadow-emerald-900/20' : 'bg-white/95 hover:bg-white text-[#0b1f3a]'}`}>{a.icon} {a.label}</Link>
               ))}
               <EventInfoNav items={infoItems} />
             </div>

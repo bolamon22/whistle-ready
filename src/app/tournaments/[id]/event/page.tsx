@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { cloneElement } from 'react'
 import { createClient } from '@libsql/client'
-import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap } from 'lucide-react'
+import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap, Award, DollarSign } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventInfoNav from '@/components/EventInfoNav'
@@ -28,7 +28,7 @@ function fmtRange(s: string, e: string) {
 
 export default async function TournamentEventPage({ params }: { params: { id: string } }) {
   const client = db()
-  const tRes = await client.execute({ sql: 'SELECT id, name, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions FROM "Tournament" WHERE id = ?', args: [params.id] })
+  const tRes = await client.execute({ sql: 'SELECT id, name, sport, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions FROM "Tournament" WHERE id = ?', args: [params.id] })
   if (tRes.rows.length === 0) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-center px-6"><div><Trophy size={40} className="mx-auto text-slate-300" /><h1 className="mt-3 text-xl font-bold text-slate-800">Tournament not found</h1></div></div>
   }
@@ -155,7 +155,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const customContent = (b: any): JSX.Element | null => {
     const p = b.props || {}
     if (b.type === 'custom') return (p.body && String(p.body).trim()) ? (
-      <EventSection id={b.id} title={p.title || 'Section'} defaultOpen={!!p.open}>
+      <EventSection id={b.id} title={p.title || 'Section'} defaultOpen={!p.collapsed}>
         <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(p.body) }} />
       </EventSection>
     ) : null
@@ -171,7 +171,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     if (b.type === 'faq') {
       const items = (Array.isArray(p.items) ? p.items : []).filter((it: any) => it && it.q)
       return items.length ? (
-        <EventSection id={b.id} title={p.title || 'Details'} defaultOpen={!!p.open}>
+        <EventSection id={b.id} title={p.title || 'Details'} defaultOpen={!p.collapsed}>
           <FaqBlock items={items} />
         </EventSection>
       ) : null
@@ -195,7 +195,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     .filter((b: any) => !b.hidden)
     .map((b: any) => {
       let el: any = isBuiltin(b.type) ? sectionMap[b.type] : customContent(b)
-      if (el && isBuiltin(b.type) && b.type !== 'rules') el = cloneElement(el, { defaultOpen: !!(b.props && b.props.open) })
+      if (el && isBuiltin(b.type) && b.type !== 'rules') el = cloneElement(el, { defaultOpen: !(b.props && b.props.collapsed) })
       return { b, el, page: isPageMode(b) }
     })
     .filter((x: any) => x.el)
@@ -213,31 +213,55 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     { href: `${base}/today`, label: 'Game Day', icon: <Zap size={15} /> },
   ].filter(Boolean) as any[]
 
+  const eyebrow = ((t.sport ? String(t.sport) + ' ' : '') + 'tournament')
+  const minFee = (() => { const m = String(c.feesText || '').match(/\$\s?[\d,]+/g); if (!m) return ''; const nums = m.map((x: string) => parseInt(x.replace(/[^\d]/g, ''))).filter((n: number) => n > 0); return nums.length ? `from $${Math.min(...nums).toLocaleString()}` : '' })()
+  const quickFacts = [
+    t.startDate && { icon: <CalendarDays size={22} />, label: 'DATES', value: fmtRange(t.startDate, t.endDate) },
+    t.location && { icon: <MapPin size={22} />, label: 'LOCATION', value: t.location },
+    divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}` },
+    minFee && { icon: <DollarSign size={22} />, label: 'TEAM FEE', value: minFee },
+  ].filter(Boolean) as any[]
+
   return (
     <div className="min-h-screen bg-slate-50">
       {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
       <section className="relative text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]">
         {c.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${c.heroImage})` }} aria-hidden />}
         {c.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55" aria-hidden />}
-        <div className="relative max-w-4xl mx-auto px-6 py-14">
+        <div className="relative max-w-4xl mx-auto px-6 py-16">
           <div className="flex items-center gap-4">
-            {t.logoUrl && <img src={t.logoUrl} alt="" className="w-20 h-20 rounded-xl object-contain bg-white/95 p-1.5" />}
+            {t.logoUrl && <img src={t.logoUrl} alt="" className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-contain bg-white/95 p-1.5 shrink-0" />}
             <div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">{t.name}</h1>
-              <p className="text-teal-200 font-medium mt-1 inline-flex items-center gap-1.5"><CalendarDays size={15} /> {fmtRange(t.startDate, t.endDate)}</p>
-              {t.location && <p className="text-slate-200 text-sm mt-0.5 inline-flex items-center gap-1.5"><MapPin size={14} /> {t.location}</p>}
+              <div className="text-teal-300 text-[11px] sm:text-xs font-semibold tracking-[0.18em] uppercase">{eyebrow}</div>
+              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.04] mt-1">{t.name}</h1>
+              <p className="text-teal-100 font-medium mt-2.5 inline-flex items-center gap-1.5"><CalendarDays size={15} /> {fmtRange(t.startDate, t.endDate)}</p>
+              {t.location && <p className="text-slate-200/90 text-sm mt-0.5 inline-flex items-center gap-1.5"><MapPin size={14} /> {t.location}</p>}
             </div>
           </div>
           <div className="mt-7 flex flex-wrap gap-2">
             {actions.map((a, i) => (
-              <Link key={i} href={a.href} className={`inline-flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-full transition-colors ${a.primary ? 'bg-teal-500 hover:bg-teal-400 text-white shadow-lg shadow-teal-500/20' : 'bg-white/95 hover:bg-white text-[#0b1f3a]'}`}>{a.icon} {a.label}</Link>
+              <Link key={i} href={a.href} className={`inline-flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-full transition-colors ${a.primary ? 'bg-[#16b886] hover:bg-[#13a87b] text-[#04241b] shadow-lg shadow-emerald-900/20' : 'bg-white/95 hover:bg-white text-[#0b1f3a]'}`}>{a.icon} {a.label}</Link>
             ))}
             <EventInfoNav items={infoItems} />
           </div>
         </div>
       </section>
 
-      <main className="max-w-4xl mx-auto px-6 py-12 space-y-4">
+      {quickFacts.length > 0 && (
+        <div className="bg-white border-b border-slate-200">
+          <div className="max-w-4xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100">
+            {quickFacts.map((f: any, i: number) => (
+              <div key={i} className="px-4 py-5 text-center">
+                <span className="text-teal-600 inline-flex">{f.icon}</span>
+                <div className="text-[11px] tracking-wide text-slate-400 font-semibold mt-1.5">{f.label}</div>
+                <div className="text-sm font-bold text-slate-900 mt-0.5 line-clamp-2">{f.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <main className="max-w-4xl mx-auto px-6 py-12 space-y-10">
         {rendered.filter((x: any) => x.b.type !== 'rules' && !x.page).map((x: any) => <div key={x.b.id}>{x.el}</div>)}
       </main>
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
