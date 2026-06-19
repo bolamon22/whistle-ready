@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cloneElement } from 'react'
 import { createClient } from '@libsql/client'
 import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
@@ -192,7 +193,11 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const isPageMode = (b: any) => (b.type === 'custom' || b.type === 'faq') && b.props && b.props.display === 'page'
   const rendered = resolveBlocks(c)
     .filter((b: any) => !b.hidden)
-    .map((b: any) => ({ b, el: isBuiltin(b.type) ? sectionMap[b.type] : customContent(b), page: isPageMode(b) }))
+    .map((b: any) => {
+      let el: any = isBuiltin(b.type) ? sectionMap[b.type] : customContent(b)
+      if (el && isBuiltin(b.type) && b.type !== 'rules') el = cloneElement(el, { defaultOpen: !!(b.props && b.props.open) })
+      return { b, el, page: isPageMode(b) }
+    })
     .filter((x: any) => x.el)
 
   const navLabel = (b: any) => isBuiltin(b.type) ? (SECTION_LABELS[b.type] || b.type) : ((b.props && b.props.title) || (b.type === 'faq' ? 'Details' : 'Section'))

@@ -30,6 +30,15 @@ function DisplayPicker({ b, updateProps }: { b: Block; updateProps: (id: string,
 
 function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch: any) => void }) {
   const p = b.props || {}
+  if (isBuiltin(b.type)) {
+    if (b.type === 'rules') return <p className="text-xs text-slate-500">Rules &amp; policies opens on its own page from the Event info menu. Edit its content in the Rules section below.</p>
+    return (
+      <>
+        <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={!!p.open} onChange={e => updateProps(b.id, { open: e.target.checked })} className="rounded border-slate-300 text-teal-600 focus:ring-teal-400" /> Start expanded on the event page</label>
+        <p className="text-xs text-slate-400 mt-2">This section&apos;s content is pulled from the field below.</p>
+      </>
+    )
+  }
   if (b.type === 'custom') return (
     <>
       <DisplayPicker b={b} updateProps={updateProps} />
@@ -147,7 +156,7 @@ export default function BlockBuilder({ blocks, onChange }: { blocks: Block[]; on
       {blocks.map((b, i) => {
         const builtin = isBuiltin(b.type)
         const hidden = !!b.hidden
-        const expanded = editId === b.id && !builtin
+        const expanded = editId === b.id
         return (
           <div key={b.id} className="rounded-lg border border-slate-200 bg-white">
             <div
@@ -165,7 +174,7 @@ export default function BlockBuilder({ blocks, onChange }: { blocks: Block[]; on
                 <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} className="p-1 rounded text-slate-400 hover:bg-slate-100 disabled:opacity-30" title="Move up"><ChevronUp size={15} /></button>
                 <button type="button" onClick={() => move(i, i + 1)} disabled={i === blocks.length - 1} className="p-1 rounded text-slate-400 hover:bg-slate-100 disabled:opacity-30" title="Move down"><ChevronDown size={15} /></button>
                 <button type="button" onClick={() => update(b.id, { hidden: !hidden })} className={`p-1 rounded hover:bg-slate-100 ${hidden ? 'text-slate-400' : 'text-teal-600'}`} title={hidden ? 'Hidden — click to show' : 'Visible — click to hide'}>{hidden ? <EyeOff size={15} /> : <Eye size={15} />}</button>
-                {!builtin && <button type="button" onClick={() => setEditId(expanded ? null : b.id)} className={`p-1 rounded hover:bg-slate-100 ${expanded ? 'text-teal-600' : 'text-slate-400'}`} title="Edit"><Pencil size={15} /></button>}
+                {<button type="button" onClick={() => setEditId(expanded ? null : b.id)} className={`p-1 rounded hover:bg-slate-100 ${expanded ? 'text-teal-600' : 'text-slate-400'}`} title="Edit"><Pencil size={15} /></button>}
                 {!builtin && <button type="button" onClick={() => duplicate(b)} className="p-1 rounded text-slate-400 hover:bg-slate-100" title="Duplicate"><Copy size={15} /></button>}
                 {!builtin && <button type="button" onClick={() => remove(b.id)} className="p-1 rounded text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><Trash2 size={15} /></button>}
               </div>
