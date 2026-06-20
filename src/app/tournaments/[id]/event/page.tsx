@@ -244,7 +244,8 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   // the tab strip to avoid duplicating the facts; everything else is a tab.
   const FACT_LINKED = ['locations', 'fees', 'hotels']
   const eventPanels: Record<string, JSX.Element> = {}
-  rendered.forEach((x: any) => { if (!x.page && x.b.type !== 'rules' && x.el) eventPanels[x.b.id] = x.el })
+  const eventPanelLabels: Record<string, string> = {}
+  rendered.forEach((x: any) => { if (!x.page && x.b.type !== 'rules' && x.el) { eventPanels[x.b.id] = x.el; eventPanelLabels[x.b.id] = navLabel(x.b) } })
   const eventTabs = rendered
     .filter((x: any) => (x.b.type === 'rules' || x.page) ? true : !FACT_LINKED.includes(x.b.type))
     .map((x: any) => ({
@@ -297,7 +298,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         </div>
       )}
 
-      <EventTabs tabs={eventTabs} panels={eventPanels} defaultId={eventDefaultId} />
+      <EventTabs tabs={eventTabs} panels={eventPanels} defaultId={eventDefaultId} panelLabels={eventPanelLabels} />
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
     </div>
   )
