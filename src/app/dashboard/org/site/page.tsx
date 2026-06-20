@@ -38,11 +38,33 @@ const EMPTY: Content = {
 
 const slugify = (t: string) => t.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 
+// Downscale/compress large images in the browser before upload. Phone photos are
+// often several MB; base64-encoded they exceed the server request-size limit and the
+// upload fails. Small files (e.g. logos) pass through untouched to preserve quality.
+async function compressImage(file: File, maxDim = 1400, quality = 0.82): Promise<Blob> {
+  if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) return file
+  if (file.size < 400 * 1024) return file
+  try {
+    const dataUrl = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = rej; fr.readAsDataURL(file) })
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = dataUrl })
+    let width = img.width, height = img.height
+    if (Math.max(width, height) > maxDim) { const sc = maxDim / Math.max(width, height); width = Math.round(width * sc); height = Math.round(height * sc) }
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height
+    const ctx = canvas.getContext('2d'); if (!ctx) return file
+    ctx.drawImage(img, 0, 0, width, height)
+    const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', quality))
+    return blob && blob.size < file.size ? blob : file
+  } catch { return file }
+}
+
 async function uploadImage(file: File): Promise<string | null> {
-  const fd = new FormData(); fd.append('file', file)
-  const r = await fetch('/api/upload', { method: 'POST', body: fd })
-  if (!r.ok) return null
-  const d = await r.json().catch(() => ({})); return d.url || null
+  try {
+    const blob = await compressImage(file)
+    const fd = new FormData(); fd.append('file', blob, 'upload.jpg')
+    const r = await fetch('/api/upload', { method: 'POST', body: fd })
+    if (!r.ok) return null
+    const d = await r.json().catch(() => ({})); return d.url || null
+  } catch { return null }
 }
 
 function Sec({ title, summary, isOpen, onToggle, children }: { title: string; summary?: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode }) {
