@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { HelpCircle, X, ArrowLeft, Search, Send, Mail, BookOpen, Sparkles } from 'lucide-react'
 import { HELP_ARTICLES, HELP_CATEGORIES } from '@/lib/helpArticles'
 import { mdToHtml } from '@/app/o/[slug]/_md'
+import SnapAvatar from '@/components/SnapAvatar'
 
 const SUPPORT_EMAIL = 'support@whistleready.com'
 const SUGGESTIONS = [
@@ -80,7 +81,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
             </div>
             {/* Tabs */}
             <div className="flex border-b border-slate-200">
-              {([['guides', 'Guides', BookOpen], ['ai', 'Ask AI', Sparkles]] as const).map(([id, label, Icon]) => (
+              {([['guides', 'Guides', BookOpen], ['ai', 'Ask Snap', Sparkles]] as const).map(([id, label, Icon]) => (
                 <button key={id} type="button" onClick={() => { setTab(id); setActiveId(null) }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === id ? 'border-teal-500 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
                   <Icon size={15} /> {label}
@@ -130,7 +131,13 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                 <div className="p-4 space-y-3">
                   {messages.length === 0 ? (
                     <>
-                      <p className="text-xs text-slate-500 text-center pt-1">Ask a how‑to question about using GameDay.</p>
+                      <div className="flex flex-col items-center gap-2 pt-2 pb-1 text-center">
+                        <SnapAvatar size={48} />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">Hi, I'm Snap</p>
+                          <p className="text-xs text-slate-500">Ask me how to do anything in GameDay.</p>
+                        </div>
+                      </div>
                       <div className="space-y-1.5">
                         {SUGGESTIONS.map(s => (
                           <button key={s} type="button" onClick={() => send(s)}
@@ -139,8 +146,9 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                       </div>
                     </>
                   ) : messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.content}</div>
+                    <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {m.role === 'assistant' && <SnapAvatar size={26} />}
+                      <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.content}</div>
                     </div>
                   ))}
                   {loading && <div className="flex gap-1 px-1"><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} /></div>}

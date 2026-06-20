@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import SnapAvatar from '@/components/SnapAvatar'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 interface Props { tournamentId: string; tournamentName: string }
@@ -62,9 +63,9 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
       <button
         onClick={() => setOpen(o => !o)}
         className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white text-2xl transition-all ${open ? 'bg-slate-600' : 'bg-[#0f1f3d] hover:bg-slate-700'}`}
-        aria-label="AI Assistant"
+        aria-label="Snap assistant"
       >
-        {open ? '✕' : '✦'}
+        {open ? '✕' : <SnapAvatar size={40} />}
       </button>
 
       {/* Panel */}
@@ -74,9 +75,12 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
 
           {/* Header */}
           <div className="bg-[#0f1f3d] px-4 py-3 flex items-center justify-between flex-shrink-0">
-            <div>
-              <p className="text-sm font-bold text-white">AI Assistant</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">{tournamentName}</p>
+            <div className="flex items-center gap-2">
+              <SnapAvatar size={28} />
+              <div>
+                <p className="text-sm font-bold text-white">Snap</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{tournamentName}</p>
+              </div>
             </div>
             {messages.length > 0 && (
               <button onClick={() => setMessages([])} className="text-[10px] text-slate-400 hover:text-white transition-colors">
