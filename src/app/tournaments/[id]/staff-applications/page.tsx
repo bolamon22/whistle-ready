@@ -24,7 +24,7 @@ export default function StaffApplicationEntries() {
   const rows = subs.slice().reverse()
   const fmt = (s: string) => { try { return new Date(s).toLocaleString() } catch { return s } }
   const exportCsv = () => {
-    const cols = ['name', 'email', 'phone', 'positions', 'refLevel', 'refGender', 'experience', 'certifications', 'availability', 'ageConfirm', 'notes']
+    const cols = ['name', 'email', 'phone', 'positions', 'events', 'refLevel', 'refGender', 'experience', 'certifications', 'availability', 'ageConfirm', 'notes']
     const head = ['Submitted', ...cols].join(',')
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = rows.map(s => [fmt(s.submittedAt), ...cols.map(c => s.data?.[c])].map(esc).join(','))

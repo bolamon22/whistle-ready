@@ -37,9 +37,12 @@ export default async function TournamentWork({ params }: { params: { id: string 
   const confirmationTitle = sf.confirmationTitle || 'Application received!'
   const confirmationHtml = mdToHtml(sf.confirmationMessage || "Thanks for your interest in working our events! We've received your application and will reach out about open positions.")
   const days = dayRange(t.startDate, t.endDate)
+  const today = new Date().toISOString().slice(0, 10)
+  let events: { id: string; name: string }[] = []
+  try { if (orgId) { const er = await client.execute({ sql: 'SELECT id, name, startDate, endDate FROM "Tournament" WHERE orgId = ? ORDER BY startDate', args: [orgId] }); events = (er.rows as any[]).filter(x => (x.endDate || x.startDate || '') >= today || String(x.id) === String(t.id)).map(x => ({ id: String(x.id), name: String(x.name || 'Event') })) } } catch {}
   return (
     <div className="min-h-screen bg-slate-50">
-      <WorkForm orgId={orgId} introHtml={introHtml} positions={positions} refLevels={refLevels} ageLabel={ageLabel} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} tournamentId={t.id} tournamentName={t.name} days={days} />
+      <WorkForm orgId={orgId} introHtml={introHtml} positions={positions} refLevels={refLevels} ageLabel={ageLabel} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} tournamentId={t.id} tournamentName={t.name} days={days} events={events} preselect={String(t.id)} />
     </div>
   )
 }

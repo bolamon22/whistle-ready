@@ -81,7 +81,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const pages: PageRec[] = Array.isArray(content.pages) ? content.pages : []
   let forms: any = {}
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
-  const workHref = (forms.staff && forms.staff.enabled !== false) ? `/o/${params.slug}/work` : undefined
+  const workHref = (forms.staff?.enabled !== false) ? `/o/${params.slug}/work` : undefined
   const nav = buildNav(params.slug, pages, gallery.length > 0, workHref)
 
   const tRes = await client.execute({

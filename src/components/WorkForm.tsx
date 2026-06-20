@@ -9,22 +9,27 @@ const labelCls = 'block text-sm font-medium text-slate-700 mb-1'
 
 function isRefPosition(p: string) { return /referee|official|umpire/i.test(p) }
 
-export default function WorkForm({ orgId, introHtml, positions, refLevels, ageLabel, confirmationTitle, confirmationHtml, tournamentId, tournamentName, days }: {
+export default function WorkForm({ orgId, introHtml, positions, refLevels, ageLabel, confirmationTitle, confirmationHtml, tournamentId, tournamentName, days, events, preselect }: {
   orgId: string; introHtml: string; positions: string[]; refLevels: string[]; ageLabel: string
   confirmationTitle: string; confirmationHtml: string; tournamentId?: string; tournamentName?: string; days?: string[]
+  events?: { id: string; name: string }[]; preselect?: string
 }) {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
-  const [d, setD] = useState<any>({ name: '', email: '', phone: '', positions: [] as string[], experience: '', certifications: '', refLevel: '', refGender: '', availability: '', availDays: [] as string[], ageConfirm: false, notes: '' })
+  const [d, setD] = useState<any>(() => ({ name: '', email: '', phone: '', positions: [] as string[], eventIds: (preselect ? [preselect] : []) as string[], experience: '', certifications: '', refLevel: '', refGender: '', availability: '', availDays: [] as string[], ageConfirm: false, notes: '' }))
   const set = (k: string, v: any) => setD((p: any) => ({ ...p, [k]: v }))
   const togglePos = (p: string) => setD((s: any) => ({ ...s, positions: s.positions.includes(p) ? s.positions.filter((x: string) => x !== p) : [...s.positions, p] }))
   const toggleDay = (day: string) => setD((s: any) => ({ ...s, availDays: s.availDays.includes(day) ? s.availDays.filter((x: string) => x !== day) : [...s.availDays, day] }))
+  const toggleEvent = (eid: string) => setD((s: any) => ({ ...s, eventIds: s.eventIds.includes(eid) ? s.eventIds.filter((x: string) => x !== eid) : [...s.eventIds, eid] }))
+  const hasEvents = Array.isArray(events) && events.length > 0
+  const selectedEventNames = hasEvents ? events!.filter(e => d.eventIds.includes(e.id)).map(e => e.name) : []
   const refSelected = (d.positions as string[]).some(isRefPosition)
   const useDayChecks = Array.isArray(days) && days.length > 0
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!d.positions.length) { toast.error('Please choose at least one position'); return }
+    if (hasEvents && !d.eventIds.length) { toast.error('Please choose at least one event') ; return }
     if (ageLabel && !d.ageConfirm) { toast.error('Please confirm the age requirement'); return }
     setSubmitting(true)
     try {
@@ -36,6 +41,7 @@ export default function WorkForm({ orgId, introHtml, positions, refLevels, ageLa
         availability, ageConfirm: d.ageConfirm ? 'Yes' : '', notes: d.notes,
         tournamentId: tournamentId || '', tournamentName: tournamentName || '',
       }
+      if (hasEvents) data.events = selectedEventNames.join(', ')
       if (refSelected) { data.refLevel = d.refLevel; data.refGender = d.refGender }
       const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'staff', data }) })
       if (res.ok) setDone(true)
@@ -45,6 +51,7 @@ export default function WorkForm({ orgId, introHtml, positions, refLevels, ageLa
 
   const receiptRows: [string, string][] = [
     ['Name', d.name], ['Email', d.email], ['Phone', d.phone], ['Positions', (d.positions as string[]).join(', ')],
+    ['Events', selectedEventNames.join(', ')],
     ['Officiating level', refSelected ? d.refLevel : ''], ['Officiates', refSelected ? d.refGender : ''],
     ['Experience', d.experience], ['Certifications', d.certifications],
     ['Availability', useDayChecks ? d.availDays.join(', ') : d.availability], ['Notes', d.notes],
@@ -80,6 +87,21 @@ export default function WorkForm({ orgId, introHtml, positions, refLevels, ageLa
           <div><label className={labelCls}>Mobile phone *</label><input className={inputCls} type="tel" value={d.phone} onChange={e => set('phone', e.target.value)} required /></div>
         </div>
       </div>
+
+      {hasEvents && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="text-base font-bold text-slate-800 mb-1 pb-2 border-b border-slate-100">Which events?</h2>
+          <p className="text-xs text-slate-400 mb-3">Select the upcoming events you'd like to work. *</p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {events!.map(ev => (
+              <label key={ev.id} className={`flex items-center gap-2.5 border rounded-lg p-3 cursor-pointer hover:bg-slate-50 ${d.eventIds.includes(ev.id) ? 'border-teal-400 bg-teal-50/40' : 'border-slate-200'}`}>
+                <input type="checkbox" className="accent-teal-500 w-4 h-4" checked={d.eventIds.includes(ev.id)} onChange={() => toggleEvent(ev.id)} />
+                <span className="text-sm text-slate-700">{ev.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-1 pb-2 border-b border-slate-100">Positions</h2>

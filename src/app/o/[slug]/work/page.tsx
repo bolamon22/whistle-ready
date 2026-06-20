@@ -26,10 +26,13 @@ export default async function OrgWorkPage({ params }: { params: { slug: string }
   const introHtml = mdToHtml(sf.intro || D_INTRO)
   const confirmationTitle = sf.confirmationTitle || 'Application received!'
   const confirmationHtml = mdToHtml(sf.confirmationMessage || "Thanks for your interest in working our events! We've received your application and will reach out about open positions.")
+  const today = new Date().toISOString().slice(0, 10)
+  let events: { id: string; name: string }[] = []
+  try { const er = await client.execute({ sql: 'SELECT id, name, startDate, endDate FROM "Tournament" WHERE orgId = ? ORDER BY startDate', args: [org.id as string] }); events = (er.rows as any[]).filter(t => (t.endDate || t.startDate || '') >= today).map(t => ({ id: String(t.id), name: String(t.name || 'Event') })) } catch {}
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-[#0b1220] text-white"><div className="max-w-2xl mx-auto px-6 py-6 flex items-center gap-3">{org.logoUrl && <img src={org.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />}<div><div className="text-xs uppercase tracking-[0.2em] text-teal-300">Work at our events</div><h1 className="text-xl font-extrabold leading-tight">{org.name}</h1></div></div></header>
-      <WorkForm orgId={org.id} introHtml={introHtml} positions={positions} refLevels={refLevels} ageLabel={ageLabel} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} />
+      <WorkForm orgId={org.id} introHtml={introHtml} positions={positions} refLevels={refLevels} ageLabel={ageLabel} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} events={events} />
     </div>
   )
 }
