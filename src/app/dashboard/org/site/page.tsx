@@ -99,6 +99,7 @@ function OrgSiteEditorInner() {
   const [openSec, setOpenSec] = useState<Record<string, boolean>>({ events: true })
   const [tournaments, setTournaments] = useState<any[]>([])
   const [galSel, setGalSel] = useState<Set<string>>(new Set())
+  const [bulkCaption, setBulkCaption] = useState('')
   const [bulkCredit, setBulkCredit] = useState('')
   const [bulkTourn, setBulkTourn] = useState('')
 
@@ -277,6 +278,8 @@ function OrgSiteEditorInner() {
         {galSel.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-3 p-2.5 rounded-xl bg-teal-50 border border-teal-200">
             <span className="text-xs font-semibold text-teal-800">{galSel.size} selected</span>
+            <input className="input py-1 text-xs w-40" value={bulkCaption} onChange={e => setBulkCaption(e.target.value)} placeholder="Caption…" />
+            <button type="button" onClick={() => galApply({ caption: bulkCaption })} className="text-xs border border-slate-300 rounded-lg px-2 py-1 bg-white hover:bg-slate-50">Apply caption</button>
             <input className="input py-1 text-xs w-40" value={bulkCredit} onChange={e => setBulkCredit(e.target.value)} placeholder="Photo credit…" />
             <button type="button" onClick={() => galApply({ credit: bulkCredit })} className="text-xs border border-slate-300 rounded-lg px-2 py-1 bg-white hover:bg-slate-50">Apply credit</button>
             <select className="input py-1 text-xs w-44" value={bulkTourn} onChange={e => setBulkTourn(e.target.value)}>
