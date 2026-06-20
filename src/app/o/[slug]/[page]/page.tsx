@@ -40,8 +40,10 @@ export default async function OrgInfoPage({ params }: { params: { slug: string; 
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <OrgHeader org={org} slug={params.slug} nav={nav} registerHref={registerHref} />
       {/* Title band */}
-      <section className="bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
-        <div className="max-w-3xl mx-auto px-6 py-14">
+      <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
+        {page.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${page.heroImage})` }} aria-hidden />}
+        {page.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55" aria-hidden />}
+        <div className="relative max-w-3xl mx-auto px-6 py-14">
           <Link href={`/o/${params.slug}`} className="text-sm text-teal-200 hover:text-white inline-flex items-center gap-1"><ChevronLeft size={14} /> Back</Link>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-3">{page.title}</h1>
         </div>

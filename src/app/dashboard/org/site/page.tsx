@@ -7,9 +7,10 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
+import AiGenerateButton from '@/components/AiGenerateButton'
 
 type Sponsor = { name: string; logoUrl: string; url: string }
-type Page = { title: string; slug: string; body: string; group: string }
+type Page = { title: string; slug: string; body: string; group: string; heroImage?: string }
 type Photo = { url: string; caption: string }
 type Insta = { username: string; token: string }
 type Content = {
@@ -106,6 +107,7 @@ function OrgSiteEditorInner() {
   const heroImg = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, hero: { ...v.hero, imageUrl: u } })); else toast.error('Upload failed') }
   const galleryAdd = async (files?: FileList | null) => { if (!files || !files.length) return; for (const f of Array.from(files)) { const u = await uploadImage(f); if (u) setC(v => ({ ...v, gallery: [...v.gallery, { url: u, caption: '' }] })); else toast.error('Upload failed') } }
   const sponLogo = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: u } : s) })); else toast.error('Upload failed') }
+  const pageHeroImg = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, heroImage: u } : x) })); else toast.error('Upload failed') }
 
   return (
     <div className="max-w-3xl mx-auto pb-16">
@@ -194,7 +196,7 @@ function OrgSiteEditorInner() {
       <Sec isOpen={!!openSec.pages} onToggle={() => setOpenSec(o => ({ ...o, pages: !o.pages }))} title="Info pages" summary={`${c.pages.length} page${c.pages.length === 1 ? '' : 's'}`}>
         <div className="flex items-center justify-between mb-1">
           <p className="text-xs text-slate-400">Pages like Directions, Refund policy, Hotels or FAQ. Same Menu group nests them under a dropdown. Arrows reorder. Body supports Markdown.</p>
-          <button onClick={() => setC(v => { const idx = v.pages.length; setOpenPages(o => ({ ...o, [idx]: true })); return { ...v, pages: [...v.pages, { title: '', slug: '', body: '', group: '' }] } })} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 flex-shrink-0 ml-3"><Plus size={14} /> Add page</button>
+          <button onClick={() => setC(v => { const idx = v.pages.length; setOpenPages(o => ({ ...o, [idx]: true })); return { ...v, pages: [...v.pages, { title: '', slug: '', body: '', group: '', heroImage: '' }] } })} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 flex-shrink-0 ml-3"><Plus size={14} /> Add page</button>
         </div>
         {c.pages.length === 0 && <p className="text-sm text-slate-400 mt-2">No pages yet.</p>}
         <div className="space-y-3 mt-2">
@@ -219,7 +221,16 @@ function OrgSiteEditorInner() {
                     </div>
                     <input className="input py-1 text-xs sm:w-48" value={pg.group || ''} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, group: e.target.value } : x) }))} placeholder="Menu group (optional)" />
                   </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    {pg.heroImage ? <img src={pg.heroImage} alt="" className="h-12 w-20 object-cover rounded-lg border border-slate-200" /> : <div className="h-12 w-20 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={16} /></div>}
+                    <div>
+                      <label className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer inline-block">Banner image<input type="file" accept="image/*" className="hidden" onChange={e => pageHeroImg(i, e.target.files?.[0])} /></label>
+                      {pg.heroImage && <button onClick={() => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, heroImage: '' } : x) }))} className="text-xs text-slate-400 hover:text-red-600 ml-2">Remove</button>}
+                      <p className="text-[11px] text-slate-400 mt-1">Optional banner shown behind the page title.</p>
+                    </div>
+                  </div>
                   <div className="mt-2"><MarkdownField value={pg.body} onChange={val => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: val } : x) }))} minHeight={160} placeholder="Page content…" /></div>
+                  <AiGenerateButton kind="custom" onResult={(t) => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: t } : x) }))} />
                 </div>
               )}
             </div>

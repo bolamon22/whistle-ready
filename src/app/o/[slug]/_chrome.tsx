@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Facebook, Instagram, Globe, ChevronDown } from 'lucide-react'
 
-export type PageRec = { title: string; slug: string; group?: string }
+export type PageRec = { title: string; slug: string; group?: string; body?: string; heroImage?: string }
 export type NavLink = { title: string; href: string }
 export type NavItem = { type: 'link'; title: string; href: string } | { type: 'group'; label: string; children: NavLink[] }
 
