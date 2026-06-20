@@ -34,13 +34,14 @@ export default async function GalleryPage({ params }: { params: { slug: string }
   const registerHref = reg ? `/tournaments/${reg.id}/register` : undefined
   const tournaments = (tRes.rows as any[]).map(t => ({ id: String(t.id), name: String(t.name || 'Tournament') }))
   const photos = gallery.map((p: any, i: number) => ({ ...p, id: p.id || `p${i}` }))
+  const covers = (content.galleryCovers && typeof content.galleryCovers === 'object') ? content.galleryCovers : {}
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <OrgHeader org={org} slug={params.slug} nav={nav} registerHref={registerHref} />
       <main className="max-w-6xl mx-auto px-6 py-14 w-full flex-1">
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 mb-8">Gallery</h1>
-        <PublicGallery photos={photos} tournaments={tournaments} />
+        <PublicGallery photos={photos} tournaments={tournaments} covers={covers} />
       </main>
       <OrgFooter org={org} contact={contact} socials={socials} />
     </div>

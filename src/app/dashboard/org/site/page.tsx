@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save } from 'lucide-react'
+import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save, Star, Search } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import AiGenerateButton from '@/components/AiGenerateButton'
 
@@ -22,6 +22,7 @@ type Content = {
   socials: { facebook: string; instagram: string; website: string }
   pages: Page[]
   gallery: Photo[]
+  galleryCovers: Record<string, string>
   instagram: Insta
 }
 const EMPTY: Content = {
@@ -33,6 +34,7 @@ const EMPTY: Content = {
   socials: { facebook: '', instagram: '', website: '' },
   pages: [],
   gallery: [],
+  galleryCovers: {},
   instagram: { username: '', token: '' },
 }
 
@@ -102,6 +104,8 @@ function OrgSiteEditorInner() {
   const [bulkCaption, setBulkCaption] = useState('')
   const [bulkCredit, setBulkCredit] = useState('')
   const [bulkTourn, setBulkTourn] = useState('')
+  const [galFilterT, setGalFilterT] = useState('all')
+  const [galSearch, setGalSearch] = useState('')
 
   useEffect(() => {
     if (status === 'loading') return
@@ -113,7 +117,7 @@ function OrgSiteEditorInner() {
         else { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrg({ name: o.name, slug: o.slug }) }
         const d = await fetch(`/api/org-site${apiQ}`).then(r => r.ok ? r.json() : {})
         fetch(`/api/tournaments${qOrg ? `?viewOrgId=${encodeURIComponent(qOrg)}` : ''}`).then(r => r.ok ? r.json() : []).then(ts => setTournaments(Array.isArray(ts) ? ts : [])).catch(() => {})
-        setC({ ...EMPTY, ...d, logo: d.logo || '', hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], pages: Array.isArray(d.pages) ? d.pages : [], gallery: Array.isArray(d.gallery) ? d.gallery.map((g: any) => ({ caption: '', credit: '', tournamentId: '', ...g, id: g.id || uid() })) : [], instagram: { ...EMPTY.instagram, ...(d.instagram || {}) } })
+        setC({ ...EMPTY, ...d, logo: d.logo || '', hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], pages: Array.isArray(d.pages) ? d.pages : [], gallery: Array.isArray(d.gallery) ? d.gallery.map((g: any) => ({ caption: '', credit: '', tournamentId: '', ...g, id: g.id || uid() })) : [], galleryCovers: (d.galleryCovers && typeof d.galleryCovers === 'object') ? d.galleryCovers : {}, instagram: { ...EMPTY.instagram, ...(d.instagram || {}) } })
       } catch {} finally { setLoading(false) }
     })()
   }, [status, session, role])
@@ -163,6 +167,16 @@ function OrgSiteEditorInner() {
   const galPatch = (id: string, patch: Partial<Photo>) => setC(v => ({ ...v, gallery: v.gallery.map(g => g.id === id ? { ...g, ...patch } : g) }))
   const galToggle = (id: string) => setGalSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const galApply = (patch: Partial<Photo>) => { setC(v => ({ ...v, gallery: v.gallery.map(g => (g.id && galSel.has(g.id)) ? { ...g, ...patch } : g) })) }
+  const galSetCover = (g: Photo) => { if (!g.tournamentId || !g.id) return; const tid = g.tournamentId; const pid = g.id; setC(v => ({ ...v, galleryCovers: { ...v.galleryCovers, [tid]: (v.galleryCovers[tid] === pid ? '' : pid) } })) }
+  const galKnownIds = new Set(tournaments.map((t: any) => String(t.id)))
+  const galView = c.gallery.filter(g => {
+    if (galFilterT === '__other') { const tid = g.tournamentId || ''; if (tid && galKnownIds.has(tid)) return false }
+    else if (galFilterT !== 'all') { if ((g.tournamentId || '') !== galFilterT) return false }
+    const q = galSearch.trim().toLowerCase()
+    if (q && !`${g.caption || ''} ${g.credit || ''}`.toLowerCase().includes(q)) return false
+    return true
+  })
+
   const sponLogo = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: u } : s) })); else toast.error('Upload failed') }
   const pageHeroImg = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, heroImage: u } : x) })); else toast.error('Upload failed') }
 
@@ -301,6 +315,20 @@ function OrgSiteEditorInner() {
           <span className="text-xs text-slate-400">{c.gallery.length}/{GALLERY_MAX} photos</span>
           <label className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 cursor-pointer"><Plus size={14} /> Add photos<input type="file" accept="image/*" multiple className="hidden" onChange={e => galleryAdd(e.target.files)} /></label>
         </div>
+        {c.gallery.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <select className="input py-1 text-xs w-48" value={galFilterT} onChange={e => setGalFilterT(e.target.value)}>
+              <option value="all">All tournaments</option>
+              {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <option value="__other">No tournament</option>
+            </select>
+            <div className="relative">
+              <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input className="input py-1 text-xs pl-7 w-48" value={galSearch} onChange={e => setGalSearch(e.target.value)} placeholder="Search caption or credit…" />
+            </div>
+            {(galFilterT !== 'all' || galSearch.trim()) && <span className="text-xs text-slate-400">Showing {galView.length} of {c.gallery.length}</span>}
+          </div>
+        )}
         {c.gallery.length === 0 && <p className="text-sm text-slate-400">No photos yet.</p>}
         {galSel.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-3 p-2.5 rounded-xl bg-teal-50 border border-teal-200">
@@ -319,14 +347,16 @@ function OrgSiteEditorInner() {
         )}
         {c.gallery.length > 0 && (
           <div className="flex items-center gap-3 mb-2 text-xs text-slate-500">
-            <button type="button" onClick={() => setGalSel(new Set(c.gallery.map(g => g.id!).filter(Boolean)))} className="hover:text-slate-800">Select all</button>
+            <button type="button" onClick={() => setGalSel(new Set(galView.map(g => g.id!).filter(Boolean)))} className="hover:text-slate-800">Select all</button>
             {galSel.size > 0 && <button type="button" onClick={() => setGalSel(new Set())} className="hover:text-slate-800">Deselect all</button>}
           </div>
         )}
+        {c.gallery.length > 0 && galView.length === 0 && <p className="text-sm text-slate-400">No photos match this filter.</p>}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {c.gallery.map((ph) => { const id = ph.id || ''; const sel = !!id && galSel.has(id); return (
+          {galView.map((ph) => { const id = ph.id || ''; const sel = !!id && galSel.has(id); const isCover = !!ph.tournamentId && c.galleryCovers[ph.tournamentId] === id; return (
             <div key={id} className={`border rounded-xl overflow-hidden relative ${sel ? 'border-teal-500 ring-2 ring-teal-200' : 'border-slate-200'}`}>
               <label className="absolute top-1.5 left-1.5 z-10 bg-white/90 rounded p-0.5 cursor-pointer flex"><input type="checkbox" checked={sel} onChange={() => galToggle(id)} /></label>
+              {ph.tournamentId && <button type="button" title={isCover ? 'Folder cover' : 'Set as folder cover'} onClick={() => galSetCover(ph)} className={`absolute top-1.5 right-1.5 z-10 rounded p-1 ${isCover ? 'bg-amber-400 text-white' : 'bg-white/90 text-slate-400 hover:text-amber-500'}`}><Star size={13} fill={isCover ? 'currentColor' : 'none'} /></button>}
               <img src={ph.url} alt="" className="w-full h-28 object-cover" />
               <div className="p-2 space-y-1.5">
                 <div className="flex items-center gap-1">
