@@ -135,7 +135,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                         <SnapAvatar size={48} />
                         <div>
                           <p className="text-sm font-semibold text-slate-800">Hi, I'm Snap</p>
-                          <p className="text-xs text-slate-500">Ask me how to do anything in GameDay.</p>
+                          <p className="text-xs text-slate-500">Ask me how to do anything in Whistle Ready.</p>
                         </div>
                       </div>
                       <div className="space-y-1.5">

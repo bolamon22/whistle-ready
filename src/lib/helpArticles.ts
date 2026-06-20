@@ -7,9 +7,9 @@ export const HELP_CATEGORIES = ['Getting started', 'Setup', 'Registration & mone
 
 export const HELP_ARTICLES: HelpArticle[] = [
   {
-    id: 'overview', title: 'How GameDay works', category: 'Getting started',
+    id: 'overview', title: 'How Whistle Ready works', category: 'Getting started',
     keywords: 'overview flow start basics workflow first steps',
-    body: `GameDay runs a tournament end to end. The usual flow is:
+    body: `Whistle Ready runs a tournament end to end. The usual flow is:
 
 1. **Set up** the tournament (name, dates, fields, fee, divisions).
 2. Add **divisions**, sort teams into **pools**, and generate **brackets**.
