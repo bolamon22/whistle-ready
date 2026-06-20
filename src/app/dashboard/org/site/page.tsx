@@ -151,7 +151,15 @@ function OrgSiteEditorInner() {
 
   const logoImg = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, logo: u })); else toast.error('Upload failed') }
   const heroImg = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, hero: { ...v.hero, imageUrl: u } })); else toast.error('Upload failed') }
-  const galleryAdd = async (files?: FileList | null) => { if (!files || !files.length) return; for (const f of Array.from(files)) { const u = await uploadImage(f); if (u) setC(v => ({ ...v, gallery: [...v.gallery, { id: uid(), url: u, caption: '', credit: '', tournamentId: '' }] })); else toast.error('Upload failed') } }
+  const GALLERY_MAX = 100
+  const galleryAdd = async (files?: FileList | null) => {
+    if (!files || !files.length) return
+    const room = GALLERY_MAX - c.gallery.length
+    if (room <= 0) { toast.error(`Gallery is full — ${GALLERY_MAX} photos max.`); return }
+    let list = Array.from(files)
+    if (list.length > room) { toast.error(`Only ${room} more photo${room === 1 ? '' : 's'} can be added (${GALLERY_MAX} max).`); list = list.slice(0, room) }
+    for (const f of list) { const u = await uploadImage(f); if (u) setC(v => ({ ...v, gallery: [...v.gallery, { id: uid(), url: u, caption: '', credit: '', tournamentId: '' }] })); else toast.error('Upload failed') }
+  }
   const galPatch = (id: string, patch: Partial<Photo>) => setC(v => ({ ...v, gallery: v.gallery.map(g => g.id === id ? { ...g, ...patch } : g) }))
   const galToggle = (id: string) => setGalSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const galApply = (patch: Partial<Photo>) => { setC(v => ({ ...v, gallery: v.gallery.map(g => (g.id && galSel.has(g.id)) ? { ...g, ...patch } : g) })) }
@@ -289,7 +297,8 @@ function OrgSiteEditorInner() {
 
       {/* Photo gallery */}
       <Sec isOpen={!!openSec.gallery} onToggle={() => setOpenSec(o => ({ ...o, gallery: !o.gallery }))} title="Photo gallery" summary={`${c.gallery.length} photo${c.gallery.length === 1 ? '' : 's'}`}>
-        <div className="flex justify-end mb-2">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-xs text-slate-400">{c.gallery.length}/{GALLERY_MAX} photos</span>
           <label className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 cursor-pointer"><Plus size={14} /> Add photos<input type="file" accept="image/*" multiple className="hidden" onChange={e => galleryAdd(e.target.files)} /></label>
         </div>
         {c.gallery.length === 0 && <p className="text-sm text-slate-400">No photos yet.</p>}
