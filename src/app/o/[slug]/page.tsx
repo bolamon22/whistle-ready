@@ -154,10 +154,11 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
           ? <p className="text-slate-500">No upcoming tournaments posted yet — check back soon.</p>
           : <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{upcoming.map(t => <Card key={t.id} t={t} />)}</div>}
 
-        {past.length > 0 && <>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 mt-16 mb-6">Past tournaments</h2>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{past.map(t => <Card key={t.id} t={t} />)}</div>
-        </>}
+        {past.length > 0 && (
+          <div className="mt-10">
+            <Link href={`/o/${params.slug}/results`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-900">Past tournament results <ArrowRight size={15} /></Link>
+          </div>
+        )}
       </main>
 
       {/* About */}

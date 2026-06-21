@@ -15,6 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const slug = String(row.slug || ''); if (!slug) continue
       out.push({ url: `${SITE_URL}/o/${slug}`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 })
       out.push({ url: `${SITE_URL}/o/${slug}/work`, lastModified: now, changeFrequency: 'monthly', priority: 0.4 })
+      out.push({ url: `${SITE_URL}/o/${slug}/results`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 })
       try {
         const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${row.id}`] })
         if (cr.rows.length) {

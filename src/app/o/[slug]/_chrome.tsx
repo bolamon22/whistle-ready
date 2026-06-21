@@ -21,6 +21,11 @@ export function buildNav(slug: string, pages: PageRec[], hasGallery: boolean, wo
       items.push({ type: 'link', title: p.title, href })
     }
   }
+  {
+    const g = 'More'
+    if (groupAt[g] === undefined) { groupAt[g] = items.length; items.push({ type: 'group', label: g, children: [] }) }
+    ;(items[groupAt[g]] as any).children.push({ title: 'Results', href: `/o/${slug}/results` })
+  }
   if (workHref) items.push({ type: 'link', title: 'Work With Us', href: workHref })
   return items
 }
