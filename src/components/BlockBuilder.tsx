@@ -126,7 +126,7 @@ function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch:
           {p.url ? 'Replace' : 'Upload'}
           <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await uploadImage(f); if (u) updateProps(b.id, { url: u }) }} />
         </label>
-        <GalleryPicker label="From gallery" onPick={(url) => updateProps(b.id, { url })} />
+        <GalleryPicker label="From library" onPick={(url) => updateProps(b.id, { url })} />
         {p.url && <button type="button" onClick={() => updateProps(b.id, { url: '' })} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
       </div>
       <label className={lbl}>Caption (optional)</label>

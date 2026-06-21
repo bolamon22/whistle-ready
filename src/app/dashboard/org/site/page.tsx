@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save, Star, Search } from 'lucide-react'
+import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save, Star, Search, Library } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import GalleryPicker from '@/components/GalleryPicker'
 import AiGenerateButton from '@/components/AiGenerateButton'
@@ -191,6 +191,7 @@ function OrgSiteEditorInner() {
           <p className="text-sm text-slate-500">Edit your public org site{org ? <> at <code className="text-teal-700">/o/{org.slug}</code></> : ''}.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/dashboard/org/assets" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"><Library size={14} /> Brand &amp; media</Link>
           {org && <Link href={`/o/${org.slug}`} target="_blank" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"><ExternalLink size={14} /> View site</Link>}
           <button onClick={save} disabled={saving} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 inline-flex items-center gap-1.5 disabled:opacity-50"><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
         </div>
@@ -216,7 +217,7 @@ function OrgSiteEditorInner() {
         <div className="flex items-center gap-3">
           {c.logo ? <img src={c.logo} alt="" className="h-16 w-16 object-contain rounded-xl border border-slate-200 bg-white" /> : <div className="h-16 w-16 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
           <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">Upload<input type="file" accept="image/*" className="hidden" onChange={e => logoImg(e.target.files?.[0])} /></label>
-          <GalleryPicker label="From gallery" onPick={(url) => setC(v => ({ ...v, logo: url }))} />
+          <GalleryPicker label="From library" onPick={(url) => setC(v => ({ ...v, logo: url }))} />
           {c.logo && <button onClick={() => setC(v => ({ ...v, logo: '' }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
         </div>
         <p className="text-xs text-slate-400 mt-2">Shown in your site header and hero.</p>
@@ -232,7 +233,7 @@ function OrgSiteEditorInner() {
         <div className="flex items-center gap-3 mt-1">
           {c.hero.imageUrl ? <img src={c.hero.imageUrl} alt="" className="h-16 w-28 object-cover rounded-lg border border-slate-200" /> : <div className="h-16 w-28 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
           <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">Upload<input type="file" accept="image/*" className="hidden" onChange={e => heroImg(e.target.files?.[0])} /></label>
-          <GalleryPicker label="From gallery" onPick={(url) => setC(v => ({ ...v, hero: { ...v.hero, imageUrl: url } }))} />
+          <GalleryPicker label="From library" onPick={(url) => setC(v => ({ ...v, hero: { ...v.hero, imageUrl: url } }))} />
           {c.hero.imageUrl && <button onClick={() => setC(v => ({ ...v, hero: { ...v.hero, imageUrl: '' } }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
         </div>
       </Sec>
@@ -260,7 +261,7 @@ function OrgSiteEditorInner() {
                 <input className="input" value={s.url} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, url: e.target.value } : x) }))} placeholder="https://…" />
               </div>
               <label className="text-xs border border-slate-300 rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer whitespace-nowrap">Logo<input type="file" accept="image/*" className="hidden" onChange={e => sponLogo(i, e.target.files?.[0])} /></label>
-              <GalleryPicker label="Gallery" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: url } : s) }))} />
+              <GalleryPicker label="Library" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: url } : s) }))} />
               <button onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
             </div>
           ))}
@@ -300,7 +301,7 @@ function OrgSiteEditorInner() {
                     {pg.heroImage ? <img src={pg.heroImage} alt="" className="h-12 w-20 object-cover rounded-lg border border-slate-200" /> : <div className="h-12 w-20 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={16} /></div>}
                     <div>
                       <label className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer inline-block">Banner image<input type="file" accept="image/*" className="hidden" onChange={e => pageHeroImg(i, e.target.files?.[0])} /></label>
-                      <GalleryPicker label="From gallery" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, heroImage: url } : x) }))} />
+                      <GalleryPicker label="From library" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, heroImage: url } : x) }))} />
                       {pg.heroImage && <button onClick={() => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, heroImage: '' } : x) }))} className="text-xs text-slate-400 hover:text-red-600 ml-2">Remove</button>}
                       <p className="text-[11px] text-slate-400 mt-1">Optional banner shown behind the page title.</p>
                     </div>

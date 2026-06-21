@@ -137,7 +137,7 @@ export default function EventPageEditor() {
           <div className="flex items-center gap-3">
             {c.heroImage ? <img src={c.heroImage} alt="" className="h-20 w-36 object-cover rounded-lg border border-slate-200" /> : <div className="h-20 w-36 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
             <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">{c.heroImage ? 'Replace' : 'Upload'}<input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, heroImage: u })); else toast.error('Upload failed') }} /></label>
-            <GalleryPicker label="From gallery" onPick={(url) => setC(v => ({ ...v, heroImage: url }))} />
+            <GalleryPicker label="From library" onPick={(url) => setC(v => ({ ...v, heroImage: url }))} />
             {c.heroImage && <button type="button" onClick={() => setC(v => ({ ...v, heroImage: '' }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
           </div>
         </Sec>
@@ -192,7 +192,7 @@ export default function EventPageEditor() {
                 <div className="flex items-center gap-3 mt-2">
                   {l.fieldMapUrl ? <img src={l.fieldMapUrl} alt="" className="h-16 w-24 object-cover rounded-lg border border-slate-200" /> : <div className="h-16 w-24 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={16} /></div>}
                   <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">Field map<input type="file" accept="image/*" className="hidden" onChange={e => fieldMapUpload(i, e.target.files?.[0])} /></label>
-                  <GalleryPicker label="From gallery" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, locations: v.locations.map((x, j) => j === i ? { ...x, fieldMapUrl: url } : x) }))} />
+                  <GalleryPicker label="From library" accept="any" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, locations: v.locations.map((x, j) => j === i ? { ...x, fieldMapUrl: url } : x) }))} />
                   {l.fieldMapUrl && <button onClick={() => setC(v => ({ ...v, locations: v.locations.map((x, j) => j === i ? { ...x, fieldMapUrl: '' } : x) }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
                 </div>
               </div>

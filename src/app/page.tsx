@@ -36,6 +36,7 @@ const ADMIN_LINKS = [
   { label: '🔐 Permissions',        href: '/admin/permissions',        desc: 'Control what each role can access' },
   { label: '📋 Forms',              href: '/dashboard/org/forms',      desc: 'Reusable forms — player waiver, vendor' },
   { label: '📜 Rules library',       href: '/dashboard/org/rules',      desc: 'Reusable rule sets — Sixes, Traditional' },
+  { label: '🖼️ Brand & media',       href: '/dashboard/org/assets',     desc: 'Logos, documents, maps, promo graphics' },
   { label: '🏒 Club Director View', href: '/dashboard/club-director',  desc: 'Preview the Club Director dashboard' },
   { label: '👤 My Profile',         href: '/profile',                  desc: 'Edit your name, email and password' },
 ]
