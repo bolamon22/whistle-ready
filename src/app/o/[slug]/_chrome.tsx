@@ -22,9 +22,9 @@ export function buildNav(slug: string, pages: PageRec[], hasGallery: boolean, wo
     }
   }
   {
-    const g = 'More'
-    if (groupAt[g] === undefined) { groupAt[g] = items.length; items.push({ type: 'group', label: g, children: [] }) }
-    ;(items[groupAt[g]] as any).children.push({ title: 'Results', href: `/o/${slug}/results` })
+    let moreIdx = items.findIndex(it => it.type === 'group' && (((it as any).label || '').trim().toLowerCase() === 'more'))
+    if (moreIdx === -1) { moreIdx = items.length; items.push({ type: 'group', label: 'More', children: [] }) }
+    ;(items[moreIdx] as any).children.push({ title: 'Results', href: `/o/${slug}/results` })
   }
   if (workHref) items.push({ type: 'link', title: 'Work With Us', href: workHref })
   return items
