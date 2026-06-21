@@ -1,18 +1,27 @@
 import Link from 'next/link'
+import { headers } from 'next/headers'
+import { isCustomOrgHost } from '@/lib/orgDomains'
 import { Facebook, Instagram, Globe, ChevronDown } from 'lucide-react'
 
 export type PageRec = { title: string; slug: string; group?: string; body?: string; heroImage?: string }
 export type NavLink = { title: string; href: string }
 export type NavItem = { type: 'link'; title: string; href: string } | { type: 'group'; label: string; children: NavLink[] }
 
+// Link base for the org's own pages. On a custom domain (sunshinelax.com) the org
+// is served at the root so links are root-relative (''); on whistleready.app they
+// live under /o/[slug]. Read once per request from the Host header.
+export function orgBase(slug: string): string {
+  try { return isCustomOrgHost(headers().get('host')) ? '' : `/o/${slug}` } catch { return `/o/${slug}` }
+}
+
 // Build the ordered nav (with dropdown groups) from the org's pages.
-export function buildNav(slug: string, pages: PageRec[], hasGallery: boolean, workHref?: string): NavItem[] {
-  const items: NavItem[] = [{ type: 'link', title: 'Tournaments', href: `/o/${slug}` }]
-  if (hasGallery) items.push({ type: 'link', title: 'Gallery', href: `/o/${slug}/gallery` })
+export function buildNav(base: string, pages: PageRec[], hasGallery: boolean, workHref?: string): NavItem[] {
+  const items: NavItem[] = [{ type: 'link', title: 'Tournaments', href: base || '/' }]
+  if (hasGallery) items.push({ type: 'link', title: 'Gallery', href: `${base}/gallery` })
   const groupAt: Record<string, number> = {}
   for (const p of pages) {
     if (!p.title || !p.slug) continue
-    const href = `/o/${slug}/${p.slug}`
+    const href = `${base}/${p.slug}`
     const g = (p.group || '').trim()
     if (g) {
       if (groupAt[g] === undefined) { groupAt[g] = items.length; items.push({ type: 'group', label: g, children: [] }) }
@@ -24,7 +33,7 @@ export function buildNav(slug: string, pages: PageRec[], hasGallery: boolean, wo
   {
     let moreIdx = items.findIndex(it => it.type === 'group' && (((it as any).label || '').trim().toLowerCase() === 'more'))
     if (moreIdx === -1) { moreIdx = items.length; items.push({ type: 'group', label: 'More', children: [] }) }
-    ;(items[moreIdx] as any).children.push({ title: 'Results', href: `/o/${slug}/results` })
+    ;(items[moreIdx] as any).children.push({ title: 'Results', href: `${base}/results` })
   }
   if (workHref) items.push({ type: 'link', title: 'Work With Us', href: workHref })
   return items
@@ -39,11 +48,11 @@ function flatten(nav: NavItem[]): NavLink[] {
   return out
 }
 
-export function OrgHeader({ org, slug, nav, registerHref }: { org: any; slug: string; nav: NavItem[]; registerHref?: string }) {
+export function OrgHeader({ org, homeHref, nav, registerHref }: { org: any; homeHref: string; nav: NavItem[]; registerHref?: string }) {
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/70">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
-        <Link href={`/o/${slug}`} className="flex items-center gap-3 flex-shrink-0">
+        <Link href={homeHref} className="flex items-center gap-3 flex-shrink-0">
           {org.logoUrl && <img src={org.logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-100" />}
           <span className="font-extrabold tracking-tight text-slate-900 text-lg">{org.name}</span>
         </Link>

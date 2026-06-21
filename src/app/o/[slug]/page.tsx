@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@libsql/client'
 import { MapPin, CalendarDays, ArrowRight, Trophy, Instagram } from 'lucide-react'
-import { OrgHeader, OrgFooter, buildNav, PageRec } from './_chrome'
+import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from './_chrome'
 import { fetchInstagram } from './_instagram'
 import type { Metadata } from 'next'
 import { SITE_URL, abs, clip, stripMd } from '@/lib/seo'
@@ -104,8 +104,9 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const pages: PageRec[] = Array.isArray(content.pages) ? content.pages : []
   let forms: any = {}
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
-  const workHref = (forms.staff?.enabled !== false) ? `/o/${params.slug}/work` : undefined
-  const nav = buildNav(params.slug, pages, gallery.length > 0, workHref)
+  const base = orgBase(params.slug)
+  const workHref = (forms.staff?.enabled !== false) ? `${base}/work` : undefined
+  const nav = buildNav(base, pages, gallery.length > 0, workHref)
 
   const tRes = await client.execute({
     sql: 'SELECT id, name, startDate, endDate, location, logoUrl, sport, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate',
@@ -126,7 +127,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   return (
     <div className="min-h-screen bg-slate-50">
       <JsonLd data={eventsLd ? [orgLd, eventsLd] : orgLd} />
-      <OrgHeader org={org} slug={params.slug} nav={nav} registerHref={registerHref} />
+      <OrgHeader org={org} homeHref={base || '/'} nav={nav} registerHref={registerHref} />
 
       {/* Hero */}
       <section className="relative overflow-hidden text-white">
@@ -156,7 +157,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
 
         {past.length > 0 && (
           <div className="mt-10">
-            <Link href={`/o/${params.slug}/results`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-900">Past tournament results <ArrowRight size={15} /></Link>
+            <Link href={`${base}/results`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-900">Past tournament results <ArrowRight size={15} /></Link>
           </div>
         )}
       </main>
@@ -177,11 +178,11 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
           <div className="max-w-6xl mx-auto px-6 py-16">
             <div className="flex items-end justify-between mb-6">
               <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Gallery</h2>
-              <Link href={`/o/${params.slug}/gallery`} className="text-sm font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1">View all <ArrowRight size={15} /></Link>
+              <Link href={`${base}/gallery`} className="text-sm font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1">View all <ArrowRight size={15} /></Link>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {gallery.slice(0, 6).map((ph, i) => (
-                <Link key={i} href={`/o/${params.slug}/gallery`} className="block rounded-xl overflow-hidden border border-slate-200 aspect-square">
+                <Link key={i} href={`${base}/gallery`} className="block rounded-xl overflow-hidden border border-slate-200 aspect-square">
                   <img src={ph.url} alt={ph.caption || ''} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
                 </Link>
               ))}

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@libsql/client'
 import { ClipboardList, ScrollText, Utensils, ListChecks, CalendarDays, MapPin, Zap } from 'lucide-react'
-import { OrgHeader, OrgFooter, buildNav } from '@/app/o/[slug]/_chrome'
+import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
 import EventInfoNav from '@/components/EventInfoNav'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
@@ -34,7 +34,7 @@ export default async function EventChrome({ tournamentId, children }: { tourname
   const headerLogo = orgLogo || org.logoUrl || ''
   const heroLogo = t.logoUrl || headerLogo
   const orgForChrome = { name: org.name, logoUrl: headerLogo, contactEmail: org.contactEmail }
-  const nav = org.slug ? buildNav(org.slug, navPages, hasGallery) : []
+  const nav = org.slug ? buildNav(orgBase(org.slug), navPages, hasGallery) : []
   const registerHref = Number(t.teamRegEnabled) ? `${base}/register` : undefined
 
   const divs = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
@@ -58,7 +58,7 @@ export default async function EventChrome({ tournamentId, children }: { tourname
 
   return (
     <>
-      {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
+      {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
       {t.name && (
         <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
           {cs.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${cs.heroImage})` }} aria-hidden />}

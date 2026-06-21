@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
-import { OrgHeader, OrgFooter, buildNav, PageRec } from '../_chrome'
+import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import PublicGallery from '@/components/PublicGallery'
 
 export const dynamic = 'force-dynamic'
@@ -37,8 +37,9 @@ export default async function GalleryPage({ params }: { params: { slug: string }
   const pages: PageRec[] = Array.isArray(content.pages) ? content.pages : []
   let forms: any = {}
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
-  const workHref = (forms.staff?.enabled !== false) ? `/o/${params.slug}/work` : undefined
-  const nav = buildNav(params.slug, pages, gallery.length > 0, workHref)
+  const base = orgBase(params.slug)
+  const workHref = (forms.staff?.enabled !== false) ? `${base}/work` : undefined
+  const nav = buildNav(base, pages, gallery.length > 0, workHref)
 
   const tRes = await client.execute({ sql: 'SELECT id, name, startDate, endDate, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate', args: [org.id as string] })
   const today = new Date().toISOString().slice(0, 10)
@@ -50,7 +51,7 @@ export default async function GalleryPage({ params }: { params: { slug: string }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <OrgHeader org={org} slug={params.slug} nav={nav} registerHref={registerHref} />
+      <OrgHeader org={org} homeHref={base || '/'} nav={nav} registerHref={registerHref} />
       <main className="max-w-6xl mx-auto px-6 py-14 w-full flex-1">
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 mb-8">Gallery</h1>
         <PublicGallery photos={photos} tournaments={tournaments} covers={covers} />

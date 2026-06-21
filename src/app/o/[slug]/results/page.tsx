@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@libsql/client'
 import { Trophy, MapPin, CalendarDays, ArrowRight, BarChart3 } from 'lucide-react'
-import { OrgHeader, OrgFooter, buildNav, PageRec } from '../_chrome'
+import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import type { Metadata } from 'next'
 import { abs, clip } from '@/lib/seo'
 
@@ -44,8 +44,9 @@ export default async function ResultsPage({ params }: { params: { slug: string }
   const socials = content.socials || {}
   let forms: any = {}
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
-  const workHref = (forms.staff?.enabled !== false) ? `/o/${params.slug}/work` : undefined
-  const nav = buildNav(params.slug, pages, gallery.length > 0, workHref)
+  const base = orgBase(params.slug)
+  const workHref = (forms.staff?.enabled !== false) ? `${base}/work` : undefined
+  const nav = buildNav(base, pages, gallery.length > 0, workHref)
 
   const tRes = await client.execute({ sql: 'SELECT id, name, startDate, endDate, location, logoUrl FROM "Tournament" WHERE orgId = ? ORDER BY startDate DESC', args: [org.id as string] })
   const today = new Date().toISOString().slice(0, 10)
@@ -55,7 +56,7 @@ export default async function ResultsPage({ params }: { params: { slug: string }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <OrgHeader org={org} slug={params.slug} nav={nav} registerHref={registerHref} />
+      <OrgHeader org={org} homeHref={base || '/'} nav={nav} registerHref={registerHref} />
       <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
         <div className="relative max-w-6xl mx-auto px-6 py-14">
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">Results</h1>

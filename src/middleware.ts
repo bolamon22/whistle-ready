@@ -1,6 +1,7 @@
 import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
 import permissionsConfig from './lib/role-permissions.json'
+import { orgSlugForHost } from './lib/orgDomains'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/']  // /o/[slug] = public org website
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
@@ -41,6 +42,29 @@ function roleCanAccess(role: string, pathname: string): boolean {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // --- Custom org domains (e.g. sunshinelax.com → Sunshine Events Group) ---
+  // Serve the org's public pages at the domain root; keep global routes
+  // (tournaments, api, assets, auth) working as-is.
+  const customSlug = orgSlugForHost(req.headers.get('host'))
+  if (customSlug) {
+    const host = (req.headers.get('host') || '').toLowerCase()
+    if (host.startsWith('www.')) {
+      return NextResponse.redirect(`https://${host.slice(4)}${pathname}${req.nextUrl.search}`, 308)
+    }
+    const passthrough =
+      pathname.startsWith('/o/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.startsWith('/favicon') ||
+      pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt' ||
+      /\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|map)$/i.test(pathname) ||
+      pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname.startsWith('/register') ||
+      pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff')
+    if (!passthrough) {
+      const url = req.nextUrl.clone()
+      url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
+      return NextResponse.rewrite(url)
+    }
+  }
 
   // Always allow public routes, auth API, and all other API routes (they handle own auth)
   if (PUBLIC_ROUTES.some(r => pathname.startsWith(r))) return NextResponse.next()

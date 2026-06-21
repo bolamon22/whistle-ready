@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@libsql/client'
 import { Trophy, ChevronLeft } from 'lucide-react'
-import { OrgHeader, OrgFooter, buildNav, PageRec } from '../_chrome'
+import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import { mdToHtml } from '../_md'
 
 export const dynamic = 'force-dynamic'
@@ -36,8 +36,9 @@ export default async function OrgInfoPage({ params }: { params: { slug: string; 
   const page = pages.find(p => p.slug === params.page)
   let forms: any = {}
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
-  const workHref = (forms.staff?.enabled !== false) ? `/o/${params.slug}/work` : undefined
-  const nav = buildNav(params.slug, pages, gallery.length > 0, workHref)
+  const base = orgBase(params.slug)
+  const workHref = (forms.staff?.enabled !== false) ? `${base}/work` : undefined
+  const nav = buildNav(base, pages, gallery.length > 0, workHref)
   const contact = content.contact || {}
   const socials = content.socials || {}
 
@@ -50,13 +51,13 @@ export default async function OrgInfoPage({ params }: { params: { slug: string; 
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <OrgHeader org={org} slug={params.slug} nav={nav} registerHref={registerHref} />
+      <OrgHeader org={org} homeHref={base || '/'} nav={nav} registerHref={registerHref} />
       {/* Title band */}
       <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
         {page.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${page.heroImage})` }} aria-hidden />}
         {page.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55" aria-hidden />}
         <div className="relative max-w-3xl mx-auto px-6 py-14">
-          <Link href={`/o/${params.slug}`} className="text-sm text-teal-200 hover:text-white inline-flex items-center gap-1"><ChevronLeft size={14} /> Back</Link>
+          <Link href={base || '/'} className="text-sm text-teal-200 hover:text-white inline-flex items-center gap-1"><ChevronLeft size={14} /> Back</Link>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-3">{page.title}</h1>
         </div>
       </section>

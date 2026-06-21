@@ -15,7 +15,7 @@ import ScheduleBlock from '@/components/ScheduleBlock'
 import StandingsBlock from '@/components/StandingsBlock'
 import { SECTION_LABELS } from '@/lib/eventSections'
 import { resolveBlocks, isBuiltin } from '@/lib/eventBlocks'
-import { OrgHeader, OrgFooter, buildNav } from '@/app/o/[slug]/_chrome'
+import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
 import type { Metadata } from 'next'
 import { abs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
@@ -90,7 +90,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const headerLogo = orgLogo || org.logoUrl || ''
   if (!t.logoUrl) t.logoUrl = headerLogo
   const orgForChrome = { name: org.name, logoUrl: headerLogo, contactEmail: org.contactEmail }
-  const nav = org.slug ? buildNav(org.slug, navPages, hasGallery) : []
+  const nav = org.slug ? buildNav(orgBase(org.slug), navPages, hasGallery) : []
   const registerHref = Number(t.teamRegEnabled) ? `/tournaments/${params.id}/register` : undefined
   const base = `/tournaments/${params.id}`
 
@@ -291,7 +291,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   return (
     <div className="min-h-screen bg-slate-50">
       <JsonLd data={[sportsEventLd, breadcrumbLd, ...(faqLd ? [faqLd] : [])]} />
-      {org.slug && <OrgHeader org={orgForChrome} slug={org.slug} nav={nav} registerHref={registerHref} />}
+      {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
       <section className="relative text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]">
         {c.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${c.heroImage})` }} aria-hidden />}
         {c.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55" aria-hidden />}
