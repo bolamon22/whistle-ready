@@ -19,6 +19,7 @@ import { OrgHeader, OrgFooter, buildNav } from '@/app/o/[slug]/_chrome'
 import type { Metadata } from 'next'
 import { abs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
+import { resolveRules } from '@/lib/rules'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +84,9 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     try { const oRes = await client.execute({ sql: 'SELECT id, name, slug, contactEmail, logoUrl FROM "Organization" WHERE id = ?', args: [t.orgId] }); if (oRes.rows.length) org = oRes.rows[0] } catch {}
     try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${t.orgId}`] }); if (s.rows.length) { const oc = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (Array.isArray(oc.sponsors)) sponsors = oc.sponsors; orgLogo = oc.logo || ''; navPages = Array.isArray(oc.pages) ? oc.pages : []; hasGallery = Array.isArray(oc.gallery) && oc.gallery.length > 0; contact = oc.contact || {}; socials = oc.socials || {} } } catch {}
   }
+  let ruleSets: any[] = []
+  try { if (t.orgId) { const rr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgRules:${t.orgId}`] }); if (rr.rows.length) { const v = JSON.parse(((rr.rows[0] as any).value as string) || '{}'); ruleSets = Array.isArray(v.sets) ? v.sets : [] } } } catch {}
+  c.rules = resolveRules(c, ruleSets).body
   const headerLogo = orgLogo || org.logoUrl || ''
   if (!t.logoUrl) t.logoUrl = headerLogo
   const orgForChrome = { name: org.name, logoUrl: headerLogo, contactEmail: org.contactEmail }

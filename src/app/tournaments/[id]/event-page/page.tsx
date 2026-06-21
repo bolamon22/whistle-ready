@@ -15,11 +15,11 @@ type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string 
 type Contact = { name: string; role: string; phone: string; email: string }
 type Content = {
   overview: string; feesText: string; divisionsText: string; ageChartUrl: string; heroImage: string
-  locations: Loc[]; hotels: string; hotelsUrl: string; rules: string; contacts: Contact[]
+  locations: Loc[]; hotels: string; hotelsUrl: string; rules: string; rulesSourceId?: string; contacts: Contact[]
   sectionOrder?: string[]; hiddenSections?: string[]
   blocks?: Block[]
 }
-const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '', rules: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [] }
+const EMPTY: Content = { overview: '', feesText: '', divisionsText: '', ageChartUrl: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '', rules: '', rulesSourceId: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [] }
 
 const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-3 mb-1'
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -73,9 +73,11 @@ export default function EventPageEditor() {
   const [saving, setSaving] = useState(false)
   const [genFaq, setGenFaq] = useState(false)
   const [regDivs, setRegDivs] = useState<string[]>([])
+  const [ruleSets, setRuleSets] = useState<{ id: string; name: string; format?: string; body: string }[]>([])
 
   useEffect(() => {
-    fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => {
+    fetch('/api/org-rules').then(r => r.ok ? r.json() : { sets: [] }).then(d => setRuleSets(Array.isArray(d.sets) ? d.sets : [])).catch(() => {})
+        fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => {
       if (d) {
         setName(d.name || 'Tournament'); setLogo(d.logoUrl || undefined)
         try { const divs = JSON.parse(d.registrationDivisions || '[]'); if (Array.isArray(divs)) setRegDivs(divs.filter(Boolean)) } catch {}
@@ -205,10 +207,29 @@ export default function EventPageEditor() {
           <p className="text-xs text-slate-400 mt-1">Supports Markdown, including [links](https://…).</p>
         </Sec>
 
-        <Sec title="Rules & policies" summary={c.rules ? 'Set' : 'Empty'} isOpen={!!open.rules} onToggle={() => toggle('rules')}>
-          <AiGenerateButton kind="custom" onResult={(t) => setC(v => ({ ...v, rules: t }))} />
-          <MarkdownField value={c.rules} onChange={val => setC(v => ({ ...v, rules: val }))} minHeight={120} placeholder="Rules, policies, or links…" />
-          <p className="text-xs text-slate-400 mt-1">Supports Markdown.</p>
+        <Sec title="Rules & policies" summary={c.rulesSourceId ? (ruleSets.find(r => r.id === c.rulesSourceId)?.name || 'Linked') : (c.rules ? 'Custom' : 'Empty')} isOpen={!!open.rules} onToggle={() => toggle('rules')}>
+          {ruleSets.length > 0 && (
+            <div className="mb-3">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Rules source</label>
+              <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" value={c.rulesSourceId || ''} onChange={e => setC(v => ({ ...v, rulesSourceId: e.target.value }))}>
+                <option value="">Custom for this event</option>
+                {ruleSets.map(r => <option key={r.id} value={r.id}>{r.name}{r.format ? ` (${r.format})` : ''}</option>)}
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1">Link to a set from your <a href="/dashboard/org/rules" className="text-teal-700 hover:underline">Rules library</a> (edits there update every linked event), or keep custom rules just for this event.</p>
+            </div>
+          )}
+          {c.rulesSourceId ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <p className="text-xs text-slate-500 mb-2">Linked to <b>{ruleSets.find(r => r.id === c.rulesSourceId)?.name || 'a rule set'}</b> — edit it in the <a href="/dashboard/org/rules" className="text-teal-700 hover:underline">Rules library</a>.</p>
+              <div className="text-sm text-slate-600 whitespace-pre-line max-h-40 overflow-y-auto bg-white rounded-lg p-3 border border-slate-100">{ruleSets.find(r => r.id === c.rulesSourceId)?.body || <span className="text-slate-400">No rules text in this set yet.</span>}</div>
+            </div>
+          ) : (
+            <>
+              <AiGenerateButton kind="custom" onResult={(t) => setC(v => ({ ...v, rules: t }))} />
+              <MarkdownField value={c.rules} onChange={val => setC(v => ({ ...v, rules: val }))} minHeight={120} placeholder="Rules, policies, or links…" />
+              <p className="text-xs text-slate-400 mt-1">Supports Markdown.</p>
+            </>
+          )}
         </Sec>
 
         <Sec title="Contacts" summary={`${c.contacts.length}`} isOpen={!!open.contacts} onToggle={() => toggle('contacts')}>
