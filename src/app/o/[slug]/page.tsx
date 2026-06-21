@@ -198,9 +198,9 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
             <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-w-5xl mx-auto">
               {sponsors.map((s, i) => {
                 const inner = s.logoUrl
-                  ? <img src={s.logoUrl} alt={s.name || ''} title={s.name || ''} className="max-h-20 max-w-full object-contain" />
+                  ? <img src={s.logoUrl} alt={s.name || ''} title={s.name || ''} className="max-h-32 max-w-full object-contain" />
                   : <span className="text-slate-600 font-bold text-lg whitespace-nowrap">{s.name}</span>
-                const tile = <div className="bg-white border border-slate-200 rounded-2xl h-28 flex items-center justify-center px-5">{inner}</div>
+                const tile = <div className="bg-white border border-slate-200 rounded-2xl h-44 flex items-center justify-center px-6">{inner}</div>
                 return s.url
                   ? <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block rounded-2xl hover:shadow-md transition-shadow">{tile}</a>
                   : <div key={i}>{tile}</div>
