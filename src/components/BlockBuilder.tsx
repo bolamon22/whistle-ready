@@ -65,7 +65,7 @@ function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch:
       <label className={lbl}>Title</label>
       <input className={inp} value={p.title || ''} onChange={e => updateProps(b.id, { title: e.target.value })} placeholder="Section title" />
       <label className={lbl}>Content</label>
-      <AiGenerateButton kind="custom" onResult={(t) => updateProps(b.id, { body: t })} />
+      <AiGenerateButton kind="custom" current={p.body || ''} onResult={(t) => updateProps(b.id, { body: t })} />
       <MarkdownField value={p.body || ''} onChange={v => updateProps(b.id, { body: v })} minHeight={120} placeholder="Write anything — parking, food trucks, awards…" />
     </>
   )
@@ -104,7 +104,7 @@ function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch:
               </div>
               <input className={inp} value={it.q || ''} onChange={e => setItems(items.map((x, j) => j === idx ? { ...x, q: e.target.value } : x))} placeholder="Heading (what people tap to expand)" />
               <div className="mt-1.5">
-                <AiGenerateButton kind="faq" label="Generate answer" onResult={(t) => setItems(items.map((x, j) => j === idx ? { ...x, a: t } : x))} />
+                <AiGenerateButton kind="faq" label="Generate answer" current={it.a || ''} onResult={(t) => setItems(items.map((x, j) => j === idx ? { ...x, a: t } : x))} />
                 <MarkdownField value={it.a || ''} onChange={v => setItems(items.map((x, j) => j === idx ? { ...x, a: v } : x))} minHeight={90} placeholder="Content — supports bold, bullets, links…" />
               </div>
             </div>

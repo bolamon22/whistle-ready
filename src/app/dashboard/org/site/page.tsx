@@ -301,7 +301,7 @@ function OrgSiteEditorInner() {
                     </div>
                   </div>
                   <div className="mt-2"><MarkdownField value={pg.body} onChange={val => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: val } : x) }))} minHeight={160} placeholder="Page content…" /></div>
-                  <AiGenerateButton kind="custom" onResult={(t) => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: t } : x) }))} />
+                  <AiGenerateButton kind="custom" current={pg.body} onResult={(t) => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, body: t } : x) }))} />
                 </div>
               )}
             </div>

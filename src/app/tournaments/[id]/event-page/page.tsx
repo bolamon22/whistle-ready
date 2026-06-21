@@ -151,7 +151,7 @@ export default function EventPageEditor() {
 
         <Sec title="Overview" summary={c.overview ? 'Set' : 'Empty'} isOpen={!!open.overview} onToggle={() => toggle('overview')}>
           <label className={labelCls}>Summary</label>
-          <AiGenerateButton kind="overview" onResult={(t) => setC(v => ({ ...v, overview: t }))} />
+          <AiGenerateButton kind="overview" current={c.overview} onResult={(t) => setC(v => ({ ...v, overview: t }))} />
           <MarkdownField value={c.overview} onChange={val => setC(v => ({ ...v, overview: val }))} minHeight={140} placeholder="Welcome blurb about this tournament…" />
           <p className="text-xs text-slate-400 mt-1">Supports Markdown (## headings, **bold**, - bullets).</p>
         </Sec>
@@ -202,7 +202,7 @@ export default function EventPageEditor() {
           <input className={inputCls} value={c.hotelsUrl} onChange={e => setC(v => ({ ...v, hotelsUrl: e.target.value }))} placeholder="https://book.housingcompany.com/…" />
           <p className="text-xs text-slate-400 mt-1">Shows as a “Book hotels” button on the event page.</p>
           <label className={labelCls}>Details (optional)</label>
-          <AiGenerateButton kind="custom" onResult={(t) => setC(v => ({ ...v, hotels: t }))} />
+          <AiGenerateButton kind="custom" current={c.hotels} onResult={(t) => setC(v => ({ ...v, hotels: t }))} />
           <MarkdownField value={c.hotels} onChange={val => setC(v => ({ ...v, hotels: val }))} minHeight={120} placeholder="Stay-to-play info, room blocks, notes…" />
           <p className="text-xs text-slate-400 mt-1">Supports Markdown, including [links](https://…).</p>
         </Sec>
@@ -225,7 +225,7 @@ export default function EventPageEditor() {
             </div>
           ) : (
             <>
-              <AiGenerateButton kind="custom" onResult={(t) => setC(v => ({ ...v, rules: t }))} />
+              <AiGenerateButton kind="custom" current={c.rules} onResult={(t) => setC(v => ({ ...v, rules: t }))} />
               <MarkdownField value={c.rules} onChange={val => setC(v => ({ ...v, rules: val }))} minHeight={120} placeholder="Rules, policies, or links…" />
               <p className="text-xs text-slate-400 mt-1">Supports Markdown.</p>
             </>

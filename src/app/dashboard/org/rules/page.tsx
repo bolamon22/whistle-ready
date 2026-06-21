@@ -7,6 +7,7 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, ScrollText, Plus, Save, Pencil, X, Trash2, Link2, Check } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
+import AiGenerateButton from '@/components/AiGenerateButton'
 import { RuleSet, uidRule } from '@/lib/rules'
 
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -117,6 +118,7 @@ function RulesInner() {
                     <label className={labelCls}>Format / tag (optional)</label>
                     <input className={inputCls} value={rs.format || ''} onChange={e => patch(rs.id, { format: e.target.value })} placeholder="Sixes · Traditional · 7v7" />
                     <label className={labelCls}>Rules</label>
+                    <AiGenerateButton kind="custom" current={rs.body} onResult={(t) => patch(rs.id, { body: t })} />
                     <MarkdownField value={rs.body} onChange={val => patch(rs.id, { body: val })} minHeight={200} placeholder="Tournament rules and policies…" />
                   </>
                 ) : (

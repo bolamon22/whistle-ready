@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'AI is not configured — add ANTHROPIC_API_KEY in Vercel.' }, { status: 503 })
   }
   try {
-    const { prompt, tournamentId, kind } = await req.json()
+    const { prompt, tournamentId, kind, current } = await req.json()
     if (!prompt || !String(prompt).trim()) return NextResponse.json({ error: 'Describe what to write.' }, { status: 400 })
 
     let ctx = ''
@@ -32,14 +32,19 @@ export async function POST(req: NextRequest) {
 Rules:
 - Output ONLY the content itself — no preamble, no "Here is", no closing remarks.
 - Use simple Markdown only: ## sub-headings, **bold**, and "- " bullet lists. Keep it scannable.
-- Warm and welcoming to parents, players, and coaches. Keep it tight.${kind === 'faq' ? '\n- This is an FAQ answer: answer the question directly in 1-3 short sentences or a short bullet list.' : ''}`
+- Warm and welcoming to parents, players, and coaches. Keep it tight.
+- When given a current draft to revise, KEEP every piece of information — only improve wording, structure, and formatting; never drop details.${kind === 'faq' ? '\n- This is an FAQ answer: answer the question directly in 1-3 short sentences or a short bullet list.' : ''}`
 
+    const hasCurrent = current && String(current).trim()
+    const userContent = hasCurrent
+      ? `Here is the current draft:\n\n${String(current).slice(0, 8000)}\n\n---\nApply this instruction and return the COMPLETE revised version: ${String(prompt)}`
+      : String(prompt)
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: sys,
-      messages: [{ role: 'user', content: String(prompt) }],
+      messages: [{ role: 'user', content: userContent }],
     })
     const text = response.content[0] && response.content[0].type === 'text' ? response.content[0].text : ''
     return NextResponse.json({ text: text.trim() })
