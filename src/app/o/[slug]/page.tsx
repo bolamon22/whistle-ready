@@ -90,6 +90,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const workHref = (forms.staff?.enabled !== false) ? `/o/${params.slug}/work` : undefined
   const nav = buildNav(params.slug, pages, gallery.length > 0, workHref)
 
+  try { await client.execute(`ALTER TABLE "Tournament" ADD COLUMN "tagline" TEXT DEFAULT ''`) } catch {}
   const tRes = await client.execute({
     sql: 'SELECT id, name, tagline, startDate, endDate, location, logoUrl, sport, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate',
     args: [org.id as string],
