@@ -9,6 +9,7 @@ import { ChevronDown, Plus, Trash2, Save, ExternalLink, ImagePlus, Sparkles } fr
 import MarkdownField from '@/components/MarkdownField'
 import AiGenerateButton from '@/components/AiGenerateButton'
 import BlockBuilder from '@/components/BlockBuilder'
+import GalleryPicker from '@/components/GalleryPicker'
 import { resolveBlocks, Block } from '@/lib/eventBlocks'
 
 type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string }
@@ -136,6 +137,7 @@ export default function EventPageEditor() {
           <div className="flex items-center gap-3">
             {c.heroImage ? <img src={c.heroImage} alt="" className="h-20 w-36 object-cover rounded-lg border border-slate-200" /> : <div className="h-20 w-36 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
             <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">{c.heroImage ? 'Replace' : 'Upload'}<input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, heroImage: u })); else toast.error('Upload failed') }} /></label>
+            <GalleryPicker label="From gallery" onPick={(url) => setC(v => ({ ...v, heroImage: url }))} />
             {c.heroImage && <button type="button" onClick={() => setC(v => ({ ...v, heroImage: '' }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
           </div>
         </Sec>
