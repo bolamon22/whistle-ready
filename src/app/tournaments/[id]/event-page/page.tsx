@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
-import { ChevronDown, Plus, Trash2, Save, ExternalLink, ImagePlus } from 'lucide-react'
+import { ChevronDown, Plus, Trash2, Save, ExternalLink, ImagePlus, Sparkles } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import AiGenerateButton from '@/components/AiGenerateButton'
 import BlockBuilder from '@/components/BlockBuilder'
@@ -71,6 +71,7 @@ export default function EventPageEditor() {
   const [open, setOpen] = useState<Record<string, boolean>>({ layout: true, overview: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [genFaq, setGenFaq] = useState(false)
   const [regDivs, setRegDivs] = useState<string[]>([])
 
   useEffect(() => {
@@ -92,6 +93,19 @@ export default function EventPageEditor() {
       if (res.ok) toast.success('Event page saved')
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Save failed') }
     } catch { toast.error('Save failed') } finally { setSaving(false) }
+  }
+  async function generateFaqs() {
+    setGenFaq(true)
+    try {
+      await fetch(`/api/tournaments/${id}/site`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })
+      const res = await fetch(`/api/tournaments/${id}/generate-faqs`, { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) {
+        const fresh = await fetch(`/api/tournaments/${id}/site`).then(r => r.ok ? r.json() : null)
+        if (fresh) setC(prev => ({ ...EMPTY, ...fresh, locations: Array.isArray(fresh.locations) ? fresh.locations : [], contacts: Array.isArray(fresh.contacts) ? fresh.contacts : [], divisionsText: fresh.divisionsText || prev.divisionsText }))
+        toast.success(d.added ? `Added ${d.added} FAQ${d.added === 1 ? '' : 's'} from event details` : 'FAQs already up to date')
+      } else toast.error(d.error || 'Could not generate FAQs')
+    } catch { toast.error('Could not generate FAQs') } finally { setGenFaq(false) }
   }
   const toggle = (k: string) => setOpen(o => ({ ...o, [k]: !o[k] }))
   const fieldMapUpload = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, locations: v.locations.map((x, j) => j === i ? { ...x, fieldMapUrl: u } : x) })); else toast.error('Upload failed') }
@@ -126,6 +140,10 @@ export default function EventPageEditor() {
 
         <Sec title="Page builder" summary="Drag, add, hide" isOpen={!!open.layout} onToggle={() => toggle('layout')}>
           <p className="text-xs text-slate-500 mb-3">Drag to reorder how blocks appear on the public event page, hide ones you don&apos;t need, or add custom blocks. Built-in sections pull their content from the fields below; custom blocks are edited right here. Empty sections never show.</p>
+          <div className="mb-3">
+            <button type="button" onClick={generateFaqs} disabled={genFaq} className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"><Sparkles size={14} /> {genFaq ? 'Generating…' : 'Generate FAQs from event details'}</button>
+            <p className="text-[11px] text-slate-400 mt-1">Builds a Q&amp;A block from this tournament's dates, location, format, divisions, fees and registration — great for visitors and AI search. Edit or remove any after.</p>
+          </div>
           <BlockBuilder blocks={resolveBlocks(c)} onChange={(blocks) => setC(v => ({ ...v, blocks }))} />
         </Sec>
 
