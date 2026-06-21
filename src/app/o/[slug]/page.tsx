@@ -90,12 +90,12 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const workHref = (forms.staff?.enabled !== false) ? `/o/${params.slug}/work` : undefined
   const nav = buildNav(params.slug, pages, gallery.length > 0, workHref)
 
-  try { await client.execute(`ALTER TABLE "Tournament" ADD COLUMN "tagline" TEXT DEFAULT ''`) } catch {}
   const tRes = await client.execute({
-    sql: 'SELECT id, name, tagline, startDate, endDate, location, logoUrl, sport, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate',
+    sql: 'SELECT id, name, startDate, endDate, location, logoUrl, sport, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate',
     args: [org.id as string],
   })
   const all = (tRes.rows as any[]).map(r => ({ ...r, teamRegEnabled: Number(r.teamRegEnabled) })) as Tourn[]
+  try { const tg = await client.execute({ sql: 'SELECT id, tagline FROM "Tournament" WHERE orgId = ?', args: [org.id as string] }); const tm: Record<string, string> = {}; (tg.rows as any[]).forEach(r => { if (r.tagline) tm[String(r.id)] = String(r.tagline) }); all.forEach(t => { (t as any).tagline = tm[String(t.id)] || '' }) } catch {}
   const today = new Date().toISOString().slice(0, 10)
   const upcoming = all.filter(t => (t.endDate || t.startDate || '') >= today).sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
   const past = all.filter(t => (t.endDate || t.startDate || '') < today).sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
