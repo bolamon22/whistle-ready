@@ -32,7 +32,9 @@ function accentFor(str: string) { let h = 0; for (let i = 0; i < str.length; i++
 function Card({ t }: { t: Tourn }) {
   const accent = accentFor(t.name)
   return (
-    <div className="group bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col">
+    <div className="group relative bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col">
+      {/* Full-tile link to event details — covers the whole card except the Register button */}
+      <Link href={`/tournaments/${t.id}/event`} className="absolute inset-0 z-10" aria-label={`View ${t.name} details`} />
       <div className="h-2" style={{ backgroundColor: accent }} />
       <div className="p-5 flex items-start gap-4">
         {t.logoUrl
@@ -46,11 +48,11 @@ function Card({ t }: { t: Tourn }) {
         </div>
       </div>
       <div className="mt-auto border-t border-slate-100 flex">
-        <Link href={`/tournaments/${t.id}/event`} className="flex-1 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50 py-3.5 transition-colors inline-flex items-center justify-center gap-1">
+        <span className="flex-1 text-center text-sm font-semibold text-slate-700 group-hover:bg-slate-50 py-3.5 transition-colors inline-flex items-center justify-center gap-1">
           Details <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-        </Link>
+        </span>
         {t.teamRegEnabled ? (
-          <Link href={`/tournaments/${t.id}/register`} className="flex-[1.4] text-center text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 py-3.5 transition-colors">Register</Link>
+          <Link href={`/tournaments/${t.id}/register`} className="relative z-20 flex-[1.4] text-center text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 py-3.5 transition-colors">Register</Link>
         ) : null}
       </div>
     </div>
