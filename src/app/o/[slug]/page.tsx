@@ -137,9 +137,9 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
               <div className="absolute inset-0 bg-gradient-to-t from-[#0b1220] via-[#0b1220]/70 to-[#0b1220]/30" />
             </>
           : <div className="absolute inset-0 bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]" />}
-        <div className="relative max-w-6xl mx-auto px-6 py-28 sm:py-36 flex flex-col items-start">
+        <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-36 flex flex-col items-start">
           <p className="text-teal-300 font-semibold tracking-[0.2em] text-xs uppercase">{hero.eyebrow || 'Tournaments'}</p>
-          <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight mt-3 leading-[1.05] max-w-3xl">{hero.headline || org.name}</h1>
+          <h1 className="text-4xl sm:text-7xl font-extrabold tracking-tight mt-3 leading-[1.05] max-w-3xl">{hero.headline || org.name}</h1>
           <p className="text-slate-200 mt-5 max-w-2xl text-lg sm:text-xl">{hero.subtext || 'Upcoming events, schedules, standings and team registration — all in one place.'}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             {registerHref && <Link href={registerHref} className="bg-teal-500 hover:bg-teal-400 text-white font-semibold px-7 py-3.5 rounded-full transition-colors shadow-lg shadow-teal-500/20">Register a team</Link>}
