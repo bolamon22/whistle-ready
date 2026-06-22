@@ -1,13 +1,17 @@
 // Shared registration-pricing model used by the public register form, the staff
 // registrations page, the setup wizard and tournament settings.
 //
-// Canonical shape: an ordered list of auto-chaining volume brackets (the last
-// has `max: null` = "and up"), plus an optional flat-rate tier (e.g. 7v7) that
-// applies to teams whose division name contains `match`.
+// Three independent, fully add/remove-able axes:
+//  - tiers:  auto-chaining volume brackets (last has max:null = "and up")
+//  - flats:  division-based flat rates — a team whose division name contains
+//            `match` pays this instead of the volume rate (e.g. 7v7, Youth, HS)
+//  - dates:  early-bird discounts — `amount`/`percent` off per team if the team
+//            registers on/before `until` (the best applicable discount applies)
 
 export type Bracket = { max: number | null; price: number }
 export type FlatTier = { label: string; match: string; price: number }
-export type RegPricing = { tiers: Bracket[]; flat: FlatTier | null }
+export type DateTier = { label: string; until: string; kind: 'amount' | 'percent'; value: number }
+export type RegPricing = { tiers: Bracket[]; flats: FlatTier[]; dates: DateTier[] }
 
 export const DEFAULT_REG_PRICING: RegPricing = {
   tiers: [
@@ -15,13 +19,31 @@ export const DEFAULT_REG_PRICING: RegPricing = {
     { max: 6, price: 1450 },
     { max: null, price: 1395 },
   ],
-  flat: { label: '7v7 teams', match: '7v7', price: 1095 },
+  flats: [{ label: '7v7 teams', match: '7v7', price: 1095 }],
+  dates: [],
 }
 
-const clone = (p: RegPricing): RegPricing => ({ tiers: p.tiers.map(t => ({ ...t })), flat: p.flat ? { ...p.flat } : null })
+const clone = (p: RegPricing): RegPricing => ({
+  tiers: p.tiers.map(t => ({ ...t })),
+  flats: p.flats.map(f => ({ ...f })),
+  dates: p.dates.map(d => ({ ...d })),
+})
 
-// Accepts the new shape, the legacy {tier1,tier1Max,...,sevenVSeven} shape, or a
-// JSON string of either, and always returns a valid RegPricing.
+function normFlat(f: any): FlatTier {
+  return { label: String(f?.label ?? 'Flat-rate teams'), match: String(f?.match ?? ''), price: Number(f?.price) || 0 }
+}
+function normDate(d: any): DateTier {
+  return {
+    label: String(d?.label ?? 'Early bird'),
+    until: String(d?.until ?? ''),
+    kind: d?.kind === 'percent' ? 'percent' : 'amount',
+    value: Number(d?.value) || 0,
+  }
+}
+
+// Accepts the current shape, the older {flat:{...}} single-flat shape, the legacy
+// {tier1,tier1Max,...,sevenVSeven} shape, or a JSON string of any — always returns
+// a valid RegPricing.
 export function parsePricing(raw: any): RegPricing {
   let o: any = raw
   if (typeof raw === 'string') { try { o = JSON.parse(raw || '{}') } catch { o = {} } }
@@ -33,10 +55,11 @@ export function parsePricing(raw: any): RegPricing {
       price: Number(t.price) || 0,
     }))
     if (!tiers.some(t => t.max === null)) tiers.push({ max: null, price: tiers[tiers.length - 1]?.price || 0 })
-    const flat = o.flat
-      ? { label: String(o.flat.label || '7v7 teams'), match: String(o.flat.match ?? '7v7'), price: Number(o.flat.price) || 0 }
-      : null
-    return { tiers, flat }
+    const flats: FlatTier[] = Array.isArray(o.flats)
+      ? o.flats.map(normFlat)
+      : (o.flat ? [normFlat(o.flat)] : [])
+    const dates: DateTier[] = Array.isArray(o.dates) ? o.dates.map(normDate) : []
+    return { tiers, flats, dates }
   }
 
   if (o.tier1 !== undefined) {
@@ -46,10 +69,10 @@ export function parsePricing(raw: any): RegPricing {
       { max: t2m, price: Number(o.tier2) || 0 },
       { max: null, price: Number(o.tier3) || 0 },
     ]
-    const flat = (o.sevenVSeven !== undefined && o.sevenVSeven !== null)
-      ? { label: '7v7 teams', match: '7v7', price: Number(o.sevenVSeven) || 0 }
-      : null
-    return { tiers, flat }
+    const flats: FlatTier[] = (o.sevenVSeven !== undefined && o.sevenVSeven !== null)
+      ? [{ label: '7v7 teams', match: '7v7', price: Number(o.sevenVSeven) || 0 }]
+      : []
+    return { tiers, flats, dates: [] }
   }
 
   return clone(DEFAULT_REG_PRICING)
@@ -64,27 +87,55 @@ function rateForCount(tiers: Bracket[], n: number): number {
   return tiers[tiers.length - 1]?.price || 0
 }
 
-const matchesFlat = (flat: FlatTier | null, division?: string): boolean =>
-  !!(flat && flat.match && division && division.toLowerCase().includes(flat.match.toLowerCase()))
+function matchedFlat(flats: FlatTier[], division?: string): FlatTier | null {
+  if (!division) return null
+  const d = division.toLowerCase()
+  return flats.find(f => f.match && d.includes(f.match.toLowerCase())) || null
+}
 
-// Total invoice for a set of teams (each with a `division` string).
-export function calcFee(teams: { division?: string }[], p: RegPricing): number {
-  const flatTeams = p.flat ? teams.filter(t => matchesFlat(p.flat, t.division)) : []
-  const regular = p.flat ? teams.filter(t => !matchesFlat(p.flat, t.division)) : teams
-  let total = flatTeams.length * (p.flat ? p.flat.price : 0)
-  total += regular.length * rateForCount(p.tiers, regular.length)
+const todayISO = () => new Date().toISOString().slice(0, 10)
+
+function dateDiscount(base: number, dates: DateTier[], asOf: string): number {
+  let best = 0
+  for (const d of dates) {
+    if (d.until && asOf <= d.until) {
+      const disc = d.kind === 'percent' ? base * (d.value / 100) : d.value
+      if (disc > best) best = disc
+    }
+  }
+  return best
+}
+
+// Total invoice for a set of teams (each with a `division` string), as of a given
+// registration date (defaults to today — used for early-bird evaluation).
+export function calcFee(teams: { division?: string }[], p: RegPricing, asOf?: string): number {
+  const when = asOf || todayISO()
+  const regularCount = teams.filter(t => !matchedFlat(p.flats, t.division)).length
+  const regRate = rateForCount(p.tiers, regularCount)
+  let total = 0
+  for (const t of teams) {
+    const f = matchedFlat(p.flats, t.division)
+    const base = f ? f.price : regRate
+    total += Math.max(0, base - dateDiscount(base, p.dates, when))
+  }
   return total
 }
 
+const fmtMoney = (n: number) => '$' + (n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
+const fmtDate = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); const dt = new Date(+y, +m - 1, +day); return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
+
 // Human-readable "view fee schedule" lines.
 export function feeScheduleLines(p: RegPricing): string[] {
-  const fmt = (n: number) => '$' + (n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
   const lines: string[] = []
   let prev = 0
   p.tiers.forEach((t) => {
-    if (t.max === null) lines.push(`${prev + 1}+ teams: ${fmt(t.price)}/team`)
-    else { lines.push(`${prev + 1}-${t.max} teams: ${fmt(t.price)}/team`); prev = t.max }
+    if (t.max === null) lines.push(`${prev + 1}+ teams: ${fmtMoney(t.price)}/team`)
+    else { lines.push(`${prev + 1}-${t.max} teams: ${fmtMoney(t.price)}/team`); prev = t.max }
   })
-  if (p.flat) lines.push(`${p.flat.label}: ${fmt(p.flat.price)}/team`)
+  p.flats.forEach(f => lines.push(`${f.label || 'Flat-rate teams'}: ${fmtMoney(f.price)}/team`))
+  p.dates.forEach(d => {
+    const off = d.kind === 'percent' ? `${d.value || 0}% off` : `${fmtMoney(d.value)} off`
+    lines.push(`${d.label || 'Early bird'}: ${off}/team if registered by ${fmtDate(d.until)}`)
+  })
   return lines
 }

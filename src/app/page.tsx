@@ -147,7 +147,7 @@ export default function HomePage() {
         const fee = parseInt(form.teamFee)
         const patch: any = {}
         if (createLogoUrl) patch.logoUrl = createLogoUrl
-        if (form.regMode === 'builtin' && fee > 0) patch.registrationPricing = JSON.stringify({ tiers: [{ max: null, price: fee }], flat: null })
+        if (form.regMode === 'builtin' && fee > 0) patch.registrationPricing = JSON.stringify({ tiers: [{ max: null, price: fee }], flats: [], dates: [] })
         if (Object.keys(patch).length) {
           try { await fetch(`/api/tournaments/${created.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }) } catch { /* non-fatal */ }
         }
