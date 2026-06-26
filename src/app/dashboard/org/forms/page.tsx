@@ -7,7 +7,7 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, FileText, ClipboardList, Save, ExternalLink, Link2, Inbox, Pencil, X, Users, ImagePlus } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
-import AiGenerateButton from '@/components/AiGenerateButton'
+import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import { DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
 
 async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
@@ -227,22 +227,7 @@ function FormsInner() {
             <p className="text-xs text-slate-500 mb-3">Shown on the confirmation screen and emailed to the club contact. Use <code className="bg-slate-100 px-1 rounded">{'{club}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{tournament}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{dates}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{location}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{org}'}</code> — these fill in automatically. The teams, fees and links are added for you.</p>
             <div className="flex justify-end mb-3"><EditBar k="reg" /></div>
             {editing.reg ? (
-              <div className="space-y-1">
-                <label className="inline-flex items-start gap-2 text-sm text-slate-600 mb-2">
-                  <input type="checkbox" className="mt-0.5 accent-teal-500" checked={rf.enabled} onChange={e => setF(v => ({ ...v, registration: { ...v.registration, enabled: e.target.checked } }))} />
-                  <span>Email a copy to the club contact</span>
-                </label>
-                <div className={labelCls}>Email subject</div>
-                <input className={inputCls} value={rf.subject} onChange={e => setF(v => ({ ...v, registration: { ...v.registration, subject: e.target.value } }))} />
-                <div className={labelCls}>Welcome message</div>
-                <MarkdownField value={rf.welcome} onChange={val => setF(v => ({ ...v, registration: { ...v.registration, welcome: val } }))} minHeight={90} />
-                <AiGenerateButton kind="reg-welcome" current={rf.welcome} onResult={t => setF(v => ({ ...v, registration: { ...v.registration, welcome: t } }))} />
-                <div className={labelCls}>What&apos;s next</div>
-                <MarkdownField value={rf.nextSteps} onChange={val => setF(v => ({ ...v, registration: { ...v.registration, nextSteps: val } }))} minHeight={90} />
-                <AiGenerateButton kind="reg-next" current={rf.nextSteps} onResult={t => setF(v => ({ ...v, registration: { ...v.registration, nextSteps: t } }))} />
-                <div className={labelCls}>Sign-off</div>
-                <MarkdownField value={rf.signoff} onChange={val => setF(v => ({ ...v, registration: { ...v.registration, signoff: val } }))} minHeight={60} />
-              </div>
+              <RegConfirmationEditor mode="org" value={rf} onChange={patch => setF(v => ({ ...v, registration: { ...v.registration, ...patch } }))} />
             ) : (
               <div className="space-y-2">
                 <div><div className={labelCls}>Welcome</div>{ro(rf.welcome)}</div>

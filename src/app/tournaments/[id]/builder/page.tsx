@@ -5,8 +5,10 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
+import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
+import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
 import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -196,9 +198,12 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [poolTb, setPoolTb] = useState<string[]>(pad6(DEFAULT_TB))
   const [divTb, setDivTb] = useState<string[]>(pad6(DEFAULT_TB))
   const [savingDefault, setSavingDefault] = useState(false)
+  const [regConf, setRegConf] = useState<Partial<RegConfirmation>>({})
+  const [orgRegDefault, setOrgRegDefault] = useState<RegConfirmation>(DEFAULT_REG_CONFIRMATION)
 
   // ─── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
+    fetch('/api/org-forms').then(r => r.ok ? r.json() : {}).then(d => setOrgRegDefault(resolveRegConfirmation(d.registration, null))).catch(() => {})
     fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(t => {
       setName(t.name); setSport(t.sport || 'Lacrosse')
       setStartDate(t.startDate || ''); setEndDate(t.endDate || '')
@@ -217,6 +222,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       } catch {}
       setOfficialsConfig({ ...DEFAULT_OFFICIALS_CONFIG, ...staffParsed.officialsConfig, rules: loadedRules })
       setPricing(parsePricing(t.registrationPricing))
+      try { const oc = JSON.parse(t.regConfirmationOverride || '{}'); if (oc && typeof oc === 'object') setRegConf(oc) } catch {}
       try {
         const d: string[] = JSON.parse(t.registrationDivisions || '[]')
         if (d.length) {
@@ -282,6 +288,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           registrationPricing: serializePricing(pricing),
           registrationDivisions: JSON.stringify(fromDivItems(divItems, customDivisions)),
           tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
+          regConfirmationOverride: JSON.stringify(regConf),
         }),
       }),
       fetch(`/api/venues/${params.id}`, {
@@ -678,6 +685,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         <p className="text-sm text-slate-500 mb-5">Per-team pricing tiers shown on the public registration form.</p>
         <RegPricingEditor value={pricing} onChange={setPricing} />
         <button type="button" onClick={() => setPricing(DEFAULT_REG_PRICING)} className="text-xs text-slate-400 hover:text-slate-600 underline mt-4 block">Reset to defaults</button>
+        <div className="mt-8 pt-6 border-t border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-800 mb-1">Confirmation letter</h3>
+          <p className="text-sm text-slate-500 mb-3">What teams see after registering and the email they receive. Leave blank to use your <a href="/dashboard/org/forms" className="text-teal-700 hover:underline">org default</a>.</p>
+          <RegConfirmationEditor mode="tournament" value={regConf} inherit={orgRegDefault} onChange={patch => setRegConf(c => ({ ...c, ...patch }))} />
+        </div>
       </div>
     )
 

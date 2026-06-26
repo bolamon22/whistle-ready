@@ -43,8 +43,9 @@ async function buildAndSendConfirmation(reg: any) {
     if (!t) return null
     const org: any = t.orgId ? await prisma.organization.findUnique({ where: { id: t.orgId } }) : null
     const orgForms = t.orgId ? await jget(`orgForms:${t.orgId}`) : {}
-    const site = await jget(`tournamentSite:${reg.tournamentId}`)
-    const cfg = resolveRegConfirmation(orgForms.registration, site.regConfirmation)
+    let override: any = null
+    try { const rr: any[] = await prisma.$queryRawUnsafe('SELECT regConfirmationOverride FROM "Tournament" WHERE id = ?', reg.tournamentId); const raw = rr?.[0]?.regConfirmationOverride; if (raw) override = JSON.parse(raw) } catch {}
+    const cfg = resolveRegConfirmation(orgForms.registration, override)
 
     const teams = (reg.teams || []).map((x: any) => ({ team: x.teamName || x.clubName || 'Team', division: x.division || '' }))
     let amount = Number(reg.invoiceAmount) || 0
