@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 
 // Shows a "SANDBOX / PREVIEW" badge on every non-production deploy so a test
 // copy is never mistaken for the live site. Auto-hides on production
-// (gameday-staff5.vercel.app or NEXT_PUBLIC_VERCEL_ENV === 'production').
+// (whistle-ready.vercel.app or NEXT_PUBLIC_VERCEL_ENV === 'production').
 export default function EnvBadge() {
   const [show, setShow] = useState(false)
   const [label, setLabel] = useState('SANDBOX PREVIEW')
@@ -13,7 +13,7 @@ export default function EnvBadge() {
     const h = window.location.hostname
     const vEnv = process.env.NEXT_PUBLIC_VERCEL_ENV
     const isLocal = h === 'localhost' || h.startsWith('127.') || h.startsWith('192.168.')
-    const isProd = vEnv === 'production' || h === 'gameday-staff5.vercel.app' || h === 'whistleready.app' || h === 'www.whistleready.app'
+    const isProd = vEnv === 'production' || h === 'whistle-ready.vercel.app' || h === 'whistleready.app' || h === 'www.whistleready.app'
     if (isProd) return
     setLabel(isLocal ? 'LOCAL DEV' : 'SANDBOX PREVIEW')
     setShow(true)
