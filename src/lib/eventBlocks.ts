@@ -70,6 +70,21 @@ export function resolveBlocks(c: any): Block[] {
     if (isBuiltin(b.type)) { if (seen.has(b.type)) return false; seen.add(b.type) }
     return true
   })
-  for (const k of BUILTIN_TYPES) if (!seen.has(k)) blocks.push({ id: k, type: k, props: {} })
+  // Append any missing built-ins at their canonical position (right after the
+  // present built-in that precedes them in SECTION_KEYS) rather than the very end,
+  // so a newly-added built-in lands next to its neighbors on existing event pages.
+  for (const k of BUILTIN_TYPES) {
+    if (seen.has(k)) continue
+    seen.add(k)
+    const ki = BUILTIN_TYPES.indexOf(k)
+    let insertAt = blocks.length, bestBi = -1
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i]
+      if (!isBuiltin(b.type)) continue
+      const bi = BUILTIN_TYPES.indexOf(b.type)
+      if (bi < ki && bi >= bestBi) { bestBi = bi; insertAt = i + 1 }
+    }
+    blocks.splice(insertAt, 0, { id: k, type: k, props: {} })
+  }
   return blocks
 }

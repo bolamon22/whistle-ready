@@ -158,9 +158,8 @@ export default function EventPageEditor() {
           <p className="text-xs text-slate-400 mt-1">Supports Markdown (## headings, **bold**, - bullets).</p>
         </Sec>
 
-        <Sec title="Fees" summary={c.feesText ? 'Set' : 'Empty'} isOpen={!!open.fees} onToggle={() => toggle('fees')}>
-          <label className={labelCls}>Fee structure</label>
-          <textarea className={`${inputCls} min-h-[120px]`} value={c.feesText} onChange={e => setC(v => ({ ...v, feesText: e.target.value }))} placeholder={'$1,495 per team for 1–3 teams\n$1,450 per team for 4–6 teams\nPayment not required at registration'} />
+        <Sec title="Tournament fees" summary="Auto from pricing" isOpen={!!open.fees} onToggle={() => toggle('fees')}>
+          <p className="text-sm text-slate-500">The fee schedule on the event page is generated automatically from your <a href={`/tournaments/${id}/builder`} className="text-teal-700 hover:text-teal-900 underline">registration pricing</a> (team rates, volume discounts, early-bird dates) — no need to retype it here. To hide it from the public page, use the Page builder above.</p>
         </Sec>
 
         <Sec title="Divisions" summary={`${regDivs.length} from setup`} isOpen={!!open.divisions} onToggle={() => toggle('divisions')}>

@@ -1,12 +1,13 @@
 // Single source of truth for the public event page's section keys, labels, and
 // default order. Used by the public event page (to render in order) and the
 // event-page editor (the drag-to-reorder / show-hide panel).
-export const SECTION_KEYS = ['overview', 'fees', 'locations', 'hotels', 'rules', 'contacts', 'sponsors'] as const
+export const SECTION_KEYS = ['overview', 'fees', 'divisions', 'locations', 'hotels', 'rules', 'contacts', 'sponsors'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
 
 export const SECTION_LABELS: Record<string, string> = {
   overview: 'Overview',
-  fees: 'Divisions',
+  fees: 'Tournament fees',
+  divisions: 'Divisions',
   locations: 'Location',
   hotels: 'Hotels',
   rules: 'Rules',

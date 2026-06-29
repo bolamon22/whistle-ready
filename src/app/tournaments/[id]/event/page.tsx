@@ -14,6 +14,7 @@ import ExpandableContent from '@/components/ExpandableContent'
 import ScheduleBlock from '@/components/ScheduleBlock'
 import StandingsBlock from '@/components/StandingsBlock'
 import { SECTION_LABELS } from '@/lib/eventSections'
+import { parsePricing, baseFee, feeScheduleLines } from '@/lib/regPricing'
 import { resolveBlocks, isBuiltin } from '@/lib/eventBlocks'
 import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
 import type { Metadata } from 'next'
@@ -70,7 +71,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 
 export default async function TournamentEventPage({ params }: { params: { id: string } }) {
   const client = db()
-  const tRes = await client.execute({ sql: 'SELECT id, name, sport, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions FROM "Tournament" WHERE id = ?', args: [params.id] })
+  const tRes = await client.execute({ sql: 'SELECT id, name, sport, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions, registrationPricing FROM "Tournament" WHERE id = ?', args: [params.id] })
   if (tRes.rows.length === 0) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-center px-6"><div><Trophy size={40} className="mx-auto text-slate-300" /><h1 className="mt-3 text-xl font-bold text-slate-800">Tournament not found</h1></div></div>
   }
@@ -98,6 +99,8 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const setupDivisions: string[] = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const manualDivisions: string[] = String(c.divisionsText || '').split('\n').map((x: string) => x.trim()).filter(Boolean)
   const divisions: string[] = setupDivisions.length ? setupDivisions : manualDivisions
+  const pricing = parsePricing(t.registrationPricing)
+  const feeLines: string[] = Number(t.teamRegEnabled) ? feeScheduleLines(pricing) : []
   const locations: any[] = Array.isArray(c.locations) ? c.locations : []
   const contacts: any[] = Array.isArray(c.contacts) ? c.contacts : []
 
@@ -108,22 +111,23 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         <ExpandableContent html={mdToHtml(c.overview)} />
       </EventSection>
     ) : null,
-    fees: (c.feesText || divisions.length > 0) ? (
-      <EventSection id="fees" title="Divisions">
-        <div className="grid sm:grid-cols-2 gap-4">
-          {c.feesText && (
-            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-              <h3 className="font-bold text-slate-900 mb-2">Tournament fees</h3>
-              <div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{c.feesText}</div>
-            </div>
-          )}
-          {divisions.length > 0 && (
-            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-              <h3 className="font-bold text-slate-900 mb-2.5">Divisions</h3>
-              <div className="flex flex-wrap gap-1.5">{divisions.map((d, i) => <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-2.5 py-1 rounded-full">{d}</span>)}</div>
-              {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
-            </div>
-          )}
+    fees: feeLines.length > 0 ? (
+      <EventSection id="fees" title="Tournament fees">
+        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 max-w-md">
+          <ul className="space-y-1.5">
+            {feeLines.map((line, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-slate-700"><DollarSign size={14} className="text-teal-600 mt-0.5 shrink-0" /><span>{line}</span></li>
+            ))}
+          </ul>
+          {registerHref && <a href={registerHref} className="text-sm font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Register a team <ExternalLink size={13} /></a>}
+        </div>
+      </EventSection>
+    ) : null,
+    divisions: divisions.length > 0 ? (
+      <EventSection id="divisions" title="Divisions">
+        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+          <div className="flex flex-wrap gap-1.5">{divisions.map((d, i) => <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-2.5 py-1 rounded-full">{d}</span>)}</div>
+          {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
         </div>
       </EventSection>
     ) : null,
@@ -256,11 +260,11 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   ].filter(Boolean) as any[]
 
   const eyebrow = ((t.sport ? String(t.sport) + ' ' : '') + 'tournament')
-  const minFee = (() => { const m = String(c.feesText || '').match(/\$\s?[\d,]+/g); if (!m) return ''; const nums = m.map((x: string) => parseInt(x.replace(/[^\d]/g, ''))).filter((n: number) => n > 0); return nums.length ? `from $${Math.min(...nums).toLocaleString()}` : '' })()
+  const minFee = (() => { if (!Number(t.teamRegEnabled)) return ''; const b = baseFee(pricing); return b > 0 ? `from $${b.toLocaleString()}` : '' })()
   const quickFacts = [
     t.startDate && { icon: <CalendarDays size={22} />, label: 'DATES', value: fmtRangeShort(t.startDate, t.endDate) },
     t.location && { icon: <MapPin size={22} />, label: 'LOCATION', value: shortLocation(t.location), href: panelIds.has('locations') ? '#locations' : undefined },
-    divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}`, href: panelIds.has('fees') ? '#fees' : undefined },
+    divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}`, href: panelIds.has('divisions') ? '#divisions' : undefined },
     minFee && { icon: <DollarSign size={22} />, label: 'TEAM FEE', value: minFee, href: registerHref || (panelIds.has('fees') ? '#fees' : undefined) },
     (c.hotelsUrl || c.hotels) && { icon: <Hotel size={22} />, label: 'HOTELS', value: 'Book hotels', href: c.hotelsUrl || (panelIds.has('hotels') ? '#hotels' : undefined) },
     { icon: <ListChecks size={22} />, label: 'SCHEDULE', value: 'View games', href: `${base}/public` },

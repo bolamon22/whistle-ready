@@ -40,7 +40,8 @@ export default async function EventChrome({ tournamentId, children }: { tourname
   const divs = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const infoItems = [
     cs.overview && { href: `${base}/event#overview`, label: 'Overview' },
-    (cs.feesText || divs.length) && { href: `${base}/event#fees`, label: 'Divisions' },
+    Number(t.teamRegEnabled) && { href: `${base}/event#fees`, label: 'Tournament fees' },
+    divs.length && { href: `${base}/event#divisions`, label: 'Divisions' },
     (Array.isArray(cs.locations) && cs.locations.length) && { href: `${base}/event#locations`, label: 'Location' },
     (cs.hotelsUrl || cs.hotels) && { href: `${base}/event#hotels`, label: 'Hotels' },
     cs.rules && { href: `${base}/rules`, label: 'Rules' },
