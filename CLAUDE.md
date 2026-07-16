@@ -7,17 +7,37 @@ standards to follow. Keep it updated as things evolve — editing this file is h
 "Current state" rather than stacking dated handoffs forever.
 
 ## The app
-GameDay Staff — tournament management for Sunshine Events Group (lacrosse and other
-sports): tournaments, divisions, pools, brackets, team & player registration, staff
-assignment, payroll, financials, public schedule/standings, and live scorekeeping.
+Whistle Ready (formerly "GameDay Staff") — tournament management for Sunshine Events Group
+(lacrosse and other sports): tournaments, divisions, pools, brackets, team & player registration,
+staff assignment, payroll, financials, public schedule/standings, and live scorekeeping.
 
 - Stack: Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS ·
-  Prisma + Turso (libSQL) · NextAuth · Stripe · hosted on Vercel.
-- Repo: github.com/bolamon22/gameday-staff5 (public). Live: gameday-staff5.vercel.app.
+  Prisma + Turso (libSQL) · NextAuth · Stripe · SendGrid (email) · hosted on Vercel.
+- Repo: github.com/bolamon22/whistle-ready (public; auto-redirects from the old
+  gameday-staff5 name). Live: **whistleready.app** (Vercel project `whistle-ready`).
+- The local folders are still named `gameday-staff5` — intentional, don't rename.
+
+### Email (SendGrid)
+ALL transactional email goes through ONE wrapper: **`src/lib/email.ts`** (`sendEmail()` /
+`emailEnabled()`). Routes must never import an email provider directly — that keeps the
+provider swappable in one file and is the seam for per-org senders + future channels.
+- Provider: **SendGrid** (`@sendgrid/mail`). Resend was fully removed Jul 16 2026.
+- Env: `SENDGRID_API_KEY`, `EMAIL_FROM` (noreply@whistleready.app), `EMAIL_FROM_NAME`.
+  `INVITE_FROM_EMAIL` is read only as a legacy fallback.
+- `sendEmail()` **never throws** — it returns `{ok, error}` and logs. Email is best-effort so a
+  failed receipt can't break a registration. **Tradeoff: a bad key fails SILENTLY** — after any
+  email change, confirm a real send in SendGrid's Activity feed, don't trust config alone.
+- 5 send sites: staff invite, org user invite, org-forms submit, registration confirmation,
+  returning-teams invite.
+- `whistleready.app` is domain-authenticated in SendGrid (3 CNAMEs at **GoDaddy**, which hosts
+  this domain's DNS; `_dmarc` already existed). The SendGrid account is SHARED with
+  Lacrossewear/lwops.com but uses a SEPARATE key ("Whistle Ready", Mail Send only) and a separate
+  authenticated domain — only the plan quota is shared.
 
 ## How we ship (workflow)
-- Local working copy: `C:\Users\lacro\Downloads\gameday-staff5` — connect this folder in Cowork.
-- Edit/verify in a sandbox copy, then copy changed files into the Downloads working copy.
+- **Working clone (use this one): `C:\Users\bo\GitHub\gameday-staff5`.** There is a second, OLD
+  clone at `C:\Users\bo\OneDrive\Documents\GitHub\gameday-staff5` — do NOT commit there. Both show
+  as "whistle-ready" in GitHub Desktop; hover to check the path before committing.
 - Verify before shipping: `npx tsc --noEmit` (grep the files you touched) and/or an
   esbuild parse; preview UI changes before deploying.
 - Deploy: commit → **push to `master` via GitHub Desktop** → Vercel auto-builds and redeploys.
@@ -235,8 +255,9 @@ scores → public. Highlights shipped to live:
     done-by/done-at for items that just flipped done; 100-item cap. Linked from the dashboard
     "Field Ops" hub as "Setup checklist".
   - **Sandbox badge** (`src/app/EnvBadge.tsx`, in `layout.tsx`): amber "SANDBOX PREVIEW" pill bottom-
-    right on previews/local; auto-hides on production (`gameday-staff5.vercel.app` or
-    `NEXT_PUBLIC_VERCEL_ENV==='production'`) so a test copy is never mistaken for live.
+    right on previews/local; auto-hides on production (`whistleready.app` / `www.` /
+    `whistle-ready.vercel.app`, or `NEXT_PUBLIC_VERCEL_ENV==='production'`) so a test copy is
+    never mistaken for live.
 
 - **Scheduler — Auto-fill (assists the drag-and-drop)**: a teal **Auto-fill** button + a pure, tested
   engine in `src/lib/autoSchedule.ts`. Places parking-lot games (after your filters) onto the grid by
@@ -260,7 +281,7 @@ scores → public. Highlights shipped to live:
 ## Open / next
 - **Forms library (in progress on `org-forms-library`)**: org Admin → Forms = reusable **templates**;
   each tournament gets a working copy. Three planned: **Player Waivers** (built — editable waiver text +
-  optional fields + confirmation + Resend email; public per-tournament form at `/tournaments/[id]/player-waiver`
+  optional fields + confirmation + email; public per-tournament form at `/tournaments/[id]/player-waiver`
   with team dropdown from that tournament's registrations + a public-page button; staff entries list at
   `/tournaments/[id]/player-waivers`), **Team Registration**, **Vendor Request**. Submissions stored in
   AppSetting `orgFormSubmissions:{orgId}` tagged with tournamentId.

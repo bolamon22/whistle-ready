@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
-import { Inbox, ChevronRight, ExternalLink, Download } from 'lucide-react'
+import { Inbox, ChevronRight, ExternalLink, Download, Trash2 } from 'lucide-react'
 
 type Sub = { id: string; submittedAt: string; data: any }
 
@@ -15,6 +15,7 @@ export default function VendorRequestEntries() {
   const [subs, setSubs] = useState<Sub[]>([])
   const [open, setOpen] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setName(d.name || 'Tournament'); setLogo(d.logoUrl || undefined) } }).catch(() => {})
@@ -23,6 +24,17 @@ export default function VendorRequestEntries() {
 
   const rows = subs.slice().reverse()
   const fmt = (s: string) => { try { return new Date(s).toLocaleString() } catch { return s } }
+
+  // Deleting is permanent, so confirm first and name the company in the prompt.
+  async function remove(s: Sub) {
+    if (!confirm(`Delete the vendor request from "${s.data?.companyName || 'this company'}"?\n\nThis can't be undone.`)) return
+    setDeleting(s.id)
+    try {
+      const res = await fetch(`/api/tournaments/${id}/vendor-requests?subId=${encodeURIComponent(s.id)}`, { method: 'DELETE' })
+      if (res.ok) { setSubs(prev => prev.filter(x => x.id !== s.id)); setOpen(null) }
+      else { const e = await res.json().catch(() => ({})); alert(e.error || 'Could not delete that request.') }
+    } catch { alert('Could not delete that request.') } finally { setDeleting(null) }
+  }
   const exportCsv = () => {
     const cols = ['companyName', 'companyContact', 'phone', 'email', 'website', 'level', 'products', 'paymentOption']
     const head = ['Submitted', ...cols].join(',')
@@ -73,6 +85,15 @@ export default function VendorRequestEntries() {
                             {Object.entries(s.data || {}).filter(([k]) => !['tournamentId', 'tournamentName', 'agree'].includes(k)).map(([k, v]) => (
                               <div key={k} className="flex justify-between gap-4 border-b border-slate-100 py-1"><span className="text-slate-400 capitalize">{k.replace(/([A-Z])/g, ' $1')}</span><span className="text-slate-700 text-right">{String(v || '—')}</span></div>
                             ))}
+                          </div>
+                          <div className="flex justify-end mt-3">
+                            <button
+                              onClick={e => { e.stopPropagation(); remove(s) }}
+                              disabled={deleting === s.id}
+                              className="text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5"
+                            >
+                              <Trash2 size={13} /> {deleting === s.id ? 'Deleting…' : 'Delete request'}
+                            </button>
                           </div>
                         </td></tr>
                       )}
