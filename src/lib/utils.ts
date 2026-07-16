@@ -121,7 +121,12 @@ export function resetDivisionColors() {
 // Always returns a PayRates-compatible object so existing routes keep working
 export function parsePayRates(raw: string): PayRates {
   try {
-    const parsed = JSON.parse(raw || '{}')
+    let parsed = JSON.parse(raw || '{}')
+    // Heal double-encoded values: an older API bug JSON.stringify'd an already-serialized
+    // string, so the column holds JSON *inside* a JSON string. One extra parse recovers it.
+    // Without this, such rows silently fall back to DEFAULT_PAY_RATES (wrong staff pay).
+    if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed) } catch { /* leave as-is */ } }
+    if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_PAY_RATES }
     if (parsed._v !== 2) return { ...DEFAULT_PAY_RATES, ...parsed }
     // v2 format — extract rates from roles array by id
     const roles: { id: string; rate: number }[] = parsed.roles || []

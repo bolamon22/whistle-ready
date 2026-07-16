@@ -22,6 +22,13 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
   try { const rr = await prisma.$queryRawUnsafe<any[]>('SELECT regConfirmationOverride FROM "Tournament" WHERE id = ?', params.id); regConfirmationOverride = (rr?.[0]?.regConfirmationOverride) || '' } catch {}
   return NextResponse.json({ ...t, tiebreakers, tagline, regConfirmationOverride })
 }
+// These columns store JSON as TEXT. Callers may send either a plain object OR an
+// already-serialized JSON string (the Setup wizard serializes some fields itself).
+// Blindly calling JSON.stringify() on a string double-encodes it — the value then
+// parses back to a STRING instead of an object, silently reverting to defaults.
+// That bug corrupted real payRates, so: only stringify what isn't already a string.
+const asJson = (v: any) => typeof v === 'string' ? v : JSON.stringify(v)
+
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const b = await req.json()
   // Fields that live in the Prisma schema.
@@ -33,10 +40,10 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.location!==undefined&&{location:b.location}),
     ...(b.scheduleIncrement!==undefined&&{scheduleIncrement:Number(b.scheduleIncrement)}),
     ...(b.logoUrl!==undefined&&{logoUrl:b.logoUrl}),
-    ...(b.dates!==undefined&&{dates:JSON.stringify(b.dates)}),
-    ...(b.payRates!==undefined&&{payRates:JSON.stringify(b.payRates)}),
-    ...(b.divisionRules!==undefined&&{divisionRules:JSON.stringify(b.divisionRules)}),
-    ...(b.tiebreakers!==undefined&&{tiebreakers:JSON.stringify(b.tiebreakers)}),
+    ...(b.dates!==undefined&&{dates:asJson(b.dates)}),
+    ...(b.payRates!==undefined&&{payRates:asJson(b.payRates)}),
+    ...(b.divisionRules!==undefined&&{divisionRules:asJson(b.divisionRules)}),
+    ...(b.tiebreakers!==undefined&&{tiebreakers:asJson(b.tiebreakers)}),
     ...(b.registrationPricing!==undefined&&{registrationPricing:b.registrationPricing}),
     ...(b.registrationDivisions!==undefined&&{registrationDivisions:b.registrationDivisions}),
   }
