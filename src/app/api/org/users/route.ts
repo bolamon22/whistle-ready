@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
-import { Resend } from 'resend'
+import { sendEmail } from '@/lib/email'
 import crypto from 'crypto'
 
 // Owner/director self-serve management of THEIR organization's users.
@@ -12,7 +12,6 @@ import crypto from 'crypto'
 // guarded ALTER and write it with the libsql client.
 
 const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
-const FROM_EMAIL = process.env.INVITE_FROM_EMAIL || 'invites@gamedaystaff.com'
 const ASSIGNABLE_ROLES = ['director', 'scheduler', 'assigner', 'coach', 'staff']
 
 function db() {
@@ -70,13 +69,11 @@ export async function POST(req: NextRequest) {
     await client.execute({ sql: `UPDATE "StaffInvite" SET orgId = ? WHERE token = ?`, args: [orgId, token] })
     const inviteUrl = `${APP_URL}/invite/${token}`
 
-    try {
-      const resend = new Resend(process.env.RESEND_API_KEY)
-      await resend.emails.send({
-        from: FROM_EMAIL, to: email, subject: `You're invited to join the team`,
-        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px"><h2 style="color:#0f172a">You've been invited to join the team</h2><p style="color:#475569">${name ? `Hi ${name}, ` : ''}click below to set up your account.</p><a href="${inviteUrl}" style="display:inline-block;background:#14b8a6;color:#fff;font-weight:600;padding:12px 28px;border-radius:10px;text-decoration:none">Accept invite →</a><p style="color:#94a3b8;font-size:13px;margin-top:24px">Link expires in 7 days.</p></div>`,
-      })
-    } catch { /* email optional — owner can copy the link */ }
+    // email optional — owner can copy the link; sendEmail never throws
+    await sendEmail({
+      to: email, subject: `You're invited to join the team`,
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px"><h2 style="color:#0f172a">You've been invited to join the team</h2><p style="color:#475569">${name ? `Hi ${name}, ` : ''}click below to set up your account.</p><a href="${inviteUrl}" style="display:inline-block;background:#14b8a6;color:#fff;font-weight:600;padding:12px 28px;border-radius:10px;text-decoration:none">Accept invite →</a><p style="color:#94a3b8;font-size:13px;margin-top:24px">Link expires in 7 days.</p></div>`,
+    })
     return NextResponse.json({ ok: true, inviteUrl })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })

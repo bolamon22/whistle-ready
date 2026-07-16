@@ -14,6 +14,7 @@
     "@libsql/client": "^0.8.0",
     "@prisma/adapter-libsql": "^5.14.0",
     "@prisma/client": "^5.14.0",
+    "@sendgrid/mail": "^8.1.3",
     "@stripe/react-stripe-js": "^6.6.0",
     "@stripe/stripe-js": "^9.7.0",
     "@types/bcryptjs": "^2.4.6",
@@ -27,7 +28,6 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1",
-    "resend": "^6.12.4",
     "stripe": "^14.25.0",
     "xlsx": "^0.18.5"
   },

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { Resend } from 'resend'
+import { sendEmail } from '@/lib/email'
 
 const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
-const FROM_EMAIL = process.env.INVITE_FROM_EMAIL || 'invites@gamedaystaff.com'
 
 function applyVars(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -58,7 +57,6 @@ Whistle Ready`
 
   const fromName = tournament.name || 'Whistle Ready'
 
-  const resend = new Resend(process.env.RESEND_API_KEY)
   let sent = 0
   const errors: string[] = []
 
@@ -82,9 +80,9 @@ Whistle Ready`
       .map(para => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">${para.replace(/\n/g, '<br/>')}</p>`)
       .join('')
 
-    try {
-      await resend.emails.send({
-        from: `${fromName} <${FROM_EMAIL}>`,
+    {
+      const res = await sendEmail({
+        fromName,
         to: club.contactEmail,
         subject,
         html: `
@@ -103,9 +101,8 @@ Whistle Ready`
           </div>
         `,
       })
-      sent++
-    } catch (e: any) {
-      errors.push(`${club.clubName}: ${e.message}`)
+      if (res.ok) sent++
+      else errors.push(`${club.clubName}: ${res.error}`)
     }
   }
 

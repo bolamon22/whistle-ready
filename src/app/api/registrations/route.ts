@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { Resend } from 'resend'
+import { sendEmail, emailEnabled } from '@/lib/email'
 import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, type RegLetterData } from '@/lib/regConfirmation'
 import { SITE_URL } from '@/lib/seo'
@@ -69,18 +69,15 @@ async function buildAndSendConfirmation(reg: any) {
     const letter = buildRegLetter(cfg, data)
 
     let emailed = false
-    if (cfg.enabled && reg.contactEmail && process.env.RESEND_API_KEY) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY)
-        await resend.emails.send({
-          from: process.env.INVITE_FROM_EMAIL || 'noreply@gamedaystaff.com',
-          to: reg.contactEmail,
-          ...(org?.contactEmail ? { replyTo: org.contactEmail } : {}),
-          subject: letter.subject,
-          html: letterToEmailHtml(letter, data),
-        } as any)
-        emailed = true
-      } catch { /* email is best-effort; never block registration */ }
+    if (cfg.enabled && reg.contactEmail && emailEnabled()) {
+      // best-effort; sendEmail never throws so registration is never blocked
+      const sent = await sendEmail({
+        to: reg.contactEmail,
+        subject: letter.subject,
+        html: letterToEmailHtml(letter, data),
+        ...(org?.contactEmail ? { replyTo: org.contactEmail } : {}),
+      })
+      emailed = sent.ok
     }
     return { letter, data, emailed }
   } catch { return null }
