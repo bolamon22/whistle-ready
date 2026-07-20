@@ -25,11 +25,15 @@ import { headers } from 'next/headers'
 // This page must re-read the DB on every request: staff edit the event content in
 // Tournament setup and expect the public page to reflect it immediately.
 //
-// `dynamic = 'force-dynamic'` alone was NOT enough — the served HTML stayed frozen at
-// its build-time content (edits to overview/hotels/contacts never appeared, and adding
-// a query string didn't bust it) even though the same query run server-side returned
-// the current data. Reading headers() opts the route out of static generation
-// unconditionally, and revalidate/fetchCache disable the data + full-route caches.
+// Jul 20 2026 — the published page served stale content: overview/hotels/contacts
+// edits were saved correctly (verified against the DB) but never appeared, while
+// tournament-derived sections (fees, divisions, location) were fine. Two things were
+// changed to fix it: these cache directives + headers(), and a full CDN/ISR cache
+// purge in Vercel. It was NOT isolated which of the two was decisive, so leave both
+// in place. If this recurs, purge the cache first before changing code.
+//
+// Verify in a real browser, not a fetch tool — an HTTP client cached the bare URL
+// during debugging and made a fixed page look broken for a long time.
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
@@ -79,7 +83,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images, type: 'website' }, twitter: { title, description, images } }
 }
 
-export default async function TournamentEventPage({ params, searchParams }: { params: { id: string }; searchParams?: { [k: string]: string | string[] | undefined } }) {
+export default async function TournamentEventPage({ params }: { params: { id: string } }) {
   // Forces this route out of static generation — see the note by `dynamic` above.
   // Do not remove: without it the published page can freeze at build-time content.
   headers()
@@ -91,22 +95,15 @@ export default async function TournamentEventPage({ params, searchParams }: { pa
   const t = tRes.rows[0] as any
 
   let c: any = {}
-  // Capture what this read actually returns. The catch here used to swallow errors
-  // silently, which hid the cause of the event content not rendering; ?debug=1 now
-  // surfaces it. Remove once the issue is closed.
-  let cDebug: any = {}
+  // Note: this catch is intentionally quiet (a missing/!unreadable row just means the
+  // event page shows its tournament-derived sections), but log it — a silent failure
+  // here previously made an event-content bug much harder to track down.
   try {
     const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${params.id}`] })
-    cDebug.rowCount = r.rows.length
     if (r.rows.length) c = JSON.parse(((r.rows[0] as any).value as string) || '{}')
   } catch (e: any) {
-    cDebug.error = e?.message || String(e)
+    console.error('[event page] failed to read tournamentSite content:', params.id, e?.message || e)
   }
-  cDebug.paramsId = params.id
-  cDebug.tId = t.id
-  cDebug.key = `tournamentSite:${params.id}`
-  cDebug.keysOnC = Object.keys(c || {})
-  cDebug.hasOverview = !!c.overview
   let sponsors: any[] = []
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
   let navPages: any[] = []; let hasGallery = false; let contact: any = {}; let socials: any = {}; let orgLogo = ''
@@ -327,11 +324,6 @@ export default async function TournamentEventPage({ params, searchParams }: { pa
   const faqLd = faqItems.length ? { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqItems.slice(0, 20).map((it: any) => ({ '@type': 'Question', name: String(it.q), acceptedAnswer: { '@type': 'Answer', text: stripMd(String(it.a)) } })) } : null
   return (
     <div className="min-h-screen bg-slate-50">
-      {searchParams?.debug === '1' && (
-        <pre className="bg-black text-green-300 text-xs p-4 overflow-auto">
-          {JSON.stringify({ ...cDebug, renderedTypes: rendered.map((x: any) => x.b.type), stacked: stackedSections.map((x: any) => x.b.type) }, null, 2)}
-        </pre>
-      )}
       <JsonLd data={[sportsEventLd, breadcrumbLd, ...(faqLd ? [faqLd] : [])]} />
       {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
       <section className="relative text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]">
