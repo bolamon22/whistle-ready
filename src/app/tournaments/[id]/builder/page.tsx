@@ -7,6 +7,7 @@ import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import StaffPayEditor from '@/components/StaffPayEditor'
+import EventContentSection, { useEventContent, type EventSectionKey } from '@/components/EventContentEditor'
 import {
   parseStaffPay, serializeStaffPay, officialsRulesToDivisionRules,
   DEFAULT_ROLES, DEFAULT_OFFICIALS_CONFIG,
@@ -15,7 +16,7 @@ import {
 import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList } from 'lucide-react'
+import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, FileText, Hotel, BookOpen, Users, Image as ImageIcon, LayoutGrid } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TimeSlot { start: string; end: string }
@@ -85,9 +86,18 @@ const SECTIONS = [
   { id: 'staffpay',     label: 'Staff pay rates',        icon: Banknote,      group: 'MONEY'  },
   { id: 'schedule',     label: 'Game Timing & Format',   icon: Clock,         group: 'PLAY'   },
   { id: 'tiebreakers',  label: 'Standings tiebreakers',  icon: ClipboardList, group: 'PLAY'   },
+  { id: 'overview',     label: 'Overview',               icon: FileText,      group: 'PUBLIC' },
+  { id: 'hotels',       label: 'Hotels & travel',        icon: Hotel,         group: 'PUBLIC' },
+  { id: 'rules',        label: 'Rules',                  icon: BookOpen,      group: 'PUBLIC' },
+  { id: 'contacts',     label: 'Contacts',               icon: Users,         group: 'PUBLIC' },
+  { id: 'hero',         label: 'Hero banner',            icon: ImageIcon,     group: 'PUBLIC' },
+  { id: 'pagebuilder',  label: 'Page builder',           icon: LayoutGrid,    group: 'PUBLIC' },
 ]
 // Sidebar render order for the group headers.
 const SECTION_GROUPS = ['BASICS', 'MONEY', 'PLAY', 'PUBLIC'] as const
+
+// Sections whose content lives in the public event-page store, not the Tournament row.
+const PUBLIC_SECTIONS: EventSectionKey[] = ['overview', 'hotels', 'rules', 'contacts', 'hero', 'pagebuilder']
 const TB_OPTS = [
   { v:'record', l:'Record' }, { v:'win_pct', l:'Winning Percentage' },
   { v:'head_to_head', l:'Head to Head' }, { v:'h2h_two', l:'Head to Head Two Teams Only' },
@@ -127,6 +137,8 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [activeSection, setActiveSection] = useState('general')
   const [saving, setSaving] = useState(false)
+  // Public event-page content (lives in AppSetting tournamentSite:{id}, saved separately)
+  const { content: eventContent, setContent: setEventContent, ruleSets, saveEventContent } = useEventContent(params.id)
   const [loading, setLoading] = useState(true)
 
   // General
@@ -251,7 +263,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   }
   async function save() {
     setSaving(true)
-    await Promise.all([
+    // Two separate stores: the Tournament row (+venues/rules) and the public
+    // event-page content (AppSetting). Report per-store so a partial failure
+    // is never announced as "Saved!".
+    const [core, eventOk] = await Promise.all([
+      Promise.all([
       fetch(`/api/tournaments/${params.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -273,8 +289,14 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ periodFormat, periodBreakMin: parseInt(periodBreak) || 0 }),
       }),
+      ]).then(rs => rs.every(r => r.ok)).catch(() => false),
+      saveEventContent().catch(() => false),
     ])
-    toast.success('Saved!')
+
+    if (core && eventOk) toast.success('Saved!')
+    else if (core && !eventOk) toast.error('Tournament settings saved, but the public event page content did NOT save. Try again.')
+    else if (!core && eventOk) toast.error('Event page content saved, but the tournament settings did NOT save. Try again.')
+    else toast.error('Save failed — nothing was saved. Check your connection and try again.')
     setSaving(false)
   }
 
@@ -329,6 +351,14 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (id === 'staffpay')     return staffRoles.length > 0
     if (id === 'schedule')     return !!(scheduleIncrement)
     if (id === 'tiebreakers')  return true
+    // Public event-page content — checked when the section has something to show.
+    if (id === 'overview')     return !!eventContent.overview.trim()
+    if (id === 'hotels')       return !!(eventContent.hotels.trim() || eventContent.hotelsUrl.trim())
+    // Rules can come from the org-wide library, so a selected source counts too.
+    if (id === 'rules')        return !!(eventContent.rules.trim() || eventContent.rulesSourceId)
+    if (id === 'contacts')     return eventContent.contacts.length > 0
+    if (id === 'hero')         return !!eventContent.heroImage
+    if (id === 'pagebuilder')  return true   // always has a default block list
     return false
   }
 
@@ -417,6 +447,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     // ── Divisions ──
     if (activeSection === 'divisions') return (
       <div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
+          <label className="label">Age &amp; eligibility chart link</label>
+          <input className="input" value={eventContent.ageChartUrl}
+            onChange={e => setEventContent(v => ({ ...v, ageChartUrl: e.target.value }))}
+            placeholder="https://…" />
+          <p className="text-xs text-slate-400 mt-1">Optional. Shown as a link under Divisions on the public event page.</p>
+        </div>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-slate-500">Check the divisions for this tournament. Click a checked division name to rename it.</p>
           <div className="flex gap-2 flex-shrink-0 ml-4">
@@ -750,6 +787,17 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           More scheduling rules (pool play, blackout times, field constraints) coming soon.
         </div>
       </div>
+    )
+
+    // ── Public event page content ──
+    if (PUBLIC_SECTIONS.includes(activeSection as EventSectionKey)) return (
+      <EventContentSection
+        section={activeSection as EventSectionKey}
+        id={params.id}
+        content={eventContent}
+        setContent={setEventContent}
+        ruleSets={ruleSets}
+      />
     )
 
     return null
