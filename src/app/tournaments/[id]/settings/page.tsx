@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { parseJsonDeep } from '@/lib/utils'
 import StaffPayEditor from '@/components/StaffPayEditor'
@@ -346,6 +347,18 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
 
         <form onSubmit={save} className="space-y-3">
 
+          {/* Signpost: public-facing content lives in the Event page editor, not here.
+              Looking for contacts/overview/hotels in Settings is a common wrong turn. */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <Info size={15} className="text-slate-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-slate-500 leading-relaxed">
+              This page configures <strong className="text-slate-700">how the tournament runs</strong>.
+              Public content teams see — contacts, overview, hotels, field maps, rules —
+              is edited on the{' '}
+              <Link href={`/tournaments/${params.id}/event-page`} className="text-teal-700 hover:text-teal-900 underline font-medium">Event page</Link>.
+            </p>
+          </div>
+
           <SectionCard title="General" description="Tournament name and basic info" icon={Trophy} open={open === 'general'} onToggle={() => toggle('general')}>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Tournament Name</label>
@@ -625,7 +638,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
             </div>
           </SectionCard>
 
-          <SectionCard title="Divisions" description="Select and name the divisions offered in this tournament" icon={Award}
+          <SectionCard title="Divisions" description="Divisions offered in this tournament · also in Setup — changes sync" icon={Award}
             open={open === 'divisions'} onToggle={() => toggle('divisions')}
             badge={`${checkedCount} active`}>
             <div className="grid grid-cols-2 gap-1.5 mb-4">
@@ -763,7 +776,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
             <p className="text-[11px] text-slate-400 mt-1.5">New tournaments will start with these tiebreakers. (The Save button above saves them to this tournament only.)</p>
           </SectionCard>
 
-          <SectionCard title="Staff Pay Rates" description="Roles, pay rates, and officials per game" icon={Banknote}
+          <SectionCard title="Staff Pay Rates" description="Roles, pay rates, and officials per game · also in Setup — changes sync" icon={Banknote}
             open={open === 'payrates'} onToggle={() => toggle('payrates')}>
             {/* Same editor as the Setup wizard — one component, so the two screens
                 can't drift into writing different shapes for the payRates column. */}
