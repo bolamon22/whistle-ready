@@ -2,22 +2,19 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { DEFAULT_PAY_RATES, PayRates, parsePayRates, parseJsonDeep } from '@/lib/utils'
+import { parseJsonDeep } from '@/lib/utils'
+import StaffPayEditor from '@/components/StaffPayEditor'
+import {
+  parseStaffPay, serializeStaffPay, officialsRulesToDivisionRules,
+  DEFAULT_ROLES, DEFAULT_OFFICIALS_CONFIG, type StaffPayConfig,
+} from '@/lib/staffPay'
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { Trophy, MapPin, DollarSign, Award, Banknote, Users, ClipboardList, ChevronUp, ChevronDown, Copy, Calendar, X, Clock, Lightbulb, Check, Info, Megaphone, Plus, type LucideIcon } from 'lucide-react'
 
-const RATE_FIELDS = [
-  { key: 'youth', label: 'Referee – Youth Cert' },
-  { key: 'hs', label: 'Referee – HS Cert' },
-  { key: 'college', label: 'Referee – College Cert' },
-  { key: 'scorekeeper', label: 'Scorekeeper' },
-  { key: 'athletic_trainer', label: 'Athletic Trainer (hourly)' },
-  { key: 'field_ops', label: 'Field Ops (hourly)' },
-  { key: 'assigner', label: 'Assigner Bonus' },
-]
-
+// RATE_FIELDS removed — the roles list now comes from @/lib/staffPay (DEFAULT_ROLES)
+// and is edited by the shared <StaffPayEditor/>, same as the Setup wizard.
 
 const INFO_ICON_OPTIONS = ['info', 'heart-pulse', 'shirt', 'square-parking', 'scroll-text', 'utensils', 'phone', 'cloud-lightning']
 
@@ -92,7 +89,7 @@ function SectionCard({ title, description, icon: Icon, open, onToggle, children,
 export default function SettingsPage({ params }: { params: { id: string } }) {
   const [name, setName] = useState('')
   const [tagline, setTagline] = useState('')
-  const [rates, setRates] = useState<PayRates>(DEFAULT_PAY_RATES)
+  const [staffPay, setStaffPay] = useState<StaffPayConfig>({ roles: [...DEFAULT_ROLES], officialsConfig: { ...DEFAULT_OFFICIALS_CONFIG } })
   const [divRules, setDivRules] = useState<Record<string, number>>({})
   const [poolTb, setPoolTb] = useState<string[]>(pad6(DEFAULT_TB))
   const [divTb, setDivTb] = useState<string[]>(pad6(DEFAULT_TB))
@@ -173,10 +170,9 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
         }
         setTournamentDates(dates)
       }
-      // Use the shared parser: it understands BOTH the flat v1 shape and the Setup
-      // wizard's v2 {roles:[...]} shape, and heals legacy double-encoded values.
-      // Parsing inline here previously showed defaults for wizard-configured rates.
-      setRates(parsePayRates(t.payRates))
+      // Shared model — understands v1, v2, and legacy double-encoded values.
+      // Parsing inline here previously showed defaults for wizard-set rates.
+      setStaffPay(parseStaffPay(t.payRates))
       setDivRules(parseJsonDeep(t.divisionRules, {}))
       try { const obj = JSON.parse(t.tiebreakers || '{}'); const pool = Array.isArray(obj)?obj:(obj.pool||[]); const division = Array.isArray(obj)?obj:(obj.division||[]); setPoolTb(pad6(pool.length?pool:DEFAULT_TB)); setDivTb(pad6(division.length?division:DEFAULT_TB)) } catch {}
       setPricing(parsePricing(t.registrationPricing))
@@ -229,7 +225,11 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
       fetch(`/api/tournaments/${params.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name, tagline, payRates: rates, divisionRules: divRules, tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
+          name, tagline,
+          // Canonical v2 string from the shared serializer (the API stores strings as-is).
+          payRates: serializeStaffPay(staffPay),
+          divisionRules: officialsRulesToDivisionRules(staffPay.officialsConfig),
+          tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
           registrationPricing: serializePricing(pricing),
           registrationDivisions: JSON.stringify(divisions),
           teamRegEnabled,
@@ -763,22 +763,11 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
             <p className="text-[11px] text-slate-400 mt-1.5">New tournaments will start with these tiebreakers. (The Save button above saves them to this tournament only.)</p>
           </SectionCard>
 
-          <SectionCard title="Staff Pay Rates" description="Default pay per game for each staff role" icon={Banknote}
+          <SectionCard title="Staff Pay Rates" description="Roles, pay rates, and officials per game" icon={Banknote}
             open={open === 'payrates'} onToggle={() => toggle('payrates')}>
-            <div className="space-y-3">
-              {RATE_FIELDS.map(f => (
-                <div key={f.key} className="flex items-center justify-between gap-4 py-1.5 border-b border-slate-100 last:border-0">
-                  <p className="text-sm font-medium text-slate-700">{f.label}</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-400 text-sm">$</span>
-                    <input type="number" min="0" step="0.01"
-                      className="border border-slate-300 rounded-lg px-3 py-1.5 w-24 text-right text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      value={rates[f.key] ?? 0}
-                      onChange={e => setRates(r => ({ ...r, [f.key]: parseFloat(e.target.value) || 0 }))} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Same editor as the Setup wizard — one component, so the two screens
+                can't drift into writing different shapes for the payRates column. */}
+            <StaffPayEditor value={staffPay} onChange={setStaffPay} />
           </SectionCard>
 
           {/* Registration Types */}
