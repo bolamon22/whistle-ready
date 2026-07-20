@@ -295,6 +295,21 @@ export default function RegisterPage() {
                 <div className="flex justify-between px-4 py-2 border-t border-slate-100"><span className="text-slate-500">Teams</span><span className="font-semibold text-slate-800">{L.numTeams}</span></div>
               </div>
               {(donePaid || L.payment) && <p className="mt-3 text-sm bg-teal-50 border border-teal-100 text-teal-800 rounded-lg px-3 py-2">{donePaid ? "Payment received — you're all set." : L.payment}</p>}
+
+              {/* Account CTA — the main next step. Shown here (not just in the email)
+                  because this is the moment the coach is actually paying attention. */}
+              {D?.claimUrl && (
+                <div className="mt-4 border border-slate-200 bg-slate-50 rounded-xl px-4 py-4">
+                  <p className="text-sm font-semibold text-slate-800">Set up your team account</p>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Manage your roster and player waivers, track your balance, and see your schedule as soon as it&apos;s posted.
+                  </p>
+                  <a href={D.claimUrl}
+                    className="inline-block mt-3 text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-5 py-2.5">
+                    Set up my account →
+                  </a>
+                </div>
+              )}
               <div className="text-slate-600 text-sm mt-4 leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(L.nextSteps) }} />
               <div className="text-slate-600 text-sm mt-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(L.signoff) }} />
               <div className="mt-5 flex flex-wrap gap-2 justify-center">

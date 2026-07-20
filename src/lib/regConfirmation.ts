@@ -54,6 +54,8 @@ export type RegLetterData = {
   paid?: boolean
   eventUrl?: string
   gameDayUrl?: string
+  /** One-time "claim your team" link — invites the coach to set up portal access. */
+  claimUrl?: string
 }
 
 function tokens(s: string, d: RegLetterData): string {
@@ -139,6 +141,14 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
   if (d.eventUrl) links.push(`<a href="${d.eventUrl}" style="color:#0f766e">Event page</a>`)
   if (d.gameDayUrl) links.push(`<a href="${d.gameDayUrl}" style="color:#0f766e">Game day</a>`)
   const linksRow = links.length ? `<p style="margin:14px 0 0;font-size:14px;color:#475569">${links.join(' &nbsp;·&nbsp; ')}</p>` : ''
+  // Account CTA — the main action we want the coach to take after registering.
+  const claim = d.claimUrl ? `
+    <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+      <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Set up your team account</p>
+      <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">Manage your roster and player waivers, track your balance, and see your schedule as soon as it's posted.</p>
+      <a href="${d.claimUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px;text-decoration:none">Set up my account →</a>
+      <p style="margin:10px 0 0;font-size:11px;color:#94a3b8">This link is unique to your registration.</p>
+    </div>` : ''
   const meta = [d.dates, d.location].filter(Boolean).join(' · ')
   return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:24px">
     <div style="border-bottom:3px solid #0f766e;padding-bottom:12px;margin-bottom:18px">
@@ -155,6 +165,7 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
       <tr><td style="padding:6px 12px;color:#64748b">Teams</td><td style="padding:6px 12px;color:#0f172a;font-weight:600;text-align:right">${letter.numTeams}</td></tr>
     </table>
     ${pay}
+    ${claim}
     ${emailMd(letter.nextSteps)}
     ${emailMd(letter.signoff)}
     ${linksRow}

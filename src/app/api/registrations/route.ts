@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, emailEnabled } from '@/lib/email'
 import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, type RegLetterData } from '@/lib/regConfirmation'
+import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { SITE_URL } from '@/lib/seo'
 
 async function ensureRegistrationColumns() {
@@ -65,6 +66,12 @@ async function buildAndSendConfirmation(reg: any) {
       paid: false,
       eventUrl: `${SITE_URL}/tournaments/${reg.tournamentId}/event`,
       gameDayUrl: `${SITE_URL}/tournaments/${reg.tournamentId}/today`,
+      // Single-use link inviting the coach to set up portal access for this club.
+      // Best-effort: if the token can't be issued we simply omit the CTA.
+      ...(await (async () => {
+        const token = await issueClaimToken(reg.id)
+        return token ? { claimUrl: claimUrl(SITE_URL, token) } : {}
+      })()),
     }
     const letter = buildRegLetter(cfg, data)
 
