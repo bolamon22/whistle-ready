@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
+import { resolveBlocks } from '@/lib/eventBlocks'
 
 // TEMPORARY read-only diagnostic.
 //
@@ -68,6 +69,28 @@ export async function GET(req: NextRequest) {
     out.prisma = row ? describe(row.value) : { rowCount: 0 }
   } catch (e: any) {
     out.prisma = { error: e?.message || String(e) }
+  }
+
+  // Replicate the public event page's exact pipeline against this row, so we can see
+  // which gate is failing at runtime instead of inferring it from the rendered HTML.
+  try {
+    const client = raw()
+    const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [key] })
+    let c: any = {}
+    if (r.rows.length) c = JSON.parse(((r.rows[0] as any).value as string) || '{}')
+    const contacts = Array.isArray(c.contacts) ? c.contacts : []
+    out.pageSimulation = {
+      typeofC: typeof c,
+      cIsArray: Array.isArray(c),
+      gate_overview: !!c.overview,
+      gate_hotels: !!(c.hotelsUrl || c.hotels),
+      gate_contacts: contacts.length > 0,
+      gate_heroImage: !!c.heroImage,
+      overviewSample: typeof c.overview === 'string' ? c.overview.slice(0, 60) : `(${typeof c.overview})`,
+      resolvedBlockTypes: resolveBlocks(c).map((b: any) => `${b.type}${b.hidden ? ':hidden' : ''}`),
+    }
+  } catch (e: any) {
+    out.pageSimulation = { error: e?.message || String(e) }
   }
 
   // Are there duplicate rows for this key? (Would make rows[0] arbitrary.)
