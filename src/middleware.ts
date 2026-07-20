@@ -78,6 +78,9 @@ export async function middleware(req: NextRequest) {
   if (/^\/tournaments\/[^/]+\/public(\/|$)/.test(pathname)) return NextResponse.next()
   // Public registration (teams/players can register without an account)
   if (/^\/tournaments\/[^/]+\/(register|player-register|player-waiver|vendor-request|work|event|rules|p|today)(\/|$)/.test(pathname)) return NextResponse.next()
+  // "Claim your team" — MUST be public: the coach following this link has no account
+  // yet (creating one is the whole point). The token in the URL is the authorization.
+  if (/^\/claim(\/|$)/.test(pathname)) return NextResponse.next()
 
   const token = await getToken({
     req,

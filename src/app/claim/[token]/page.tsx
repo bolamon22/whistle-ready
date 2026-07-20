@@ -114,7 +114,7 @@ export default function ClaimPage() {
           {[
             [<Users key="u" size={14} />,       'Manage your roster and player waivers'],
             [<CreditCard key="c" size={14} />,  'See your invoice, payments and balance'],
-            [<CalendarDays key="s" size={14} />,'View your schedule once it&apos;s posted'],
+            [<CalendarDays key="s" size={14} />,'View your schedule once it’s posted'],
             [<ClipboardList key="r" size={14} />,'Register more teams without re-typing everything'],
           ].map(([icon, label], i) => (
             <li key={i} className="flex items-center gap-2.5 text-sm text-slate-600">
