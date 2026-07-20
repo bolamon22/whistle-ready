@@ -5,7 +5,6 @@ import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, List
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventInfoNav from '@/components/EventInfoNav'
-import EventTabs from '@/components/EventTabs'
 import PublicChirp from '@/components/PublicChirp'
 import EventSection from '@/components/EventSection'
 import CountdownBlock from '@/components/CountdownBlock'
@@ -270,21 +269,13 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   ].filter(Boolean) as any[]
   const factCols = ({ 1: 'sm:grid-cols-2', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6' } as any)[quickFacts.length] || 'sm:grid-cols-4' 
 
-  // Tabbed content: fact-linked sections (reached via the facts bar) stay OUT of
-  // the tab strip to avoid duplicating the facts; everything else is a tab.
-  const FACT_LINKED = ['locations', 'fees', 'hotels']
-  const eventPanels: Record<string, JSX.Element> = {}
-  const eventPanelLabels: Record<string, string> = {}
-  rendered.forEach((x: any) => { if (!x.page && x.b.type !== 'rules' && x.el) { eventPanels[x.b.id] = x.el; eventPanelLabels[x.b.id] = navLabel(x.b) } })
-  const eventTabs = rendered
-    .filter((x: any) => (x.b.type === 'rules' || x.page) ? true : !FACT_LINKED.includes(x.b.type))
-    .map((x: any) => ({
-      id: x.b.id,
-      label: navLabel(x.b),
-      href: x.b.type === 'rules' ? `${base}/rules` : (x.page ? `${base}/p/${x.b.id}` : undefined),
-    }))
-  const firstPanelTab = eventTabs.find((t: any) => !t.href)
-  const eventDefaultId = eventPanels['overview'] ? 'overview' : (firstPanelTab ? firstPanelTab.id : (eventTabs[0] ? eventTabs[0].id : 'overview'))
+  // All in-page sections, stacked in order. Previously these were tab panels, which
+  // meant only ONE section rendered at a time — a coach had to click through to see
+  // divisions, then fees, then location, and the rest wasn't in the HTML at all (bad
+  // for search/AI crawlers). The tab strip also duplicated the Event info dropdown.
+  // Stacking shows everything on one scroll; the fact-bar cards and Event info menu
+  // now scroll to a section (#id) instead of swapping panels.
+  const stackedSections = rendered.filter((x: any) => !x.page && x.b.type !== 'rules' && x.el)
 
   const eventUrl = abs(`${base}/event`)
   const faqItems = resolveBlocks(c).filter((b: any) => b.type === 'faq').flatMap((b: any) => Array.isArray(b.props?.items) ? b.props.items : []).filter((it: any) => it && it.q && it.a)
@@ -335,7 +326,11 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         </div>
       )}
 
-      <EventTabs tabs={eventTabs} panels={eventPanels} defaultId={eventDefaultId} panelLabels={eventPanelLabels} />
+      <div className="max-w-4xl mx-auto px-6 py-10 space-y-12">
+        {stackedSections.map((x: any) => (
+          <div key={x.b.id}>{x.el}</div>
+        ))}
+      </div>
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
       <PublicChirp tournamentId={params.id} tournamentName={t.name} />
     </div>
