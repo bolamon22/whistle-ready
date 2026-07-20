@@ -61,15 +61,21 @@ function fromDivItems(items: DivisionItem[], customs: string[]): string[] {
 // model. They previously each owned a copy and drifted — wizard-set pay rates
 // were silently discarded by payroll.
 
+// Sections are grouped by theme so the sidebar stays scannable as sections are
+// consolidated here from the old separate Settings page.
+//   BASICS — what the tournament IS      MONEY  — what it costs / what you pay out
+//   PLAY   — how games run               PUBLIC — what teams and parents see
 const SECTIONS = [
-  { id: 'general',      label: 'General info',    icon: Trophy },
-  { id: 'divisions',    label: 'Divisions',       icon: Award },
-  { id: 'venues',       label: 'Venues & fields', icon: MapPin },
-  { id: 'registration', label: 'Team fees',       icon: DollarSign },
-  { id: 'staffpay',     label: 'Staff pay rates', icon: Banknote },
-  { id: 'schedule',     label: 'Game Timing & Format',  icon: Clock },
-  { id: 'tiebreakers',  label: 'Standings tiebreakers', icon: ClipboardList },
+  { id: 'general',      label: 'General info',           icon: Trophy,        group: 'BASICS' },
+  { id: 'divisions',    label: 'Divisions',              icon: Award,         group: 'BASICS' },
+  { id: 'venues',       label: 'Venues & fields',        icon: MapPin,        group: 'BASICS' },
+  { id: 'registration', label: 'Team fees',              icon: DollarSign,    group: 'MONEY'  },
+  { id: 'staffpay',     label: 'Staff pay rates',        icon: Banknote,      group: 'MONEY'  },
+  { id: 'schedule',     label: 'Game Timing & Format',   icon: Clock,         group: 'PLAY'   },
+  { id: 'tiebreakers',  label: 'Standings tiebreakers',  icon: ClipboardList, group: 'PLAY'   },
 ]
+// Sidebar render order for the group headers.
+const SECTION_GROUPS = ['BASICS', 'MONEY', 'PLAY', 'PUBLIC'] as const
 const TB_OPTS = [
   { v:'record', l:'Record' }, { v:'win_pct', l:'Winning Percentage' },
   { v:'head_to_head', l:'Head to Head' }, { v:'h2h_two', l:'Head to Head Two Teams Only' },
@@ -732,17 +738,28 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Setup</p>
             </div>
-            <nav className="p-2 space-y-0.5">
-              {SECTIONS.map(s => {
-                const done = isComplete(s.id)
-                const active = activeSection === s.id
+            <nav className="p-2">
+              {SECTION_GROUPS.map(group => {
+                const items = SECTIONS.filter(s => s.group === group)
+                if (items.length === 0) return null   // group not populated yet
                 return (
-                  <button key={s.id} onClick={() => setActiveSection(s.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${active ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50'}`}>
-                    <s.icon size={16} className="flex-shrink-0" />
-                    <span className={`flex-1 text-sm font-medium ${active ? 'text-teal-700' : ''}`}>{s.label}</span>
-                    <span className={`text-xs ${done ? 'text-emerald-500' : 'text-slate-200'}`}>{done ? <Check size={14} /> : <Circle size={14} />}</span>
-                  </button>
+                  <div key={group} className="mb-1.5 last:mb-0">
+                    <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-300">{group}</p>
+                    <div className="space-y-0.5">
+                      {items.map(s => {
+                        const done = isComplete(s.id)
+                        const active = activeSection === s.id
+                        return (
+                          <button key={s.id} onClick={() => setActiveSection(s.id)}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${active ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            <s.icon size={16} className="flex-shrink-0" />
+                            <span className={`flex-1 text-sm font-medium ${active ? 'text-teal-700' : ''}`}>{s.label}</span>
+                            <span className={`text-xs ${done ? 'text-emerald-500' : 'text-slate-200'}`}>{done ? <Check size={14} /> : <Circle size={14} />}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               })}
             </nav>
