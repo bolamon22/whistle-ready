@@ -44,7 +44,11 @@ const DEFAULT_DIVISIONS = [
 interface TimeSlot { start: string; end: string }
 interface DayAvailability { date: string; slots: TimeSlot[] }
 interface Field { id: string; name: string; availStart?: string; availEnd?: string; divRestrictions?: string[] }
-interface Venue { id: string; name: string; fields: Field[] }
+// Keep in sync with the Setup wizard's Venue. address/mapUrl/fieldMapUrl are the
+// public-facing details shown in the Location section of the event page. This editor
+// doesn't expose them (Setup does), but they MUST be carried through on save —
+// every handler here spreads (`{...x}`) so they survive.
+interface Venue { id: string; name: string; fields: Field[]; address?: string; mapUrl?: string; fieldMapUrl?: string }
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 

@@ -70,7 +70,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 
 export default async function TournamentEventPage({ params }: { params: { id: string } }) {
   const client = db()
-  const tRes = await client.execute({ sql: 'SELECT id, name, sport, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions, registrationPricing FROM "Tournament" WHERE id = ?', args: [params.id] })
+  const tRes = await client.execute({ sql: 'SELECT id, name, sport, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions, registrationPricing, venues FROM "Tournament" WHERE id = ?', args: [params.id] })
   if (tRes.rows.length === 0) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-center px-6"><div><Trophy size={40} className="mx-auto text-slate-300" /><h1 className="mt-3 text-xl font-bold text-slate-800">Tournament not found</h1></div></div>
   }
@@ -99,7 +99,20 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const divisions: string[] = setupDivisions
   const pricing = parsePricing(t.registrationPricing)
   const feeLines: string[] = Number(t.teamRegEnabled) ? feeScheduleLines(pricing) : []
-  const locations: any[] = Array.isArray(c.locations) ? c.locations : []
+  // Venues are the single source of truth for "where we play". A venue appears on the
+  // public page once it has an address (that's the opt-in). We fall back to the legacy
+  // event-page `locations` list for tournaments not migrated yet, so nothing vanishes.
+  const venueLocations: any[] = (() => {
+    try {
+      const raw = JSON.parse((t as any).venues || '[]')
+      const list = Array.isArray(raw) ? raw : (raw.venues || [])
+      return (Array.isArray(list) ? list : [])
+        .filter((v: any) => v && (v.address || v.fieldMapUrl))
+        .map((v: any) => ({ name: v.name || '', address: v.address || '', mapUrl: v.mapUrl || '', fieldMapUrl: v.fieldMapUrl || '' }))
+    } catch { return [] }
+  })()
+  const legacyLocations: any[] = (Array.isArray(c.locations) ? c.locations : []).filter((l: any) => l && (l.name || l.address))
+  const locations: any[] = venueLocations.length > 0 ? venueLocations : legacyLocations
   const contacts: any[] = Array.isArray(c.contacts) ? c.contacts : []
 
   // Built-in section content (singletons), keyed by type.

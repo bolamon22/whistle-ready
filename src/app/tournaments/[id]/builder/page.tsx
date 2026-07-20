@@ -21,7 +21,19 @@ import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, Chevro
 interface TimeSlot { start: string; end: string }
 interface DayAvailability { date: string; slots: TimeSlot[] }
 interface Field { id: string; name: string; abbr: string; availStart?: string; availEnd?: string; divRestrictions?: string[] }
-interface Venue { id: string; name: string; fields: Field[] }
+// A venue is both an operational thing (fields the scheduler assigns games to) and a
+// public thing (where parents drive to). address/mapUrl/fieldMapUrl are OPTIONAL and
+// additive — the scheduler only reads `name` and `fields`, so it is unaffected.
+// These replace the separate "Location" list that used to live on the Event page,
+// where the same venue had to be typed a second time and could drift out of sync.
+interface Venue {
+  id: string
+  name: string
+  fields: Field[]
+  address?: string
+  mapUrl?: string
+  fieldMapUrl?: string
+}
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
@@ -542,6 +554,33 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                   value={venue.name} onChange={e => updateVenueName(venue.id, e.target.value)} />
                 <button type="button" onClick={() => removeVenue(venue.id)} className="text-red-400 hover:text-red-600 text-sm"><X size={13} /></button>
               </div>
+
+              {/* Public-facing venue details. Shown in the Location section of the
+                  public event page — entered here so the venue is defined once. */}
+              <div className="px-4 py-3 bg-white border-b border-slate-100 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Shown to teams &amp; parents</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <input className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                    value={venue.address || ''}
+                    onChange={e => setVenues(vs => vs.map(v => v.id === venue.id ? { ...v, address: e.target.value } : v))}
+                    placeholder="Street address (e.g. 123 Main St, Stuart, FL)" />
+                  <input className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                    value={venue.mapUrl || ''}
+                    onChange={e => setVenues(vs => vs.map(v => v.id === venue.id ? { ...v, mapUrl: e.target.value } : v))}
+                    placeholder="Google Maps link (optional)" />
+                </div>
+                <div className="flex items-center gap-2">
+                  {venue.fieldMapUrl
+                    ? <img src={venue.fieldMapUrl} alt="" className="h-10 w-14 object-cover rounded-lg border border-slate-200" />
+                    : <div className="h-10 w-14 rounded-lg border border-dashed border-slate-200 flex items-center justify-center text-slate-300"><MapPin size={13} /></div>}
+                  <input className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                    value={venue.fieldMapUrl || ''}
+                    onChange={e => setVenues(vs => vs.map(v => v.id === venue.id ? { ...v, fieldMapUrl: e.target.value } : v))}
+                    placeholder="Field map image URL (optional)" />
+                </div>
+                <p className="text-[11px] text-slate-400">A Google map embeds automatically from the address. Leave blank to hide this venue from the public page.</p>
+              </div>
+
               <div className="divide-y divide-slate-100">
                 {venue.fields.map((field, idx) => (
                   <div key={field.id}>
