@@ -20,8 +20,19 @@ import type { Metadata } from 'next'
 import { abs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import { resolveRules } from '@/lib/rules'
+import { headers } from 'next/headers'
 
+// This page must re-read the DB on every request: staff edit the event content in
+// Tournament setup and expect the public page to reflect it immediately.
+//
+// `dynamic = 'force-dynamic'` alone was NOT enough — the served HTML stayed frozen at
+// its build-time content (edits to overview/hotels/contacts never appeared, and adding
+// a query string didn't bust it) even though the same query run server-side returned
+// the current data. Reading headers() opts the route out of static generation
+// unconditionally, and revalidate/fetchCache disable the data + full-route caches.
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 
@@ -69,6 +80,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 export default async function TournamentEventPage({ params }: { params: { id: string } }) {
+  // Forces this route out of static generation — see the note by `dynamic` above.
+  // Do not remove: without it the published page can freeze at build-time content.
+  headers()
   const client = db()
   const tRes = await client.execute({ sql: 'SELECT id, name, sport, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions, registrationPricing, venues FROM "Tournament" WHERE id = ?', args: [params.id] })
   if (tRes.rows.length === 0) {
