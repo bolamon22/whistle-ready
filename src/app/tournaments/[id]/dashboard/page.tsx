@@ -63,12 +63,22 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [teamsByDiv, setTeamsByDiv] = useState<Record<string, DivTeam[]>>({})
   const [openDiv, setOpenDiv] = useState<string | null>(null)
+  // Whether the public can register right now. Defaults to true so the badge doesn't
+  // flash "closed" while loading; the API returns the real value.
+  const [regOpen, setRegOpen] = useState(true)
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}/dashboard`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
+  }, [id])
+
+  useEffect(() => {
+    fetch(`/api/tournaments/${id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(t => { if (t) setRegOpen(t.teamRegEnabled !== false) })
+      .catch(() => {})
   }, [id])
 
   // Teams grouped by division (for the expandable Registered teams list).
@@ -123,7 +133,20 @@ export default function DashboardPage() {
 
         {/* ── At a glance ───────────────────────────────────────────────── */}
         <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">At a glance</h2>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">At a glance</h2>
+            {/* Registration status — the public-facing on/off switch, surfaced here so
+                you never have to open Settings to know whether teams can register. */}
+            <Link href={`/tournaments/${id}/settings`}
+              className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full transition-colors ${
+                regOpen
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                  : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+              }`}
+              title={regOpen ? 'Teams can register now — click to change' : 'Registration is closed — click to change'}>
+              {regOpen ? 'Registration open' : 'Registration closed'}
+            </Link>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             <Kpi label="Teams" value={reg.teams} sub={reg.clubs > 0 ? `${reg.clubs} clubs` : undefined} href={`/tournaments/${id}/registrations`} />
             <Kpi label="Games" value={games.active} sub={`${games.divisions} divisions`} href={`/tournaments/${id}/scheduler`} />

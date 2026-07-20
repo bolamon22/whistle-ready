@@ -20,7 +20,23 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
   try { const tr = await prisma.$queryRawUnsafe<any[]>('SELECT tagline FROM "Tournament" WHERE id = ?', params.id); tagline = (tr?.[0]?.tagline) || '' } catch {}
   let regConfirmationOverride = ''
   try { const rr = await prisma.$queryRawUnsafe<any[]>('SELECT regConfirmationOverride FROM "Tournament" WHERE id = ?', params.id); regConfirmationOverride = (rr?.[0]?.regConfirmationOverride) || '' } catch {}
-  return NextResponse.json({ ...t, tiebreakers, tagline, regConfirmationOverride })
+  // Registration toggles are raw columns (not in the Prisma schema), so they must be
+  // read explicitly — otherwise they come back undefined and every consumer assumes
+  // "open", which made the Settings checkbox always render checked regardless of the
+  // real value. Default to 1 (open) only when the column genuinely doesn't exist yet.
+  let teamRegEnabled = 1, individualRegEnabled = 0
+  try {
+    const rg = await prisma.$queryRawUnsafe<any[]>('SELECT teamRegEnabled, individualRegEnabled FROM "Tournament" WHERE id = ?', params.id)
+    if (rg?.[0]) {
+      if (rg[0].teamRegEnabled !== null && rg[0].teamRegEnabled !== undefined) teamRegEnabled = Number(rg[0].teamRegEnabled)
+      if (rg[0].individualRegEnabled !== null && rg[0].individualRegEnabled !== undefined) individualRegEnabled = Number(rg[0].individualRegEnabled)
+    }
+  } catch { /* columns not created yet — keep defaults */ }
+  return NextResponse.json({
+    ...t, tiebreakers, tagline, regConfirmationOverride,
+    teamRegEnabled: !!teamRegEnabled,
+    individualRegEnabled: !!individualRegEnabled,
+  })
 }
 // These columns store JSON as TEXT. Callers may send either a plain object OR an
 // already-serialized JSON string (the Setup wizard serializes some fields itself).
