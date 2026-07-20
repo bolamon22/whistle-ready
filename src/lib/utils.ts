@@ -144,3 +144,21 @@ export function parsePayRates(raw: string): PayRates {
     return { ...DEFAULT_PAY_RATES }
   }
 }
+
+/**
+ * Parse a JSON-TEXT column, tolerating legacy DOUBLE-ENCODED values.
+ *
+ * An older PATCH bug JSON.stringify'd values that were already serialized, so some
+ * rows hold JSON *inside* a JSON string. A single JSON.parse() then yields a STRING,
+ * and callers silently fall through to their empty default (e.g. officials rules
+ * vanishing, staff pay reverting). One extra parse recovers the real object.
+ */
+export function parseJsonDeep<T>(raw: any, fallback: T): T {
+  try {
+    let v = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw
+    if (typeof v === 'string') { try { v = JSON.parse(v) } catch { /* keep single-parsed */ } }
+    return (v === null || v === undefined) ? fallback : v as T
+  } catch {
+    return fallback
+  }
+}

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { DEFAULT_PAY_RATES, PayRates } from '@/lib/utils'
+import { DEFAULT_PAY_RATES, PayRates, parsePayRates, parseJsonDeep } from '@/lib/utils'
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
@@ -173,8 +173,11 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
         }
         setTournamentDates(dates)
       }
-      setRates({ ...DEFAULT_PAY_RATES, ...JSON.parse(t.payRates) })
-      setDivRules(JSON.parse(t.divisionRules || '{}'))
+      // Use the shared parser: it understands BOTH the flat v1 shape and the Setup
+      // wizard's v2 {roles:[...]} shape, and heals legacy double-encoded values.
+      // Parsing inline here previously showed defaults for wizard-configured rates.
+      setRates(parsePayRates(t.payRates))
+      setDivRules(parseJsonDeep(t.divisionRules, {}))
       try { const obj = JSON.parse(t.tiebreakers || '{}'); const pool = Array.isArray(obj)?obj:(obj.pool||[]); const division = Array.isArray(obj)?obj:(obj.division||[]); setPoolTb(pad6(pool.length?pool:DEFAULT_TB)); setDivTb(pad6(division.length?division:DEFAULT_TB)) } catch {}
       setPricing(parsePricing(t.registrationPricing))
       try { const d = JSON.parse(t.registrationDivisions || '[]'); if (d.length > 0) setDivisions(d) } catch {}

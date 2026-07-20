@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { getPayRate, parsePayRates } from '@/lib/utils'
+import { getPayRate, parsePayRates, parseJsonDeep } from '@/lib/utils'
 
 interface WorkerRow {
   id: string; name: string; certLevel: string; defaultRole: string
@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const tournament = await prisma.tournament.findUnique({ where: { id: params.id } })
   if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const payRates = parsePayRates(tournament.payRates)
-  const divRules: Record<string,number> = JSON.parse(tournament.divisionRules || '{}')
+  const divRules: Record<string,number> = parseJsonDeep(tournament.divisionRules, {})
 
   function getRefCount(game: { division: string; refCount: number; isChampionship: boolean }): number {
     const div = game.division.toLowerCase()
