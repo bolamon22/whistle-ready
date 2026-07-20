@@ -79,7 +79,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images, type: 'website' }, twitter: { title, description, images } }
 }
 
-export default async function TournamentEventPage({ params }: { params: { id: string } }) {
+export default async function TournamentEventPage({ params, searchParams }: { params: { id: string }; searchParams?: { [k: string]: string | string[] | undefined } }) {
   // Forces this route out of static generation — see the note by `dynamic` above.
   // Do not remove: without it the published page can freeze at build-time content.
   headers()
@@ -91,7 +91,22 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const t = tRes.rows[0] as any
 
   let c: any = {}
-  try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${params.id}`] }); if (r.rows.length) c = JSON.parse(((r.rows[0] as any).value as string) || '{}') } catch {}
+  // Capture what this read actually returns. The catch here used to swallow errors
+  // silently, which hid the cause of the event content not rendering; ?debug=1 now
+  // surfaces it. Remove once the issue is closed.
+  let cDebug: any = {}
+  try {
+    const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${params.id}`] })
+    cDebug.rowCount = r.rows.length
+    if (r.rows.length) c = JSON.parse(((r.rows[0] as any).value as string) || '{}')
+  } catch (e: any) {
+    cDebug.error = e?.message || String(e)
+  }
+  cDebug.paramsId = params.id
+  cDebug.tId = t.id
+  cDebug.key = `tournamentSite:${params.id}`
+  cDebug.keysOnC = Object.keys(c || {})
+  cDebug.hasOverview = !!c.overview
   let sponsors: any[] = []
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
   let navPages: any[] = []; let hasGallery = false; let contact: any = {}; let socials: any = {}; let orgLogo = ''
@@ -312,6 +327,11 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const faqLd = faqItems.length ? { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqItems.slice(0, 20).map((it: any) => ({ '@type': 'Question', name: String(it.q), acceptedAnswer: { '@type': 'Answer', text: stripMd(String(it.a)) } })) } : null
   return (
     <div className="min-h-screen bg-slate-50">
+      {searchParams?.debug === '1' && (
+        <pre className="bg-black text-green-300 text-xs p-4 overflow-auto">
+          {JSON.stringify({ ...cDebug, renderedTypes: rendered.map((x: any) => x.b.type), stacked: stackedSections.map((x: any) => x.b.type) }, null, 2)}
+        </pre>
+      )}
       <JsonLd data={[sportsEventLd, breadcrumbLd, ...(faqLd ? [faqLd] : [])]} />
       {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
       <section className="relative text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]">
