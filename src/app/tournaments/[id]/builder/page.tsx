@@ -773,7 +773,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (activeSection === 'info') return (
       <div className="space-y-4">
         <p className="text-sm text-slate-500">Public info for parents and coaches — medical, parking, lost &amp; found and so on. Shown under the Info button on the public page.</p>
-        <TournamentInfoEditor value={infoSections} onChange={setInfoSections} />
+        <TournamentInfoEditor value={infoSections} onChange={setInfoSections} tournamentId={params.id} />
       </div>
     )
 

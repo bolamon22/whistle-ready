@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useState, useMemo, useContext, createContext, Fragment } from 'react'
+import { INFO_ICONS } from '@/lib/infoIcons'
 import { useParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
 
 const LogosContext = createContext<Record<string, string>>({})
 import Link from 'next/link'
-import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Sun, Moon, MapPin, ClipboardList, Bell, Share2, X, Info, HeartPulse, Shirt, SquareParking, ScrollText, Utensils, Phone, CloudLightning, Megaphone, LogIn } from 'lucide-react'
+import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Sun, Moon, MapPin, ClipboardList, Bell, Share2, X, Info, ScrollText, Utensils, Megaphone, LogIn } from 'lucide-react'
 
-const INFO_ICONS: Record<string, any> = { 'heart-pulse': HeartPulse, 'shirt': Shirt, 'square-parking': SquareParking, 'scroll-text': ScrollText, 'utensils': Utensils, 'phone': Phone, 'cloud-lightning': CloudLightning, 'info': Info }
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
