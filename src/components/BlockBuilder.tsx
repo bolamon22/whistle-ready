@@ -48,14 +48,25 @@ function DisplayPicker({ b, updateProps }: { b: Block; updateProps: (id: string,
   )
 }
 
-function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch: any) => void }) {
+function Editor({ b, updateProps, builtinEditor }: {
+  b: Block
+  updateProps: (id: string, patch: any) => void
+  /** Content editor for a built-in block, supplied by the caller. Layout lives
+   *  here; the content itself belongs to whoever owns the event content. */
+  builtinEditor?: (b: Block) => React.ReactNode
+}) {
   const p = b.props || {}
   if (isBuiltin(b.type)) {
-    if (b.type === 'rules') return <p className="text-xs text-slate-500">Rules &amp; policies opens on its own page from the Event info menu. Edit its content in the Rules section below.</p>
+    const content = builtinEditor?.(b)
     return (
       <>
-        <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={!!p.collapsed} onChange={e => updateProps(b.id, { collapsed: e.target.checked })} className="rounded border-slate-300 text-teal-600 focus:ring-teal-400" /> Start collapsed on the event page</label>
-        <p className="text-xs text-slate-400 mt-2">This section&apos;s content is pulled from the field below.</p>
+        {content}
+        {/* Rules opens on its own page, so it has no collapsed-on-the-event-page state. */}
+        {b.type !== 'rules' && (
+          <label className={`flex items-center gap-2 text-sm text-slate-600 ${content ? 'mt-4 pt-3 border-t border-slate-100' : ''}`}>
+            <input type="checkbox" checked={!!p.collapsed} onChange={e => updateProps(b.id, { collapsed: e.target.checked })} className="rounded border-slate-300 text-teal-600 focus:ring-teal-400" /> Start collapsed on the event page
+          </label>
+        )}
       </>
     )
   }
@@ -152,7 +163,11 @@ function Editor({ b, updateProps }: { b: Block; updateProps: (id: string, patch:
   return null
 }
 
-export default function BlockBuilder({ blocks, onChange }: { blocks: Block[]; onChange: (b: Block[]) => void }) {
+export default function BlockBuilder({ blocks, onChange, builtinEditor }: {
+  blocks: Block[]
+  onChange: (b: Block[]) => void
+  builtinEditor?: (b: Block) => React.ReactNode
+}) {
   const [drag, setDrag] = useState<number | null>(null)
   const [over, setOver] = useState<number | null>(null)
   const [editId, setEditId] = useState<string | null>(null)
@@ -200,7 +215,7 @@ export default function BlockBuilder({ blocks, onChange }: { blocks: Block[]; on
                 {!builtin && <button type="button" onClick={() => remove(b.id)} className="p-1 rounded text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><Trash2 size={15} /></button>}
               </div>
             </div>
-            {expanded && <div className="px-3 pb-3 border-t border-slate-100 pt-3"><Editor b={b} updateProps={updateProps} /></div>}
+            {expanded && <div className="px-3 pb-3 border-t border-slate-100 pt-3"><Editor b={b} updateProps={updateProps} builtinEditor={builtinEditor} /></div>}
           </div>
         )
       })}

@@ -159,14 +159,34 @@ export default function EventContentSection({
 
   if (section === 'pagebuilder') return (
     <div>
-      <p className="text-sm text-slate-500 mb-3">Drag to reorder how blocks appear on the public event page, hide ones you don&apos;t need, or add custom blocks. Built-in sections pull their content from the other Public sections; custom blocks are edited right here. Empty sections never show.</p>
+      <p className="text-sm text-slate-500 mb-3">Drag to reorder how blocks appear on the public event page, hide ones you don&apos;t need, or add custom blocks. Click the pencil on any block to edit its content right here. Empty sections never show.</p>
       <div className="mb-3">
         <button type="button" onClick={generateFaqs} disabled={genFaq} className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50">
           <Sparkles size={14} /> {genFaq ? 'Generating…' : 'Generate FAQs from event details'}
         </button>
         <p className="text-[11px] text-slate-400 mt-1">Builds a Q&amp;A block from this tournament&apos;s dates, location, format, divisions, fees and registration — great for visitors and AI search. Edit or remove any after.</p>
       </div>
-      <BlockBuilder blocks={resolveBlocks(c)} onChange={(blocks) => setC(v => ({ ...v, blocks }))} />
+      <BlockBuilder
+        blocks={resolveBlocks(c)}
+        onChange={(blocks) => setC(v => ({ ...v, blocks }))}
+        builtinEditor={(b) => {
+          // Editing happens where you arrange the page: expanding a block shows its
+          // own content editor. These four reuse the same section components rather
+          // than a second copy of the markup.
+          if (b.type === 'overview' || b.type === 'hotels' || b.type === 'rules' || b.type === 'contacts') {
+            return <EventContentSection section={b.type} id={id} content={c} setContent={setC} ruleSets={ruleSets} />
+          }
+          // The rest are derived — there's nothing to type here, so say where they
+          // come from instead of showing an empty editor.
+          const source: Record<string, string> = {
+            fees: 'Pulled from Team fees in setup — the public page lists your current pricing tiers.',
+            divisions: 'Pulled from Divisions in setup.',
+            locations: 'Pulled from Venues & fields — any venue with an address appears here.',
+            sponsors: 'Pulled from your organisation’s sponsors in the website editor.',
+          }
+          return source[b.type] ? <p className="text-xs text-slate-500">{source[b.type]}</p> : null
+        }}
+      />
     </div>
   )
 
