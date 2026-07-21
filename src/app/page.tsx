@@ -203,8 +203,11 @@ export default function HomePage() {
     try {
       const fd = new FormData(); fd.append('file', file)
       const res = await fetch('/api/upload', { method:'POST', body:fd })
-      const { url } = await res.json()
-      setEditLogoUrl(url)
+      const d = await res.json().catch(() => ({} as any))
+      // The upload API can now fail rather than silently inlining a large image,
+      // so don't report success unless a URL actually came back.
+      if (!res.ok || !d.url) { toast.error(d.error || 'Logo upload failed — please try again'); return }
+      setEditLogoUrl(d.url)
       toast.success('Logo uploaded!')
     } catch { toast.error('Upload failed') }
     finally { setLogoUploading(false) }
@@ -217,8 +220,11 @@ export default function HomePage() {
     try {
       const fd = new FormData(); fd.append('file', file)
       const res = await fetch('/api/upload', { method:'POST', body:fd })
-      const { url } = await res.json()
-      setCreateLogoUrl(url)
+      const d = await res.json().catch(() => ({} as any))
+      // The upload API can now fail rather than silently inlining a large image,
+      // so don't report success unless a URL actually came back.
+      if (!res.ok || !d.url) { toast.error(d.error || 'Logo upload failed — please try again'); return }
+      setCreateLogoUrl(d.url)
       toast.success('Logo uploaded!')
     } catch { toast.error('Upload failed') }
     finally { setCreateLogoUploading(false) }

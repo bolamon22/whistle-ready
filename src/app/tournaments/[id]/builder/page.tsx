@@ -306,8 +306,14 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     setLogoUploading(true)
     const fd = new FormData(); fd.append('file', file)
     const res = await fetch('/api/upload', { method: 'POST', body: fd })
-    const { url } = await res.json()
-    setLogoUrl(url); toast.success('Logo uploaded!')
+    const d = await res.json().catch(() => ({} as any))
+    // The upload API can now fail rather than silently inlining a large image.
+    if (!res.ok || !d.url) {
+      toast.error(d.error || 'Logo upload failed — please try again')
+      setLogoUploading(false)
+      return
+    }
+    setLogoUrl(d.url); toast.success('Logo uploaded!')
     setLogoUploading(false)
   }
 
