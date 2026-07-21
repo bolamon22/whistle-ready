@@ -20,7 +20,7 @@ import {
 import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, FileText, Hotel, BookOpen, Users, Image as ImageIcon, LayoutGrid, Info, Megaphone } from 'lucide-react'
+import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, Image as ImageIcon, LayoutGrid, Info, Megaphone } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TimeSlot { start: string; end: string }
@@ -91,10 +91,6 @@ const SECTIONS = [
   { id: 'staffpay',     label: 'Staff pay rates',        icon: Banknote,      group: 'MONEY'  },
   { id: 'schedule',     label: 'Game Timing & Format',   icon: Clock,         group: 'PLAY'   },
   { id: 'tiebreakers',  label: 'Standings tiebreakers',  icon: ClipboardList, group: 'PLAY'   },
-  { id: 'overview',     label: 'Overview',               icon: FileText,      group: 'PUBLIC' },
-  { id: 'hotels',       label: 'Hotels & travel',        icon: Hotel,         group: 'PUBLIC' },
-  { id: 'rules',        label: 'Rules',                  icon: BookOpen,      group: 'PUBLIC' },
-  { id: 'contacts',     label: 'Contacts',               icon: Users,         group: 'PUBLIC' },
   { id: 'hero',         label: 'Hero banner',            icon: ImageIcon,     group: 'PUBLIC' },
   { id: 'pagebuilder',  label: 'Page builder',           icon: LayoutGrid,    group: 'PUBLIC' },
   { id: 'info',         label: 'Tournament info',        icon: Info,          group: 'PUBLIC' },
@@ -104,7 +100,10 @@ const SECTIONS = [
 const SECTION_GROUPS = ['BASICS', 'MONEY', 'PLAY', 'PUBLIC'] as const
 
 // Sections whose content lives in the public event-page store, not the Tournament row.
-const PUBLIC_SECTIONS: EventSectionKey[] = ['overview', 'hotels', 'rules', 'contacts', 'hero', 'pagebuilder']
+// Overview / hotels / rules / contacts used to be listed here too; they're now edited
+// by expanding their block in the Page builder, which is also where you arrange and
+// hide them — one place per block instead of content here and layout there.
+const PUBLIC_SECTIONS: EventSectionKey[] = ['hero', 'pagebuilder']
 const TB_OPTS = [
   { v:'record', l:'Record' }, { v:'win_pct', l:'Winning Percentage' },
   { v:'head_to_head', l:'Head to Head' }, { v:'h2h_two', l:'Head to Head Two Teams Only' },
@@ -148,7 +147,12 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   // a Suspense boundary. Ignores unknown values so a bad link just opens General info.
   useEffect(() => {
     const want = new URLSearchParams(window.location.search).get('section')
-    if (want && SECTIONS.some(x => x.id === want)) setActiveSection(want)
+    if (!want) return
+    // These four used to be their own sections; they're now edited inside the page
+    // builder, so send old links there instead of dropping them on General info.
+    const MOVED_INTO_PAGE_BUILDER = ['overview', 'hotels', 'rules', 'contacts']
+    const target = MOVED_INTO_PAGE_BUILDER.includes(want) ? 'pagebuilder' : want
+    if (SECTIONS.some(x => x.id === target)) setActiveSection(target)
   }, [])
   const [saving, setSaving] = useState(false)
   // Public event-page content (lives in AppSetting tournamentSite:{id}, saved separately)
@@ -387,11 +391,6 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (id === 'schedule')     return !!(scheduleIncrement)
     if (id === 'tiebreakers')  return true
     // Public event-page content — checked when the section has something to show.
-    if (id === 'overview')     return !!eventContent.overview.trim()
-    if (id === 'hotels')       return !!(eventContent.hotels.trim() || eventContent.hotelsUrl.trim())
-    // Rules can come from the org-wide library, so a selected source counts too.
-    if (id === 'rules')        return !!(eventContent.rules.trim() || eventContent.rulesSourceId)
-    if (id === 'contacts')     return eventContent.contacts.length > 0
     if (id === 'hero')         return !!eventContent.heroImage
     if (id === 'pagebuilder')  return true   // always has a default block list
     return false
