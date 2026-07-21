@@ -143,6 +143,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [activeSection, setActiveSection] = useState('general')
+  // Allow deep-linking to a section, e.g. the dashboard's registration badge links to
+  // ?section=regtypes. Read from location rather than useSearchParams to avoid needing
+  // a Suspense boundary. Ignores unknown values so a bad link just opens General info.
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get('section')
+    if (want && SECTIONS.some(x => x.id === want)) setActiveSection(want)
+  }, [])
   const [saving, setSaving] = useState(false)
   // Public event-page content (lives in AppSetting tournamentSite:{id}, saved separately)
   const { content: eventContent, setContent: setEventContent, ruleSets, saveEventContent } = useEventContent(params.id)

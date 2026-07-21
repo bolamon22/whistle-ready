@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
+import CopyTournamentButton from '@/components/CopyTournamentButton'
 
 interface DashData {
   tournament: {
@@ -136,8 +137,8 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">At a glance</h2>
             {/* Registration status — the public-facing on/off switch, surfaced here so
-                you never have to open Settings to know whether teams can register. */}
-            <Link href={`/tournaments/${id}/settings`}
+                you never have to dig into setup to know whether teams can register. */}
+            <Link href={`/tournaments/${id}/builder?section=regtypes`}
               className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full transition-colors ${
                 regOpen
                   ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
@@ -273,6 +274,19 @@ export default function DashboardPage() {
             </div>
           </section>
         )}
+
+        {/* ── Tournament tools ──────────────────────────────────────────
+            Copy tournament moved here when the Settings page was retired into
+            Setup — it's an action, not a setting. */}
+        <section className="pt-2 border-t border-slate-200">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-medium text-slate-700">Start next year&apos;s event from this one</p>
+              <p className="text-xs text-slate-500 mt-0.5">Copies venues, divisions, pay rates and registration setup. Games and registrations stay behind.</p>
+            </div>
+            <CopyTournamentButton tournamentId={String(id)} tournamentName={t.name} />
+          </div>
+        </section>
 
       </div>
       </div>

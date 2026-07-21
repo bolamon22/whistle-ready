@@ -82,7 +82,6 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/chirp-insights`, label: 'Chirp insights' },
     ]},
     { label: 'Financials', href: `${base}/financials` },
-    { label: 'Settings',   href: `${base}/settings` },
   ]
 
   const hrefActive = (href: string) => href === base ? pathname === base : pathname.startsWith(href)
