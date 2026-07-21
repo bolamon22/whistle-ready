@@ -77,9 +77,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const key = req.nextUrl.searchParams.get('key')
-  const apply = req.nextUrl.searchParams.get('apply') === '1'
-  if (!key) return NextResponse.json({ error: 'Pass ?key=orgSite:<orgId> (add &apply=1 to write)' }, { status: 400 })
+  // Params come from the JSON body (query strings are blocked by some browser
+  // tooling); query params still work as a fallback for manual curl-style use.
+  let body: any = {}
+  try { body = await req.json() } catch { /* no body sent */ }
+  const key = body.key || req.nextUrl.searchParams.get('key')
+  const apply = body.apply === true || req.nextUrl.searchParams.get('apply') === '1'
+  if (!key) return NextResponse.json({ error: 'POST {"key":"orgSite:<orgId>"} — add "apply":true to write' }, { status: 400 })
 
   const client = db()
   await ensureImageTable(client)
