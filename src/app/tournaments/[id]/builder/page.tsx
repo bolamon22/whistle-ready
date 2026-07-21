@@ -272,6 +272,8 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       if (d) {
         if (d.periodFormat) setPeriodFormat(d.periodFormat)
         if (d.periodBreakMin != null) setPeriodBreak(String(d.periodBreakMin))
+        if (d.gameLengthMin != null) setGameLength(String(d.gameLengthMin))
+        if (d.breakBetweenGamesMin != null) setBreakLength(String(d.breakBetweenGamesMin))
       }
     }).catch(() => {})
   }, [params.id])
@@ -313,7 +315,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       }),
       fetch(`/api/tournaments/${params.id}/rules`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ periodFormat, periodBreakMin: parseInt(periodBreak) || 0 }),
+        body: JSON.stringify({
+          periodFormat, periodBreakMin: parseInt(periodBreak) || 0,
+          gameLengthMin: parseInt(gameLength) || 50,
+          breakBetweenGamesMin: parseInt(breakLength) || 0,
+        }),
       }),
       ]).then(rs => rs.every(r => r.ok)).catch(() => false),
       // Own endpoints, but part of the same Save Changes so there's one save button.
@@ -807,12 +813,12 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           <div>
             <label className="label">Game Length (min)</label>
             <input className="input" type="number" min="10" max="120" step="5" value={gameLength} onChange={e => setGameLength(e.target.value)} />
-            <p className="text-xs text-slate-400 mt-1">Actual play time per game</p>
+            <p className="text-xs text-slate-400 mt-1">Actual play time per game — reference only for now; the scheduler spaces games by the increment above</p>
           </div>
           <div>
             <label className="label">Break Between Games (min)</label>
             <input className="input" type="number" min="0" max="60" step="5" value={breakLength} onChange={e => setBreakLength(e.target.value)} />
-            <p className="text-xs text-slate-400 mt-1">Buffer between consecutive games</p>
+            <p className="text-xs text-slate-400 mt-1">Buffer between consecutive games — reference only for now</p>
           </div>
         </div>
         <div className="border-t border-slate-200 pt-5">
