@@ -5,6 +5,8 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
+import RegistrationTypesEditor from '@/components/RegistrationTypesEditor'
+import { parseRegistrationTypes, registrationTypesPayload, DEFAULT_REGISTRATION_TYPES, type RegistrationTypes } from '@/lib/registrationTypes'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import StaffPayEditor from '@/components/StaffPayEditor'
 import EventContentSection, { useEventContent, type EventSectionKey } from '@/components/EventContentEditor'
@@ -83,6 +85,7 @@ const SECTIONS = [
   { id: 'divisions',    label: 'Divisions',              icon: Award,         group: 'BASICS' },
   { id: 'venues',       label: 'Venues & fields',        icon: MapPin,        group: 'BASICS' },
   { id: 'registration', label: 'Team fees',              icon: DollarSign,    group: 'MONEY'  },
+  { id: 'regtypes',     label: 'Registration types',     icon: ClipboardList, group: 'MONEY'  },
   { id: 'staffpay',     label: 'Staff pay rates',        icon: Banknote,      group: 'MONEY'  },
   { id: 'schedule',     label: 'Game Timing & Format',   icon: Clock,         group: 'PLAY'   },
   { id: 'tiebreakers',  label: 'Standings tiebreakers',  icon: ClipboardList, group: 'PLAY'   },
@@ -139,6 +142,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [saving, setSaving] = useState(false)
   // Public event-page content (lives in AppSetting tournamentSite:{id}, saved separately)
   const { content: eventContent, setContent: setEventContent, ruleSets, saveEventContent } = useEventContent(params.id)
+  const [regTypes, setRegTypes] = useState<RegistrationTypes>(DEFAULT_REGISTRATION_TYPES)
   const [loading, setLoading] = useState(true)
 
   // General
@@ -208,6 +212,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       } catch {}
       setOfficialsConfig({ ...DEFAULT_OFFICIALS_CONFIG, ...staffParsed.officialsConfig, rules: loadedRules })
       setPricing(parsePricing(t.registrationPricing))
+      setRegTypes(parseRegistrationTypes(t))
       try { const oc = JSON.parse(t.regConfirmationOverride || '{}'); if (oc && typeof oc === 'object') setRegConf(oc) } catch {}
       try {
         const d: string[] = JSON.parse(t.registrationDivisions || '[]')
@@ -276,6 +281,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           payRates: serializeStaffPay({ roles: staffRoles, officialsConfig }),
           divisionRules: JSON.stringify(officialsRulesToDivisionRules(officialsConfig)),
           registrationPricing: serializePricing(pricing),
+          ...registrationTypesPayload(regTypes),
           registrationDivisions: JSON.stringify(fromDivItems(divItems, customDivisions)),
           tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
           regConfirmationOverride: JSON.stringify(regConf),
@@ -354,6 +360,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (id === 'divisions')    return divItems.some(i => i.checked) || customDivisions.length > 0
     if (id === 'venues')       return venues.length > 0
     if (id === 'registration') return baseFee(pricing) > 0
+    if (id === 'regtypes')     return regTypes.teamEnabled || regTypes.individualEnabled
     if (id === 'staffpay')     return staffRoles.length > 0
     if (id === 'schedule')     return !!(scheduleIncrement)
     if (id === 'tiebreakers')  return true
@@ -738,6 +745,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     )
 
     // ── Staff & Pay ──
+    if (activeSection === 'regtypes') return (
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">Choose which registration forms this tournament offers. Turning team registration off hides the Register button on the public page.</p>
+        <RegistrationTypesEditor value={regTypes} onChange={setRegTypes} tournamentId={params.id} />
+      </div>
+    )
+
     if (activeSection === 'staffpay') return (
       <StaffPayEditor
         value={{ roles: staffRoles, officialsConfig }}

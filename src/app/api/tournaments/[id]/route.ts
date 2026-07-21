@@ -25,17 +25,40 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
   // "open", which made the Settings checkbox always render checked regardless of the
   // real value. Default to 1 (open) only when the column genuinely doesn't exist yet.
   let teamRegEnabled = 1, individualRegEnabled = 0
+  // The individual-registration details are raw columns too, and they were NOT being
+  // returned. The editor read them as undefined, fell back to empty defaults, and then
+  // wrote those defaults back on save — silently wiping configured tiers, positions,
+  // sizes and description. Read them explicitly, same as the toggles above.
+  let individualRegDescription = '', individualRegTiers = '[]'
+  let individualRegPositions = '[]', individualRegSizes = '[]'
   try {
-    const rg = await prisma.$queryRawUnsafe<any[]>('SELECT teamRegEnabled, individualRegEnabled FROM "Tournament" WHERE id = ?', params.id)
+    const rg = await prisma.$queryRawUnsafe<any[]>('SELECT teamRegEnabled, individualRegEnabled, individualRegDescription, individualRegTiers, individualRegPositions, individualRegSizes FROM "Tournament" WHERE id = ?', params.id)
     if (rg?.[0]) {
-      if (rg[0].teamRegEnabled !== null && rg[0].teamRegEnabled !== undefined) teamRegEnabled = Number(rg[0].teamRegEnabled)
-      if (rg[0].individualRegEnabled !== null && rg[0].individualRegEnabled !== undefined) individualRegEnabled = Number(rg[0].individualRegEnabled)
+      const r0 = rg[0]
+      if (r0.teamRegEnabled !== null && r0.teamRegEnabled !== undefined) teamRegEnabled = Number(r0.teamRegEnabled)
+      if (r0.individualRegEnabled !== null && r0.individualRegEnabled !== undefined) individualRegEnabled = Number(r0.individualRegEnabled)
+      if (r0.individualRegDescription) individualRegDescription = String(r0.individualRegDescription)
+      if (r0.individualRegTiers) individualRegTiers = String(r0.individualRegTiers)
+      if (r0.individualRegPositions) individualRegPositions = String(r0.individualRegPositions)
+      if (r0.individualRegSizes) individualRegSizes = String(r0.individualRegSizes)
     }
-  } catch { /* columns not created yet — keep defaults */ }
+  } catch {
+    // The detail columns may not exist on older databases, and one missing column
+    // fails the whole SELECT. Fall back to just the toggles so they don't regress to
+    // defaults (which would make a closed registration look open).
+    try {
+      const rg = await prisma.$queryRawUnsafe<any[]>('SELECT teamRegEnabled, individualRegEnabled FROM "Tournament" WHERE id = ?', params.id)
+      if (rg?.[0]) {
+        if (rg[0].teamRegEnabled !== null && rg[0].teamRegEnabled !== undefined) teamRegEnabled = Number(rg[0].teamRegEnabled)
+        if (rg[0].individualRegEnabled !== null && rg[0].individualRegEnabled !== undefined) individualRegEnabled = Number(rg[0].individualRegEnabled)
+      }
+    } catch { /* neither set of columns exists yet — keep defaults */ }
+  }
   return NextResponse.json({
     ...t, tiebreakers, tagline, regConfirmationOverride,
     teamRegEnabled: !!teamRegEnabled,
     individualRegEnabled: !!individualRegEnabled,
+    individualRegDescription, individualRegTiers, individualRegPositions, individualRegSizes,
   })
 }
 // These columns store JSON as TEXT. Callers may send either a plain object OR an

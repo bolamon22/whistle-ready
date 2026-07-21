@@ -11,8 +11,10 @@ import {
 } from '@/lib/staffPay'
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
+import RegistrationTypesEditor from '@/components/RegistrationTypesEditor'
+import { parseRegistrationTypes, registrationTypesPayload, DEFAULT_REGISTRATION_TYPES, type RegistrationTypes } from '@/lib/registrationTypes'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
-import { Trophy, MapPin, DollarSign, Award, Banknote, Users, ClipboardList, ChevronUp, ChevronDown, Copy, Calendar, X, Clock, Lightbulb, Check, Info, Megaphone, Plus, type LucideIcon } from 'lucide-react'
+import { Trophy, MapPin, DollarSign, Award, Banknote, Users, ClipboardList, ChevronUp, ChevronDown, Copy, Calendar, X, Clock, Check, Info, Megaphone, Plus, type LucideIcon } from 'lucide-react'
 
 // RATE_FIELDS removed — the roles list now comes from @/lib/staffPay (DEFAULT_ROLES)
 // and is edited by the shared <StaffPayEditor/>, same as the Setup wizard.
@@ -109,23 +111,14 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [defaultAvailability, setDefaultAvailability] = useState<DayAvailability[]>([]) 
   const [tournamentDates, setTournamentDates] = useState<string[]>([])
   const [tName, setTName] = useState('')
+  // One shared model with the Setup wizard (see @/lib/registrationTypes).
+  const [regTypes, setRegTypes] = useState<RegistrationTypes>(DEFAULT_REGISTRATION_TYPES)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingDefault, setSavingDefault] = useState(false)
   const [newKeyword, setNewKeyword] = useState('')
   const [newCount, setNewCount] = useState('1')
   // Registration types
-  const [teamRegEnabled, setTeamRegEnabled] = useState(true)
-  const [indivRegEnabled, setIndivRegEnabled] = useState(false)
-  const [indivRegDesc, setIndivRegDesc] = useState('')
-  const [indivRegTiers, setIndivRegTiers] = useState<{id:string;name:string;price:number;description:string}[]>([])
-  const [newTierName, setNewTierName] = useState('')
-  const [newTierPrice, setNewTierPrice] = useState('')
-  const [newTierDesc, setNewTierDesc] = useState('')
-  const [indivRegPositions, setIndivRegPositions] = useState<string[]>(['Attack','Midfield','Defense','Goalie','Utility/Other'])
-  const [indivRegSizes, setIndivRegSizes] = useState<string[]>(['YS','YM','YL','S','M','L','XL','XXL'])
-  const [newPosition, setNewPosition] = useState('')
-  const [newSize, setNewSize] = useState('')
   const [open, setOpen] = useState<Section>('general')
   const [infoSections, setInfoSections] = useState<{ icon: string; title: string; body: string }[]>([])
   const [savingInfo, setSavingInfo] = useState(false)
@@ -183,12 +176,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
       setPricing(parsePricing(t.registrationPricing))
       try { const d = JSON.parse(t.registrationDivisions || '[]'); if (d.length > 0) setDivisions(d) } catch {}
       try { const v = JSON.parse(t.venues || '[]'); setVenues(v) } catch {}
-      setTeamRegEnabled(t.teamRegEnabled !== false)
-    setIndivRegEnabled(Boolean(t.individualRegEnabled))
-    setIndivRegDesc(t.individualRegDescription || '')
-    try { setIndivRegTiers(JSON.parse(t.individualRegTiers || '[]')) } catch {}
-    try { const p = JSON.parse(t.individualRegPositions || '[]'); if(p.length > 0) setIndivRegPositions(p) } catch {}
-    try { const s = JSON.parse(t.individualRegSizes || '[]'); if(s.length > 0) setIndivRegSizes(s) } catch {}
+        setRegTypes(parseRegistrationTypes(t))
     setLoading(false)
     })
     fetch(`/api/venues/${params.id}`).then(r => r.json()).then(data => {
@@ -237,12 +225,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
           registrationPricing: serializePricing(pricing),
           registrationDivisions: JSON.stringify(divisions),
-          teamRegEnabled,
-          individualRegEnabled: indivRegEnabled,
-          individualRegDescription: indivRegDesc,
-          individualRegTiers: JSON.stringify(indivRegTiers),
-          individualRegPositions: JSON.stringify(indivRegPositions),
-          individualRegSizes: JSON.stringify(indivRegSizes),
+          ...registrationTypesPayload(regTypes),
         })
       }),
       fetch(`/api/venues/${params.id}`, {
@@ -789,113 +772,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
 
           {/* Registration Types */}
           <SectionCard title="Registration Types" description="Choose which registration forms to offer" icon={ClipboardList}
-            open={open === 'registration'} onToggle={() => toggle('registration')} badge={[teamRegEnabled && 'Teams', indivRegEnabled && 'Individual'].filter(Boolean).join(' + ') || undefined}>
-            <div className="space-y-5">
-              {/* Team Registration */}
-              <div className={`p-4 rounded-xl border ${teamRegEnabled ? 'border-teal-300 bg-teal-50' : 'border-slate-200'}`}>
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={teamRegEnabled} onChange={e => setTeamRegEnabled(e.target.checked)} className="accent-teal-500 w-4 h-4 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">Team Registration</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Clubs register and pay for entire teams. Use for standard team tournaments.</p>
-                    {teamRegEnabled && (
-                      <p className="text-xs text-teal-600 mt-1 font-medium">Link: /tournaments/{params.id}/register</p>
-                    )}
-                  </div>
-                </label>
-              </div>
-
-              {/* Individual Registration */}
-              <div className={`p-4 rounded-xl border ${indivRegEnabled ? 'border-teal-300 bg-teal-50' : 'border-slate-200'}`}>
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={indivRegEnabled} onChange={e => setIndivRegEnabled(e.target.checked)} className="accent-teal-500 w-4 h-4 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">Individual Player Registration</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Players register and pay individually. Great for free agents or hybrid tournaments.</p>
-                    {indivRegEnabled && (
-                      <p className="text-xs text-teal-600 mt-1 font-medium">Link: /tournaments/{params.id}/individual-register</p>
-                    )}
-                  </div>
-                </label>
-              </div>
-
-              <div className="flex items-start gap-1.5 bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 text-xs text-teal-700">
-                <Lightbulb size={14} className="flex-shrink-0 mt-0.5" /> You can enable both — teams register their players and free agents register individually.
-              </div>
-
-            {indivRegEnabled && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Registration Description</label>
-                    <textarea className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" rows={3}
-                      value={indivRegDesc} onChange={e => setIndivRegDesc(e.target.value)}
-                      placeholder="Describe what's included (e.g. uniforms, housing, tourney fees...)" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Fee Tiers</label>
-                    <div className="space-y-2 mb-3">
-                      {indivRegTiers.map((tier, i) => (
-                        <div key={tier.id} className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-2.5">
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-slate-800">{tier.name}</span>
-                            {tier.description && <span className="text-xs text-slate-500 ml-2">{tier.description}</span>}
-                          </div>
-                          <span className="text-sm font-bold text-teal-700">${tier.price.toFixed(2)}</span>
-                          <button type="button" onClick={() => setIndivRegTiers(t => t.filter((_, j) => j !== i))}
-                            className="text-red-400 hover:text-red-600 text-xs">Remove</button>
-                        </div>
-                      ))}
-                      {indivRegTiers.length === 0 && <p className="text-xs text-slate-400">No tiers yet. Add one below.</p>}
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      <input className="border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Tier name" value={newTierName} onChange={e => setNewTierName(e.target.value)} />
-                      <input className="border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Price (e.g. 400)" type="number" value={newTierPrice} onChange={e => setNewTierPrice(e.target.value)} />
-                      <input className="border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Description (optional)" value={newTierDesc} onChange={e => setNewTierDesc(e.target.value)} />
-                    </div>
-                    <button type="button" onClick={() => {
-                      if (!newTierName.trim() || !newTierPrice) return
-                      setIndivRegTiers(t => [...t, { id: Date.now().toString(), name: newTierName.trim(), price: parseFloat(newTierPrice), description: newTierDesc.trim() }])
-                      setNewTierName(''); setNewTierPrice(''); setNewTierDesc('')
-                    }} className="mt-2 text-sm text-teal-600 hover:text-teal-700 font-medium">+ Add Tier</button>
-                  </div>
-                  <div className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 text-xs text-teal-700">
-                    Share this link with players: <strong>{typeof window !== 'undefined' ? window.location.origin : ''}/tournaments/{params.id}/individual-register</strong>
-                  </div>
-                  {/* Positions */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Positions</label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {indivRegPositions.map((pos, i) => (
-                        <span key={i} className="flex items-center gap-1 bg-slate-100 rounded-lg px-3 py-1 text-sm text-slate-700">
-                          {pos}
-                          <button type="button" onClick={() => setIndivRegPositions(p => p.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500 text-xs ml-1"><X size={13} /></button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <input className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Attack" value={newPosition} onChange={e => setNewPosition(e.target.value)} onKeyDown={e => { if(e.key==='Enter'){e.preventDefault(); if(newPosition.trim()){setIndivRegPositions(p=>[...p,newPosition.trim()]);setNewPosition('')}} }} />
-                      <button type="button" onClick={() => { if(newPosition.trim()){setIndivRegPositions(p=>[...p,newPosition.trim()]);setNewPosition('')} }} className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium">+ Add</button>
-                    </div>
-                  </div>
-                  {/* Sizes */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Jersey / Shorts Sizes</label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {indivRegSizes.map((sz, i) => (
-                        <span key={i} className="flex items-center gap-1 bg-slate-100 rounded-lg px-3 py-1 text-sm text-slate-700">
-                          {sz}
-                          <button type="button" onClick={() => setIndivRegSizes(s => s.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500 text-xs ml-1"><X size={13} /></button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <input className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. XL" value={newSize} onChange={e => setNewSize(e.target.value)} onKeyDown={e => { if(e.key==='Enter'){e.preventDefault(); if(newSize.trim()){setIndivRegSizes(s=>[...s,newSize.trim()]);setNewSize('')}} }} />
-                      <button type="button" onClick={() => { if(newSize.trim()){setIndivRegSizes(s=>[...s,newSize.trim()]);setNewSize('')} }} className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium">+ Add</button>
-                    </div>
-                  </div>
-                </>
-            )}
-            </div>
+            open={open === 'registration'} onToggle={() => toggle('registration')} badge={[regTypes.teamEnabled && 'Teams', regTypes.individualEnabled && 'Individual'].filter(Boolean).join(' + ') || undefined}>
+            <RegistrationTypesEditor value={regTypes} onChange={setRegTypes} tournamentId={params.id} />
           </SectionCard>
 
         </form>
