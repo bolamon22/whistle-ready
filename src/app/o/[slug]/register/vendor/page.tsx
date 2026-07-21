@@ -3,7 +3,13 @@ import { Trophy } from 'lucide-react'
 import { mdToHtml } from '../../_md'
 import VendorForm from './VendorForm'
 
+// Reads below go to Turso via @libsql/client, which uses fetch() under the hood.
+// Next caches fetch responses in its Data Cache, and `force-dynamic` does NOT
+// disable that — the page re-renders per request but replays a stale DB result.
+// These two lines are what actually keep published pages current.
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 const D_DISCLAIMER = "Vendors are not allowed to sell tournament merchandise unless receiving prior approval from the organizer. Items not pre-approved on this application must be removed from the booth or may result in denied future access. Products that do not fit the mission of the event or are deemed not family-friendly will not be allowed to be sold."

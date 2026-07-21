@@ -3,7 +3,13 @@ import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import PlayerRegForm from '@/app/o/[slug]/register/player/PlayerRegForm'
 
+// Reads below go to Turso via @libsql/client, which uses fetch() under the hood.
+// Next caches fetch responses in its Data Cache, and `force-dynamic` does NOT
+// disable that — the page re-renders per request but replays a stale DB result.
+// These two lines are what actually keep published pages current.
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })

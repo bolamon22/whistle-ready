@@ -5,7 +5,13 @@ import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import { mdToHtml } from '../_md'
 import WorkForm from '@/components/WorkForm'
 
+// Reads below go to Turso via @libsql/client, which uses fetch() under the hood.
+// Next caches fetch responses in its Data Cache, and `force-dynamic` does NOT
+// disable that — the page re-renders per request but replays a stale DB result.
+// These two lines are what actually keep published pages current.
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 import type { Metadata } from 'next'
 import { abs, clip, stripMd } from '@/lib/seo'
 
