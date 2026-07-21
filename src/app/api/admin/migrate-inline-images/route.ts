@@ -88,6 +88,47 @@ export async function POST(req: NextRequest) {
   const client = db()
   await ensureImageTable(client)
 
+  // Table mode: convert a column that holds image data URIs across every row
+  // (e.g. Tournament.logoUrl, where a single logo reached 1.5 MB and shipped with
+  // every tournament list response). Only the two columns we know about are
+  // allowed — this interpolates identifiers into SQL, so it must not take
+  // arbitrary caller input.
+  const ALLOWED: Record<string, string[]> = { Tournament: ['logoUrl'], Organization: ['logoUrl'] }
+  if (key === 'table') {
+    const table = String(body.table || '')
+    const column = String(body.column || '')
+    if (!ALLOWED[table]?.includes(column)) {
+      return NextResponse.json({ error: `Not allowed. Supported: ${JSON.stringify(ALLOWED)}` }, { status: 400 })
+    }
+    const rows = await client.execute(`SELECT id, "${column}" AS val FROM "${table}"`)
+    const report: any[] = []
+    let movedBytes = 0
+    for (const row of rows.rows as any[]) {
+      const val = row.val
+      if (typeof val !== 'string') continue
+      const m = val.match(DATA_URI)
+      if (!m) continue
+      const bytes = Buffer.from(m[2], 'base64')
+      movedBytes += bytes.length
+      const entry: any = { id: String(row.id), kb: Math.round(bytes.length / 1024), mime: m[1] }
+      if (apply) {
+        const id = globalThis.crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2))
+        await client.execute({ sql: 'INSERT INTO "UploadedImage" ("id","mime","data") VALUES (?,?,?)', args: [id, m[1], new Uint8Array(bytes)] })
+        await client.execute({ sql: `UPDATE "${table}" SET "${column}" = ? WHERE id = ?`, args: [`/api/img/${id}`, row.id] })
+        entry.newUrl = `/api/img/${id}`
+      }
+      report.push(entry)
+    }
+    return NextResponse.json({
+      target: `${table}.${column}`,
+      mode: apply ? 'APPLIED' : 'DRY RUN (add "apply":true to write)',
+      rowsScanned: rows.rows.length,
+      inlineFound: report.length,
+      inlineMB: +(movedBytes / 1048576).toFixed(2),
+      rows: report,
+    })
+  }
+
   const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [key] })
   if (!r.rows.length) return NextResponse.json({ error: `No AppSetting row for ${key}` }, { status: 404 })
 
