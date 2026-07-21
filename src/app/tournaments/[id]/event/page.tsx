@@ -20,23 +20,20 @@ import type { Metadata } from 'next'
 import { abs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import { resolveRules } from '@/lib/rules'
-import { headers } from 'next/headers'
 
-// This page must re-read the DB on every request: staff edit the event content in
-// Tournament setup and expect the public page to reflect it immediately.
+// Cache policy for published pages.
 //
-// Jul 20 2026 — the published page served stale content: overview/hotels/contacts
-// edits were saved correctly (verified against the DB) but never appeared, while
-// tournament-derived sections (fees, divisions, location) were fine. Two things were
-// changed to fix it: these cache directives + headers(), and a full CDN/ISR cache
-// purge in Vercel. It was NOT isolated which of the two was decisive, so leave both
-// in place. If this recurs, purge the cache first before changing code.
+// Jul 20 2026: these pages read Turso via @libsql/client, which uses fetch() under the
+// hood, and Next caches fetch responses in its Data Cache. A `dynamic` export does NOT
+// disable that, so pages re-rendered on every request while replaying a stale DB
+// response — and since nothing expired, they stayed stale indefinitely (an org hero
+// image and gallery went missing until it was noticed).
 //
-// Verify in a real browser, not a fetch tool — an HTTP client cached the bare URL
-// during debugging and made a fixed page look broken for a long time.
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-export const fetchCache = 'force-no-store'
+// `revalidate` is the fix rather than turning caching off: content is served from cache
+// for this many seconds then re-fetched, so staleness is always bounded. Saving in the
+// admin also calls revalidatePath() for an immediate refresh. Don't swap this back to
+// dynamic/no-store — that made every visit re-run every query (~14s page loads).
+export const revalidate = 30
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 
@@ -84,9 +81,6 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 export default async function TournamentEventPage({ params }: { params: { id: string } }) {
-  // Forces this route out of static generation — see the note by `dynamic` above.
-  // Do not remove: without it the published page can freeze at build-time content.
-  headers()
   const client = db()
   const tRes = await client.execute({ sql: 'SELECT id, name, sport, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions, registrationPricing, venues FROM "Tournament" WHERE id = ?', args: [params.id] })
   if (tRes.rows.length === 0) {

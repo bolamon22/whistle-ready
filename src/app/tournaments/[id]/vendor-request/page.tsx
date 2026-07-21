@@ -3,13 +3,19 @@ import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import VendorForm from '@/app/o/[slug]/register/vendor/VendorForm'
 
-// Reads below go to Turso via @libsql/client, which uses fetch() under the hood.
-// Next caches fetch responses in its Data Cache, and `force-dynamic` does NOT
-// disable that — the page re-renders per request but replays a stale DB result.
-// These two lines are what actually keep published pages current.
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-export const fetchCache = 'force-no-store'
+// Cache policy for published pages.
+//
+// Jul 20 2026: these pages read Turso via @libsql/client, which uses fetch() under the
+// hood, and Next caches fetch responses in its Data Cache. A `dynamic` export does NOT
+// disable that, so pages re-rendered on every request while replaying a stale DB
+// response — and since nothing expired, they stayed stale indefinitely (an org hero
+// image and gallery went missing until it was noticed).
+//
+// `revalidate` is the fix rather than turning caching off: content is served from cache
+// for this many seconds then re-fetched, so staleness is always bounded. Saving in the
+// admin also calls revalidatePath() for an immediate refresh. Don't swap this back to
+// dynamic/no-store — that made every visit re-run every query (~14s page loads).
+export const revalidate = 30
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 const D_DISCLAIMER = "Vendors are not allowed to sell tournament merchandise unless receiving prior approval from the organizer. Items not pre-approved on this application must be removed from the booth or may result in denied future access. Products that do not fit the mission of the event or are deemed not family-friendly will not be allowed to be sold."

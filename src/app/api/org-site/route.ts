@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { revalidatePath } from 'next/cache'
 
 async function ensureTable() {
   try {
@@ -46,6 +47,15 @@ export async function POST(req: NextRequest) {
       update: { value },
       create: { key: `orgSite:${orgId}`, value },
     })
+    // Refresh this org's cached public pages so edits show up right away.
+    try {
+      const orgRow = await prisma.organization.findUnique({ where: { id: orgId }, select: { slug: true } })
+      if (orgRow?.slug) {
+        for (const p of [`/o/${orgRow.slug}`, `/o/${orgRow.slug}/gallery`, `/o/${orgRow.slug}/results`]) {
+          try { revalidatePath(p) } catch { /* best-effort */ }
+        }
+      }
+    } catch { /* best-effort */ }
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to save' }, { status: 500 })

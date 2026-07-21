@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { revalidatePath } from 'next/cache'
 
 async function ensureTable() {
   try {
@@ -32,6 +33,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       update: { value },
       create: { key: key(params.id), value },
     })
+    // Published pages are cached briefly (see `revalidate` on those pages); refresh
+    // them now so staff see their edit immediately instead of waiting for expiry.
+    for (const p of [`/tournaments/${params.id}/event`, `/tournaments/${params.id}/rules`]) {
+      try { revalidatePath(p) } catch { /* cache refresh is best-effort */ }
+    }
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to save' }, { status: 500 })
