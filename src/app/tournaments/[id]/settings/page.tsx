@@ -12,22 +12,16 @@ import {
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
 import RegistrationTypesEditor from '@/components/RegistrationTypesEditor'
+import TournamentInfoEditor, { loadInfoSections, saveInfoSections, type InfoSection } from '@/components/TournamentInfoEditor'
+import BroadcastRolesEditor, { loadBroadcastRoles, saveBroadcastRoles as persistBroadcastRoles } from '@/components/BroadcastRolesEditor'
 import { parseRegistrationTypes, registrationTypesPayload, DEFAULT_REGISTRATION_TYPES, type RegistrationTypes } from '@/lib/registrationTypes'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
-import { Trophy, MapPin, DollarSign, Award, Banknote, Users, ClipboardList, ChevronUp, ChevronDown, Copy, Calendar, X, Clock, Check, Info, Megaphone, Plus, type LucideIcon } from 'lucide-react'
+import { Trophy, MapPin, DollarSign, Award, Banknote, ClipboardList, ChevronUp, ChevronDown, Copy, Calendar, X, Clock, Check, Info, Megaphone, type LucideIcon } from 'lucide-react'
 
 // RATE_FIELDS removed — the roles list now comes from @/lib/staffPay (DEFAULT_ROLES)
 // and is edited by the shared <StaffPayEditor/>, same as the Setup wizard.
 
-const INFO_ICON_OPTIONS = ['info', 'heart-pulse', 'shirt', 'square-parking', 'scroll-text', 'utensils', 'phone', 'cloud-lightning']
 
-const BROADCAST_ROLE_OPTIONS = [
-  { key: 'scheduler', label: 'Schedulers' },
-  { key: 'assigner', label: 'Assigners' },
-  { key: 'staff', label: 'Staff (field ops, medical, etc.)' },
-  { key: 'scorekeeper', label: 'Scorekeepers' },
-  { key: 'ref', label: 'Referees' },
-]
 
 const DEFAULT_DIVISIONS = [
   'Boys U8',
@@ -120,7 +114,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const [newCount, setNewCount] = useState('1')
   // Registration types
   const [open, setOpen] = useState<Section>('general')
-  const [infoSections, setInfoSections] = useState<{ icon: string; title: string; body: string }[]>([])
+  const [infoSections, setInfoSections] = useState<InfoSection[]>([])
   const [savingInfo, setSavingInfo] = useState(false)
   const [broadcastRoles, setBroadcastRoles] = useState<string[]>(['assigner'])
   const [savingBroadcastRoles, setSavingBroadcastRoles] = useState(false)
@@ -186,30 +180,22 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
         if (data.defaultAvailability) setDefaultAvailability(data.defaultAvailability)
       }
     }).catch(() => {})
-    fetch(`/api/tournaments/${params.id}/info`).then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.sections)) setInfoSections(d.sections) }).catch(() => {})
-    fetch(`/api/tournaments/${params.id}/broadcast-roles`).then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.roles)) setBroadcastRoles(d.roles.filter((r: string) => r !== 'director')) }).catch(() => {})
+    loadInfoSections(params.id).then(setInfoSections)
+    loadBroadcastRoles(params.id).then(setBroadcastRoles)
   }, [params.id])
 
   async function saveInfo() {
     setSavingInfo(true)
-    try {
-      const res = await fetch(`/api/tournaments/${params.id}/info`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections: infoSections.filter(s => s.title || s.body) }),
-      })
-      if (res.ok) toast.success('Tournament info saved!'); else toast.error('Failed to save info')
-    } catch { toast.error('Failed to save info') } finally { setSavingInfo(false) }
+    const ok = await saveInfoSections(params.id, infoSections)
+    ok ? toast.success('Tournament info saved!') : toast.error('Failed to save info')
+    setSavingInfo(false)
   }
 
   async function saveBroadcastRoles() {
     setSavingBroadcastRoles(true)
-    try {
-      const res = await fetch(`/api/tournaments/${params.id}/broadcast-roles`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roles: broadcastRoles }),
-      })
-      if (res.ok) toast.success('Broadcast permissions saved!'); else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Failed to save') }
-    } catch { toast.error('Failed to save') } finally { setSavingBroadcastRoles(false) }
+    const ok = await persistBroadcastRoles(params.id, broadcastRoles)
+    ok ? toast.success('Broadcast permissions saved!') : toast.error('Failed to save')
+    setSavingBroadcastRoles(false)
   }
 
   async function save(e: React.FormEvent) {
@@ -681,57 +667,16 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
 
           <SectionCard title="Tournament Info" description="Public info for parents & coaches (medical, parking, lost & found, etc.) — shown under the Info button on the public page" icon={Info}
             open={open === 'info'} onToggle={() => toggle('info')} badge={`${infoSections.length} sections`}>
-            <div className="space-y-3">
-              {infoSections.map((s, i) => (
-                <div key={i} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
-                  <div className="flex items-center gap-2 mb-2">
-                    <select value={s.icon} onChange={e => setInfoSections(arr => arr.map((x, xi) => xi === i ? { ...x, icon: e.target.value } : x))}
-                      className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
-                      {INFO_ICON_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    <input value={s.title} onChange={e => setInfoSections(arr => arr.map((x, xi) => xi === i ? { ...x, title: e.target.value } : x))}
-                      placeholder="Section title" className="flex-1 min-w-0 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                    <button type="button" onClick={() => setInfoSections(arr => arr.filter((_, xi) => xi !== i))}
-                      className="text-red-400 hover:text-red-600 flex-shrink-0"><X size={15} /></button>
-                  </div>
-                  <textarea value={s.body} onChange={e => setInfoSections(arr => arr.map((x, xi) => xi === i ? { ...x, body: e.target.value } : x))}
-                    rows={2} placeholder="Details…" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                </div>
-              ))}
-              {infoSections.length === 0 && <p className="text-sm text-slate-400">No info sections yet. Add one below — until you save any, the public page shows sensible defaults.</p>}
-            </div>
-            <div className="flex items-center gap-2 mt-3">
-              <button type="button" onClick={() => setInfoSections(arr => [...arr, { icon: 'info', title: '', body: '' }])}
-                className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium">+ Add section</button>
-              <button type="button" onClick={saveInfo} disabled={savingInfo}
-                className="bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold">{savingInfo ? 'Saving…' : 'Save info'}</button>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-2">This content appears on the public page under the “Info” button. The icon dropdown matches the public display.</p>
+            <TournamentInfoEditor value={infoSections} onChange={setInfoSections} />
+            <button type="button" onClick={saveInfo} disabled={savingInfo}
+              className="mt-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold">{savingInfo ? 'Saving…' : 'Save info'}</button>
           </SectionCard>
 
           <SectionCard title="Broadcast permissions" description="Which staff roles may post broadcasts to the public page (you, the director, always can)" icon={Megaphone}
             open={open === 'broadcast'} onToggle={() => toggle('broadcast')} badge={`${broadcastRoles.length + 1} roles`}>
-            <div className="space-y-2 max-w-md">
-              <div className="flex items-center gap-2 rounded-xl px-3 py-2 bg-teal-500/10 border border-teal-500/40">
-                <input type="checkbox" checked readOnly className="w-4 h-4 accent-teal-600" />
-                <span className="text-sm font-medium text-slate-800">Tournament Director</span>
-                <span className="text-[11px] text-slate-400 ml-auto">Always allowed</span>
-              </div>
-              {BROADCAST_ROLE_OPTIONS.map(o => {
-                const on = broadcastRoles.includes(o.key)
-                return (
-                  <label key={o.key} className={`flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer border ${on ? 'bg-teal-500/10 border-teal-500/40' : 'bg-slate-50 border-transparent'}`}>
-                    <input type="checkbox" checked={on}
-                      onChange={e => setBroadcastRoles(rs => e.target.checked ? Array.from(new Set([...rs, o.key])) : rs.filter(r => r !== o.key))}
-                      className="w-4 h-4 accent-teal-600" />
-                    <span className="text-sm text-slate-700">{o.label}</span>
-                  </label>
-                )
-              })}
-            </div>
+            <BroadcastRolesEditor value={broadcastRoles} onChange={setBroadcastRoles} />
             <button type="button" onClick={saveBroadcastRoles} disabled={savingBroadcastRoles}
               className="mt-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold">{savingBroadcastRoles ? 'Saving…' : 'Save permissions'}</button>
-            <p className="text-[11px] text-slate-400 mt-2">Allowed staff get a Broadcast page (/broadcast) to post to the public announcement banner. You can remove any post.</p>
           </SectionCard>
 
           <SectionCard title="Standings tiebreakers" description="How teams level on points are ranked" icon={ClipboardList}

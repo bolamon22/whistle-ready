@@ -6,6 +6,8 @@ import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
 import RegistrationTypesEditor from '@/components/RegistrationTypesEditor'
+import TournamentInfoEditor, { loadInfoSections, saveInfoSections, type InfoSection } from '@/components/TournamentInfoEditor'
+import BroadcastRolesEditor, { loadBroadcastRoles, saveBroadcastRoles } from '@/components/BroadcastRolesEditor'
 import { parseRegistrationTypes, registrationTypesPayload, DEFAULT_REGISTRATION_TYPES, type RegistrationTypes } from '@/lib/registrationTypes'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import StaffPayEditor from '@/components/StaffPayEditor'
@@ -18,7 +20,7 @@ import {
 import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, FileText, Hotel, BookOpen, Users, Image as ImageIcon, LayoutGrid } from 'lucide-react'
+import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, FileText, Hotel, BookOpen, Users, Image as ImageIcon, LayoutGrid, Info, Megaphone } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TimeSlot { start: string; end: string }
@@ -95,6 +97,8 @@ const SECTIONS = [
   { id: 'contacts',     label: 'Contacts',               icon: Users,         group: 'PUBLIC' },
   { id: 'hero',         label: 'Hero banner',            icon: ImageIcon,     group: 'PUBLIC' },
   { id: 'pagebuilder',  label: 'Page builder',           icon: LayoutGrid,    group: 'PUBLIC' },
+  { id: 'info',         label: 'Tournament info',        icon: Info,          group: 'PUBLIC' },
+  { id: 'broadcast',    label: 'Broadcast permissions',  icon: Megaphone,     group: 'PUBLIC' },
 ]
 // Sidebar render order for the group headers.
 const SECTION_GROUPS = ['BASICS', 'MONEY', 'PLAY', 'PUBLIC'] as const
@@ -143,6 +147,9 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   // Public event-page content (lives in AppSetting tournamentSite:{id}, saved separately)
   const { content: eventContent, setContent: setEventContent, ruleSets, saveEventContent } = useEventContent(params.id)
   const [regTypes, setRegTypes] = useState<RegistrationTypes>(DEFAULT_REGISTRATION_TYPES)
+  // These two live behind their own endpoints, loaded/saved alongside the main row.
+  const [infoSections, setInfoSections] = useState<InfoSection[]>([])
+  const [broadcastRoles, setBroadcastRoles] = useState<string[]>(['assigner'])
   const [loading, setLoading] = useState(true)
 
   // General
@@ -213,6 +220,8 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       setOfficialsConfig({ ...DEFAULT_OFFICIALS_CONFIG, ...staffParsed.officialsConfig, rules: loadedRules })
       setPricing(parsePricing(t.registrationPricing))
       setRegTypes(parseRegistrationTypes(t))
+      loadInfoSections(params.id).then(setInfoSections)
+      loadBroadcastRoles(params.id).then(setBroadcastRoles)
       try { const oc = JSON.parse(t.regConfirmationOverride || '{}'); if (oc && typeof oc === 'object') setRegConf(oc) } catch {}
       try {
         const d: string[] = JSON.parse(t.registrationDivisions || '[]')
@@ -271,7 +280,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     // Two separate stores: the Tournament row (+venues/rules) and the public
     // event-page content (AppSetting). Report per-store so a partial failure
     // is never announced as "Saved!".
-    const [core, eventOk] = await Promise.all([
+    const [core, eventOk, infoOk, broadcastOk] = await Promise.all([
       Promise.all([
       fetch(`/api/tournaments/${params.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -296,10 +305,14 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({ periodFormat, periodBreakMin: parseInt(periodBreak) || 0 }),
       }),
       ]).then(rs => rs.every(r => r.ok)).catch(() => false),
+      // Own endpoints, but part of the same Save Changes so there's one save button.
+      saveInfoSections(params.id, infoSections),
+      saveBroadcastRoles(params.id, broadcastRoles),
       saveEventContent().catch(() => false),
     ])
 
-    if (core && eventOk) toast.success('Saved!')
+    if (core && eventOk && infoOk && broadcastOk) toast.success('Saved!')
+    else if (core && eventOk && (!infoOk || !broadcastOk)) toast.error(`Saved, but ${[!infoOk && 'tournament info', !broadcastOk && 'broadcast permissions'].filter(Boolean).join(' and ')} did NOT save. Try again.`)
     else if (core && !eventOk) toast.error('Tournament settings saved, but the public event page content did NOT save. Try again.')
     else if (!core && eventOk) toast.error('Event page content saved, but the tournament settings did NOT save. Try again.')
     else toast.error('Save failed — nothing was saved. Check your connection and try again.')
@@ -361,6 +374,8 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (id === 'venues')       return venues.length > 0
     if (id === 'registration') return baseFee(pricing) > 0
     if (id === 'regtypes')     return regTypes.teamEnabled || regTypes.individualEnabled
+    if (id === 'info')         return infoSections.length > 0
+    if (id === 'broadcast')    return true   // a valid choice can be 'director only'
     if (id === 'staffpay')     return staffRoles.length > 0
     if (id === 'schedule')     return !!(scheduleIncrement)
     if (id === 'tiebreakers')  return true
@@ -745,6 +760,20 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     )
 
     // ── Staff & Pay ──
+    if (activeSection === 'info') return (
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">Public info for parents and coaches — medical, parking, lost &amp; found and so on. Shown under the Info button on the public page.</p>
+        <TournamentInfoEditor value={infoSections} onChange={setInfoSections} />
+      </div>
+    )
+
+    if (activeSection === 'broadcast') return (
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">Which staff roles may post announcements to the public page. You, as director, always can.</p>
+        <BroadcastRolesEditor value={broadcastRoles} onChange={setBroadcastRoles} />
+      </div>
+    )
+
     if (activeSection === 'regtypes') return (
       <div className="space-y-4">
         <p className="text-sm text-slate-500">Choose which registration forms this tournament offers. Turning team registration off hides the Register button on the public page.</p>
