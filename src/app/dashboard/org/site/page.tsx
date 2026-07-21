@@ -206,7 +206,7 @@ function OrgSiteEditorInner() {
             <div key={t.id} className="flex items-center gap-2 border border-slate-200 rounded-lg p-3">
               <span className="flex-1 text-sm font-medium text-slate-700 truncate">{t.name}</span>
               <a href={`/tournaments/${t.id}/event`} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"><ExternalLink size={12} /> View</a>
-              <Link href={`/tournaments/${t.id}/event-page`} className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-lg px-3 py-1.5 hover:bg-teal-100">Edit event page</Link>
+              <Link href={`/tournaments/${t.id}/builder?section=pagebuilder`} className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-lg px-3 py-1.5 hover:bg-teal-100">Edit event page</Link>
             </div>
           ))}
         </div>

@@ -921,19 +921,6 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             </a>
           </div>
 
-          {/* Signpost: public-facing content is edited elsewhere. This page is
-              operational config only — contacts/overview/hotels live on the Event page. */}
-          <div className="mt-3">
-            <a href={`/tournaments/${params.id}/event-page`}
-              className="flex items-center gap-3 px-4 py-3 bg-white border border-slate-200 rounded-xl hover:bg-teal-50 hover:border-teal-200 transition-colors group">
-              <Trophy className="w-5 h-5 text-slate-400" />
-              <div>
-                <p className="text-sm font-semibold text-slate-700 group-hover:text-teal-700">Event page</p>
-                <p className="text-xs text-slate-400">Contacts, overview, hotels, rules</p>
-              </div>
-              <ArrowRight size={14} className="ml-auto text-slate-300 group-hover:text-teal-400" />
-            </a>
-          </div>
 
           {/* Quick stats */}
           <div className="mt-4 bg-white border border-slate-200 rounded-xl p-4 space-y-2">

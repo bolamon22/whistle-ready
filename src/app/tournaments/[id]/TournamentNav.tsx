@@ -61,7 +61,6 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     { label: 'Dashboard', href: `${base}/dashboard` },
     { label: 'Setup', items: [
       { href: `${base}/builder`,    label: 'Tournament setup' },
-      { href: `${base}/event-page`, label: 'Event page' },
       { href: `${base}/divisions`,  label: 'Divisions & teams' },
       { href: `${base}/scheduler`,  label: 'Scheduler' },
       { href: `${base}`,            label: 'Assigner' },
