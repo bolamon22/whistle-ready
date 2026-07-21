@@ -112,7 +112,7 @@ export function useEventContent(id: string) {
   return { content, setContent, ruleSets, loaded, saveEventContent }
 }
 
-export type EventSectionKey = 'overview' | 'hotels' | 'rules' | 'contacts' | 'hero' | 'pagebuilder'
+export type EventSectionKey = 'overview' | 'hotels' | 'rules' | 'contacts' | 'pagebuilder'
 
 export default function EventContentSection({
   section, id, content: c, setContent: setC, ruleSets,
@@ -140,14 +140,24 @@ export default function EventContentSection({
     } catch { toast.error('Could not generate FAQs') } finally { setGenFaq(false) }
   }
 
-  if (section === 'hero') return (
-    <div>
-      <p className="text-sm text-slate-500 mb-4">Optional background image shown behind the tournament name at the top of the event page (and the register / waiver / rules headers). A dark overlay keeps the white text readable.</p>
+
+  // The page header sits above the block list rather than in it: it can't be
+  // reordered or hidden, and it renders on the register / waiver / rules / info pages
+  // too, not just the event page. Showing it as a sortable block would promise
+  // otherwise.
+  const heroRow = (
+    <div className="border border-slate-200 rounded-xl bg-slate-50/60 p-3 mb-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div>
+          <p className="text-sm font-medium text-slate-700">Page header</p>
+          <p className="text-[11px] text-slate-400">Background image behind the tournament name — shown on all event pages</p>
+        </div>
+      </div>
       <div className="flex items-center gap-3 flex-wrap">
         {c.heroImage
-          ? <img src={c.heroImage} alt="" className="h-20 w-36 object-cover rounded-lg border border-slate-200" />
-          : <div className="h-20 w-36 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
-        <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer">
+          ? <img src={c.heroImage} alt="" className="h-16 w-28 object-cover rounded-lg border border-slate-200" />
+          : <div className="h-16 w-28 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={18} /></div>}
+        <label className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 cursor-pointer bg-white">
           {c.heroImage ? 'Replace' : 'Upload'}
           <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, heroImage: u })); else toast.error('Upload failed') }} />
         </label>
@@ -166,6 +176,7 @@ export default function EventContentSection({
         </button>
         <p className="text-[11px] text-slate-400 mt-1">Builds a Q&amp;A block from this tournament&apos;s dates, location, format, divisions, fees and registration — great for visitors and AI search. Edit or remove any after.</p>
       </div>
+      {heroRow}
       <BlockBuilder
         blocks={resolveBlocks(c)}
         onChange={(blocks) => setC(v => ({ ...v, blocks }))}
