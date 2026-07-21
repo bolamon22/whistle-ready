@@ -79,7 +79,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images }, twitter: { title, description, images } }
 }
 
-export default async function OrgSite({ params }: { params: { slug: string } }) {
+export default async function OrgSite({ params, searchParams }: { params: { slug: string }; searchParams?: { [k: string]: string | string[] | undefined } }) {
   const client = db()
   const orgRes = await client.execute({ sql: 'SELECT id, name, contactEmail, logoUrl FROM "Organization" WHERE slug = ?', args: [params.slug] })
   if (orgRes.rows.length === 0) {
@@ -96,10 +96,23 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const org = orgRes.rows[0] as any
 
   let content: any = {}
+  const dbg: any = { key: `orgSite:${org.id}`, orgId: org.id, slug: params.slug }
   try {
     const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${org.id}`] })
-    if (cr.rows.length) content = JSON.parse(((cr.rows[0] as any).value as string) || '{}')
-  } catch { /* no content yet */ }
+    dbg.rowCount = cr.rows.length
+    if (cr.rows.length) {
+      const rawVal = (cr.rows[0] as any).value as string
+      dbg.rawType = typeof rawVal
+      dbg.rawLen = rawVal ? rawVal.length : 0
+      dbg.rawHead = rawVal ? String(rawVal).slice(0, 80) : ''
+      dbg.rawTail = rawVal ? String(rawVal).slice(-80) : ''
+      content = JSON.parse(rawVal || '{}')
+    }
+  } catch (e: any) { dbg.error = e?.message || String(e) }
+  dbg.contentKeys = Object.keys(content || {})
+  dbg.hero = content.hero || null
+  dbg.galleryLen = Array.isArray(content.gallery) ? content.gallery.length : 'not-array'
+  dbg.hasLogo = !!content.logo
   const hero = content.hero || {}
   const about = content.about || {}
   const sponsors: any[] = Array.isArray(content.sponsors) ? content.sponsors : []
@@ -134,6 +147,9 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const eventsLd = upcoming.length ? { '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: upcoming.map((t, i) => ({ '@type': 'ListItem', position: i + 1, url: abs(`/tournaments/${t.id}/event`), name: t.name })) } : null
   return (
     <div className="min-h-screen bg-slate-50">
+      {searchParams?.debug === '1' && (
+        <pre style={{background:'#000',color:'#7CFC00',fontSize:11,padding:12,overflow:'auto'}}>{JSON.stringify(dbg, null, 2)}</pre>
+      )}
       <JsonLd data={eventsLd ? [orgLd, eventsLd] : orgLd} />
       <OrgHeader org={org} homeHref={base || '/'} nav={nav} registerHref={registerHref} />
 
