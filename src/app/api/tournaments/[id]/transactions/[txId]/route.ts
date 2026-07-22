@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireDirector } from '@/lib/apiAuth'
 
+// Editing/deleting a financial record — director only. Previously unauthenticated.
 export async function DELETE(_: Request, { params }: { params: { id: string; txId: string } }) {
+  const gate = await requireDirector(); if (!gate.ok) return gate.res
   await prisma.tournamentTransaction.delete({ where: { id: params.txId } })
   return NextResponse.json({ ok: true })
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string; txId: string } }) {
+  const gate = await requireDirector(); if (!gate.ok) return gate.res
   const data = await req.json()
   const tx = await prisma.tournamentTransaction.update({
     where: { id: params.txId },

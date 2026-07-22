@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireStaff, requireDirector } from '@/lib/apiAuth'
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tiebreakers" TEXT NOT NULL DEFAULT '{}'`) } catch {}
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tagline" TEXT DEFAULT ''`) } catch {}
@@ -69,6 +70,9 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
 const asJson = (v: any) => typeof v === 'string' ? v : JSON.stringify(v)
 
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
+  // Editing tournament config — any staff (setup is used by director/scheduler/assigner).
+  // Was previously callable with no auth at all.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const b = await req.json()
   // Fields that live in the Prisma schema.
   const data: any = {
@@ -105,5 +109,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   return NextResponse.json(out)
 }
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
+  // Deleting a whole tournament — director only. Was two lines with no auth.
+  const gate = await requireDirector(); if (!gate.ok) return gate.res
   await prisma.tournament.delete({ where:{id:params.id} }); return NextResponse.json({ ok:true })
 }
