@@ -143,23 +143,68 @@ export default async function TournamentEventPage({ params }: { params: { id: st
       </EventSection>
     ) : null,
     fees: feeLines.length > 0 ? (
-      <EventSection id="fees" title="Tournament fees">
-        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 max-w-md">
-          <ul className="space-y-1.5">
-            {feeLines.map((line, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-slate-700"><DollarSign size={14} className="text-teal-600 mt-0.5 shrink-0" /><span>{line}</span></li>
-            ))}
-          </ul>
-          {registerHref && <a href={registerHref} className="text-sm font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Register a team <ExternalLink size={13} /></a>}
-        </div>
+      <EventSection id="fees" title="Team fees">
+        {/* Volume tiers as cards so the multi-team discount is legible at a glance —
+            "save $100/team" sells 7+ far better than a bullet list did. */}
+        {(() => {
+          const tiers = pricing.tiers || []
+          const first = tiers[0]?.price || 0
+          const cards = tiers.map((tier, i) => {
+            const prevMax = i === 0 ? 0 : (tiers[i - 1].max ?? 0)
+            const label = tier.max === null ? `${prevMax + 1}+ teams` : `${prevMax + 1}–${tier.max} teams`
+            return { label, price: tier.price, save: first - tier.price, last: i === tiers.length - 1 }
+          })
+          const flatNote = (pricing.flats || []).map((f: any) => `${f.label || 'Flat rate'}: $${(f.price || 0).toLocaleString()}/team`).join(' · ')
+          const dateNotes = feeLines.filter(l => / off\/team /.test(l))
+          return (
+            <>
+              <div className={`grid grid-cols-2 ${cards.length >= 3 ? 'sm:grid-cols-3' : ''} gap-3`}>
+                {cards.map((cd, i) => (
+                  <div key={i} className={`relative rounded-xl p-4 text-center border ${cd.last && cd.save > 0 ? 'border-2 border-teal-500' : 'border-slate-200 bg-white'}`}>
+                    {cd.last && cd.save > 0 && <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-teal-50 text-teal-700 text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap border border-teal-200">Best value</span>}
+                    <div className="text-xs text-slate-500">{cd.label}</div>
+                    <div className="text-2xl font-bold text-slate-900 mt-1">${(cd.price || 0).toLocaleString()}</div>
+                    <div className={`text-[11px] mt-0.5 ${cd.save > 0 ? 'text-teal-700 font-medium' : 'text-slate-400'}`}>{cd.save > 0 ? `save $${cd.save.toLocaleString()}/team` : 'per team'}</div>
+                  </div>
+                ))}
+              </div>
+              {(flatNote || dateNotes.length > 0) && (
+                <div className="mt-3 space-y-0.5">
+                  {flatNote && <p className="text-xs text-slate-500">{flatNote}</p>}
+                  {dateNotes.map((l, i) => <p key={i} className="text-xs text-teal-700">{l}</p>)}
+                </div>
+              )}
+              {registerHref && <a href={registerHref} className="text-sm font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Register a team <ExternalLink size={13} /></a>}
+            </>
+          )
+        })()}
       </EventSection>
     ) : null,
     divisions: divisions.length > 0 ? (
       <EventSection id="divisions" title="Divisions">
-        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-          <div className="flex flex-wrap gap-1.5">{divisions.map((d, i) => <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-2.5 py-1 rounded-full">{d}</span>)}</div>
-          {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
-        </div>
+        {/* Grouped Boys / Girls when names allow it; anything else falls into a third
+            group so nothing disappears for non-standard division names. */}
+        {(() => {
+          const groups: [string, string[]][] = [
+            ['Boys', divisions.filter(d => /^boys\b/i.test(d)).map(d => d.replace(/^boys\s*/i, ''))],
+            ['Girls', divisions.filter(d => /^girls\b/i.test(d)).map(d => d.replace(/^girls\s*/i, ''))],
+          ]
+          const other = divisions.filter(d => !/^(boys|girls)\b/i.test(d))
+          if (other.length) groups.push(['Divisions', other])
+          const shown = groups.filter(([, list]) => list.length > 0)
+          const chip = (d: string, i: number) => <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-3 py-1 rounded-full border border-teal-100">{d}</span>
+          return (
+            <div>
+              {shown.map(([label, list]) => (
+                <div key={label} className="mb-3 last:mb-0">
+                  {shown.length > 1 && <div className="text-[10px] font-semibold tracking-wider uppercase text-slate-400 mb-1.5">{label}</div>}
+                  <div className="flex flex-wrap gap-1.5">{list.map(chip)}</div>
+                </div>
+              ))}
+              {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
+            </div>
+          )
+        })()}
       </EventSection>
     ) : null,
     locations: locations.length > 0 ? (
@@ -284,13 +329,14 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     { href: `${base}/vendor-request`, label: 'Vendor Request' },
   ]
 
-  const actions = [
-    Number(t.teamRegEnabled) ? { href: `${base}/register`, label: 'Register', icon: <ClipboardList size={15} />, primary: true } : null,
-    { href: `${base}/player-waiver`, label: 'Player Waiver', icon: <ScrollText size={15} /> },
-    { href: `${base}/today`, label: 'Game Day', icon: <Zap size={15} /> },
-  ].filter(Boolean) as any[]
-
-  const eyebrow = ((t.sport ? String(t.sport) + ' ' : '') + 'tournament')
+  // The hero carries ONE dominant action (Register) plus the Event info menu. Player
+  // waiver and Game Day moved to the "For players" rail card — three equal buttons in
+  // the hero buried the only one that converts.
+  const eyebrow = [
+    (t.sport ? String(t.sport) : 'Tournament'),
+    t.startDate ? fmtRangeShort(t.startDate, t.endDate) : '',
+    shortLocation(t.location || ''),
+  ].filter(Boolean).join(' · ')
   const minFee = (() => { if (!Number(t.teamRegEnabled)) return ''; const b = baseFee(pricing); return b > 0 ? `from $${b.toLocaleString()}` : '' })()
   const quickFacts = [
     t.startDate && { icon: <CalendarDays size={22} />, label: 'DATES', value: fmtRangeShort(t.startDate, t.endDate) },
@@ -310,6 +356,16 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   // now scroll to a section (#id) instead of swapping panels.
   const stackedSections = rendered.filter((x: any) => !x.page && x.b.type !== 'rules' && x.el)
 
+  // Two-column body: the story reads down the left (overview, fees, divisions, custom
+  // blocks, FAQ); everything actionable lives in a right rail (map, hotels, contacts,
+  // player links). Rail sections render as compact cards — the 28px EventSection
+  // headings are wrong at rail width — but visibility still follows the block builder:
+  // a hidden Location block hides the rail card too.
+  const RAIL_TYPES = new Set(['locations', 'hotels', 'contacts'])
+  const mainSections = stackedSections.filter((x: any) => !RAIL_TYPES.has(x.b.type))
+  const railVisible = new Set(stackedSections.filter((x: any) => RAIL_TYPES.has(x.b.type)).map((x: any) => x.b.type))
+  const hasRules = rendered.some((x: any) => x.b.type === 'rules')
+
   const eventUrl = abs(`${base}/event`)
   const faqItems = resolveBlocks(c).filter((b: any) => b.type === 'faq').flatMap((b: any) => Array.isArray(b.props?.items) ? b.props.items : []).filter((it: any) => it && it.q && it.a)
   const sportName = t.sport || 'Lacrosse'
@@ -322,48 +378,128 @@ export default async function TournamentEventPage({ params }: { params: { id: st
       {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
       <section className="relative text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]">
         {c.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${c.heroImage})` }} aria-hidden />}
-        {c.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55" aria-hidden />}
-        <div className="relative max-w-4xl mx-auto px-6 py-16">
-          <div className="flex items-center gap-4">
-            {t.logoUrl && <img src={t.logoUrl} alt="" className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-contain bg-white/95 p-1.5 shrink-0" />}
-            <div>
-              <div className="text-teal-300 text-[11px] sm:text-xs font-semibold tracking-[0.18em] uppercase">{eyebrow}</div>
+        {/* Bottom-weighted scrim: the title sits low, so darkness concentrates where
+            the text is and any hero photo stays visible up top. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#040c18]/90 via-[#040c18]/45 to-[#040c18]/15" aria-hidden />
+        <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-10">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-5">
+            {t.logoUrl && <img src={t.logoUrl} alt="" className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl object-contain bg-white/95 p-1.5 shrink-0 ring-2 ring-white/40" />}
+            <div className="flex-1 min-w-0">
+              <div className="text-teal-300 text-[11px] sm:text-xs font-semibold tracking-[0.16em] uppercase">{eyebrow}</div>
               <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.04] mt-1">{t.name}</h1>
             </div>
-          </div>
-          <div className="mt-7 flex flex-wrap gap-2">
-            {actions.map((a, i) => (
-              <Link key={i} href={a.href} className={`inline-flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-full transition-colors ${a.primary ? 'bg-[#16b886] hover:bg-[#13a87b] text-[#04241b] shadow-lg shadow-emerald-900/20' : 'bg-white/95 hover:bg-white text-[#0b1f3a]'}`}>{a.icon} {a.label}</Link>
-            ))}
-            <EventInfoNav items={infoItems} />
+            <div className="flex flex-wrap items-center gap-2 shrink-0 sm:pb-1">
+              {registerHref && (
+                <Link href={registerHref} className="inline-flex items-center gap-1.5 text-sm font-semibold px-6 py-3 rounded-xl bg-[#16b886] hover:bg-[#13a87b] text-[#04241b] shadow-lg shadow-emerald-900/20 transition-colors">
+                  <ClipboardList size={15} /> Register a team
+                </Link>
+              )}
+              <EventInfoNav items={infoItems} />
+            </div>
           </div>
         </div>
       </section>
 
       {quickFacts.length > 0 && (
-        <div className="bg-white border-b border-slate-200">
-          <div className={`max-w-4xl mx-auto px-6 grid grid-cols-2 ${factCols} divide-x divide-slate-100`}>
+        <div className="max-w-6xl mx-auto px-6 relative -mt-6">
+          <div className={`bg-white border border-slate-200 rounded-2xl shadow-sm grid grid-cols-2 ${factCols} divide-x divide-slate-100 overflow-hidden`}>
             {quickFacts.map((f: any, i: number) => {
               const inner = (
                 <>
-                  <span className="text-teal-600 inline-flex">{f.icon}</span>
-                  <div className="text-[11px] tracking-wide text-slate-400 font-semibold mt-1.5">{f.label}</div>
-                  <div className={`text-sm font-bold mt-0.5 line-clamp-2 ${f.href ? 'text-teal-700' : 'text-slate-900'}`}>{f.value}</div>
+                  <div className="text-[10px] tracking-[0.08em] text-slate-400 font-semibold uppercase">{f.label}</div>
+                  <div className={`text-sm font-bold mt-1 line-clamp-2 ${f.href ? 'text-teal-700' : 'text-slate-900'}`}>{f.value}</div>
                 </>
               )
               return f.href
-                ? <a key={i} href={f.href} {...(String(f.href).startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})} className="px-4 py-5 text-center block hover:bg-slate-50 transition-colors">{inner}</a>
-                : <div key={i} className="px-4 py-5 text-center">{inner}</div>
+                ? <a key={i} href={f.href} {...(String(f.href).startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})} className="px-4 py-4 text-center block hover:bg-slate-50 transition-colors">{inner}</a>
+                : <div key={i} className="px-4 py-4 text-center">{inner}</div>
             })}
           </div>
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto px-6 py-10 space-y-12">
-        {stackedSections.map((x: any) => (
-          <div key={x.b.id}>{x.el}</div>
-        ))}
+      <div className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-10 items-start">
+        <div className="space-y-12 min-w-0">
+          {mainSections.map((x: any) => (
+            <div key={x.b.id}>{x.el}</div>
+          ))}
+        </div>
+
+        <aside className="space-y-4 lg:sticky lg:top-6">
+          {railVisible.has('locations') && locations.length > 0 && (
+            <div id="locations" className="scroll-mt-28">
+              {locations.map((l, i) => (
+                <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-4 last:mb-0">
+                  {l.fieldMapUrl
+                    ? <FieldMap src={l.fieldMapUrl} label={l.name} />
+                    : l.address
+                      ? <iframe title={`Map of ${l.name || 'venue'}`} src={`https://www.google.com/maps?q=${encodeURIComponent(l.address)}&output=embed`} className="w-full h-36 border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+                      : null}
+                  <div className="p-4">
+                    <h3 className="font-bold text-slate-900 text-sm">{l.name}</h3>
+                    {l.address && <p className="text-xs text-slate-500 mt-0.5">{l.address}</p>}
+                    {(l.mapUrl || l.address) && <a href={l.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.address)}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-2"><MapPin size={12} /> Get directions</a>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {railVisible.has('hotels') && (c.hotelsUrl || c.hotels) && (
+            <div id="hotels" className="bg-white border border-slate-200 rounded-2xl p-4 scroll-mt-28">
+              <h3 className="font-bold text-slate-900 text-sm">Where to stay</h3>
+              {c.hotels
+                ? <div className="text-xs text-slate-500 mt-1 prose-body [&_p]:m-0" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />
+                : <p className="text-xs text-slate-500 mt-1">Room blocks for traveling teams.</p>}
+              {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg mt-3"><Hotel size={13} /> Book hotels</a>}
+            </div>
+          )}
+
+          {railVisible.has('contacts') && contacts.length > 0 && (
+            <div id="contacts" className="bg-white border border-slate-200 rounded-2xl p-4 scroll-mt-28">
+              <h3 className="font-bold text-slate-900 text-sm mb-3">Questions?</h3>
+              <div className="space-y-3">
+                {contacts.map((ct, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center text-xs font-semibold shrink-0">
+                      {String(ct.name || '?').split(/\s+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-900">{ct.name}{ct.role ? <span className="text-slate-400 font-normal"> · {ct.role}</span> : null}</div>
+                      {ct.phone && <a href={`tel:${ct.phone}`} className="text-xs text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Phone size={11} /> {ct.phone}</a>}
+                      {ct.email && <a href={`mailto:${ct.email}`} className="block text-xs text-teal-700 hover:text-teal-900 truncate">{ct.email}</a>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4">
+            <h3 className="font-bold text-slate-900 text-sm mb-2">For players &amp; parents</h3>
+            <div className="flex flex-col gap-1.5">
+              <Link href={`${base}/player-waiver`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ScrollText size={12} /> Player waiver</Link>
+              {hasRules && <Link href={`${base}/rules`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ScrollText size={12} /> Rules &amp; policies</Link>}
+              <Link href={`${base}/public`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ListChecks size={12} /> Schedule &amp; live scores</Link>
+              <Link href={`${base}/today`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><Zap size={12} /> Game day hub</Link>
+            </div>
+          </div>
+        </aside>
       </div>
+
+      {registerHref && (
+        <div className="bg-[#0b1f3a]">
+          <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-white font-semibold">Ready to compete{t.location ? ` in ${shortLocation(t.location)}` : ''}?</p>
+              <p className="text-slate-400 text-sm mt-0.5">Spots are confirmed once registration and payment are complete.</p>
+            </div>
+            <Link href={registerHref} className="inline-flex items-center gap-1.5 text-sm font-semibold px-6 py-3 rounded-xl bg-[#16b886] hover:bg-[#13a87b] text-[#04241b] shrink-0 transition-colors">
+              <ClipboardList size={15} /> Register a team
+            </Link>
+          </div>
+        </div>
+      )}
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
       <PublicChirp tournamentId={params.id} tournamentName={t.name} />
     </div>
