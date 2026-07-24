@@ -50,11 +50,12 @@ export default function RegConfirmationEditor({
   // time: tournament overrides fall back to the org default, then to built-ins.
   const [showPreview, setShowPreview] = useState(false)
   const [samplePaid, setSamplePaid] = useState(false)
+  const [sampleReturning, setSampleReturning] = useState(false)
   let previewHtml = ''
   if (showPreview) {
     try {
       const cfg = mode === 'tournament' ? resolveRegConfirmation(inherit, v) : resolveRegConfirmation(v, null)
-      const data = { ...SAMPLE, paid: samplePaid }
+      const data = { ...SAMPLE, paid: samplePaid, hasAccount: sampleReturning, loginUrl: '#' }
       previewHtml = letterToEmailHtml(buildRegLetter(cfg, data), data)
     } catch { previewHtml = '<p style="font-family:sans-serif;color:#b91c1c;padding:16px">Preview failed to render.</p>' }
   }
@@ -71,10 +72,16 @@ export default function RegConfirmationEditor({
           {showPreview ? 'Hide preview' : 'Preview email'}
         </button>
         {showPreview && (
-          <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
-            <input type="checkbox" className="accent-teal-500" checked={samplePaid} onChange={e => setSamplePaid(e.target.checked)} />
-            Show as paid online
-          </label>
+          <span className="flex items-center gap-3">
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+              <input type="checkbox" className="accent-teal-500" checked={samplePaid} onChange={e => setSamplePaid(e.target.checked)} />
+              Show as paid online
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+              <input type="checkbox" className="accent-teal-500" checked={sampleReturning} onChange={e => setSampleReturning(e.target.checked)} />
+              Show as returning club
+            </label>
+          </span>
         )}
       </div>
       {showPreview && (

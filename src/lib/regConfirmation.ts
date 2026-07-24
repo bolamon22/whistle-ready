@@ -22,7 +22,7 @@ export const DEFAULT_REG_CONFIRMATION: RegConfirmation = {
     "Thank you for registering **{club}** for **{tournament}**! We're thrilled to have you join us{locationClause}. Your registration has been received and your spot is reserved.",
   nextSteps:
     "**What's next**\n" +
-    "- **Set up your team account** using the button above. We run {tournament} on **Whistle Ready** — schedules, standings and game-day updates are all online and live, and your login also gives you your roster, player waivers and balance in one place.\n" +
+    "- **Get into your Whistle Ready account** using the button above. We run {tournament} on **Whistle Ready** — schedules, standings and game-day updates are all online and live, and your login also gives you your roster, player waivers and balance in one place.\n" +
     "- **Player waivers are completed online this year** — no paper forms. Every player needs one on file before their first game; share the waiver link below with your team families.\n" +
     "- The full schedule and pool/bracket assignments will be posted as we get closer to {dates} — you'll see them the moment they're up.\n" +
     "- Questions? Just reply to this email and we'll take care of you.",
@@ -66,6 +66,10 @@ export type RegLetterData = {
   waiverUrl?: string
   /** One-time "claim your team" link — invites the coach to set up portal access. */
   claimUrl?: string
+  /** True when the contact email already has a Whistle Ready account — the
+      letter then says "welcome back, sign in" instead of "create an account". */
+  hasAccount?: boolean
+  loginUrl?: string
 }
 
 function tokens(s: string, d: RegLetterData): string {
@@ -153,8 +157,15 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
   if (d.gameDayUrl) links.push(`<a href="${d.gameDayUrl}" style="color:#0f766e">Game day</a>`)
   const linksRow = links.length ? `<p style="margin:14px 0 0;font-size:14px;color:#475569">${links.join(' &nbsp;·&nbsp; ')}</p>` : ''
   // Account CTA — the main action we want the coach to take after registering.
-  // This IS the Whistle Ready login invite: the claim link creates their account.
-  const claim = d.claimUrl ? `
+  // New contact → the claim link creates their Whistle Ready login.
+  // Returning contact → welcome back + sign in + the pre-tournament checklist
+  // (don't ask people who already have accounts to sign up again).
+  const claim = d.hasAccount ? `
+    <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+      <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Welcome back — you already have an account</p>
+      <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">This registration is tied to your Whistle Ready login. Once you're signed in: confirm your players are registered, make sure each one has completed the <strong style="color:#0f172a">online player waiver</strong>, keep an eye on your balance, and watch for the schedule the moment it posts.</p>
+      <a href="${d.loginUrl || '#'}" style="display:inline-block;background:#0f766e;color:#ffffff;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px;text-decoration:none">Sign in to my account →</a>
+    </div>` : d.claimUrl ? `
     <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
       <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Set up your Whistle Ready account</p>
       <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">We run this event on Whistle Ready — live schedules, standings and game-day updates, plus your roster, online player waivers and balance, all in one place. Use this link to create your login.</p>

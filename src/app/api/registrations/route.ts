@@ -83,9 +83,16 @@ async function buildAndSendConfirmation(reg: any) {
       gameDayUrl: base(`/tournaments/${reg.tournamentId}/today`),
       // Waivers are in-app now — point families at the tournament's online form.
       waiverUrl: base(`/tournaments/${reg.tournamentId}/player-waiver`),
-      // Single-use link inviting the coach to set up portal access for this club.
-      // Best-effort: if the token can't be issued we simply omit the CTA.
+      // Returning contact? Say "welcome back, sign in" — never ask an existing
+      // account holder to sign up again. Otherwise issue the single-use claim
+      // link that creates their login (best-effort; omit the CTA on failure).
       ...(await (async () => {
+        try {
+          const existing = reg.contactEmail
+            ? await prisma.user.findUnique({ where: { email: String(reg.contactEmail).toLowerCase() } })
+            : null
+          if (existing) return { hasAccount: true, loginUrl: `${SITE_URL}/login` }
+        } catch {}
         const token = await issueClaimToken(reg.id)
         return token ? { claimUrl: claimUrl(SITE_URL, token) } : {}
       })()),
