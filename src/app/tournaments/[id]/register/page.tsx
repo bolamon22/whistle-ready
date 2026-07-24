@@ -157,6 +157,7 @@ export default function RegisterPage() {
   const [contactPhone, setContactPhone] = useState('')
   const [clubBasedIn, setClubBasedIn] = useState('')
   const [clubWebsite, setClubWebsite] = useState('')
+  const [instagram, setInstagram] = useState('')
   const [needsHotel, setNeedsHotel] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [notes, setNotes] = useState('')
@@ -189,6 +190,14 @@ export default function RegisterPage() {
 
   const updateTeam = (i: number, field: keyof TeamRow, value: string) => {
     setTeams(prev => prev.map((t, idx) => idx === i ? { ...t, [field]: value } : t))
+  }
+
+  // Typing the club name auto-fills every team row that hasn't been customized
+  // (empty, or still matching the previous club name) — so Team 1, created
+  // before the club name existed, follows along keystroke by keystroke.
+  const changeClubName = (next: string) => {
+    setTeams(prev => prev.map(t => (!t.clubName || t.clubName === clubName) ? { ...t, clubName: next } : t))
+    setClubName(next)
   }
 
   const addTeam = () => setTeams(prev => [...prev, { ...emptyTeam(), clubName, logoUrl: clubLogoUrl }])
@@ -229,8 +238,15 @@ export default function RegisterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tournamentId, clubName, clubContact, contactEmail, contactPhone,
-          clubBasedIn, clubWebsite, numTeams: teams.length,
-          needsHotel, paymentMethod, notes, teams, clubLogoUrl,
+          clubBasedIn,
+          // Accept "yourclub.com" — add the scheme for them.
+          clubWebsite: clubWebsite.trim() && !/^https?:\/\//i.test(clubWebsite.trim()) ? `https://${clubWebsite.trim()}` : clubWebsite.trim(),
+          instagram: instagram.trim(),
+          numTeams: teams.length,
+          needsHotel, paymentMethod, notes,
+          // Safety net: any team row left without a club name gets the club's.
+          teams: teams.map(t => ({ ...t, clubName: t.clubName || clubName })),
+          clubLogoUrl,
         }),
       })
       if (!res.ok) throw new Error('Registration failed')
@@ -384,7 +400,7 @@ export default function RegisterPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Name</label>
-                  <input name="organization" autoComplete="organization" value={clubName} onChange={e => setClubName(e.target.value)} className={inputCls} />
+                  <input name="organization" autoComplete="organization" value={clubName} onChange={e => changeClubName(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Contact <span className="text-red-500">*</span></label>
@@ -404,7 +420,14 @@ export default function RegisterPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Website</label>
-                  <input type="url" placeholder="https://" name="url" autoComplete="url" value={clubWebsite} onChange={e => setClubWebsite(e.target.value)} className={inputCls} />
+                  {/* type=text on purpose: type=url rejects "yourclub.com" without a
+                      scheme. We normalize to https:// at submit instead. */}
+                  <input type="text" inputMode="url" placeholder="yourclub.com" name="url" autoComplete="url" value={clubWebsite} onChange={e => setClubWebsite(e.target.value)} className={inputCls} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Instagram <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input type="text" placeholder="@yourclub" value={instagram} onChange={e => setInstagram(e.target.value)} className={inputCls} />
+                  <p className="text-xs text-gray-400 mt-1">Drop your handle and we&apos;ll follow your club — and tag you in tournament coverage.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Will your club need hotel rooms? <span className="text-red-500">*</span></label>

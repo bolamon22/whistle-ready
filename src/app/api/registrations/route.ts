@@ -8,6 +8,15 @@ import { SITE_URL, tournamentAbs } from '@/lib/seo'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "instagramHandle" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+}
+
+// "@yourclub", "instagram.com/yourclub", "https://www.instagram.com/yourclub/" → "yourclub"
+function normalizeInstagram(raw?: string): string {
+  let s = String(raw || '').trim()
+  if (!s) return ''
+  s = s.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/[/?#].*$/, '')
+  return s.slice(0, 60)
 }
 
 export async function GET(req: NextRequest) {
@@ -111,6 +120,7 @@ async function buildAndSendConfirmation(reg: any) {
           clubBasedIn: reg.clubBasedIn || '',
           needsHotel: reg.needsHotel || '',
           notes: reg.notes || '',
+          instagram: reg.instagramHandle || '',
           // Staff console link stays on whistleready.app — that's where staff log in.
           adminUrl: `${SITE_URL}/tournaments/${reg.tournamentId}/registrations`,
         }
@@ -131,7 +141,7 @@ export async function POST(req: NextRequest) {
   const {
     tournamentId, clubName, clubContact, contactEmail, contactPhone,
     clubBasedIn, clubWebsite, numTeams, needsHotel, paymentMethod, notes, teams,
-    invoiceAmount, discountAmount, discountNote, clubLogoUrl, source,
+    invoiceAmount, discountAmount, discountNote, clubLogoUrl, source, instagram,
   } = body
 
   const isImport = source === 'import'
@@ -172,8 +182,12 @@ export async function POST(req: NextRequest) {
     include: { teams: true, payments: true },
   })
 
+  // instagramHandle is a raw column (not in the Prisma schema) — write it separately.
+  const ig = normalizeInstagram(instagram)
+  if (ig) { try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "instagramHandle" = ? WHERE id = ?`, ig, registration.id) } catch {} }
+
   // Public form registrations get a confirmation letter (on-screen + email); imports don't.
-  const confirmation = isImport ? null : await buildAndSendConfirmation(registration)
+  const confirmation = isImport ? null : await buildAndSendConfirmation({ ...registration, instagramHandle: ig })
 
   return NextResponse.json({ ...registration, confirmation }, { status: 201 })
 }

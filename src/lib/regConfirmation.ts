@@ -195,6 +195,7 @@ export type RegNotifyData = RegLetterData & {
   clubBasedIn?: string
   needsHotel?: string
   notes?: string
+  instagram?: string   // club's IG handle (no @) — for the follow/collab play
   adminUrl?: string    // staff registrations page for this tournament
 }
 
@@ -224,6 +225,7 @@ export function organizerEmailHtml(d: RegNotifyData): string {
       ${row('Email', d.contactEmail, d.contactEmail ? `mailto:${d.contactEmail}` : undefined)}
       ${row('Based in', d.clubBasedIn)}
       ${row('Hotel needed', d.needsHotel)}
+      ${row('Instagram', d.instagram ? '@' + d.instagram : '', d.instagram ? `https://instagram.com/${d.instagram}` : undefined)}
     </table>
     <h2 style="font-size:14px;color:#0f172a;margin:16px 0 6px">Teams (${(d.teams || []).length})</h2>
     <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${teamRows}</table>
