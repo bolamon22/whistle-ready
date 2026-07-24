@@ -89,7 +89,27 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Jun 18, 2026)
+## Current state (as of Jul 23, 2026)
+
+- **sunshineeventsgroup.com = Sunshine's public domain (LIVE Jul 23)** — hosted directly on the
+  whistle-ready Vercel project (NOT a forward). How it works:
+  - `ORG_DOMAINS` in `src/lib/orgDomains.ts` maps the host → org slug; middleware rewrites root
+    paths to `/o/{slug}/*`, so `/`, `/gallery`, `/register/vendor` and info pages serve at the root.
+    `/tournaments/*` passes through. `/register` passthrough is EXACT-match only (org register
+    pages must rewrite).
+  - `LEGACY_REDIRECTS` (same file) 301s the old WordPress slugs (monster-mash-lax-clash, rules,
+    vendors, register-teams, …) to their new homes; junk-prefix 301s clean up SportsPress demo
+    URLs. **Event-slug targets hardcode the CURRENT season's tournament ids — update annually.**
+  - Canonicals/sitemap/JSON-LD emit the custom domain for mapped orgs (`orgAbs`/`tournamentAbs`
+    in `src/lib/seo.ts`) so search credit accrues to the org's domain, not whistleready.app.
+  - Vercel: apex = Production, www = 308 → apex. DNS at **Hostinger** (registrar GoDaddy):
+    A @ → Vercel, MX/SPF/SendGrid records untouched (domain has Hostinger email service).
+  - sunshinelax.com = GoDaddy **301** forward → sunshineeventsgroup.com (was 302 → whistleready).
+  - GSC: domain property verified (TXT in Hostinger DNS), sitemap submitted.
+  - Old WordPress site: intact on Hostinger hosting (cancel later); browsable reference at
+    web.archive.org (May 2026 snapshot).
+
+## Earlier state (as of Jun 18, 2026)
 
 - **Public event page builder (LIVE)** — each tournament has a public **event page** (`/tournaments/[id]/event`)
   rendered from an ordered **block list**, edited at **Setup → Event page → Page builder**
