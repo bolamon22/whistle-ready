@@ -211,7 +211,11 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
             <div className="space-y-4">
               <FeaturedCard t={upcoming[0]} />
               {upcoming.length > 1 && (
-                <div className="grid gap-4 sm:grid-cols-2">
+                /* grid-cols-1 matters: Tailwind's grid-cols-* use minmax(0,1fr), which
+                   lets cards shrink below their text's min-content width so `truncate`
+                   can work. Without it, phones get an auto-sized column that grows to
+                   fit the nowrap text and drags the whole page into horizontal scroll. */
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                   {upcoming.slice(1).map(t => <Card key={t.id} t={t} />)}
                 </div>
               )}
