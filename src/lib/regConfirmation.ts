@@ -10,6 +10,9 @@ export type RegConfirmation = {
   welcome: string       // markdown welcome message
   nextSteps: string     // markdown "what's next"
   signoff: string       // markdown sign-off
+  /** Comma-separated internal recipients for the new-registration notification.
+      Falls back to the org contact email when empty. */
+  notifyEmails?: string
 }
 
 export const DEFAULT_REG_CONFIRMATION: RegConfirmation = {
@@ -18,7 +21,11 @@ export const DEFAULT_REG_CONFIRMATION: RegConfirmation = {
   welcome:
     "Thank you for registering **{club}** for **{tournament}**! We're thrilled to have you join us{locationClause}. Your registration has been received and your spot is reserved.",
   nextSteps:
-    "**What's next**\n- We'll review your registration and follow up with confirmation and any remaining details.\n- The full schedule and pool/bracket assignments will be posted on the event page as we get closer to {dates}.\n- Keep an eye on your inbox, and check the event page anytime for the latest info.",
+    "**What's next**\n" +
+    "- **Set up your team account** using the button above. We run {tournament} on **Whistle Ready** — schedules, standings and game-day updates are all online and live, and your login also gives you your roster, player waivers and balance in one place.\n" +
+    "- **Player waivers are completed online this year** — no paper forms. Every player needs one on file before their first game; share the waiver link below with your team families.\n" +
+    "- The full schedule and pool/bracket assignments will be posted as we get closer to {dates} — you'll see them the moment they're up.\n" +
+    "- Questions? Just reply to this email and we'll take care of you.",
   signoff: "See you on the field!\n\n— The {org} Team",
 }
 
@@ -38,6 +45,7 @@ export function resolveRegConfirmation(orgCfg: any, override: any): RegConfirmat
     welcome: String(pick('welcome')),
     nextSteps: String(pick('nextSteps')),
     signoff: String(pick('signoff')),
+    notifyEmails: String(ov.notifyEmails ?? o.notifyEmails ?? ''),
   }
 }
 
@@ -54,6 +62,8 @@ export type RegLetterData = {
   paid?: boolean
   eventUrl?: string
   gameDayUrl?: string
+  /** Public online player-waiver form for this tournament (waivers are in-app now). */
+  waiverUrl?: string
   /** One-time "claim your team" link — invites the coach to set up portal access. */
   claimUrl?: string
 }
@@ -139,13 +149,15 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
   const pay = letter.payment ? `<p style="margin:14px 0;padding:12px 14px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;color:#0f766e;font-size:14px">${escHtml(letter.payment)}</p>` : ''
   const links: string[] = []
   if (d.eventUrl) links.push(`<a href="${d.eventUrl}" style="color:#0f766e">Event page</a>`)
+  if (d.waiverUrl) links.push(`<a href="${d.waiverUrl}" style="color:#0f766e">Player waiver form</a>`)
   if (d.gameDayUrl) links.push(`<a href="${d.gameDayUrl}" style="color:#0f766e">Game day</a>`)
   const linksRow = links.length ? `<p style="margin:14px 0 0;font-size:14px;color:#475569">${links.join(' &nbsp;·&nbsp; ')}</p>` : ''
   // Account CTA — the main action we want the coach to take after registering.
+  // This IS the Whistle Ready login invite: the claim link creates their account.
   const claim = d.claimUrl ? `
     <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
-      <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Set up your team account</p>
-      <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">Manage your roster and player waivers, track your balance, and see your schedule as soon as it's posted.</p>
+      <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Set up your Whistle Ready account</p>
+      <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">We run this event on Whistle Ready — live schedules, standings and game-day updates, plus your roster, online player waivers and balance, all in one place. Use this link to create your login.</p>
       <a href="${d.claimUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px;text-decoration:none">Set up my account →</a>
       <p style="margin:10px 0 0;font-size:11px;color:#94a3b8">This link is unique to your registration.</p>
     </div>` : ''
@@ -170,5 +182,54 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
     ${emailMd(letter.signoff)}
     ${linksRow}
     <p style="margin:22px 0 0;color:#94a3b8;font-size:12px">${escHtml(d.orgName || '')} · Registration confirmation</p>
+  </div>`
+}
+
+// ── Internal "new registration" notification ─────────────────────────────
+// Sent to the tournament organizers (and anyone else in notifyEmails) so a
+// human can call the club director and welcome them. Includes every detail
+// captured on the form — this email IS the call sheet.
+export type RegNotifyData = RegLetterData & {
+  contactEmail?: string
+  contactPhone?: string
+  clubBasedIn?: string
+  needsHotel?: string
+  notes?: string
+  adminUrl?: string    // staff registrations page for this tournament
+}
+
+export function organizerEmailSubject(d: RegNotifyData): string {
+  const n = (d.teams || []).length
+  return `New registration — ${d.clubName || 'Unknown club'} (${n} team${n === 1 ? '' : 's'}) — ${d.tournamentName}`
+}
+
+export function organizerEmailHtml(d: RegNotifyData): string {
+  const row = (label: string, value?: string, href?: string) => value ? `<tr>
+    <td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;white-space:nowrap">${escHtml(label)}</td>
+    <td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600;text-align:right">${href ? `<a href="${href}" style="color:#0f766e">${escHtml(value)}</a>` : escHtml(value)}</td>
+  </tr>` : ''
+  const teamRows = (d.teams || []).map(t =>
+    `<tr><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a">${escHtml(t.team || 'Team')}</td><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;text-align:right">${escHtml(t.division || '')}</td></tr>`
+  ).join('')
+  const pay = d.amount ? `<p style="margin:12px 0;padding:10px 14px;background:${d.paid ? '#f0fdf4;border:1px solid #bbf7d0' : '#fffbeb;border:1px solid #fde68a'};border-radius:8px;font-size:14px;color:${d.paid ? '#166534' : '#92400e'}">${d.paid ? `Paid online — ${money(d.amount)} received.` : `${money(d.amount)} due · method: ${escHtml(d.paymentMethod || 'not set')}`}</p>` : ''
+  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+    <div style="border-bottom:3px solid #0f766e;padding-bottom:12px;margin-bottom:16px">
+      <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#0f766e">New team registration</div>
+      <h1 style="margin:4px 0 0;font-size:20px;color:#0f172a">${escHtml(d.clubName || 'Unknown club')} → ${escHtml(d.tournamentName)}</h1>
+    </div>
+    <p style="margin:0 0 12px;color:#475569;font-size:14px;line-height:1.6">A new club just registered. Give <strong style="color:#0f172a">${escHtml(d.contactName || 'the club director')}</strong> a call to welcome them and confirm details.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      ${row('Contact', d.contactName)}
+      ${row('Phone', d.contactPhone, d.contactPhone ? `tel:${(d.contactPhone || '').replace(/[^+\d]/g, '')}` : undefined)}
+      ${row('Email', d.contactEmail, d.contactEmail ? `mailto:${d.contactEmail}` : undefined)}
+      ${row('Based in', d.clubBasedIn)}
+      ${row('Hotel needed', d.needsHotel)}
+    </table>
+    <h2 style="font-size:14px;color:#0f172a;margin:16px 0 6px">Teams (${(d.teams || []).length})</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${teamRows}</table>
+    ${pay}
+    ${d.notes ? `<h2 style="font-size:14px;color:#0f172a;margin:16px 0 6px">Notes from the club</h2><p style="margin:0;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;color:#475569;font-size:14px;line-height:1.6">${escHtml(d.notes)}</p>` : ''}
+    ${d.adminUrl ? `<p style="margin:18px 0 0"><a href="${d.adminUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;font-weight:600;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none">Open in Whistle Ready →</a></p>` : ''}
+    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px">${escHtml(d.orgName || '')} · Internal notification — not sent to the club</p>
   </div>`
 }

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendEmail, emailEnabled } from '@/lib/email'
 import { parsePricing, calcFee } from '@/lib/regPricing'
-import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, type RegLetterData } from '@/lib/regConfirmation'
+import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, organizerEmailHtml, organizerEmailSubject, type RegLetterData, type RegNotifyData } from '@/lib/regConfirmation'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
-import { SITE_URL } from '@/lib/seo'
+import { SITE_URL, tournamentAbs } from '@/lib/seo'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -52,7 +52,13 @@ async function buildAndSendConfirmation(reg: any) {
     let amount = Number(reg.invoiceAmount) || 0
     if (!amount) { try { amount = calcFee(teams, parsePricing((t as any).registrationPricing)) } catch {} }
     if (reg.discountAmount) amount = Math.max(0, amount - Number(reg.discountAmount))
+    // Paid online at signup? Thank them in the letter instead of dunning them.
+    const received = (reg.payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+    const paid = amount > 0 && received >= amount
 
+    // Public links live on the org's custom domain when it has one
+    // (e.g. sunshineeventsgroup.com), matching where families actually browse.
+    const base = (path: string) => tournamentAbs(org?.slug, path)
     const data: RegLetterData = {
       tournamentName: t.name || 'the tournament',
       orgName: org?.name || '',
@@ -63,9 +69,11 @@ async function buildAndSendConfirmation(reg: any) {
       teams,
       amount,
       paymentMethod: reg.paymentMethod || '',
-      paid: false,
-      eventUrl: `${SITE_URL}/tournaments/${reg.tournamentId}/event`,
-      gameDayUrl: `${SITE_URL}/tournaments/${reg.tournamentId}/today`,
+      paid,
+      eventUrl: base(`/tournaments/${reg.tournamentId}/event`),
+      gameDayUrl: base(`/tournaments/${reg.tournamentId}/today`),
+      // Waivers are in-app now — point families at the tournament's online form.
+      waiverUrl: base(`/tournaments/${reg.tournamentId}/player-waiver`),
       // Single-use link inviting the coach to set up portal access for this club.
       // Best-effort: if the token can't be issued we simply omit the CTA.
       ...(await (async () => {
@@ -85,6 +93,34 @@ async function buildAndSendConfirmation(reg: any) {
         ...(org?.contactEmail ? { replyTo: org.contactEmail } : {}),
       })
       emailed = sent.ok
+    }
+
+    // Internal heads-up so a human can call the club director while it's warm.
+    // Recipients come from the confirmation config's notifyEmails (comma-
+    // separated); org site contact + org account email are the fallback.
+    if (emailEnabled()) {
+      const orgSite = t.orgId ? await jget(`orgSite:${t.orgId}`) : {}
+      const fallback = [orgSite?.contact?.email, org?.contactEmail].filter(Boolean).join(',')
+      const recipients = String(cfg.notifyEmails || fallback || '')
+        .split(',').map(s => s.trim()).filter(s => s.includes('@'))
+      if (recipients.length) {
+        const notify: RegNotifyData = {
+          ...data,
+          contactEmail: reg.contactEmail || '',
+          contactPhone: reg.contactPhone || '',
+          clubBasedIn: reg.clubBasedIn || '',
+          needsHotel: reg.needsHotel || '',
+          notes: reg.notes || '',
+          // Staff console link stays on whistleready.app — that's where staff log in.
+          adminUrl: `${SITE_URL}/tournaments/${reg.tournamentId}/registrations`,
+        }
+        await sendEmail({
+          to: recipients.join(','),
+          subject: organizerEmailSubject(notify),
+          html: organizerEmailHtml(notify),
+          ...(reg.contactEmail ? { replyTo: reg.contactEmail } : {}),
+        })
+      }
     }
     return { letter, data, emailed }
   } catch { return null }

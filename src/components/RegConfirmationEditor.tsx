@@ -47,6 +47,10 @@ export default function RegConfirmationEditor({
 
       <div className={labelCls}>Sign-off</div>
       <MarkdownField value={v.signoff ?? ''} onChange={val => onChange({ signoff: val })} minHeight={60} placeholder={ph('signoff')} />
+
+      <div className={labelCls}>Notify your team</div>
+      <input className={inputCls} value={v.notifyEmails ?? ''} placeholder={ph('notifyEmails') || 'organizer@example.com, office@example.com'} onChange={e => onChange({ notifyEmails: e.target.value })} />
+      <p className="text-xs text-slate-400 mt-1">Each new registration also sends an internal heads-up (contact info, teams, payment status) to these addresses — comma-separated — so someone can call the club director. Blank = your org contact email.</p>
     </div>
   )
 }
