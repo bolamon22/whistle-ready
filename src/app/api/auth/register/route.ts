@@ -16,10 +16,11 @@ const PUBLIC_ROLES = new Set(['coach', 'parent', 'club_director'])
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password, role, company } = await req.json()
+    const { name, email, password, role, hp_extra } = await req.json()
 
     // Honeypot tripped — pretend it worked, create nothing.
-    if (company) return NextResponse.json({ id: 'ok', name: '', email: '' }, { status: 201 })
+    // (Field renamed from "company", which Chrome autofilled for real users.)
+    if (hp_extra) return NextResponse.json({ id: 'ok', name: '', email: '' }, { status: 201 })
 
     if (!name || !email || !password) return NextResponse.json({ error: 'All fields required' }, { status: 400 })
     if (password.length < 6) return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })

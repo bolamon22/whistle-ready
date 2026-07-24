@@ -17,7 +17,10 @@ function RegisterInner() {
   const [loading, setLoading] = useState(false)
   // Honeypot — invisible to humans, irresistible to signup bots. If it has a
   // value, the API silently discards the submission.
-  const [company, setCompany] = useState('')
+  // LESSON (Jul 24): this was first named "company", and Chrome AUTOFILLED it
+  // with the user's organization — real signups got silently eaten. The name
+  // must never match an autofill heuristic (no company/name/email/phone/url).
+  const [hpExtra, setHpExtra] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,7 +31,7 @@ function RegisterInner() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, role: role || undefined, company }),
+      body: JSON.stringify({ name, email, password, role: role || undefined, hp_extra: hpExtra }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error || 'Registration failed.'); setLoading(false); return }
@@ -53,10 +56,10 @@ function RegisterInner() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Honeypot: visually removed, excluded from tab order and autofill. */}
+          {/* Honeypot: visually removed, excluded from tab order. The meaningless
+              name + one-time-code autocomplete keep browser autofill away from it. */}
           <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
-            <label>Company</label>
-            <input type="text" name="company" tabIndex={-1} autoComplete="off" value={company} onChange={e => setCompany(e.target.value)} />
+            <input type="text" name="hp_extra" tabIndex={-1} autoComplete="one-time-code" value={hpExtra} onChange={e => setHpExtra(e.target.value)} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
