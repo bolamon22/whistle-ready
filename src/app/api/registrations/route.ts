@@ -149,6 +149,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  // The public form doesn't send invoiceAmount, which left every registration
+  // invoiced at $0 on the staff page (the letter computed its own fee, hiding
+  // the bug). The server now owns the number: compute from the tournament's
+  // pricing whenever the caller didn't provide one.
+  let invoice = Number(invoiceAmount) || 0
+  if (!invoice) {
+    try {
+      const t: any = await prisma.tournament.findUnique({ where: { id: tournamentId } })
+      invoice = calcFee((teams || []).map((x: any) => ({ division: x.division || '' })), parsePricing(t?.registrationPricing))
+    } catch { /* leave 0 if pricing can't be read */ }
+  }
+
   await ensureRegistrationColumns()
   const registration = await prisma.teamRegistration.create({
     data: {
@@ -163,7 +175,7 @@ export async function POST(req: NextRequest) {
       needsHotel: needsHotel === true ? 'Yes' : needsHotel === false ? 'No' : (needsHotel || 'No'),
       paymentMethod: paymentMethod || 'check',
       notes: notes || '',
-      invoiceAmount: Number(invoiceAmount) || 0,
+      invoiceAmount: invoice,
       discountAmount: Number(discountAmount) || 0,
       discountNote: discountNote || '',
       clubLogoUrl: clubLogoUrl || '',
