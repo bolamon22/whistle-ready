@@ -15,6 +15,9 @@ function RegisterInner() {
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Honeypot — invisible to humans, irresistible to signup bots. If it has a
+  // value, the API silently discards the submission.
+  const [company, setCompany] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,7 +28,7 @@ function RegisterInner() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, role: role || undefined }),
+      body: JSON.stringify({ name, email, password, role: role || undefined, company }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error || 'Registration failed.'); setLoading(false); return }
@@ -50,6 +53,11 @@ function RegisterInner() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Honeypot: visually removed, excluded from tab order and autofill. */}
+          <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
+            <label>Company</label>
+            <input type="text" name="company" tabIndex={-1} autoComplete="off" value={company} onChange={e => setCompany(e.target.value)} />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
             <input required value={name} onChange={e => setName(e.target.value)}
