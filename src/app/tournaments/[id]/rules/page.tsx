@@ -17,15 +17,15 @@ import { mdToHtml } from '@/app/o/[slug]/_md'
 // dynamic/no-store — that made every visit re-run every query (~14s page loads).
 export const revalidate = 30
 import type { Metadata } from 'next'
-import { abs, clip, stripMd } from '@/lib/seo'
+import { tournamentAbs, clip, stripMd } from '@/lib/seo'
 import { resolveRules } from '@/lib/rules'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const client = db(); let name = 'Tournament'
-  try { const r = await client.execute({ sql: 'SELECT name FROM "Tournament" WHERE id = ?', args: [params.id] }); if (r.rows.length) name = (r.rows[0] as any).name } catch {}
-  const title = `Rules — ${name}`; const description = clip(`Official tournament rules and policies for ${name}.`); const url = abs(`/tournaments/${params.id}/rules`)
+  const client = db(); let name = 'Tournament'; let orgSlug = ''
+  try { const r = await client.execute({ sql: 'SELECT t.name, o.slug AS orgSlug FROM "Tournament" t LEFT JOIN "Organization" o ON o.id = t.orgId WHERE t.id = ?', args: [params.id] }); if (r.rows.length) { name = (r.rows[0] as any).name; orgSlug = (r.rows[0] as any).orgSlug || '' } } catch {}
+  const title = `Rules — ${name}`; const description = clip(`Official tournament rules and policies for ${name}.`); const url = tournamentAbs(orgSlug, `/tournaments/${params.id}/rules`)
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
 }
 

@@ -17,7 +17,7 @@ import WorkForm from '@/components/WorkForm'
 // dynamic/no-store — that made every visit re-run every query (~14s page loads).
 export const revalidate = 30
 import type { Metadata } from 'next'
-import { abs, clip, stripMd } from '@/lib/seo'
+import { tournamentAbs, clip, stripMd } from '@/lib/seo'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 const D_POSITIONS = ['Referee / Official', 'Scorekeeper', 'Field / Event staff', 'Athletic trainer / Medical']
@@ -36,9 +36,9 @@ function dayRange(start?: string, end?: string): string[] {
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const client = db(); let name = 'our event'
-  try { const r = await client.execute({ sql: 'SELECT name FROM "Tournament" WHERE id = ?', args: [params.id] }); if (r.rows.length) name = (r.rows[0] as any).name } catch {}
-  const title = `Work at ${name}`; const description = clip(`Apply to work ${name} as a referee, scorekeeper, athletic trainer or event staff.`); const url = abs(`/tournaments/${params.id}/work`)
+  const client = db(); let name = 'our event'; let orgSlug = ''
+  try { const r = await client.execute({ sql: 'SELECT t.name, o.slug AS orgSlug FROM "Tournament" t LEFT JOIN "Organization" o ON o.id = t.orgId WHERE t.id = ?', args: [params.id] }); if (r.rows.length) { name = (r.rows[0] as any).name; orgSlug = (r.rows[0] as any).orgSlug || '' } } catch {}
+  const title = `Work at ${name}`; const description = clip(`Apply to work ${name} as a referee, scorekeeper, athletic trainer or event staff.`); const url = tournamentAbs(orgSlug, `/tournaments/${params.id}/work`)
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
 }
 

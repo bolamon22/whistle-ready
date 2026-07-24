@@ -1,7 +1,7 @@
 import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
 import permissionsConfig from './lib/role-permissions.json'
-import { orgSlugForHost } from './lib/orgDomains'
+import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES } from './lib/orgDomains'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/']  // /o/[slug] = public org website
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
@@ -52,11 +52,25 @@ export async function middleware(req: NextRequest) {
     if (host.startsWith('www.')) {
       return NextResponse.redirect(`https://${host.slice(4)}${pathname}${req.nextUrl.search}`, 308)
     }
+    // Legacy URLs from the domain's previous (WordPress) site → 301 to their new
+    // home, BEFORE the rewrite, so Google transfers history and backlinks work.
+    const bare = pathname.replace(/\/+$/, '') || '/'
+    const legacyMap = LEGACY_REDIRECTS[hostOnly(host)]
+    if (legacyMap) {
+      const target = legacyMap[bare]
+      if (target && target !== bare) return NextResponse.redirect(new URL(target, req.url), 301)
+      if (bare !== '/' && LEGACY_JUNK_PREFIXES.some(p => bare.startsWith(p))) {
+        return NextResponse.redirect(new URL('/', req.url), 301)
+      }
+    }
+    // NOTE: '/register' passthrough is EXACT match only — the org's own register
+    // pages (/register/player, /register/vendor) must rewrite to /o/{slug}/register/*
+    // or they 404 on the custom domain.
     const passthrough =
       pathname.startsWith('/o/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.startsWith('/favicon') ||
       pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt' ||
       /\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|map)$/i.test(pathname) ||
-      pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname.startsWith('/register') ||
+      pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
       pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff')
     if (!passthrough) {

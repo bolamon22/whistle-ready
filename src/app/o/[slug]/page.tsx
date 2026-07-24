@@ -4,7 +4,7 @@ import { MapPin, CalendarDays, ArrowRight, Trophy, Instagram } from 'lucide-reac
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from './_chrome'
 import { fetchInstagram } from './_instagram'
 import type { Metadata } from 'next'
-import { SITE_URL, abs, clip, stripMd } from '@/lib/seo'
+import { SITE_URL, abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 
 // Cache policy for published pages.
@@ -112,7 +112,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   try { const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${org.id}`] }); if (cr.rows.length) { const c = JSON.parse(((cr.rows[0] as any).value as string) || '{}'); about = c.hero?.subtext || c.about?.body || ''; if (c.logo) org.logoUrl = c.logo } } catch {}
   const title = `${org.name} — Tournaments, schedules & team registration`
   const description = clip(stripMd(about) || `${org.name}: upcoming tournaments, live schedules, standings and online team registration — all in one place.`)
-  const url = abs(`/o/${params.slug}`)
+  const url = orgAbs(params.slug)
   const images = org.logoUrl ? [org.logoUrl] : []
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images }, twitter: { title, description, images } }
 }
@@ -170,9 +170,9 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
 
   const igItems = await fetchInstagram(ig.token || '', 8)
 
-  const orgUrl = abs(`/o/${params.slug}`)
+  const orgUrl = orgAbs(params.slug)
   const orgLd = { '@context': 'https://schema.org', '@type': 'SportsOrganization', name: org.name, url: orgUrl, ...(org.logoUrl ? { logo: abs(org.logoUrl) } : {}), sameAs: [socials.facebook, socials.instagram, socials.website].filter(Boolean) }
-  const eventsLd = upcoming.length ? { '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: upcoming.map((t, i) => ({ '@type': 'ListItem', position: i + 1, url: abs(`/tournaments/${t.id}/event`), name: t.name })) } : null
+  const eventsLd = upcoming.length ? { '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: upcoming.map((t, i) => ({ '@type': 'ListItem', position: i + 1, url: tournamentAbs(params.slug, `/tournaments/${t.id}/event`), name: t.name })) } : null
   return (
     <div className="min-h-screen bg-slate-50">
       <JsonLd data={eventsLd ? [orgLd, eventsLd] : orgLd} />

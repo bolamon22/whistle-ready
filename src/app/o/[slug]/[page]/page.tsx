@@ -18,7 +18,7 @@ import { mdToHtml } from '../_md'
 // dynamic/no-store — that made every visit re-run every query (~14s page loads).
 export const revalidate = 30
 import type { Metadata } from 'next'
-import { abs, clip, stripMd } from '@/lib/seo'
+import { orgAbs, clip, stripMd } from '@/lib/seo'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -27,7 +27,7 @@ function db() {
 export async function generateMetadata({ params }: { params: { slug: string; page: string } }): Promise<Metadata> {
   const client = db(); let orgName = params.slug; let pageTitle = params.page; let body = ''
   try { const r = await client.execute({ sql: 'SELECT id, name FROM "Organization" WHERE slug = ?', args: [params.slug] }); if (r.rows.length) { const o = r.rows[0] as any; orgName = o.name; try { const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${o.id}`] }); if (cr.rows.length) { const c = JSON.parse(((cr.rows[0] as any).value as string) || '{}'); const pg = (Array.isArray(c.pages) ? c.pages : []).find((p: any) => p.slug === params.page); if (pg) { pageTitle = pg.title; body = pg.body || '' } } } catch {} } } catch {}
-  const title = `${pageTitle} — ${orgName}`; const description = clip(stripMd(body) || `${pageTitle} — ${orgName}.`); const url = abs(`/o/${params.slug}/${params.page}`)
+  const title = `${pageTitle} — ${orgName}`; const description = clip(stripMd(body) || `${pageTitle} — ${orgName}.`); const url = orgAbs(params.slug, `/${params.page}`)
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
 }
 

@@ -3,7 +3,7 @@ import { createClient } from '@libsql/client'
 import { Trophy, MapPin, CalendarDays, BarChart3 } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import type { Metadata } from 'next'
-import { abs, clip } from '@/lib/seo'
+import { orgAbs, clip } from '@/lib/seo'
 
 // Cache policy for published pages.
 //
@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   try { const r = await client.execute({ sql: 'SELECT name FROM "Organization" WHERE slug = ?', args: [params.slug] }); if (r.rows.length) name = (r.rows[0] as any).name } catch {}
   const title = `Results & past tournaments — ${name}`
   const description = clip(`Past tournament results, scores and final standings from ${name}.`)
-  const url = abs(`/o/${params.slug}/results`)
+  const url = orgAbs(params.slug, '/results')
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
 }
 
