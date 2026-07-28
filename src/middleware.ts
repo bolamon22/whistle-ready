@@ -52,6 +52,10 @@ export async function middleware(req: NextRequest) {
     if (host.startsWith('www.')) {
       return NextResponse.redirect(`https://${host.slice(4)}${pathname}${req.nextUrl.search}`, 308)
     }
+    // Spam URLs from the domain's pre-Sunshine life (German e-commerce junk —
+    // ~142K of them in Search Console) get an explicit 410 Gone: same meaning
+    // as 404 but Google drops 410s from its index faster. Never redirect these.
+    if (/^\/(itm|iam)\//.test(pathname)) return new NextResponse(null, { status: 410 })
     // Legacy URLs from the domain's previous (WordPress) site → 301 to their new
     // home, BEFORE the rewrite, so Google transfers history and backlinks work.
     const bare = pathname.replace(/\/+$/, '') || '/'
