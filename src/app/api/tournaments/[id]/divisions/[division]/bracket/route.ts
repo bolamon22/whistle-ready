@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getTemplate } from '@/lib/bracketTemplates'
+import { requireStaff } from '@/lib/apiAuth'
 
 function genId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
@@ -217,6 +218,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string; division: string } }
 ) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const division = decodeURIComponent(params.division)
   const body = await req.json()
 
@@ -274,6 +277,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; division: string } }
 ) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const division = decodeURIComponent(params.division)
   const flight = new URL(req.url).searchParams.get('flight') || 'A'
   const body = await req.json()
@@ -364,6 +369,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string; division: string } }
 ) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const division = decodeURIComponent(params.division)
   try {
     await clearDivision(params.id, division)

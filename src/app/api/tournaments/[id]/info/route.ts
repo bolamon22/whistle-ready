@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 // Tournament Info content (medical, parking, lost & found, etc.) shown on the public page.
 // Stored as JSON in the hand-migrated AppSetting table under key `tournamentInfo:<id>`.
@@ -38,6 +39,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     await ensureTable()
     const body = await req.json()

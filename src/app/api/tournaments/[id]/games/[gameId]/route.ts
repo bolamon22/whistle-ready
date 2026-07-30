@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string; gameId: string } }
 ) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const body = await req.json()
     const { date, startTime, location, gameNumber } = body
@@ -29,6 +32,8 @@ export async function DELETE(
   _: Request,
   { params }: { params: { id: string; gameId: string } }
 ) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     await prisma.game.delete({
       where: { id: params.gameId, tournamentId: params.id },

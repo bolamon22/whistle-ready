@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
+import { requireStaff } from '@/lib/apiAuth'
 
 function getClient() {
   return createClient({
@@ -32,6 +33,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const { division, color } = await req.json()
   if (!division || !color) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   const client = getClient()

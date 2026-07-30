@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -73,6 +74,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 // POST: create a new division
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { name } = await req.json()
     if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
@@ -97,6 +100,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
 // PATCH: rename a division (cascade to teams, pools, games)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { oldName, newName } = await req.json()
     if (!oldName || !newName?.trim()) return NextResponse.json({ error: 'oldName and newName required' }, { status: 400 })
@@ -147,6 +152,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // DELETE: remove a division (fails if teams exist)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { name, force } = await req.json()
     if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })

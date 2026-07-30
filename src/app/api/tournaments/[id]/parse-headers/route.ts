@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
+import { requireStaff } from '@/lib/apiAuth'
 export async function POST(req: Request) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const fd = await req.formData(); const file = fd.get('file') as File
     const buf = Buffer.from(await file.arrayBuffer())

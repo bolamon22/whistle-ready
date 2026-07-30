@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const { deletedBy, date, category } = await req.json()
   if (!deletedBy) return NextResponse.json({ error: 'deletedBy required' }, { status: 400 })
 

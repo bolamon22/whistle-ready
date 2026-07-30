@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function PATCH(
   req: NextRequest,
@@ -7,6 +8,19 @@ export async function PATCH(
 ) {
   try {
     const body = await req.json()
+    // Auth (Jul 2026 sweep): the PUBLIC individual-registration flow PATCHes
+    // this route (self-service fields + a redundant post-Stripe status echo —
+    // the webhook is what authoritatively marks 'paid'), so it can't be
+    // staff-only. Instead, anonymous callers lose the money fields: without
+    // this, anyone could set paymentStatus='paid' and skip paying.
+    const gate = await requireStaff()
+    if (!gate.ok) { delete body.paymentStatus; delete body.feeTierId; delete body.feeTierName; delete body.feeTierAmount }
+    // Nothing left after stripping (e.g. the post-Stripe {paymentStatus} echo)?
+    // Answer OK without an empty Prisma update — the webhook already did the work.
+    if (Object.keys(body).length === 0) {
+      const current = await prisma.individualRegistration.findUnique({ where: { id: params.regId } })
+      return NextResponse.json(current ?? { ok: true })
+    }
     const reg = await prisma.individualRegistration.update({
       where: { id: params.regId },
       data: {
@@ -46,6 +60,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string; regId: string } }
 ) {
+  // Deleting a registrant — staff only. Was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     await prisma.individualRegistration.delete({ where: { id: params.regId } })
     return NextResponse.json({ ok: true })

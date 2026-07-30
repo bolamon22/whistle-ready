@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 // GET – list existing pool games for this division
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
@@ -53,6 +54,8 @@ function roundRobinByRound(teams: string[]): [string, string][][] {
 
 // POST – generate round-robin pool games OR add a single game
 export async function POST(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const division = decodeURIComponent(params.division)
   const body = await req.json()
 
@@ -156,6 +159,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
 
 // DELETE – remove all games for this division (pool and non-pool)
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const division = decodeURIComponent(params.division)
   const { count } = await prisma.game.deleteMany({
     where: { tournamentId: params.id, division },

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   return NextResponse.json(await prisma.game.findMany({
@@ -10,6 +11,8 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
 }
 
 export async function POST(req: Request, { params }: { params:{id:string} }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const b = await req.json()
   const game = await prisma.game.create({ data:{
     tournamentId: params.id,

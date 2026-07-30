@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { sendEmail } from '@/lib/email'
+import { requireStaff } from '@/lib/apiAuth'
 
 const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
 
@@ -9,6 +10,8 @@ function applyVars(template: string, vars: Record<string, string>): string {
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const body = await req.json() as {
     clubs: { clubName: string; contactEmail: string; contactName: string; numTeams?: number; divisions?: string[] }[]
     subjectTemplate?: string

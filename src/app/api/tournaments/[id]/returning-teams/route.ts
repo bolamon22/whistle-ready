@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const { searchParams } = new URL(req.url)
   const fromId = searchParams.get('from')
   if (!fromId) return NextResponse.json({ error: 'from param required' }, { status: 400 })

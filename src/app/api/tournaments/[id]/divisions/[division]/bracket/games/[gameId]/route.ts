@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; division: string; gameId: string } }
 ) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const body = await req.json()
   const { score1, score2, field, startTime, gameDate, team1, team2, clearScore } = body
 

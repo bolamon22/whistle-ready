@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { parsePayRates, roleLabel } from '@/lib/utils'
+import { requireStaff } from '@/lib/apiAuth'
 
 function calcHours(e:{clockIn:string|null;clockOut:string|null;hoursManual:number|null}):number {
   if(e.hoursManual!=null)return e.hoursManual
@@ -9,6 +10,8 @@ function calcHours(e:{clockIn:string|null;clockOut:string|null;hoursManual:numbe
 }
 
 export async function GET(_: Request, { params }: { params:{id:string} }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const tournament = await prisma.tournament.findUnique({ where:{id:params.id} })
   if (!tournament) return NextResponse.json({ error:'Not found' }, { status:404 })
   const payRates = parsePayRates(tournament.payRates)

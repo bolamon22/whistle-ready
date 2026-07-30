@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import prisma from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 function getClient() {
   return createClient({
@@ -35,6 +36,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const client = getClient()
   await ensureColumns(client)
 

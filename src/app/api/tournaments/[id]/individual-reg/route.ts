@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 // GET — list all individual registrations for a tournament
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const regs = await (prisma as any).individualRegistration.findMany({

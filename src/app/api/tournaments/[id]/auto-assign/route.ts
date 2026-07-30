@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getPayRate, parsePayRates, parseJsonDeep } from '@/lib/utils'
+import { requireStaff } from '@/lib/apiAuth'
 
 interface WorkerRow {
   id: string; name: string; certLevel: string; defaultRole: string
@@ -26,6 +27,8 @@ function canScorekeeper(w: WorkerRow): boolean {
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const { date, stickyScorekeeper } = await req.json()
 
   const tournament = await prisma.tournament.findUnique({ where: { id: params.id } })

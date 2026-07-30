@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
   try {
@@ -14,6 +15,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { name } = await req.json()
     const pool = await prisma.pool.create({
@@ -26,6 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { poolId, teamNames } = await req.json()
     const pool = await prisma.pool.update({
@@ -39,6 +44,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { poolId } = await req.json()
     await prisma.pool.delete({ where: { id: poolId } })

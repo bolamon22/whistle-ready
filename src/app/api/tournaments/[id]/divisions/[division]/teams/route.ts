@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
   try {
@@ -63,6 +64,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
 
 // PATCH: move a team to a different division
 export async function PATCH(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { teamId, newDivision } = await req.json()
     if (!teamId || !newDivision?.trim()) return NextResponse.json({ error: 'teamId and newDivision required' }, { status: 400 })
@@ -114,6 +117,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // POST: add a placeholder team directly (no full registration required)
 export async function POST(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const division = decodeURIComponent(params.division)
     const body = await req.json()
@@ -166,6 +171,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
 
 // PUT: update team details (and optionally confirm)
 export async function PUT(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { teamId, teamName, clubName, coachName, coachEmail, coachPhone, logoUrl, confirm } = await req.json()
     if (!teamId) return NextResponse.json({ error: 'teamId required' }, { status: 400 })
@@ -206,6 +213,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 // here also disappears from the Registrations list). Multi-team club
 // registrations are kept and their team count is decremented.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { teamId } = await req.json()
     if (!teamId) return NextResponse.json({ error: 'teamId required' }, { status: 400 })
