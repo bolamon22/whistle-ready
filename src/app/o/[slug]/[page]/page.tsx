@@ -19,15 +19,39 @@ import { mdToHtml } from '../_md'
 export const revalidate = 30
 import type { Metadata } from 'next'
 import { orgAbs, clip, stripMd } from '@/lib/seo'
+import JsonLd from '@/components/JsonLd'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 }
 
+// AEO: pull FAQ question/answer pairs out of a page's Markdown so we can emit
+// FAQPage structured data without any extra authoring UI. Convention: an H2
+// containing "FAQ" or "frequently asked" opens the section; each H3 inside it
+// is a question and the text below it (until the next heading) is the answer.
+// Any info page that follows the pattern gets rich-result markup for free.
+function extractFaqs(md: string): { q: string; a: string }[] {
+  const faqs: { q: string; a: string }[] = []
+  let inFaq = false, q = '', a: string[] = []
+  const push = () => { const ans = stripMd(a.join(' ')).trim(); if (q && ans) faqs.push({ q, a: ans }); q = ''; a = [] }
+  for (const line of (md || '').split(/\r?\n/)) {
+    const h3 = line.match(/^###\s+(.+)/); const h2 = !h3 && line.match(/^##\s+(.+)/); const h1 = !h3 && !h2 && line.match(/^#\s+(.+)/)
+    if (h2 || h1) { push(); inFaq = /faq|frequently asked/i.test((h2 || h1)![1]); continue }
+    if (h3) { push(); if (inFaq) q = stripMd(h3[1]).trim(); continue }
+    if (inFaq && q) a.push(line)
+  }
+  push()
+  return faqs
+}
+
 export async function generateMetadata({ params }: { params: { slug: string; page: string } }): Promise<Metadata> {
-  const client = db(); let orgName = params.slug; let pageTitle = params.page; let body = ''
-  try { const r = await client.execute({ sql: 'SELECT id, name FROM "Organization" WHERE slug = ?', args: [params.slug] }); if (r.rows.length) { const o = r.rows[0] as any; orgName = o.name; try { const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${o.id}`] }); if (cr.rows.length) { const c = JSON.parse(((cr.rows[0] as any).value as string) || '{}'); const pg = (Array.isArray(c.pages) ? c.pages : []).find((p: any) => p.slug === params.page); if (pg) { pageTitle = pg.title; body = pg.body || '' } } } catch {} } } catch {}
-  const title = `${pageTitle} — ${orgName}`; const description = clip(stripMd(body) || `${pageTitle} — ${orgName}.`); const url = orgAbs(params.slug, `/${params.page}`)
+  const client = db(); let orgName = params.slug; let pageTitle = params.page; let body = ''; let pg: any = null
+  try { const r = await client.execute({ sql: 'SELECT id, name FROM "Organization" WHERE slug = ?', args: [params.slug] }); if (r.rows.length) { const o = r.rows[0] as any; orgName = o.name; try { const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${o.id}`] }); if (cr.rows.length) { const c = JSON.parse(((cr.rows[0] as any).value as string) || '{}'); pg = (Array.isArray(c.pages) ? c.pages : []).find((p: any) => p.slug === params.page); if (pg) { pageTitle = pg.title; body = pg.body || '' } } } catch {} } } catch {}
+  // Pages can carry explicit seoTitle/seoDescription (set via the site API or a
+  // future editor field); otherwise metadata is computed from title + body.
+  const title = (pg?.seoTitle && String(pg.seoTitle)) || `${pageTitle} — ${orgName}`
+  const description = (pg?.seoDescription && String(pg.seoDescription)) || clip(stripMd(body) || `${pageTitle} — ${orgName}.`)
+  const url = orgAbs(params.slug, `/${params.page}`)
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
 }
 
@@ -61,8 +85,16 @@ export default async function OrgInfoPage({ params }: { params: { slug: string; 
 
   if (!page) return <NotFound slug={params.slug} />
 
+  // Structured data: Article for every info page; FAQPage when the body follows
+  // the H2-"FAQ" / H3-question convention (see extractFaqs above).
+  const pageUrl = orgAbs(params.slug, `/${params.page}`)
+  const articleLd = { '@context': 'https://schema.org', '@type': 'Article', headline: page.title, url: pageUrl, publisher: { '@type': 'Organization', name: org.name }, ...(page.heroImage ? { image: page.heroImage } : {}) }
+  const faqs = extractFaqs(page.body || '')
+  const faqLd = faqs.length >= 2 ? { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })) } : null
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      <JsonLd data={[articleLd, ...(faqLd ? [faqLd] : [])]} />
       <OrgHeader org={org} homeHref={base || '/'} nav={nav} registerHref={registerHref} />
       {/* Title band */}
       <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
