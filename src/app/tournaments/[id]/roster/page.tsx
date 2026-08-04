@@ -296,10 +296,16 @@ export default function RosterPage({ params }: { params:{id:string} }) {
           <h1 className="section-title">Staff Roster</h1>
           <p className="text-sm text-slate-500 mt-1">Confirm who's working this tournament · {onRoster.length} confirmed</p>
         </div>
-        <button onClick={() => setShowInvite(true)}
-          className="btn-primary btn-sm flex items-center gap-2">
-          <UserPlus size={15} />Invite Staff
-        </button>
+        <div className="flex items-center gap-2">
+          <Link href={`/tournaments/${params.id}/roster/exhibit-a`}
+            className="btn-secondary btn-sm flex items-center gap-2" title="County background-check affidavit table, filled from this roster">
+            <ShieldCheck size={15} />Exhibit A
+          </Link>
+          <button onClick={() => setShowInvite(true)}
+            className="btn-primary btn-sm flex items-center gap-2">
+            <UserPlus size={15} />Invite Staff
+          </button>
+        </div>
       </div>
 
       {/* ── On Roster ── */}

@@ -7,6 +7,17 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
 }
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const b=await req.json()
+  // Background-check date (Aug 2026): raw column, not in the Prisma schema.
+  // Used by the county Exhibit A affidavit -- re-screen required every 12 months.
+  if (b.bgCheckDate !== undefined) {
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "bgCheckDate" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
+    try { await prisma.$executeRawUnsafe(`UPDATE "Worker" SET "bgCheckDate" = ? WHERE id = ?`, String(b.bgCheckDate || '').slice(0, 10), params.id) } catch {}
+    const rest = { ...b }; delete rest.bgCheckDate
+    if (Object.keys(rest).length === 0) {
+      const w = await prisma.worker.findUnique({ where: { id: params.id } })
+      return NextResponse.json(w ?? { ok: true })
+    }
+  }
   return NextResponse.json(await prisma.worker.update({where:{id:params.id},data:{
     ...(b.name!==undefined&&{name:b.name}),
     ...(b.email!==undefined&&{email:b.email||null}),
