@@ -89,7 +89,23 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Jul 23, 2026)
+## Current state (as of Aug 4, 2026)
+
+- **Grants & county paperwork toolkit (LIVE-pending-push, Aug 4)** — built for the annual city
+  sports-tourism grants (Play Treasure Coast etc.) and venue permits:
+  - **Travel & hotels** (`/tournaments/[id]/travel`, nav People → Travel & hotels): room-night tracking.
+    Register form asks hotel/rooms/nights when a club needs rooms; stored as RAW TeamRegistration columns
+    (`hotelName`/`hotelRooms`/`hotelNights` — like `instagramHandle`, deliberately NOT in schema.prisma;
+    guarded ALTERs in the registrations routes; GET merges them in). Staff page has inline edits via a
+    `{travel:true}` PATCH branch (staff-gated, never touches the team list), totals + room-nights-by-hotel
+    (the grant post-event report table).
+  - **Exhibit A generator** (`/tournaments/[id]/roster/exhibit-a`, button on Staff Roster): fills the county
+    "ISA Background Check Results" affidavit table from the roster. `Worker.bgCheckDate` raw column (set via
+    workers [id] PATCH); flags missing/>12-month-stale screenings; print-ready.
+  - Grant/venue facts (FEIN, PTC contacts/deadlines, Martin County permit specs) live in the agent's private
+    memory, NOT this public repo.
+
+## Earlier state (as of Jul 23, 2026)
 
 - **sunshineeventsgroup.com = Sunshine's public domain (LIVE Jul 23)** — hosted directly on the
   whistle-ready Vercel project (NOT a forward). How it works:
