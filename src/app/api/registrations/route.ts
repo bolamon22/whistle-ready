@@ -170,6 +170,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  // Honeypot tripped (spam bot autofilled the hidden field): pretend success,
+  // write nothing, send nothing. Same play as the signup form.
+  if (body.hp_extra) {
+    return NextResponse.json({ id: 'ok', confirmation: null }, { status: 201 })
+  }
+
   // The public form doesn't send invoiceAmount, which left every registration
   // invoiced at $0 on the staff page (the letter computed its own fee, hiding
   // the bug). The server now owns the number: compute from the tournament's

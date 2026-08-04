@@ -1515,6 +1515,7 @@ export default function RegistrationsPage() {
                       <div className="min-w-0">
                         <div className="font-semibold text-slate-800 truncate">{reg.clubName || reg.clubContact}</div>
                         <div className="text-sm text-slate-500 truncate">{reg.contactEmail} · {reg.contactPhone}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">Registered {reg.createdAt ? new Date(reg.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
                       </div>
                     </button>
 

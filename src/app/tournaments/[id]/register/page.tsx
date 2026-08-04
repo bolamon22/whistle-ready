@@ -162,6 +162,7 @@ export default function RegisterPage() {
   const [hotelName, setHotelName] = useState('')
   const [hotelRooms, setHotelRooms] = useState('')
   const [hotelNights, setHotelNights] = useState('')
+  const [hpExtra, setHpExtra] = useState('')  // honeypot -- bots autofill it, humans never see it
   const [paymentMethod, setPaymentMethod] = useState('')
   const [notes, setNotes] = useState('')
   const [teams, setTeams] = useState<TeamRow[]>([emptyTeam()])
@@ -240,7 +241,7 @@ export default function RegisterPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tournamentId, clubName, clubContact, contactEmail, contactPhone,
+          tournamentId, hp_extra: hpExtra, clubName, clubContact, contactEmail, contactPhone,
           clubBasedIn,
           // Accept "yourclub.com" — add the scheme for them.
           clubWebsite: clubWebsite.trim() && !/^https?:\/\//i.test(clubWebsite.trim()) ? `https://${clubWebsite.trim()}` : clubWebsite.trim(),
@@ -400,6 +401,11 @@ export default function RegisterPage() {
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-2xl shadow p-8">
           <form onSubmit={handleSubmit} className="space-y-8" autoComplete="on">
+              {/* Honeypot (spam bots): offscreen, name/autocomplete chosen so real
+                  browser autofill ignores it -- same pattern as the signup form. */}
+              <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
+                <input type="text" name="hp_extra" tabIndex={-1} autoComplete="one-time-code" value={hpExtra} onChange={e => setHpExtra(e.target.value)} />
+              </div>
             <section>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
