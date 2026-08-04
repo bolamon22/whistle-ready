@@ -9,6 +9,11 @@ import { SITE_URL, tournamentAbs } from '@/lib/seo'
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "instagramHandle" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+  // Travel/room-night tracking (Aug 2026): raw columns like instagramHandle --
+  // kept out of the Prisma schema so no client regen / migration is needed.
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelName" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelRooms" INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelNights" INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
 }
 
 // "@yourclub", "instagram.com/yourclub", "https://www.instagram.com/yourclub/" → "yourclub"
@@ -30,7 +35,15 @@ export async function GET(req: NextRequest) {
     include: { teams: true, payments: { orderBy: { receivedAt: 'asc' } } },
     orderBy: { createdAt: 'desc' },
   })
-  return NextResponse.json(registrations)
+  // Raw columns (hotel/instagram) aren't in the Prisma schema -- merge them in.
+  try {
+    const extras: any[] = await prisma.$queryRawUnsafe(
+      `SELECT id, "hotelName", "hotelRooms", "hotelNights", "instagramHandle" FROM "TeamRegistration" WHERE tournamentId = ?`, tournamentId)
+    const byId = new Map(extras.map((e: any) => [e.id, e]))
+    return NextResponse.json(registrations.map((r: any) => ({ ...r, ...((byId.get(r.id) as any) || {}) })))
+  } catch {
+    return NextResponse.json(registrations)
+  }
 }
 
 const fmtDay = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); const dt = new Date(+y, +m - 1, +day); return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
@@ -149,6 +162,7 @@ export async function POST(req: NextRequest) {
     tournamentId, clubName, clubContact, contactEmail, contactPhone,
     clubBasedIn, clubWebsite, numTeams, needsHotel, paymentMethod, notes, teams,
     invoiceAmount, discountAmount, discountNote, clubLogoUrl, source, instagram,
+    hotelName, hotelRooms, hotelNights,
   } = body
 
   const isImport = source === 'import'
@@ -204,6 +218,11 @@ export async function POST(req: NextRequest) {
   // instagramHandle is a raw column (not in the Prisma schema) — write it separately.
   const ig = normalizeInstagram(instagram)
   if (ig) { try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "instagramHandle" = ? WHERE id = ?`, ig, registration.id) } catch {} }
+  // Hotel/travel answers (raw columns) -- feed grant room-night projections + the travel report.
+  if (hotelName || hotelRooms || hotelNights) {
+    try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "hotelName" = ?, "hotelRooms" = ?, "hotelNights" = ? WHERE id = ?`,
+      String(hotelName || '').slice(0, 120), Number(hotelRooms) || 0, Number(hotelNights) || 0, registration.id) } catch {}
+  }
 
   // Public form registrations get a confirmation letter (on-screen + email); imports don't.
   const confirmation = isImport ? null : await buildAndSendConfirmation({ ...registration, instagramHandle: ig })

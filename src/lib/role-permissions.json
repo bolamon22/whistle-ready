@@ -77,7 +77,8 @@
       "label": "Team Registrations",
       "group": "Registrations",
       "routes": [
-        "/tournaments/*/registrations"
+        "/tournaments/*/registrations",
+        "/tournaments/*/travel"
       ]
     },
     {

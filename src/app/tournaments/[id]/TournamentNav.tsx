@@ -73,6 +73,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/vendor-requests`,      label: 'Vendor Requests' },
       { href: `${base}/staff-applications`,   label: 'Staff applications' },
       { href: `${base}/roster`,               label: 'Staff roster' },
+      { href: `${base}/travel`,               label: 'Travel & hotels' },
     ]},
     { label: 'Game Day', items: [
       { href: `${base}/scores`,         label: 'Post scores' },

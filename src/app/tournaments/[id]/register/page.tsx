@@ -159,6 +159,9 @@ export default function RegisterPage() {
   const [clubWebsite, setClubWebsite] = useState('')
   const [instagram, setInstagram] = useState('')
   const [needsHotel, setNeedsHotel] = useState('')
+  const [hotelName, setHotelName] = useState('')
+  const [hotelRooms, setHotelRooms] = useState('')
+  const [hotelNights, setHotelNights] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [notes, setNotes] = useState('')
   const [teams, setTeams] = useState<TeamRow[]>([emptyTeam()])
@@ -244,6 +247,7 @@ export default function RegisterPage() {
           instagram: instagram.trim(),
           numTeams: teams.length,
           needsHotel, paymentMethod, notes,
+          hotelName: hotelName.trim(), hotelRooms: Number(hotelRooms) || 0, hotelNights: Number(hotelNights) || 0,
           // Safety net: any team row left without a club name gets the club's.
           teams: teams.map(t => ({ ...t, clubName: t.clubName || clubName })),
           clubLogoUrl,
@@ -438,6 +442,23 @@ export default function RegisterPage() {
                     <option>Maybe</option>
                   </select>
                 </div>
+                {(needsHotel === 'Yes' || needsHotel === 'Maybe') && (
+                  <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Hotel <span className="text-gray-400 font-normal">(if known)</span></label>
+                      <input type="text" placeholder="TBD" value={hotelName} onChange={e => setHotelName(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Rooms <span className="text-gray-400 font-normal">(est.)</span></label>
+                      <input type="number" min="0" inputMode="numeric" placeholder="10" value={hotelRooms} onChange={e => setHotelRooms(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nights <span className="text-gray-400 font-normal">(est.)</span></label>
+                      <input type="number" min="0" inputMode="numeric" placeholder="1" value={hotelNights} onChange={e => setHotelNights(e.target.value)} className={inputCls} />
+                    </div>
+                    <p className="sm:col-span-3 text-xs text-gray-400 -mt-2">Rough estimates are fine — this helps us reserve room blocks near the fields and support the event with local partners.</p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Logo</label>
                   <p className="text-xs text-gray-400 mb-2">Automatically applied to all your teams. You can override per team below.</p>
