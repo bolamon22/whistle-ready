@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useContext, createContext, Fragment } fro
 import { INFO_ICONS } from '@/lib/infoIcons'
 import { useParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
+import LiveTicker from '@/components/LiveTicker'
 
 const LogosContext = createContext<Record<string, string>>({})
 import Link from 'next/link'
@@ -608,7 +609,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
           const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-500'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.isChampionship?{t:'Bracket',c:'bg-amber-50 text-amber-700'}:g.pool?{t:'Pool '+g.pool,c:'bg-teal-50 text-teal-700'}:{t:'Upcoming',c:'bg-slate-100 text-slate-500'}
           return (
             <div key={g.id} className={`bg-white border rounded-xl px-2.5 py-2 flex items-center gap-2.5 ${live?'border-red-200':isHL?'border-teal-300 bg-teal-50/30':'border-slate-200'}`}>
-              <span className={`text-[10px] font-bold w-8 text-center py-0.5 rounded flex-shrink-0 ${chipCls}`}>{g.gameNumber}</span>
+              <Link href={`/tournaments/${id}/public/games/${g.id}`} title="Game page" className={`text-[10px] font-bold w-8 text-center py-0.5 rounded flex-shrink-0 hover:ring-2 hover:ring-teal-300 ${chipCls}`}>{g.gameNumber}</Link>
               <div className="w-[58px] flex-shrink-0 text-center border-r border-slate-100 pr-2">
                 <div className="text-[12px] font-semibold text-slate-800">{g.startTime||'TBD'}</div>
                 <div className="text-[10px] text-slate-400 truncate">{(g.location||'').split(' - ').pop()||''}</div>
@@ -806,6 +807,8 @@ export default function PublicTournamentPage() {
     <LogosContext.Provider value={logos}>
     <div className={`min-h-screen bg-gray-50 ${dark ? 'gd-dark' : ''}`}>
       <style>{GD_DARK_CSS}</style>
+      {/* Live-score ticker: live games + recent finals, linking to per-game pages */}
+      <LiveTicker tournamentId={String(id)} games={games} logos={logos}/>
       {/* Notification modal */}
       {showNotifyModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setShowNotifyModal(false)}>
