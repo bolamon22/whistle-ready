@@ -105,6 +105,14 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
   - Grant/venue facts (FEIN, PTC contacts/deadlines, Martin County permit specs) live in the agent's private
     memory, NOT this public repo.
 
+- **Public game pages + live ticker (Aug 4)** — Regystra-inspired game-day presentation:
+  - `/tournaments/[id]/public/games/[gameId]` (public via existing middleware regex): shareable per-game
+    page — crests + big score, Live (polls live-scores, period label) / Final / Upcoming badge, meta chips,
+    share + .ics. Schedule cards' game-number chips link to it.
+  - `src/components/LiveTicker.tsx` on `/public`: horizontal strip of live games (pulsing) + recent finals,
+    linking to game pages; hidden when empty. Next tier (per Regystra analysis): scorekeeper EVENT logging
+    (goal/assist/penalty + jersey #) → box scores, timelines, player leaderboards; then team/venue pages.
+
 ## Earlier state (as of Jul 23, 2026)
 
 - **sunshineeventsgroup.com = Sunshine's public domain (LIVE Jul 23)** — hosted directly on the
