@@ -118,8 +118,13 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
     URLs. **Event-slug targets hardcode the CURRENT season's tournament ids — update annually.**
   - Canonicals/sitemap/JSON-LD emit the custom domain for mapped orgs (`orgAbs`/`tournamentAbs`
     in `src/lib/seo.ts`) so search credit accrues to the org's domain, not whistleready.app.
-  - Vercel: apex = Production, www = 308 → apex. DNS at **Hostinger** (registrar GoDaddy):
-    A @ → Vercel, MX/SPF/SendGrid records untouched (domain has Hostinger email service).
+  - Vercel: apex = Production, www = 308 → apex. **DNS moved to GoDaddy (Aug 4 2026)** — registrar
+    GoDaddy now also hosts the zone (ns21/ns22.domaincontrol.com) after Hostinger twice reset the zone
+    to its own CDN (old WP showed). Full zone recreated at GoDaddy: A @ 76.76.21.21, www CNAME
+    cname.vercel-dns.com, MX mx1/mx2.hostinger.com (5/10), SPF, google-site-verification TXT, DKIM
+    CNAMEs (SendGrid s1/s2 + em784, Hostinger a/b/c, mlsend litesrv), autodiscover/autoconfig.
+    _dmarc = GoDaddy default p=quarantine (was p=none; fine — all DKIM aligned). Hostinger's zone
+    still exists but is inert. Hostinger can no longer break the site.
   - sunshinelax.com = GoDaddy **301** forward → sunshineeventsgroup.com (was 302 → whistleready).
   - GSC: domain property verified (TXT in Hostinger DNS), sitemap submitted.
   - Old WordPress site: intact on Hostinger hosting (cancel later); browsable reference at
