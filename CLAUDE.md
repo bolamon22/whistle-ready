@@ -113,6 +113,15 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
     linking to game pages; hidden when empty. Next tier (per Regystra analysis): scorekeeper EVENT logging
     (goal/assist/penalty + jersey #) → box scores, timelines, player leaderboards; then team/venue pages.
 
+- **Club database / returning teams (Aug 11)** — org Admin → Club database (`/dashboard/org/clubs`): every club
+  that has registered, deduped across name variants + shared emails, with per-event/year history (teams brought,
+  \$ paid, divisions) + returning/win-back flags; search/filter, expandable record, one-click "draft win-back
+  email" (mailto with the club's history). **Import** parses Cognito-style exports (first sheet = club-level,
+  `TeamInformation` sheet = per-team divisions) fully IN-BROWSER via SheetJS (cdnjs) and rebuilds — repeatable each
+  season. Stored per-org in AppSetting `orgClubs:{orgId}`; API `/api/org-clubs` (admin/director write, coach/parent
+  get []). Seed data: 14 Cognito exports (MonsterMash/FallClassic/SummerKickOff/JingleBrawl 2022-26) → 484 regs,
+  1154 teams, 127 clubs; master workbook also in session outputs.
+
 ## Earlier state (as of Jul 23, 2026)
 
 - **sunshineeventsgroup.com = Sunshine's public domain (LIVE Jul 23)** — hosted directly on the
