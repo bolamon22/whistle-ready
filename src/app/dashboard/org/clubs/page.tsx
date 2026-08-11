@@ -144,6 +144,7 @@ function ClubsInner(){
   const [importing,setImporting]=useState(false)
   const [search,setSearch]=useState('')
   const [filter,setFilter]=useState<'all'|'returning'|'winback'>('all')
+  const [eventFilter,setEventFilter]=useState('')
   const [expanded,setExpanded]=useState<string|null>(null)
   const [updatedAt,setUpdatedAt]=useState<string|null>(null)
 
@@ -168,17 +169,36 @@ function ClubsInner(){
     setImporting(false)
   }
 
+  // Distinct tournaments across all clubs' histories, for the event dropdown.
+  const eventNames=useMemo(()=>[...new Set(clubs.flatMap(c=>c.history.map(h=>h.event)))].sort(),[clubs])
+  const latestYear=useMemo(()=>Math.max(2000,...clubs.flatMap(c=>c.years)),[clubs])
+
   const filtered=useMemo(()=>{
     const s=search.trim().toLowerCase()
     return clubs.filter(c=>{
+      if(eventFilter && !c.history.some(h=>h.event===eventFilter)) return false
       if(filter==='returning'&&!c.returning) return false
-      if(filter==='winback'&&!c.winBack) return false
+      // Win-back respects the event filter: if an event is chosen, "win-back" =
+      // attended that event before but not in the most recent year it ran.
+      if(filter==='winback'){
+        if(eventFilter){
+          const evYears=c.history.filter(h=>h.event===eventFilter).map(h=>h.year)
+          const evLatest=Math.max(0,...clubs.flatMap(cc=>cc.history.filter(h=>h.event===eventFilter).map(h=>h.year)))
+          if(!(evYears.length && !evYears.includes(evLatest))) return false
+        } else if(!c.winBack) return false
+      }
       if(s && !(`${c.club} ${c.contact} ${c.email} ${c.city}`.toLowerCase().includes(s))) return false
       return true
     })
-  },[clubs,search,filter])
+  },[clubs,search,filter,eventFilter])
 
-  const stats=useMemo(()=>({ total:clubs.length, returning:clubs.filter(c=>c.returning).length, winback:clubs.filter(c=>c.winBack).length, teams:clubs.reduce((s,c)=>s+c.totalTeams,0) }),[clubs])
+  const stats=useMemo(()=>{
+    const base = eventFilter ? clubs.filter(c=>c.history.some(h=>h.event===eventFilter)) : clubs
+    const teams = eventFilter
+      ? base.reduce((s,c)=>s+c.history.filter(h=>h.event===eventFilter).reduce((t,h)=>t+h.teams,0),0)
+      : base.reduce((s,c)=>s+c.totalTeams,0)
+    return { total:base.length, returning:base.filter(c=>c.returning).length, winback:filtered.length&&filter==='winback'?filtered.length:base.filter(c=>c.winBack).length, teams }
+  },[clubs,eventFilter,filtered,filter])
 
   if(loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-slate-400">Loading…</div>
 
@@ -222,12 +242,19 @@ function ClubsInner(){
                 <Search size={15} className="absolute left-2.5 top-2.5 text-slate-400"/>
                 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search club, contact, city…" className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"/>
               </div>
+              {eventNames.length>1 && (
+                <select value={eventFilter} onChange={e=>setEventFilter(e.target.value)} className="border border-slate-300 rounded-lg px-2.5 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
+                  <option value="">All tournaments</option>
+                  {eventNames.map(ev=><option key={ev} value={ev}>{ev}</option>)}
+                </select>
+              )}
               <div className="flex bg-slate-100 rounded-lg p-0.5">
                 {([['all','All'],['returning','Returning'],['winback','Win-back']] as const).map(([k,l])=>(
                   <button key={k} onClick={()=>setFilter(k)} className={`text-xs px-3 py-1.5 rounded-md transition-colors ${filter===k?'bg-white shadow text-teal-700 font-medium':'text-slate-500 hover:text-slate-700'}`}>{l}</button>
                 ))}
               </div>
             </div>
+            {eventFilter && <p className="text-xs text-slate-400 -mt-1 mb-3">Showing clubs that attended <b className="text-slate-600">{eventFilter}</b>. Team &amp; win-back counts are for this tournament{filter==='winback'?' (attended before, but not its most recent year)':''}.</p>}
             {/* List */}
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               {filtered.map(c=>{
