@@ -65,6 +65,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/scheduler`,  label: 'Scheduler' },
       { href: `${base}`,            label: 'Assigner' },
       { href: `${base}/checklist`,  label: 'Checklist' },
+      { href: `${base}/documents`,  label: 'Documents' },
     ]},
     { label: 'People', items: [
       { href: `${base}/registrations`,        label: 'Team registrations' },

@@ -94,7 +94,8 @@
       "label": "Tournament Settings",
       "group": "Tournaments",
       "routes": [
-        "/tournaments/*/settings"
+        "/tournaments/*/settings",
+        "/tournaments/*/documents"
       ]
     },
     {
