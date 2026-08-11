@@ -346,9 +346,9 @@ function ClubsInner(){
                           <table className="w-full text-sm">
                             <thead><tr className="text-left text-[11px] uppercase tracking-wide text-slate-400"><th className="py-1.5 pr-4">Event</th><th className="py-1.5 pr-4">Teams</th><th className="py-1.5 pr-4">Paid</th><th className="py-1.5">Divisions</th></tr></thead>
                             <tbody>
-                              {c.history.map((h,i)=>(
+                              {[...c.history].sort((a,b)=>b.year-a.year||b.event.localeCompare(a.event)).map((h,i)=>(
                                 <tr key={i} className="border-t border-slate-100">
-                                  <td className="py-1.5 pr-4 text-slate-700 whitespace-nowrap">{h.event} {h.year}{c.history.length>1&&h===c.history[c.history.length-1]&&<Star size={11} className="inline ml-1 text-amber-400" fill="currentColor"/>}</td>
+                                  <td className="py-1.5 pr-4 text-slate-700 whitespace-nowrap">{h.event} {h.year}{c.history.length>1&&i===0&&<Star size={11} className="inline ml-1 text-amber-400" fill="currentColor"/>}</td>
                                   <td className="py-1.5 pr-4 font-medium">{h.teams}</td>
                                   <td className="py-1.5 pr-4">{money(h.paid)}</td>
                                   <td className="py-1.5 text-slate-500 text-xs">{h.divisions.join(', ')}</td>
