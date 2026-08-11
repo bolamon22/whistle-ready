@@ -96,6 +96,35 @@ async function buildFromFiles(files:FileList):Promise<Club[]>{
   return clubs
 }
 
+// Merge freshly-imported clubs INTO the existing database instead of replacing
+// it — so adding files one at a time accumulates, and re-importing a file just
+// refreshes that event's numbers (idempotent, keyed by canonical name + email).
+function mergeClubs(existing:Club[], incoming:Club[]):Club[]{
+  const idx:Record<string,Club>={}; const emailIdx:Record<string,string>={}
+  for(const c of existing){ idx[canon(c.club)]=c; if(c.email) emailIdx[c.email]=canon(c.club) }
+  for(const nc of incoming){
+    let key=canon(nc.club)
+    if(!idx[key]&&nc.email&&emailIdx[nc.email]) key=emailIdx[nc.email]
+    const cur=idx[key]
+    if(!cur){ idx[key]=nc; if(nc.email) emailIdx[nc.email]=key; continue }
+    const ncKeys=new Set(nc.history.map(h=>h.event+'|'+h.year))
+    const hist=cur.history.filter(h=>!ncKeys.has(h.event+'|'+h.year)).concat(nc.history).sort((a,b)=>a.year-b.year||a.event.localeCompare(b.event))
+    const years=[...new Set(hist.map(h=>h.year))].sort((a,b)=>a-b)
+    const totalTeams=hist.reduce((s,h)=>s+h.teams,0)
+    const totalPaid=Math.round(hist.reduce((s,h)=>s+h.paid,0))
+    const divisions=[...new Set([...(cur.divisions||[]),...(nc.divisions||[])])].sort()
+    const newer=nc.lastYear>=cur.lastYear?nc:cur; const older=newer===nc?cur:nc
+    const f=(k:keyof Club)=> (newer as any)[k]||(older as any)[k]||''
+    const e25=new Set(hist.filter(h=>h.year===2025).map(h=>h.event)); const e24=new Set(hist.filter(h=>h.year===2024).map(h=>h.event))
+    idx[key]={ club:cur.club||nc.club, contact:f('contact') as string, email:f('email') as string, phone:f('phone') as string,
+      city:f('city') as string, website:f('website') as string, eventsAttended:hist.length, years,
+      firstYear:years[0], lastYear:years[years.length-1], totalTeams, totalPaid, divisions, history:hist,
+      returning:years.length>=2, winBack:[...e24].some(ev=>!e25.has(ev)) }
+    if(idx[key].email) emailIdx[idx[key].email]=key
+  }
+  return Object.values(idx).sort((a,b)=>b.totalTeams-a.totalTeams||a.club.localeCompare(b.club))
+}
+
 function draftInvite(c:Club){
   const last=c.history[c.history.length-1]
   const brought = last ? `${last.teams} team${last.teams===1?'':'s'} to ${last.event} ${last.year}` : 'teams to our events'
@@ -127,9 +156,14 @@ function ClubsInner(){
     try{
       const built=await buildFromFiles(files)
       if(!built.length){ toast.error('No registration data found in those files'); setImporting(false); return }
-      const res=await fetch(`/api/org-clubs${q}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clubs:built})})
+      // Merge into whatever is already saved so imports add up (and refresh, not wipe).
+      const merged=mergeClubs(clubs,built)
+      const res=await fetch(`/api/org-clubs${q}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clubs:merged})})
       if(!res.ok){ const e=await res.json().catch(()=>({})); toast.error(e.error||'Save failed'); setImporting(false); return }
-      setClubs(built); setUpdatedAt(new Date().toISOString()); toast.success(`Imported ${built.length} clubs`)
+      const addedNames=new Set(clubs.map(c=>canon(c.club)))
+      const newCount=built.filter(b=>!addedNames.has(canon(b.club))).length
+      setClubs(merged); setUpdatedAt(new Date().toISOString())
+      toast.success(`Imported ${built.length} club${built.length===1?'':'s'} · ${newCount} new, ${merged.length} total`)
     }catch(e:any){ toast.error('Import failed: '+(e?.message||'')) }
     setImporting(false)
   }
@@ -155,12 +189,18 @@ function ClubsInner(){
         <Link href="/" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15}/> Home</Link>
         <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Users size={22} className="text-teal-600"/> Club database</h1>
-          <label className={`cursor-pointer inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg px-4 py-2 ${importing?'opacity-50 pointer-events-none':''}`}>
-            <Upload size={15}/>{importing?'Importing…':'Import registration exports'}
-            <input type="file" multiple accept=".xlsx" className="hidden" disabled={importing} onChange={e=>{ onImport(e.target.files); e.currentTarget.value='' }}/>
-          </label>
+          <div className="flex items-center gap-2">
+            {clubs.length>0 && (
+              <button onClick={async()=>{ if(!confirm('Clear the whole club database? You can rebuild it by importing again.')) return; await fetch(`/api/org-clubs${q}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clubs:[]})}); setClubs([]); setUpdatedAt(new Date().toISOString()); toast.success('Database cleared') }}
+                className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-50">Clear</button>
+            )}
+            <label className={`cursor-pointer inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg px-4 py-2 ${importing?'opacity-50 pointer-events-none':''}`}>
+              <Upload size={15}/>{importing?'Importing…':clubs.length?'Import more':'Import registration exports'}
+              <input type="file" multiple accept=".xlsx" className="hidden" disabled={importing} onChange={e=>{ onImport(e.target.files); e.currentTarget.value='' }}/>
+            </label>
+          </div>
         </div>
-        <p className="text-sm text-slate-500 mb-4">Every club that has registered, with their full history. Import your yearly registration spreadsheets to build or refresh it{updatedAt?` · last updated ${new Date(updatedAt).toLocaleDateString()}`:''}.</p>
+        <p className="text-sm text-slate-500 mb-4">Every club that has registered, with their full history. Import your registration spreadsheets — you can select several at once, or add them one at a time and they <b>add up</b> (re-importing a file just refreshes that event){updatedAt?` · last updated ${new Date(updatedAt).toLocaleDateString()}`:''}.</p>
 
         {clubs.length===0 ? (
           <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
