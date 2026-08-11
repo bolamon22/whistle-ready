@@ -56,37 +56,42 @@ async function buildFromFiles(files:FileList):Promise<{clubs:Club[];skipped:stri
   const XLSX=(window as any).XLSX
   const regs:any[]=[]; const teams:any[]=[]; const skipped:string[]=[]
   const pick=(o:any,...ks:string[])=>{ for(const k of ks){ const h=Object.keys(o).find(x=>x.toLowerCase()===k.toLowerCase()); if(h&&o[h]!=='')return o[h] } return '' }
+  // Safely read a sheet by name to an array of row-objects (never throws).
+  const rowsOf=(name:string):any[]=>{ try{ const sh=wb.Sheets?.[name]; if(!sh) return []; const r=XLSX.utils.sheet_to_json(sh,{defval:''}); return Array.isArray(r)?r:[] }catch{ return [] } }
+  const hasClubCol=(row:any)=> !!row && Object.keys(row).some(k=>/club\s*name/i.test(String(k).replace(/([a-z])([A-Z])/g,'$1 $2')))
+  var wb:any
   for(const f of Array.from(files)){
-    let wb:any; try{ wb=XLSX.read(await f.arrayBuffer(),{type:'array'}) }catch{ skipped.push(f.name+' (not a spreadsheet)'); continue }
-    // Find the sheet that has a Club Name column (usually the first). If none, skip.
-    let mainSheet=wb.SheetNames.find((n:string)=>{ const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}); return r.length && Object.keys(r[0]).some(k=>/^club\s*name$/i.test(k.replace(/([a-z])([A-Z])/g,'$1 $2'))) })
-    if(!mainSheet) mainSheet=wb.SheetNames[0]
-    const main=XLSX.utils.sheet_to_json(wb.Sheets[mainSheet],{defval:''})
-    const hasClub=main.length && Object.keys(main[0]).some(k=>/club\s*name/i.test(k.replace(/([a-z])([A-Z])/g,'$1 $2')))
-    if(!hasClub){ skipped.push(f.name+' (no Club Name column)'); continue }
-    const ef=eventFromName(f.name)
-    // Year from filename, else from the sheet's submission dates.
-    let year=ef.yr
-    if(!year){ for(const o of main){ const y=yearOf(pick(o,'Entry_DateSubmitted')||pick(o,'Entry_DateCreated')||pick(o,'Order_Date')); if(y){ year=y; break } } }
-    const ey={ ev:ef.ev, yr:year||new Date().getFullYear() }
-    const idKey=Object.keys(main[0]||{})[0]
-    for(const o of main){ const club=String(pick(o,'ClubName')||'').trim(); if(!club) continue
-      regs.push({ event:ey.ev, year:ey.yr, id:String(o[idKey]),
-        club, contact:String(pick(o,'ClubContact')||pick(o,'Order_BillingName_FirstAndLast')||'').trim(),
-        email:String(pick(o,'ClubContactEmail')||pick(o,'Order_EmailAddress')||'').trim().toLowerCase(),
-        phone:String(pick(o,'ClubContactMobilePhone')||pick(o,'Order_PhoneNumber')||'').trim(),
-        city:String(pick(o,'ClubBasedIn')||pick(o,'Order_BillingAddress_CityStatePostalCode')||'').trim(),
-        website:String(pick(o,'ClubWebsite')||'').trim(),
-        teamsClaimed:String(pick(o,'HowManyTeamsAreYouRegistering')||'').trim(),
-        paid:num(pick(o,'Order_AmountPaid'))||num(pick(o,'PaymentAmount2'))||num(pick(o,'PaymentAmount')) })
-    }
-    if(wb.SheetNames.includes('TeamInformation')){
-      const ti=XLSX.utils.sheet_to_json(wb.Sheets['TeamInformation'],{defval:''})
-      const tIdKey=Object.keys(ti[0]||{})[0]
-      for(const o of ti){ const club=String(pick(o,'ClubName')||'').trim(); if(!club) continue
-        const div=pick(o,'BoysDivision')||pick(o,'GirlsDivision')||pick(o,'DivisionType')||''
-        teams.push({ event:ey.ev, year:ey.yr, regid:String(o[tIdKey]), division:String(div).trim() }) }
-    }
+    try{
+      try{ wb=XLSX.read(await f.arrayBuffer(),{type:'array'}) }catch{ skipped.push(f.name+' (not a spreadsheet)'); continue }
+      const names:string[]=Array.isArray(wb?.SheetNames)?wb.SheetNames:[]
+      if(!names.length){ skipped.push(f.name+' (empty file)'); continue }
+      // Find the sheet with a Club Name column (usually the first).
+      let mainSheet=names.find(n=>{ const r=rowsOf(n); return r.length && hasClubCol(r[0]) }) || names[0]
+      const main=rowsOf(mainSheet)
+      if(!main.length || !hasClubCol(main[0])){ skipped.push(f.name+' (no Club Name column)'); continue }
+      const ef=eventFromName(f.name)
+      let year=ef.yr
+      if(!year){ for(const o of main){ const y=yearOf(pick(o,'Entry_DateSubmitted')||pick(o,'Entry_DateCreated')||pick(o,'Order_Date')); if(y){ year=y; break } } }
+      const ey={ ev:ef.ev, yr:year||new Date().getFullYear() }
+      const idKey=Object.keys(main[0])[0]
+      for(const o of main){ const club=String(pick(o,'ClubName')||'').trim(); if(!club) continue
+        regs.push({ event:ey.ev, year:ey.yr, id:String(o[idKey]),
+          club, contact:String(pick(o,'ClubContact')||pick(o,'Order_BillingName_FirstAndLast')||'').trim(),
+          email:String(pick(o,'ClubContactEmail')||pick(o,'Order_EmailAddress')||'').trim().toLowerCase(),
+          phone:String(pick(o,'ClubContactMobilePhone')||pick(o,'Order_PhoneNumber')||'').trim(),
+          city:String(pick(o,'ClubBasedIn')||pick(o,'Order_BillingAddress_CityStatePostalCode')||'').trim(),
+          website:String(pick(o,'ClubWebsite')||'').trim(),
+          teamsClaimed:String(pick(o,'HowManyTeamsAreYouRegistering')||'').trim(),
+          paid:num(pick(o,'Order_AmountPaid'))||num(pick(o,'PaymentAmount2'))||num(pick(o,'PaymentAmount')) })
+      }
+      const ti=rowsOf('TeamInformation')
+      if(ti.length){
+        const tIdKey=Object.keys(ti[0])[0]
+        for(const o of ti){ const club=String(pick(o,'ClubName')||'').trim(); if(!club) continue
+          const div=pick(o,'BoysDivision')||pick(o,'GirlsDivision')||pick(o,'DivisionType')||''
+          teams.push({ event:ey.ev, year:ey.yr, regid:String(o[tIdKey]), division:String(div).trim() }) }
+      }
+    }catch(err:any){ skipped.push(f.name+' (could not read: '+(err?.message||'error')+')') }
   }
   // team counts + divisions per registration
   const tc:Record<string,number>={}; const td:Record<string,Set<string>>={}
