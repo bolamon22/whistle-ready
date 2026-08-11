@@ -9,7 +9,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronDown, ChevronRight, Users, Upload, Search, Mail, Star, Trophy, Download } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronRight, Users, Upload, Search, Mail, Star, Trophy, Download, Archive } from 'lucide-react'
 
 interface Hist { event:string; year:number; teams:number; paid:number; divisions:string[] }
 interface Club {
@@ -17,6 +17,7 @@ interface Club {
   eventsAttended:number; years:number[]; firstYear:number; lastYear:number
   totalTeams:number; totalPaid:number; divisions:string[]; history:Hist[]
   returning:boolean; winBack:boolean
+  note?:string; archived?:boolean   // manual, staff-editable; preserved across re-imports
 }
 
 const money = (n:number)=> '$'+Math.round(n||0).toLocaleString()
@@ -119,7 +120,8 @@ function mergeClubs(existing:Club[], incoming:Club[]):Club[]{
     idx[key]={ club:cur.club||nc.club, contact:f('contact') as string, email:f('email') as string, phone:f('phone') as string,
       city:f('city') as string, website:f('website') as string, eventsAttended:hist.length, years,
       firstYear:years[0], lastYear:years[years.length-1], totalTeams, totalPaid, divisions, history:hist,
-      returning:years.length>=2, winBack:[...e24].some(ev=>!e25.has(ev)) }
+      returning:years.length>=2, winBack:[...e24].some(ev=>!e25.has(ev)),
+      note:cur.note||nc.note, archived:cur.archived??nc.archived }  // keep manual note/archive on re-import
     if(idx[key].email) emailIdx[idx[key].email]=key
   }
   return Object.values(idx).sort((a,b)=>b.totalTeams-a.totalTeams||a.club.localeCompare(b.club))
@@ -145,6 +147,7 @@ function ClubsInner(){
   const [search,setSearch]=useState('')
   const [filter,setFilter]=useState<'all'|'returning'|'winback'>('all')
   const [eventFilter,setEventFilter]=useState('')
+  const [showArchived,setShowArchived]=useState(false)
   const [expanded,setExpanded]=useState<string|null>(null)
   const [updatedAt,setUpdatedAt]=useState<string|null>(null)
 
@@ -169,13 +172,26 @@ function ClubsInner(){
     setImporting(false)
   }
 
-  // Distinct tournaments across all clubs' histories, for the event dropdown.
-  const eventNames=useMemo(()=>[...new Set(clubs.flatMap(c=>c.history.map(h=>h.event)))].sort(),[clubs])
+  // Apply a manual edit (note / archived) to one club and persist the whole set.
+  async function patchClub(clubName:string, patch:Partial<Club>){
+    const next=clubs.map(c=>c.club===clubName?{...c,...patch}:c)
+    setClubs(next)
+    try{ await fetch(`/api/org-clubs${q}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clubs:next})}) }
+    catch{ toast.error('Could not save — check your connection') }
+  }
+
+  // Distinct tournaments across all clubs' histories, most-recently-run first.
+  const eventNames=useMemo(()=>{
+    const latest:Record<string,number>={}
+    for(const c of clubs) for(const h of c.history) latest[h.event]=Math.max(latest[h.event]||0,h.year)
+    return Object.keys(latest).sort((a,b)=>latest[b]-latest[a]||a.localeCompare(b))
+  },[clubs])
   const latestYear=useMemo(()=>Math.max(2000,...clubs.flatMap(c=>c.years)),[clubs])
 
   const filtered=useMemo(()=>{
     const s=search.trim().toLowerCase()
     return clubs.filter(c=>{
+      if(!!c.archived !== showArchived) return false  // archived view is separate from active
       if(eventFilter && !c.history.some(h=>h.event===eventFilter)) return false
       if(filter==='returning'&&!c.returning) return false
       // Win-back respects the event filter: if an event is chosen, "win-back" =
@@ -187,13 +203,15 @@ function ClubsInner(){
           if(!(evYears.length && !evYears.includes(evLatest))) return false
         } else if(!c.winBack) return false
       }
-      if(s && !(`${c.club} ${c.contact} ${c.email} ${c.city}`.toLowerCase().includes(s))) return false
+      if(s && !(`${c.club} ${c.contact} ${c.email} ${c.city} ${c.note||''}`.toLowerCase().includes(s))) return false
       return true
     })
-  },[clubs,search,filter,eventFilter])
+  },[clubs,search,filter,eventFilter,showArchived])
+  const archivedCount=useMemo(()=>clubs.filter(c=>c.archived).length,[clubs])
 
   const stats=useMemo(()=>{
-    const base = eventFilter ? clubs.filter(c=>c.history.some(h=>h.event===eventFilter)) : clubs
+    let base = clubs.filter(c=>!!c.archived===showArchived)
+    if(eventFilter) base = base.filter(c=>c.history.some(h=>h.event===eventFilter))
     const teams = eventFilter
       ? base.reduce((s,c)=>s+c.history.filter(h=>h.event===eventFilter).reduce((t,h)=>t+h.teams,0),0)
       : base.reduce((s,c)=>s+c.totalTeams,0)
@@ -253,6 +271,11 @@ function ClubsInner(){
                   <button key={k} onClick={()=>setFilter(k)} className={`text-xs px-3 py-1.5 rounded-md transition-colors ${filter===k?'bg-white shadow text-teal-700 font-medium':'text-slate-500 hover:text-slate-700'}`}>{l}</button>
                 ))}
               </div>
+              {(archivedCount>0||showArchived) && (
+                <button onClick={()=>setShowArchived(v=>!v)} className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${showArchived?'bg-slate-700 text-white border-slate-700':'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+                  {showArchived?`← Active clubs`:`Archived (${archivedCount})`}
+                </button>
+              )}
             </div>
             {eventFilter && <p className="text-xs text-slate-400 -mt-1 mb-3">Showing clubs that attended <b className="text-slate-600">{eventFilter}</b>. Team &amp; win-back counts are for this tournament{filter==='winback'?' (attended before, but not its most recent year)':''}.</p>}
             {/* List */}
@@ -264,11 +287,12 @@ function ClubsInner(){
                     <button onClick={()=>setExpanded(open?null:c.club)} className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50">
                       {open?<ChevronDown size={16} className="text-slate-400 shrink-0"/>:<ChevronRight size={16} className="text-slate-400 shrink-0"/>}
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-slate-800 truncate flex items-center gap-1.5">{c.club}
-                          {c.returning&&<span className="text-[10px] font-bold uppercase bg-teal-100 text-teal-700 rounded px-1.5 py-0.5">Returning</span>}
-                          {c.winBack&&<span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">Win-back</span>}
+                        <div className={`font-semibold truncate flex items-center gap-1.5 ${c.archived?'text-slate-400':'text-slate-800'}`}>{c.club}
+                          {c.archived&&<span className="text-[10px] font-bold uppercase bg-slate-200 text-slate-500 rounded px-1.5 py-0.5">Archived</span>}
+                          {!c.archived&&c.returning&&<span className="text-[10px] font-bold uppercase bg-teal-100 text-teal-700 rounded px-1.5 py-0.5">Returning</span>}
+                          {!c.archived&&c.winBack&&<span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">Win-back</span>}
                         </div>
-                        <div className="text-xs text-slate-400 truncate">{c.contact}{c.email?` · ${c.email}`:''}{c.city?` · ${c.city}`:''}</div>
+                        <div className="text-xs text-slate-400 truncate">{c.note?<span className="text-slate-500 italic">{c.note}</span>:`${c.contact}${c.email?` · ${c.email}`:''}${c.city?` · ${c.city}`:''}`}</div>
                       </div>
                       <div className="text-right shrink-0 hidden sm:block">
                         <div className="text-sm font-semibold text-slate-700">{c.totalTeams} teams · {money(c.totalPaid)}</div>
@@ -281,6 +305,16 @@ function ClubsInner(){
                           {c.email && <a href={draftInvite(c)} className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg px-3 py-1.5"><Mail size={13}/> Draft win-back email</a>}
                           {c.phone && <a href={`tel:${c.phone}`} className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white">{c.phone}</a>}
                           {c.website && <a href={c.website.startsWith('http')?c.website:`https://${c.website}`} target="_blank" rel="noreferrer" className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white">Website</a>}
+                          <button onClick={()=>patchClub(c.club,{archived:!c.archived})} className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 text-slate-500 hover:bg-white ml-auto inline-flex items-center gap-1.5">
+                            <Archive size={13}/>{c.archived?'Unarchive':'Archive'}
+                          </button>
+                        </div>
+                        {/* Manual note — folded, renamed, contact changed, etc. Survives re-imports. */}
+                        <div className="mb-3">
+                          <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Note</label>
+                          <textarea defaultValue={c.note||''} onBlur={e=>{ const v=e.target.value.trim(); if(v!==(c.note||'')) patchClub(c.club,{note:v}) }}
+                            placeholder="e.g. folded 2025 · rebranded to Coastal Elite · new contact is…"
+                            className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" rows={2}/>
                         </div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
