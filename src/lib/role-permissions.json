@@ -95,7 +95,8 @@
       "group": "Tournaments",
       "routes": [
         "/tournaments/*/settings",
-        "/tournaments/*/documents"
+        "/tournaments/*/documents",
+        "/dashboard/org/clubs"
       ]
     },
     {
