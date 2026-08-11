@@ -24,28 +24,51 @@ const money = (n:number)=> '$'+Math.round(n||0).toLocaleString()
 
 // ---- In-browser importer: parse Cognito-style exports (main + TeamInformation
 // tabs), dedupe, and aggregate — the same pipeline that built the master file. ----
-function eventYearFromName(fn:string){
-  const m=fn.match(/_?(\d{4})(.+?)TeamRegistration/i); if(!m) return null
-  const yr=+m[1]; const r=m[2]
-  const ev=/MonsterMash/i.test(r)?'Monster Mash':/SummerKickOff/i.test(r)?'Summer Kick Off':/FallClassic/i.test(r)?'Fall Classic':/JingleBrawl/i.test(r)?'Jingle Brawl':r
+// Best-effort event + year from a filename — tolerant of naming variations
+// (spaces, missing "TeamRegistration", missing year). Year can be filled from
+// the sheet's own dates later if the name has none.
+function eventFromName(fn:string){
+  const base=fn.replace(/\.[a-z]+$/i,'')
+  const yrM=base.match(/20\d{2}/); const yr=yrM?+yrM[0]:null
+  let ev=''
+  if(/monster\s*mash/i.test(base)) ev='Monster Mash'
+  else if(/summer\s*kick\s*off/i.test(base)) ev='Summer Kick Off'
+  else if(/fall\s*classic/i.test(base)) ev='Fall Classic'
+  else if(/jingle\s*brawl/i.test(base)) ev='Jingle Brawl'
+  else ev=base.replace(/^_?20\d{2}/,'').replace(/team\s*registration/i,'').replace(/[_\-()]+/g,' ').replace(/\s+/g,' ').trim()||'Event'
   return {ev,yr}
 }
 const num=(v:any)=>{ const n=parseFloat(String(v??'').replace(/[$,]/g,'')); return isNaN(n)?0:n }
+// Cognito dates come as Excel serials (e.g. 45588.42) or ISO strings; pull the year.
+function yearOf(v:any):number|null{
+  if(v==null||v==='') return null
+  if(typeof v==='number'&&v>20000&&v<80000){ const d=new Date(Date.UTC(1899,11,30)+v*86400000); return d.getUTCFullYear() }
+  const m=String(v).match(/20\d{2}/); return m?+m[0]:null
+}
 function canon(name:string){
   let s=(name||'').toLowerCase().replace(/[^a-z0-9]/g,'')
   for(const suf of ['lacrosseclub','lacrosse','laxclub','lax','lc','club']){ if(s.endsWith(suf)&&s.length>suf.length+2){ s=s.slice(0,-suf.length); break } }
   return s||(name||'').toLowerCase().trim()
 }
-async function buildFromFiles(files:FileList):Promise<Club[]>{
+async function buildFromFiles(files:FileList):Promise<{clubs:Club[];skipped:string[]}>{
   // load SheetJS on demand
   if(!(window as any).XLSX){ await new Promise<void>((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload=()=>res(); s.onerror=rej; document.head.appendChild(s) }) }
   const XLSX=(window as any).XLSX
-  const regs:any[]=[]; const teams:any[]=[]
+  const regs:any[]=[]; const teams:any[]=[]; const skipped:string[]=[]
+  const pick=(o:any,...ks:string[])=>{ for(const k of ks){ const h=Object.keys(o).find(x=>x.toLowerCase()===k.toLowerCase()); if(h&&o[h]!=='')return o[h] } return '' }
   for(const f of Array.from(files)){
-    const ey=eventYearFromName(f.name); if(!ey) continue
-    const wb=XLSX.read(await f.arrayBuffer(),{type:'array'})
-    const main=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''})
-    const pick=(o:any,...ks:string[])=>{ for(const k of ks){ const h=Object.keys(o).find(x=>x.toLowerCase()===k.toLowerCase()); if(h&&o[h]!=='')return o[h] } return '' }
+    let wb:any; try{ wb=XLSX.read(await f.arrayBuffer(),{type:'array'}) }catch{ skipped.push(f.name+' (not a spreadsheet)'); continue }
+    // Find the sheet that has a Club Name column (usually the first). If none, skip.
+    let mainSheet=wb.SheetNames.find((n:string)=>{ const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}); return r.length && Object.keys(r[0]).some(k=>/^club\s*name$/i.test(k.replace(/([a-z])([A-Z])/g,'$1 $2'))) })
+    if(!mainSheet) mainSheet=wb.SheetNames[0]
+    const main=XLSX.utils.sheet_to_json(wb.Sheets[mainSheet],{defval:''})
+    const hasClub=main.length && Object.keys(main[0]).some(k=>/club\s*name/i.test(k.replace(/([a-z])([A-Z])/g,'$1 $2')))
+    if(!hasClub){ skipped.push(f.name+' (no Club Name column)'); continue }
+    const ef=eventFromName(f.name)
+    // Year from filename, else from the sheet's submission dates.
+    let year=ef.yr
+    if(!year){ for(const o of main){ const y=yearOf(pick(o,'Entry_DateSubmitted')||pick(o,'Entry_DateCreated')||pick(o,'Order_Date')); if(y){ year=y; break } } }
+    const ey={ ev:ef.ev, yr:year||new Date().getFullYear() }
     const idKey=Object.keys(main[0]||{})[0]
     for(const o of main){ const club=String(pick(o,'ClubName')||'').trim(); if(!club) continue
       regs.push({ event:ey.ev, year:ey.yr, id:String(o[idKey]),
@@ -158,8 +181,11 @@ function ClubsInner(){
     if(!files||!files.length) return
     setImporting(true)
     try{
-      const built=await buildFromFiles(files)
-      if(!built.length){ toast.error('No registration data found in those files'); setImporting(false); return }
+      const { clubs:built, skipped }=await buildFromFiles(files)
+      if(!built.length){
+        toast.error(skipped.length ? `Couldn't read: ${skipped.join('; ')}. Expected a registration export with a Club Name column.` : 'No club data found in those files.')
+        setImporting(false); return
+      }
       // Merge into whatever is already saved so imports add up (and refresh, not wipe).
       const merged=mergeClubs(clubs,built)
       const res=await fetch(`/api/org-clubs${q}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clubs:merged})})
@@ -167,7 +193,7 @@ function ClubsInner(){
       const addedNames=new Set(clubs.map(c=>canon(c.club)))
       const newCount=built.filter(b=>!addedNames.has(canon(b.club))).length
       setClubs(merged); setUpdatedAt(new Date().toISOString())
-      toast.success(`Imported ${built.length} club${built.length===1?'':'s'} · ${newCount} new, ${merged.length} total`)
+      toast.success(`Imported ${built.length} club${built.length===1?'':'s'} · ${newCount} new, ${merged.length} total`+(skipped.length?` (skipped ${skipped.length})`:''))
     }catch(e:any){ toast.error('Import failed: '+(e?.message||'')) }
     setImporting(false)
   }
