@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CalendarDays, MapPin, ArrowRight, Search, Trophy, Loader2, LogIn } from 'lucide-react'
+import { CalendarDays, MapPin, ArrowRight, Search, Trophy, Loader2 } from 'lucide-react'
+import LandingNav from '../LandingNav'
 
 type Tournament = {
   id: string; name: string; sport: string
@@ -73,18 +74,8 @@ export default function FindTournamentPage() {
   return (
     <div className="-m-6 bg-white text-slate-800 min-h-screen">
 
-      {/* ── HEADER ── */}
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 font-bold text-slate-900 text-lg">
-            <img src="/whistle-ready-icon.png" alt="" className="w-9 h-9 rounded-lg object-contain" />
-            Whistle Ready
-          </Link>
-          <Link href="/login" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 px-4 py-2 rounded-lg transition-colors">
-            <LogIn className="w-4 h-4" /> Log in
-          </Link>
-        </div>
-      </header>
+      {/* ── HEADER (shared) ── */}
+      <LandingNav />
 
       {/* ── HERO + SEARCH ── */}
       <section className="px-6 pt-14 pb-8" style={{ background: 'radial-gradient(1000px 420px at 80% -12%, #f0fdfa, transparent)' }}>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
+import LandingNav from './LandingNav'
 import {
   Users, LayoutGrid, CalendarDays, Activity, DollarSign, ClipboardList,
   ShieldCheck, Check, ArrowRight, Search, Eye, Flag, UserRound, UserCog, Loader2,
@@ -101,23 +102,7 @@ export default function Landing() {
     <div className="-m-6 bg-white text-slate-800">
 
       {/* ── NAV ── */}
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 font-bold text-slate-900 text-lg">
-            <img src="/whistle-ready-icon.png" alt="" className="w-9 h-9 rounded-lg object-contain" />
-            Whistle Ready
-          </div>
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
-            <a href="#features" className="hover:text-slate-900 transition-colors">Features</a>
-            <a href="#who" className="hover:text-slate-900 transition-colors">Who it&apos;s for</a>
-            <Link href="/find" className="hover:text-slate-900 transition-colors">Find your tournament</Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <a href="#login" className="hidden sm:inline-flex text-sm font-semibold text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors">Log in</a>
-            <a href="#organizations" className="inline-flex items-center gap-1.5 text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors">Run a tournament</a>
-          </div>
-        </div>
-      </header>
+      <LandingNav />
 
       {/* ── HERO ── */}
       <section className="px-6 pt-16 pb-12" style={{ background: 'radial-gradient(1100px 460px at 82% -12%, #f0fdfa, transparent)' }}>
