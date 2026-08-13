@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import permissionsConfig from './lib/role-permissions.json'
 import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES } from './lib/orgDomains'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset']  // /o/[slug] = public org website; forgot/reset = password recovery
+const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find']  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public tournament look-up
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
 
 const FEATURE_ROUTE_MAP: Record<string, string[]> = {}
