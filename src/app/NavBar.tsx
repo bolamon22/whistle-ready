@@ -70,6 +70,9 @@ export default function NavBar() {
   // Admin pages use SuperAdminBar as sole header
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/o/')) return null
 
+  // The public marketing landing (logged-out root) has its own header.
+  if (!session && pathname === '/') return null
+
   return (
     <div className="sticky top-0 z-40">
       {/* Preview banner */}

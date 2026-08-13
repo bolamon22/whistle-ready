@@ -106,8 +106,11 @@ export async function middleware(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   })
 
-  // Not logged in — redirect to login
+  // Not logged in
   if (!token) {
+    // The main-domain root is the public marketing landing — let it render.
+    if (pathname === '/') return NextResponse.next()
+    // Everything else requires auth — redirect to login.
     const loginUrl = new URL('/login', req.url)
     loginUrl.searchParams.set('callbackUrl', req.url)
     return NextResponse.redirect(loginUrl)
