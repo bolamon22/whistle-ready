@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import './globals.css'
 import { SITE_URL } from '@/lib/seo'
 import { Toaster } from 'react-hot-toast'
@@ -8,6 +9,7 @@ import Providers from './providers'
 import ThemeShell from './ThemeShell'
 import EnvBadge from './EnvBadge'
 import AppMain from './AppMain'
+import Analytics from '@/components/Analytics'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -21,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen">
+        <Suspense fallback={null}><Analytics /></Suspense>
         <Providers>
           <ThemeShell />
           <EnvBadge />
