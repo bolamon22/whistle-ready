@@ -16,10 +16,17 @@
 //   NEXT_PUBLIC_GA_ID_SEG           GA4 measurement id, G-XXXXXXXXXX
 //   NEXT_PUBLIC_GA_ID_APP
 //
-// Plausible attaches its own History API listeners, so it counts client-side
-// route changes on its own. GA4 only counts the initial load (via its config
-// call) — we fire a page_view by hand for each client-side navigation after
-// that, skipping the first pass so the landing page isn't counted twice.
+// Both trackers are driven explicitly rather than left to auto-capture:
+//
+// Plausible's snippet relies on an inline stub running before its external
+// script, and next/script gives no ordering guarantee between the two — when
+// the external script won the race, plausible.o stayed undefined and NOTHING
+// was ever recorded (this silently ate all whistleready.app traffic). So we
+// init from the script's own onLoad with autoCapturePageviews off and send
+// every pageview ourselves. No race, no double count.
+//
+// GA4 keeps its own config-triggered initial pageview (gtag may not have
+// loaded when this component first runs), so its manual effect skips pass one.
 
 import Script from 'next/script'
 import { usePathname, useSearchParams } from 'next/navigation'
@@ -41,6 +48,11 @@ declare global {
   interface Window {
     dataLayer?: unknown[]
     gtag?: (...args: unknown[]) => void
+    plausible?: ((event: string, opts?: Record<string, unknown>) => void) & {
+      init?: (opts?: Record<string, unknown>) => void
+      q?: unknown[]
+      o?: Record<string, unknown>
+    }
   }
 }
 
@@ -58,11 +70,18 @@ export default function Analytics() {
   const searchParams = useSearchParams()
   const [cfg, setCfg] = useState({ plausible: '', ga: '' })
   const countedInitial = useRef(false)
+  const [plausibleReady, setPlausibleReady] = useState(false)
 
   // Hostname is only knowable client-side, so resolve after mount.
   useEffect(() => {
     setCfg(configForHost(window.location.hostname))
   }, [])
+
+  // Plausible: fire every pageview, including the first.
+  useEffect(() => {
+    if (!plausibleReady || typeof window.plausible !== 'function') return
+    window.plausible('pageview')
+  }, [plausibleReady, pathname, searchParams])
 
   // GA4 only. gtag's own config call reports the initial pageview, and it may
   // not have loaded yet on this first pass, so skip it here — otherwise the
@@ -88,14 +107,15 @@ export default function Analytics() {
   return (
     <>
       {cfg.plausible && (
-        <>
-          <Script id="plausible-src" strategy="afterInteractive" src={cfg.plausible} />
-          <Script id="plausible-init" strategy="afterInteractive">
-            {`window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)};
-plausible.init=plausible.init||function(i){plausible.o=i||{}};
-plausible.init();`}
-          </Script>
-        </>
+        <Script
+          id="plausible-src"
+          strategy="afterInteractive"
+          src={cfg.plausible}
+          onLoad={() => {
+            window.plausible?.init?.({ autoCapturePageviews: false })
+            setPlausibleReady(true)
+          }}
+        />
       )}
 
       {cfg.ga && (
