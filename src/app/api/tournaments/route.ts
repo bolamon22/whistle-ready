@@ -9,8 +9,14 @@ function db() {
 }
 
 const INCLUDE = {
-  _count: { select: { games: true, teamRegistrations: true, playerRegistrations: true } },
-  teamRegistrations: { select: { numTeams: true } },
+  _count: {
+    select: {
+      games: true,
+      teamRegistrations: { where: { deletedAt: null } },
+      playerRegistrations: { where: { deletedAt: null } },
+    },
+  },
+  teamRegistrations: { where: { deletedAt: null }, select: { numTeams: true } },
 }
 
 function shape(t: any) {

@@ -11,11 +11,11 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   const [srcRegs, curRegs] = await Promise.all([
     prisma.teamRegistration.findMany({
-      where: { tournamentId: fromId },
+      where: { tournamentId: fromId, deletedAt: null },
       include: { teams: { select: { teamName: true, division: true } } },
     }),
     prisma.teamRegistration.findMany({
-      where: { tournamentId: params.id },
+      where: { tournamentId: params.id, deletedAt: null },
       select: { clubName: true },
     }),
   ])

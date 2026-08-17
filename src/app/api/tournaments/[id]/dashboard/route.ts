@@ -11,7 +11,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     prisma.tournament.findUnique({ where: { id } }),
     prisma.game.findMany({ where: { tournamentId: id }, select: { id: true, division: true, isCanceled: true, assignments: { select: { id: true } } } }),
     prisma.teamRegistration.findMany({
-      where: { tournamentId: id },
+      where: { tournamentId: id, deletedAt: null },
       include: { teams: { select: { id: true, division: true } }, payments: { select: { amount: true } } },
     }),
     prisma.rosterEntry.findMany({ where: { tournamentId: id }, select: { workerId: true } }),
@@ -19,7 +19,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     prisma.timeEntry.findMany({ where: { tournamentId: id }, include: { worker: { select: { hourlyRate: true } } } }),
     prisma.paymentRecord.findMany({ where: { tournamentId: id }, select: { amount: true } }),
     prisma.tournamentTransaction.findMany({ where: { tournamentId: id }, select: { type: true, category: true, amount: true } }),
-    prisma.playerRegistration.count({ where: { tournamentId: id } }),
+    prisma.playerRegistration.count({ where: { tournamentId: id, deletedAt: null } }),
   ])
 
   if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
