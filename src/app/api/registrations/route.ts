@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { sendEmail, emailEnabled } from '@/lib/email'
+import { sendEmail, emailEnabled, orgSender } from '@/lib/email'
+import { tournamentOrgId, orgById } from '@/lib/org'
 import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, organizerEmailHtml, organizerEmailSubject, type RegLetterData, type RegNotifyData } from '@/lib/regConfirmation'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
@@ -64,8 +65,15 @@ async function buildAndSendConfirmation(reg: any) {
   try {
     const t: any = await prisma.tournament.findUnique({ where: { id: reg.tournamentId } })
     if (!t) return null
-    const org: any = t.orgId ? await prisma.organization.findUnique({ where: { id: t.orgId } }) : null
-    const orgForms = t.orgId ? await jget(`orgForms:${t.orgId}`) : {}
+    // orgId / Organization are raw SQL, not Prisma schema -- reading them through
+    // the typed client made `org` null on EVERY registration, which blanked the
+    // org name in the letter, pointed links at whistleready.app instead of the
+    // org's own domain, ignored the org Forms library, dropped the Reply-To, and
+    // (the reason nobody ever got a heads-up) left the organizer notification
+    // with zero recipients. See src/lib/org.ts.
+    const orgId = await tournamentOrgId(reg.tournamentId)
+    const org: any = await orgById(orgId)
+    const orgForms = orgId ? await jget(`orgForms:${orgId}`) : {}
     let override: any = null
     try { const rr: any[] = await prisma.$queryRawUnsafe('SELECT regConfirmationOverride FROM "Tournament" WHERE id = ?', reg.tournamentId); const raw = rr?.[0]?.regConfirmationOverride; if (raw) override = JSON.parse(raw) } catch {}
     const cfg = resolveRegConfirmation(orgForms.registration, override)
@@ -119,7 +127,9 @@ async function buildAndSendConfirmation(reg: any) {
         to: reg.contactEmail,
         subject: letter.subject,
         html: letterToEmailHtml(letter, data),
-        ...(org?.contactEmail ? { replyTo: org.contactEmail } : {}),
+        // From the tournament company, not from Whistle Ready. orgSender() also
+        // points Reply-To at the org's real inbox.
+        ...orgSender(org),
       })
       emailed = sent.ok
     }
@@ -128,10 +138,14 @@ async function buildAndSendConfirmation(reg: any) {
     // Recipients come from the confirmation config's notifyEmails (comma-
     // separated); org site contact + org account email are the fallback.
     if (emailEnabled()) {
-      const orgSite = t.orgId ? await jget(`orgSite:${t.orgId}`) : {}
+      const orgSite = orgId ? await jget(`orgSite:${orgId}`) : {}
       const fallback = [orgSite?.contact?.email, org?.contactEmail].filter(Boolean).join(',')
-      const recipients = String(cfg.notifyEmails || fallback || '')
-        .split(',').map(s => s.trim()).filter(s => s.includes('@'))
+      const recipients = Array.from(new Set(String(cfg.notifyEmails || fallback || '')
+        .split(',').map(s => s.trim().toLowerCase()).filter(s => s.includes('@'))))
+      // Loud on purpose: silently sending to nobody is why new registrations
+      // went unnoticed. Set "Notify your team" in the org Forms library, or give
+      // the org a contactEmail.
+      if (!recipients.length) console.warn('[registrations] no notification recipients for tournament', reg.tournamentId)
       if (recipients.length) {
         const notify: RegNotifyData = {
           ...data,
@@ -148,6 +162,8 @@ async function buildAndSendConfirmation(reg: any) {
           to: recipients.join(','),
           subject: organizerEmailSubject(notify),
           html: organizerEmailHtml(notify),
+          ...orgSender(org),
+          // Reply goes to the CLUB, not back to us -- this email is a call sheet.
           ...(reg.contactEmail ? { replyTo: reg.contactEmail } : {}),
         })
       }
