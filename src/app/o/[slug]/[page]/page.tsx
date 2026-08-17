@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { createClient } from '@libsql/client'
 import { Trophy, ChevronLeft } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
@@ -58,7 +59,7 @@ export async function generateMetadata({ params }: { params: { slug: string; pag
 export default async function OrgInfoPage({ params }: { params: { slug: string; page: string } }) {
   const client = db()
   const orgRes = await client.execute({ sql: 'SELECT id, name, contactEmail, logoUrl FROM "Organization" WHERE slug = ?', args: [params.slug] })
-  if (orgRes.rows.length === 0) return <NotFound slug={params.slug} />
+  if (orgRes.rows.length === 0) notFound()
   const org = orgRes.rows[0] as any
 
   let content: any = {}
@@ -83,7 +84,7 @@ export default async function OrgInfoPage({ params }: { params: { slug: string; 
   const reg = (tRes.rows as any[]).filter(t => (t.endDate || t.startDate || '') >= today).find(t => Number(t.teamRegEnabled))
   const registerHref = reg ? `/tournaments/${reg.id}/register` : undefined
 
-  if (!page) return <NotFound slug={params.slug} />
+  if (!page) notFound()
 
   // Structured data: Article for every info page; FAQPage when the body follows
   // the H2-"FAQ" / H3-question convention (see extractFaqs above).

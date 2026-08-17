@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function GalleryPage({ params }: { params: { slug: string } }) {
   const client = db()
   const orgRes = await client.execute({ sql: 'SELECT id, name, contactEmail, logoUrl FROM "Organization" WHERE slug = ?', args: [params.slug] })
-  if (orgRes.rows.length === 0) return <NotFound slug={params.slug} />
+  if (orgRes.rows.length === 0) notFound()
   const org = orgRes.rows[0] as any
 
   let content: any = {}
