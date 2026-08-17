@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { sendEmail } from '@/lib/email'
+import { sendEmail, orgSender } from '@/lib/email'
+import { orgForTournament } from '@/lib/org'
 import { requireStaff } from '@/lib/apiAuth'
 
 const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
@@ -58,7 +59,12 @@ Whistle Ready`
   const subjectTemplate = body.subjectTemplate ?? defaultSubject
   const bodyTemplate = body.bodyTemplate ?? defaultBody
 
-  const fromName = tournament.name || 'Whistle Ready'
+  // Cold outreach to club directors -- it has to come from the tournament
+  // company, not noreply@whistleready.app. Falls back to the platform sender
+  // when the org has no SendGrid-authenticated address.
+  const org = await orgForTournament(params.id)
+  const sender = orgSender(org)
+  const fromName = org?.name || tournament.name || 'Whistle Ready'
 
   let sent = 0
   const errors: string[] = []
@@ -85,6 +91,7 @@ Whistle Ready`
 
     {
       const res = await sendEmail({
+        ...sender,
         fromName,
         to: club.contactEmail,
         subject,
