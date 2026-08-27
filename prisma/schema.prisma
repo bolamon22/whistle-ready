@@ -407,3 +407,22 @@ model BracketGame {
 
   @@index([bracketId])
 }
+
+// Staff-login invite tokens. The TABLE has existed since Jun 2026
+// (prisma/migrations/20260605_add_staff_invite) but the model was never added here,
+// so the generated client had no `prisma.staffInvite` and the invite routes crashed
+// at runtime. Adding the model fixes those routes; no DB change needed.
+// `orgId` and `workerId` are RAW columns (guarded ALTERs at their call sites,
+// same pattern as Organization / Tournament.orgId — see src/lib/org.ts).
+model StaffInvite {
+  id           String    @id @default(cuid())
+  token        String    @unique
+  email        String
+  name         String?
+  tournamentId String?
+  usedAt       DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  @@index([email])
+}
