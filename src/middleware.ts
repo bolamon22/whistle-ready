@@ -77,7 +77,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
-      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff')
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay')
     if (!passthrough) {
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
@@ -100,6 +100,8 @@ export async function middleware(req: NextRequest) {
   // "Claim your team" — MUST be public: the coach following this link has no account
   // yet (creating one is the whole point). The token in the URL is the authorization.
   if (/^\/claim(\/|$)/.test(pathname)) return NextResponse.next()
+  // Pay-by-link for team registrations — public: the emailed link IS the authorization.
+  if (/^\/pay(\/|$)/.test(pathname)) return NextResponse.next()
 
   const token = await getToken({
     req,

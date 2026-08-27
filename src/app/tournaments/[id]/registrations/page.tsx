@@ -583,6 +583,19 @@ export default function RegistrationsPage() {
     finally { setAchLoading(false) }
   }
 
+  const [sendingLink, setSendingLink] = useState<string | null>(null)
+  const emailPayLink = async (reg: Registration) => {
+    if (!reg.contactEmail) { toast.error('No contact email on this registration'); return }
+    setSendingLink(reg.id)
+    try {
+      const res = await fetch(`/api/registrations/${reg.id}/send-pay-link`, { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.ok) throw new Error(d.error || 'Send failed')
+      toast.success(`Payment link emailed to ${reg.contactEmail}`)
+    } catch (e: any) { toast.error(e?.message || 'Send failed') }
+    finally { setSendingLink(null) }
+  }
+
   const handleQboSync = async (registrationId: string) => {
     toast.loading('Syncing to QuickBooks…', { id: 'qbo-sync' })
     try {
@@ -1541,6 +1554,10 @@ export default function RegistrationsPage() {
                     <span className="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded-full">{reg.teams.length} team{reg.teams.length !== 1 ? 's' : ''}</span>
                     <button onClick={() => { setPayingRegId(reg.id); const _bal1=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal1>0?String(_bal1):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
                       className="text-xs text-green-600 border border-green-300 hover:border-green-500 px-2.5 py-1 rounded-lg">+ Payment</button>
+                    {balance > 0 && <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/pay/${reg.id}`); toast.success('Payment link copied') }}
+                      className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
+                    {balance > 0 && <button onClick={() => emailPayLink(reg)} disabled={sendingLink === reg.id}
+                      className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg disabled:opacity-50">{sendingLink === reg.id ? 'Sending…' : 'Email link'}</button>}
                     {reg.qboInvoiceId ? (
                       <span className="inline-flex items-center gap-1 text-xs text-green-600 border border-green-200 bg-green-50 px-2.5 py-1 rounded-lg"><Check size={12} /> QB synced</span>
                     ) : (
