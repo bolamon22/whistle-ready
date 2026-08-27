@@ -63,7 +63,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         poolGameCount: data.gameCount,
         bracketGameCount: bracketCount.get(name) ?? 0,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => {
+        // Curated order from registrationDivisions; names not in it (legacy) go last, A\u2192Z.
+        const ai = regDivs.indexOf(a.name); const bi = regDivs.indexOf(b.name)
+        return ((ai === -1 ? 1e9 : ai) - (bi === -1 ? 1e9 : bi)) || a.name.localeCompare(b.name)
+      })
 
     return NextResponse.json(divisions)
   } catch (e) {
@@ -86,7 +90,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (existing.map(d => d.toLowerCase()).includes(name.trim().toLowerCase())) {
       return NextResponse.json({ error: 'Division already exists' }, { status: 409 })
     }
-    const updated = [...existing, name.trim()].sort((a, b) => a.localeCompare(b))
+    // Append, no re-sort: registrationDivisions order is the curated display order (set in the builder).
+    const updated = [...existing, name.trim()]
     await prisma.tournament.update({
       where: { id: params.id },
       data: { registrationDivisions: JSON.stringify(updated) },

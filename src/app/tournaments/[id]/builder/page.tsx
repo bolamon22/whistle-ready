@@ -20,7 +20,7 @@ import {
 import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, LayoutGrid, Info, Megaphone } from 'lucide-react'
+import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, LayoutGrid, Info, Megaphone, GripVertical } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TimeSlot { start: string; end: string }
@@ -70,6 +70,16 @@ function isLegacyDivision(s: string): boolean {
 }
 function fromDivItems(items: DivisionItem[], customs: string[]): string[] {
   return [...items.filter(i => i.checked).map(i => i.display), ...customs]
+}
+// Apply the manual division order: names in `order` keep that relative order,
+// anything newly selected is appended in its natural (catalog + customs)
+// position. Stale names in `order` are ignored but kept in state, so
+// re-checking a division restores its old slot.
+function applyDivOrder(selected: string[], order: string[]): string[] {
+  const sel = new Set(selected)
+  const kept = order.filter(n => sel.has(n))
+  const seen = new Set(kept)
+  return [...kept, ...selected.filter(n => !seen.has(n))]
 }
 
 
@@ -180,6 +190,9 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [divItems, setDivItems]         = useState<DivisionItem[]>(DEFAULT_DIVISIONS.map(d => ({ def: d, display: d, abbr: divAbbr(d), checked: false })))
   const [customDivisions, setCustomDivisions] = useState<string[]>([])
   const [newDivision, setNewDivision]  = useState('')
+  const [divOrder, setDivOrder]        = useState<string[]>([])   // manual division order (names)
+  const [dragDiv, setDragDiv]          = useState<string | null>(null)
+  const [dragOverDiv, setDragOverDiv]  = useState<string | null>(null)
 
   // Venues
   const [venues, setVenues]           = useState<Venue[]>([])
@@ -240,6 +253,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           // Only carry over custom divisions that aren't old legacy year-based ones
           const customs = d.filter(s => !DEFAULT_DIVISIONS.includes(s) && !isLegacyDivision(s))
           setCustomDivisions(customs)
+          setDivOrder(d)  // the stored array order IS the display order
         }
       } catch {}
       // Build date list
@@ -303,7 +317,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           divisionRules: JSON.stringify(officialsRulesToDivisionRules(officialsConfig)),
           registrationPricing: serializePricing(pricing),
           ...registrationTypesPayload(regTypes),
-          registrationDivisions: JSON.stringify(fromDivItems(divItems, customDivisions)),
+          registrationDivisions: JSON.stringify(applyDivOrder(fromDivItems(divItems, customDivisions), divOrder)),
           tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
           regConfirmationOverride: JSON.stringify(regConf),
         }),
@@ -499,8 +513,9 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
               onClick={() => {
                 const saved = localStorage.getItem('gameday_div_prefs')
                 if (saved) {
-                  const { items, customs } = JSON.parse(saved)
+                  const { items, customs, order } = JSON.parse(saved)
                   setDivItems(items); setCustomDivisions(customs)
+                  setDivOrder(Array.isArray(order) ? order : [])
                   toast.success('Loaded your saved preferences')
                 } else toast.error('No saved preferences found')
               }}
@@ -509,7 +524,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             </button>
             <button type="button"
               onClick={() => {
-                localStorage.setItem('gameday_div_prefs', JSON.stringify({ items: divItems, customs: customDivisions }))
+                localStorage.setItem('gameday_div_prefs', JSON.stringify({ items: divItems, customs: customDivisions, order: applyDivOrder(fromDivItems(divItems, customDivisions), divOrder) }))
                 toast.success('Preferences saved!')
               }}
               className="text-xs border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-50 text-teal-600 whitespace-nowrap">
@@ -527,7 +542,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                 ? <input
                     className="flex-1 min-w-0 bg-transparent text-sm font-medium text-slate-800 focus:outline-none border-b border-transparent focus:border-teal-400 px-0.5"
                     value={item.display}
-                    onChange={e => setDivItems(prev => prev.map((d, i) => i === idx ? { ...d, display: e.target.value } : d))} />
+                    onChange={e => {
+                      const oldName = item.display; const newName = e.target.value
+                      setDivItems(prev => prev.map((d, i) => i === idx ? { ...d, display: newName } : d))
+                      setDivOrder(prev => prev.map(n => n === oldName ? newName : n))
+                    }} />
                 : <span className="text-sm text-slate-400 flex-1 truncate">{item.def}</span>
               }
             </div>
@@ -540,7 +559,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             <div key={i} className="flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-xl px-3 py-2 mb-1.5">
               <input type="checkbox" checked readOnly className="w-4 h-4 accent-teal-600 flex-shrink-0" />
               <input className="flex-1 min-w-0 bg-transparent text-sm font-medium text-slate-800 focus:outline-none border-b border-transparent focus:border-teal-400"
-                value={d} onChange={e => setCustomDivisions(prev => prev.map((v, j) => j === i ? e.target.value : v))} />
+                value={d} onChange={e => {
+                  const oldName = d; const newName = e.target.value
+                  setCustomDivisions(prev => prev.map((v, j) => j === i ? newName : v))
+                  setDivOrder(prev => prev.map(n => n === oldName ? newName : n))
+                }} />
               <button type="button" onClick={() => setCustomDivisions(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs"><X size={13} /></button>
             </div>
           ))}
@@ -554,9 +577,48 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
+        {(() => {
+          const ordered = applyDivOrder(fromDivItems(divItems, customDivisions), divOrder)
+          if (ordered.length < 2) return null
+          const move = (from: number, to: number) => {
+            if (to < 0 || to >= ordered.length || from === to) return
+            const next = [...ordered]
+            const [m] = next.splice(from, 1)
+            next.splice(to, 0, m)
+            setDivOrder(next)
+          }
+          return (
+            <div className="border-t border-slate-100 pt-4 mt-4">
+              <p className="text-xs font-medium text-slate-500 mb-1">Division order</p>
+              <p className="text-xs text-slate-400 mb-2">Drag to reorder (or use the arrows). This is the order teams see on the registration form and public pages.</p>
+              {ordered.map((name, i) => (
+                <div key={`${name}-${i}`} draggable
+                  onDragStart={() => setDragDiv(name)}
+                  onDragOver={e => { e.preventDefault(); if (dragOverDiv !== name) setDragOverDiv(name) }}
+                  onDragLeave={() => { if (dragOverDiv === name) setDragOverDiv(null) }}
+                  onDrop={e => {
+                    e.preventDefault()
+                    if (dragDiv && dragDiv !== name) move(ordered.indexOf(dragDiv), i)
+                    setDragDiv(null); setDragOverDiv(null)
+                  }}
+                  onDragEnd={() => { setDragDiv(null); setDragOverDiv(null) }}
+                  className={`flex items-center gap-2 bg-white border rounded-xl px-3 py-2 mb-1.5 transition-colors ${dragDiv === name ? 'opacity-50 border-slate-200' : dragOverDiv === name ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <GripVertical size={14} className="text-slate-300 flex-shrink-0 cursor-grab" />
+                  <span className="text-xs text-slate-400 w-5 text-right flex-shrink-0">{i + 1}.</span>
+                  <span className="flex-1 min-w-0 text-sm font-medium text-slate-800 truncate">{name}</span>
+                  <button type="button" disabled={i === 0} onClick={() => move(i, i - 1)}
+                    className="text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:hover:text-slate-300 p-0.5"><ChevronUp size={14} /></button>
+                  <button type="button" disabled={i === ordered.length - 1} onClick={() => move(i, i + 1)}
+                    className="text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:hover:text-slate-300 p-0.5"><ChevronDown size={14} /></button>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+
         <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100">
           <span className="text-xs text-slate-400">{divItems.filter(i => i.checked).length + customDivisions.length} divisions selected</span>
-          <button type="button" onClick={() => { setDivItems(prev => prev.map(d => ({ ...d, checked: false, display: d.def }))); setCustomDivisions([]) }}
+          <button type="button" onClick={() => { setDivItems(prev => prev.map(d => ({ ...d, checked: false, display: d.def }))); setCustomDivisions([]); setDivOrder([]) }}
             className="text-xs text-slate-400 hover:text-slate-600 underline">Clear all</button>
         </div>
       </div>
