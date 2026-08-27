@@ -388,9 +388,14 @@ export default function PayPage() {
         />
       )}
       {!method && !creating && <p className="text-xs text-gray-400 text-center">Choose how you&apos;d like to pay.</p>}
-      <p className="text-xs text-gray-400 text-center mt-5 pt-4 border-t border-gray-100 flex items-center justify-center gap-1.5">
-        <Lock size={12} className="flex-shrink-0" /> Payments are processed securely by <span className="font-semibold text-gray-500">Stripe</span> — your card and bank details are never shared with the tournament.
-      </p>
+      <div className="mt-5 pt-4 border-t border-gray-100 text-center">
+        <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5">
+          <Lock size={13} className="text-slate-500 flex-shrink-0" />
+          <span className="text-xs font-medium text-slate-600">Powered by</span>
+          <span className="text-[15px] font-bold leading-none" style={{ color: '#635BFF', letterSpacing: '-0.02em' }}>stripe</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">Your card and bank details go directly to Stripe &mdash; never shared with the tournament.</p>
+      </div>
     </div>
   </>)
 }
