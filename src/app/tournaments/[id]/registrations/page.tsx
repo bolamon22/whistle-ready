@@ -596,6 +596,27 @@ export default function RegistrationsPage() {
     finally { setSendingLink(null) }
   }
 
+  const [refundFor, setRefundFor] = useState<RegistrationPayment | null>(null)
+  const [refundAmt, setRefundAmt] = useState('')
+  const [refunding, setRefunding] = useState(false)
+  const doRefund = async () => {
+    if (!refundFor) return
+    const amt = parseFloat(refundAmt)
+    if (!amt || amt <= 0) { toast.error('Enter a refund amount'); return }
+    setRefunding(true)
+    try {
+      const res = await fetch(`/api/registration-payments/${refundFor.id}/refund`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amt }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.ok) throw new Error(d.error || 'Refund failed')
+      toast.success(`Refunded ${fmt(amt)}${d.status === 'pending' ? ' — bank refunds take ~5-10 days' : ''}`)
+      setRefundFor(null); load()
+    } catch (e: any) { toast.error(e?.message || 'Refund failed') }
+    finally { setRefunding(false) }
+  }
+
   const handleQboSync = async (registrationId: string) => {
     toast.loading('Syncing to QuickBooks…', { id: 'qbo-sync' })
     try {
@@ -1039,6 +1060,26 @@ export default function RegistrationsPage() {
               <div className="flex gap-3 mt-5">
                 <button onClick={savePricing} className="flex-1 bg-teal-600 text-white rounded-xl py-2 text-sm font-semibold hover:bg-teal-700">Save Settings</button>
                 <button onClick={() => setShowPricing(false)} className="px-4 border border-slate-300 rounded-xl text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Refund modal */}
+        {refundFor && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !refunding && setRefundFor(null)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-slate-800 mb-1">Refund payment</h3>
+              <p className="text-sm text-slate-500 mb-4">Goes back to their card or bank account through Stripe. Partial amounts are fine. Stripe keeps its original processing fee either way, and bank (ACH) refunds take ~5-10 days to land.</p>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Amount to refund (paid {fmt(refundFor.amount)})</label>
+              <div className="relative mb-4">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                <input type="number" min="0.01" step="0.01" value={refundAmt} onChange={e => setRefundAmt(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setRefundFor(null)} disabled={refunding} className="text-sm border border-slate-300 text-slate-600 px-4 py-2 rounded-lg hover:bg-slate-50">Cancel</button>
+                <button onClick={doRefund} disabled={refunding} className="text-sm bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-semibold px-4 py-2 rounded-lg">{refunding ? 'Refunding…' : 'Refund'}</button>
               </div>
             </div>
           </div>
@@ -1636,8 +1677,11 @@ export default function RegistrationsPage() {
                                   <td className="py-1.5">{new Date(p.receivedAt).toLocaleDateString()}</td>
                                   <td className="py-1.5">{payLabel(p.method)}</td>
                                   <td className="py-1.5 text-slate-500">{p.checkNumber || p.notes || '—'}</td>
-                                  <td className="py-1.5 text-right font-medium text-green-700">{fmt(p.amount)}</td>
-                                  <td className="py-1.5 text-right">
+                                  <td className={`py-1.5 text-right font-medium ${p.amount < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(p.amount)}</td>
+                                  <td className="py-1.5 text-right whitespace-nowrap">
+                                    {p.amount > 0 && /pi_[A-Za-z0-9]+/.test(p.notes || '') && (
+                                      <button onClick={() => { setRefundFor(p); setRefundAmt(String(p.amount)) }} className="text-xs text-amber-600 border border-amber-300 hover:bg-amber-50 hover:border-amber-500 px-2 py-0.5 rounded-lg">Refund</button>
+                                    )}
                                     <button onClick={() => handleDeletePayment(p.id, p.amount)} className="text-xs text-red-500 border border-red-200 hover:bg-red-50 hover:border-red-400 px-2 py-0.5 rounded-lg ml-2">Delete</button>
                                   </td>
                                 </tr>
