@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { amount, tournamentName, clubName, registrationId } = await req.json()
+    const { amount, baseAmount, tournamentName, clubName, registrationId } = await req.json()
 
     if (!amount || amount <= 0) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     formData.append('metadata[tournamentName]', tournamentName || '')
     formData.append('metadata[clubName]', clubName || '')
     formData.append('metadata[type]', 'team_registration')
+    if (baseAmount && baseAmount > 0) formData.append('metadata[baseAmount]', String(baseAmount))
 
     const stripeRes = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',

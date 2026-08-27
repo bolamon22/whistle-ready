@@ -35,14 +35,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       where: { registrationId: params.id, notes: { contains: piId } },
     })
     if (!existing) {
+      // Record the BASE amount (what they owed) when the intent carries it; the
+      // 3% card fee goes in the note so invoiced-vs-paid balances stay clean.
+      const charged = (pi.amount_received ?? pi.amount ?? 0) / 100
+      const base = parseFloat(pi.metadata?.baseAmount || '')
+      const recordAmount = base > 0 && base <= charged ? base : charged
       await prisma.registrationPayment.create({
         data: {
           registrationId: params.id,
-          amount: (pi.amount_received ?? pi.amount ?? 0) / 100,
+          amount: recordAmount,
           method: 'credit_card',
           checkNumber: '',
           receivedAt: new Date().toISOString().split('T')[0],
-          notes: `Stripe · ${piId}`,
+          notes: `Stripe · ${piId}${recordAmount < charged ? ` · incl. $${(charged - recordAmount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''}`,
         },
       })
     }

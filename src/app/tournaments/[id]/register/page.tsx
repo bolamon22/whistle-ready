@@ -271,6 +271,7 @@ export default function RegisterPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             amount: amountWithFee,
+            baseAmount,
             tournamentName,
             clubName,
             registrationId: registration.id,
