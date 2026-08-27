@@ -27,6 +27,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const formData = new URLSearchParams()
     formData.append('payment_method_types[]', 'card')
+    // ACH on the hosted Checkout page too (fee-free rail); webhook marks paid on settlement.
+    formData.append('payment_method_types[]', 'us_bank_account')
+    formData.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
     formData.append('mode', 'payment')
     formData.append('line_items[0][price_data][currency]', 'usd')
     formData.append('line_items[0][price_data][product_data][name]', `${tournament.name} — ${tierName}`)

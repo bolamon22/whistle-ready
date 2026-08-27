@@ -1294,7 +1294,7 @@ export default function RegistrationsPage() {
                       <option>Yes</option><option>No</option><option>Maybe</option></select></div>
                   <div><label className="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
                     <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={inputCls}>
-                      <option value="check">Check</option><option value="zelle">Zelle</option><option value="credit_card">Credit Card</option></select></div>
+                      <option value="check">Check</option><option value="zelle">Zelle</option><option value="ach">ACH Bank Transfer</option><option value="credit_card">Credit Card</option></select></div>
                 </div>
 
                 {/* Club Logo */}
