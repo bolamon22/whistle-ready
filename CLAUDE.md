@@ -89,7 +89,29 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Aug 4, 2026)
+## Current state (as of Aug 27, 2026)
+
+- **Staff Pool → app-login onboarding (Aug 27)** — the pool now shows whether each Worker has
+  actually registered in the app. Worker ↔ User are matched by EMAIL (no FK); `/api/workers` GET
+  merges `appStatus` per row: registered / invited / none / no_email (+ `appRole`, `invitedAt`).
+  - **Claim invites for EXISTING pool members**: `/api/workers/onboard` (requireStaff-gated) creates
+    a StaffInvite carrying a raw `workerId` column (guarded ALTER), 30-day expiry, and REUSES a
+    pending token so previously sent links stay valid. `mode:'send'` emails via SendGrid (platform
+    sender); `mode:'link'` just returns the URL — the pool's "Copy link" for texting staff with no
+    email on file.
+  - Accepting at `/invite/[token]`: claim invites are handled 100% in raw SQL and LINK the existing
+    Worker (no duplicate) — prefilled name/roles, staff just set a password (+ email when none was
+    on file; it's saved back to the Worker so status matching works). Plain invites (no workerId)
+    keep the original create-new-Worker flow.
+  - **Root cause found:** the StaffInvite TABLE has existed since Jun 2026, but the model was never
+    in schema.prisma — so `prisma.staffInvite` was undefined at runtime and EVERY invite accept
+    500'd. That's why no staff (or org-user) invite was ever completed. Model added to the schema
+    (compile-time fix only; no DB migration needed).
+  - Staff Pool UI: App column (status badges + Invite / Resend / Copy link), App filter,
+    registered/invited counts by the search bar, bulk "Send app invites" on selection (client sends
+    chunks of 15 to stay under serverless timeouts). Remember: SendGrid fails silently — verify a
+    real send in the Activity feed after deploying.
+
 
 - **Grants & county paperwork toolkit (LIVE-pending-push, Aug 4)** — built for the annual city
   sports-tourism grants (Play Treasure Coast etc.) and venue permits:
