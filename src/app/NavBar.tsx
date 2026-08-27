@@ -69,6 +69,8 @@ export default function NavBar() {
 
   // Admin pages use SuperAdminBar as sole header
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/o/')) return null
+  // Public pay-by-link pages present as the tournament org (Sunshine Events Group), not Whistle Ready.
+  if (pathname?.startsWith('/pay')) return null
 
   // The public marketing landing and the /find look-up have their own header.
   if (!session && (pathname === '/' || pathname === '/find')) return null
