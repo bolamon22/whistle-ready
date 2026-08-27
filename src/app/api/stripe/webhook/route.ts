@@ -87,7 +87,10 @@ export async function POST(req: NextRequest) {
           const charged = (pi.amount_received ?? pi.amount ?? 0) / 100
           const base = parseFloat(pi.metadata?.baseAmount || '')
           const amount = base > 0 && base <= charged ? base : charged
-          const isAch = (pi.payment_method_types || []).includes('us_bank_account')
+          // Exact single-type match: our ACH intents carry ONLY us_bank_account.
+          // Card intents may LIST us_bank_account among the account defaults, so
+          // includes() would mislabel card payments as ACH (bug found Aug 27).
+          const isAch = (pi.payment_method_types || []).join(',') === 'us_bank_account'
           await prisma.registrationPayment.create({
             data: {
               registrationId,

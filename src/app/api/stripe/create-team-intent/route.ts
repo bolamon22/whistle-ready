@@ -62,6 +62,11 @@ export async function POST(req: NextRequest) {
     if (paymentMethodType === 'us_bank_account') {
       formData.append('payment_method_types[]', 'us_bank_account')
       formData.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
+    } else {
+      // Pin card intents to exactly ['card'] — leaving types unset attaches the
+      // account's whole payment-method configuration, which broke method
+      // labeling downstream (card payments recorded as ACH).
+      formData.append('payment_method_types[]', 'card')
     }
 
     const stripeRes = await fetch('https://api.stripe.com/v1/payment_intents', {

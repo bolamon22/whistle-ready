@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       'Stripe-Version': '2024-06-20',
     }
     if (process.env.STRIPE_ACCOUNT_ID) stripeHeaders['Stripe-Context'] = process.env.STRIPE_ACCOUNT_ID
-    const piRes = await fetch(`https://api.stripe.com/v1/payment_intents/${piId}`, { headers: stripeHeaders })
+    const piRes = await fetch(`https://api.stripe.com/v1/payment_intents/${piId}?expand[]=latest_charge`, { headers: stripeHeaders })
     const pi = await piRes.json()
     if (!piRes.ok) return NextResponse.json({ error: pi?.error?.message || 'Stripe lookup failed' }, { status: 502 })
     if (pi.status !== 'succeeded' || pi.metadata?.registrationId !== params.id) {
@@ -38,6 +38,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!existing) {
       // Record the BASE amount (what they owed) when the intent carries it; the
       // 3% card fee goes in the note so invoiced-vs-paid balances stay clean.
+      // Method comes from the CHARGE actually made, not payment_method_types —
+      // intents created without explicit types inherit the account's whole
+      // payment-method configuration (card + us_bank_account + …), which made
+      // includes('us_bank_account') label real card payments as ACH.
+      const pmType = (pi.latest_charge && typeof pi.latest_charge === 'object'
+        ? pi.latest_charge?.payment_method_details?.type : '') || ''
+      const isAchPayment = pmType ? pmType === 'us_bank_account'
+        : (pi.payment_method_types || []).join(',') === 'us_bank_account'
       const charged = (pi.amount_received ?? pi.amount ?? 0) / 100
       const base = parseFloat(pi.metadata?.baseAmount || '')
       const recordAmount = base > 0 && base <= charged ? base : charged
@@ -45,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         data: {
           registrationId: params.id,
           amount: recordAmount,
-          method: (pi.payment_method_types || []).includes('us_bank_account') ? 'ach' : 'credit_card',
+          method: isAchPayment ? 'ach' : 'credit_card',
           checkNumber: '',
           receivedAt: new Date().toISOString().split('T')[0],
           notes: `Stripe · ${piId}${recordAmount < charged ? ` · incl. $${(charged - recordAmount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''}`,
@@ -54,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       await notifyPaymentReceived({
         registrationId: params.id,
         amount: recordAmount,
-        method: (pi.payment_method_types || []).includes('us_bank_account') ? 'ach' : 'credit_card',
+        method: isAchPayment ? 'ach' : 'credit_card',
         charged,
       })
     }

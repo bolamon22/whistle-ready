@@ -51,7 +51,10 @@ const DEFAULT_DIVISIONS = [
 const emptyTeam = (): TeamRow => ({ clubName: '', teamName: '', division: '', coachName: '', coachPhone: '', coachEmail: '', logoUrl: '' })
 const inputCls = "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
 const smallInputCls = "w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-const payLabel = (m: string) => m === 'credit_card' ? 'Credit Card' : m === 'zelle' ? 'Zelle' : m === 'ach' ? 'ACH Bank Transfer' : m === 'paypal' ? 'PayPal' : 'Check'
+const payLabel = (m: string) => m === 'credit_card' ? 'Credit Card' : m === 'zelle' ? 'Zelle' : m === 'ach' ? 'Bank Transfer (ACH)' : m === 'paypal' ? 'PayPal' : m === 'venmo' ? 'Venmo' : m === 'cash' ? 'Cash' : 'Check'
+// receivedAt is a plain YYYY-MM-DD string — new Date() would read it as UTC
+// midnight and show the PREVIOUS day in US timezones (8/27 payments read 8/26).
+const fmtPayDate = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? `${+m[2]}/${+m[3]}/${m[1]}` : (s ? new Date(s).toLocaleDateString() : '') }
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -1675,7 +1678,7 @@ export default function RegistrationsPage() {
                             <tbody>
                               {reg.payments.map(p => (
                                 <tr key={p.id} className="border-b border-slate-50">
-                                  <td className="py-1.5">{new Date(p.receivedAt).toLocaleDateString()}</td>
+                                  <td className="py-1.5">{fmtPayDate(p.receivedAt)}</td>
                                   <td className="py-1.5">{payLabel(p.method)}</td>
                                   <td className="py-1.5 text-slate-500">{p.checkNumber || p.notes || '—'}</td>
                                   <td className={`py-1.5 text-right font-medium ${p.amount < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(p.amount)}</td>
