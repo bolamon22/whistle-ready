@@ -13,6 +13,42 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
   const body = await req.json()
 
+  // Stripe paid-marking from the public register page: anonymous but VERIFIED --
+  // we confirm with Stripe (secret key) that this intent really succeeded for THIS
+  // registration before recording a payment. Nothing else is writable on this path.
+  if (body.stripeConfirm) {
+    if (!process.env.STRIPE_SECRET_KEY) return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
+    const piId = String(body.stripeConfirm)
+    if (!/^pi_[A-Za-z0-9]+$/.test(piId)) return NextResponse.json({ error: 'Bad payment intent id' }, { status: 400 })
+    const stripeHeaders: Record<string, string> = {
+      'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+      'Stripe-Version': '2024-06-20',
+    }
+    if (process.env.STRIPE_ACCOUNT_ID) stripeHeaders['Stripe-Context'] = process.env.STRIPE_ACCOUNT_ID
+    const piRes = await fetch(`https://api.stripe.com/v1/payment_intents/${piId}`, { headers: stripeHeaders })
+    const pi = await piRes.json()
+    if (!piRes.ok) return NextResponse.json({ error: pi?.error?.message || 'Stripe lookup failed' }, { status: 502 })
+    if (pi.status !== 'succeeded' || pi.metadata?.registrationId !== params.id) {
+      return NextResponse.json({ error: 'Payment not verified' }, { status: 400 })
+    }
+    const existing = await prisma.registrationPayment.findFirst({
+      where: { registrationId: params.id, notes: { contains: piId } },
+    })
+    if (!existing) {
+      await prisma.registrationPayment.create({
+        data: {
+          registrationId: params.id,
+          amount: (pi.amount_received ?? pi.amount ?? 0) / 100,
+          method: 'credit_card',
+          checkNumber: '',
+          receivedAt: new Date().toISOString().split('T')[0],
+          notes: `Stripe · ${piId}`,
+        },
+      })
+    }
+    return NextResponse.json({ ok: true })
+  }
+
   // Travel-only update (from the Travel & hotels report page): touches ONLY the
   // hotel columns. Deliberately separate from the full PATCH below, which
   // deletes + recreates the team list -- a travel edit must never do that.
@@ -30,6 +66,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: 'Failed to update travel info' }, { status: 500 })
     }
   }
+  // Full staff edit below (deletes + recreates the team list) -- never anonymous.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
+
   const {
     clubName, clubContact, contactEmail, contactPhone,
     clubBasedIn, clubWebsite, needsHotel, paymentMethod, notes, teams,
@@ -79,6 +118,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   await prisma.teamRegistration.update({
     where: { id: params.id },
     data: { deletedAt: new Date() },

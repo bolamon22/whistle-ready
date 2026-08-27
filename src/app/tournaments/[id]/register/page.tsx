@@ -67,7 +67,10 @@ function CardPayForm({
 
   async function handlePay(e: React.FormEvent) {
     e.preventDefault()
-    if (!stripe || !elements) return
+    if (!stripe || !elements) {
+      setCardError('The payment form is still loading — give it a few seconds. If this persists, refresh and try again.')
+      return
+    }
     setPaying(true)
     setCardError('')
 
@@ -90,7 +93,7 @@ function CardPayForm({
         await fetch(`/api/registrations/${registrationId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentStatus: 'paid' }),
+          body: JSON.stringify({ stripeConfirm: paymentIntent.id }),
         })
       } catch {}
       onSuccess()
