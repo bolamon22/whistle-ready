@@ -168,7 +168,7 @@ function AchPayForm({ stripePromise, clientSecret, clubName, tournamentName, reg
         className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors">
         {busy ? 'Processing…' : `Pay ${fmt(total)}`}
       </button>
-      <p className="text-xs text-gray-400 text-center">Bank payments take about 4 business days to clear.</p>
+      <p className="text-xs text-gray-400 text-center">ACH payments take about 4 business days to clear.</p>
     </div>
   )
 
@@ -304,9 +304,9 @@ export default function PayPage() {
     {header}
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
       <Clock className="mx-auto text-teal-500 mb-3" size={36} />
-      <h2 className="text-lg font-bold text-slate-800 mb-1">Bank payment initiated</h2>
+      <h2 className="text-lg font-bold text-slate-800 mb-1">Bank transfer (ACH) initiated</h2>
       <p className="text-sm text-slate-500 leading-relaxed">
-        Your payment of {fmt(balance)} for {info?.clubName} is on its way — bank transfers typically clear within
+        Your payment of {fmt(balance)} for {info?.clubName} is on its way — ACH transfers typically clear within
         4 business days, and we&apos;ll mark your registration paid automatically once it does. You can close this page.
       </p>
     </div>
@@ -348,7 +348,7 @@ export default function PayPage() {
           <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
         </>}
         {method === 'ach' && <>
-          <div className="flex justify-between text-teal-600 text-xs"><span>Bank transfer — no processing fee</span><span>+$0.00</span></div>
+          <div className="flex justify-between text-teal-600 text-xs"><span>Bank transfer (ACH) — no processing fee</span><span>+$0.00</span></div>
           <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(balance)}</span></div>
         </>}
       </div>
@@ -359,7 +359,7 @@ export default function PayPage() {
       <div className="grid grid-cols-2 gap-3 mb-5">
         <button type="button" onClick={() => chooseMethod('ach')} disabled={creating}
           className={`rounded-xl border-2 p-4 text-left transition-colors ${method === 'ach' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
-          <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><Landmark size={16} className="text-teal-600" /> Bank transfer</div>
+          <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><Landmark size={16} className="text-teal-600" /> Bank transfer (ACH)</div>
           <div className="text-xs text-teal-600 font-medium mt-1">No fee — pay {fmt(balance)}</div>
           <div className="text-xs text-gray-400 mt-0.5">Clears in ~4 business days</div>
         </button>
