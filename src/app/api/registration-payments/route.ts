@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 
 export async function POST(req: NextRequest) {
+  // Auth (Aug 2026): staff only — was previously callable with no auth.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const body = await req.json()
   const { registrationId, amount, method, checkNumber, receivedAt, notes } = body
   if (!registrationId || !amount || !receivedAt) {
