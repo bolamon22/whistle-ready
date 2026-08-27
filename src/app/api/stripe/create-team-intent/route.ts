@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -38,6 +39,24 @@ export async function POST(req: NextRequest) {
     formData.append('metadata[clubName]', clubName || '')
     formData.append('metadata[type]', 'team_registration')
     if (baseAmount && baseAmount > 0) formData.append('metadata[baseAmount]', String(baseAmount))
+    // Stripe-hosted receipts: API-created payments only email the customer when
+    // receipt_email is set. Look it up server-side from the registration record
+    // (never trust a client-supplied email for receipts). Payment still proceeds
+    // if the lookup fails or the id is unknown.
+    try {
+      if (registrationId) {
+        const reg = await prisma.teamRegistration.findUnique({
+          where: { id: registrationId },
+          select: { contactEmail: true },
+        })
+        const email = (reg?.contactEmail || '').trim()
+        if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          formData.append('receipt_email', email)
+        }
+      }
+    } catch (e) {
+      console.error('receipt_email lookup failed (payment continues):', e)
+    }
     // ACH (fee-free): explicit us_bank_account intent with instant bank-login verification
     // (Financial Connections) and microdeposit fallback. Default stays card.
     if (paymentMethodType === 'us_bank_account') {
