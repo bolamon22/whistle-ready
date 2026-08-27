@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { certLabel, CERT_LEVELS, WORKER_ROLES, PAY_METHODS, isHourlyRole } from '@/lib/utils'
 
-interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null }
+interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
 const GENDERS=[{value:'both',label:'Girls & Boys'},{value:'boys',label:'Boys'},{value:'girls',label:'Girls'}]
 const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',roles:['ref'],isAssigner:false,gender:'both',payRateOverride:'',hourlyRate:'',payMethod:'check',payHandle:'',notes:''}
 
-type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'
+type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'|'appStatus'
 type SortDir = 'asc'|'desc'
 type ExpandMode = 'profile'|'edit'
 
@@ -98,6 +98,8 @@ export default function StaffPage() {
   const [sortDir,setSortDir]=useState<SortDir>('asc')
   const [roleFilter,setRoleFilter]=useState('all')
   const [genderFilter,setGenderFilter]=useState('all')
+  const [appFilter,setAppFilter]=useState('all')
+  const [inviting,setInviting]=useState(false)
   const [search,setSearch]=useState('')
 
   const [selected,setSelected]=useState<Set<string>>(new Set())
@@ -131,6 +133,7 @@ export default function StaffPage() {
   const filtered=workers
     .filter(w=>roleFilter==='all'||parseRoles(w).includes(roleFilter))
     .filter(w=>genderFilter==='all'||w.gender===genderFilter)
+    .filter(w=>appFilter==='all'||(w.appStatus??'none')===appFilter)
     .filter(w=>!search||w.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
       const av=String(a[sortKey as keyof Worker]??''),bv=String(b[sortKey as keyof Worker]??'')
@@ -186,6 +189,43 @@ export default function StaffPage() {
     await fetch(`/api/workers/${id}`,{method:'DELETE'});toast.success('Unassigned')
     if(expandedId===id)setExpandedId(null);load()
   }
+
+  // ── App-login onboarding: invite pool members to register (see /api/workers/onboard) ──
+  async function sendAppInvites(ids:string[],fromBulk=false){
+    if(!ids.length||inviting)return
+    setInviting(true)
+    const c={sent:0,already:0,noEmail:0,failed:0}
+    for(let i=0;i<ids.length;i+=15){
+      const chunk=ids.slice(i,i+15)
+      try{
+        const res=await fetch('/api/workers/onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerIds:chunk,mode:'send'})})
+        const d=await res.json()
+        if(res.ok){c.sent+=d.sent??0;c.already+=d.alreadyRegistered??0;c.noEmail+=d.noEmail??0}else c.failed+=chunk.length
+      }catch{c.failed+=chunk.length}
+    }
+    const parts:string[]=[]
+    if(c.sent)parts.push(`${c.sent} invite${c.sent===1?'':'s'} sent`)
+    if(c.already)parts.push(`${c.already} already registered`)
+    if(c.noEmail)parts.push(`${c.noEmail} no email — use Copy link`)
+    if(c.failed)parts.push(`${c.failed} failed`)
+    const msg=parts.join(' · ')||'Nothing to send'
+    if(c.sent&&!c.failed)toast.success(msg);else if(c.failed)toast.error(msg);else toast(msg)
+    setInviting(false);if(fromBulk)setSelected(new Set());load()
+  }
+
+  async function copyInviteLink(w:Worker){
+    try{
+      const res=await fetch('/api/workers/onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerIds:[w.id],mode:'link'})})
+      const d=await res.json()
+      const url=d?.results?.[0]?.inviteUrl
+      if(!res.ok||!url){toast.error(d?.results?.[0]?.status==='already_registered'?`${w.name} already has a login`:'Could not create an invite link');return}
+      await navigator.clipboard.writeText(url)
+      toast.success(`Invite link copied — text it to ${w.name}`)
+      load()
+    }catch{toast.error('Could not copy the link')}
+  }
+
+  const fmtInviteDate=(d:string)=>{const t=new Date(d.includes('T')?d:d.replace(' ','T')+'Z');return isNaN(t.getTime())?'':t.toLocaleDateString()}
 
   function toggleSelect(id:string){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}
   function toggleAll(){setSelected(s=>s.size===filtered.length&&filtered.length>0?new Set():new Set(filtered.map(w=>w.id)))}
@@ -329,13 +369,25 @@ export default function StaffPage() {
               <option value="girls">Girls</option>
               <option value="both">Girls & Boys</option>
             </select>
+            <label className="text-sm text-slate-500">App:</label>
+            <select className="select !w-auto text-sm" value={appFilter} onChange={e=>{setAppFilter(e.target.value);setSelected(new Set())}}>
+              <option value="all">All</option>
+              <option value="registered">Registered</option>
+              <option value="invited">Invited</option>
+              <option value="none">Not invited</option>
+              <option value="no_email">No email</option>
+            </select>
             <span className="text-xs text-slate-400">{filtered.length} shown</span>
-            {(search||roleFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all')}}>Clear filters</button>}
+            <span className="text-xs text-slate-300">·</span>
+            <span className="text-xs text-slate-400"><span className="font-semibold text-emerald-600">{workers.filter(w=>w.appStatus==='registered').length}</span> registered · <span className="font-semibold text-amber-600">{workers.filter(w=>w.appStatus==='invited').length}</span> invited · <span className="font-semibold text-slate-500">{workers.filter(w=>w.appStatus==='none'||w.appStatus==='no_email').length}</span> not on app</span>
+            {(search||roleFilter!=='all'||appFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all');setAppFilter('all')}}>Clear filters</button>}
           </div>
 
           {selected.size>0&&(
             <div className="flex items-center gap-3 mb-3 p-3 bg-sky-50 border border-sky-200 rounded-lg flex-wrap">
               <span className="text-sm font-medium text-sky-700">{selected.size} selected</span>
+              <button onClick={()=>sendAppInvites(Array.from(selected),true)} className="btn-primary btn-sm" disabled={inviting}>{inviting?'Sending…':'Send app invites'}</button>
+              <span className="text-slate-300 text-sm">|</span>
               <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}><option value="">— choose field to edit —</option>{BULK_FIELDS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}</select>
               {bulkField&&<>
                 {bulkField==='defaultRole'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>}
@@ -363,6 +415,7 @@ export default function StaffPage() {
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Rate</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Contact</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('appStatus')}>App {sortArrow('appStatus')}</th>
                   <th className="px-4 py-3"/>
                 </tr>
               </thead>
@@ -385,6 +438,19 @@ export default function StaffPage() {
                       <td className="px-4 py-3"><span className="badge bg-slate-100 text-slate-700">{pmLabel(w.payMethod)}</span>{w.payHandle&&<div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{wRoles.some(r=>isHourlyRole(r))?(w.hourlyRate?`$${w.hourlyRate}/hr`:'—'):(w.payRateOverride?`$${w.payRateOverride}/game`:'Default')}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{w.phone&&<div>{w.phone}</div>}{w.email&&<div>{w.email}</div>}{!w.phone&&!w.email&&'—'}</td>
+                      <td className="px-4 py-3">
+                        {w.appStatus==='registered'?<span className="badge bg-emerald-100 text-emerald-700" title={w.appRole&&w.appRole!=='staff'?`Has a login (account role: ${w.appRole})`:'Has an app login'}>Registered</span>:(
+                          <div>
+                            {w.appStatus==='invited'?<span className="badge bg-amber-100 text-amber-700" title={w.invitedAt?`Invited ${fmtInviteDate(w.invitedAt)}`:'Invite sent'}>Invited</span>
+                              :w.appStatus==='no_email'?<span className="badge bg-rose-50 text-rose-600" title="No email on file — copy the link and text it to them">No email</span>
+                              :<span className="badge bg-slate-100 text-slate-500">Not invited</span>}
+                            <div className="flex gap-2 mt-1">
+                              {w.appStatus!=='no_email'&&<button onClick={()=>sendAppInvites([w.id])} disabled={inviting} className="text-[11px] text-teal-600 hover:text-teal-800 font-medium disabled:opacity-50">{w.appStatus==='invited'?'Resend':'Invite'}</button>}
+                              <button onClick={()=>copyInviteLink(w)} className="text-[11px] text-slate-400 hover:text-slate-600 font-medium">Copy link</button>
+                            </div>
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={()=>expand(w,'profile')} className={`text-xs mr-2 font-medium transition-colors ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-400 hover:text-slate-700'}`}>Profile</button>
                         <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-sky-800 underline':'text-sky-600 hover:text-sky-800'}`}>Edit</button>
@@ -395,7 +461,7 @@ export default function StaffPage() {
                     {/* Profile panel */}
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
-                        <td colSpan={9} className="p-0 border-b border-slate-200">
+                        <td colSpan={11} className="p-0 border-b border-slate-200">
                           <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white px-4 sm:px-6 py-4 sm:py-5">
                             <div className="flex items-start gap-5">
                               {/* Avatar */}
@@ -447,7 +513,7 @@ export default function StaffPage() {
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={9} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">
+                        <td colSpan={11} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">
                           {/* Photo upload */}
                           <div className="flex items-center gap-4 mb-5 pb-5 border-b border-slate-200">
                             <div className="relative group flex-shrink-0">
