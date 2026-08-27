@@ -21,6 +21,40 @@ async function resolveOrgId(req: Request): Promise<{ orgId: string | null; isAdm
   return { orgId: sessionOrgId, isAdmin: false }
 }
 
+// App-login status for the Staff Pool: is each Worker matched (by email) to a User
+// account, or covered by a pending claim invite (see /api/workers/onboard)?
+// Best-effort — a failure here must never block the roster itself.
+async function withAppStatus(client: ReturnType<typeof db>, rows: unknown[]) {
+  if (!rows.length) return rows
+  const users = new Map<string, string>()
+  try {
+    const u = await client.execute(`SELECT lower(email) AS email, role FROM "User" WHERE email IS NOT NULL AND email != ''`)
+    for (const r of u.rows as Array<Record<string, unknown>>) users.set(String(r.email), String(r.role ?? ''))
+  } catch { /* status stays unknown */ }
+  const invByWorker = new Map<string, string>()
+  const invByEmail = new Map<string, string>()
+  try {
+    let inv
+    try {
+      inv = await client.execute(`SELECT workerId, lower(email) AS email, createdAt FROM "StaffInvite" WHERE usedAt IS NULL AND expiresAt > datetime('now')`)
+    } catch {
+      // workerId column not migrated yet
+      inv = await client.execute(`SELECT NULL AS workerId, lower(email) AS email, createdAt FROM "StaffInvite" WHERE usedAt IS NULL AND expiresAt > datetime('now')`)
+    }
+    for (const r of inv.rows as Array<Record<string, unknown>>) {
+      if (r.workerId) invByWorker.set(String(r.workerId), String(r.createdAt ?? ''))
+      if (r.email) invByEmail.set(String(r.email), String(r.createdAt ?? ''))
+    }
+  } catch { /* table may not exist yet */ }
+  return (rows as Array<Record<string, unknown>>).map(r => {
+    const email = r.email ? String(r.email).trim().toLowerCase() : ''
+    const userRole = email ? users.get(email) : undefined
+    const invitedAt = invByWorker.get(String(r.id)) ?? (email ? invByEmail.get(email) : undefined)
+    const appStatus = userRole !== undefined ? 'registered' : invitedAt !== undefined ? 'invited' : email ? 'none' : 'no_email'
+    return { ...r, appStatus, appRole: userRole ?? null, invitedAt: invitedAt ?? null }
+  })
+}
+
 export async function GET(req: Request) {
   const { orgId, isAdmin } = await resolveOrgId(req)
   const client = db()
@@ -28,7 +62,7 @@ export async function GET(req: Request) {
   if (isAdmin && !orgId) {
     // Platform view — all workers
     const res = await client.execute(`SELECT * FROM "Worker" ORDER BY name ASC`)
-    return NextResponse.json(res.rows)
+    return NextResponse.json(await withAppStatus(client, res.rows as unknown[]))
   }
 
   if (orgId) {
@@ -37,7 +71,7 @@ export async function GET(req: Request) {
         sql: `SELECT * FROM "Worker" WHERE orgId = ? ORDER BY name ASC`,
         args: [orgId],
       })
-      return NextResponse.json(res.rows)
+      return NextResponse.json(await withAppStatus(client, res.rows as unknown[]))
     } catch {
       // orgId column not yet migrated — return empty until migration is run
       return NextResponse.json([])
