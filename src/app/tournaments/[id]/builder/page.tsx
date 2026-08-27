@@ -506,6 +506,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             placeholder="https://…" />
           <p className="text-xs text-slate-400 mt-1">Optional. Shown as a link under Divisions on the public event page.</p>
         </div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
+          <label className="label">Divisions note</label>
+          <textarea className="input" rows={2} value={eventContent.divisionsNote}
+            onChange={e => setEventContent(v => ({ ...v, divisionsNote: e.target.value }))}
+            placeholder="e.g. Please note that divisions are subject to adjustment or merger based on final registration numbers per division." />
+          <p className="text-xs text-slate-400 mt-1">Optional. Shown under the division list on the public event page.</p>
+        </div>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-slate-500">Check the divisions for this tournament. Click a checked division name to rename it.</p>
           <div className="flex gap-2 flex-shrink-0 ml-4">

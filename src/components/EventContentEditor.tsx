@@ -25,14 +25,14 @@ import { resolveBlocks, Block } from '@/lib/eventBlocks'
 export type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string }
 export type Contact = { name: string; role: string; phone: string; email: string }
 export type EventContent = {
-  overview: string; ageChartUrl: string; heroImage: string
+  overview: string; ageChartUrl: string; divisionsNote: string; heroImage: string
   locations: Loc[]; hotels: string; hotelsUrl: string
   rules: string; rulesSourceId?: string; contacts: Contact[]
   sectionOrder?: string[]; hiddenSections?: string[]
   blocks?: Block[]
 }
 export const EMPTY_EVENT_CONTENT: EventContent = {
-  overview: '', ageChartUrl: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '',
+  overview: '', ageChartUrl: '', divisionsNote: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '',
   rules: '', rulesSourceId: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [],
 }
 
@@ -83,7 +83,7 @@ export function useEventContent(id: string) {
         const str = (v: any) => typeof v === 'string' ? v : ''
         return {
           ...EMPTY_EVENT_CONTENT, ...d,
-          overview: str(d?.overview), ageChartUrl: str(d?.ageChartUrl), heroImage: str(d?.heroImage),
+          overview: str(d?.overview), ageChartUrl: str(d?.ageChartUrl), divisionsNote: str(d?.divisionsNote), heroImage: str(d?.heroImage),
           hotels: str(d?.hotels), hotelsUrl: str(d?.hotelsUrl),
           rules: str(d?.rules), rulesSourceId: str(d?.rulesSourceId),
           locations: Array.isArray(d?.locations) ? d.locations : [],

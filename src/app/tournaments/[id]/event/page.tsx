@@ -203,6 +203,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
                   <div className="flex flex-wrap gap-1.5">{list.map(chip)}</div>
                 </div>
               ))}
+              {typeof c.divisionsNote === 'string' && c.divisionsNote.trim() !== '' && <p className="text-xs text-slate-500 leading-relaxed mt-3">{c.divisionsNote}</p>}
               {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
             </div>
           )
