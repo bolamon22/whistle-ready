@@ -532,7 +532,7 @@ export default function RegistrationsPage() {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete registration for "${name}"?`)) return
+    if (!confirm(`Delete the registration for "${name}"?\n\nIt moves to Recently Deleted at the bottom of this page — you can restore it any time in the next 30 days.`)) return
     try {
       await fetch(`/api/registrations/${id}`, { method: 'DELETE' })
       toast.success('Deleted.'); setExpanded(null); load()
@@ -821,7 +821,7 @@ export default function RegistrationsPage() {
   }
 
   const handleDeleteIndiv = async (id: string, name: string) => {
-    if (!confirm(`Delete registration for "${name}"?`)) return
+    if (!confirm(`Delete the registration for "${name}"?\n\nIt moves to Recently Deleted at the bottom of this page — you can restore it any time in the next 30 days.`)) return
     try {
       await fetch(`/api/tournaments/${tournamentId}/individual-reg/${id}`, { method: 'DELETE' })
       toast.success('Deleted.'); load()
@@ -1719,7 +1719,7 @@ export default function RegistrationsPage() {
           className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
         >
           <span>{showDeleted ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
-          <span>Recently Deleted <span className="text-xs text-slate-400">(restored within 15 days)</span></span>
+          <span>Recently Deleted <span className="text-xs text-slate-400">(restorable for 30 days)</span></span>
         </button>
         {showDeleted && (
           <div className="mt-3 border border-slate-200 rounded-lg divide-y divide-slate-200">
