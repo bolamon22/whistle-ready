@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { amount, baseAmount, tournamentName, clubName, registrationId } = await req.json()
+    const { amount, baseAmount, tournamentName, clubName, registrationId, paymentMethodType } = await req.json()
 
     if (!amount || amount <= 0) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
@@ -38,6 +38,12 @@ export async function POST(req: NextRequest) {
     formData.append('metadata[clubName]', clubName || '')
     formData.append('metadata[type]', 'team_registration')
     if (baseAmount && baseAmount > 0) formData.append('metadata[baseAmount]', String(baseAmount))
+    // ACH (fee-free): explicit us_bank_account intent with instant bank-login verification
+    // (Financial Connections) and microdeposit fallback. Default stays card.
+    if (paymentMethodType === 'us_bank_account') {
+      formData.append('payment_method_types[]', 'us_bank_account')
+      formData.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
+    }
 
     const stripeRes = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',

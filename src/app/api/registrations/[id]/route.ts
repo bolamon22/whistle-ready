@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         data: {
           registrationId: params.id,
           amount: recordAmount,
-          method: 'credit_card',
+          method: (pi.payment_method_types || []).includes('us_bank_account') ? 'ach' : 'credit_card',
           checkNumber: '',
           receivedAt: new Date().toISOString().split('T')[0],
           notes: `Stripe · ${piId}${recordAmount < charged ? ` · incl. $${(charged - recordAmount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''}`,

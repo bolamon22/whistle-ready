@@ -23,6 +23,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({
       clubName: reg.clubName,
       teamCount: reg.teams.length,
+      // Itemized roster so clubs can see exactly what the invoice covers.
+      // Team name + division only — never coach contact info on a public route.
+      teams: reg.teams.map(t => ({ team: t.teamName, division: t.division })),
       tournamentId: reg.tournamentId,
       tournamentName: tournament?.name || '',
       tournamentDates: tournament?.startDate

@@ -69,5 +69,40 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // --- Team registration paid via PaymentIntent (card or ACH) ---
+  // ACH settles days after the customer authorizes, so this webhook is what
+  // records those payments. Idempotent with the stripeConfirm PATCH path
+  // (both skip when a payment already references this intent id).
+  if (event.type === 'payment_intent.succeeded') {
+    const pi = event.data.object as Stripe.PaymentIntent
+    const registrationId = pi.metadata?.registrationId
+    if (pi.metadata?.type === 'team_registration' && registrationId) {
+      try {
+        const existing = await prisma.registrationPayment.findFirst({
+          where: { registrationId, notes: { contains: pi.id } },
+        })
+        if (!existing) {
+          const charged = (pi.amount_received ?? pi.amount ?? 0) / 100
+          const base = parseFloat(pi.metadata?.baseAmount || '')
+          const amount = base > 0 && base <= charged ? base : charged
+          const isAch = (pi.payment_method_types || []).includes('us_bank_account')
+          await prisma.registrationPayment.create({
+            data: {
+              registrationId,
+              amount,
+              method: isAch ? 'ach' : 'credit_card',
+              checkNumber: '',
+              receivedAt: new Date().toISOString().split('T')[0],
+              notes: `Stripe · ${pi.id}${amount < charged ? ` · incl. $${(charged - amount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''} · via webhook`,
+            },
+          })
+          console.log(`Team registration payment recorded via webhook: ${registrationId}, $${amount}`)
+        }
+      } catch (e) {
+        console.error('Failed to record webhook payment:', e)
+      }
+    }
+  }
+
   return NextResponse.json({ received: true })
 }

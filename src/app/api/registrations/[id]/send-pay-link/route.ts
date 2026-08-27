@@ -40,12 +40,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     <tr><td style="padding:6px 0;font-weight:bold;border-top:1px solid #e2e8f0">Balance due</td><td style="padding:6px 0;text-align:right;font-weight:bold;border-top:1px solid #e2e8f0">${fmt(balance)}</td></tr>
   </table>
   <p style="text-align:center;margin:24px 0">
-    <a href="${link}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">Pay ${fmt(balance)} by card</a>
+    <a href="${link}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">Pay ${fmt(balance)} online</a>
   </p>
-  <p style="font-size:13px;color:#64748b">A 3% card processing fee is added at checkout (${fmt(totalWithFee)} total). Prefer to pay by check? Just reply to this email.</p>
+  <p style="font-size:13px;color:#64748b">Pay by bank transfer (ACH) with <strong>no fee</strong>, or by card (3% processing fee &mdash; ${fmt(totalWithFee)} total). Prefer to pay by check? Just reply to this email.</p>
   <p style="font-size:13px;color:#64748b">If the button does not work, copy this link into your browser:<br>${link}</p>
 </div>`
-    const text = `Payment link for ${reg.clubName} (${teamsLabel}) at ${tName}\n\nInvoiced: ${fmt(due)}\nPaid: ${fmt(paid)}\nBalance due: ${fmt(balance)}\n\nPay by card (3% processing fee added, ${fmt(totalWithFee)} total):\n${link}\n\nPrefer to pay by check? Just reply to this email.`
+    const text = `Payment link for ${reg.clubName} (${teamsLabel}) at ${tName}\n\nInvoiced: ${fmt(due)}\nPaid: ${fmt(paid)}\nBalance due: ${fmt(balance)}\n\nPay online — bank transfer (no fee) or card (3% fee, ${fmt(totalWithFee)} total):\n${link}\n\nPrefer to pay by check? Just reply to this email.`
 
     const result = await sendEmail({
       to: reg.contactEmail,
