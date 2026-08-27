@@ -6,8 +6,7 @@ import PublicChirp from '@/components/PublicChirp'
 import toast, { Toaster } from 'react-hot-toast'
 import { parsePricing, calcFee, feeScheduleLines, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { mdToHtml } from '@/app/o/[slug]/_md'
-import { loadStripe } from '@stripe/stripe-js'
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import StripePayPanel, { type PayMethod } from '@/components/StripePayPanel'
 
 interface TeamRow {
   clubName: string
@@ -53,89 +52,6 @@ async function uploadFile(file: File): Promise<string> {
   return data.url
 }
 
-// Card Payment Form (must be inside <Elements>)
-function CardPayForm({
-  clientSecret, total, clubName, contactEmail, registrationId, onSuccess,
-}: {
-  clientSecret: string; total: number; clubName: string; contactEmail: string
-  registrationId: string; onSuccess: () => void
-}) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const [paying, setPaying] = useState(false)
-  const [cardError, setCardError] = useState('')
-
-  async function handlePay(e: React.FormEvent) {
-    e.preventDefault()
-    if (!stripe || !elements) {
-      setCardError('The payment form is still loading — give it a few seconds. If this persists, refresh and try again.')
-      return
-    }
-    setPaying(true)
-    setCardError('')
-
-    const card = elements.getElement(CardElement)!
-    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: {
-        card,
-        billing_details: { name: clubName, email: contactEmail },
-      },
-    })
-
-    if (error) {
-      setCardError(error.message || 'Payment failed')
-      setPaying(false)
-      return
-    }
-
-    if (paymentIntent?.status === 'succeeded') {
-      try {
-        await fetch(`/api/registrations/${registrationId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stripeConfirm: paymentIntent.id }),
-        })
-      } catch {}
-      onSuccess()
-    }
-
-    setPaying(false)
-  }
-
-  return (
-    <form onSubmit={handlePay} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Card Details</label>
-        <div className="border border-gray-200 rounded-xl px-4 py-3.5 bg-white">
-          <CardElement options={{
-            style: {
-              base: {
-                fontSize: '15px',
-                color: '#374151',
-                fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
-                '::placeholder': { color: '#9CA3AF' },
-                iconColor: '#6B7280',
-              },
-              invalid: { color: '#EF4444' },
-            },
-          }} />
-        </div>
-        {cardError && <p className="text-red-500 text-sm mt-1.5">{cardError}</p>}
-      </div>
-      <button
-        type="submit"
-        disabled={paying || !stripe || !elements}
-        className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl text-base transition-colors shadow-sm"
-      >
-        {paying ? 'Processing...' : `Pay $${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-      </button>
-      <p className="text-center text-xs text-gray-400">
-        Secured by Stripe. Your card is never stored on our servers.
-      </p>
-    </form>
-  )
-}
-
 export default function RegisterPage() {
   const { id: tournamentId } = useParams()
   const searchParams = useSearchParams()
@@ -149,10 +65,11 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
 
   const [step, setStep] = useState<'form' | 'payment' | 'success'>('form')
-  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null)
-  const [clientSecret, setClientSecret] = useState('')
   const [savedRegistrationId, setSavedRegistrationId] = useState('')
-  const [invoiceTotal, setInvoiceTotal] = useState(0)
+  const [invoiceBase, setInvoiceBase] = useState(0)
+  const [payChoice, setPayChoice] = useState<'' | PayMethod>('')
+  const [achNote, setAchNote] = useState<'' | 'processing' | 'micro'>('')
+  const [microUrl, setMicroUrl] = useState('')
 
   const [clubName, setClubName] = useState('')
   const [clubContact, setClubContact] = useState('')
@@ -261,30 +178,8 @@ export default function RegisterPage() {
       const registration = await res.json()
       setConf(registration.confirmation || null)
 
-      if (paymentMethod === 'credit_card') {
-        const baseAmount = calcInvoice(teams, pricing)
-        const amountWithFee = Math.round(baseAmount * 1.03 * 100) / 100
-        setInvoiceTotal(amountWithFee)
-
-        const intentRes = await fetch('/api/stripe/create-team-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: amountWithFee,
-            baseAmount,
-            tournamentName,
-            clubName,
-            registrationId: registration.id,
-          }),
-        })
-        const intentData = await intentRes.json()
-        if (!intentRes.ok || !intentData.clientSecret) {
-          throw new Error(intentData.error || 'Failed to initialize payment')
-        }
-
-        const sp = loadStripe(intentData.publishableKey, intentData.accountId ? { stripeAccount: intentData.accountId } : undefined)
-        setStripePromise(sp)
-        setClientSecret(intentData.clientSecret)
+      if (paymentMethod === 'credit_card' || paymentMethod === 'ach') {
+        setInvoiceBase(calcInvoice(teams, pricing))
         setSavedRegistrationId(registration.id)
         setStep('payment')
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -309,7 +204,7 @@ export default function RegisterPage() {
           <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
-          <h2 className="text-2xl font-bold text-center text-slate-900 mb-1">{donePaid ? 'Payment complete!' : 'Registration received!'}</h2>
+          <h2 className="text-2xl font-bold text-center text-slate-900 mb-1">{donePaid && !achNote ? 'Payment complete!' : 'Registration received!'}</h2>
           {L ? (
             <div className="mt-4 text-left">
               <p className="font-semibold text-slate-800">{L.greeting}</p>
@@ -319,7 +214,9 @@ export default function RegisterPage() {
                 {L.teams.map((t: any, i: number) => <div key={i} className="flex justify-between px-4 py-2 border-t border-slate-100"><span className="text-slate-700">{t.team}</span><span className="text-slate-500">{t.division}</span></div>)}
                 <div className="flex justify-between px-4 py-2 border-t border-slate-100"><span className="text-slate-500">Teams</span><span className="font-semibold text-slate-800">{L.numTeams}</span></div>
               </div>
-              {(donePaid || L.payment) && <p className="mt-3 text-sm bg-teal-50 border border-teal-100 text-teal-800 rounded-lg px-3 py-2">{donePaid ? "Payment received — you're all set." : L.payment}</p>}
+              {achNote === 'processing' && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">Bank transfer (ACH) initiated — it typically clears within 4 business days, and we&apos;ll mark your registration paid automatically once it does.</p>}
+              {achNote === 'micro' && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">One more step: Stripe is sending a small verification deposit to your bank (1&ndash;2 days). Follow the emailed instructions{microUrl ? <> or <a href={microUrl} className="underline" target="_blank" rel="noreferrer">verify here</a></> : null} to complete your payment.</p>}
+              {!achNote && (donePaid || L.payment) && <p className="mt-3 text-sm bg-teal-50 border border-teal-100 text-teal-800 rounded-lg px-3 py-2">{donePaid ? "Payment received — you're all set." : L.payment}</p>}
 
               {/* Account CTA — the main next step. Shown here (not just in the email)
                   because this is the moment the coach is actually paying attention. */}
@@ -344,14 +241,15 @@ export default function RegisterPage() {
               {conf?.emailed && <p className="text-xs text-slate-400 text-center mt-4">A copy was emailed to {contactEmail}.</p>}
             </div>
           ) : (
-            <p className="text-gray-600 text-center mt-2">Thank you for registering for <strong>{tournamentName}</strong>. {donePaid ? 'Your payment was successful. ' : ''}We will be in touch soon with confirmation details.</p>
+            <p className="text-gray-600 text-center mt-2">Thank you for registering for <strong>{tournamentName}</strong>. {donePaid && !achNote ? 'Your payment was successful. ' : achNote ? 'Your bank transfer is processing — it typically clears within 4 business days. ' : ''}We will be in touch soon with confirmation details.</p>
           )}
         </div>
       </div>
     )
   }
 
-  if (step === 'payment' && stripePromise && clientSecret) {
+  if (step === 'payment' && savedRegistrationId) {
+    const cardTotal = Math.round(invoiceBase * 1.03 * 100) / 100
     return (
       <div className="min-h-screen bg-gray-50">
         <Toaster />
@@ -359,33 +257,41 @@ export default function RegisterPage() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">Order Summary</h2>
             <div className="text-sm text-gray-500 mb-3">{clubName} &middot; {teams.length} team{teams.length !== 1 ? 's' : ''}</div>
+            <div className="mb-4 border border-gray-100 rounded-xl overflow-hidden">
+              {teams.map((t, i) => (
+                <div key={i} className={`flex justify-between items-center px-4 py-2.5 text-sm ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                  <span className="text-gray-700 font-medium">{t.teamName || `Team ${i + 1}`}</span>
+                  <span className="text-gray-400 text-xs">{t.division}</span>
+                </div>
+              ))}
+            </div>
             <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-600">
-                <span>Registration ({teams.length} team{teams.length !== 1 ? 's' : ''})</span>
-                <span>{fmt(calcInvoice(teams, pricing))}</span>
-              </div>
-              <div className="flex justify-between text-gray-400 text-xs">
-                <span>Processing fee (3%)</span>
-                <span>+{fmt(Math.round(calcInvoice(teams, pricing) * 0.03))}</span>
-              </div>
-              <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2">
-                <span>Total due</span>
-                <span>{fmt(Math.round(invoiceTotal))}</span>
-              </div>
+              <div className="flex justify-between font-semibold text-gray-800"><span>Registration ({teams.length} team{teams.length !== 1 ? 's' : ''})</span><span>{fmt(invoiceBase)}</span></div>
+              {payChoice === 'card' && <>
+                <div className="flex justify-between text-gray-400 text-xs"><span>Card processing fee (3%)</span><span>+{fmt(cardTotal - invoiceBase)}</span></div>
+                <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
+              </>}
+              {payChoice === 'ach' && <>
+                <div className="flex justify-between text-teal-600 text-xs"><span>Bank transfer (ACH) — no processing fee</span><span>+$0</span></div>
+                <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(invoiceBase)}</span></div>
+              </>}
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-bold text-gray-800 mb-5 pb-2 border-b border-gray-100">Payment</h2>
-            <Elements stripe={stripePromise}>
-              <CardPayForm
-                clientSecret={clientSecret}
-                total={invoiceTotal}
-                clubName={clubName}
-                contactEmail={contactEmail}
-                registrationId={savedRegistrationId}
-                onSuccess={() => setStep('success')}
-              />
-            </Elements>
+            <h2 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">Payment</h2>
+            <StripePayPanel
+              registrationId={savedRegistrationId}
+              balance={invoiceBase}
+              clubName={clubName}
+              tournamentName={tournamentName}
+              contactEmail={contactEmail}
+              initialMethod={paymentMethod === 'ach' ? 'ach' : 'card'}
+              onMethodChange={setPayChoice}
+              onCardSuccess={() => setStep('success')}
+              onAchProcessing={() => { setAchNote('processing'); setStep('success') }}
+              onAchMicrodeposits={url => { setAchNote('micro'); setMicroUrl(url); setStep('success') }}
+              onAchSuccess={() => setStep('success')}
+            />
           </div>
           <button
             onClick={() => setStep('form')}
@@ -587,6 +493,9 @@ export default function RegisterPage() {
                     {paymentMethod === 'credit_card' && (
                       <p className="text-xs text-blue-500 mt-0.5">+3% CC fee = {fmt(Math.round(calcInvoice(teams, pricing) * 1.03))}</p>
                     )}
+                    {paymentMethod === 'ach' && (
+                      <p className="text-xs text-teal-600 mt-0.5">No fee with bank transfer (ACH)</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -597,7 +506,7 @@ export default function RegisterPage() {
                   { value: 'credit_card', label: 'Credit Card' },
                   { value: 'check', label: 'Check' },
                   { value: 'zelle', label: 'Zelle' },
-                  { value: 'ach', label: 'ACH' },
+                  { value: 'ach', label: 'Bank Transfer (ACH) — No Fee' },
                   { value: 'paypal', label: 'PayPal' },
                 ].map(opt => (
                   <label key={opt.value} className={`flex items-center gap-2 cursor-pointer text-sm border rounded-lg px-4 py-2 transition-colors ${paymentMethod === opt.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
@@ -616,15 +525,7 @@ export default function RegisterPage() {
                 <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Please mail checks payable to <strong>{org?.checkPayableTo || 'Sunshine Events Group'}</strong> to:<br/>{org?.checkAddress || '11830 Wiles Rd. Coral Springs, FL 33076'}</p>
               )}
               {paymentMethod === 'ach' && (
-                org?.achBankName ? (
-                  <div className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 space-y-1">
-                    <p><strong>Bank:</strong> {org.achBankName}</p>
-                    {org.achRoutingNumber && <p><strong>Routing:</strong> {org.achRoutingNumber}</p>}
-                    {org.achAccountNumber && <p><strong>Account:</strong> {org.achAccountNumber}</p>}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">ACH payment instructions will be provided after registration is confirmed.</p>
-                )
+                <p className="text-sm text-teal-700 mt-3 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Pay online by secure bank login on the next step — <strong>no processing fee</strong>.</p>
               )}
               {paymentMethod === 'paypal' && (
                 <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Send PayPal to <strong>{org?.paypalEmail || 'info@sunshinelax.com'}</strong></p>
@@ -640,8 +541,8 @@ export default function RegisterPage() {
             <button type="submit" disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 text-sm transition-colors">
               {loading
-                ? (paymentMethod === 'credit_card' ? 'Preparing payment...' : 'Submitting...')
-                : (paymentMethod === 'credit_card' ? 'Continue to Payment' : 'Submit Registration')}
+                ? (paymentMethod === 'credit_card' || paymentMethod === 'ach' ? 'Preparing payment...' : 'Submitting...')
+                : (paymentMethod === 'credit_card' || paymentMethod === 'ach' ? 'Continue to Payment' : 'Submit Registration')}
             </button>
           </form>
         </div>
