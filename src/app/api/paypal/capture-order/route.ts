@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { paypalConfigured, paypalAccessToken, PAYPAL_BASE } from '@/lib/paypal'
 
 // Captures an approved PayPal/Venmo order and records the payment. Public by
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
               notes: `${method === 'venmo' ? 'Venmo (PayPal)' : 'PayPal'} · ${cap.id} · order ${orderId}${amount < charged ? ` · incl. $${(charged - amount).toFixed(2)} processing fee (charged $${charged.toFixed(2)})` : ''}`,
             },
           })
+          await notifyPaymentReceived({ registrationId: regId, amount, method, charged })
         }
       }
     }

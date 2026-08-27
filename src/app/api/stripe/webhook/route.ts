@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { prisma } from '@/lib/db'
+import { notifyPaymentReceived } from '@/lib/paymentNotify'
 
 export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
             },
           })
           console.log(`Team registration payment recorded: ${reg.id}, $${amount}`)
+          await notifyPaymentReceived({ registrationId: reg.id, amount, method: 'credit_card', via: 'Stripe webhook' })
         }
       } catch (e) {
         console.error('Failed to create team payment record:', e)
@@ -97,6 +99,7 @@ export async function POST(req: NextRequest) {
             },
           })
           console.log(`Team registration payment recorded via webhook: ${registrationId}, $${amount}`)
+          await notifyPaymentReceived({ registrationId, amount, method: isAch ? 'ach' : 'credit_card', charged, via: 'Stripe webhook' })
         }
       } catch (e) {
         console.error('Failed to record webhook payment:', e)

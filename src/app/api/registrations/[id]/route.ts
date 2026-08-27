@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { requireStaff } from '@/lib/apiAuth'
 
 async function ensureRegistrationColumns() {
@@ -49,6 +50,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           receivedAt: new Date().toISOString().split('T')[0],
           notes: `Stripe · ${piId}${recordAmount < charged ? ` · incl. $${(charged - recordAmount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''}`,
         },
+      })
+      await notifyPaymentReceived({
+        registrationId: params.id,
+        amount: recordAmount,
+        method: (pi.payment_method_types || []).includes('us_bank_account') ? 'ach' : 'credit_card',
+        charged,
       })
     }
     return NextResponse.json({ ok: true })
