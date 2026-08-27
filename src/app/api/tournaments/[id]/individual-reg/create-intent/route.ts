@@ -11,6 +11,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!process.env.STRIPE_PUBLISHABLE_KEY) {
     return NextResponse.json({ error: 'Stripe publishable key not configured — add STRIPE_PUBLISHABLE_KEY to Vercel env vars' }, { status: 503 })
   }
+  if (!(process.env.STRIPE_PUBLISHABLE_KEY || '').startsWith('pk_')) {
+    return NextResponse.json({ error: 'STRIPE_PUBLISHABLE_KEY is not a publishable key — it must start with pk_. Copy the "Publishable key" from Stripe → Developers → API keys into Vercel env vars.' }, { status: 503 })
+  }
 
   try {
     const body = await req.json()
