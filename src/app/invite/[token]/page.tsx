@@ -24,12 +24,20 @@ const CERT_LEVELS = [
   { value: 'none', label: 'N/A' },
 ]
 
+// Labels for the role values STORED on Worker records (claim invites show these read-only)
+const CLAIM_ROLE_LABELS: Record<string, string> = {
+  ref: 'Referee', referee: 'Referee', scorekeeper: 'Scorekeeper',
+  field_ops: 'Field Ops', athletic_trainer: 'Athletic Trainer', assigner: 'Assigner',
+}
+
 export default function AcceptInvitePage() {
   const { token } = useParams()
   const router = useRouter()
 
   const [status, setStatus] = useState<'loading' | 'valid' | 'invalid' | 'used' | 'expired'>('loading')
-  const [invite, setInvite] = useState<{ email: string; name: string | null; tournamentName: string | null } | null>(null)
+  const [invite, setInvite] = useState<{ email: string | null; name: string | null; tournamentName: string | null; kind?: string; needEmail?: boolean; orgName?: string | null; roles?: string[] } | null>(null)
+  const [email, setEmail] = useState('')
+  const [hadAccount, setHadAccount] = useState(false)
 
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
@@ -41,6 +49,10 @@ export default function AcceptInvitePage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+
+  // Claim invites link an EXISTING staff-pool record — role/cert are already on file,
+  // so the form is just (email if we don't have one) + password.
+  const isClaim = invite?.kind === 'claim'
 
   useEffect(() => {
     fetch(`/api/invite/${token}`)
@@ -61,7 +73,8 @@ export default function AcceptInvitePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!role) { setError('Please select your role'); return }
+    if (!isClaim && !role) { setError('Please select your role'); return }
+    if (isClaim && invite?.needEmail && !email.trim().includes('@')) { setError('Please enter your email address'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     if (password !== confirm) { setError('Passwords do not match'); return }
 
@@ -71,7 +84,7 @@ export default function AcceptInvitePage() {
     const res = await fetch(`/api/invite/${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, role, gender, certLevel, phone, password }),
+      body: JSON.stringify(isClaim ? { password, email: email.trim() } : { name, role, gender, certLevel, phone, password }),
     })
     const data = await res.json()
 
@@ -79,6 +92,7 @@ export default function AcceptInvitePage() {
       setError(data.error ?? 'Something went wrong')
       setSubmitting(false)
     } else {
+      if (data?.alreadyHadAccount) setHadAccount(true)
       setDone(true)
     }
   }
@@ -108,7 +122,7 @@ export default function AcceptInvitePage() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-10 max-w-sm w-full text-center">
         <div className="text-4xl mb-4">🎉</div>
         <h1 className="text-xl font-bold text-slate-800 mb-2">You're all set!</h1>
-        <p className="text-sm text-slate-500 mb-6">Your staff profile has been created. Sign in to see your schedule.</p>
+        <p className="text-sm text-slate-500 mb-6">{hadAccount ? 'You already have a Whistle Ready login with this email — sign in with your existing password.' : isClaim ? 'Your staff login is ready. Sign in to see your assignments and schedule.' : 'Your staff profile has been created. Sign in to see your schedule.'}</p>
         <Link href="/login" className="inline-block bg-teal-500 hover:bg-teal-400 text-white font-semibold text-sm px-6 py-2.5 rounded-xl transition-colors">
           Sign in →
         </Link>
@@ -122,14 +136,40 @@ export default function AcceptInvitePage() {
 
         <div className="bg-[#0f1f3d] px-6 py-5">
           <p className="text-xs text-teal-400 font-medium mb-1">
-            {invite?.tournamentName ?? 'Whistle Ready'} · Staff Invite
+            {isClaim ? (invite?.orgName ?? 'Whistle Ready') + ' · Staff login' : (invite?.tournamentName ?? 'Whistle Ready') + ' · Staff Invite'}
           </p>
-          <h1 className="text-lg font-bold text-white">Welcome aboard</h1>
-          <p className="text-xs text-slate-400 mt-1">{invite?.email}</p>
+          <h1 className="text-lg font-bold text-white">{isClaim ? 'Create your staff login' : 'Welcome aboard'}</h1>
+          <p className="text-xs text-slate-400 mt-1">{isClaim ? (invite?.email ?? 'Set up your account below') : invite?.email}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
 
+          {isClaim && (
+            <>
+              <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+                <p className="text-sm font-semibold text-slate-800">{invite?.name}</p>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {(invite?.roles ?? []).map(r => (
+                    <span key={r} className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">{CLAIM_ROLE_LABELS[r] ?? r}</span>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">Your details are already on file{invite?.orgName ? ' with ' + invite.orgName : ''} — just set up your login.</p>
+              </div>
+              {invite?.needEmail && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Your email</label>
+                  <input
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    value={email} onChange={e => setEmail(e.target.value)}
+                    type="email" placeholder="you@example.com" required autoComplete="email"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">You&apos;ll use this to sign in.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {!isClaim && (<>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Your name</label>
             <input
@@ -194,6 +234,8 @@ export default function AcceptInvitePage() {
             />
           </div>
 
+          </>)}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Password</label>
@@ -215,9 +257,9 @@ export default function AcceptInvitePage() {
 
           {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
-          <button type="submit" disabled={submitting || !role}
+          <button type="submit" disabled={submitting || (!isClaim && !role)}
             className="w-full bg-teal-500 hover:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm py-3 rounded-xl transition-colors">
-            {submitting ? 'Setting up your profile…' : 'Join the staff →'}
+            {submitting ? (isClaim ? 'Creating your login…' : 'Setting up your profile…') : (isClaim ? 'Create my login →' : 'Join the staff →')}
           </button>
         </form>
       </div>
