@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import { Toaster } from 'react-hot-toast'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
-import { CheckCircle2, AlertCircle, CreditCard, Landmark, Clock } from 'lucide-react'
+import { CheckCircle2, AlertCircle, CreditCard, Landmark, Clock, Lock } from 'lucide-react'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -75,7 +75,6 @@ function CardPayForm({ clientSecret, clubName, regId, total, onSuccess }: {
         className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors">
         {paying ? 'Processing…' : `Pay ${fmt(total)}`}
       </button>
-      <p className="text-xs text-gray-400 text-center">Payments are processed securely by Stripe.</p>
     </form>
   )
 }
@@ -389,6 +388,9 @@ export default function PayPage() {
         />
       )}
       {!method && !creating && <p className="text-xs text-gray-400 text-center">Choose how you&apos;d like to pay.</p>}
+      <p className="text-xs text-gray-400 text-center mt-5 pt-4 border-t border-gray-100 flex items-center justify-center gap-1.5">
+        <Lock size={12} className="flex-shrink-0" /> Payments are processed securely by <span className="font-semibold text-gray-500">Stripe</span> — your card and bank details are never shared with the tournament.
+      </p>
     </div>
   </>)
 }
