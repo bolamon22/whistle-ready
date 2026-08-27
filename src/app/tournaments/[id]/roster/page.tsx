@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { certLabel, WORKER_ROLES, isHourlyRole, PAY_METHODS, CERT_LEVELS } from '@/lib/utils'
-import { Users, Calendar, Clock, Wallet, Mail, UserPlus } from 'lucide-react'
+import { Users, Calendar, Clock, Wallet, Mail, UserPlus, ShieldCheck } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
