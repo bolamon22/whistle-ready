@@ -68,6 +68,7 @@ export default function RegisterPage() {
   const [savedRegistrationId, setSavedRegistrationId] = useState('')
   const [invoiceBase, setInvoiceBase] = useState(0)
   const [payChoice, setPayChoice] = useState<'' | PayMethod>('')
+  const [paypalLive, setPaypalLive] = useState(false)
   const [achNote, setAchNote] = useState<'' | 'processing' | 'micro'>('')
   const [microUrl, setMicroUrl] = useState('')
 
@@ -110,6 +111,7 @@ export default function RegisterPage() {
       })
       .catch(() => {})
     fetch('/api/admin/org').then(r => r.json()).then(d => { if (d) setOrg(d) }).catch(() => {})
+    fetch('/api/paypal/config').then(r => setPaypalLive(r.ok)).catch(() => {})
   }, [tournamentId])
 
   const updateTeam = (i: number, field: keyof TeamRow, value: string) => {
@@ -178,7 +180,7 @@ export default function RegisterPage() {
       const registration = await res.json()
       setConf(registration.confirmation || null)
 
-      if (paymentMethod === 'credit_card' || paymentMethod === 'ach') {
+      if (paymentMethod === 'credit_card' || paymentMethod === 'ach' || (paymentMethod === 'paypal' && paypalLive)) {
         setInvoiceBase(calcInvoice(teams, pricing))
         setSavedRegistrationId(registration.id)
         setStep('payment')
@@ -275,6 +277,10 @@ export default function RegisterPage() {
                 <div className="flex justify-between text-teal-600 text-xs"><span>Bank transfer (ACH) — no processing fee</span><span>+$0</span></div>
                 <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(invoiceBase)}</span></div>
               </>}
+              {payChoice === 'paypal' && <>
+                <div className="flex justify-between text-gray-400 text-xs"><span>PayPal / Venmo processing fee (3%)</span><span>+{fmt(cardTotal - invoiceBase)}</span></div>
+                <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
+              </>}
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -285,9 +291,10 @@ export default function RegisterPage() {
               clubName={clubName}
               tournamentName={tournamentName}
               contactEmail={contactEmail}
-              initialMethod={paymentMethod === 'ach' ? 'ach' : 'card'}
+              initialMethod={paymentMethod === 'ach' ? 'ach' : paymentMethod === 'paypal' ? 'paypal' : 'card'}
               onMethodChange={setPayChoice}
               onCardSuccess={() => setStep('success')}
+              onPayPalSuccess={() => setStep('success')}
               onAchProcessing={() => { setAchNote('processing'); setStep('success') }}
               onAchMicrodeposits={url => { setAchNote('micro'); setMicroUrl(url); setStep('success') }}
               onAchSuccess={() => setStep('success')}
@@ -496,6 +503,9 @@ export default function RegisterPage() {
                     {paymentMethod === 'ach' && (
                       <p className="text-xs text-teal-600 mt-0.5">No fee with bank transfer (ACH)</p>
                     )}
+                    {paymentMethod === 'paypal' && paypalLive && (
+                      <p className="text-xs text-blue-500 mt-0.5">+3% fee = {fmt(Math.round(calcInvoice(teams, pricing) * 1.03))}</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -503,11 +513,11 @@ export default function RegisterPage() {
               <h2 className="text-lg font-semibold text-gray-800 mb-3">Payment Options <span className="text-red-500">*</span></h2>
               <div className="flex flex-wrap gap-4">
                 {[
-                  { value: 'credit_card', label: 'Credit Card' },
-                  { value: 'check', label: 'Check' },
-                  { value: 'zelle', label: 'Zelle' },
                   { value: 'ach', label: 'Bank Transfer (ACH) — No Fee' },
-                  { value: 'paypal', label: 'PayPal' },
+                  { value: 'credit_card', label: 'Credit Card' },
+                  { value: 'paypal', label: paypalLive ? 'PayPal / Venmo' : 'PayPal' },
+                  { value: 'zelle', label: 'Zelle' },
+                  { value: 'check', label: 'Check' },
                 ].map(opt => (
                   <label key={opt.value} className={`flex items-center gap-2 cursor-pointer text-sm border rounded-lg px-4 py-2 transition-colors ${paymentMethod === opt.value ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                     <input type="radio" name="paymentMethod" value={opt.value} checked={paymentMethod === opt.value} onChange={e => setPaymentMethod(e.target.value)} className="hidden" />
@@ -527,9 +537,11 @@ export default function RegisterPage() {
               {paymentMethod === 'ach' && (
                 <p className="text-sm text-teal-700 mt-3 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Pay online by secure bank login on the next step — <strong>no processing fee</strong>.</p>
               )}
-              {paymentMethod === 'paypal' && (
+              {paymentMethod === 'paypal' && (paypalLive ? (
+                <p className="text-sm text-blue-600 mt-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">Pay with your PayPal or Venmo account on the next step. A 3% processing fee applies.</p>
+              ) : (
                 <p className="text-sm text-gray-600 mt-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Send PayPal to <strong>{org?.paypalEmail || 'info@sunshinelax.com'}</strong></p>
-              )}
+              ))}
             </section>
 
             <section>
@@ -541,8 +553,8 @@ export default function RegisterPage() {
             <button type="submit" disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 text-sm transition-colors">
               {loading
-                ? (paymentMethod === 'credit_card' || paymentMethod === 'ach' ? 'Preparing payment...' : 'Submitting...')
-                : (paymentMethod === 'credit_card' || paymentMethod === 'ach' ? 'Continue to Payment' : 'Submit Registration')}
+                ? (paymentMethod === 'credit_card' || paymentMethod === 'ach' || (paymentMethod === 'paypal' && paypalLive) ? 'Preparing payment...' : 'Submitting...')
+                : (paymentMethod === 'credit_card' || paymentMethod === 'ach' || (paymentMethod === 'paypal' && paypalLive) ? 'Continue to Payment' : 'Submit Registration')}
             </button>
           </form>
         </div>

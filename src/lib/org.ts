@@ -19,6 +19,7 @@ export type Org = {
   contactPhone: string
   logoUrl: string
   website: string
+  zelleHandle: string
 }
 
 /** The id of the org that owns a tournament, or null. Never throws. */
@@ -38,7 +39,7 @@ export async function orgById(orgId: string | null | undefined): Promise<Org | n
   if (!orgId) return null
   try {
     const rows: any[] = await prisma.$queryRawUnsafe(
-      'SELECT id, name, slug, contactEmail, contactPhone, logoUrl, website FROM "Organization" WHERE id = ?', orgId)
+      'SELECT id, name, slug, contactEmail, contactPhone, logoUrl, website, zelleHandle FROM "Organization" WHERE id = ?', orgId)
     return (rows?.[0] as Org) || null
   } catch {
     return null

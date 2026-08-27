@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { orgForTournament } from '@/lib/org'
 
 // Public by design: the registration id in the URL is the capability (same model
 // as /claim links). Returns ONLY what the public pay page needs — no contact info.
@@ -15,6 +16,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where: { id: reg.tournamentId },
       select: { id: true, name: true, startDate: true, endDate: true, location: true, logoUrl: true },
     })
+
+    const org = await orgForTournament(reg.tournamentId)
 
     const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
     const due = (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
@@ -33,6 +36,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         : '',
       location: tournament?.location || '',
       logoUrl: tournament?.logoUrl || '',
+      zelleHandle: org?.zelleHandle || '',
       due, paid, balance,
       paidInFull: due > 0 && balance <= 0,
       noInvoice: due <= 0,

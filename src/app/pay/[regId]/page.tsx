@@ -12,6 +12,7 @@ type PayInfo = {
   teams: { team: string; division: string }[]
   tournamentId: string; tournamentName: string; tournamentDates: string; location: string; logoUrl: string
   due: number; paid: number; balance: number; paidInFull: boolean; noInvoice: boolean
+  zelleHandle?: string
 }
 
 export default function PayPage() {
@@ -139,6 +140,10 @@ export default function PayPage() {
           <div className="flex justify-between text-teal-600 text-xs"><span>Bank transfer (ACH) — no processing fee</span><span>+$0.00</span></div>
           <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(balance)}</span></div>
         </>}
+        {method === 'paypal' && <>
+          <div className="flex justify-between text-gray-400 text-xs"><span>PayPal / Venmo processing fee (3%)</span><span>+{fmt(cardTotal - balance)}</span></div>
+          <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
+        </>}
       </div>
     </div>
 
@@ -151,10 +156,16 @@ export default function PayPage() {
         tournamentName={info?.tournamentName || ''}
         onMethodChange={setMethod}
         onCardSuccess={() => setStatus('success')}
+        onPayPalSuccess={() => setStatus('success')}
         onAchProcessing={() => setStatus('initiated')}
         onAchMicrodeposits={url => { setMicroUrl(url); setStatus('microdeposits') }}
         onAchSuccess={() => setStatus('success')}
       />
     </div>
+
+    <p className="text-center text-xs text-gray-400 pb-6">
+      Prefer Zelle? Send {fmt(balance)} to <span className="font-medium text-gray-500">{info?.zelleHandle || 'info@sunshinelax.com'}</span> with
+      &ldquo;{info?.clubName || 'your club name'}&rdquo; in the memo &mdash; we&apos;ll mark your invoice paid when it arrives.
+    </p>
   </>)
 }

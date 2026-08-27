@@ -1,8 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
-import { CreditCard, Landmark, Lock } from 'lucide-react'
+import { CreditCard, Landmark, Lock, Wallet } from 'lucide-react'
 
 // Shared Stripe payment panel: method chooser (fee-free ACH vs card +3%),
 // card form, ACH bank-login flow, and the trust badge. Used by the public
@@ -11,7 +11,7 @@ import { CreditCard, Landmark, Lock } from 'lucide-react'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 type StripePromise = ReturnType<typeof loadStripe>
-export type PayMethod = 'card' | 'ach'
+export type PayMethod = 'card' | 'ach' | 'paypal'
 
 function CardPayForm({ clientSecret, clubName, regId, total, onSuccess }: {
   clientSecret: string; clubName: string; regId: string; total: number; onSuccess: () => void
@@ -186,12 +186,98 @@ function AchPayForm({ stripePromise, clientSecret, clubName, tournamentName, reg
   )
 }
 
-export default function StripePayPanel({ registrationId, balance, clubName, tournamentName, contactEmail = '', initialMethod = '', onMethodChange, onCardSuccess, onAchProcessing, onAchMicrodeposits, onAchSuccess }: {
+function PayPalPayForm({ clientId, registrationId, balance, total, tournamentName, clubName, onSuccess }: {
+  clientId: string; registrationId: string; balance: number; total: number
+  tournamentName: string; clubName: string; onSuccess: () => void
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [sdkReady, setSdkReady] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const markReady = () => { if (!cancelled) setSdkReady(true) }
+    if ((window as any).paypal?.Buttons) { markReady(); return }
+    const id = 'paypal-sdk-js'
+    let script = document.getElementById(id) as HTMLScriptElement | null
+    if (!script) {
+      script = document.createElement('script')
+      script.id = id
+      script.src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(clientId) +
+        '&currency=USD&intent=capture&enable-funding=venmo&disable-funding=card,paylater,credit'
+      document.body.appendChild(script)
+    }
+    script.addEventListener('load', markReady)
+    script.addEventListener('error', () => { if (!cancelled) setErr('Could not load PayPal — please choose another payment method.') })
+    return () => { cancelled = true }
+  }, [clientId])
+
+  useEffect(() => {
+    if (!sdkReady || !containerRef.current) return
+    const paypal = (window as any).paypal
+    if (!paypal?.Buttons) return
+    containerRef.current.innerHTML = ''
+    paypal.Buttons({
+      style: { layout: 'vertical', height: 44, label: 'pay' },
+      createOrder: async () => {
+        setErr('')
+        const res = await fetch('/api/paypal/create-order', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: total, baseAmount: balance, tournamentName, clubName, registrationId }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || !data.orderId) throw new Error(data.error || 'Could not start the PayPal payment')
+        return data.orderId
+      },
+      onApprove: async (data: any, actions: any) => {
+        setCapturing(true); setErr('')
+        try {
+          const res = await fetch('/api/paypal/capture-order', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: data.orderID }),
+          })
+          const out = await res.json().catch(() => ({}))
+          if (out.issue === 'INSTRUMENT_DECLINED' && actions?.restart) {
+            setCapturing(false)
+            setErr('That funding source was declined — pick a different one inside PayPal.')
+            return actions.restart()
+          }
+          if (!res.ok || !out.ok) {
+            setErr(out.error || 'The PayPal payment could not be completed.')
+            setCapturing(false)
+            return
+          }
+          onSuccess()
+        } catch {
+          setErr('The PayPal payment could not be completed. If you were charged, contact the tournament before retrying.')
+          setCapturing(false)
+        }
+      },
+      onError: () => { setCapturing(false); setErr('PayPal ran into a problem — please try again or choose another method.') },
+      onCancel: () => setCapturing(false),
+    }).render(containerRef.current).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdkReady])
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-600">Pay {fmt(total)} with PayPal or Venmo &mdash; you&apos;ll finish in their secure window.</p>
+      {err && <p className="text-red-500 text-sm">{err}</p>}
+      {capturing && <p className="text-sm text-slate-500 text-center py-1">Finishing your payment&hellip;</p>}
+      <div ref={containerRef} className={capturing ? 'pointer-events-none opacity-50' : ''} />
+      {!sdkReady && !err && <p className="text-sm text-slate-400 text-center py-3">Loading PayPal&hellip;</p>}
+    </div>
+  )
+}
+
+export default function StripePayPanel({ registrationId, balance, clubName, tournamentName, contactEmail = '', initialMethod = '', onMethodChange, onCardSuccess, onPayPalSuccess, onAchProcessing, onAchMicrodeposits, onAchSuccess }: {
   registrationId: string; balance: number; clubName: string; tournamentName: string
   contactEmail?: string
   initialMethod?: '' | PayMethod
   onMethodChange?: (m: PayMethod) => void
   onCardSuccess: () => void
+  onPayPalSuccess?: () => void
   onAchProcessing: () => void
   onAchMicrodeposits: (url: string) => void
   onAchSuccess: () => void
@@ -201,13 +287,26 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
   const [stripePromise, setStripePromise] = useState<StripePromise | null>(null)
   const [clientSecret, setClientSecret] = useState('')
   const [payError, setPayError] = useState('')
+  const [paypalClientId, setPaypalClientId] = useState('')
+  const [paypalProbe, setPaypalProbe] = useState<'pending' | 'ready' | 'off'>('pending')
+
+  useEffect(() => {
+    fetch('/api/paypal/config')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d?.configured && d.clientId) { setPaypalClientId(d.clientId); setPaypalProbe('ready') } else { setPaypalProbe('off') }
+      })
+      .catch(() => setPaypalProbe('off'))
+  }, [])
 
   const cardTotal = Math.round(balance * 1.03 * 100) / 100
 
   async function chooseMethod(m: PayMethod) {
     if (creating) return
-    setMethod(m); setClientSecret(''); setPayError(''); setCreating(true)
+    setMethod(m); setClientSecret(''); setPayError('')
     onMethodChange?.(m)
+    if (m === 'paypal') return // the PayPal pane creates its own order when clicked
+    setCreating(true)
     try {
       const amount = m === 'ach' ? balance : cardTotal
       const res = await fetch('/api/stripe/create-team-intent', {
@@ -238,7 +337,7 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className={paypalProbe !== 'off' ? 'grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5' : 'grid grid-cols-2 gap-3 mb-5'}>
         <button type="button" onClick={() => chooseMethod('ach')} disabled={creating}
           className={`rounded-xl border-2 p-4 text-left transition-colors ${method === 'ach' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
           <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><Landmark size={16} className="text-teal-600" /> Bank transfer (ACH)</div>
@@ -251,6 +350,14 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
           <div className="text-xs text-gray-500 font-medium mt-1">3% fee — pay {fmt(cardTotal)}</div>
           <div className="text-xs text-gray-400 mt-0.5">Instant confirmation</div>
         </button>
+        {paypalProbe !== 'off' && (
+          <button type="button" onClick={() => chooseMethod('paypal')} disabled={creating}
+            className={`rounded-xl border-2 p-4 text-left transition-colors ${method === 'paypal' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+            <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><Wallet size={16} className="text-teal-600" /> PayPal / Venmo</div>
+            <div className="text-xs text-gray-500 font-medium mt-1">3% fee &mdash; pay {fmt(cardTotal)}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Instant confirmation</div>
+          </button>
+        )}
       </div>
 
       {creating && <p className="text-sm text-slate-400 text-center py-3">Setting up payment…</p>}
@@ -268,15 +375,38 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
           onProcessing={onAchProcessing} onMicrodeposits={onAchMicrodeposits} onSuccess={onAchSuccess}
         />
       )}
+      {!creating && method === 'paypal' && (
+        paypalProbe === 'ready' && paypalClientId ? (
+          <PayPalPayForm clientId={paypalClientId} registrationId={registrationId} balance={balance} total={cardTotal}
+            tournamentName={tournamentName} clubName={clubName} onSuccess={onPayPalSuccess || onCardSuccess} />
+        ) : paypalProbe === 'pending' ? (
+          <p className="text-sm text-slate-400 text-center py-3">Loading PayPal&hellip;</p>
+        ) : (
+          <p className="text-sm text-red-500">PayPal isn&apos;t available right now &mdash; please choose another method above.</p>
+        )
+      )}
       {!method && !creating && <p className="text-xs text-gray-400 text-center">Choose how you&apos;d like to pay.</p>}
 
       <div className="mt-5 pt-4 border-t border-gray-100 text-center">
-        <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5">
-          <Lock size={13} className="text-slate-500 flex-shrink-0" />
-          <span className="text-xs font-medium text-slate-600">Powered by</span>
-          <span className="text-[15px] font-bold leading-none" style={{ color: '#635BFF', letterSpacing: '-0.02em' }}>stripe</span>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">Your card and bank details go directly to Stripe &mdash; never shared with the tournament.</p>
+        {method === 'paypal' ? (
+          <>
+            <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5">
+              <Lock size={13} className="text-slate-500 flex-shrink-0" />
+              <span className="text-xs font-medium text-slate-600">Powered by</span>
+              <span className="text-[15px] font-bold italic leading-none" style={{ color: '#003087', letterSpacing: '-0.01em' }}>PayPal</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">You log in on PayPal&apos;s own site &mdash; your details are never shared with the tournament.</p>
+          </>
+        ) : (
+          <>
+            <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5">
+              <Lock size={13} className="text-slate-500 flex-shrink-0" />
+              <span className="text-xs font-medium text-slate-600">Powered by</span>
+              <span className="text-[15px] font-bold leading-none" style={{ color: '#635BFF', letterSpacing: '-0.02em' }}>stripe</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Your card and bank details go directly to Stripe &mdash; never shared with the tournament.</p>
+          </>
+        )}
       </div>
     </div>
   )
