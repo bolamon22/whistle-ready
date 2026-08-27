@@ -68,7 +68,6 @@ export default function FindTournamentPage() {
   }
   const list = all ?? []
   const upcoming = list.filter(t => (t.endDate || t.startDate || '') >= today).filter(matches).reverse()
-  const past = list.filter(t => (t.endDate || t.startDate || '') < today).filter(matches)
   const hasSearch = query.trim().length > 0
 
   return (
@@ -105,34 +104,22 @@ export default function FindTournamentPage() {
             <div className="flex items-center justify-center gap-2 text-slate-400 py-16">
               <Loader2 className="w-5 h-5 animate-spin" /> Loading events…
             </div>
-          ) : (upcoming.length === 0 && past.length === 0) ? (
+          ) : upcoming.length === 0 ? (
             hasSearch ? (
               <p className="text-center text-slate-500 py-10">No events match “{query}”.</p>
             ) : (
               <div className="text-center border border-dashed border-slate-300 rounded-xl py-16">
                 <Trophy className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                <p className="font-semibold text-slate-600">No events posted yet</p>
-                <p className="text-sm text-slate-400 mt-1">New tournaments show up here automatically.</p>
+                <p className="font-semibold text-slate-600">No upcoming events posted yet</p>
+                <p className="text-sm text-slate-400 mt-1">New tournaments show up here automatically — check back soon.</p>
               </div>
             )
           ) : (
             <>
-              {upcoming.length > 0 && (
-                <>
-                  <h2 className="text-xl font-bold text-slate-900 mb-4">{hasSearch ? 'Matching events' : 'Upcoming & current'}</h2>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {upcoming.map(t => <TournamentCard key={t.id} t={t} action="view" />)}
-                  </div>
-                </>
-              )}
-              {past.length > 0 && (
-                <>
-                  <h3 className="text-lg font-bold text-slate-900 mt-10 mb-4">Recent results</h3>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {past.slice(0, hasSearch ? past.length : 6).map(t => <TournamentCard key={t.id} t={t} action="results" />)}
-                  </div>
-                </>
-              )}
+              <h2 className="text-xl font-bold text-slate-900 mb-4">{hasSearch ? 'Matching events' : 'Upcoming & current'}</h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {upcoming.map(t => <TournamentCard key={t.id} t={t} action="view" />)}
+              </div>
             </>
           )}
 
