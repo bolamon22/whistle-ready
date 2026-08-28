@@ -27,8 +27,10 @@ provider swappable in one file and is the seam for per-org senders + future chan
 - `sendEmail()` **never throws** — it returns `{ok, error}` and logs. Email is best-effort so a
   failed receipt can't break a registration. **Tradeoff: a bad key fails SILENTLY** — after any
   email change, confirm a real send in SendGrid's Activity feed, don't trust config alone.
-- 5 send sites: staff invite, org user invite, org-forms submit, registration confirmation,
-  returning-teams invite.
+- Send sites: staff invite, staff onboarding (claim) invite, org user invite, org-forms submit,
+  registration confirmation, returning-teams invite, payment-recorded alert.
+- **Staff/ref invites send AS the org via `orgSender()`** — the org is the employer (Bo, Aug 28
+  2026). Platform account mail (password reset, org-user login invites) stays Whistle Ready-branded.
 - `whistleready.app` is domain-authenticated in SendGrid (3 CNAMEs at **GoDaddy**, which hosts
   this domain's DNS; `_dmarc` already existed). The SendGrid account is SHARED with
   Lacrossewear/lwops.com but uses a SEPARATE key ("Whistle Ready", Mail Send only) and a separate

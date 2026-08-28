@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import crypto from 'crypto'
 import { requireStaff } from '@/lib/apiAuth'
-import { sendEmail } from '@/lib/email'
+import { sendEmail, orgSender } from '@/lib/email'
 import { orgById } from '@/lib/org'
 
 const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
@@ -40,11 +40,11 @@ export async function POST(req: Request) {
   try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "orgId" TEXT`) } catch { /* exists */ }
   try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "workerId" TEXT`) } catch { /* exists */ }
 
-  const orgNames = new Map<string, string | null>()
-  async function orgName(orgId: string | null): Promise<string | null> {
+  const orgs = new Map<string, Awaited<ReturnType<typeof orgById>>>()
+  async function orgFor(orgId: string | null) {
     if (!orgId) return null
-    if (!orgNames.has(orgId)) orgNames.set(orgId, (await orgById(orgId))?.name ?? null)
-    return orgNames.get(orgId) ?? null
+    if (!orgs.has(orgId)) orgs.set(orgId, await orgById(orgId))
+    return orgs.get(orgId) ?? null
   }
 
   type Result = { workerId: string; status: string; inviteUrl?: string }
@@ -95,9 +95,14 @@ export async function POST(req: Request) {
     if (!email) { results.push({ workerId, status: 'link_only', inviteUrl }); continue }
     if (mode === 'link') { results.push({ workerId, status: 'link', inviteUrl }); continue }
 
-    const orgLabel = (await orgName(workerOrgId)) || 'Whistle Ready'
+    const org = await orgFor(workerOrgId)
+    const orgLabel = org?.name || 'Whistle Ready'
     const firstName = String(worker.name ?? '').trim().split(/\s+/)[0] || ''
+    // From the ORG, not the platform: the org is the employer recruiting this staffer
+    // (Bo, Aug 28 2026) — orgSender degrades safely to the platform sender if the org's
+    // domain isn't SendGrid-authenticated.
     await sendEmail({
+      ...orgSender(org),
       to: email,
       subject: `Create your ${orgLabel} staff login`,
       html: `

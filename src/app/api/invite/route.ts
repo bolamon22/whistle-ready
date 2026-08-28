@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { sendEmail } from '@/lib/email'
+import { sendEmail, orgSender } from '@/lib/email'
+import { orgForTournament } from '@/lib/org'
 import crypto from 'crypto'
 
 const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
@@ -36,7 +37,11 @@ export async function POST(req: NextRequest) {
 
     const inviteUrl = `${APP_URL}/invite/${token}`
 
+    // From the ORG (the employer), when the invite is tied to a tournament we can
+    // resolve an org for — same rule as /api/workers/onboard (Bo, Aug 28 2026).
+    const org = tournamentId ? await orgForTournament(tournamentId) : null
     await sendEmail({
+      ...orgSender(org),
       to: email,
       subject: `You're invited to join ${tournamentName} staff`,
       html: `
