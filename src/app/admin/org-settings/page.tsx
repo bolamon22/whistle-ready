@@ -288,7 +288,7 @@ export default function OrgSettingsPage() {
                             )}
                           </ul>
                           <a
-                            href={`mailto:info@gamedaystaff.com?subject=Upgrade to ${t.label}`}
+                            href={`mailto:support@whistleready.com?subject=Upgrade to ${t.label}`}
                             className="block w-full text-center text-xs bg-slate-800 text-white rounded-lg py-2 hover:bg-slate-700 font-medium"
                           >
                             Upgrade to {t.label}

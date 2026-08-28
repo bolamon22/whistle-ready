@@ -1,4 +1,4 @@
-# GameDay — Go-Live Build Plan
+# Whistle Ready (formerly GameDay) — Go-Live Build Plan
 
 _Sequencing the validated prototype (`staff-app-prototype.html`) into the live app._
 _Owner: Bo · Drafted Jun 13, 2026 · Status: proposed_
@@ -62,7 +62,7 @@ Risk: low. Output: the staff app already looks like the prototype.
 
 ### Phase 1 — Public polish (Tier 1: frontend + light data, NO new accounts)
 The visible wins, all on `/tournaments/[id]/public`:
-- **1a. Branding hierarchy** — org (Sunshine Events Group) + tournament + "Powered by Gameday
+- **1a. Branding hierarchy** — org (Sunshine Events Group) + tournament + "Powered by Whistle Ready
   Blueprint" header/footer, using stored logo URLs. Pure UI.
 - **1b. Lucide consistency** — replace any remaining emoji on public + staff with lucide
   (already the standard). Pure UI.

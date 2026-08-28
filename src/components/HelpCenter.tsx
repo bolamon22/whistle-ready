@@ -58,7 +58,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
     setLoading(false)
   }
 
-  const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('GameDay help request')}`
+  const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Whistle Ready help request')}`
 
   return (
     <>

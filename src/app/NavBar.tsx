@@ -162,7 +162,7 @@ export default function NavBar() {
           </>
         )}
 
-        {/* ── RIGHT: GameDay badge (org users only) + auth ── */}
+        {/* ── RIGHT: Whistle Ready badge (org users only) + auth ── */}
         <div className="ml-auto flex items-center gap-3 flex-shrink-0">
 
           {/* Whistle Ready platform badge — shown to org users */}

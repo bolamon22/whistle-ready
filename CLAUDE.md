@@ -1,4 +1,4 @@
-# GameDay Staff — project guide & working philosophy
+# Whistle Ready — project guide & working philosophy
 
 This file is read automatically at the start of any Claude / Cowork session that has
 this repo connected. It is the project's memory: what the app is, how we work, and the

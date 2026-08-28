@@ -4,7 +4,7 @@ import { helpArticlesText } from '@/lib/helpArticles'
 
 export const runtime = 'nodejs'
 
-// AI help assistant: answers "how do I…" questions about using GameDay, grounded
+// AI help assistant: answers "how do I…" questions about using Whistle Ready, grounded
 // in the in-app help articles. Separate from /api/chat (which answers questions
 // about a tournament's live data).
 export async function POST(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const { messages } = await req.json()
-    const system = `You are Chirp, the friendly in-app help assistant for Whistle Ready (a tournament-management app, internally called GameDay) for sports event directors and staff. If asked your name, you are Chirp. Keep a warm, can-do tone.
+    const system = `You are Chirp, the friendly in-app help assistant for Whistle Ready (a tournament-management app) for sports event directors and staff. If asked your name, you are Chirp. Keep a warm, can-do tone.
 
 Answer the user's "how do I…" questions about USING Whistle Ready, based on the documentation below. Be concise and practical: give short, numbered steps and name the exact menus/buttons (e.g. "Setup → Scheduler", "Save Changes"). If the docs don't cover something, say so briefly and suggest contacting support. Do not invent features that aren't in the docs.
 
