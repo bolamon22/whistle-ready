@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
+// Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
+// handles or edit/delete workers).
 export async function GET(_: Request, { params }: { params:{id:string} }) {
+  const gate = await requireStaff()
+  if (!gate.ok) return gate.res
   const w = await prisma.worker.findUnique({ where:{id:params.id} })
   if (!w) return NextResponse.json({ error:'Not found' }, { status:404 })
   return NextResponse.json(w)
 }
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
+  const gate = await requireStaff()
+  if (!gate.ok) return gate.res
   const b=await req.json()
   // Background-check date (Aug 2026): raw column, not in the Prisma schema.
   // Used by the county Exhibit A affidavit -- re-screen required every 12 months.
@@ -36,5 +43,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   }}))
 }
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
+  const gate = await requireStaff()
+  if (!gate.ok) return gate.res
   await prisma.worker.delete({where:{id:params.id}}); return NextResponse.json({ok:true})
 }

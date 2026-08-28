@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { requireStaff } from '@/lib/apiAuth'
 import { createClient } from '@libsql/client'
 
 function db() {
@@ -82,6 +83,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // Staff-only since Aug 2026: public self-signup moved to /api/join (code-gated),
+  // so nothing unauthenticated needs to create workers here anymore.
+  const gatePost = await requireStaff()
+  if (!gatePost.ok) return gatePost.res
+
   const session = await getServerSession(authOptions)
   const role = (session?.user as any)?.role
   const sessionOrgId = (session?.user as any)?.orgId ?? null
