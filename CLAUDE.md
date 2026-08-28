@@ -89,7 +89,21 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Aug 27, 2026)
+## Current state (as of Aug 28, 2026)
+
+- **Ref recruiting link + duplicate merge (Aug 28)** — Staff Pool "Recruiting link" button copies a
+  shareable signup URL (`/join?org=&code=`); the secret code lives in AppSetting `joinCode:{orgId}`
+  (rotate via POST `/api/workers/recruit-link` `{regenerate:true}` — kills previously shared links).
+  `/join` + `/api/join` (code-gated + honeypot) create Worker + STAFF login in one shot — the old
+  join flow minted PARENT accounts (Jul bot-hardening role allowlist) and never linked records; now
+  a signup email already in the org's pool LINKS to that Worker (fills only empty fields).
+  Duplicates: the pool shows an amber "possible duplicates" chip (same email / phone / normalized
+  name; "different people" dismissals persist in AppSetting `workerDupeDismissed:{orgId}`) with a
+  side-by-side panel — `/api/workers/merge` repoints roster/availability/assignments/time/pay to the
+  kept record (dropping unique-constraint collisions), unions roles, fills gaps, deletes the loser.
+  SECURITY: POST `/api/workers` and all of `/api/workers/[id]` are now requireStaff-gated (they were
+  fully public — anyone could read pay handles or edit/delete workers).
+
 
 - **Staff Pool → app-login onboarding (Aug 27)** — the pool now shows whether each Worker has
   actually registered in the app. Worker ↔ User are matched by EMAIL (no FK); `/api/workers` GET
