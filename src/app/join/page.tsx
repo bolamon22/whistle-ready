@@ -1,6 +1,11 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+// Public staff recruiting signup. Reached from the org's recruiting link
+// (Staff Pool → "Recruiting link"), which carries ?org= and a secret &code= —
+// see /api/join for why the code exists (bot-hardening) and for the duplicate
+// guard that links an existing pool record instead of creating a second one.
+
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -25,19 +30,39 @@ const CERT_LEVELS = [
 ]
 
 function JoinForm() {
+  const searchParams = useSearchParams()
+  const orgId = searchParams.get('org') || ''
+  const code = searchParams.get('code') || ''
+  const roleParam = searchParams.get('role') || ''
+
+  const [linkState, setLinkState] = useState<'loading' | 'invalid' | 'valid'>('loading')
+  const [orgName, setOrgName] = useState<string | null>(null)
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [role, setRole] = useState('')
+  const [role, setRole] = useState(ROLES.some(r => r.value === roleParam) ? roleParam : '')
   const [gender, setGender] = useState('both')
   const [certLevel, setCertLevel] = useState('youth')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [hpExtra, setHpExtra] = useState('') // honeypot — humans never see it
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
-  const searchParams = useSearchParams()
-  const orgId = searchParams.get('org')
+  const [linked, setLinked] = useState(false)
+
+  useEffect(() => {
+    if (!orgId || !code) { setLinkState('invalid'); return }
+    fetch(`/api/join?org=${encodeURIComponent(orgId)}&code=${encodeURIComponent(code)}`)
+      .then(async r => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) { setLinkState('invalid'); return }
+        setOrgName(d.orgName ?? null)
+        setLinkState('valid')
+      })
+      .catch(() => setLinkState('invalid'))
+  }, [orgId, code])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -48,33 +73,47 @@ function JoinForm() {
     setSubmitting(true)
     setError('')
 
-    const roles = JSON.stringify([role])
-
-    const wRes = await fetch('/api/workers', {
+    const res = await fetch('/api/join', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone: phone || null, defaultRole: role, roles, certLevel, gender, payMethod: 'check', orgId }),
+      body: JSON.stringify({ org: orgId, code, name, email, phone: phone || null, role, gender, certLevel, password, hp_extra: hpExtra }),
     })
-    const wData = await wRes.json()
-    if (!wRes.ok) { setError(wData.error || 'Could not create profile'); setSubmitting(false); return }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { setError(data.error || 'Could not sign you up'); setSubmitting(false); return }
 
-    const uRes = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, role: 'staff' }),
-    })
-    const uData = await uRes.json()
-    if (!uRes.ok) { setError(uData.error || 'Could not create account'); setSubmitting(false); return }
-
+    setLinked(!!data.linked)
     setDone(true)
   }
+
+  if (linkState === 'loading') return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <p className="text-slate-400 animate-pulse">Checking your link…</p>
+    </div>
+  )
+
+  if (linkState === 'invalid') return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-10 max-w-sm w-full text-center">
+        <div className="text-4xl mb-4">🔗</div>
+        <h1 className="text-lg font-bold text-slate-800 mb-2">This signup link isn't active</h1>
+        <p className="text-sm text-slate-500">Ask your assigner or coordinator for the current link — or if you already have an account, just sign in.</p>
+        <Link href="/login" className="inline-block mt-5 bg-teal-500 hover:bg-teal-400 text-white font-semibold text-sm px-6 py-2.5 rounded-xl transition-colors">
+          Sign in →
+        </Link>
+      </div>
+    </div>
+  )
 
   if (done) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-10 max-w-sm w-full text-center">
         <div className="text-4xl mb-4">🎉</div>
         <h1 className="text-xl font-bold text-slate-800 mb-2">You're all set!</h1>
-        <p className="text-sm text-slate-500 mb-6">Your staff profile has been created. Sign in to see your schedule and availability.</p>
+        <p className="text-sm text-slate-500 mb-6">
+          {linked
+            ? `Good news — you were already on the ${orgName ?? 'staff'} list, so we connected your new login to your existing record.`
+            : 'Your staff profile has been created. Sign in to set your availability and see your assignments.'}
+        </p>
         <Link href="/login" className="inline-block bg-teal-500 hover:bg-teal-400 text-white font-semibold text-sm px-6 py-2.5 rounded-xl transition-colors">
           Sign in →
         </Link>
@@ -88,11 +127,17 @@ function JoinForm() {
 
         {/* Header */}
         <div className="bg-[#0f1f3d] px-6 py-5">
-          <h1 className="text-lg font-bold text-white">Join our Staff</h1>
-          <p className="text-xs text-slate-400 mt-1">Create your profile to get scheduled for games.</p>
+          <p className="text-xs text-teal-400 font-medium mb-1">{orgName ?? 'Whistle Ready'} · Staff signup</p>
+          <h1 className="text-lg font-bold text-white">Join {orgName ? `the ${orgName} staff` : 'our staff'}</h1>
+          <p className="text-xs text-slate-400 mt-1">Create your profile to get scheduled — it takes about a minute.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+
+          {/* Honeypot — hidden from humans, filled by bots */}
+          <div className="hidden" aria-hidden="true">
+            <label>Leave this field empty<input tabIndex={-1} autoComplete="off" value={hpExtra} onChange={e => setHpExtra(e.target.value)} /></label>
+          </div>
 
           {/* Name + Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
