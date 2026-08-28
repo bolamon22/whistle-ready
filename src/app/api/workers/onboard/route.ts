@@ -5,7 +5,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgById } from '@/lib/org'
 
-const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
+const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })

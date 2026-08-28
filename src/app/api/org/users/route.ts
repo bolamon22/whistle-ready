@@ -11,7 +11,7 @@ import crypto from 'crypto'
 // StaffInvite.orgId is a raw column (not in the Prisma schema), so we add it via a
 // guarded ALTER and write it with the libsql client.
 
-const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
+const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 const ASSIGNABLE_ROLES = ['director', 'scheduler', 'assigner', 'coach', 'staff']
 
 function db() {

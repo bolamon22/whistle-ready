@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 
-const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
+const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 
 // POST /api/workers/recruit-link — get (or mint) this org's public recruiting link
 // for /join. The link carries a secret code (AppSetting joinCode:{orgId}) so the open
