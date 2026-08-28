@@ -12,6 +12,8 @@ const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',
 type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'|'appStatus'
 type SortDir = 'asc'|'desc'
 type ExpandMode = 'profile'|'edit'
+type DupeSide={id:string;name:string;email:string|null;phone:string|null;defaultRole:string;roles:string;certLevel:string;payMethod:string;payHandle:string|null;association:string|null;createdAt:string}
+type DupePair={key:string;reasons:string[];a:DupeSide;b:DupeSide}
 
 // ── Inline edit form (defined OUTSIDE component to prevent remount on render) ──
 function StaffEditForm({
@@ -100,6 +102,9 @@ export default function StaffPage() {
   const [genderFilter,setGenderFilter]=useState('all')
   const [appFilter,setAppFilter]=useState('all')
   const [inviting,setInviting]=useState(false)
+  const [recruitBusy,setRecruitBusy]=useState(false)
+  const [dupePairs,setDupePairs]=useState<DupePair[]>([])
+  const [showDupes,setShowDupes]=useState(false)
   const [search,setSearch]=useState('')
 
   const [selected,setSelected]=useState<Set<string>>(new Set())
@@ -120,9 +125,10 @@ export default function StaffPage() {
     setLoading(false)
   }
   useEffect(()=>{
-    load()
+    load();loadDupes()
     window.addEventListener('preview-org-changed',load)
-    return ()=>window.removeEventListener('preview-org-changed',load)
+    window.addEventListener('preview-org-changed',loadDupes)
+    return ()=>{window.removeEventListener('preview-org-changed',load);window.removeEventListener('preview-org-changed',loadDupes)}
   },[])
 
   function parseRoles(w:Worker):string[]{try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.length?r:[w.defaultRole]}catch{return[w.defaultRole]}}
@@ -227,6 +233,44 @@ export default function StaffPage() {
 
   const fmtInviteDate=(d:string)=>{const t=new Date(d.includes('T')?d:d.replace(' ','T')+'Z');return isNaN(t.getTime())?'':t.toLocaleDateString()}
 
+  // ── Recruiting link: shareable code-gated /join URL for this org (see /api/workers/recruit-link) ──
+  async function copyRecruitLink(){
+    if(recruitBusy)return
+    setRecruitBusy(true)
+    try{
+      const res=await fetch('/api/workers/recruit-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewOrgId:previewOrgId()})})
+      const d=await res.json()
+      if(!res.ok||!d.url){toast.error(d.error||'Could not get the link');return}
+      await navigator.clipboard.writeText(d.url)
+      toast.success('Recruiting link copied — paste it into your letter or a text')
+    }catch{toast.error('Could not get the link')}
+    finally{setRecruitBusy(false)}
+  }
+
+  // ── Possible duplicates (see /api/workers/duplicates + /api/workers/merge) ──
+  async function loadDupes(){
+    try{
+      const o=previewOrgId()
+      const res=await fetch(o?`/api/workers/duplicates?viewOrgId=${o}`:'/api/workers/duplicates')
+      const d=await res.json()
+      setDupePairs(res.ok&&Array.isArray(d.pairs)?d.pairs:[])
+    }catch{setDupePairs([])}
+  }
+
+  async function mergePair(pair:DupePair,keepSide:'a'|'b'){
+    const k=keepSide==='a'?pair.a:pair.b, r=keepSide==='a'?pair.b:pair.a
+    if(!confirm(`Merge "${r.name}" into "${k.name}"?\n\nAll of ${r.name}'s roster spots, availability, assignments, and pay history move to ${k.name}, and the duplicate record is deleted. This can't be undone.`))return
+    const res=await fetch('/api/workers/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keepId:k.id,removeId:r.id})})
+    if(res.ok){toast.success(`Merged into ${k.name}`);load();loadDupes()}
+    else{const d=await res.json().catch(()=>({}));toast.error(d.error||'Merge failed')}
+  }
+
+  async function dismissPair(pair:DupePair){
+    const res=await fetch('/api/workers/duplicates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'dismiss',key:pair.key,viewOrgId:previewOrgId()})})
+    if(res.ok)setDupePairs(ps=>ps.filter(x=>x.key!==pair.key))
+    else toast.error('Could not dismiss')
+  }
+
   function toggleSelect(id:string){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}
   function toggleAll(){setSelected(s=>s.size===filtered.length&&filtered.length>0?new Set():new Set(filtered.map(w=>w.id)))}
 
@@ -304,6 +348,7 @@ export default function StaffPage() {
           <p className="text-sm text-slate-500 mt-1">Global staff database · {workers.length} total</p>
         </div>
         <div className="flex gap-2">
+          {tab==='roster'&&<button className="btn-secondary btn-sm" onClick={copyRecruitLink} disabled={recruitBusy}>{recruitBusy?'Copying…':'Recruiting link'}</button>}
           <button className={`btn-sm ${tab==='import'?'btn-primary':'btn-secondary'}`} onClick={()=>setTab(t=>t==='import'?'roster':'import')}>{tab==='import'?'← Pool':'↑ Bulk Import'}</button>
           {tab==='roster'&&<button className="btn-primary" onClick={()=>{setExpandedId('__new__');setExpandMode('edit');setEditForm(EMPTY_FORM)}}>+ Add Staff</button>}
         </div>
@@ -380,6 +425,7 @@ export default function StaffPage() {
             <span className="text-xs text-slate-400">{filtered.length} shown</span>
             <span className="text-xs text-slate-300">·</span>
             <span className="text-xs text-slate-400"><span className="font-semibold text-emerald-600">{workers.filter(w=>w.appStatus==='registered').length}</span> registered · <span className="font-semibold text-amber-600">{workers.filter(w=>w.appStatus==='invited').length}</span> invited · <span className="font-semibold text-slate-500">{workers.filter(w=>w.appStatus==='none'||w.appStatus==='no_email').length}</span> not on app</span>
+            {dupePairs.length>0&&<button onClick={()=>setShowDupes(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">{dupePairs.length} possible duplicate{dupePairs.length===1?'':'s'}</button>}
             {(search||roleFilter!=='all'||appFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all');setAppFilter('all')}}>Clear filters</button>}
           </div>
 
@@ -399,6 +445,34 @@ export default function StaffPage() {
                 <button onClick={applyBulk} className="btn-primary btn-sm" disabled={bulkSaving||!bulkValue}>{bulkSaving?'Saving…':'Apply to Selected'}</button>
               </>}
               <button onClick={()=>setSelected(new Set())} className="btn-secondary btn-sm ml-auto">Clear</button>
+            </div>
+          )}
+
+          {showDupes&&dupePairs.length>0&&(
+            <div className="card p-4 mb-3 border border-amber-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-slate-800 text-sm">Possible duplicates</h3>
+                <button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>setShowDupes(false)}>Close</button>
+              </div>
+              <div className="space-y-3">
+                {dupePairs.map(p=>(
+                  <div key={p.key} className="border border-slate-200 rounded-xl p-3">
+                    <div className="flex flex-wrap gap-1 mb-2">{p.reasons.map(r=><span key={r} className="badge bg-amber-50 text-amber-700">{r}</span>)}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(['a','b'] as const).map(side=>{const w=side==='a'?p.a:p.b;return(
+                        <div key={w.id} className="bg-slate-50 rounded-lg p-3">
+                          <p className="font-semibold text-sm text-slate-800">{w.name}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{w.email||'no email'} · {w.phone||'no phone'}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{rLabel(w.defaultRole)}{w.association?` · ${w.association}`:''} · added {fmtInviteDate(w.createdAt)||'—'}</p>
+                          <button onClick={()=>mergePair(p,side)} className="mt-2 text-xs font-medium text-teal-600 hover:text-teal-800">Keep this one →</button>
+                        </div>
+                      )})}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-2">"Keep this one" moves the other record's history onto it and deletes the duplicate.</p>
+                    <button onClick={()=>dismissPair(p)} className="mt-1 text-xs text-slate-500 hover:text-slate-700 font-medium">These are different people</button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
