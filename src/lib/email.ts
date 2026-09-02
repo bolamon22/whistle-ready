@@ -45,7 +45,15 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     console.warn('[email] SENDGRID_API_KEY not set — skipping send:', args.subject)
     return { ok: false, error: 'email not configured' }
   }
-  const recipients = Array.isArray(args.to) ? args.to.filter(Boolean) : [args.to].filter(Boolean)
+  // Accept a single address, a comma-separated string, or an array (or arrays
+  // of comma-strings). Callers like the organizer heads-up and payment notify
+  // pass `recipients.join(',')`; wrapping that as [args.to] made ONE malformed
+  // recipient ("a@x.com,b@y.com") that SendGrid rejects — every multi-recipient
+  // notification silently failed. Split on commas so each address stands alone.
+  const recipients = (Array.isArray(args.to) ? args.to : [args.to])
+    .flatMap(x => String(x ?? '').split(','))
+    .map(s => s.trim())
+    .filter(Boolean)
   if (!recipients.length) return { ok: false, error: 'no recipient' }
 
   try {
