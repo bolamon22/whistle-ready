@@ -73,7 +73,7 @@ export default function TodayPage() {
       <div className="max-w-md mx-auto">
         <div className="bg-[#0b1f3a] px-5 pt-6 pb-6 text-white">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-teal-300 text-[11px] font-semibold tracking-[0.12em]">GAME DAY</span>
+            <span className="text-teal-300 text-[11px] font-semibold tracking-[0.12em]">TODAY</span>
             <span className="text-slate-300 text-xs inline-flex items-center gap-1"><CalendarDays size={13} /> {t ? fmtDay(t.startDate) : ''}</span>
           </div>
           <div className="flex items-center gap-3">

@@ -103,7 +103,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
     <div className="min-h-screen bg-slate-50 pb-16">
       <Toaster />
       <TournamentNav id={params.id} name={tName} logoUrl={tLogo} />
-      <div className="max-w-5xl mx-auto px-4 pt-6">
+      <div className="max-w-5xl mx-auto px-0 sm:px-4 pt-4 sm:pt-6">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -117,7 +117,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
               <span className={`ml-2 font-semibold ${pct >= 90 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-500' : 'text-red-500'}`}>{pct}%</span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
             <button onClick={() => setView('game')}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${view === 'game' ? 'bg-teal-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
               By game
@@ -141,7 +141,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
             )
           })}
           <select value={selDiv} onChange={e => setSelDiv(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-600 bg-white focus:outline-none">
+            className="flex-1 sm:flex-none min-w-0 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-600 bg-white focus:outline-none">
             <option value="">All divisions</option>
             {divisions.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -157,17 +157,22 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
               const complete = filled >= slots
               return (
                 <div key={game.id} className={`bg-white border rounded-xl overflow-hidden ${complete ? 'border-emerald-200' : filled > 0 ? 'border-amber-200' : 'border-slate-200'}`}>
-                  <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-50">
-                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${game.isChampionship ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>#{game.gameNumber}</span>
-                    <span className="text-xs text-slate-500">{fmt12(game.startTime)}</span>
-                    <span className="text-sm font-medium text-slate-800 flex-1">{game.team1} <span className="text-slate-400 font-normal text-xs">vs</span> {game.team2}</span>
-                    <span className="text-xs text-slate-400">{game.division}</span>
-                    <span className="text-xs text-slate-400">{game.location}</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${complete ? 'bg-emerald-100 text-emerald-700' : filled > 0 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
-                      {filled}/{slots}
-                    </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 sm:px-5 py-3 border-b border-slate-50">
+                    <div className="flex items-center gap-2 sm:contents">
+                      <span className={`text-xs font-mono px-2 py-0.5 rounded ${game.isChampionship ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>#{game.gameNumber}</span>
+                      <span className="text-xs text-slate-500">{fmt12(game.startTime)}</span>
+                      <span className={`ml-auto sm:ml-0 sm:order-4 text-xs font-semibold px-2 py-0.5 rounded-full ${complete ? 'bg-emerald-100 text-emerald-700' : filled > 0 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
+                        {filled}/{slots}
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-slate-800 sm:flex-1 sm:order-1">{game.team1} <span className="text-slate-400 font-normal text-xs">vs</span> {game.team2}</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-400 sm:contents">
+                      <span className="sm:order-2">{game.division}</span>
+                      <span className="sm:hidden">·</span>
+                      <span className="sm:order-3 truncate">{game.location}</span>
+                    </div>
                   </div>
-                  <div className="px-5 py-2.5 flex flex-wrap gap-2">
+                  <div className="px-3 sm:px-5 py-2.5 flex flex-wrap gap-2">
                     {game.assignments.length === 0
                       ? <span className="text-xs text-slate-400 italic">No staff assigned</span>
                       : game.assignments.map(a => (
@@ -195,7 +200,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
               const totalPay = wGames.reduce((s, g) => s + g.payRate, 0)
               return (
                 <div key={worker.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-50 bg-slate-50">
+                  <div className="flex items-center gap-3 px-3 sm:px-5 py-3 border-b border-slate-50 bg-slate-50">
                     <div className="w-7 h-7 rounded-full bg-teal-100 text-teal-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
                       {worker.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                     </div>
@@ -205,14 +210,16 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
                   </div>
                   <div className="divide-y divide-slate-50">
                     {wGames.sort((a, b) => `${a.game.date}${a.game.startTime}` < `${b.game.date}${b.game.startTime}` ? -1 : 1).map(({ game, role, payRate, assignmentId }) => (
-                      <div key={assignmentId} className="flex items-center gap-3 px-5 py-2.5">
-                        <span className="text-xs text-slate-400 w-10">{fmt12(game.startTime)}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[role] || 'bg-slate-100 text-slate-600'}`}>{ROLE_LABELS[role] || role}</span>
-                        <span className="text-sm text-slate-700 flex-1">{game.team1} vs {game.team2}</span>
-                        <span className="text-xs text-slate-400">{game.division}</span>
-                        <span className="text-xs text-slate-500 font-medium">${payRate}</span>
-                        <button onClick={() => removeAssignment(assignmentId)} disabled={removing === assignmentId}
-                          className="text-red-300 hover:text-red-500 text-xs transition-colors"><X size={12} /></button>
+                      <div key={assignmentId} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 sm:px-5 py-2.5">
+                        <div className="flex items-center gap-2 sm:contents">
+                          <span className="text-xs text-slate-400 sm:w-10">{fmt12(game.startTime)}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[role] || 'bg-slate-100 text-slate-600'}`}>{ROLE_LABELS[role] || role}</span>
+                          <span className="ml-auto sm:ml-0 sm:order-3 text-xs text-slate-500 font-medium">${payRate}</span>
+                          <button onClick={() => removeAssignment(assignmentId)} disabled={removing === assignmentId}
+                            className="sm:order-4 text-red-300 hover:text-red-500 text-xs transition-colors p-1 -mr-1 sm:p-0 sm:mr-0"><X size={12} /></button>
+                        </div>
+                        <span className="text-sm text-slate-700 sm:flex-1 sm:order-1">{game.team1} vs {game.team2} <span className="sm:hidden text-xs text-slate-400">· {game.division}</span></span>
+                        <span className="hidden sm:inline text-xs text-slate-400 sm:order-2">{game.division}</span>
                       </div>
                     ))}
                   </div>
