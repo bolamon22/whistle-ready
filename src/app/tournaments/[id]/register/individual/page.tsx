@@ -216,7 +216,7 @@ export default function IndividualRegPage() {
   )
 
   if (!tournament.individualRegEnabled) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-3 sm:p-6">
       <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
         <div className="text-4xl mb-3">🔒</div>
         <h1 className="text-lg font-bold text-gray-800 mb-2">Registration not open</h1>

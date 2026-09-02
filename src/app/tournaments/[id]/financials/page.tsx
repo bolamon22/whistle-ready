@@ -151,7 +151,7 @@ export default function FinancialsPage() {
   ] as const
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
       <Toaster />
       <div className="max-w-5xl mx-auto">
 

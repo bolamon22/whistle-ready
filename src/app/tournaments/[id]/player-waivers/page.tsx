@@ -34,7 +34,7 @@ export default function PlayerWaiverEntries() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
       <div className="max-w-5xl mx-auto">
         <TournamentNav id={id} name={name} logoUrl={logo} />
 
