@@ -63,7 +63,7 @@ export default function StaffPayEditor({
   return (
     <div className="space-y-8">
       {showSaveGlobal && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <p className="text-sm text-amber-800">Save these roles and rates as your default for future tournaments?</p>
           <div className="flex gap-2 flex-shrink-0">
             <button type="button" onClick={saveDefaults}

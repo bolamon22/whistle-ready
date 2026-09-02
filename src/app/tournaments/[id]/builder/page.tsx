@@ -513,9 +513,9 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             placeholder="e.g. Please note that divisions are subject to adjustment or merger based on final registration numbers per division." />
           <p className="text-xs text-slate-400 mt-1">Optional. Shown under the division list on the public event page.</p>
         </div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <p className="text-sm text-slate-500">Check the divisions for this tournament. Click a checked division name to rename it.</p>
-          <div className="flex gap-2 flex-shrink-0 ml-4">
+          <div className="flex gap-2 flex-shrink-0 sm:ml-4">
             <button type="button"
               onClick={() => {
                 const saved = localStorage.getItem('gameday_div_prefs')
@@ -574,13 +574,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
               <button type="button" onClick={() => setCustomDivisions(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs"><X size={13} /></button>
             </div>
           ))}
-          <div className="flex gap-2 mt-2">
-            <input className="input flex-1" placeholder="e.g. Boys U9 (7v7)" value={newDivision}
+          <div className="flex flex-wrap gap-2 mt-2">
+            <input className="input flex-1 min-w-0" placeholder="e.g. Boys U9 (7v7)" value={newDivision}
               onChange={e => setNewDivision(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (newDivision.trim()) { setCustomDivisions(p => [...p, newDivision.trim()]); setNewDivision('') } } }} />
             <button type="button" className="btn-secondary"
               onClick={() => { if (newDivision.trim()) { setCustomDivisions(p => [...p, newDivision.trim()]); setNewDivision('') } }}>Add</button>
-            <p className="text-xs text-slate-400 mt-2">Custom division abbreviations can be edited after adding.</p>
+            <p className="w-full text-xs text-slate-400">Custom division abbreviations can be edited after adding.</p>
           </div>
         </div>
 
@@ -639,12 +639,12 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           <div className="mb-6">
             <p className="text-sm font-semibold text-slate-700 mb-1"><Calendar size={14} className="inline mr-1 align-text-bottom" /> Default field availability</p>
             <p className="text-xs text-slate-400 mb-3">Default hours for all fields. Override per-field using the Availability toggle on each field below.</p>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 w-36">Date</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">Time Slots</th>
+                    <th className="text-left px-2 sm:px-4 py-2 text-xs font-semibold text-slate-500 w-28 sm:w-36">Date</th>
+                    <th className="text-left px-2 sm:px-4 py-2 text-xs font-semibold text-slate-500">Time Slots</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -664,8 +664,8 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                     }
                     return (
                       <tr key={dateStr} className="align-top">
-                        <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDate(dateStr)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-2 sm:px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDate(dateStr)}</td>
+                        <td className="px-2 sm:px-4 py-3">
                           <div className="space-y-1.5">
                             {slots.map((slot, i) => (
                               <div key={i} className="flex items-center gap-2">
@@ -728,8 +728,8 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
               <div className="divide-y divide-slate-100">
                 {venue.fields.map((field, idx) => (
                   <div key={field.id}>
-                    <div className="flex items-center gap-2 px-4 py-2.5">
-                      <span className="text-xs text-slate-400 w-5 text-right">{idx + 1}</span>
+                    <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5">
+                      <span className="text-xs text-slate-400 w-5 text-right flex-shrink-0">{idx + 1}</span>
                       <input className="flex-1 min-w-0 text-sm text-slate-700 border border-transparent focus:border-slate-300 focus:outline-none rounded px-2 py-1 focus:ring-1 focus:ring-teal-400"
                         value={field.name} onChange={e => updateFieldName(venue.id, field.id, e.target.value)} placeholder="Field name" />
                       <input
@@ -741,15 +741,15 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                       />
                       <button type="button" onClick={() => setExpandedFields(e => ({ ...e, [field.id]: !e[field.id] }))}
                         className={`text-xs px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${expandedFields[field.id] ? 'bg-teal-50 border-teal-200 text-teal-600' : 'border-slate-200 text-slate-400 hover:text-slate-600'}`}>
-                        {expandedFields[field.id] ? <><ChevronUp size={12} className="inline" /> Availability</> : <><ChevronDown size={12} className="inline" /> Availability</>}
+                        {expandedFields[field.id] ? <><ChevronUp size={12} className="inline" /> <span className="hidden sm:inline">Availability</span></> : <><ChevronDown size={12} className="inline" /> <span className="hidden sm:inline">Availability</span></>}
                       </button>
                       <button type="button" onClick={() => removeField(venue.id, field.id)} className="text-red-300 hover:text-red-500 text-sm"><X size={13} /></button>
                     </div>
                     {expandedFields[field.id] && (
-                      <div className="bg-teal-50 border-t border-teal-100 px-6 py-4 space-y-4">
+                      <div className="bg-teal-50 border-t border-teal-100 px-4 sm:px-6 py-4 space-y-4">
                         <div>
                           <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">⏰ Available Hours</p>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-3">
                             <div className="flex items-center gap-2">
                               <label className="text-xs text-slate-500">From</label>
                               <input type="time" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -933,22 +933,46 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
 
   // ─── Layout ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-6 pb-24 sm:pb-6">
       <Toaster />
 
       <TournamentNav id={params.id} name={name || 'Tournament Builder'} logoUrl={logoUrl || undefined} />
 
-      <div className="max-w-6xl mx-auto px-4 pt-0 pb-2 flex justify-end">
+      {/* Desktop: Save sits top-right. Phones get a fixed bar at the bottom (below). */}
+      <div className="hidden sm:flex max-w-6xl mx-auto px-4 pt-0 pb-2 justify-end">
         <button onClick={save} disabled={saving}
           className="bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors">
           {saving ? 'Saving…' : '💾 Save Changes'}
         </button>
       </div>
+      <div className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 p-3">
+        <button onClick={save} disabled={saving}
+          className="w-full bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors">
+          {saving ? 'Saving…' : '💾 Save Changes'}
+        </button>
+      </div>
 
-      <div className="flex max-w-6xl mx-auto py-4 px-4 gap-6">
+      <div className="flex flex-col md:flex-row max-w-6xl mx-auto py-3 sm:py-4 px-0 sm:px-4 gap-4 md:gap-6">
 
-        {/* Sidebar */}
-        <div className="w-56 flex-shrink-0">
+        {/* Phones: section picker instead of the sidebar */}
+        <div className="md:hidden">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Setup section</label>
+          <select value={activeSection} onChange={e => setActiveSection(e.target.value)}
+            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400">
+            {SECTION_GROUPS.map(group => {
+              const items = SECTIONS.filter(s => s.group === group)
+              if (items.length === 0) return null
+              return (
+                <optgroup key={group} label={group}>
+                  {items.map(s => <option key={s.id} value={s.id}>{isComplete(s.id) ? '✓ ' : ''}{s.label}</option>)}
+                </optgroup>
+              )
+            })}
+          </select>
+        </div>
+
+        {/* Sidebar (tablet and up) */}
+        <div className="hidden md:block w-56 flex-shrink-0">
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Setup</p>
@@ -1009,25 +1033,25 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         {/* Main panel */}
         <div className="flex-1 min-w-0">
           <div className="bg-white border border-slate-200 rounded-xl">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                  {(() => { const Icon = SECTIONS.find(s => s.id === activeSection)?.icon; return Icon ? <Icon size={18} className="text-slate-400" /> : null })()}
-                  {SECTIONS.find(s => s.id === activeSection)?.label}
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 min-w-0">
+                  {(() => { const Icon = SECTIONS.find(s => s.id === activeSection)?.icon; return Icon ? <Icon size={18} className="text-slate-400 flex-shrink-0" /> : null })()}
+                  <span className="truncate">{SECTIONS.find(s => s.id === activeSection)?.label}</span>
                 </h2>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-shrink-0">
                 {SECTIONS.findIndex(s => s.id === activeSection) > 0 && (
                   <button onClick={() => setActiveSection(SECTIONS[SECTIONS.findIndex(s => s.id === activeSection) - 1].id)}
-                    className="btn-secondary btn-sm">← Prev</button>
+                    className="btn-secondary btn-sm">← <span className="hidden sm:inline">Prev</span></button>
                 )}
                 {SECTIONS.findIndex(s => s.id === activeSection) < SECTIONS.length - 1 && (
                   <button onClick={() => setActiveSection(SECTIONS[SECTIONS.findIndex(s => s.id === activeSection) + 1].id)}
-                    className="btn-primary btn-sm">Next →</button>
+                    className="btn-primary btn-sm"><span className="hidden sm:inline">Next</span> →</button>
                 )}
               </div>
             </div>
-            <div className="px-6 py-6">
+            <div className="px-4 sm:px-6 py-4 sm:py-6">
               {renderSection()}
             </div>
           </div>
