@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Suspense } from 'react'
 import './globals.css'
 import { SITE_URL } from '@/lib/seo'
@@ -17,6 +17,13 @@ export const metadata: Metadata = {
   description: 'The Sports Management Master Plan',
   openGraph: { siteName: 'Whistle Ready', type: 'website' },
   twitter: { card: 'summary_large_image' },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: 'Whistle Ready', statusBarStyle: 'default' },
+  icons: { icon: '/icon-192.png', apple: '/apple-touch-icon.png' },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#0f766e',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

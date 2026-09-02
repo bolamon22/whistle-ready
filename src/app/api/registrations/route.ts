@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendEmail, emailEnabled, orgSender } from '@/lib/email'
 import { tournamentOrgId, orgById } from '@/lib/org'
+import { sendPushToOrg } from '@/lib/push'
 import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, organizerEmailHtml, organizerEmailSubject, type RegLetterData, type RegNotifyData } from '@/lib/regConfirmation'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
@@ -168,6 +169,15 @@ async function buildAndSendConfirmation(reg: any) {
         })
       }
     }
+    // Phone push to any subscribed staff device — independent of the email
+    // heads-up (best-effort; a push failure never affects the registration).
+    await sendPushToOrg(orgId, {
+      title: `New registration — ${reg.clubName || 'a club'}`,
+      body: `${(reg.teams || []).length} team${(reg.teams || []).length === 1 ? '' : 's'} · ${t.name || 'your tournament'}`,
+      url: `/tournaments/${reg.tournamentId}/registrations`,
+      tag: `reg-${reg.id}`,
+    })
+
     return { letter, data, emailed }
   } catch { return null }
 }

@@ -8,6 +8,7 @@ import { sendEmail, emailEnabled, orgSender } from '@/lib/email'
 import { tournamentOrgId, orgById } from '@/lib/org'
 import { resolveRegConfirmation } from '@/lib/regConfirmation'
 import { SITE_URL } from '@/lib/seo'
+import { sendPushToOrg } from '@/lib/push'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -55,13 +56,23 @@ export async function notifyPaymentReceived(args: {
     const fallback = [orgSite?.contact?.email, org?.contactEmail].filter(Boolean).join(',')
     const recipients = Array.from(new Set(String(cfg.notifyEmails || fallback || '')
       .split(',').map(s => s.trim().toLowerCase()).filter(s => s.includes('@'))))
-    if (!recipients.length) { console.warn('[paymentNotify] no recipients for tournament', reg.tournamentId); return }
 
     const paid = reg.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
     const due = (Number(reg.invoiceAmount) || 0) - (Number(reg.discountAmount) || 0)
     const balance = Math.round(Math.max(0, due - paid) * 100) / 100
     const label = METHOD_LABELS[args.method] || args.method
     const tName = t?.name || 'your tournament'
+
+    // Phone push — independent of email recipients (a device can be subscribed
+    // even with no notify emails configured). Best-effort, never blocks.
+    await sendPushToOrg(orgId, {
+      title: `Payment received — ${fmt(args.amount)}`,
+      body: `${reg.clubName || 'A club'} · ${tName}${balance > 0 ? ` · ${fmt(balance)} left` : ' · paid in full'}`,
+      url: `/tournaments/${reg.tournamentId}/registrations`,
+      tag: `pay-${args.registrationId}`,
+    })
+
+    if (!recipients.length) { console.warn('[paymentNotify] no email recipients for tournament', reg.tournamentId); return }
     const row = (k: string, v: string) =>
       `<tr><td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top">${k}</td><td style="padding:4px 0">${v}</td></tr>`
 

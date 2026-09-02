@@ -8,6 +8,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, FileText, ClipboardList, Save, ExternalLink, Link2, Inbox, Pencil, X, Users, ImagePlus } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
+import PushToggle from '@/components/PushToggle'
 import { DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
 
 async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
@@ -236,6 +237,7 @@ function FormsInner() {
                 <div className="text-sm text-slate-600">Email confirmation: <span className="font-medium">{rf.enabled ? 'On' : 'Off'}</span></div>
               </div>
             )}
+            <PushToggle />
           </div>
         )}
       </section>
