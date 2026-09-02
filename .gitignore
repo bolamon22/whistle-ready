@@ -8,3 +8,6 @@ node_modules
 # Runtime user uploads (team logos etc.) are not part of the build
 /public/uploads/
 .cognito_tmp/
+
+# scratch folder for files Claude could not delete on the mount
+_to_delete/
