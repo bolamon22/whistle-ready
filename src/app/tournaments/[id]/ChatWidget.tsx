@@ -62,7 +62,7 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
       {/* Floating button */}
       <button
         onClick={() => setOpen(o => !o)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white text-2xl transition-all ${open ? 'bg-slate-600' : 'bg-[#0f1f3d] hover:bg-slate-700'}`}
+        className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center text-white text-2xl transition-all ${open ? 'bg-slate-600' : 'bg-[#0f1f3d] hover:bg-slate-700'}`}
         aria-label="Chirp assistant"
       >
         {open ? '✕' : <ChirpAvatar size={40} />}
@@ -70,7 +70,7 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
 
       {/* Panel */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
+        <div className="fixed bottom-20 sm:bottom-24 left-3 right-3 sm:left-auto sm:right-6 z-50 w-auto sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
           style={{ maxHeight: '70vh' }}>
 
           {/* Header */}

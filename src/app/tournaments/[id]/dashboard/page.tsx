@@ -33,7 +33,7 @@ const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigi
 // Compact KPI tile.
 function Kpi({ label, value, sub, href }: { label: string; value: string | number; sub?: string; href?: string }) {
   const inner = (
-    <div className={`bg-white border border-slate-200 rounded-xl p-4 h-full transition-colors${href ? ' hover:border-teal-300 cursor-pointer' : ''}`}>
+    <div className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-4 h-full transition-colors${href ? ' hover:border-teal-300 cursor-pointer' : ''}`}>
       <div className="text-2xl font-semibold text-slate-900">{value}</div>
       <div className="text-sm text-slate-500 mt-0.5">{label}</div>
       {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
@@ -46,12 +46,13 @@ function Kpi({ label, value, sub, href }: { label: string; value: string | numbe
 function GameDayCard({ href, icon: Icon, label, hint, accent }: { href: string; icon: LucideIcon; label: string; hint?: string; accent?: boolean }) {
   return (
     <Link href={href}
-      className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 hover:border-teal-300 transition-colors">
+      className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 flex items-center gap-3 hover:border-teal-300 transition-colors">
       <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${accent ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-500'}`}><Icon size={20} /></span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="font-medium text-slate-800 leading-tight">{label}</div>
         {hint && <div className="text-xs text-slate-400 mt-0.5">{hint}</div>}
       </div>
+      <ArrowRight size={16} className="text-slate-300 flex-shrink-0 sm:hidden" />
     </Link>
   )
 }
@@ -125,12 +126,12 @@ export default function DashboardPage() {
 
   return (
     <>
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-6 pb-24 sm:pb-6">
       <div className="max-w-5xl mx-auto">
 
       <TournamentNav id={String(id)} name={t.name} logoUrl={t.logoUrl} />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-6 sm:space-y-8">
+      <div className="max-w-5xl mx-auto px-0 sm:px-6 py-2 sm:py-8 space-y-6 sm:space-y-8">
 
         {/* ── At a glance ───────────────────────────────────────────────── */}
         <section>
@@ -162,7 +163,7 @@ export default function DashboardPage() {
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Live</h2>
             {isLive && <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Live now</span>}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             <GameDayCard href={`/tournaments/${id}/scores`}         icon={Target}         label="Post scores"     hint="Quick entry" accent />
             <GameDayCard href={`/tournaments/${id}/assignments`}    icon={ClipboardList}  label="Assignments"     hint={`~${assignPct}% filled`} />
             <GameDayCard href={`/tournaments/${id}/communications`} icon={Megaphone}      label="Communications"  hint="Field requests · broadcast · incidents · contacts" />
@@ -173,8 +174,8 @@ export default function DashboardPage() {
         {topDivisions.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Registered teams</h2>
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <h3 className="text-sm font-medium text-slate-700 mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400" /> Teams by division <span className="text-xs font-normal text-slate-400">· tap a division to see teams</span></h3>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
+              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap a division to see teams</span></h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {topDivisions.map(([div, count]) => {
                   const open = openDiv === div
@@ -225,7 +226,7 @@ export default function DashboardPage() {
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Money</h2>
             <Link href={`/tournaments/${id}/financials`}
-              className="block bg-white border border-slate-200 rounded-xl p-5 hover:border-teal-300 transition-colors">
+              className="block bg-white border border-slate-200 rounded-xl p-4 sm:p-5 hover:border-teal-300 transition-colors">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <div className="text-xl font-semibold text-slate-800">{fmt(revenue)}</div>
