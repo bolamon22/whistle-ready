@@ -183,6 +183,51 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const gLabel=(g:string)=>GENDERS.find(x=>x.value===g)?.label??g
   const pmLabel=(p:string)=>PAY_METHODS.find(x=>x.value===p)?.label??p
 
+  // Profile panel — shared by the desktop table row and the phone card.
+  const renderProfile=(w:Worker, wRoles:string[])=>(
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white px-4 sm:px-6 py-4 sm:py-5">
+      <div className="flex items-start gap-3 sm:gap-5">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shrink-0 shadow-lg">
+          {w.photoUrl
+            ? <img src={w.photoUrl} alt={w.name} className="w-full h-full object-cover"/>
+            : <div className="w-full h-full bg-teal-500 flex items-center justify-center font-bold text-2xl text-white">{w.name[0].toUpperCase()}</div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold leading-tight">{w.name}</h3>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {wRoles.map(r=>(
+                  <span key={r} className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${r==='ref'?'bg-teal-500/30 text-teal-200':r==='scorekeeper'?'bg-emerald-500/30 text-emerald-200':'bg-slate-500/40 text-slate-300'}`}>{rLabel(r)}</span>
+                ))}
+                {w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
+              </div>
+            </div>
+            <button onClick={()=>expand(w,'edit')} className="text-xs text-teal-300 hover:text-white border border-teal-400/40 hover:border-teal-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-3 mt-4 text-sm">
+            {w.phone&&<div><p className="text-slate-400 text-xs mb-0.5">Phone</p><a href={`tel:${w.phone}`} className="text-teal-200">{w.phone}</a></div>}
+            {w.email&&<div className="min-w-0"><p className="text-slate-400 text-xs mb-0.5">Email</p><a href={`mailto:${w.email}`} className="block truncate text-teal-200">{w.email}</a></div>}
+            {wRoles.includes('ref')&&<>
+              <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p>{certLabel(w.certLevel)}</p></div>
+              <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p>{gLabel(w.gender)}</p></div>
+            </>}
+            <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p>{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
+            {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p>${w.payRateOverride}/game</p></div>}
+            {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p>${w.hourlyRate}/hr</p></div>}
+          </div>
+          {w.notes&&(
+            <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
+              <p className="text-slate-400 text-xs mb-1">Notes</p>
+              <p className="text-slate-200 text-sm whitespace-pre-wrap">{w.notes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   const onRoster = allWorkers.filter(w=>isOnRoster(w.id))
   const notOnRoster = allWorkers.filter(w=>!isOnRoster(w.id))
   const filteredNotOnRoster = notOnRoster
@@ -204,7 +249,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   if (!tournament) return <div className="text-red-500">Not found</div>
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
       <div className="max-w-5xl mx-auto">
       {/* ── Invite modal ── */}
       {showInvite && (
@@ -272,22 +317,22 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
 
       {/* Staff sub-nav */}
-      <div className="flex items-center gap-1 mb-6 border-b border-slate-200">
+      <div className="flex items-center gap-0.5 sm:gap-1 mb-5 sm:mb-6 border-b border-slate-200 overflow-x-auto">
         <Link href={`/tournaments/${params.id}/roster`}
-          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-teal-600 text-teal-700">
-          <Users size={15} className="inline align-text-bottom mr-1.5" />Staff Roster
+          className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-teal-600 text-teal-700 whitespace-nowrap">
+          <Users size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Staff Roster
         </Link>
         <Link href={`/tournaments/${params.id}/availability`}
-          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
-          <Calendar size={15} className="inline align-text-bottom mr-1.5" />Availability
+          className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
+          <Calendar size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Availability
         </Link>
         <Link href={`/tournaments/${params.id}/time-entries`}
-          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
-          <Clock size={15} className="inline align-text-bottom mr-1.5" />Time Entries
+          className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
+          <Clock size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Time Entries
         </Link>
         <Link href={`/tournaments/${params.id}/pay-summary`}
-          className="px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
-          <Wallet size={15} className="inline align-text-bottom mr-1.5" />Pay Summary
+          className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
+          <Wallet size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Pay Summary
         </Link>
       </div>
 
@@ -311,23 +356,29 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       {/* ── On Roster ── */}
       {onRoster.length > 0 && (
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"/>
-              <span className="font-semibold text-emerald-800 text-sm">Confirmed ({onRoster.length})</span>
+          <div className="mb-3 space-y-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"/>
+                <span className="font-semibold text-emerald-800 text-sm">Confirmed ({onRoster.length})</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-400">
+                <span>{filteredOnRoster.length} shown</span>
+                {(search||roleFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setSearch('');setRoleFilter('all')}}>Clear filters</button>}
+              </div>
             </div>
-            <input className="input !w-48 text-sm ml-4" placeholder="Search by name…" value={search} onChange={e=>setSearch(e.target.value)}/>
-            <label className="text-sm text-slate-500">Role:</label>
-            <select className="select !w-auto text-sm" value={roleFilter} onChange={e=>{setRoleFilter(e.target.value);setSelected(new Set())}}>
-              <option value="all">All roles</option>
-              {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-            <span className="text-xs text-slate-400">{filteredOnRoster.length} shown</span>
-            {(search||roleFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all')}}>Clear filters</button>}
+            <div className="flex items-center gap-2">
+              <input className="input text-sm flex-1 min-w-0 sm:flex-none sm:!w-56" placeholder="Search by name…" value={search} onChange={e=>setSearch(e.target.value)}/>
+              <label className="text-sm text-slate-500 hidden sm:inline">Role:</label>
+              <select className="select !w-auto text-sm flex-shrink-0" value={roleFilter} onChange={e=>{setRoleFilter(e.target.value);setSelected(new Set())}}>
+                <option value="all">All roles</option>
+                {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </div>
           </div>
 
           {selected.size>0&&(
-            <div className="flex items-center gap-3 mb-3 p-3 bg-teal-50 border border-teal-200 rounded-lg flex-wrap">
+            <div className="flex items-center gap-2 sm:gap-3 mb-3 p-3 bg-teal-50 border border-teal-200 rounded-lg flex-wrap">
               <span className="text-sm font-medium text-teal-700">{selected.size} selected</span>
               <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}>
                 <option value="">— choose field to edit —</option>
@@ -344,7 +395,52 @@ export default function RosterPage({ params }: { params:{id:string} }) {
             </div>
           )}
 
-          <div className="card overflow-hidden">
+          {/* Phones: one card per staff member */}
+          <div className="sm:hidden space-y-2">
+            {filteredOnRoster.map(w=>{
+              const wRoles=parseRoles(w)
+              const isExpanded=expandedId===w.id
+              return(
+                <div key={w.id} className={`card overflow-hidden ${selected.has(w.id)?'border-teal-300 bg-teal-50':''}`}>
+                  <div className="px-3 pt-2.5 pb-2 flex items-start gap-2.5">
+                    <input type="checkbox" className="mt-1 flex-shrink-0" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={()=>expand(w,'profile')} className="font-semibold text-slate-900 text-left leading-tight">{w.name}</button>
+                        {w.isAssigner&&<span className="badge bg-amber-100 text-amber-700">Assigner</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
+                        {wRoles.includes('ref')&&<>
+                          <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                          <span className="badge bg-white border border-slate-200 text-slate-500">{gLabel(w.gender)}</span>
+                        </>}
+                        <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                        {w.phone&&<a href={`tel:${w.phone}`} className="text-teal-700">{w.phone}</a>}
+                        {w.email&&<a href={`mailto:${w.email}`} className="text-teal-700 truncate max-w-full">{w.email}</a>}
+                        {!w.phone&&!w.email&&<span className="text-slate-400">No contact info</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-3 pb-2.5 flex items-center justify-end gap-4 text-xs">
+                    <button onClick={()=>expand(w,'profile')} className={`font-medium ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-500'}`}>Profile</button>
+                    <button onClick={()=>expand(w,'edit')} className={`font-medium ${isExpanded&&expandMode==='edit'?'text-teal-800 underline':'text-teal-600'}`}>Edit</button>
+                    <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="text-red-400">Remove</button>
+                  </div>
+                  {isExpanded&&expandMode==='profile'&&<div className="border-t border-slate-200">{renderProfile(w,wRoles)}</div>}
+                  {isExpanded&&expandMode==='edit'&&(
+                    <div className="px-3 py-4 bg-teal-50/40 border-t border-slate-200">
+                      <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving}/>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="hidden sm:block card overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -400,49 +496,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     {/* Profile panel */}
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
-                        <td colSpan={8} className="p-0 border-b border-slate-200">
-                          <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white px-6 py-5">
-                            <div className="flex items-start gap-5">
-                              <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 shadow-lg">
-                                {w.photoUrl
-                                  ? <img src={w.photoUrl} alt={w.name} className="w-14 h-14 object-cover"/>
-                                  : <div className="w-14 h-14 bg-teal-500 flex items-center justify-center font-bold text-2xl text-white">{w.name[0].toUpperCase()}</div>
-                                }
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-4">
-                                  <div>
-                                    <h3 className="text-lg font-bold">{w.name}</h3>
-                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                      {wRoles.map(r=>(
-                                        <span key={r} className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${r==='ref'?'bg-teal-500/30 text-teal-200':r==='scorekeeper'?'bg-emerald-500/30 text-emerald-200':'bg-slate-500/40 text-slate-300'}`}>{rLabel(r)}</span>
-                                      ))}
-                                      {w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
-                                    </div>
-                                  </div>
-                                  <button onClick={()=>expand(w,'edit')} className="text-xs text-teal-300 hover:text-white border border-teal-400/40 hover:border-teal-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 mt-4 text-sm">
-                                  {w.phone&&<div><p className="text-slate-400 text-xs mb-0.5">Phone</p><p>{w.phone}</p></div>}
-                                  {w.email&&<div><p className="text-slate-400 text-xs mb-0.5">Email</p><p className="truncate">{w.email}</p></div>}
-                                  {wRoles.includes('ref')&&<>
-                                    <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p>{certLabel(w.certLevel)}</p></div>
-                                    <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p>{gLabel(w.gender)}</p></div>
-                                  </>}
-                                  <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p>{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
-                                  {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p>${w.payRateOverride}/game</p></div>}
-                                  {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p>${w.hourlyRate}/hr</p></div>}
-                                </div>
-                                {w.notes&&(
-                                  <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
-                                    <p className="text-slate-400 text-xs mb-1">Notes</p>
-                                    <p className="text-slate-200 text-sm whitespace-pre-wrap">{w.notes}</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+                        <td colSpan={8} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
                       </tr>
                     )}
 
@@ -465,31 +519,66 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       {/* ── Not on roster ── */}
       {notOnRoster.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-3 flex-wrap">
-            <span className="w-2 h-2 rounded-full bg-slate-300"/>
-            <span className="font-semibold text-slate-600 text-sm">Available to Add ({notOnRoster.length})</span>
-            <input className="input !w-48 text-sm ml-2" placeholder="Search by name…" value={addSearch} onChange={e=>setAddSearch(e.target.value)}/>
-            <label className="text-sm text-slate-500">Role:</label>
-            <select className="select !w-auto text-sm" value={addRole} onChange={e=>setAddRole(e.target.value)}>
-              <option value="all">All roles</option>
-              {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-            <label className="text-sm text-slate-500">Level:</label>
-            <select className="select !w-auto text-sm" value={addCert} onChange={e=>setAddCert(e.target.value)}>
-              <option value="all">All levels</option>
-              {CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-            <label className="text-sm text-slate-500">Can ref:</label>
-            <select className="select !w-auto text-sm" value={addGender} onChange={e=>setAddGender(e.target.value)}>
-              <option value="all">Any</option>
-              <option value="boys">Boys</option>
-              <option value="girls">Girls</option>
-              <option value="both">Both only</option>
-            </select>
-            <span className="text-xs text-slate-400">{filteredNotOnRoster.length} shown</span>
-            {(addSearch||addRole!=='all'||addCert!=='all'||addGender!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setAddSearch('');setAddRole('all');setAddCert('all');setAddGender('all')}}>Clear</button>}
+          <div className="px-3 sm:px-5 py-3 bg-slate-50 border-b border-slate-100 space-y-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-slate-300"/>
+                <span className="font-semibold text-slate-600 text-sm">Available to Add ({notOnRoster.length})</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-400">
+                <span>{filteredNotOnRoster.length} shown</span>
+                {(addSearch||addRole!=='all'||addCert!=='all'||addGender!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setAddSearch('');setAddRole('all');setAddCert('all');setAddGender('all')}}>Clear</button>}
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <input className="input text-sm w-full sm:!w-56" placeholder="Search by name…" value={addSearch} onChange={e=>setAddSearch(e.target.value)}/>
+              <div className="grid grid-cols-3 sm:flex sm:items-center gap-2">
+                <label className="text-sm text-slate-500 hidden sm:inline">Role:</label>
+                <select className="select !w-auto min-w-0 text-sm" value={addRole} onChange={e=>setAddRole(e.target.value)}>
+                  <option value="all">All roles</option>
+                  {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+                <label className="text-sm text-slate-500 hidden sm:inline">Level:</label>
+                <select className="select !w-auto min-w-0 text-sm" value={addCert} onChange={e=>setAddCert(e.target.value)}>
+                  <option value="all">All levels</option>
+                  {CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                <label className="text-sm text-slate-500 hidden sm:inline">Can ref:</label>
+                <select className="select !w-auto min-w-0 text-sm" value={addGender} onChange={e=>setAddGender(e.target.value)}>
+                  <option value="all">Any</option>
+                  <option value="boys">Boys</option>
+                  <option value="girls">Girls</option>
+                  <option value="both">Both only</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <table className="w-full text-sm">
+
+          {/* Phones: compact rows */}
+          <div className="sm:hidden divide-y divide-slate-100">
+            {filteredNotOnRoster.map(w=>{
+              const wRoles=parseRoles(w)
+              return(
+                <div key={w.id} className="px-3 py-2.5 flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-slate-800 truncate">{w.name}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
+                      {wRoles.includes('ref')&&<>
+                        <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                        <span className={`badge ${w.gender==='boys'?'bg-sky-100 text-sky-700':w.gender==='girls'?'bg-pink-100 text-pink-700':'bg-violet-100 text-violet-700'}`}>{w.gender==='boys'?'Boys':w.gender==='girls'?'Girls':'Both'}</span>
+                      </>}
+                    </div>
+                    <div className="text-xs text-slate-400 truncate mt-0.5">{w.phone||w.email||'—'}</div>
+                  </div>
+                  <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="btn-primary btn-sm flex-shrink-0">+ Add</button>
+                </div>
+              )
+            })}
+            {filteredNotOnRoster.length===0 && <div className="px-5 py-8 text-center text-slate-400 text-sm">No staff match these filters.</div>}
+          </div>
+
+          <table className="hidden sm:table w-full text-sm">
             <tbody className="divide-y divide-slate-100">
               {filteredNotOnRoster.map(w=>{
                 const wRoles=parseRoles(w)
