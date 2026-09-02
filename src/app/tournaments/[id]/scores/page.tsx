@@ -50,6 +50,15 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
   const [selGroup, setSelGroup]     = useState('__all__')
   const [expandedComplexes, setExpandedComplexes] = useState<Record<string, boolean>>({})
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  // Phones get a card per game instead of the 12-column grid. Rendered conditionally
+  // (not just CSS-hidden) so each score input registers exactly one ref for Enter/Tab hopping.
+  const [isPhone, setIsPhone] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const sync = () => setIsPhone(mq.matches)
+    sync(); mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
 
   useEffect(() => {
     fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(t => {
@@ -169,17 +178,17 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
       <TournamentNav id={params.id} name={tName} logoUrl={tLogo} />
 
       {/* Page header */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-3 sm:py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-xl font-bold text-slate-900">Post scores</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
               <span className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2.5 py-0.5 font-medium">
                 <ClipboardCheck size={12} /> Tournament director &amp; schedule manager
               </span>
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-right flex-shrink-0">
             <p className="text-2xl font-bold text-slate-900">{totalScored}<span className="text-slate-400 font-normal text-lg">/{totalGames}</span></p>
             <p className="text-xs text-slate-400">games scored</p>
           </div>
@@ -187,8 +196,8 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Top toolbar */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4 flex-wrap">
-        <div className="relative w-full sm:w-auto flex-1 sm:flex-none sm:min-w-[220px]">
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <div className="relative w-full sm:w-auto sm:min-w-[220px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
 <Search className="h-4 w-4" />
           </span>
@@ -198,14 +207,32 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"><X size={14} /></button>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
           <select value={groupBy} onChange={e => { setGroupBy(e.target.value as GroupBy); setSelGroup('__all__') }}
-            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none font-medium">
+            className="min-w-0 text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none font-medium">
             <option value="division">Show by division</option>
             <option value="field">Show by complex / field</option>
           </select>
+          {/* Phones have no sidebar — pick the division / field here */}
+          <select value={selGroup} onChange={e => setSelGroup(e.target.value)}
+            className="sm:hidden min-w-0 text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none font-medium">
+            <option value="__all__">All {groupBy === 'division' ? 'divisions' : 'fields'} ({totalScored}/{totalGames})</option>
+            {groupBy === 'division'
+              ? divisions.map(div => <option key={div} value={div}>{div} ({scoredIn(div)}/{totalIn(div)})</option>)
+              : [...complexMap.entries()].map(([complex, fields]) => (
+                  <optgroup key={complex} label={complex}>
+                    <option value={`__complex__${complex}`}>All fields ({complexScored(complex)}/{complexTotal(complex)})</option>
+                    {[...fields].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(field => {
+                      const loc = `${complex} - ${field}`
+                      const fs = games.filter(g => !g.isCanceled && g.location === loc && g.score1 != null).length
+                      const ft = games.filter(g => !g.isCanceled && g.location === loc).length
+                      return <option key={field} value={loc}>Field {field} ({fs}/{ft})</option>
+                    })}
+                  </optgroup>
+                ))}
+          </select>
         </div>
-        <p className="text-xs text-slate-400">All changes will be saved automatically</p>
+        <p className="hidden sm:block text-xs text-slate-400 sm:ml-auto">All changes will be saved automatically</p>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -277,10 +304,10 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
         </div>
 
         {/* ── MAIN PANEL ── */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5">
+        <div className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-3 sm:py-5">
           {/* Panel header */}
-          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <div className="min-w-0">
               <h2 className="text-lg font-bold text-slate-800">
                 {selGroup === '__all__' ? `All ${groupBy === 'division' ? 'divisions' : 'fields'}` :
                  selGroup.startsWith('__complex__') ? selGroup.replace('__complex__', '') + ' — All fields' :
@@ -288,14 +315,14 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
               </h2>
               {selGroup.startsWith('__complex__') && <p className="text-xs text-slate-400">{selGroup.replace('__complex__','')}</p>}
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="grid grid-cols-2 sm:flex gap-2">
               <select value={sortBy} onChange={e => setSortBy(e.target.value as SortBy)}
-                className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none">
+                className="min-w-0 text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none">
                 <option value="time">Sort by date/time</option>
                 <option value="game">Sort by game #</option>
               </select>
               <select value={showFilter} onChange={e => setShowFilter(e.target.value as ShowFilter)}
-                className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none">
+                className="min-w-0 text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none">
                 <option value="all">Show all games</option>
                 <option value="scored">Show final games</option>
                 <option value="unscored">Show not final games</option>
@@ -312,11 +339,61 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
               {[...panelGrouped.entries()].map(([grpName, grpGames]) => (
                 <div key={grpName} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                   {selGroup === '__all__' && (
-                    <div className="px-5 py-2.5 bg-slate-800 flex items-center justify-between">
+                    <div className="px-3 sm:px-5 py-2.5 bg-slate-800 flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-white">{grpName}</p>
                       <p className="text-xs text-slate-400">{grpGames.filter(g => g.score1 != null).length}/{grpGames.length} scored</p>
                     </div>
                   )}
+                  {isPhone ? (
+                  /* ── Phone: a card per game, scores stacked under each team ── */
+                  <div>
+                  {grpGames.map(game => {
+                    const draft = drafts[game.id] || { s1: '', s2: '', note: '', dirty: false }
+                    const isScored = game.score1 != null && game.score2 != null
+                    const t1wins = isScored && game.score1! > game.score2!
+                    const t2wins = isScored && game.score2! > game.score1!
+                    const scoreCls = (wins: boolean) => `w-16 text-center text-lg font-bold border rounded-lg px-1 py-1.5 focus:outline-none focus:ring-2 focus:ring-teal-400 ${wins ? 'border-emerald-300 bg-emerald-50' : 'border-slate-300'}`
+                    return (
+                      <div key={game.id} className={`px-3 py-3 border-b border-slate-100 last:border-0 ${draft.dirty ? 'bg-amber-50/40' : ''}`}>
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                          <span className={`font-semibold ${game.isChampionship ? 'text-amber-600' : 'text-slate-600'}`}>{gameLabel(game)}</span>
+                          <span className="whitespace-nowrap">{fmtDate(game.date)}, {fmt12(game.startTime)}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate mb-2">{game.location}</div>
+                        <div className="flex items-center gap-3">
+                          <span className={`flex-1 min-w-0 truncate text-sm ${t1wins ? 'font-bold text-slate-900' : 'text-slate-700'}`}>{game.team1}</span>
+                          <input ref={el => { inputRefs.current[`${game.id}-s1`] = el }}
+                            type="number" inputMode="numeric" min="0" max="99" className={scoreCls(t1wins)}
+                            value={draft.s1} placeholder="–"
+                            onChange={e => setDraft(game.id, 's1', e.target.value)}
+                            onKeyDown={e => handleKey(e, game.id, 's1')}
+                            onBlur={() => saveGame(game.id)} />
+                        </div>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <span className={`flex-1 min-w-0 truncate text-sm ${t2wins ? 'font-bold text-slate-900' : 'text-slate-700'}`}>{game.team2}</span>
+                          <input ref={el => { inputRefs.current[`${game.id}-s2`] = el }}
+                            type="number" inputMode="numeric" min="0" max="99" className={scoreCls(t2wins)}
+                            value={draft.s2} placeholder="–"
+                            onChange={e => setDraft(game.id, 's2', e.target.value)}
+                            onKeyDown={e => handleKey(e, game.id, 's2')}
+                            onBlur={() => saveGame(game.id)} />
+                        </div>
+                        <div className="flex items-center gap-3 mt-2">
+                          <input className="flex-1 min-w-0 text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-300 text-slate-600"
+                            value={draft.note} placeholder="Note…"
+                            onChange={e => setDraft(game.id, 'note', e.target.value)} />
+                          <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 flex-shrink-0 pr-1">
+                            {saving[game.id]
+                              ? <span className="text-teal-400 w-4 text-center">…</span>
+                              : <input type="checkbox" checked={isScored && !draft.dirty} onChange={e => toggleFinal(game.id, e.target.checked)} className="w-4 h-4 accent-teal-600" />}
+                            Final
+                          </label>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  </div>
+                  ) : (
                   <div className="overflow-x-auto">
                   {/* Column headers */}
                   <div className="grid grid-cols-12 gap-2 px-5 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wide min-w-[600px]">
@@ -384,7 +461,8 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                       </div>
                     )
                   })}
-                  </div>{/* end overflow-x-auto */}
+                  </div>
+                  )}
                 </div>
               ))}
             </div>
