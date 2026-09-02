@@ -264,8 +264,8 @@ export default function TournamentsDashboard() {
           <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="section-title">Tournaments</h1>{!isAdmin && orgName && <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{orgName}</span>}</div>
           <p className="text-sm text-slate-500 mt-1">Manage staff scheduling for each tournament</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/org/site" className="border px-4 py-2 rounded-lg text-sm font-medium bg-white text-slate-700 border-slate-300 hover:bg-slate-50 transition-colors">🌐 Website</Link>
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+          <Link href="/dashboard/org/site" className="border px-4 py-2 rounded-lg text-sm font-medium bg-white text-slate-700 border-slate-300 hover:bg-slate-50 transition-colors text-center whitespace-nowrap">🌐 Website</Link>
           {isAdmin && orgs.length > 0 && (
             <select value={viewOrgId} onChange={async e => {
                 const newOrgId = e.target.value
@@ -276,7 +276,7 @@ export default function TournamentsDashboard() {
                   body: JSON.stringify({ orgId: newOrgId || null }),
                 })
                 window.dispatchEvent(new CustomEvent('preview-org-changed'))
-              }} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              }} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-0 w-full sm:w-auto">
               <option value="">All Orgs</option>
               {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
@@ -285,13 +285,13 @@ export default function TournamentsDashboard() {
             <div className="relative">
               <button
                 onClick={() => setShowAdminPanel(v => !v)}
-                className={`border px-4 py-2 rounded-lg text-sm font-medium transition-colors ${showAdminPanel ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>
+                className={`w-full sm:w-auto border px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${showAdminPanel ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>
                 ⚙ Admin
               </button>
               {showAdminPanel && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowAdminPanel(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+                  <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
                     <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Admin Tools</p>
                     </div>
@@ -310,7 +310,7 @@ export default function TournamentsDashboard() {
               )}
             </div>
           )}
-          <button className="btn-primary" onClick={() => setShowForm(!showForm)}>+ New Tournament</button>
+          <button className="btn-primary whitespace-nowrap" onClick={() => setShowForm(!showForm)}>+ New Tournament</button>
         </div>
       </div>
 
@@ -514,13 +514,13 @@ export default function TournamentsDashboard() {
           {tournaments.map(t => {
             const dates: string[] = JSON.parse(t.dates)
             return (
-              <div key={t.id} className="card-hover p-5 relative">
+              <div key={t.id} className="card-hover p-4 sm:p-5 relative">
                 {/* Top controls */}
-                <div className="flex justify-between items-center mb-3">
+                <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
                   <div className="flex items-center gap-2">
                     {t.sport && <span className="badge bg-emerald-100 text-emerald-700">{t.sport}</span>}
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button onClick={e=>{e.preventDefault();openEdit(t)}} className="text-xs text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-300 px-2 py-0.5 rounded-md transition-colors">Edit</button>
                     <button onClick={e=>{e.preventDefault();setCopySourceId(t.id);setCopyName(t.name+' (Copy)');setCopyStart('');setCopyEnd('')}} className="text-xs text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-300 px-2 py-0.5 rounded-md transition-colors">Copy</button>
                     {orgs.length > 0 && (
@@ -542,7 +542,7 @@ export default function TournamentsDashboard() {
                   {/* Logo centered at top */}
                   {t.logoUrl && (
                     <div className="flex justify-center mb-3">
-                      <img src={t.logoUrl} alt="logo" className="h-24 w-24 object-contain rounded-xl" />
+                      <img src={t.logoUrl} alt="logo" className="h-20 w-20 sm:h-24 sm:w-24 object-contain rounded-xl" />
                     </div>
                   )}
                   <div className="min-w-0">
@@ -565,13 +565,13 @@ export default function TournamentsDashboard() {
                     </div>
                   </div>
                 </Link>
-                <div className="flex gap-2 flex-wrap">
-                  <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm">Schedule</Link>
-                  <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm">Staff</Link>
-                  <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm text-purple-600 border-purple-200 hover:bg-purple-50">📋 Registrations</Link>
-                  <Link href={`/tournaments/${t.id}/player-registrations`} className="btn-secondary btn-sm text-teal-600 border-teal-200 hover:bg-teal-50">🏃 Players</Link>
-                  <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm">Pay Report</Link>
-                  <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm text-blue-600 border-blue-200 hover:bg-blue-50">🏗 Builder</Link>
+                <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
+                  <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm justify-center whitespace-nowrap">Schedule</Link>
+                  <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>
+                  <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-purple-600 border-purple-200 hover:bg-purple-50"><span className="hidden sm:inline">📋 </span>Registrations</Link>
+                  <Link href={`/tournaments/${t.id}/player-registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-teal-600 border-teal-200 hover:bg-teal-50"><span className="hidden sm:inline">🏃 </span>Players</Link>
+                  <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Pay Report</Link>
+                  <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-blue-600 border-blue-200 hover:bg-blue-50"><span className="hidden sm:inline">🏗 </span>Builder</Link>
                 </div>
               </div>
             )
