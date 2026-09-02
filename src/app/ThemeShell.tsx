@@ -19,7 +19,8 @@ export function isStaffThemeRoute(pathname: string) {
 export default function ThemeShell() {
   const pathname = usePathname() || ''
   const isStaff = isStaffThemeRoute(pathname)
-  // /admin has no <NavBar> (SuperAdminBar instead), so keep the floating button there on phones too.
+  // /admin has no <NavBar> (SuperAdminBar instead), so keep the floating button there at every width.
+  // Elsewhere the button only shows at xl+, where NavBar has no compact menu (its Appearance switch covers smaller screens).
   const fabOnPhones = pathname.startsWith('/admin')
   const [dark, setDark] = useState(false)
 
@@ -46,7 +47,7 @@ export default function ThemeShell() {
   if (!isStaff) return null
   return (
     <button onClick={toggle} aria-label="Toggle light or dark mode" title="Toggle light / dark"
-      className={`fixed bottom-3 left-3 sm:bottom-4 sm:left-4 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gray-800/80 sm:bg-gray-800 text-white border border-gray-600 shadow-lg items-center justify-center text-base sm:text-lg hover:bg-gray-700 transition-colors ${fabOnPhones ? 'flex' : 'hidden sm:flex'}`}>
+      className={`fixed bottom-3 left-3 sm:bottom-4 sm:left-4 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gray-800/80 sm:bg-gray-800 text-white border border-gray-600 shadow-lg items-center justify-center text-base sm:text-lg hover:bg-gray-700 transition-colors ${fabOnPhones ? 'flex' : 'hidden xl:flex'}`}>
       {dark ? '☀️' : '🌙'}
     </button>
   )

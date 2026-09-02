@@ -108,12 +108,12 @@ export default function NavBar() {
         </div>
       )}
 
-      <nav className="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3 shadow-sm">
+      <nav className="bg-white border-b border-slate-200 px-3 xl:px-4 py-2 xl:py-2.5 flex items-center gap-2 xl:gap-3 shadow-sm">
 
         {/* ── LEFT: Brand ── */}
         {hasOrg ? (
           /* Org user: org logo + name on the left */
-          <a href="/" className="flex items-center gap-2.5 min-w-0 sm:flex-shrink-0 group">
+          <a href="/" className="flex items-center gap-2.5 min-w-0 xl:flex-shrink-0 group">
             {org.logoUrl ? (
               <img
                 src={org.logoUrl}
@@ -137,16 +137,16 @@ export default function NavBar() {
           </a>
         )}
 
-        <div className="hidden sm:block h-5 w-px bg-slate-200 flex-shrink-0"/>
+        <div className="hidden xl:block h-5 w-px bg-slate-200 flex-shrink-0"/>
 
         {/* Nav links */}
-        <a href="/" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Tournaments</a>
+        <a href="/" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Tournaments</a>
 
         {/* Tournament quick-links */}
         {tournaments.length > 0 && (
           <>
-            <div className="hidden sm:block h-5 w-px bg-slate-200 flex-shrink-0"/>
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="hidden xl:block h-5 w-px bg-slate-200 flex-shrink-0"/>
+            <div className="hidden xl:flex items-center gap-3 flex-shrink-0">
               {tournaments.slice(0, 4).map(t => (
                 <Link
                   key={t.id}
@@ -172,25 +172,25 @@ export default function NavBar() {
         )}
 
         {(role === 'admin' || role === 'director' || role === 'assigner' || role === 'scheduler') && (
-          <a href="/staff" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Staff</a>
+          <a href="/staff" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Staff</a>
         )}
 
         {/* Admin-only links */}
         {isAdmin && (
           <>
-            <Link href="/admin" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Dashboard</Link>
-            <Link href="/admin/users" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Users</Link>
-            <Link href="/admin/permissions" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Perms</Link>
-            <Link href="/admin/roadmap" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Roadmap</Link>
+            <Link href="/admin" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Dashboard</Link>
+            <Link href="/admin/users" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Users</Link>
+            <Link href="/admin/permissions" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Perms</Link>
+            <Link href="/admin/roadmap" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Roadmap</Link>
           </>
         )}
 
         {/* ── RIGHT: Whistle Ready badge (org users only) + auth ── */}
-        <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        <div className="ml-auto flex items-center gap-2 xl:gap-3 flex-shrink-0">
 
           {/* Whistle Ready platform badge — shown to org users */}
           {hasOrg && (
-            <div className="hidden sm:flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50">
+            <div className="hidden xl:flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50">
               <div className="w-4 h-4 bg-sky-600 rounded flex items-center justify-center flex-shrink-0">
                 <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="2.5" strokeLinecap="round"/>
@@ -204,7 +204,7 @@ export default function NavBar() {
             <>
               {/* View As dropdown — admin only */}
               {isAdmin && (
-                <div className="hidden sm:flex items-center gap-1.5">
+                <div className="hidden xl:flex items-center gap-1.5">
                   <span className="text-xs text-slate-400">View as:</span>
                   <select
                     value={isPreview ? role : ''}
@@ -219,7 +219,7 @@ export default function NavBar() {
                 </div>
               )}
 
-              <span className={`hidden sm:inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>
+              <span className={`hidden xl:inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>
                 {ROLE_LABELS[role] ?? role}
               </span>
 
@@ -231,18 +231,18 @@ export default function NavBar() {
                     {(session.user?.name || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)}
                   </div>
                 )}
-                <span className="text-sm text-slate-600 hidden sm:block">{session.user?.name}</span>
+                <span className="text-sm text-slate-600 hidden xl:block">{session.user?.name}</span>
               </Link>
 
               <button onClick={() => signOut({ callbackUrl: '/login' })}
-                className="hidden sm:inline-block text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-300 px-3 py-1 rounded-lg transition-colors">
+                className="hidden xl:inline-block text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-300 px-3 py-1 rounded-lg transition-colors">
                 Sign out
               </button>
 
-              {/* Phone: hamburger replaces the links, role badge, View-as and Sign out */}
+              {/* Below 1280px (phones AND tablets — the full admin bar needs ~1,250px): hamburger replaces the links, role badge, View-as and Sign out */}
               <button type="button" onClick={() => setMenuOpen(o => !o)}
                 aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}
-                className="sm:hidden w-9 h-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center">
+                className="xl:hidden w-9 h-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center">
                 {menuOpen ? <X size={18} /> : <Menu size={18} />}
               </button>
             </>
@@ -255,9 +255,9 @@ export default function NavBar() {
         </div>
       </nav>
 
-      {/* Phone menu — everything the desktop bar shows, stacked under the bar */}
+      {/* Compact menu — everything the desktop bar shows, stacked under the bar */}
       {menuOpen && session && (
-        <div className="sm:hidden">
+        <div className="xl:hidden">
           <div className="absolute inset-x-0 top-full h-screen bg-black/30" onClick={() => setMenuOpen(false)} />
           <div className="absolute inset-x-0 top-full bg-white border-b border-slate-200 shadow-lg max-h-[80vh] overflow-y-auto">
             <div className="px-3 divide-y divide-slate-100">
