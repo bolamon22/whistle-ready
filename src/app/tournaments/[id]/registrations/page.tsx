@@ -167,67 +167,88 @@ function CardPaymentForm({ base, registrationId, tournamentId, date, notes, onSu
   )
 
 }
-interface PayPalFormProps { amount: number; registrationId: string; onSuccess: () => void; onCancel: () => void }
-function PayPalForm({ amount, registrationId, onSuccess, onCancel }: PayPalFormProps) {
+interface PayPalFormProps { amount: number; registrationId: string; clubName?: string; tournamentName?: string; onSuccess: () => void; onCancel: () => void }
+// In-person PayPal / Venmo at the registration table. Uses the SAME routes as the public
+// pay page (/api/paypal/*): the org's configured PayPal account, a 3% pass-through fee,
+// and the capture route records the payment (idempotent on the capture id) and sends the
+// payment notification — so nothing taken here can go unrecorded.
+function PayPalForm({ amount, registrationId, clubName, tournamentName, onSuccess, onCancel }: PayPalFormProps) {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [status, setStatus] = React.useState<'loading' | 'ready' | 'processing' | 'error'>('loading')
   const [errMsg, setErrMsg] = React.useState('')
+  const base = Math.round((amount || 0) * 100) / 100
+  const total = Math.round(base * 1.03 * 100) / 100
+  const fee = Math.round((total - base) * 100) / 100
 
   React.useEffect(() => {
-    if (!amount || amount <= 0) return
+    if (!base || base <= 0) return
     let cancelled = false
     ;(async () => {
       try {
-        const cfg = await fetch('/api/payments/paypal/config').then(r => r.json())
-        if (!cfg.connected) { setErrMsg('PayPal not connected. Go to Admin → Payment Providers.'); setStatus('error'); return }
-        const sdkUrl = `https://www.${cfg.sandbox ? 'sandbox.' : ''}paypal.com/sdk/js?client-id=${cfg.clientId}&currency=USD&intent=capture`
+        const cfg = await fetch('/api/paypal/config').then(r => r.ok ? r.json() : { configured: false }).catch(() => ({ configured: false }))
+        if (!cfg?.configured || !cfg.clientId) { setErrMsg('PayPal isn’t connected for this organization yet.'); setStatus('error'); return }
+        const sdkUrl = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(cfg.clientId) +
+          '&currency=USD&intent=capture&enable-funding=venmo&disable-funding=card,paylater,credit'
         await new Promise<void>((resolve, reject) => {
-          const existing = document.querySelector(`script[src="${sdkUrl}"]`)
-          if (existing) { resolve(); return }
-          const s = document.createElement('script'); s.src = sdkUrl; s.onload = () => resolve(); s.onerror = reject
-          document.body.appendChild(s)
+          const existing = document.getElementById('paypal-sdk-js') as HTMLScriptElement | null
+          if (existing) {
+            if ((window as any).paypal?.Buttons) { resolve(); return }
+            existing.addEventListener('load', () => resolve()); existing.addEventListener('error', () => reject(new Error('PayPal failed to load')))
+            return
+          }
+          const sc = document.createElement('script'); sc.id = 'paypal-sdk-js'; sc.src = sdkUrl
+          sc.onload = () => resolve(); sc.onerror = () => reject(new Error('PayPal failed to load'))
+          document.body.appendChild(sc)
         })
-        if (cancelled || !(window as any).paypal) return
-        if (!containerRef.current) return
+        if (cancelled || !(window as any).paypal?.Buttons || !containerRef.current) return
         containerRef.current.innerHTML = ''
         ;(window as any).paypal.Buttons({
+          style: { layout: 'vertical', height: 44, label: 'pay' },
           createOrder: async () => {
-            setStatus('processing')
-            const res = await fetch('/api/payments/paypal/create-order', {
+            setErrMsg('')
+            const res = await fetch('/api/paypal/create-order', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ amount, registrationId, description: 'Tournament Registration' }),
+              body: JSON.stringify({ amount: total, baseAmount: base, tournamentName: tournamentName || '', clubName: clubName || '', registrationId }),
             })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || 'Failed to create PayPal order')
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data.orderId) throw new Error(data.error || 'Could not start the PayPal payment')
             return data.orderId
           },
-          onApprove: async (_data: any) => {
-            const res = await fetch('/api/payments/paypal/capture-order', {
+          onApprove: async (data: any, actions: any) => {
+            setStatus('processing')
+            const res = await fetch('/api/paypal/capture-order', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ orderId: _data.orderID, registrationId, amount }),
+              body: JSON.stringify({ orderId: data.orderID }),
             })
-            const result = await res.json()
-            if (!res.ok) throw new Error(result.error || 'Capture failed')
+            const out = await res.json().catch(() => ({}))
+            if (out.issue === 'INSTRUMENT_DECLINED' && actions?.restart) {
+              setStatus('ready'); setErrMsg('That funding source was declined — pick a different one inside PayPal.')
+              return actions.restart()
+            }
+            if (!res.ok || !out.ok) { setStatus('ready'); setErrMsg(out.error || 'The PayPal payment could not be completed.'); return }
+            toast.success(`${out.method === 'venmo' ? 'Venmo' : 'PayPal'} payment recorded`)
             onSuccess()
           },
           onError: (err: any) => { setErrMsg(err?.message || 'PayPal error'); setStatus('error') },
           onCancel: () => setStatus('ready'),
-          style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'pay' },
         }).render(containerRef.current)
         if (!cancelled) setStatus('ready')
-      } catch (e: any) { if (!cancelled) { setErrMsg(e.message || 'Failed to load PayPal'); setStatus('error') } }
+      } catch (e: any) { if (!cancelled) { setErrMsg(e?.message || 'Failed to load PayPal'); setStatus('error') } }
     })()
     return () => { cancelled = true }
-  }, [amount, registrationId])
+  }, [base, total, registrationId, clubName, tournamentName])
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
-        Pay securely via PayPal. Amount: <strong>${amount.toFixed(2)}</strong>
-      </p>
+      <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-sm space-y-1">
+        <div className="flex justify-between text-slate-600"><span>Registration amount</span><span>${base.toFixed(2)}</span></div>
+        <div className="flex justify-between text-slate-500"><span>PayPal / Venmo fee (3%)</span><span>+${fee.toFixed(2)}</span></div>
+        <div className="flex justify-between font-bold text-slate-900 border-t border-teal-200 pt-1"><span>Total charged</span><span>${total.toFixed(2)}</span></div>
+      </div>
+      <p className="text-xs text-slate-500">Hand the device to the payer — they sign in to their own PayPal or Venmo. The payment is recorded here automatically once it completes.</p>
       {status === 'loading' && <div className="text-center py-4 text-sm text-slate-400">Loading PayPal…</div>}
-      {status === 'error' && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errMsg}</div>}
-      {status === 'processing' && <div className="text-center py-4 text-sm text-slate-400">Processing…</div>}
+      {errMsg && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errMsg}</div>}
+      {status === 'processing' && <div className="text-center py-4 text-sm text-slate-400">Completing payment…</div>}
       <div ref={containerRef} className={status === 'loading' || status === 'error' ? 'hidden' : ''} />
       <button type="button" onClick={onCancel} className="w-full border border-slate-300 rounded-xl py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
     </div>
@@ -1178,6 +1199,8 @@ export default function RegistrationsPage() {
                 <PayPalForm
                   amount={parseFloat(payAmount) || 0}
                   registrationId={payingRegId!}
+                  clubName={registrations.find(r => r.id === payingRegId)?.clubName || ''}
+                  tournamentName={tournamentName}
                   onSuccess={() => { setPayingRegId(null); setPayAmount(''); load() }}
                   onCancel={() => setPayingRegId(null)}
                 />
