@@ -54,7 +54,7 @@ export default async function EventChrome({ tournamentId, children }: { tourname
   const actions = [
     Number(t.teamRegEnabled) ? { href: `${base}/register`, label: 'Register', icon: <ClipboardList size={15} />, primary: true } : null,
     { href: `${base}/player-waiver`, label: 'Player Waiver', icon: <ScrollText size={15} /> },
-    { href: `${base}/today`, label: 'Game Day', icon: <Zap size={15} /> },
+    { href: `${base}/today`, label: 'Live', icon: <Zap size={15} /> },
   ].filter(Boolean) as any[]
 
   return (

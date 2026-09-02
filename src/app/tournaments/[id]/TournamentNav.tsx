@@ -76,7 +76,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/roster`,               label: 'Staff roster' },
       { href: `${base}/travel`,               label: 'Travel & hotels' },
     ]},
-    { label: 'Game Day', items: [
+    { label: 'Live', items: [
       { href: `${base}/scores`,         label: 'Post scores' },
       { href: `${base}/assignments`,    label: 'Assignments' },
       { href: `${base}/communications`, label: 'Communications' },

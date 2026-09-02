@@ -159,7 +159,7 @@ export default function DashboardPage() {
         {/* ── Game Day console ──────────────────────────────────────────── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Game Day</h2>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Live</h2>
             {isLive && <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Live now</span>}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
