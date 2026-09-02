@@ -3,10 +3,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
-import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail } from 'lucide-react'
+import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil } from 'lucide-react'
 
-type Sub = { id: string; submittedAt: string; data: any }
+type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[] }
 
 // Friendly labels for the detail view (anything not listed falls back to a de-camelCased key).
 const LABELS: Record<string, string> = {
@@ -31,6 +32,55 @@ function detailEntries(d: any): [string, any][] {
   const keys = Object.keys(d || {}).filter(k => !HIDDEN_KEYS.includes(k))
   keys.sort((a, b) => { const ia = DETAIL_ORDER.indexOf(a), ib = DETAIL_ORDER.indexOf(b); return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) })
   return keys.map(k => [k, k === 'teamName' ? teamLabel(d[k]) : d[k]])
+}
+
+// Staff edit — the fields a parent filled in (never the signature / agreement).
+const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+const EDIT_FIELDS: { key: string; label: string; type?: string; options?: string[]; team?: boolean }[] = [
+  { key: 'playerName', label: 'Player' }, { key: 'playerEmail', label: 'Player email', type: 'email' },
+  { key: 'usLacrosse', label: 'US Lacrosse #' }, { key: 'dob', label: 'Date of birth', type: 'date' },
+  { key: 'gender', label: 'Gender', options: ['', 'Female', 'Male'] }, { key: 'grade', label: 'Grade', options: ['', ...GRADES] },
+  { key: 'teamName', label: 'Team', team: true }, { key: 'jerseyNumber', label: 'Jersey #' },
+  { key: 'parentName', label: 'Parent' }, { key: 'parentEmail', label: 'Parent email', type: 'email' }, { key: 'parentPhone', label: 'Parent phone', type: 'tel' },
+  { key: 'parent2Name', label: 'Parent 2' }, { key: 'parent2Email', label: 'Parent 2 email', type: 'email' }, { key: 'parent2Phone', label: 'Parent 2 phone', type: 'tel' },
+  { key: 'emergencyName', label: 'Emergency contact' }, { key: 'emergencyPhone', label: 'Emergency phone', type: 'tel' },
+  { key: 'hotel', label: 'Hotel / rental' }, { key: 'hotelName', label: 'Where staying' },
+]
+
+function WaiverEditForm({ form, setForm, teamOptions, onSave, onCancel, saving }: {
+  form: Record<string, string>; setForm: (f: Record<string, string>) => void; teamOptions: string[]
+  onSave: () => void; onCancel: () => void; saving: boolean
+}) {
+  const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400'
+  return (
+    <form onSubmit={e => { e.preventDefault(); onSave() }} className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {EDIT_FIELDS.map(f => {
+          const v = form[f.key] || ''
+          const options = f.options ? (f.options.includes(v) ? f.options : [...f.options, v]) : null
+          return (
+            <div key={f.key} className={f.team ? 'sm:col-span-2' : ''}>
+              <label className="block text-xs font-medium text-slate-500 mb-1">{f.label}</label>
+              {options ? (
+                <select className={inp} value={v} onChange={e => setForm({ ...form, [f.key]: e.target.value })}>
+                  {options.map(o => <option key={o} value={o}>{o || '—'}</option>)}
+                </select>
+              ) : (
+                <input className={inp} type={f.type || 'text'} value={v} list={f.team ? 'wr-team-options' : undefined}
+                  placeholder={f.team ? 'Pick a registered club or type a team name' : undefined}
+                  onChange={e => setForm({ ...form, [f.key]: e.target.value })} />
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <datalist id="wr-team-options">{teamOptions.map(t => <option key={t} value={t} />)}</datalist>
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50">Cancel</button>
+        <button type="submit" disabled={saving} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg px-4 py-2">{saving ? 'Saving…' : 'Save changes'}</button>
+      </div>
+    </form>
+  )
 }
 
 // Full waiver detail — every field, with tap-to-call / tap-to-email on phones and emails.
@@ -63,11 +113,47 @@ export default function PlayerWaiverEntries() {
   const [team, setTeam] = useState('')
   const [sort, setSort] = useState<'newest' | 'name' | 'jersey'>('newest')
   const [limit, setLimit] = useState(PAGE)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [form, setForm] = useState<Record<string, string>>({})
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [teamOptions, setTeamOptions] = useState<string[]>([])
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setName(d.name || 'Tournament'); setLogo(d.logoUrl || undefined) } }).catch(() => {})
     fetch(`/api/tournaments/${id}/player-waivers`).then(r => r.ok ? r.json() : { submissions: [] }).then(d => setSubs(Array.isArray(d.submissions) ? d.submissions : [])).catch(() => {}).finally(() => setLoading(false))
+    // Registered clubs / teams for this tournament → suggestions when staff assign a team
+    fetch(`/api/registrations?tournamentId=${id}`).then(r => r.ok ? r.json() : []).then((regs: any[]) => {
+      const names = new Set<string>()
+      ;(Array.isArray(regs) ? regs : []).forEach(reg => {
+        if (reg?.clubName) names.add(String(reg.clubName).trim())
+        ;(reg?.teams || []).forEach((t: any) => { if (t?.teamName) names.add(String(t.teamName).trim()) })
+      })
+      setTeamOptions([...names].filter(Boolean).sort((a, b) => a.localeCompare(b)))
+    }).catch(() => {})
   }, [id])
+
+  function startEdit(s: Sub) {
+    const d = s.data || {}
+    const f: Record<string, string> = {}
+    EDIT_FIELDS.forEach(x => { const v = d[x.key]; f[x.key] = v === '__other' ? '' : String(v ?? '') })
+    setForm(f); setEditing(s.id); setOpen(s.id)
+  }
+  async function saveEdit() {
+    if (!editing) return
+    const s = subs.find(x => x.id === editing)
+    if (!s) return
+    const data: Record<string, string> = {}
+    EDIT_FIELDS.forEach(x => { const before = String(s.data?.[x.key] ?? ''); const after = (form[x.key] ?? '').trim(); if (after !== before) data[x.key] = after })
+    if (!Object.keys(data).length) { setEditing(null); return }
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/tournaments/${id}/player-waivers`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing, data }) })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(j.error || 'Could not save'); return }
+      setSubs(prev => prev.map(x => x.id === editing ? j.submission : x))
+      setEditing(null); toast.success('Saved')
+    } catch { toast.error('Could not save') } finally { setSavingEdit(false) }
+  }
 
   // Distinct teams with counts, for the roster picker
   const teams = useMemo(() => {
@@ -110,8 +196,21 @@ export default function PlayerWaiverEntries() {
 
   const filtering = !!(q.trim() || team)
 
+  const renderExpanded = (s: Sub) => editing === s.id ? (
+    <WaiverEditForm form={form} setForm={setForm} teamOptions={teamOptions} onSave={saveEdit} onCancel={() => setEditing(null)} saving={savingEdit} />
+  ) : (
+    <>
+      <Detail d={s.data} />
+      <div className="flex items-center justify-between gap-3 mt-3">
+        <div className="text-xs text-slate-400">Submitted {fmt(s.submittedAt)}{s.edits?.length ? ` · edited ${fmtShort(s.edits[s.edits.length - 1].at)}` : ''}</div>
+        <button onClick={() => startEdit(s)} className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 rounded-lg px-2.5 py-1.5 flex-shrink-0"><Pencil size={13} /> Edit</button>
+      </div>
+    </>
+  )
+
   return (
     <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
+      <Toaster />
       <div className="max-w-5xl mx-auto">
         <TournamentNav id={id} name={name} logoUrl={logo} />
 
@@ -193,7 +292,7 @@ export default function PlayerWaiverEntries() {
                           {d.parentEmail && <a href={`mailto:${d.parentEmail}`} className="inline-flex items-center gap-1 text-xs text-teal-700 border border-teal-200 rounded-lg px-2 py-1 min-w-0"><Mail size={12} /> <span className="truncate">Email</span></a>}
                         </div>
                       )}
-                      {isOpen && <div className="px-3 py-3 bg-slate-50 border-t border-slate-100"><Detail d={d} /><div className="text-xs text-slate-400 mt-2">Submitted {fmt(s.submittedAt)}</div></div>}
+                      {isOpen && <div className="px-3 py-3 bg-slate-50 border-t border-slate-100">{renderExpanded(s)}</div>}
                     </div>
                   )
                 })}
@@ -219,7 +318,7 @@ export default function PlayerWaiverEntries() {
                             <td className="px-4 py-2.5 text-slate-400"><ChevronRight size={15} className={open === s.id ? 'rotate-90 transition-transform' : 'transition-transform'} /></td>
                           </tr>
                           {open === s.id && (
-                            <tr><td colSpan={6} className="px-4 py-3 bg-slate-50"><Detail d={d} /></td></tr>
+                            <tr><td colSpan={6} className="px-4 py-3 bg-slate-50">{renderExpanded(s)}</td></tr>
                           )}
                         </React.Fragment>
                       )
