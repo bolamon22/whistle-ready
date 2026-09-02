@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
     const row = await prisma.appSetting.findUnique({ where: { key: key(orgId) } })
     const list: any[] = row ? (JSON.parse(row.value || '[]') || []) : []
     list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), formType, data, submittedAt: new Date().toISOString() })
-    if (list.length > 5000) list.splice(0, list.length - 5000)
+    // Safety valve only. The old 5,000 cap silently dropped the OLDEST submissions (i.e. signed
+    // waivers) once an org crossed it — with thousands of players per event that is real data loss.
+    // The proper fix is a submissions table; until then keep everything short of a runaway blob.
+    if (list.length > 50000) list.splice(0, list.length - 50000)
     const value = JSON.stringify(list)
     await prisma.appSetting.upsert({ where: { key: key(orgId) }, update: { value }, create: { key: key(orgId), value } })
 

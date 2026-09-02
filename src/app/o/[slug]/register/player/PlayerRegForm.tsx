@@ -13,7 +13,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [d, setD] = useState<any>({
-    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', jerseyNumber: '',
+    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', jerseyNumber: '',
     parentName: '', parentEmail: '', parentPhone: '',
     parent2Name: '', parent2Email: '', parent2Phone: '',
     emergencyName: '', emergencyPhone: '',
@@ -25,9 +25,12 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!d.agree || !d.signature.trim()) { toast.error('Please agree to the waiver and sign'); return }
+    if (d.teamName === '__other' && !String(d.teamOther || '').trim()) { toast.error('Please enter your team or club name'); return }
     setSubmitting(true)
     try {
-      const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data: { ...d, tournamentId: tournamentId || '', tournamentName: tournamentName || '' } }) })
+      // "Other / not listed" stores the typed name, not the sentinel, so staff rosters read properly.
+      const teamName = d.teamName === '__other' ? String(d.teamOther || '').trim() : d.teamName
+      const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data: { ...d, teamName, tournamentId: tournamentId || '', tournamentName: tournamentName || '' } }) })
       if (res.ok) setDone(true)
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Submission failed') }
     } catch { toast.error('Submission failed') } finally { setSubmitting(false) }
@@ -35,7 +38,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
   const receiptRows: [string, string][] = [
     ['Player name', d.playerName], ['Player email', d.playerEmail], ['US Lacrosse #', d.usLacrosse], ['Date of birth', d.dob],
-    ['Gender', d.gender], ['Grade', d.grade], ['Team', d.teamName], ['Jersey #', d.jerseyNumber],
+    ['Gender', d.gender], ['Grade', d.grade], ['Team', d.teamName === '__other' ? d.teamOther : d.teamName], ['Jersey #', d.jerseyNumber],
     ['Parent', d.parentName], ['Parent email', d.parentEmail], ['Parent phone', d.parentPhone],
     ['Parent 2', d.parent2Name], ['Parent 2 email', d.parent2Email], ['Parent 2 phone', d.parent2Phone],
     ['Emergency contact', d.emergencyName], ['Emergency phone', d.emergencyPhone],
@@ -85,6 +88,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           {fields.teamName && <div><label className={labelCls}>Team or club name *</label>{teams && teams.length > 0
             ? <select className={inputCls} value={d.teamName} onChange={e => set('teamName', e.target.value)} required><option value="">Select your team…</option>{teams.map(tm => <option key={tm} value={tm}>{tm}</option>)}<option value="__other">Other / not listed</option></select>
             : <input className={inputCls} value={d.teamName} onChange={e => set('teamName', e.target.value)} required />}</div>}
+          {fields.teamName && d.teamName === '__other' && <div><label className={labelCls}>Enter your team or club name *</label><input className={inputCls} value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required /></div>}
           <div><label className={labelCls}>Jersey number</label><input className={inputCls} value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value)} /></div>
         </div>
       </div>
