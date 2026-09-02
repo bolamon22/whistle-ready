@@ -56,6 +56,9 @@ export default function TournamentsDashboard() {
   const [orgName, setOrgName] = useState('')
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [listView, setListViewState] = useState<'upcoming' | 'past' | 'all'>('upcoming')
+  useEffect(() => { try { const v = localStorage.getItem('wr-tournaments-view'); if (v === 'past' || v === 'all' || v === 'upcoming') setListViewState(v) } catch {} }, [])
+  const setListView = (v: 'upcoming' | 'past' | 'all') => { setListViewState(v); try { localStorage.setItem('wr-tournaments-view', v) } catch {} }
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -255,6 +258,91 @@ export default function TournamentsDashboard() {
       load()
     } catch { toast.error('Failed to save') }
     finally { setEditSaving(false) }
+  }
+
+  // ── Ordering: what's next is what matters. Upcoming (incl. in-progress) soonest first;
+  //    past tournaments most recent first, tucked behind a filter. ──
+  const todayKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
+  const datesOf = (t: Tournament): string[] => { try { const a = JSON.parse(t.dates || '[]'); return Array.isArray(a) ? a.filter(Boolean).sort() : [] } catch { return [] } }
+  const startOf = (t: Tournament) => t.startDate || datesOf(t)[0] || ''
+  const endOf = (t: Tournament) => t.endDate || t.startDate || datesOf(t).slice(-1)[0] || ''
+  const isPast = (t: Tournament) => { const e = endOf(t); return !!e && e < todayKey }
+  const upcoming = tournaments.filter(t => !isPast(t)).sort((a, b) => (startOf(a) || '9999').localeCompare(startOf(b) || '9999'))
+  const past = tournaments.filter(isPast).sort((a, b) => endOf(b).localeCompare(endOf(a)))
+  const statusOf = (t: Tournament): { label: string; cls: string } | null => {
+    const s0 = startOf(t), e0 = endOf(t)
+    if (!s0) return null
+    if (s0 <= todayKey && todayKey <= e0) return { label: 'In progress', cls: 'bg-emerald-100 text-emerald-700' }
+    if (e0 < todayKey) return { label: 'Completed', cls: 'bg-slate-100 text-slate-500' }
+    const days = Math.round((new Date(s0 + 'T12:00:00').getTime() - new Date(todayKey + 'T12:00:00').getTime()) / 86400000)
+    return { label: days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days} days away`, cls: 'bg-sky-100 text-sky-700' }
+  }
+
+  const renderCard = (t: Tournament) => {
+            const dates: string[] = JSON.parse(t.dates)
+            return (
+              <div key={t.id} className="card-hover p-4 sm:p-5 relative">
+                {/* Top controls */}
+                <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {t.sport && <span className="badge bg-emerald-100 text-emerald-700">{t.sport}</span>}
+                    {(() => { const st = statusOf(t); return st ? <span className={`badge ${st.cls}`}>{st.label}</span> : null })()}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button onClick={e=>{e.preventDefault();openEdit(t)}} className="text-xs text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-300 px-2 py-0.5 rounded-md transition-colors">Edit</button>
+                    <button onClick={e=>{e.preventDefault();setCopySourceId(t.id);setCopyName(t.name+' (Copy)');setCopyStart('');setCopyEnd('')}} className="text-xs text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-300 px-2 py-0.5 rounded-md transition-colors">Copy</button>
+                    {orgs.length > 0 && (
+                      <select
+                        defaultValue=""
+                        onChange={e => { if (e.target.value) { moveToOrg(t.id, e.target.value); e.target.value = '' } }}
+                        onClick={e => e.preventDefault()}
+                        className="text-xs text-slate-400 border border-slate-200 px-2 py-0.5 rounded-md bg-white cursor-pointer hover:border-orange-300 hover:text-orange-600 transition-colors">
+                        <option value="" disabled>Move to…</option>
+                        {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
+                    )}
+                    <button onClick={()=>del(t.id,t.name)} className="text-slate-300 hover:text-red-400 transition-colors text-xl leading-none">×</button>
+                  </div>
+                </div>
+
+                {/* Clickable header */}
+                <Link href={`/tournaments/${t.id}/dashboard`} className="block mb-4">
+                  {/* Logo centered at top */}
+                  {t.logoUrl && (
+                    <div className="flex justify-center mb-3">
+                      <img src={t.logoUrl} alt="logo" className="h-20 w-20 sm:h-24 sm:w-24 object-contain rounded-xl" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-slate-900 text-lg truncate">{t.name}</h3>
+                    {(t.startDate || dates.length > 0) && (
+                      <p className="text-sm text-slate-500 mt-0.5">
+                        {t.startDate ? (t.endDate && t.endDate !== t.startDate ? `${fmtDate(t.startDate)} – ${fmtDate(t.endDate)}` : fmtDate(t.startDate)) : dates.map(d=>formatDate(d)).join(' & ')}
+                      </p>
+                    )}
+                    {t.location && <p className="text-xs text-slate-400 mt-0.5 truncate">📍 {t.location}</p>}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className="badge bg-sky-100 text-sky-700">{t._count.games} games</span>
+                      {t._count.teamRegistrations > 0 && <>
+                        <span className="badge bg-purple-100 text-purple-700">{t._count.teamRegistrations} clubs</span>
+                        <span className="badge bg-green-100 text-green-700">{t._count.registeredTeams} teams</span>
+                      </>}
+                      {t._count.playerRegistrations > 0 && (
+                        <span className="badge bg-teal-100 text-teal-700">{t._count.playerRegistrations} players</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+                <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
+                  <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm justify-center whitespace-nowrap">Schedule</Link>
+                  <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>
+                  <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-purple-600 border-purple-200 hover:bg-purple-50"><span className="hidden sm:inline">📋 </span>Registrations</Link>
+                  <Link href={`/tournaments/${t.id}/player-registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-teal-600 border-teal-200 hover:bg-teal-50"><span className="hidden sm:inline">🏃 </span>Players</Link>
+                  <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Pay Report</Link>
+                  <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-blue-600 border-blue-200 hover:bg-blue-50"><span className="hidden sm:inline">🏗 </span>Builder</Link>
+                </div>
+              </div>
+            )
   }
 
   return (
@@ -510,73 +598,34 @@ export default function TournamentsDashboard() {
           <p className="text-sm text-slate-400 mt-1">Create your first tournament to get started</p>
         </div>
        ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tournaments.map(t => {
-            const dates: string[] = JSON.parse(t.dates)
-            return (
-              <div key={t.id} className="card-hover p-4 sm:p-5 relative">
-                {/* Top controls */}
-                <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    {t.sport && <span className="badge bg-emerald-100 text-emerald-700">{t.sport}</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button onClick={e=>{e.preventDefault();openEdit(t)}} className="text-xs text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-300 px-2 py-0.5 rounded-md transition-colors">Edit</button>
-                    <button onClick={e=>{e.preventDefault();setCopySourceId(t.id);setCopyName(t.name+' (Copy)');setCopyStart('');setCopyEnd('')}} className="text-xs text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-300 px-2 py-0.5 rounded-md transition-colors">Copy</button>
-                    {orgs.length > 0 && (
-                      <select
-                        defaultValue=""
-                        onChange={e => { if (e.target.value) { moveToOrg(t.id, e.target.value); e.target.value = '' } }}
-                        onClick={e => e.preventDefault()}
-                        className="text-xs text-slate-400 border border-slate-200 px-2 py-0.5 rounded-md bg-white cursor-pointer hover:border-orange-300 hover:text-orange-600 transition-colors">
-                        <option value="" disabled>Move to…</option>
-                        {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                      </select>
-                    )}
-                    <button onClick={()=>del(t.id,t.name)} className="text-slate-300 hover:text-red-400 transition-colors text-xl leading-none">×</button>
-                  </div>
-                </div>
+        <>
+          {/* Upcoming / Past / All */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {([['upcoming', `Upcoming (${upcoming.length})`], ['past', `Past (${past.length})`], ['all', 'All']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => setListView(k)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${listView === k ? 'bg-teal-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
 
-                {/* Clickable header */}
-                <Link href={`/tournaments/${t.id}/dashboard`} className="block mb-4">
-                  {/* Logo centered at top */}
-                  {t.logoUrl && (
-                    <div className="flex justify-center mb-3">
-                      <img src={t.logoUrl} alt="logo" className="h-20 w-20 sm:h-24 sm:w-24 object-contain rounded-xl" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-slate-900 text-lg truncate">{t.name}</h3>
-                    {(t.startDate || dates.length > 0) && (
-                      <p className="text-sm text-slate-500 mt-0.5">
-                        {t.startDate ? (t.endDate && t.endDate !== t.startDate ? `${fmtDate(t.startDate)} – ${fmtDate(t.endDate)}` : fmtDate(t.startDate)) : dates.map(d=>formatDate(d)).join(' & ')}
-                      </p>
-                    )}
-                    {t.location && <p className="text-xs text-slate-400 mt-0.5 truncate">📍 {t.location}</p>}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="badge bg-sky-100 text-sky-700">{t._count.games} games</span>
-                      {t._count.teamRegistrations > 0 && <>
-                        <span className="badge bg-purple-100 text-purple-700">{t._count.teamRegistrations} clubs</span>
-                        <span className="badge bg-green-100 text-green-700">{t._count.registeredTeams} teams</span>
-                      </>}
-                      {t._count.playerRegistrations > 0 && (
-                        <span className="badge bg-teal-100 text-teal-700">{t._count.playerRegistrations} players</span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-                <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
-                  <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm justify-center whitespace-nowrap">Schedule</Link>
-                  <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>
-                  <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-purple-600 border-purple-200 hover:bg-purple-50"><span className="hidden sm:inline">📋 </span>Registrations</Link>
-                  <Link href={`/tournaments/${t.id}/player-registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-teal-600 border-teal-200 hover:bg-teal-50"><span className="hidden sm:inline">🏃 </span>Players</Link>
-                  <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Pay Report</Link>
-                  <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-blue-600 border-blue-200 hover:bg-blue-50"><span className="hidden sm:inline">🏗 </span>Builder</Link>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+          {(listView === 'upcoming' || listView === 'all') && (
+            <>
+              {listView === 'all' && <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Upcoming — next up first</h2>}
+              {upcoming.length === 0
+                ? <div className="card p-8 text-center text-slate-400 mb-6">No upcoming tournaments.{past.length > 0 && <button onClick={() => setListView('past')} className="ml-2 text-teal-600 hover:underline">See past tournaments</button>}</div>
+                : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">{upcoming.map(renderCard)}</div>}
+            </>
+          )}
+          {(listView === 'past' || listView === 'all') && (
+            <>
+              {listView === 'all' && past.length > 0 && <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Past — most recent first</h2>}
+              {past.length === 0
+                ? (listView === 'past' && <div className="card p-8 text-center text-slate-400">No past tournaments yet.</div>)
+                : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{past.map(renderCard)}</div>}
+            </>
+          )}
+        </>
        )}
 
       {/* Copy Tournament Modal */}
