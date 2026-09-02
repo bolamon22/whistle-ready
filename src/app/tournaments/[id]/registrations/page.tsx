@@ -896,7 +896,7 @@ export default function RegistrationsPage() {
           <Link href={`/tournaments/${tournamentId}/returning-teams`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-xl transition-colors">
             <RefreshCw size={14} /> Returning teams
           </Link>
-          <div className="flex gap-2 flex-wrap justify-start sm:justify-end">
+          <div className="grid grid-cols-2 sm:flex gap-2 sm:flex-wrap sm:justify-end">
             {(activeTab === 'team' ? [
               { label: 'Clubs', value: registrations.length, color: 'text-teal-600' },
               { label: 'Teams', value: totalTeams, color: 'text-green-600' },
@@ -909,7 +909,7 @@ export default function RegistrationsPage() {
               { label: 'Pending', value: individualRegs.filter(r => r.paymentStatus === 'pending').length, color: 'text-amber-500' },
               { label: 'Revenue', value: fmt(individualRegs.filter(r => r.paymentStatus === 'paid').reduce((s, r) => s + r.feeTierAmount, 0)), color: 'text-green-700' },
             ]).map(s => (
-              <div key={s.label} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-center min-w-[70px] flex-1 sm:flex-none">
+              <div key={s.label} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-center min-w-[70px] last:odd:col-span-2 sm:flex-none">
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-slate-500">{s.label}</div>
               </div>

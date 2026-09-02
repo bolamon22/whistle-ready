@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
-// Staff dark theme with a per-user Light/Dark toggle (default dark).
+// Staff theme with a per-user Light/Dark toggle (default light).
 // Applies on signed-in routes only; excludes the public tournament page
 // (its own toggle) and the login/register pages. Preference persists in
 // localStorage. Renders a small floating toggle on staff routes.
@@ -13,7 +13,7 @@ export default function ThemeShell() {
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register')
   const isSite = pathname.startsWith('/o/')  // public org website = fixed light theme
   const isStaff = !isPublic && !isAuthPage && !isSite
-  const [dark, setDark] = useState(true)
+  const [dark, setDark] = useState(false)
 
   useEffect(() => {
     try { const s = localStorage.getItem('gd-staff-theme'); if (s) setDark(s === 'dark') } catch {}
@@ -35,7 +35,7 @@ export default function ThemeShell() {
   if (!isStaff) return null
   return (
     <button onClick={toggle} aria-label="Toggle light or dark mode" title="Toggle light / dark"
-      className="fixed bottom-4 left-4 z-[60] w-11 h-11 rounded-full bg-gray-800 text-white border border-gray-600 shadow-lg flex items-center justify-center text-lg hover:bg-gray-700 transition-colors">
+      className="fixed bottom-3 left-3 sm:bottom-4 sm:left-4 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gray-800/80 sm:bg-gray-800 text-white border border-gray-600 shadow-lg flex items-center justify-center text-base sm:text-lg hover:bg-gray-700 transition-colors">
       {dark ? '☀️' : '🌙'}
     </button>
   )
