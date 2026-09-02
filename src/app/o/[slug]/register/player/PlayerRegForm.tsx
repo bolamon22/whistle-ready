@@ -9,11 +9,16 @@ const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm fo
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1'
 const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
-export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, tournamentId, tournamentName }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; tournamentId?: string; tournamentName?: string }) {
+export type ClubOption = { name: string; teams: { name: string; division: string }[] }
+
+export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string }) {
+  // Tournament forms pass the registered clubs with their teams: the parent picks the club,
+  // then the team on it, and we store "Club — Team" so staff rosters line up exactly.
+  const clubMode = !!clubs && clubs.length > 0
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [d, setD] = useState<any>({
-    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', jerseyNumber: '',
+    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '',
     parentName: '', parentEmail: '', parentPhone: '',
     parent2Name: '', parent2Email: '', parent2Phone: '',
     emergencyName: '', emergencyPhone: '',
@@ -21,16 +26,30 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     agree: false, signature: '',
   })
   const set = (k: string, v: any) => setD((p: any) => ({ ...p, [k]: v }))
+  const clubTeams = clubMode ? (clubs!.find(c => c.name === d.clubName)?.teams ?? []) : []
+  const resolvedTeam: string = (() => {
+    const other = String(d.teamOther || '').trim()
+    if (clubMode) {
+      if (d.clubName === '__other') return other
+      if (!d.clubName) return ''
+      if (d.teamPick === '__other') return other ? `${d.clubName} — ${other}` : d.clubName
+      return d.teamPick ? `${d.clubName} — ${d.teamPick}` : d.clubName
+    }
+    return d.teamName === '__other' ? other : d.teamName
+  })()
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!d.agree || !d.signature.trim()) { toast.error('Please agree to the waiver and sign'); return }
-    if (d.teamName === '__other' && !String(d.teamOther || '').trim()) { toast.error('Please enter your team or club name'); return }
+    if (fields.teamName && clubMode && !d.clubName) { toast.error('Please select your club'); return }
+    if (fields.teamName && clubMode && d.clubName !== '__other' && clubTeams.length > 0 && !d.teamPick) { toast.error('Please select your team'); return }
+    if ((d.teamName === '__other' || d.clubName === '__other' || d.teamPick === '__other') && !String(d.teamOther || '').trim()) { toast.error('Please enter your team or club name'); return }
     setSubmitting(true)
     try {
       // "Other / not listed" stores the typed name, not the sentinel, so staff rosters read properly.
-      const teamName = d.teamName === '__other' ? String(d.teamOther || '').trim() : d.teamName
-      const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data: { ...d, teamName, tournamentId: tournamentId || '', tournamentName: tournamentName || '' } }) })
+      const rest: any = { ...d }; delete rest.teamPick; delete rest.teamOther
+      const data = { ...rest, teamName: resolvedTeam, clubName: clubMode && d.clubName !== '__other' ? d.clubName : '', tournamentId: tournamentId || '', tournamentName: tournamentName || '' }
+      const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data }) })
       if (res.ok) setDone(true)
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Submission failed') }
     } catch { toast.error('Submission failed') } finally { setSubmitting(false) }
@@ -38,7 +57,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
   const receiptRows: [string, string][] = [
     ['Player name', d.playerName], ['Player email', d.playerEmail], ['US Lacrosse #', d.usLacrosse], ['Date of birth', d.dob],
-    ['Gender', d.gender], ['Grade', d.grade], ['Team', d.teamName === '__other' ? d.teamOther : d.teamName], ['Jersey #', d.jerseyNumber],
+    ['Gender', d.gender], ['Grade', d.grade], ['Team', resolvedTeam], ['Jersey #', d.jerseyNumber],
     ['Parent', d.parentName], ['Parent email', d.parentEmail], ['Parent phone', d.parentPhone],
     ['Parent 2', d.parent2Name], ['Parent 2 email', d.parent2Email], ['Parent 2 phone', d.parent2Phone],
     ['Emergency contact', d.emergencyName], ['Emergency phone', d.emergencyPhone],
@@ -85,10 +104,35 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           <div><label className={labelCls}>Date of birth *</label><input className={inputCls} type="date" value={d.dob} onChange={e => set('dob', e.target.value)} required /></div>
           {fields.gender && <div><label className={labelCls}>Gender *</label><select className={inputCls} value={d.gender} onChange={e => set('gender', e.target.value)} required><option value="">Select…</option><option>Female</option><option>Male</option></select></div>}
           {fields.grade && <div><label className={labelCls}>Player grade *</label><select className={inputCls} value={d.grade} onChange={e => set('grade', e.target.value)} required><option value="">Select…</option>{GRADES.map(g => <option key={g}>{g}</option>)}</select></div>}
-          {fields.teamName && <div><label className={labelCls}>Team or club name *</label>{teams && teams.length > 0
+          {fields.teamName && clubMode && (
+            <>
+              <div><label className={labelCls}>Club *</label>
+                <select className={inputCls} value={d.clubName} onChange={e => { const c = e.target.value; setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '' })) }} required>
+                  <option value="">Select your club…</option>
+                  {clubs!.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  <option value="__other">Other / not listed</option>
+                </select>
+              </div>
+              {d.clubName && d.clubName !== '__other' && clubTeams.length > 0 && (
+                <div><label className={labelCls}>Team *</label>
+                  <select className={inputCls} value={d.teamPick} onChange={e => set('teamPick', e.target.value)} required>
+                    <option value="">Select your team…</option>
+                    {clubTeams.map(t => <option key={t.name} value={t.name}>{t.name}{t.division ? ` · ${t.division}` : ''}</option>)}
+                    <option value="__other">Other / not listed</option>
+                  </select>
+                </div>
+              )}
+              {(d.clubName === '__other' || d.teamPick === '__other') && (
+                <div><label className={labelCls}>{d.clubName === '__other' ? 'Enter your club and team name *' : 'Enter your team name *'}</label>
+                  <input className={inputCls} value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder={d.clubName === '__other' ? 'e.g. Tampa Elite 2031' : 'e.g. 2031 Blue'} required />
+                </div>
+              )}
+            </>
+          )}
+          {fields.teamName && !clubMode && <div><label className={labelCls}>Team or club name *</label>{teams && teams.length > 0
             ? <select className={inputCls} value={d.teamName} onChange={e => set('teamName', e.target.value)} required><option value="">Select your team…</option>{teams.map(tm => <option key={tm} value={tm}>{tm}</option>)}<option value="__other">Other / not listed</option></select>
             : <input className={inputCls} value={d.teamName} onChange={e => set('teamName', e.target.value)} required />}</div>}
-          {fields.teamName && d.teamName === '__other' && <div><label className={labelCls}>Enter your team or club name *</label><input className={inputCls} value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required /></div>}
+          {fields.teamName && !clubMode && d.teamName === '__other' && <div><label className={labelCls}>Enter your team or club name *</label><input className={inputCls} value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required /></div>}
           <div><label className={labelCls}>Jersey number</label><input className={inputCls} value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value)} /></div>
         </div>
       </div>

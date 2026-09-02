@@ -1,7 +1,7 @@
 import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
-import PlayerRegForm from '@/app/o/[slug]/register/player/PlayerRegForm'
+import PlayerRegForm, { type ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
 
 // Cache policy for published pages.
 //
@@ -48,11 +48,24 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
     if (orgId) { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${orgId}`] }); if (s.rows.length) { const c = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (c.logo) org.logoUrl = c.logo } }
   } catch { /* none */ }
 
-  // teams registered for THIS tournament -> dropdown
+  // Clubs registered for THIS tournament, each with its teams -> club picker, then team picker
   let teams: string[] = []
+  let clubs: ClubOption[] = []
   try {
-    const tr = await client.execute({ sql: 'SELECT DISTINCT clubName FROM "TeamRegistration" WHERE tournamentId = ? AND deletedAt IS NULL ORDER BY clubName', args: [params.id] })
-    teams = (tr.rows as any[]).map(r => String(r.clubName || '').trim()).filter(Boolean)
+    const tr = await client.execute({
+      sql: 'SELECT r.clubName AS club, t.teamName AS team, t.division AS division FROM "TeamRegistration" r LEFT JOIN "RegisteredTeam" t ON t.registrationId = r.id WHERE r.tournamentId = ? AND r.deletedAt IS NULL ORDER BY r.clubName, t.teamName',
+      args: [params.id],
+    })
+    const byClub = new Map<string, Map<string, string>>()
+    for (const row of tr.rows as any[]) {
+      const club = String(row.club || '').trim()
+      if (!club) continue
+      if (!byClub.has(club)) byClub.set(club, new Map())
+      const team = String(row.team || '').trim()
+      if (team) byClub.get(club)!.set(team, String(row.division || '').trim())
+    }
+    clubs = [...byClub.entries()].map(([name, ts]) => ({ name, teams: [...ts.entries()].map(([n, division]) => ({ name: n, division })) }))
+    teams = clubs.map(c => c.name)
   } catch { /* none */ }
 
   const pf = forms.player || {}
@@ -65,7 +78,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
   return (
     <div className="min-h-screen bg-slate-50">
       <p className="max-w-2xl mx-auto px-6 pt-6 text-sm text-slate-500">All players must complete this waiver to compete. Required fields are marked *.</p>
-      <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} tournamentId={t.id} tournamentName={t.name} />
+      <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name} />
     </div>
   )
 }
