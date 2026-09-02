@@ -337,6 +337,82 @@ export default function StaffPage() {
   const gLabel=(g:string)=>GENDERS.find(x=>x.value===g)?.label??g
   const pmLabel=(p:string)=>PAY_METHODS.find(x=>x.value===p)?.label??p
 
+  // Profile panel — shared by the desktop table row and the phone card.
+  const renderProfile=(w:Worker,wRoles:string[])=>(
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white px-4 sm:px-6 py-4 sm:py-5">
+      <div className="flex items-start gap-3 sm:gap-5">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shrink-0 shadow-lg">
+          {w.photoUrl
+            ? <img src={w.photoUrl} alt={w.name} className="w-full h-full object-cover"/>
+            : <div className="w-full h-full bg-sky-500 flex items-center justify-center font-bold text-2xl text-white">{w.name[0].toUpperCase()}</div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold leading-tight">{w.name}</h3>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {wRoles.map(r=>(
+                  <span key={r} className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${r==='ref'?'bg-sky-500/30 text-sky-200':r==='scorekeeper'?'bg-emerald-500/30 text-emerald-200':'bg-slate-500/40 text-slate-300'}`}>{rLabel(r)}</span>
+                ))}
+                {!!w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
+              </div>
+            </div>
+            <button onClick={()=>expand(w,'edit')} className="text-xs text-sky-300 hover:text-white border border-sky-400/40 hover:border-sky-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-3 mt-4 text-sm">
+            {w.phone&&<div><p className="text-slate-400 text-xs mb-0.5">Phone</p><a href={`tel:${w.phone}`} className="text-sky-200">{w.phone}</a></div>}
+            {w.email&&<div className="min-w-0"><p className="text-slate-400 text-xs mb-0.5">Email</p><a href={`mailto:${w.email}`} className="block truncate text-sky-200">{w.email}</a></div>}
+            {wRoles.includes('ref')&&<>
+              <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p className="text-white">{certLabel(w.certLevel)}</p></div>
+              <div><p className="text-slate-400 text-xs mb-0.5">Association</p><p className="text-white">{w.association||'\u2014'}</p></div>
+              <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p className="text-white">{gLabel(w.gender)}</p></div>
+            </>}
+            <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
+            {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p className="text-white">${w.payRateOverride}/game</p></div>}
+            {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p className="text-white">${w.hourlyRate}/hr</p></div>}
+          </div>
+          {w.notes&&(
+            <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
+              <p className="text-slate-400 text-xs mb-1">Notes</p>
+              <p className="text-slate-200 text-sm whitespace-pre-wrap">{w.notes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  // Photo + edit form — shared by the desktop edit row and the phone card.
+  const renderEdit=(w:Worker)=>(
+    <>
+      <div className="flex items-center gap-4 mb-5 pb-5 border-b border-slate-200">
+        <div className="relative group flex-shrink-0">
+          {w.photoUrl
+            ? <img src={w.photoUrl} alt={w.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-200"/>
+            : <div className="w-16 h-16 rounded-2xl bg-sky-500 flex items-center justify-center font-bold text-2xl text-white border-2 border-transparent">{w.name[0].toUpperCase()}</div>
+          }
+          <button type="button" onClick={()=>photoRef.current?.click()} disabled={photoUploading}
+            className="absolute inset-0 rounded-2xl bg-black/50 text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            {photoUploading?'…':'📷'}
+          </button>
+        </div>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-slate-700">Profile Photo</p>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={()=>photoRef.current?.click()} disabled={photoUploading}
+              className="text-xs text-sky-600 hover:text-sky-800 font-medium border border-sky-200 hover:border-sky-400 px-3 py-1.5 rounded-lg">
+              {photoUploading?'Uploading…':w.photoUrl?'Replace photo':'+ Upload photo'}
+            </button>
+            {w.photoUrl&&<button type="button" onClick={()=>removePhoto(w.id)} className="text-xs text-red-400 hover:text-red-600 font-medium">Unassign</button>}
+          </div>
+        </div>
+        <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={e=>handlePhotoUpload(e,w.id)}/>
+      </div>
+      <StaffEditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={saving} submitLabel="Save"/>
+    </>
+  )
+
   const BULK_FIELDS=[{value:'defaultRole',label:'Role'},{value:'certLevel',label:'Cert Level'},{value:'gender',label:'Can Ref'},{value:'payMethod',label:'Pay Method'},{value:'payRateOverride',label:'Pay Rate Override ($/game)'},{value:'hourlyRate',label:'Hourly Rate ($/hr)'},{value:'isAssigner',label:'Is Assigner'}]
   const preview=importData?buildPreview():[]
 
@@ -347,10 +423,10 @@ export default function StaffPage() {
           <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="section-title">Staff Pool</h1></div>
           <p className="text-sm text-slate-500 mt-1">Global staff database · {workers.length} total</p>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
           {tab==='roster'&&<button className="btn-secondary btn-sm" onClick={copyRecruitLink} disabled={recruitBusy}>{recruitBusy?'Copying…':'Recruiting link'}</button>}
           <button className={`btn-sm ${tab==='import'?'btn-primary':'btn-secondary'}`} onClick={()=>setTab(t=>t==='import'?'roster':'import')}>{tab==='import'?'← Pool':'↑ Bulk Import'}</button>
-          {tab==='roster'&&<button className="btn-primary" onClick={()=>{setExpandedId('__new__');setExpandMode('edit');setEditForm(EMPTY_FORM)}}>+ Add Staff</button>}
+          {tab==='roster'&&<button className="btn-primary col-span-2 sm:col-span-1" onClick={()=>{setExpandedId('__new__');setExpandMode('edit');setEditForm(EMPTY_FORM)}}>+ Add Staff</button>}
         </div>
       </div>
 
@@ -400,28 +476,32 @@ export default function StaffPage() {
       {/* ── ROSTER ── */}
       {tab==='roster'&&(loading?<div className="text-slate-400 text-center py-12">Loading…</div>:workers.length===0&&expandedId!=='__new__'?<div className="card p-12 text-center text-slate-400"><div className="text-4xl mb-2">👥</div><p>No staff yet</p></div>:(
         <div>
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <input className="input !w-48 text-sm" placeholder="Search by name…" value={search} onChange={e=>setSearch(e.target.value)}/>
-            <label className="text-sm text-slate-500">Role:</label>
-            <select className="select !w-auto text-sm" value={roleFilter} onChange={e=>{setRoleFilter(e.target.value);setSelected(new Set())}}>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2 sm:flex-wrap">
+            <input className="input text-sm w-full sm:!w-48" placeholder="Search by name…" value={search} onChange={e=>setSearch(e.target.value)}/>
+            <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 sm:gap-3">
+            <label className="text-sm text-slate-500 hidden sm:inline">Role:</label>
+            <select className="select !w-auto min-w-0 text-sm" value={roleFilter} onChange={e=>{setRoleFilter(e.target.value);setSelected(new Set())}}>
               <option value="all">All roles</option>
               {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
-            <label className="text-sm text-slate-500">Can Ref:</label>
-            <select className="select !w-auto text-sm" value={genderFilter} onChange={e=>{setGenderFilter(e.target.value);setSelected(new Set())}}>
-              <option value="all">All</option>
+            <label className="text-sm text-slate-500 hidden sm:inline">Can Ref:</label>
+            <select className="select !w-auto min-w-0 text-sm" value={genderFilter} onChange={e=>{setGenderFilter(e.target.value);setSelected(new Set())}}>
+              <option value="all">Can ref: all</option>
               <option value="boys">Boys</option>
               <option value="girls">Girls</option>
               <option value="both">Girls & Boys</option>
             </select>
-            <label className="text-sm text-slate-500">App:</label>
-            <select className="select !w-auto text-sm" value={appFilter} onChange={e=>{setAppFilter(e.target.value);setSelected(new Set())}}>
-              <option value="all">All</option>
+            <label className="text-sm text-slate-500 hidden sm:inline">App:</label>
+            <select className="select !w-auto min-w-0 text-sm" value={appFilter} onChange={e=>{setAppFilter(e.target.value);setSelected(new Set())}}>
+              <option value="all">App: all</option>
               <option value="registered">Registered</option>
               <option value="invited">Invited</option>
               <option value="none">Not invited</option>
               <option value="no_email">No email</option>
             </select>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
             <span className="text-xs text-slate-400">{filtered.length} shown</span>
             <span className="text-xs text-slate-300">·</span>
             <span className="text-xs text-slate-400"><span className="font-semibold text-emerald-600">{workers.filter(w=>w.appStatus==='registered').length}</span> registered · <span className="font-semibold text-amber-600">{workers.filter(w=>w.appStatus==='invited').length}</span> invited · <span className="font-semibold text-slate-500">{workers.filter(w=>w.appStatus==='none'||w.appStatus==='no_email').length}</span> not on app</span>
@@ -476,7 +556,57 @@ export default function StaffPage() {
             </div>
           )}
 
-          <div className="card overflow-hidden">
+          {/* Phones: one card per person */}
+          <div className="sm:hidden space-y-2">
+            {filtered.map(w=>{
+              const wRoles=parseRoles(w)
+              const isExpanded=expandedId===w.id
+              return(
+                <div key={w.id} className={`card overflow-hidden ${selected.has(w.id)?'border-sky-300 bg-sky-50':''}`}>
+                  <div className="px-3 pt-2.5 pb-2 flex items-start gap-2.5">
+                    <input type="checkbox" className="mt-1 flex-shrink-0" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={()=>expand(w,'profile')} className="font-semibold text-slate-900 text-left leading-tight">{w.name}</button>
+                        {!!w.isAssigner&&<span className="badge bg-amber-100 text-amber-700">Assigner</span>}
+                        {w.appStatus==='registered'?<span className="badge bg-emerald-100 text-emerald-700">Registered</span>
+                          :w.appStatus==='invited'?<span className="badge bg-amber-100 text-amber-700">Invited</span>
+                          :w.appStatus==='no_email'?<span className="badge bg-rose-50 text-rose-600">No email</span>
+                          :<span className="badge bg-slate-100 text-slate-500">Not invited</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
+                        {wRoles.includes('ref')&&<>
+                          <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                          <span className="badge bg-white border border-slate-200 text-slate-500">{gLabel(w.gender)}</span>
+                          {w.association&&<span className="badge bg-white border border-slate-200 text-slate-500">{w.association}</span>}
+                        </>}
+                        <span className="badge bg-slate-100 text-slate-700">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</span>
+                        <span className="badge bg-white border border-slate-200 text-slate-500">{wRoles.some(r=>isHourlyRole(r))?(w.hourlyRate?`$${w.hourlyRate}/hr`:'no rate'):(w.payRateOverride?`$${w.payRateOverride}/game`:'Default rate')}</span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                        {w.phone&&<a href={`tel:${w.phone}`} className="text-teal-700">{w.phone}</a>}
+                        {w.email&&<a href={`mailto:${w.email}`} className="text-teal-700 truncate max-w-full">{w.email}</a>}
+                        {!w.phone&&!w.email&&<span className="text-slate-400">No contact info</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-3 pb-2.5 flex items-center gap-4 text-xs">
+                    {w.appStatus!=='registered'&&w.appStatus!=='no_email'&&<button onClick={()=>sendAppInvites([w.id])} disabled={inviting} className="text-teal-600 font-medium disabled:opacity-50">{w.appStatus==='invited'?'Resend invite':'Invite to app'}</button>}
+                    {w.appStatus!=='registered'&&<button onClick={()=>copyInviteLink(w)} className="text-slate-400 font-medium">Copy link</button>}
+                    <span className="flex-1"/>
+                    <button onClick={()=>expand(w,'profile')} className={`font-medium ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-500'}`}>Profile</button>
+                    <button onClick={()=>expand(w,'edit')} className={`font-medium ${isExpanded&&expandMode==='edit'?'text-sky-800 underline':'text-sky-600'}`}>Edit</button>
+                    <button onClick={()=>del(w.id,w.name)} className="text-red-400 font-medium">Unassign</button>
+                  </div>
+                  {isExpanded&&expandMode==='profile'&&<div className="border-t border-slate-200">{renderProfile(w,wRoles)}</div>}
+                  {isExpanded&&expandMode==='edit'&&<div className="px-3 py-4 bg-sky-50/40 border-t border-slate-200">{renderEdit(w)}</div>}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="hidden sm:block card overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -535,85 +665,14 @@ export default function StaffPage() {
                     {/* Profile panel */}
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
-                        <td colSpan={11} className="p-0 border-b border-slate-200">
-                          <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white px-4 sm:px-6 py-4 sm:py-5">
-                            <div className="flex items-start gap-5">
-                              {/* Avatar */}
-                              <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 shadow-lg">
-                                {w.photoUrl
-                                  ? <img src={w.photoUrl} alt={w.name} className="w-14 h-14 object-cover"/>
-                                  : <div className="w-14 h-14 bg-sky-500 flex items-center justify-center font-bold text-2xl text-white">{w.name[0].toUpperCase()}</div>
-                                }
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-4">
-                                  <div>
-                                    <h3 className="text-lg font-bold">{w.name}</h3>
-                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                      {wRoles.map(r=>(
-                                        <span key={r} className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${r==='ref'?'bg-sky-500/30 text-sky-200':r==='scorekeeper'?'bg-emerald-500/30 text-emerald-200':'bg-slate-500/40 text-slate-300'}`}>{rLabel(r)}</span>
-                                      ))}
-                                      {!!w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
-                                    </div>
-                                  </div>
-                                  <button onClick={()=>expand(w,'edit')} className="text-xs text-sky-300 hover:text-white border border-sky-400/40 hover:border-sky-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
-                                </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 mt-4 text-sm">
-                                  {w.phone&&<div><p className="text-slate-400 text-xs mb-0.5">Phone</p><p className="text-white">{w.phone}</p></div>}
-                                  {w.email&&<div><p className="text-slate-400 text-xs mb-0.5">Email</p><p className="text-white truncate">{w.email}</p></div>}
-                                  {wRoles.includes('ref')&&<>
-                                    <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p className="text-white">{certLabel(w.certLevel)}</p></div><div><p className="text-slate-400 text-xs mb-0.5">Association</p><p className="text-white">{w.association||'\u2014'}</p></div>
-                                    <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p className="text-white">{gLabel(w.gender)}</p></div>
-                                  </>}
-                                  <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
-                                  {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p className="text-white">${w.payRateOverride}/game</p></div>}
-                                  {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p className="text-white">${w.hourlyRate}/hr</p></div>}
-                                </div>
-
-                                {w.notes&&(
-                                  <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
-                                    <p className="text-slate-400 text-xs mb-1">Notes</p>
-                                    <p className="text-slate-200 text-sm whitespace-pre-wrap">{w.notes}</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+                        <td colSpan={11} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
                       </tr>
                     )}
 
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={11} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">
-                          {/* Photo upload */}
-                          <div className="flex items-center gap-4 mb-5 pb-5 border-b border-slate-200">
-                            <div className="relative group flex-shrink-0">
-                              {w.photoUrl
-                                ? <img src={w.photoUrl} alt={w.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-200"/>
-                                : <div className="w-16 h-16 rounded-2xl bg-sky-500 flex items-center justify-center font-bold text-2xl text-white border-2 border-transparent">{w.name[0].toUpperCase()}</div>
-                              }
-                              <button type="button" onClick={()=>photoRef.current?.click()} disabled={photoUploading}
-                                className="absolute inset-0 rounded-2xl bg-black/50 text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                {photoUploading?'…':'📷'}
-                              </button>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <p className="text-sm font-medium text-slate-700">Profile Photo</p>
-                              <div className="flex items-center gap-3">
-                                <button type="button" onClick={()=>photoRef.current?.click()} disabled={photoUploading}
-                                  className="text-xs text-sky-600 hover:text-sky-800 font-medium border border-sky-200 hover:border-sky-400 px-3 py-1.5 rounded-lg">
-                                  {photoUploading?'Uploading…':w.photoUrl?'Replace photo':'+ Upload photo'}
-                                </button>
-                                {w.photoUrl&&<button type="button" onClick={()=>removePhoto(w.id)} className="text-xs text-red-400 hover:text-red-600 font-medium">Unassign</button>}
-                              </div>
-                            </div>
-                            <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={e=>handlePhotoUpload(e,w.id)}/>
-                          </div>
-                          <StaffEditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={saving} submitLabel="Save"/>
-                        </td>
+                        <td colSpan={11} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">{renderEdit(w)}</td>
                       </tr>
                     )}
                   </>
