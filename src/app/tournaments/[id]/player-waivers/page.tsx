@@ -47,11 +47,20 @@ const EDIT_FIELDS: { key: string; label: string; type?: string; options?: string
   { key: 'hotel', label: 'Hotel / rental' }, { key: 'hotelName', label: 'Where staying' },
 ]
 
-function WaiverEditForm({ form, setForm, teamOptions, onSave, onCancel, saving }: {
-  form: Record<string, string>; setForm: (f: Record<string, string>) => void; teamOptions: string[]
+type TeamGroup = { club: string; teams: string[] }
+
+function WaiverEditForm({ form, setForm, teamGroups, otherTeams, onSave, onCancel, saving }: {
+  form: Record<string, string>; setForm: (f: Record<string, string>) => void
+  teamGroups: TeamGroup[]; otherTeams: string[]
   onSave: () => void; onCancel: () => void; saving: boolean
 }) {
+  const teamOptions = [...teamGroups.flatMap(g => [g.club, ...g.teams.map(t => `${g.club} — ${t}`)]), ...otherTeams]
   const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400'
+  // Team is a real <select> (a datalist never shows as a picker on iPhone). A name that
+  // isn't in the list — or "Other / type a name…" — switches to a free-text box.
+  const teamVal = form.teamName || ''
+  const [customTeam, setCustomTeam] = useState(() => !!teamVal && !teamOptions.includes(teamVal))
+  const teamSelectValue = customTeam ? '__custom__' : (teamOptions.includes(teamVal) ? teamVal : '')
   return (
     <form onSubmit={e => { e.preventDefault(); onSave() }} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -61,20 +70,45 @@ function WaiverEditForm({ form, setForm, teamOptions, onSave, onCancel, saving }
           return (
             <div key={f.key} className={f.team ? 'sm:col-span-2' : ''}>
               <label className="block text-xs font-medium text-slate-500 mb-1">{f.label}</label>
-              {options ? (
+              {f.team ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select className={inp} value={teamSelectValue}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val === '__custom__') { setCustomTeam(true); setForm({ ...form, teamName: '' }) }
+                      else { setCustomTeam(false); setForm({ ...form, teamName: val }) }
+                    }}>
+                    <option value="">— pick a team —</option>
+                    {teamGroups.map(g => (
+                      <optgroup key={g.club} label={g.club}>
+                        <option value={g.club}>{g.club} (club)</option>
+                        {g.teams.map(t => <option key={t} value={`${g.club} — ${t}`}>{t}</option>)}
+                      </optgroup>
+                    ))}
+                    {otherTeams.length > 0 && (
+                      <optgroup label="Already used on waivers">
+                        {otherTeams.map(t => <option key={t} value={t}>{t}</option>)}
+                      </optgroup>
+                    )}
+                    <option value="__custom__">Other / type a name…</option>
+                  </select>
+                  {customTeam && (
+                    <input className={inp} type="text" value={teamVal} autoFocus placeholder="Team or club name"
+                      onChange={e => setForm({ ...form, teamName: e.target.value })} />
+                  )}
+                </div>
+              ) : options ? (
                 <select className={inp} value={v} onChange={e => setForm({ ...form, [f.key]: e.target.value })}>
                   {options.map(o => <option key={o} value={o}>{o || '—'}</option>)}
                 </select>
               ) : (
-                <input className={inp} type={f.type || 'text'} value={v} list={f.team ? 'wr-team-options' : undefined}
-                  placeholder={f.team ? 'Pick a registered club or type a team name' : undefined}
+                <input className={inp} type={f.type || 'text'} value={v}
                   onChange={e => setForm({ ...form, [f.key]: e.target.value })} />
               )}
             </div>
           )
         })}
       </div>
-      <datalist id="wr-team-options">{teamOptions.map(t => <option key={t} value={t} />)}</datalist>
       <div className="flex gap-2 justify-end">
         <button type="button" onClick={onCancel} className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50">Cancel</button>
         <button type="submit" disabled={saving} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg px-4 py-2">{saving ? 'Saving…' : 'Save changes'}</button>
@@ -116,21 +150,30 @@ export default function PlayerWaiverEntries() {
   const [editing, setEditing] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
   const [savingEdit, setSavingEdit] = useState(false)
-  const [teamOptions, setTeamOptions] = useState<string[]>([])
+  const [teamGroups, setTeamGroups] = useState<TeamGroup[]>([])
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setName(d.name || 'Tournament'); setLogo(d.logoUrl || undefined) } }).catch(() => {})
     fetch(`/api/tournaments/${id}/player-waivers`).then(r => r.ok ? r.json() : { submissions: [] }).then(d => setSubs(Array.isArray(d.submissions) ? d.submissions : [])).catch(() => {}).finally(() => setLoading(false))
-    // Registered clubs / teams for this tournament → suggestions when staff assign a team
+    // Registered clubs and their teams for this tournament → the Team picker when staff edit a waiver
     fetch(`/api/registrations?tournamentId=${id}`).then(r => r.ok ? r.json() : []).then((regs: any[]) => {
-      const names = new Set<string>()
+      const byClub = new Map<string, Set<string>>()
       ;(Array.isArray(regs) ? regs : []).forEach(reg => {
-        if (reg?.clubName) names.add(String(reg.clubName).trim())
-        ;(reg?.teams || []).forEach((t: any) => { if (t?.teamName) names.add(String(t.teamName).trim()) })
+        const club = String(reg?.clubName || reg?.clubContact || '').trim()
+        if (!club) return
+        if (!byClub.has(club)) byClub.set(club, new Set())
+        ;(reg?.teams || []).forEach((t: any) => { const n = String(t?.teamName || '').trim(); if (n) byClub.get(club)!.add(n) })
       })
-      setTeamOptions([...names].filter(Boolean).sort((a, b) => a.localeCompare(b)))
+      setTeamGroups([...byClub.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([club, teams]) => ({ club, teams: [...teams].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) })))
     }).catch(() => {})
   }, [id])
+
+  // Team names already used on other waivers that aren't a registered club/team — offered too, for consistency.
+  const otherTeams = useMemo(() => {
+    const known = new Set(teamGroups.flatMap(g => [g.club, ...g.teams.map(t => `${g.club} — ${t}`)]))
+    return [...new Set(subs.map(s => String(s.data?.teamName || '').trim()).filter(t => t && t !== '__other' && !known.has(t)))].sort((a, b) => a.localeCompare(b))
+  }, [subs, teamGroups])
 
   function startEdit(s: Sub) {
     const d = s.data || {}
@@ -197,7 +240,7 @@ export default function PlayerWaiverEntries() {
   const filtering = !!(q.trim() || team)
 
   const renderExpanded = (s: Sub) => editing === s.id ? (
-    <WaiverEditForm form={form} setForm={setForm} teamOptions={teamOptions} onSave={saveEdit} onCancel={() => setEditing(null)} saving={savingEdit} />
+    <WaiverEditForm key={s.id} form={form} setForm={setForm} teamGroups={teamGroups} otherTeams={otherTeams} onSave={saveEdit} onCancel={() => setEditing(null)} saving={savingEdit} />
   ) : (
     <>
       <Detail d={s.data} />
