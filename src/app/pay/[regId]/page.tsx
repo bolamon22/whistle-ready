@@ -31,7 +31,9 @@ export default function PayPage() {
     if (!regId) return
     fetch(`/api/registrations/${regId}/pay-info`)
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then((d: PayInfo) => {
+      .then((d: PayInfo & { mergedInto?: string }) => {
+        // This registration was merged into another one — its link now lives there.
+        if (d.mergedInto) { window.location.replace(`/pay/${d.mergedInto}`); return }
         setInfo(d)
         setStatus(d.balance <= 0 ? 'paid' : 'ready')
       })

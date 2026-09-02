@@ -10,6 +10,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where: { id: params.id },
       include: { teams: true, payments: true },
     })
+    if (reg && reg.deletedAt) {
+      // A registration merged into another one: send the pay page to the survivor so
+      // old pay links keep working.
+      try {
+        const m = await prisma.$queryRawUnsafe<any[]>(`SELECT "mergedIntoId" FROM "TeamRegistration" WHERE id = ?`, params.id)
+        const into = String(m?.[0]?.mergedIntoId || '')
+        if (into) return NextResponse.json({ mergedInto: into })
+      } catch { /* column not there yet */ }
+    }
     if (!reg || reg.deletedAt) return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
 
     const tournament = await prisma.tournament.findUnique({

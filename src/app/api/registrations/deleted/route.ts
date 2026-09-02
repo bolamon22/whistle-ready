@@ -26,5 +26,15 @@ export async function GET(req: NextRequest) {
     include: { teams: true },
     orderBy: { deletedAt: 'desc' },
   })
-  return NextResponse.json(deleted)
+  // Merged duplicates are soft-deleted too; say where they went so nobody "restores" an empty shell.
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT d.id, d."mergedIntoId" AS mergedIntoId, t."clubName" AS mergedIntoName
+         FROM "TeamRegistration" d LEFT JOIN "TeamRegistration" t ON t.id = d."mergedIntoId"
+        WHERE d."tournamentId" = ? AND d."deletedAt" IS NOT NULL AND d."mergedIntoId" <> ''`, tournamentId)
+    const byId = new Map((rows || []).map(r => [r.id, r]))
+    return NextResponse.json(deleted.map(d => ({ ...d, mergedIntoId: byId.get(d.id)?.mergedIntoId || '', mergedIntoName: byId.get(d.id)?.mergedIntoName || '' })))
+  } catch {
+    return NextResponse.json(deleted)
+  }
 }

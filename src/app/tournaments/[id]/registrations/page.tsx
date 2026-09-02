@@ -10,7 +10,8 @@ import RegPricingEditor from '@/components/RegPricingEditor'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import toast, { Toaster } from 'react-hot-toast'
-import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp } from 'lucide-react'
+import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle } from 'lucide-react'
+import { nameKey } from '@/lib/names'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
 
@@ -260,6 +261,13 @@ export default function RegistrationsPage() {
   const { id: tournamentId } = useParams()
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [deletedRegs, setDeletedRegs] = useState<any[]>([])
+  // Merge duplicate registrations (same club registered twice for this tournament)
+  const [mergeFor, setMergeFor] = useState<Registration | null>(null)   // the entry "Merge" was tapped on
+  const [mergeOtherId, setMergeOtherId] = useState('')                   // the entry to combine with it
+  const [mergeKeep, setMergeKeep] = useState<'this' | 'other'>('this')   // whose contact details survive
+  const [mergePlan, setMergePlan] = useState<any>(null)
+  const [mergePlanError, setMergePlanError] = useState('')
+  const [merging, setMerging] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -552,6 +560,43 @@ export default function RegistrationsPage() {
       setShowForm(false); resetForm(); load()
     } catch (err: any) { toast.error(err?.message ? `Failed to save: ${err.message}` : 'Failed to save.') }
     finally { setSaving(false) }
+  }
+
+  const regLabel = (r: Registration) => `${r.clubName || r.clubContact || 'Unnamed'} · ${r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'} · ${r.teams.length} team${r.teams.length === 1 ? '' : 's'}`
+  const openMerge = (reg: Registration) => {
+    // Default to the likeliest duplicate: same club name (ignoring case/spacing), oldest first.
+    const others = registrations.filter(r => r.id !== reg.id)
+    const twin = others.filter(r => nameKey(r.clubName) === nameKey(reg.clubName)).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+    setMergeFor(reg); setMergeOtherId(twin?.id || ''); setMergePlan(null); setMergePlanError('')
+    // Keep the older entry's details by default (it usually has the payment history and the original contact).
+    setMergeKeep(twin && twin.createdAt < reg.createdAt ? 'other' : 'this')
+  }
+  const mergeIds = () => {
+    if (!mergeFor || !mergeOtherId) return null
+    return mergeKeep === 'this' ? { keepId: mergeFor.id, sourceId: mergeOtherId } : { keepId: mergeOtherId, sourceId: mergeFor.id }
+  }
+  useEffect(() => {
+    const ids = mergeIds()
+    if (!ids) { setMergePlan(null); return }
+    let cancelled = false
+    setMergePlan(null); setMergePlanError('')
+    fetch(`/api/registrations/${ids.keepId}/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: ids.sourceId, dryRun: true }) })
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Could not preview'); return j })
+      .then(j => { if (!cancelled) setMergePlan(j.plan) })
+      .catch(e => { if (!cancelled) setMergePlanError(e.message || 'Could not preview') })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergeFor?.id, mergeOtherId, mergeKeep])
+  const confirmMerge = async () => {
+    const ids = mergeIds(); if (!ids || !mergePlan) return
+    setMerging(true)
+    try {
+      const r = await fetch(`/api/registrations/${ids.keepId}/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: ids.sourceId }) })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || 'Merge failed')
+      toast.success(`Merged — ${mergePlan.result.teams.length} teams, ${fmt(mergePlan.result.paid)} paid, balance ${fmt(mergePlan.result.balance)}`, { duration: 6000 })
+      setMergeFor(null); setExpanded(ids.keepId); load()
+    } catch (e: any) { toast.error(e.message || 'Merge failed') } finally { setMerging(false) }
   }
 
   const handleDelete = async (id: string, name: string) => {
@@ -1112,6 +1157,88 @@ export default function RegistrationsPage() {
         )}
 
         {/* Add payment modal */}
+        {mergeFor && (() => {
+          const other = registrations.find(r => r.id === mergeOtherId) || null
+          const keep = mergeKeep === 'this' ? mergeFor : other
+          const gone = mergeKeep === 'this' ? other : mergeFor
+          const plan = mergePlan
+          return (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+              <div className="absolute inset-0 bg-black/40" onClick={() => !merging && setMergeFor(null)} />
+              <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg z-10 max-h-[92vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-800 inline-flex items-center gap-2"><Merge size={18} className="text-amber-600" /> Merge duplicate registrations</h2>
+                  <button onClick={() => !merging && setMergeFor(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                </div>
+                <div className="px-5 py-4 space-y-4">
+                  <p className="text-sm text-slate-600">Combine two entries for the same club into one. Every team, payment, invoice and discount from both is kept — nothing is deleted.</p>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Combine <span className="font-semibold text-slate-800">{regLabel(mergeFor)}</span> with</label>
+                    <select value={mergeOtherId} onChange={e => setMergeOtherId(e.target.value)} className={inputCls}>
+                      <option value="">Choose a registration…</option>
+                      {registrations.filter(r => r.id !== mergeFor.id)
+                        .sort((a, b) => Number(nameKey(b.clubName) === nameKey(mergeFor.clubName)) - Number(nameKey(a.clubName) === nameKey(mergeFor.clubName)) || a.clubName.localeCompare(b.clubName))
+                        .map(r => <option key={r.id} value={r.id}>{regLabel(r)}{nameKey(r.clubName) === nameKey(mergeFor.clubName) ? ' — likely duplicate' : ''}</option>)}
+                    </select>
+                  </div>
+                  {other && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Keep contact details, pay method and registration date from</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {([['this', mergeFor], ['other', other]] as const).map(([k, r]) => (
+                          <button key={k} type="button" onClick={() => setMergeKeep(k)}
+                            className={`text-left rounded-lg border px-3 py-2 ${mergeKeep === k ? 'border-teal-500 ring-2 ring-teal-200 bg-teal-50/40' : 'border-slate-200 hover:border-slate-300'}`}>
+                            <div className="text-sm font-semibold text-slate-800 truncate">{r.clubName || r.clubContact}</div>
+                            <div className="text-xs text-slate-500 truncate">Registered {r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'} · {r.clubContact}</div>
+                            <div className="text-xs text-slate-500 truncate">{r.contactEmail} · {r.contactPhone}</div>
+                            <div className="text-xs text-slate-500">{payLabel(r.paymentMethod)} · paid {fmt(r.payments.reduce((s, p) => s + p.amount, 0))}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">Anything different on the other entry (a second contact, phone, hotel…) is written into the notes so it isn't lost.</p>
+                    </div>
+                  )}
+                  {other && mergePlanError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{mergePlanError}</div>}
+                  {other && !plan && !mergePlanError && <p className="text-sm text-slate-400">Working out the result…</p>}
+                  {other && plan && keep && gone && (
+                    <div className="rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">After the merge</div>
+                      <div className="px-4 py-3 space-y-3 text-sm">
+                        <div>
+                          <div className="font-semibold text-slate-800">{keep.clubName || keep.clubContact} · {plan.result.teams.length} teams</div>
+                          <ul className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-slate-600">
+                            {plan.result.teams.map((t: any, i: number) => <li key={i} className="truncate"><span className="font-medium text-slate-800">{t.teamName}</span> <span className="text-slate-400">· {t.division}</span></li>)}
+                          </ul>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div><div className="text-[11px] text-slate-400">Invoice</div><div className="font-semibold text-slate-800">{fmt(plan.result.invoiceAmount)}</div></div>
+                          <div><div className="text-[11px] text-slate-400">Discount</div><div className="font-semibold text-amber-600">{plan.result.discountAmount ? `-${fmt(plan.result.discountAmount)}` : '—'}</div></div>
+                          <div><div className="text-[11px] text-slate-400">Paid</div><div className="font-semibold text-green-600">{fmt(plan.result.paid)}</div></div>
+                          <div><div className="text-[11px] text-slate-400">Balance</div><div className={`font-semibold ${plan.result.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(plan.result.balance)}</div></div>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {plan.result.paymentsMoved} payment{plan.result.paymentsMoved === 1 ? '' : 's'} from the {new Date(gone.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} entry move over with their dates and methods.
+                          {plan.result.filled?.length ? ` Filled in from it: ${plan.result.filled.join(', ')}.` : ''}
+                          {' '}That entry then shows under Recently Deleted as "merged".
+                        </div>
+                        {plan.warnings?.length > 0 && (
+                          <ul className="space-y-1.5">
+                            {plan.warnings.map((w: string, i: number) => <li key={i} className="flex gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><AlertTriangle size={14} className="flex-shrink-0 mt-0.5" /><span>{w}</span></li>)}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="sticky bottom-0 bg-white border-t border-slate-100 px-5 py-3 flex gap-2 justify-end">
+                  <button onClick={() => setMergeFor(null)} disabled={merging} className="text-sm border border-slate-300 rounded-lg px-4 py-2 text-slate-600 hover:bg-slate-50">Cancel</button>
+                  <button onClick={confirmMerge} disabled={!plan || merging || !!mergePlanError} className="text-sm font-semibold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 inline-flex items-center gap-1.5"><Merge size={14} /> {merging ? 'Merging…' : 'Merge these two'}</button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         {payingRegId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/40" onClick={() => setPayingRegId(null)} />
@@ -1635,6 +1762,12 @@ export default function RegistrationsPage() {
                       <button onClick={() => handleQboSync(reg.id)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">QB Sync</button>
                     )}
                     <button onClick={() => openEdit(reg)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Edit</button>
+                    {registrations.length > 1 && (
+                      <button onClick={() => openMerge(reg)} title="Combine with a duplicate registration of the same club"
+                        className={`text-xs border px-2.5 py-1 rounded-lg inline-flex items-center gap-1 ${registrations.some(r => r.id !== reg.id && nameKey(r.clubName) === nameKey(reg.clubName)) ? 'text-amber-700 border-amber-300 bg-amber-50 hover:border-amber-400' : 'text-teal-600 border-teal-200 hover:border-teal-400'}`}>
+                        <Merge size={12} /> Merge
+                      </button>
+                    )}
                     <button onClick={() => handleDelete(reg.id, reg.clubName || reg.clubContact)} className="text-xs text-red-500 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg">Del</button>
                     <button onClick={() => setExpanded(expanded === reg.id ? null : reg.id)} className="text-slate-400 hover:text-slate-600">{expanded === reg.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
                   </div>
@@ -1809,15 +1942,19 @@ export default function RegistrationsPage() {
                     <span className="ml-3 text-xs text-slate-500">
                       Deleted {new Date(reg.deletedAt).toLocaleDateString()}
                     </span>
-                    <span className="ml-3 text-xs text-slate-400">{reg.teams?.length || 0} teams</span>
+                    {reg.mergedIntoId
+                      ? <span className="ml-3 text-xs text-amber-700">Merged into {reg.mergedIntoName || 'another registration'} — its teams and payments live there now</span>
+                      : <span className="ml-3 text-xs text-slate-400">{reg.teams?.length || 0} teams</span>}
                   </div>
-                  <button
-                    onClick={() => handleRestore(reg.id)}
-                    disabled={restoringId === reg.id}
-                    className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded hover:bg-teal-700 disabled:opacity-50 transition-colors"
-                  >
-                    {restoringId === reg.id ? 'Restoring…' : 'Restore'}
-                  </button>
+                  {!reg.mergedIntoId && (
+                    <button
+                      onClick={() => handleRestore(reg.id)}
+                      disabled={restoringId === reg.id}
+                      className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                    >
+                      {restoringId === reg.id ? 'Restoring…' : 'Restore'}
+                    </button>
+                  )}
                 </div>
               ))
             )}
