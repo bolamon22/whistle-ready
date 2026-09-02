@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
-import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData } from '@/lib/formSubmissions'
+import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData, setCheckIn, clearCheckIns, countCheckedIn } from '@/lib/formSubmissions'
 
 // Player-waiver submissions for ONE tournament (rows in "OrgFormSubmission", see
 // src/lib/formSubmissions.ts).
@@ -10,6 +10,8 @@ import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSub
 //         Search and paging are server-side so the page stays quick at thousands of waivers.
 //   PATCH { id, data: { teamName?, jerseyNumber?, … } } edits the whitelisted fields of one
 //         submission and appends an audit entry; the signature / agreement are never editable.
+//   PATCH { id, checkIn: true|false }  game-day check-in: marks the player present (or undoes it).
+//   PATCH { clearCheckIns: true, team? } clears check-ins for the team (or the whole tournament).
 
 const EDITABLE = [
   'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'clubName', 'teamName', 'jerseyNumber',
@@ -40,13 +42,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const offset = Math.max(0, parseInt(sp.get('offset') || '0', 10) || 0)
   const scope = { orgId: g.orgId, formType: 'player', tournamentId: params.id }
   try {
-    const [submissions, total, grandTotal, teams] = await Promise.all([
+    const [submissions, total, grandTotal, teams, checkedIn] = await Promise.all([
       listSubmissions({ ...scope, q, team, sort, limit, offset }),
       countSubmissions({ ...scope, q, team }),
       countSubmissions(scope),
       teamCounts(scope),
+      countCheckedIn({ ...scope, q, team }),
     ])
-    return NextResponse.json({ submissions, total, grandTotal, teams, limit, offset })
+    return NextResponse.json({ submissions, total, grandTotal, teams, checkedIn, limit, offset })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to load', submissions: [], total: 0, grandTotal: 0, teams: [] }, { status: 500 })
   }
@@ -56,9 +59,29 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const g = await gateForTournament(params.id)
   if ('res' in g) return g.res
   const body = await req.json().catch(() => ({})) as any
+  const who = String(g.gate.session?.user?.name || g.gate.session?.user?.email || g.gate.userId || '')
+
+  // Clear a team's (or the tournament's) check-ins — e.g. before day two.
+  if (body?.clearCheckIns === true) {
+    const team = body?.team ? String(body.team) : undefined
+    const cleared = await clearCheckIns({ orgId: g.orgId, formType: 'player', tournamentId: params.id, team })
+    return NextResponse.json({ ok: true, cleared })
+  }
+
   const subId = String(body?.id || '')
-  const patch = body?.data && typeof body.data === 'object' ? body.data : {}
   if (!subId) return NextResponse.json({ error: 'Missing submission id' }, { status: 400 })
+
+  // Game-day check-in toggle.
+  if (typeof body?.checkIn === 'boolean') {
+    const cur = await getSubmission(g.orgId, subId)
+    if (!cur || cur.formType !== 'player' || String(cur.data?.tournamentId || '') !== params.id) {
+      return NextResponse.json({ error: 'Submission not found' }, { status: 404 })
+    }
+    const submission = await setCheckIn(g.orgId, subId, body.checkIn, who)
+    return NextResponse.json({ ok: true, submission })
+  }
+
+  const patch = body?.data && typeof body.data === 'object' ? body.data : {}
 
   const changes: Record<string, string> = {}
   for (const k of EDITABLE) if (k in patch) changes[k] = String(patch[k] ?? '').trim()

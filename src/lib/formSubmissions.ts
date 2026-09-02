@@ -16,6 +16,9 @@ export type FormSubmission = {
   submittedAt: string
   data: any
   edits?: { at: string; by?: string; fields: string[] }[]
+  /** Game-day check-in (player waivers): when / by whom the player was marked present. */
+  checkedInAt?: string | null
+  checkedInBy?: string | null
 }
 
 export type FormType = 'player' | 'vendor' | 'staff' | string
@@ -45,6 +48,10 @@ export function ensureSubmissionsTable(): Promise<void> {
       )`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_scope" ON "OrgFormSubmission" ("orgId", "formType", "tournamentId", "submittedAt")`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_team" ON "OrgFormSubmission" ("orgId", "tournamentId", "teamName")`)
+      // Game-day check-in (Sep 2026): added after the table shipped, so ALTER in place.
+      for (const col of ['"checkedInAt" TEXT', '"checkedInBy" TEXT']) {
+        try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgFormSubmission" ADD COLUMN ${col}`) } catch { /* already there */ }
+      }
     })().catch(e => { tableReady = null; throw e })
   }
   return tableReady
@@ -73,7 +80,11 @@ function rowToSub(r: any): FormSubmission {
   let data: any = {}; let edits: any[] = []
   try { data = JSON.parse(r.data || '{}') } catch {}
   try { edits = JSON.parse(r.edits || '[]') } catch {}
-  return { id: r.id, formType: r.formType, submittedAt: r.submittedAt, data, edits: Array.isArray(edits) && edits.length ? edits : undefined }
+  return {
+    id: r.id, formType: r.formType, submittedAt: r.submittedAt, data,
+    edits: Array.isArray(edits) && edits.length ? edits : undefined,
+    checkedInAt: r.checkedInAt || null, checkedInBy: r.checkedInBy || null,
+  }
 }
 
 export function newSubmissionId() {
@@ -147,6 +158,33 @@ export async function updateSubmissionData(orgId: string, id: string, changes: R
     `UPDATE "OrgFormSubmission" SET "data" = ?, "edits" = ?, "playerName" = ?, "teamName" = ?, "clubName" = ?, "jersey" = ?, "search" = ?, "updatedAt" = ? WHERE "orgId" = ? AND "id" = ?`,
     JSON.stringify(data), JSON.stringify(edits), dv.playerName, dv.teamName, dv.clubName, dv.jersey, dv.search, new Date().toISOString(), orgId, id)
   return { ...cur, data, edits }
+}
+
+/** Mark a player present (or undo it). Returns the updated row, or null when it doesn't exist. */
+export async function setCheckIn(orgId: string, id: string, on: boolean, by?: string): Promise<FormSubmission | null> {
+  await ensureOrgMigrated(orgId)
+  await prisma.$executeRawUnsafe(
+    `UPDATE "OrgFormSubmission" SET "checkedInAt" = ?, "checkedInBy" = ? WHERE "orgId" = ? AND "id" = ?`,
+    on ? new Date().toISOString() : null, on ? (by || null) : null, orgId, id)
+  return getSubmission(orgId, id)
+}
+
+/** Clear every check-in matching the filter (e.g. one team before day two). Returns rows affected. */
+export async function clearCheckIns(a: Pick<ListArgs, 'orgId' | 'formType' | 'tournamentId' | 'team'>): Promise<number> {
+  await ensureOrgMigrated(a.orgId)
+  const sql = buildWhere(a)
+  const n = await prisma.$executeRawUnsafe(
+    `UPDATE "OrgFormSubmission" SET "checkedInAt" = NULL, "checkedInBy" = NULL WHERE ${sql.sql} AND "checkedInAt" IS NOT NULL`,
+    ...sql.params)
+  return Number(n) || 0
+}
+
+/** How many rows matching the filter are checked in. */
+export async function countCheckedIn(a: ListArgs): Promise<number> {
+  await ensureOrgMigrated(a.orgId)
+  const sql = buildWhere(a)
+  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT COUNT(*) AS n FROM "OrgFormSubmission" WHERE ${sql.sql} AND "checkedInAt" IS NOT NULL`, ...sql.params)
+  return Number(rows?.[0]?.n || 0)
 }
 
 export async function deleteSubmission(orgId: string, id: string, formType?: string, tournamentId?: string): Promise<boolean> {

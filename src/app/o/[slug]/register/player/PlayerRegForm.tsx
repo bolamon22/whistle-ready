@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { CheckCircle2 } from 'lucide-react'
 
@@ -26,6 +26,24 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     agree: false, signature: '',
   })
   const set = (k: string, v: any) => setD((p: any) => ({ ...p, [k]: v }))
+  // Staff can hand a parent a link / QR with ?club=&team= (game-day check-in): preselect
+  // them when they match a registered club/team, otherwise leave the pickers untouched.
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      const club = String(sp.get('club') || '').trim(), team = String(sp.get('team') || '').trim()
+      if (!club && !team) return
+      if (clubMode) {
+        const c = clubs!.find(x => x.name === club)
+        if (!c) return
+        const t = team && c.teams.some(x => x.name === team) ? team : ''
+        setD((p: any) => ({ ...p, clubName: c.name, teamPick: t }))
+      } else if (team && Array.isArray(teams) && teams.includes(team)) {
+        setD((p: any) => ({ ...p, teamName: team }))
+      }
+    } catch { /* no window / bad params */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const clubTeams = clubMode ? (clubs!.find(c => c.name === d.clubName)?.teams ?? []) : []
   const resolvedTeam: string = (() => {
     const other = String(d.teamOther || '').trim()
