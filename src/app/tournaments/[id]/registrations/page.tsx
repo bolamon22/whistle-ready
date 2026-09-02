@@ -1565,7 +1565,7 @@ export default function RegistrationsPage() {
               return (
                 <div key={reg.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                   {/* Row header */}
-                  <div className="px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+                  <div className="px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                     <button onClick={() => setExpanded(expanded === reg.id ? null : reg.id)} className="flex-1 text-left min-w-0 flex items-center gap-3">
                       {clubLogo
                         ? <img src={clubLogo} alt="" className="h-9 w-9 rounded-lg object-contain bg-white border border-slate-200 flex-shrink-0" />
@@ -1578,7 +1578,7 @@ export default function RegistrationsPage() {
                     </button>
 
                     {/* Billing summary */}
-                    <div className="flex items-center gap-4 text-sm flex-shrink-0">
+                    <div className="flex items-center gap-4 text-sm flex-shrink-0 w-full sm:w-auto justify-between sm:justify-end border-t border-slate-100 pt-2 sm:border-0 sm:pt-0 pl-12 sm:pl-0">
                       <div className="text-right">
                         <div className="text-xs text-slate-400">Invoiced</div>
                         <div className="font-medium text-slate-700">{fmt(due)}</div>
