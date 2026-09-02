@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
+import { Menu, X, Sun, Moon } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { useOrg } from '@/lib/org-context'
+import { isStaffThemeRoute } from './ThemeShell'
 
 interface Tournament {
   id: string
@@ -38,6 +40,8 @@ const ROLE_LABELS: Record<string, string> = {
 export default function NavBar() {
   const pathname = usePathname()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [menuOpen, setMenuOpen] = useState(false)   // phone hamburger menu
+  const [dark, setDark] = useState(false)           // mirrors <ThemeShell>'s preference
   const org = useOrg()
   const { data: session } = useSession()
   const { effectiveRole, isPreview, setPreviewRole } = useRole()
@@ -67,6 +71,25 @@ export default function NavBar() {
     return () => window.removeEventListener('preview-org-changed', fetchTournaments)
   }, [isAdmin])
 
+  // Close the phone menu whenever the route changes
+  useEffect(() => { setMenuOpen(false) }, [pathname])
+
+  // Light/Dark lives in <ThemeShell> (localStorage + body class); the phone menu
+  // flips the same key and both sides sync over a 'gd-theme' window event.
+  useEffect(() => {
+    try { setDark(localStorage.getItem('gd-staff-theme') === 'dark') } catch {}
+    const onTheme = (e: Event) => setDark(!!(e as CustomEvent).detail?.dark)
+    window.addEventListener('gd-theme', onTheme)
+    return () => window.removeEventListener('gd-theme', onTheme)
+  }, [])
+
+  function toggleTheme() {
+    const next = !dark
+    setDark(next)
+    try { localStorage.setItem('gd-staff-theme', next ? 'dark' : 'light') } catch {}
+    window.dispatchEvent(new CustomEvent('gd-theme', { detail: { dark: next } }))
+  }
+
   // Admin pages use SuperAdminBar as sole header
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/o/')) return null
   // Public pay-by-link pages present as the tournament org (Sunshine Events Group), not Whistle Ready.
@@ -85,12 +108,12 @@ export default function NavBar() {
         </div>
       )}
 
-      <nav className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 shadow-sm">
+      <nav className="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3 shadow-sm">
 
         {/* ── LEFT: Brand ── */}
         {hasOrg ? (
           /* Org user: org logo + name on the left */
-          <a href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+          <a href="/" className="flex items-center gap-2.5 min-w-0 sm:flex-shrink-0 group">
             {org.logoUrl ? (
               <img
                 src={org.logoUrl}
@@ -102,7 +125,7 @@ export default function NavBar() {
                 <span className="text-white font-bold text-sm">{org.name?.charAt(0) ?? '?'}</span>
               </div>
             )}
-            <span className="font-bold text-slate-800 text-base tracking-tight leading-tight">
+            <span className="font-bold text-slate-800 text-base tracking-tight leading-tight min-w-0 truncate">
               {org.name}
             </span>
           </a>
@@ -114,16 +137,16 @@ export default function NavBar() {
           </a>
         )}
 
-        <div className="h-5 w-px bg-slate-200 flex-shrink-0"/>
+        <div className="hidden sm:block h-5 w-px bg-slate-200 flex-shrink-0"/>
 
         {/* Nav links */}
-        <a href="/" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Tournaments</a>
+        <a href="/" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Tournaments</a>
 
         {/* Tournament quick-links */}
         {tournaments.length > 0 && (
           <>
-            <div className="h-5 w-px bg-slate-200 flex-shrink-0"/>
-            <div className="flex items-center gap-3">
+            <div className="hidden sm:block h-5 w-px bg-slate-200 flex-shrink-0"/>
+            <div className="hidden sm:flex items-center gap-3">
               {tournaments.slice(0, 4).map(t => (
                 <Link
                   key={t.id}
@@ -149,21 +172,21 @@ export default function NavBar() {
         )}
 
         {(role === 'admin' || role === 'director' || role === 'assigner' || role === 'scheduler') && (
-          <a href="/staff" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Staff</a>
+          <a href="/staff" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Staff</a>
         )}
 
         {/* Admin-only links */}
         {isAdmin && (
           <>
-            <Link href="/admin" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Dashboard</Link>
-            <Link href="/admin/users" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Users</Link>
-            <Link href="/admin/permissions" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Perms</Link>
-            <Link href="/admin/roadmap" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Roadmap</Link>
+            <Link href="/admin" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Dashboard</Link>
+            <Link href="/admin/users" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Users</Link>
+            <Link href="/admin/permissions" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Perms</Link>
+            <Link href="/admin/roadmap" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Roadmap</Link>
           </>
         )}
 
         {/* ── RIGHT: Whistle Ready badge (org users only) + auth ── */}
-        <div className="ml-auto flex items-center gap-3 flex-shrink-0">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-shrink-0">
 
           {/* Whistle Ready platform badge — shown to org users */}
           {hasOrg && (
@@ -181,8 +204,8 @@ export default function NavBar() {
             <>
               {/* View As dropdown — admin only */}
               {isAdmin && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-slate-400 hidden sm:block">View as:</span>
+                <div className="hidden sm:flex items-center gap-1.5">
+                  <span className="text-xs text-slate-400">View as:</span>
                   <select
                     value={isPreview ? role : ''}
                     onChange={e => setPreviewRole(e.target.value || null)}
@@ -196,7 +219,7 @@ export default function NavBar() {
                 </div>
               )}
 
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>
+              <span className={`hidden sm:inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>
                 {ROLE_LABELS[role] ?? role}
               </span>
 
@@ -212,8 +235,15 @@ export default function NavBar() {
               </Link>
 
               <button onClick={() => signOut({ callbackUrl: '/login' })}
-                className="text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-300 px-3 py-1 rounded-lg transition-colors">
+                className="hidden sm:inline-block text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-300 px-3 py-1 rounded-lg transition-colors">
                 Sign out
+              </button>
+
+              {/* Phone: hamburger replaces the links, role badge, View-as and Sign out */}
+              <button type="button" onClick={() => setMenuOpen(o => !o)}
+                aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}
+                className="sm:hidden w-9 h-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center">
+                {menuOpen ? <X size={18} /> : <Menu size={18} />}
               </button>
             </>
           ) : (
@@ -224,6 +254,94 @@ export default function NavBar() {
           )}
         </div>
       </nav>
+
+      {/* Phone menu — everything the desktop bar shows, stacked under the bar */}
+      {menuOpen && session && (
+        <div className="sm:hidden">
+          <div className="absolute inset-x-0 top-full h-screen bg-black/30" onClick={() => setMenuOpen(false)} />
+          <div className="absolute inset-x-0 top-full bg-white border-b border-slate-200 shadow-lg max-h-[80vh] overflow-y-auto">
+            <div className="px-3 divide-y divide-slate-100">
+
+              <Link href="/profile" className="flex items-center gap-3 py-3">
+                {session.user?.image ? (
+                  <img src={session.user.image} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-200 flex-shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-sky-100 text-sky-700 text-xs font-bold flex items-center justify-center border border-slate-200 flex-shrink-0">
+                    {(session.user?.name || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-slate-800 truncate">{session.user?.name}</div>
+                  <span className={`inline-block mt-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>{ROLE_LABELS[role] ?? role}</span>
+                </div>
+                <span className="text-sm font-medium text-sky-600">Profile</span>
+              </Link>
+
+              <div className="py-1.5">
+                <a href="/" className={MOBILE_LINK}>Tournaments</a>
+                {tournaments.slice(0, 4).map(t => (
+                  <Link key={t.id} href={`/tournaments/${t.id}/dashboard`} className={MOBILE_LINK}>
+                    {t.logoUrl ? (
+                      <img src={t.logoUrl} alt="" className="h-7 w-7 object-contain rounded-md border border-slate-200 bg-slate-50 flex-shrink-0" />
+                    ) : (
+                      <div className="h-7 w-7 rounded-md border border-slate-200 bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">{t.name.charAt(0)}</div>
+                    )}
+                    <span className="truncate">{t.name}</span>
+                  </Link>
+                ))}
+                {(role === 'admin' || role === 'director' || role === 'assigner' || role === 'scheduler') && (
+                  <a href="/staff" className={MOBILE_LINK}>Staff</a>
+                )}
+                {isAdmin && (
+                  <>
+                    <Link href="/admin" className={MOBILE_LINK}>Dashboard</Link>
+                    <Link href="/admin/users" className={MOBILE_LINK}>Users</Link>
+                    <Link href="/admin/permissions" className={MOBILE_LINK}>Perms</Link>
+                    <Link href="/admin/roadmap" className={MOBILE_LINK}>Roadmap</Link>
+                  </>
+                )}
+              </div>
+
+              {isAdmin && (
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-600">View as</span>
+                  <select
+                    value={isPreview ? role : ''}
+                    onChange={e => setPreviewRole(e.target.value || null)}
+                    className={`text-sm font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-amber-400 ${isPreview ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
+                  >
+                    <option value="">Admin (you)</option>
+                    {['director','club_director','assigner','scheduler','coach','staff','parent'].map(r => (
+                      <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {isStaffThemeRoute(pathname || '') && (
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-600">Appearance</span>
+                  <button type="button" onClick={toggleTheme}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-1.5">
+                    {dark ? <Sun size={15} /> : <Moon size={15} />}
+                    {dark ? 'Switch to light' : 'Switch to dark'}
+                  </button>
+                </div>
+              )}
+
+              <div className="py-3">
+                <button onClick={() => signOut({ callbackUrl: '/login' })}
+                  className="w-full text-sm font-medium text-slate-600 hover:text-red-600 border border-slate-200 hover:border-red-300 px-3 py-2 rounded-lg transition-colors">
+                  Sign out
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
+const MOBILE_LINK = 'flex items-center gap-3 py-2.5 text-[15px] font-medium text-slate-700 hover:text-sky-600'
