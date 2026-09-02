@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
+import { tournamentOrgId } from '@/lib/org'
+import { listSubmissions } from '@/lib/formSubmissions'
 
-// Staff: list "work at our event" applications for THIS tournament. Submissions are
-// stored per-org (orgFormSubmissions:{orgId}) and tagged with tournamentId.
+// Staff: "work at our event" applications for THIS tournament (rows in
+// "OrgFormSubmission" tagged with the tournamentId — see src/lib/formSubmissions.ts).
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ submissions: [] }, { status: 401 })
-  const id = params.id
+  const gate = await requireStaff()
+  if (!gate.ok) return gate.res
+  const orgId = await tournamentOrgId(params.id)
+  if (!orgId) return NextResponse.json({ submissions: [] }, { status: 404 })
+  if (gate.role !== 'admin' && gate.orgId && gate.orgId !== orgId) return NextResponse.json({ error: 'Not your organization', submissions: [] }, { status: 403 })
   try {
-    const t = await prisma.$queryRawUnsafe<any[]>('SELECT orgId FROM "Tournament" WHERE id = ?', id)
-    const orgId = t?.[0]?.orgId
-    if (!orgId) return NextResponse.json({ submissions: [] })
-    const row = await prisma.appSetting.findUnique({ where: { key: `orgFormSubmissions:${orgId}` } })
-    const all = row ? JSON.parse(row.value || '[]') : []
-    const subs = (Array.isArray(all) ? all : []).filter((s: any) => s.formType === 'staff' && s?.data?.tournamentId === id)
-    return NextResponse.json({ submissions: subs })
+    const submissions = await listSubmissions({ orgId, formType: 'staff', tournamentId: params.id, sort: 'oldest', limit: 5000 })
+    return NextResponse.json({ submissions })
   } catch {
     return NextResponse.json({ submissions: [] })
   }

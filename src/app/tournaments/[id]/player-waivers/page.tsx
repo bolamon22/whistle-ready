@@ -23,8 +23,6 @@ const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'g
 const PAGE = 100
 
 const teamLabel = (t: any) => { const s = String(t || '').trim(); return !s ? '—' : s === '__other' ? 'Other / not listed' : s }
-const jerseyNum = (j: any) => { const n = parseInt(String(j || '').replace(/\D/g, ''), 10); return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY }
-const norm = (s: any) => String(s ?? '').toLowerCase()
 const isPhone = (k: string) => /phone/i.test(k)
 const isEmail = (k: string) => /email/i.test(k)
 
@@ -140,21 +138,57 @@ export default function PlayerWaiverEntries() {
   const { id } = useParams() as { id: string }
   const [name, setName] = useState('Tournament')
   const [logo, setLogo] = useState<string | undefined>(undefined)
-  const [subs, setSubs] = useState<Sub[]>([])
+  const [subs, setSubs] = useState<Sub[]>([])          // the loaded page(s) of results
+  const [total, setTotal] = useState(0)                 // matching the current search / team
+  const [grandTotal, setGrandTotal] = useState(0)       // every waiver for this tournament
+  const [teams, setTeams] = useState<{ name: string; count: number }[]>([])
   const [open, setOpen] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [q, setQ] = useState('')
-  const [team, setTeam] = useState('')
+  const [qDebounced, setQDebounced] = useState('')
+  const [team, setTeam] = useState('')                  // raw teamName value ('' = all)
   const [sort, setSort] = useState<'newest' | 'name' | 'jersey'>('newest')
-  const [limit, setLimit] = useState(PAGE)
   const [editing, setEditing] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
   const [savingEdit, setSavingEdit] = useState(false)
   const [teamGroups, setTeamGroups] = useState<TeamGroup[]>([])
 
+  // Search / team / sort are answered by the server, a page at a time, so this stays quick
+  // with thousands of waivers. A roster (team selected) reads best in jersey order.
+  const effSort = sort === 'newest' && team ? 'jersey' : sort
+  const queryUrl = (offset: number, limit = PAGE) =>
+    `/api/tournaments/${id}/player-waivers?q=${encodeURIComponent(qDebounced)}&team=${encodeURIComponent(team)}&sort=${effSort}&limit=${limit}&offset=${offset}`
+  useEffect(() => { const t = setTimeout(() => setQDebounced(q.trim()), 250); return () => clearTimeout(t) }, [q])
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetch(queryUrl(0)).then(r => r.ok ? r.json() : null).then(d => {
+      if (cancelled || !d) return
+      setSubs(Array.isArray(d.submissions) ? d.submissions : [])
+      setTotal(Number(d.total) || 0); setGrandTotal(Number(d.grandTotal) || 0)
+      setTeams(Array.isArray(d.teams) ? d.teams : [])
+    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, qDebounced, team, effSort])
+  async function loadMore() {
+    setLoadingMore(true)
+    try {
+      const d = await fetch(queryUrl(subs.length)).then(r => r.ok ? r.json() : null)
+      if (d && Array.isArray(d.submissions)) setSubs(prev => [...prev, ...d.submissions.filter((x: Sub) => !prev.some(p => p.id === x.id))])
+      if (d) setTotal(Number(d.total) || 0)
+    } catch {} finally { setLoadingMore(false) }
+  }
+  async function refreshCounts() {
+    try {
+      const d = await fetch(queryUrl(0, 1)).then(r => r.ok ? r.json() : null)
+      if (d) { setTotal(Number(d.total) || 0); setGrandTotal(Number(d.grandTotal) || 0); setTeams(Array.isArray(d.teams) ? d.teams : []) }
+    } catch {}
+  }
+
   useEffect(() => {
     fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setName(d.name || 'Tournament'); setLogo(d.logoUrl || undefined) } }).catch(() => {})
-    fetch(`/api/tournaments/${id}/player-waivers`).then(r => r.ok ? r.json() : { submissions: [] }).then(d => setSubs(Array.isArray(d.submissions) ? d.submissions : [])).catch(() => {}).finally(() => setLoading(false))
     // Registered clubs and their teams for this tournament → the Team picker when staff edit a waiver
     fetch(`/api/registrations?tournamentId=${id}`).then(r => r.ok ? r.json() : []).then((regs: any[]) => {
       const byClub = new Map<string, Set<string>>()
@@ -172,8 +206,8 @@ export default function PlayerWaiverEntries() {
   // Team names already used on other waivers that aren't a registered club/team — offered too, for consistency.
   const otherTeams = useMemo(() => {
     const known = new Set(teamGroups.flatMap(g => [g.club, ...g.teams.map(t => `${g.club} — ${t}`)]))
-    return [...new Set(subs.map(s => String(s.data?.teamName || '').trim()).filter(t => t && t !== '__other' && !known.has(t)))].sort((a, b) => a.localeCompare(b))
-  }, [subs, teamGroups])
+    return teams.map(t => t.name.trim()).filter(t => t && t !== '__other' && !known.has(t)).sort((a, b) => a.localeCompare(b))
+  }, [teams, teamGroups])
 
   function startEdit(s: Sub) {
     const d = s.data || {}
@@ -195,46 +229,22 @@ export default function PlayerWaiverEntries() {
       if (!res.ok) { toast.error(j.error || 'Could not save'); return }
       setSubs(prev => prev.map(x => x.id === editing ? j.submission : x))
       setEditing(null); toast.success('Saved')
+      refreshCounts()
     } catch { toast.error('Could not save') } finally { setSavingEdit(false) }
   }
-
-  // Distinct teams with counts, for the roster picker
-  const teams = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const s of subs) { const t = teamLabel(s.data?.teamName); m.set(t, (m.get(t) || 0) + 1) }
-    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [subs])
-
-  // Search + team filter + sort. Everything is client-side: a few thousand rows filter instantly.
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    let list = subs.filter(s => {
-      const d = s.data || {}
-      if (team && teamLabel(d.teamName) !== team) return false
-      if (!needle) return true
-      return [d.playerName, d.parentName, d.parent2Name, d.parentEmail, d.parent2Email, d.playerEmail, teamLabel(d.teamName), d.usLacrosse, d.jerseyNumber, d.parentPhone, d.parent2Phone, d.emergencyName, d.grade]
-        .some(v => norm(v).includes(needle))
-    })
-    const effSort = sort === 'newest' && team ? 'jersey' : sort   // a team roster reads best in jersey order
-    if (effSort === 'name') list = list.slice().sort((a, b) => norm(a.data?.playerName).localeCompare(norm(b.data?.playerName)))
-    else if (effSort === 'jersey') list = list.slice().sort((a, b) => (jerseyNum(a.data?.jerseyNumber) - jerseyNum(b.data?.jerseyNumber)) || norm(a.data?.playerName).localeCompare(norm(b.data?.playerName)))
-    else list = list.slice().sort((a, b) => (Date.parse(b.submittedAt) || 0) - (Date.parse(a.submittedAt) || 0))
-    return list
-  }, [subs, q, team, sort])
-
-  useEffect(() => { setLimit(PAGE) }, [q, team, sort])
-  const shown = rows.slice(0, limit)
 
   const fmt = (s: string) => { try { return new Date(s).toLocaleString() } catch { return s } }
   const fmtShort = (s: string) => { try { return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return s } }
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
+    let all: Sub[] = subs
+    try { const d = await fetch(queryUrl(0, 20000)).then(r => r.ok ? r.json() : null); if (d && Array.isArray(d.submissions)) all = d.submissions } catch {}
     const head = ['Submitted', ...CSV_COLS].join(',')
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = rows.map(s => [fmt(s.submittedAt), ...CSV_COLS.map(c => c === 'teamName' ? teamLabel(s.data?.teamName) : s.data?.[c])].map(esc).join(','))
+    const lines = all.map(s => [fmt(s.submittedAt), ...CSV_COLS.map(c => c === 'teamName' ? teamLabel(s.data?.teamName) : s.data?.[c])].map(esc).join(','))
     const blob = new Blob([[head, ...lines].join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url
-    a.download = `player-waivers${team ? '-' + team.replace(/[^\w-]+/g, '_') : ''}.csv`; a.click(); URL.revokeObjectURL(url)
+    a.download = `player-waivers${team ? '-' + teamLabel(team).replace(/[^\w-]+/g, '_') : ''}.csv`; a.click(); URL.revokeObjectURL(url)
   }
 
   const filtering = !!(q.trim() || team)
@@ -260,16 +270,16 @@ export default function PlayerWaiverEntries() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 sm:mt-6 mb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Player waivers</h1>
-            <p className="text-sm text-slate-500">{subs.length} submission{subs.length === 1 ? '' : 's'} for this tournament.</p>
+            <p className="text-sm text-slate-500">{grandTotal} submission{grandTotal === 1 ? '' : 's'} for this tournament.</p>
           </div>
           <div className="grid grid-cols-2 sm:flex items-center gap-2">
             <Link href={`/tournaments/${id}/player-waiver`} target="_blank" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><ExternalLink size={14} /> Open form</Link>
-            {subs.length > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Download size={14} /> Export{filtering ? ` (${rows.length})` : ' CSV'}</button>}
+            {grandTotal > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Download size={14} /> Export{filtering ? ` (${total})` : ' CSV'}</button>}
           </div>
         </div>
 
         {/* Search + roster picker */}
-        {subs.length > 0 && (
+        {(grandTotal > 0 || filtering) && (
           <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -279,8 +289,8 @@ export default function PlayerWaiverEntries() {
             </div>
             <div className="grid grid-cols-2 sm:flex gap-2">
               <select value={team} onChange={e => setTeam(e.target.value)} className="min-w-0 sm:w-56 border border-slate-300 rounded-lg px-3 py-2.5 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
-                <option value="">All teams ({subs.length})</option>
-                {teams.map(([t, n]) => <option key={t} value={t}>{t} ({n})</option>)}
+                <option value="">All teams ({grandTotal})</option>
+                {teams.map(t => <option key={t.name || '(blank)'} value={t.name}>{teamLabel(t.name)} ({t.count})</option>)}
               </select>
               <select value={sort} onChange={e => setSort(e.target.value as any)} className="min-w-0 sm:w-36 border border-slate-300 rounded-lg px-3 py-2.5 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
                 <option value="newest">{team ? 'Jersey # (roster)' : 'Newest first'}</option>
@@ -291,29 +301,29 @@ export default function PlayerWaiverEntries() {
           </div>
         )}
 
-        {loading ? <p className="text-slate-400 text-center py-16">Loading…</p>
-          : subs.length === 0 ? (
+        {loading && subs.length === 0 ? <p className="text-slate-400 text-center py-16">Loading…</p>
+          : grandTotal === 0 && !filtering ? (
             <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400">
               <Inbox size={32} className="mx-auto mb-2" />
               No waivers submitted yet. Share the form from the public page or the link below.
             </div>
-          ) : rows.length === 0 ? (
+          ) : subs.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400">
-              No players match{q.trim() ? ` “${q.trim()}”` : ''}{team ? ` on ${team}` : ''}.
+              No players match{q.trim() ? ` “${q.trim()}”` : ''}{team ? ` on ${teamLabel(team)}` : ''}.
               <button onClick={() => { setQ(''); setTeam('') }} className="block mx-auto mt-2 text-sm text-teal-600 hover:underline">Clear filters</button>
             </div>
           ) : (
             <>
               {team && (
                 <div className="flex items-center justify-between gap-3 mb-2">
-                  <h2 className="text-sm font-semibold text-slate-700 truncate">{team} roster · {rows.length} player{rows.length === 1 ? '' : 's'}</h2>
+                  <h2 className="text-sm font-semibold text-slate-700 truncate">{teamLabel(team)} roster · {total} player{total === 1 ? '' : 's'}</h2>
                   <button onClick={() => setTeam('')} className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap">All teams</button>
                 </div>
               )}
 
               {/* Phones: one card per player */}
               <div className="sm:hidden space-y-2">
-                {shown.map(s => {
+                {subs.map(s => {
                   const d = s.data || {}
                   const isOpen = open === s.id
                   return (
@@ -348,7 +358,7 @@ export default function PlayerWaiverEntries() {
                     <tr><th className="px-4 py-2.5 font-semibold">Player</th><th className="px-4 py-2.5 font-semibold">Team</th><th className="px-4 py-2.5 font-semibold">Grade</th><th className="px-4 py-2.5 font-semibold">Parent</th><th className="px-4 py-2.5 font-semibold">Submitted</th><th className="px-4 py-2.5"></th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {shown.map(s => {
+                    {subs.map(s => {
                       const d = s.data || {}
                       return (
                         <React.Fragment key={s.id}>
@@ -371,9 +381,9 @@ export default function PlayerWaiverEntries() {
               </div>
 
               <div className="flex items-center justify-between gap-3 mt-3 text-xs text-slate-400">
-                <span>Showing {shown.length} of {rows.length}{filtering ? ` matching (${subs.length} total)` : ''}</span>
-                {rows.length > shown.length && (
-                  <button onClick={() => setLimit(l => l + PAGE)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 rounded-lg px-3 py-1.5">Show {Math.min(PAGE, rows.length - shown.length)} more</button>
+                <span>Showing {subs.length} of {total}{filtering ? ` matching (${grandTotal} total)` : ''}{loading ? ' · updating…' : ''}</span>
+                {total > subs.length && (
+                  <button onClick={loadMore} disabled={loadingMore} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 disabled:opacity-50 rounded-lg px-3 py-1.5">{loadingMore ? 'Loading…' : `Show ${Math.min(PAGE, total - subs.length)} more`}</button>
                 )}
               </div>
             </>

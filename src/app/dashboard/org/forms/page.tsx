@@ -126,6 +126,7 @@ function FormsInner() {
   const [f, setF] = useState<Forms>(EMPTY)
   const [snap, setSnap] = useState<Forms>(EMPTY)
   const [subs, setSubs] = useState<any[]>([])
+  const [subCounts, setSubCounts] = useState<Record<string, number>>({})
   const [open, setOpen] = useState<{ [k: string]: boolean }>({})
   const [editing, setEditing] = useState<{ [k: string]: boolean }>({})
   const [loading, setLoading] = useState(true)
@@ -147,8 +148,9 @@ function FormsInner() {
           registration: { ...EMPTY.registration, ...(d.registration || {}) },
         }
         setF(merged); setSnap(merged)
-        const sj = await fetch(`/api/org-forms/submit${apiQ}`).then(r => r.ok ? r.json() : { submissions: [] })
+        const sj = await fetch(`/api/org-forms/submit${apiQ}`).then(r => r.ok ? r.json() : { submissions: [], counts: {} })
         setSubs(Array.isArray(sj.submissions) ? sj.submissions : [])
+        setSubCounts(sj.counts && typeof sj.counts === 'object' ? sj.counts : {})
       } catch {} finally { setLoading(false) }
     })()
   }, [status, session, role])
@@ -168,9 +170,11 @@ function FormsInner() {
 
   if (loading) return <div className="text-slate-400 text-center py-16">Loading…</div>
   const pf = f.player, vf = f.vendor, stf = f.staff, rf = f.registration
-  const playerSubs = subs.filter(s => s.formType !== 'vendor' && s.formType !== 'staff')
-  const vendorSubs = subs.filter(s => s.formType === 'vendor')
-  const staffSubs = subs.filter(s => s.formType === 'staff')
+  // Counts come from the API now (submissions live in their own table); the list itself is no longer downloaded.
+  const countOf = (t: string, fallback: any[]) => subCounts[t] ?? fallback.length
+  const playerSubs = { length: countOf('player', subs.filter(s => s.formType !== 'vendor' && s.formType !== 'staff')) }
+  const vendorSubs = { length: countOf('vendor', subs.filter(s => s.formType === 'vendor')) }
+  const staffSubs = { length: countOf('staff', subs.filter(s => s.formType === 'staff')) }
   const playerPath = slug ? `/o/${slug}/register/player` : ''
   const vendorPath = slug ? `/o/${slug}/register/vendor` : ''
   const staffPath = slug ? `/o/${slug}/work` : ''

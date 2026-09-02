@@ -1,49 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
+import { tournamentOrgId } from '@/lib/org'
+import { listSubmissions, deleteSubmission } from '@/lib/formSubmissions'
 
-// Staff: list player-waiver submissions for THIS tournament. Submissions are stored
-// per-org (orgFormSubmissions:{orgId}) and tagged with tournamentId.
+// Staff: vendor requests for THIS tournament (rows in "OrgFormSubmission" tagged with
+// the tournamentId — see src/lib/formSubmissions.ts).
+async function gateForTournament(id: string) {
+  const gate = await requireStaff()
+  if (!gate.ok) return { res: gate.res }
+  const orgId = await tournamentOrgId(id)
+  if (!orgId) return { res: NextResponse.json({ error: 'Tournament not found', submissions: [] }, { status: 404 }) }
+  if (gate.role !== 'admin' && gate.orgId && gate.orgId !== orgId) {
+    return { res: NextResponse.json({ error: 'Not your organization', submissions: [] }, { status: 403 }) }
+  }
+  return { gate, orgId }
+}
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ submissions: [] }, { status: 401 })
-  const id = params.id
+  const g = await gateForTournament(params.id)
+  if ('res' in g) return g.res
   try {
-    const t = await prisma.$queryRawUnsafe<any[]>('SELECT orgId FROM "Tournament" WHERE id = ?', id)
-    const orgId = t?.[0]?.orgId
-    if (!orgId) return NextResponse.json({ submissions: [] })
-    const row = await prisma.appSetting.findUnique({ where: { key: `orgFormSubmissions:${orgId}` } })
-    const all = row ? JSON.parse(row.value || '[]') : []
-    const subs = (Array.isArray(all) ? all : []).filter((s: any) => s.formType === 'vendor' && s?.data?.tournamentId === id)
-    return NextResponse.json({ submissions: subs })
+    const submissions = await listSubmissions({ orgId: g.orgId, formType: 'vendor', tournamentId: params.id, sort: 'oldest', limit: 5000 })
+    return NextResponse.json({ submissions })
   } catch {
     return NextResponse.json({ submissions: [] })
   }
 }
 
-// Staff: delete ONE vendor request (e.g. spam or a test entry). The submissions list is
-// shared across the whole org, so we only ever drop an entry that is BOTH formType
-// 'vendor' AND tagged with this tournamentId — never anything else in the org's list.
+// Staff: delete ONE vendor request (e.g. spam or a test entry). Scoped to this
+// tournament's vendor rows only — never anything else the org has collected.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const id = params.id
+  const g = await gateForTournament(params.id)
+  if ('res' in g) return g.res
   const subId = String(new URL(req.url).searchParams.get('subId') || '')
   if (!subId) return NextResponse.json({ error: 'Missing subId' }, { status: 400 })
   try {
-    const t = await prisma.$queryRawUnsafe<any[]>('SELECT orgId FROM "Tournament" WHERE id = ?', id)
-    const orgId = t?.[0]?.orgId
-    if (!orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
-    const key = `orgFormSubmissions:${orgId}`
-    const row = await prisma.appSetting.findUnique({ where: { key } })
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const all = JSON.parse(row.value || '[]')
-    const list: any[] = Array.isArray(all) ? all : []
-    const next = list.filter((s: any) => !(s?.id === subId && s?.formType === 'vendor' && s?.data?.tournamentId === id))
-    if (next.length === list.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    await prisma.appSetting.update({ where: { key }, data: { value: JSON.stringify(next) } })
-    return NextResponse.json({ ok: true, removed: list.length - next.length })
+    const removed = await deleteSubmission(g.orgId, subId, 'vendor', params.id)
+    if (!removed) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ ok: true, removed: 1 })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Delete failed' }, { status: 500 })
   }

@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
+import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData } from '@/lib/formSubmissions'
 
-// Player-waiver submissions for ONE tournament. They live in the org's form-submissions
-// blob (AppSetting `orgFormSubmissions:{orgId}`, a JSON array) tagged with data.tournamentId.
-//   GET   → list them (staff of this org, or admin)
-//   PATCH → { id, data: { teamName?, jerseyNumber?, … } } edits the whitelisted fields of one
-//           submission and appends an audit entry; the signature / agreement are never editable.
+// Player-waiver submissions for ONE tournament (rows in "OrgFormSubmission", see
+// src/lib/formSubmissions.ts).
+//   GET   ?q=&team=&sort=newest|name|jersey&limit=&offset=
+//         → { submissions, total, grandTotal, teams:[{name,count}], limit, offset }
+//         Search and paging are server-side so the page stays quick at thousands of waivers.
+//   PATCH { id, data: { teamName?, jerseyNumber?, … } } edits the whitelisted fields of one
+//         submission and appends an audit entry; the signature / agreement are never editable.
 
-const KEY = (orgId: string) => `orgFormSubmissions:${orgId}`
 const EDITABLE = [
-  'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber',
+  'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'clubName', 'teamName', 'jerseyNumber',
   'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone',
   'emergencyName', 'emergencyPhone', 'hotel', 'hotelName',
 ] as const
@@ -27,20 +28,27 @@ async function gateForTournament(id: string) {
   return { gate, orgId }
 }
 
-function isForTournament(s: any, id: string) {
-  return s && s.formType === 'player' && s?.data?.tournamentId === id
-}
-
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const g = await gateForTournament(params.id)
   if ('res' in g) return g.res
+  const sp = new URL(req.url).searchParams
+  const q = String(sp.get('q') || '').trim()
+  const team = String(sp.get('team') || '')
+  const sortParam = String(sp.get('sort') || 'newest')
+  const sort = (['newest', 'oldest', 'name', 'jersey'].includes(sortParam) ? sortParam : 'newest') as 'newest' | 'oldest' | 'name' | 'jersey'
+  const limit = Math.max(1, Math.min(20000, parseInt(sp.get('limit') || '100', 10) || 100))
+  const offset = Math.max(0, parseInt(sp.get('offset') || '0', 10) || 0)
+  const scope = { orgId: g.orgId, formType: 'player', tournamentId: params.id }
   try {
-    const row = await prisma.appSetting.findUnique({ where: { key: KEY(g.orgId) } })
-    const all = row ? JSON.parse(row.value || '[]') : []
-    const subs = (Array.isArray(all) ? all : []).filter((s: any) => isForTournament(s, params.id))
-    return NextResponse.json({ submissions: subs })
-  } catch {
-    return NextResponse.json({ submissions: [] })
+    const [submissions, total, grandTotal, teams] = await Promise.all([
+      listSubmissions({ ...scope, q, team, sort, limit, offset }),
+      countSubmissions({ ...scope, q, team }),
+      countSubmissions(scope),
+      teamCounts(scope),
+    ])
+    return NextResponse.json({ submissions, total, grandTotal, teams, limit, offset })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Failed to load', submissions: [], total: 0, grandTotal: 0, teams: [] }, { status: 500 })
   }
 }
 
@@ -56,21 +64,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   for (const k of EDITABLE) if (k in patch) changes[k] = String(patch[k] ?? '').trim()
   if (!Object.keys(changes).length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
 
-  const key = KEY(g.orgId)
-  const row = await prisma.appSetting.findUnique({ where: { key } })
-  const all: any[] = row ? (JSON.parse(row.value || '[]') || []) : []
-  const idx = all.findIndex(s => s?.id === subId && isForTournament(s, params.id))
-  if (idx < 0) return NextResponse.json({ error: 'Submission not found' }, { status: 404 })
-
-  const before = all[idx]
-  const changed = Object.keys(changes).filter(k => String(before.data?.[k] ?? '') !== changes[k])
-  if (changed.length) {
-    all[idx] = {
-      ...before,
-      data: { ...(before.data || {}), ...changes },
-      edits: [...(Array.isArray(before.edits) ? before.edits : []), { at: new Date().toISOString(), by: g.gate.userId, fields: changed }],
-    }
-    await prisma.appSetting.update({ where: { key }, data: { value: JSON.stringify(all) } })
+  const cur = await getSubmission(g.orgId, subId)
+  if (!cur || cur.formType !== 'player' || String(cur.data?.tournamentId || '') !== params.id) {
+    return NextResponse.json({ error: 'Submission not found' }, { status: 404 })
   }
-  return NextResponse.json({ ok: true, submission: all[idx] })
+  const submission = await updateSubmissionData(g.orgId, subId, changes, g.gate.userId)
+  return NextResponse.json({ ok: true, submission })
 }

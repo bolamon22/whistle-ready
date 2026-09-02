@@ -4,17 +4,11 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, emailEnabled } from '@/lib/email'
 import { mdToHtml } from '@/app/o/[slug]/_md'
-
-async function ensureTable() {
-  try {
-    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AppSetting" ("key" TEXT NOT NULL PRIMARY KEY, "value" TEXT NOT NULL, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
-  } catch { /* ignore */ }
-}
-
-const key = (orgId: string) => `orgFormSubmissions:${orgId}`
+import { insertSubmission, countsByType } from '@/lib/formSubmissions'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
-// exists, then appends the submission to the org's submissions list.
+// exists, then stores the submission as its own row (see src/lib/formSubmissions.ts —
+// the old per-org JSON blob lost entries when two people submitted at once).
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({})) as any
@@ -24,16 +18,7 @@ export async function POST(req: NextRequest) {
     if (!orgId) return NextResponse.json({ error: 'Missing organization' }, { status: 400 })
     const org = await prisma.$queryRawUnsafe<any[]>('SELECT id FROM "Organization" WHERE id = ?', orgId)
     if (!org || org.length === 0) return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
-    await ensureTable()
-    const row = await prisma.appSetting.findUnique({ where: { key: key(orgId) } })
-    const list: any[] = row ? (JSON.parse(row.value || '[]') || []) : []
-    list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), formType, data, submittedAt: new Date().toISOString() })
-    // Safety valve only. The old 5,000 cap silently dropped the OLDEST submissions (i.e. signed
-    // waivers) once an org crossed it — with thousands of players per event that is real data loss.
-    // The proper fix is a submissions table; until then keep everything short of a runaway blob.
-    if (list.length > 50000) list.splice(0, list.length - 50000)
-    const value = JSON.stringify(list)
-    await prisma.appSetting.upsert({ where: { key: key(orgId) }, update: { value }, create: { key: key(orgId), value } })
+    await insertSubmission({ orgId, formType, data })
 
     // Confirmation email (non-blocking) — uses the org's configured confirmation text.
     try {
@@ -62,7 +47,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// AUTH: org admin/director reads submissions for the editor.
+// AUTH: org admin/director reads submission COUNTS for the forms editor (it only shows totals).
 function targetOrgId(req: NextRequest, session: any): string | null {
   const role = session?.user?.role
   const paramOrg = new URL(req.url).searchParams.get('org')
@@ -76,10 +61,9 @@ export async function GET(req: NextRequest) {
   const orgId = targetOrgId(req, session)
   if (!orgId) return NextResponse.json({ submissions: [] })
   try {
-    await ensureTable()
-    const row = await prisma.appSetting.findUnique({ where: { key: key(orgId) } })
-    return NextResponse.json({ submissions: row ? JSON.parse(row.value || '[]') : [] })
+    const counts = await countsByType(orgId)
+    return NextResponse.json({ submissions: [], counts })
   } catch {
-    return NextResponse.json({ submissions: [] })
+    return NextResponse.json({ submissions: [], counts: {} })
   }
 }
