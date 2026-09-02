@@ -68,7 +68,7 @@ export default function TravelPage({ params }: { params: { id: string } }) {
   if (loading) return <div className="p-8 text-slate-400">Loading…</div>
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-5xl mx-auto px-0 sm:px-4 py-4 sm:py-6">
       <div className="page-header print:hidden">
         <div>
           <h1 className="section-title flex items-center gap-2"><BedDouble size={20} className="text-teal-600" />Travel &amp; hotels</h1>
@@ -95,8 +95,53 @@ export default function TravelPage({ params }: { params: { id: string } }) {
         ))}
       </div>
 
-      {/* Per-club table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto mb-6">
+      {/* Per-club — cards on phones, editable table on desktop */}
+      <div className="sm:hidden space-y-2 mb-6">
+        {regs.map(r => (
+          <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold text-slate-800 truncate">{r.clubName || r.clubContact}</div>
+                <div className="text-xs text-slate-500 truncate">{r.numTeams ?? r.teams?.length ?? ''} team{(r.numTeams ?? r.teams?.length ?? 0) === 1 ? '' : 's'}{r.clubBasedIn ? ` · ${r.clubBasedIn}` : ''}</div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="text-lg font-bold text-slate-800 leading-tight">{nights(r) || 0}</div>
+                <div className="text-[10px] uppercase tracking-wide text-slate-400">room nights</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-2.5">
+              <div>
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Hotel?</label>
+                <select value={r.needsHotel || 'No'} onChange={e => patchLocal(r.id, { needsHotel: e.target.value })} onBlur={() => save(r)}
+                  className="w-full border border-slate-300 rounded px-1.5 py-1.5 text-sm bg-white">
+                  <option>Yes</option><option>No</option><option>Maybe</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Hotel</label>
+                <input className={inputCls} value={r.hotelName || ''} placeholder="TBD" onChange={e => patchLocal(r.id, { hotelName: e.target.value })} onBlur={() => save(r)} />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Rooms/night</label>
+                <input type="number" inputMode="numeric" min="0" className={inputCls} value={r.hotelRooms || ''} onChange={e => patchLocal(r.id, { hotelRooms: Number(e.target.value) })} onBlur={() => save(r)} />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Nights</label>
+                <input type="number" inputMode="numeric" min="0" className={inputCls} value={r.hotelNights || ''} onChange={e => patchLocal(r.id, { hotelNights: Number(e.target.value) })} onBlur={() => save(r)} />
+              </div>
+              <div className="flex items-end pb-2 text-xs text-slate-400">{savingId === r.id ? 'Saving…' : ''}</div>
+            </div>
+          </div>
+        ))}
+        {regs.length === 0 && <div className="bg-white border border-slate-200 rounded-xl px-3 py-8 text-center text-slate-400">No registrations yet.</div>}
+        {regs.length > 0 && (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-sm font-semibold text-slate-800">
+            <span>Totals</span><span>{totals.rooms} rooms/night · {totals.roomNights} room nights</span>
+          </div>
+        )}
+      </div>
+
+      <div className="hidden sm:block bg-white border border-slate-200 rounded-xl overflow-x-auto mb-6">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">

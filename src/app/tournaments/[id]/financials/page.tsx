@@ -157,19 +157,19 @@ export default function FinancialsPage() {
 
         <TournamentNav id={tournamentId as string} name={tournamentName || 'Tournament'} logoUrl={tournamentLogo} />
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-5 sm:mb-6 gap-3 sm:gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Financials</h1>
           </div>
           {/* Top-line summary pills */}
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-2 sm:flex gap-2 sm:flex-wrap">
             {[
               { label: 'Total Revenue', value: totalRevenue, color: 'text-slate-800', bg: 'bg-slate-50 border-slate-200' },
               { label: 'Total Expenses', value: totalExpense, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
               { label: 'Gross Profit', value: grossProfit, color: grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600', bg: grossProfit >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200' },
               { label: 'Net Cash', value: netCash, color: netCash >= 0 ? 'text-emerald-700' : 'text-red-600', bg: netCash >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200' },
             ].map(s => (
-              <div key={s.label} className={`border rounded-xl px-4 py-2 text-center min-w-[100px] ${s.bg}`}>
+              <div key={s.label} className={`border rounded-xl px-3 sm:px-4 py-2 text-center min-w-0 sm:min-w-[100px] ${s.bg}`}>
                 <div className={`text-lg font-bold ${s.color}`}>{fmt(s.value)}</div>
                 <div className="text-xs text-slate-500">{s.label}</div>
               </div>
@@ -178,19 +178,19 @@ export default function FinancialsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-white border border-slate-200 rounded-xl p-1 w-fit flex-wrap">
+        <div className="flex gap-1 mb-5 sm:mb-6 bg-white border border-slate-200 rounded-xl p-1 w-full sm:w-fit flex-wrap">
           {tabs.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.key ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.key ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
               <tab.Icon size={15} /> {tab.label}
             </button>
           ))}
           <Link href={`/tournaments/${tournamentId}/registrations`}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100">
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100 whitespace-nowrap">
             <ClipboardList size={15} /> Team Fees ({registrations.length + individualRegs.length})
           </Link>
           <Link href={`/tournaments/${tournamentId}/pay-summary`}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100">
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100 whitespace-nowrap">
             <Users size={15} /> Staff Pay ({staffSummary.length})
           </Link>
         </div>
@@ -356,7 +356,35 @@ export default function FinancialsPage() {
                 <p className="text-sm text-slate-400 mt-1">Add vendor fees, tent rentals, field costs, merch sales, awards, etc.</p>
               </Card>
             ) : (
-              <Card className="overflow-hidden">
+              <>
+              <div className="sm:hidden space-y-2">
+                {transactions.map(tx => (
+                  <div key={tx.id} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-800">{tx.description}</div>
+                        <div className="text-xs text-slate-400">{new Date(tx.date).toLocaleDateString()} · {methodLabel(tx.method)}</div>
+                        {tx.notes && <div className="text-xs text-slate-400 mt-0.5">{tx.notes}</div>}
+                      </div>
+                      <div className={`text-base font-bold whitespace-nowrap ${tx.type==='income'?'text-emerald-600':'text-red-500'}`}>{tx.type==='income'?'+':'-'}{fmt(tx.amount)}</div>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 mt-2">
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${tx.type==='income'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{catLabel(tx.category)}</span>
+                      <div className="flex items-center gap-3">
+                        <button onClick={()=>openEdit(tx)} aria-label="Edit" className="text-slate-400 hover:text-teal-600 p-1"><Pencil size={15} /></button>
+                        <button onClick={()=>handleDelete(tx.id,tx.description)} aria-label="Delete" className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={15} /></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm space-y-1">
+                  {otherIncome > 0 && <div className="flex justify-between font-semibold text-emerald-700"><span>Total Income</span><span>+{fmt(otherIncome)}</span></div>}
+                  {otherExpense > 0 && <div className="flex justify-between font-semibold text-red-600"><span>Total Expenses</span><span>-{fmt(otherExpense)}</span></div>}
+                  <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-200"><span>Net</span><span className={otherIncome-otherExpense>=0?'text-emerald-700':'text-red-600'}>{fmt(otherIncome-otherExpense)}</span></div>
+                </div>
+              </div>
+
+              <Card className="hidden sm:block overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
@@ -399,6 +427,7 @@ export default function FinancialsPage() {
                   </tfoot>
                 </table>
               </Card>
+              </>
             )}
           </div>
         )}

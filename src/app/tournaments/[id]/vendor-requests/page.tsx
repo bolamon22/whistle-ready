@@ -48,14 +48,14 @@ export default function VendorRequestEntries() {
     <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
       <div className="max-w-5xl mx-auto">
         <TournamentNav id={id} name={name} logoUrl={logo} />
-        <div className="flex items-center justify-between mt-6 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 sm:mt-6 mb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Vendor requests</h1>
             <p className="text-sm text-slate-500">{subs.length} request{subs.length === 1 ? '' : 's'} for this tournament.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href={`/tournaments/${id}/vendor-request`} target="_blank" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"><ExternalLink size={14} /> Open form</Link>
-            {subs.length > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center gap-1.5"><Download size={14} /> Export CSV</button>}
+          <div className="grid grid-cols-2 sm:flex items-center gap-2">
+            <Link href={`/tournaments/${id}/vendor-request`} target="_blank" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><ExternalLink size={14} /> Open form</Link>
+            {subs.length > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Download size={14} /> Export CSV</button>}
           </div>
         </div>
 
@@ -63,7 +63,39 @@ export default function VendorRequestEntries() {
           : subs.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400"><Inbox size={32} className="mx-auto mb-2" />No vendor requests yet.</div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <>
+            {/* Phones: one card per request */}
+            <div className="sm:hidden space-y-2">
+              {rows.map(s => (
+                <div key={s.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <button onClick={() => setOpen(open === s.id ? null : s.id)} className="w-full text-left px-3 py-2.5 flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-800 truncate">{s.data?.companyName || '—'}</div>
+                      <div className="text-sm text-slate-600 truncate">{s.data?.companyContact || '—'}{s.data?.email ? ` · ${s.data.email}` : ''}</div>
+                      <div className="text-xs text-slate-400 truncate">{[s.data?.level, s.data?.paymentOption].filter(Boolean).join(' · ') || '—'} · {fmt(s.submittedAt)}</div>
+                    </div>
+                    <ChevronRight size={16} className={`text-slate-400 flex-shrink-0 mt-1 transition-transform ${open === s.id ? 'rotate-90' : ''}`} />
+                  </button>
+                  {open === s.id && (
+                    <div className="px-3 py-3 bg-slate-50 border-t border-slate-100">
+                      <div className="grid gap-y-1 text-sm">
+                        {Object.entries(s.data || {}).filter(([k]) => !['tournamentId', 'tournamentName', 'agree'].includes(k)).map(([k, v]) => (
+                          <div key={k} className="flex justify-between gap-4 border-b border-slate-100 py-1"><span className="text-slate-400 capitalize flex-shrink-0">{k.replace(/([A-Z])/g, ' $1')}</span><span className="text-slate-700 text-right break-words min-w-0">{String(v || '—')}</span></div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end mt-3">
+                        <button onClick={() => remove(s)} disabled={deleting === s.id}
+                          className="text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5">
+                          <Trash2 size={13} /> {deleting === s.id ? 'Deleting…' : 'Delete request'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden sm:block bg-white border border-slate-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-slate-500 text-left text-xs uppercase tracking-wide">
                   <tr><th className="px-4 py-2.5 font-semibold">Company</th><th className="px-4 py-2.5 font-semibold">Contact</th><th className="px-4 py-2.5 font-semibold">Level</th><th className="px-4 py-2.5 font-semibold">Payment</th><th className="px-4 py-2.5 font-semibold">Submitted</th><th className="px-4 py-2.5"></th></tr>
@@ -102,6 +134,7 @@ export default function VendorRequestEntries() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
       </div>
     </div>
