@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { requireStaff } from '@/lib/apiAuth'
+import { cleanName } from '@/lib/names'
+import { renameTeamRefs, renameClubRefs } from '@/lib/teamRename'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -96,18 +98,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   } = body
 
   await ensureRegistrationColumns()
+  // The drawer sends the whole team list back without ids, so the rows are
+  // recreated. Keep the previous names so a rename (or a whitespace cleanup)
+  // can be carried through to pools, games, brackets and waivers below.
+  const before = await prisma.teamRegistration.findUnique({
+    where: { id: params.id },
+    include: { teams: true },
+  })
   await prisma.registeredTeam.deleteMany({ where: { registrationId: params.id } })
+
+  const club = cleanName(clubName)
+  const cleanTeams = (teams || []).map((t: any) => ({
+    clubName: cleanName(t.clubName) || club,
+    teamName: cleanName(t.teamName),
+    division: cleanName(t.division),
+    coachName: cleanName(t.coachName),
+    coachPhone: String(t.coachPhone || '').trim(),
+    coachEmail: String(t.coachEmail || '').trim(),
+    logoUrl: t.logoUrl || (clubLogoUrl || ''),
+  }))
 
   const registration = await prisma.teamRegistration.update({
     where: { id: params.id },
     data: {
-      clubName: clubName || '',
-      clubContact,
-      contactEmail,
-      contactPhone,
-      clubBasedIn: clubBasedIn || '',
-      clubWebsite: clubWebsite || '',
-      numTeams: (teams || []).length,
+      clubName: club,
+      clubContact: cleanName(clubContact),
+      contactEmail: String(contactEmail || '').trim(),
+      contactPhone: String(contactPhone || '').trim(),
+      clubBasedIn: cleanName(clubBasedIn),
+      clubWebsite: String(clubWebsite || '').trim(),
+      numTeams: cleanTeams.length,
       needsHotel: needsHotel || 'No',
       paymentMethod: paymentMethod || 'check',
       notes: notes || '',
@@ -115,20 +135,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       discountAmount: Number(discountAmount) || 0,
       discountNote: discountNote || '',
       clubLogoUrl: clubLogoUrl || '',
-      teams: {
-        create: (teams || []).map((t: any) => ({
-          clubName: t.clubName || '',
-          teamName: t.teamName || '',
-          division: t.division || '',
-          coachName: t.coachName || '',
-          coachPhone: t.coachPhone || '',
-          coachEmail: t.coachEmail || '',
-          logoUrl: t.logoUrl || (clubLogoUrl || ''),
-        })),
-      },
+      teams: { create: cleanTeams },
     },
     include: { teams: true, payments: { orderBy: { receivedAt: 'asc' } } },
   })
+
+  // Carry renames through. Rows have no ids, so match by position — only when
+  // the list is the same length (add/remove changes positions and is skipped).
+  if (before) {
+    if (before.clubName && before.clubName !== club) {
+      await renameClubRefs(before.tournamentId, before.clubName, club)
+    }
+    if (before.teams.length === cleanTeams.length) {
+      for (let i = 0; i < cleanTeams.length; i++) {
+        const was = before.teams[i]?.teamName || ''
+        const now = cleanTeams[i].teamName
+        if (was && now && was !== now) await renameTeamRefs(before.tournamentId, was, now, club)
+      }
+    }
+  }
 
   return NextResponse.json(registration)
   } catch (e: any) {

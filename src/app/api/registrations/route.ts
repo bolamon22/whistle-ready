@@ -7,6 +7,7 @@ import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, organizerEmailHtml, organizerEmailSubject, type RegLetterData, type RegNotifyData } from '@/lib/regConfirmation'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
+import { cleanName } from '@/lib/names'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -215,15 +216,18 @@ export async function POST(req: NextRequest) {
   }
 
   await ensureRegistrationColumns()
+  // Names are string keys elsewhere (pools, games, waivers): trim + collapse
+  // whitespace on the way in so "LaxManiax " can't become a second club.
+  const club = cleanName(clubName)
   const registration = await prisma.teamRegistration.create({
     data: {
       tournamentId,
-      clubName: clubName || '',
-      clubContact,
-      contactEmail,
-      contactPhone,
-      clubBasedIn: clubBasedIn || '',
-      clubWebsite: clubWebsite || '',
+      clubName: club,
+      clubContact: cleanName(clubContact),
+      contactEmail: String(contactEmail || '').trim(),
+      contactPhone: String(contactPhone || '').trim(),
+      clubBasedIn: cleanName(clubBasedIn),
+      clubWebsite: String(clubWebsite || '').trim(),
       numTeams: Number(numTeams) || 1,
       needsHotel: needsHotel === true ? 'Yes' : needsHotel === false ? 'No' : (needsHotel || 'No'),
       paymentMethod: paymentMethod || 'check',
@@ -234,12 +238,12 @@ export async function POST(req: NextRequest) {
       clubLogoUrl: clubLogoUrl || '',
       teams: {
         create: (teams || []).map((t: any) => ({
-          clubName: t.clubName || '',
-          teamName: t.teamName || '',
-          division: t.division || '',
-          coachName: t.coachName || '',
-          coachPhone: t.coachPhone || '',
-          coachEmail: t.coachEmail || '',
+          clubName: cleanName(t.clubName) || club,
+          teamName: cleanName(t.teamName),
+          division: cleanName(t.division),
+          coachName: cleanName(t.coachName),
+          coachPhone: String(t.coachPhone || '').trim(),
+          coachEmail: String(t.coachEmail || '').trim(),
           logoUrl: t.logoUrl || (clubLogoUrl || ''),
         })),
       },

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { cleanName } from '@/lib/names'
+import { renameTeamRefs } from '@/lib/teamRename'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
   try {
@@ -179,15 +181,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 
     // Update known fields via Prisma
     const data: Record<string, string> = {}
-    if (teamName?.trim()) data.teamName = teamName.trim()
-    if (clubName !== undefined) data.clubName = clubName.trim()
-    if (coachName !== undefined) data.coachName = coachName.trim()
-    if (coachEmail !== undefined) data.coachEmail = coachEmail.trim()
-    if (coachPhone !== undefined) data.coachPhone = coachPhone.trim()
+    if (cleanName(teamName)) data.teamName = cleanName(teamName)
+    if (clubName !== undefined) data.clubName = cleanName(clubName)
+    if (coachName !== undefined) data.coachName = cleanName(coachName)
+    if (coachEmail !== undefined) data.coachEmail = String(coachEmail || '').trim()
+    if (coachPhone !== undefined) data.coachPhone = String(coachPhone || '').trim()
     if (logoUrl !== undefined) data.logoUrl = logoUrl
 
     if (Object.keys(data).length > 0) {
+      const before = await prisma.registeredTeam.findUnique({ where: { id: teamId }, include: { registration: { select: { clubName: true } } } })
       await prisma.registeredTeam.update({ where: { id: teamId }, data })
+      // A rename has to follow the team into its pool, games, bracket and waivers.
+      if (before && data.teamName && before.teamName !== data.teamName) {
+        await renameTeamRefs(params.id, before.teamName, data.teamName, before.registration?.clubName || undefined)
+      }
     }
 
     // Update status via raw SQL if confirming

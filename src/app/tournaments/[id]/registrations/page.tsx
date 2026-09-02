@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
+import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import toast, { Toaster } from 'react-hot-toast'
 import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp } from 'lucide-react'
@@ -277,6 +278,7 @@ export default function RegistrationsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [clubName, setClubName] = useState('')
+  const knownClubs = useKnownClubs(tournamentId as string)
   const [clubContact, setClubContact] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [contactPhone, setContactPhone] = useState('')
@@ -1346,7 +1348,8 @@ export default function RegistrationsPage() {
               <form onSubmit={handleSave} className="px-4 sm:px-6 py-5 sm:py-6 space-y-6" autoComplete="on">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-sm font-medium text-slate-700 mb-1">Club Name</label>
-                    <input autoComplete="organization" value={clubName} onChange={e => setClubName(e.target.value)} className={inputCls} /></div>
+                    <input autoComplete="organization" value={clubName} onChange={e => setClubName(e.target.value)} className={inputCls} />
+                    <ClubNameHint value={clubName} known={knownClubs} onUse={setClubName} /></div>
                   <div><label className="block text-sm font-medium text-slate-700 mb-1">Club Contact *</label>
                     <input required autoComplete="name" value={clubContact} onChange={e => setClubContact(e.target.value)} className={inputCls} /></div>
                   <div><label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>

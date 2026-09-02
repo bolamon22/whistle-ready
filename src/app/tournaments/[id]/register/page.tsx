@@ -7,6 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { parsePricing, calcFee, feeScheduleLines, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import StripePayPanel, { type PayMethod } from '@/components/StripePayPanel'
+import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 
 interface TeamRow {
   clubName: string
@@ -76,6 +77,7 @@ export default function RegisterPage() {
   const [clubContact, setClubContact] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [contactPhone, setContactPhone] = useState('')
+  const knownClubs = useKnownClubs(tournamentId as string)
   const [clubBasedIn, setClubBasedIn] = useState('')
   const [clubWebsite, setClubWebsite] = useState('')
   const [instagram, setInstagram] = useState('')
@@ -328,6 +330,7 @@ export default function RegisterPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Name</label>
                   <input name="organization" autoComplete="organization" value={clubName} onChange={e => changeClubName(e.target.value)} className={inputCls} />
+                  <ClubNameHint value={clubName} known={knownClubs} onUse={changeClubName} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Contact <span className="text-red-500">*</span></label>
