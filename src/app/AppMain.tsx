@@ -6,5 +6,5 @@ import { usePathname } from 'next/navigation'
 export default function AppMain({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const bare = pathname?.startsWith('/o/')
-  return <main className={bare ? '' : 'p-6 max-w-screen-2xl mx-auto'}>{children}</main>
+  return <main className={bare ? '' : 'p-3 sm:p-6 max-w-screen-2xl mx-auto'}>{children}</main>
 }

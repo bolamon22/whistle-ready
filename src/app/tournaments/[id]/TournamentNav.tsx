@@ -120,7 +120,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
 
         {/* Header row */}
         {!collapsed && (
-        <div className="flex items-center justify-between gap-4 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4">
           <div className="flex items-center gap-3 min-w-0">
 
             {/* Logo */}
@@ -160,7 +160,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex gap-2 flex-shrink-0 self-start sm:self-auto">
             <Link href={`${base}/register`}
               className="text-xs text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5">
               <ClipboardList size={14} /> Register
