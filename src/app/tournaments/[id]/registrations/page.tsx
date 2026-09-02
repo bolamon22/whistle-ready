@@ -918,15 +918,15 @@ export default function RegistrationsPage() {
         </div>
 
         {/* Action bar */}
-        <div className="mb-5 flex gap-2 flex-wrap">
+        <div className="mb-5 grid grid-cols-2 sm:flex gap-2 sm:flex-wrap">
           <button
             onClick={() => activeTab === 'individual' ? openIndivNew() : openNew()}
-            className="inline-flex items-center gap-1.5 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700"
+            className="inline-flex items-center justify-center sm:justify-start gap-1.5 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700"
           ><Plus size={15} /> Add entry</button>
-          <Link href={`/tournaments/${tournamentId}/registrations/import`} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border bg-white text-slate-700 border-slate-300 hover:bg-slate-50"><Upload size={15} /> Import teams</Link>
-          <button onClick={() => { setPricingDraft(pricing); setDivisionsDraft(divisions); setNewDivision(''); setShowPricing(true) }} className="inline-flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><Settings size={15} /> Settings</button>
-          <button onClick={() => downloadCSV(registrations)} disabled={!registrations.length} className="inline-flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Download size={15} /> CSV</button>
-          <Link href={`/tournaments/${tournamentId}/register`} target="_blank" className="inline-flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><ExternalLink size={15} /> Public form</Link>
+          <Link href={`/tournaments/${tournamentId}/registrations/import`} className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border bg-white text-slate-700 border-slate-300 hover:bg-slate-50"><Upload size={15} /> Import teams</Link>
+          <button onClick={() => { setPricingDraft(pricing); setDivisionsDraft(divisions); setNewDivision(''); setShowPricing(true) }} className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><Settings size={15} /> Settings</button>
+          <button onClick={() => downloadCSV(registrations)} disabled={!registrations.length} className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Download size={15} /> CSV</button>
+          <Link href={`/tournaments/${tournamentId}/register`} target="_blank" className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><ExternalLink size={15} /> Public form</Link>
         </div>
 
         {/* Import panel */}
@@ -937,7 +937,7 @@ export default function RegistrationsPage() {
 
             {!importData ? (
               <div className="flex gap-2">
-                <button onClick={downloadImportTemplate} className="inline-flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><Download size={15} /> Download template</button>
+                <button onClick={downloadImportTemplate} className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><Download size={15} /> Download template</button>
                 <label className={`px-4 py-2 rounded-lg text-sm font-medium cursor-pointer bg-teal-600 text-white hover:bg-teal-700 ${importLoading ? 'opacity-60 pointer-events-none' : ''}`}>
                   {importLoading ? 'Parsing…' : <><Upload size={15} /> Upload file</>}
                   <input ref={importFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportFile} disabled={importLoading} />
@@ -1316,7 +1316,7 @@ export default function RegistrationsPage() {
           <div className="fixed inset-0 z-50 flex">
             <div className="flex-1 bg-black/40" onClick={() => setShowForm(false)} />
             <div className="w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
+              <div className="sticky top-0 bg-white border-b px-4 sm:px-6 py-4 flex items-center justify-between z-10">
                 <h2 className="text-lg font-semibold text-slate-800">{editingId ? 'Edit Registration' : 'Add Registration'}</h2>
                 <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
@@ -1514,12 +1514,12 @@ export default function RegistrationsPage() {
               placeholder="Search club, team, coach..."
               value={filterSearch}
               onChange={e => setFilterSearch(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-56"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-56"
             />
             <select
               value={filterDivision}
               onChange={e => setFilterDivision(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 flex-1 sm:flex-none min-w-0"
             >
               <option value="">All Divisions</option>
               {allDivisionsInData.map(d => <option key={d} value={d}>{d}</option>)}
@@ -1527,7 +1527,7 @@ export default function RegistrationsPage() {
             <select
               value={filterPayment}
               onChange={e => setFilterPayment(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 flex-1 sm:flex-none min-w-0"
             >
               <option value="">All Payment Status</option>
               <option value="paid">Paid in Full</option>
@@ -1565,7 +1565,7 @@ export default function RegistrationsPage() {
               return (
                 <div key={reg.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                   {/* Row header */}
-                  <div className="px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+                  <div className="px-4 sm:px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                     <button onClick={() => setExpanded(expanded === reg.id ? null : reg.id)} className="flex-1 text-left min-w-0 flex items-center gap-3">
                       {clubLogo
                         ? <img src={clubLogo} alt="" className="h-9 w-9 rounded-lg object-contain bg-white border border-slate-200 flex-shrink-0" />
@@ -1595,7 +1595,7 @@ export default function RegistrationsPage() {
                   </div>
 
                   {/* Action row */}
-                  <div className="px-5 pb-4 flex items-center gap-1.5 flex-wrap">
+                  <div className="px-4 sm:px-5 pb-4 flex items-center gap-x-1.5 gap-y-2 flex-wrap">
                     <span className="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded-full">{reg.teams.length} team{reg.teams.length !== 1 ? 's' : ''}</span>
                     <button onClick={() => { setPayingRegId(reg.id); const _bal1=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal1>0?String(_bal1):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
                       className="text-xs text-green-600 border border-green-300 hover:border-green-500 px-2.5 py-1 rounded-lg">+ Payment</button>
@@ -1626,7 +1626,8 @@ export default function RegistrationsPage() {
 
                       {/* Teams table */}
                       {reg.teams.length > 0 && (
-                        <table className="w-full text-sm border-collapse">
+                        <div className="overflow-x-auto -mx-1 px-1">
+                        <table className="w-full min-w-[600px] text-sm border-collapse">
                           <thead>
                             <tr className="bg-slate-100 text-slate-600 text-xs uppercase">
                               {['Club','Team','Division','Coach','Phone','Email'].map(h => (
@@ -1647,6 +1648,7 @@ export default function RegistrationsPage() {
                             ))}
                           </tbody>
                         </table>
+                        </div>
                       )}
 
                       {/* Invoice summary */}
@@ -1665,7 +1667,8 @@ export default function RegistrationsPage() {
                         </div>
 
                         {reg.payments.length > 0 ? (
-                          <table className="w-full text-sm">
+                          <div className="overflow-x-auto -mx-1 px-1">
+                          <table className="w-full min-w-[480px] text-sm">
                             <thead>
                               <tr className="text-xs uppercase text-slate-500 border-b">
                                 <th className="pb-1 text-left">Date</th>
@@ -1680,7 +1683,7 @@ export default function RegistrationsPage() {
                                 <tr key={p.id} className="border-b border-slate-50">
                                   <td className="py-1.5">{fmtPayDate(p.receivedAt)}</td>
                                   <td className="py-1.5">{payLabel(p.method)}</td>
-                                  <td className="py-1.5 text-slate-500">{p.checkNumber || p.notes || '—'}</td>
+                                  <td className="py-1.5 text-slate-500"><span className="block max-w-[220px] truncate" title={p.checkNumber || p.notes || ''}>{p.checkNumber || p.notes || '—'}</span></td>
                                   <td className={`py-1.5 text-right font-medium ${p.amount < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(p.amount)}</td>
                                   <td className="py-1.5 text-right whitespace-nowrap">
                                     {p.amount > 0 && /pi_[A-Za-z0-9]+/.test(p.notes || '') && (
@@ -1699,6 +1702,7 @@ export default function RegistrationsPage() {
                               </tr>
                             </tfoot>
                           </table>
+                          </div>
                         ) : (
                           <p className="text-sm text-slate-400">No payments recorded yet.</p>
                         )}
@@ -1713,7 +1717,7 @@ export default function RegistrationsPage() {
       </div>
 
       {/* Recently Deleted */}
-      <div className="mt-10">
+      <div className="mt-10 pb-24">
         <button
           onClick={() => { setShowDeleted(v => !v); if (!showDeleted) fetchDeleted() }}
           className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
@@ -1727,8 +1731,8 @@ export default function RegistrationsPage() {
               <p className="p-4 text-sm text-slate-400 italic">No recently deleted registrations.</p>
             ) : (
               deletedRegs.map(reg => (
-                <div key={reg.id} className="flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100">
-                  <div>
+                <div key={reg.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100">
+                  <div className="min-w-0">
                     <span className="font-medium text-sm text-slate-800">{reg.clubName}</span>
                     <span className="ml-3 text-xs text-slate-500">
                       Deleted {new Date(reg.deletedAt).toLocaleDateString()}
