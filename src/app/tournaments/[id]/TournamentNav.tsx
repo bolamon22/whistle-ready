@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
+import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp, LayoutDashboard, Settings, Users, Zap, DollarSign, type LucideIcon } from 'lucide-react'
 import HelpCenter from '@/components/HelpCenter'
 
 interface Props {
@@ -23,6 +23,9 @@ interface TournamentMeta {
 
 type NavItem = { href: string; label: string }
 type NavGroup = { label: string; href?: string; items?: NavItem[] }
+
+// Icons for the phone tab bar (desktop tabs are text-only).
+const GROUP_ICONS: Record<string, LucideIcon> = { Dashboard: LayoutDashboard, Setup: Settings, People: Users, Live: Zap, Financials: DollarSign }
 
 function fmtDate(d: string) {
   if (!d) return ''
@@ -110,24 +113,102 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         : fmtDate(meta.startDate))
     : (() => { try { return JSON.parse(meta?.dates || '[]').map(fmtDate).join(' · ') } catch { return '' } })()
 
-  const tabBase = 'px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex items-center gap-1'
+  const tabBase = 'px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex items-center gap-1'
+  const phoneIcon = 'w-9 h-9 rounded-lg text-slate-300 active:bg-white/10 flex items-center justify-center'
   const tabOn = 'border-teal-400 text-teal-300'
   const tabOff = 'border-transparent text-slate-400 hover:text-white hover:border-white/20'
 
   return (
-    <div className="bg-[#0f1f3d] mb-6 rounded-xl" ref={navRef}>
-      <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-0">
+    <div className="bg-[#0f1f3d] mb-4 sm:mb-6 rounded-xl" ref={navRef}>
+
+      {/* ══ Phone header: compact identity row + 5-up icon tab bar ══ */}
+      <div className="sm:hidden px-3 pt-3">
+        {!collapsed ? (
+          <div className="flex items-start gap-2.5">
+            <Link href={`${base}/dashboard`} className="flex-shrink-0">
+              {logo
+                ? <img src={logo} alt="logo" className="h-10 w-10 object-contain rounded-lg border border-white/10 bg-white/5" />
+                : <div className="h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
+              }
+            </Link>
+            <div className="min-w-0 flex-1">
+              <Link href={`${base}/dashboard`} className="block text-[15px] font-bold text-white leading-snug line-clamp-2">{name}</Link>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400 min-w-0">
+                {dateStr && <span className="truncate">{dateStr}</span>}
+                {countdown && <span className={`flex-shrink-0 px-1.5 py-px rounded-full font-semibold ${countdown.color}`}>{countdown.label}</span>}
+                {stats && <span className="flex-shrink-0 text-sky-400">{stats.assigned}/{stats.games} assigned</span>}
+              </div>
+            </div>
+            <div className="flex items-center flex-shrink-0 -mr-1.5 -mt-1">
+              <Link href={`${base}/register`} aria-label="Registration form" title="Registration form" className={phoneIcon}><ClipboardList size={16} /></Link>
+              <Link href={`${base}/public`} target="_blank" aria-label="Public page" title="Public page" className={phoneIcon}><Globe size={16} /></Link>
+              <HelpCenter tournamentId={id} />
+              <button onClick={toggleCollapsed} aria-label="Minimize header" className={phoneIcon}><ChevronUp size={16} /></button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Link href={`${base}/dashboard`} className="flex items-center gap-2 min-w-0 flex-1">
+              {logo && <img src={logo} alt="" className="h-7 w-7 object-contain rounded-lg border border-white/10 bg-white/5 flex-shrink-0" />}
+              <span className="text-sm font-semibold text-white truncate">{name}</span>
+            </Link>
+            <div className="flex items-center flex-shrink-0 -mr-1.5">
+              <HelpCenter tournamentId={id} />
+              <button onClick={toggleCollapsed} aria-label="Expand header" className={phoneIcon}><ChevronDown size={16} /></button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab bar */}
+        <div className="mt-2 -mx-3 px-1 border-t border-white/10 grid grid-cols-5">
+          {groups.map(g => {
+            const Icon = GROUP_ICONS[g.label]
+            const active = groupActive(g)
+            const cls = `flex flex-col items-center justify-center gap-1 py-2 text-[10.5px] font-medium leading-none transition-colors ${active ? 'text-teal-300' : 'text-slate-400'}`
+            return g.items ? (
+              <button key={g.label} onClick={() => setOpenMenu(m => m === g.label ? null : g.label)} className={cls} aria-expanded={openMenu === g.label}>
+                {Icon && <Icon size={18} />}
+                <span className="flex items-center gap-0.5">{g.label}<ChevronDown size={10} className={`opacity-60 transition-transform ${openMenu === g.label ? 'rotate-180' : ''}`} /></span>
+              </button>
+            ) : (
+              <Link key={g.label} href={g.href!} className={cls}>
+                {Icon && <Icon size={18} />}
+                <span>{g.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* Open group: its pages, as a panel under the bar */}
+        {openMenu && (() => {
+          const g = groups.find(x => x.label === openMenu)
+          if (!g?.items) return null
+          return (
+            <div className="-mx-3 px-2 pt-1.5 pb-2 bg-[#162844] border-t border-white/10 rounded-b-xl grid grid-cols-2 gap-1">
+              {g.items.map(item => (
+                <Link key={item.href} href={item.href}
+                  className={`px-3 py-2 rounded-lg text-[13px] font-medium ${hrefActive(item.href) ? 'text-teal-300 bg-white/10' : 'text-slate-300 active:bg-white/5'}`}>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )
+        })()}
+      </div>
+
+      {/* ══ Desktop header (unchanged) ══ */}
+      <div className="hidden sm:block px-6 pt-5 pb-0">
 
         {/* Header row */}
         {!collapsed && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4">
+        <div className="flex items-center justify-between gap-3 pb-4">
           <div className="flex items-center gap-3 min-w-0">
 
             {/* Logo */}
             <Link href={`${base}/dashboard`} className="flex-shrink-0">
               {logo
-                ? <img src={logo} alt="logo" className="h-11 w-11 sm:h-12 sm:w-12 object-contain rounded-xl border border-white/10 bg-white/5 hover:border-white/30 transition-colors" />
-                : <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
+                ? <img src={logo} alt="logo" className="h-12 w-12 object-contain rounded-xl border border-white/10 bg-white/5 hover:border-white/30 transition-colors" />
+                : <div className="h-12 w-12 rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
               }
             </Link>
 
@@ -137,7 +218,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
                 <span className="mx-1 opacity-40">/</span>
               </div>
               <Link href={`${base}/dashboard`}
-                className="text-base sm:text-lg font-bold text-white leading-tight hover:text-teal-300 transition-colors block truncate">
+                className="text-lg font-bold text-white leading-tight hover:text-teal-300 transition-colors block truncate">
                 {name}
               </Link>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -148,7 +229,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${countdown.color}`}>{countdown.label}</span>
                 )}
                 {dateStr && <span className="text-[10px] text-slate-400">{dateStr}</span>}
-                {meta?.location && <span className="text-[10px] text-slate-500 hidden sm:flex items-center gap-1 truncate max-w-[200px]"><MapPin size={11} className="flex-shrink-0" />{meta.location}</span>}
+                {meta?.location && <span className="text-[10px] text-slate-500 flex items-center gap-1 truncate max-w-[200px]"><MapPin size={11} className="flex-shrink-0" />{meta.location}</span>}
                 {stats && (
                   <>
                     <span className="text-slate-600 text-[10px]">·</span>
@@ -160,7 +241,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-2 flex-shrink-0 self-start sm:self-auto">
+          <div className="flex gap-2 flex-shrink-0">
             <Link href={`${base}/register`}
               className="text-xs text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5">
               <ClipboardList size={14} /> Register
