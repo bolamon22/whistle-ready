@@ -1615,7 +1615,7 @@ export default function RegistrationsPage() {
 
                   {/* Expanded detail */}
                   {expanded === reg.id && (
-                    <div className="border-t border-slate-100 bg-slate-50 px-5 py-4 space-y-4">
+                    <div className="border-t border-slate-100 bg-slate-50 px-3 sm:px-5 py-4 space-y-4">
                       {/* Club details */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                         {reg.clubBasedIn && <div><span className="text-slate-500">Based In: </span>{reg.clubBasedIn}</div>}
@@ -1624,9 +1624,29 @@ export default function RegistrationsPage() {
                         {reg.notes && <div className="col-span-full"><span className="text-slate-500">Notes: </span>{reg.notes}</div>}
                       </div>
 
-                      {/* Teams table */}
+                      {/* Teams — one card per team on phones, table on desktop */}
                       {reg.teams.length > 0 && (
-                        <div className="overflow-x-auto -mx-1 px-1">
+                        <div className="sm:hidden space-y-2">
+                          {reg.teams.map(t => (
+                            <div key={t.id} className="bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <div className="font-semibold text-slate-800 min-w-0 truncate">{t.teamName}</div>
+                                {t.division && <span className="text-xs text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full flex-shrink-0">{t.division}</span>}
+                              </div>
+                              {t.clubName && t.clubName !== reg.clubName && <div className="text-xs text-slate-500">{t.clubName}</div>}
+                              {(t.coachName || t.coachPhone || t.coachEmail) && (
+                                <div className="mt-1.5 text-slate-600 space-y-0.5">
+                                  {t.coachName && <div><span className="text-slate-400">Coach </span>{t.coachName}</div>}
+                                  {t.coachPhone && <a href={`tel:${t.coachPhone}`} className="block text-teal-700">{t.coachPhone}</a>}
+                                  {t.coachEmail && <a href={`mailto:${t.coachEmail}`} className="block text-teal-700 truncate">{t.coachEmail}</a>}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {reg.teams.length > 0 && (
+                        <div className="hidden sm:block overflow-x-auto -mx-1 px-1">
                         <table className="w-full min-w-[600px] text-sm border-collapse">
                           <thead>
                             <tr className="bg-slate-100 text-slate-600 text-xs uppercase">
@@ -1653,21 +1673,47 @@ export default function RegistrationsPage() {
 
                       {/* Invoice summary */}
                       <div className="bg-white border border-slate-200 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center justify-between gap-3 mb-3">
                           <h3 className="text-sm font-semibold text-slate-700">Invoice & Payments</h3>
-                          <button onClick={() => { setPayingRegId(reg.id); const _bal2=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal2>0?String(_bal2):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
-                            className="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">+ Record Payment</button>
+                          {balance > 0 ? (
+                            <button onClick={() => { setPayingRegId(reg.id); const _bal2=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal2>0?String(_bal2):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
+                              className="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 whitespace-nowrap">+ Record Payment</button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-lg whitespace-nowrap"><Check size={12} /> Paid in full</span>
+                          )}
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm mb-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
                           <div><span className="text-slate-500">Invoice: </span><span className="font-medium">{fmt(reg.invoiceAmount)}</span></div>
                           {reg.discountAmount > 0 && (
                             <div><span className="text-slate-500">Discount: </span><span className="font-medium text-amber-600">-{fmt(reg.discountAmount)}{reg.discountNote ? ` (${reg.discountNote})` : ''}</span></div>
                           )}
-                          <div><span className="text-slate-500">Due: </span><span className="font-semibold">{fmt(due)}</span></div>
+                          <div><span className="text-slate-500">Paid: </span><span className="font-medium text-green-700">{fmt(totalPaid)}</span></div>
+                          <div><span className="text-slate-500">Balance: </span><span className={`font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(balance)}</span></div>
                         </div>
 
-                        {reg.payments.length > 0 ? (
-                          <div className="overflow-x-auto -mx-1 px-1">
+                        {reg.payments.length > 0 ? (<>
+                          <div className="sm:hidden divide-y divide-slate-100 border-t border-slate-100">
+                            {reg.payments.map(p => (
+                              <div key={p.id} className="py-2.5 flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm text-slate-800">{fmtPayDate(p.receivedAt)} · {payLabel(p.method)}</div>
+                                  <div className="text-xs text-slate-500 truncate" title={p.checkNumber || p.notes || ''}>{p.checkNumber || p.notes || '—'}</div>
+                                  <div className="mt-1.5 flex gap-2">
+                                    {p.amount > 0 && /pi_[A-Za-z0-9]+/.test(p.notes || '') && (
+                                      <button onClick={() => { setRefundFor(p); setRefundAmt(String(p.amount)) }} className="text-xs text-amber-600 border border-amber-300 hover:bg-amber-50 hover:border-amber-500 px-2 py-0.5 rounded-lg">Refund</button>
+                                    )}
+                                    <button onClick={() => handleDeletePayment(p.id, p.amount)} className="text-xs text-red-500 border border-red-200 hover:bg-red-50 hover:border-red-400 px-2 py-0.5 rounded-lg">Delete</button>
+                                  </div>
+                                </div>
+                                <div className={`text-sm font-semibold whitespace-nowrap ${p.amount < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(p.amount)}</div>
+                              </div>
+                            ))}
+                            <div className="pt-2 flex items-center justify-between text-sm font-semibold">
+                              <span className="text-slate-600">Balance Due</span>
+                              <span className={balance > 0 ? 'text-red-600' : 'text-green-600'}>{fmt(balance)}</span>
+                            </div>
+                          </div>
+                          <div className="hidden sm:block overflow-x-auto -mx-1 px-1">
                           <table className="w-full min-w-[480px] text-sm">
                             <thead>
                               <tr className="text-xs uppercase text-slate-500 border-b">
@@ -1703,7 +1749,7 @@ export default function RegistrationsPage() {
                             </tfoot>
                           </table>
                           </div>
-                        ) : (
+                        </>) : (
                           <p className="text-sm text-slate-400">No payments recorded yet.</p>
                         )}
                       </div>
