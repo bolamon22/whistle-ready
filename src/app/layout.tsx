@@ -10,6 +10,9 @@ import ThemeShell from './ThemeShell'
 import EnvBadge from './EnvBadge'
 import AppMain from './AppMain'
 import Analytics from '@/components/Analytics'
+import { Analytics as VercelAnalytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+import ClientErrorReporter from './ClientErrorReporter'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -31,6 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen">
         <Suspense fallback={null}><Analytics /></Suspense>
+        <VercelAnalytics />
+        <SpeedInsights />
+        <ClientErrorReporter />
         <Providers>
           <ThemeShell />
           <EnvBadge />
