@@ -2,16 +2,28 @@
 
 import { useEffect, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Shield } from 'lucide-react'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1'
 const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
-export type ClubOption = { name: string; teams: { name: string; division: string }[] }
+export type ClubOption = { name: string; logoUrl?: string; teams: { name: string; division: string }[] }
+export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
 
-export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string }) {
+// Club identity beside the picker and in the header: the club's logo when its director uploaded
+// one at team registration, otherwise an initials badge in a color picked from the name.
+const BADGE_COLORS = ['bg-teal-600', 'bg-blue-600', 'bg-indigo-600', 'bg-violet-600', 'bg-rose-600', 'bg-orange-500', 'bg-emerald-600', 'bg-slate-700']
+function initials(name: string) { const w = name.trim().split(/\s+/).filter(Boolean); return ((w[0]?.[0] || '') + (w[1]?.[0] || '')).toUpperCase() || '?' }
+function badgeColor(name: string) { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return BADGE_COLORS[h % BADGE_COLORS.length] }
+function ClubMark({ name, logoUrl, size }: { name: string; logoUrl?: string; size: 'sm' | 'lg' }) {
+  const box = size === 'lg' ? 'w-10 h-10 rounded-lg text-sm' : 'w-7 h-7 rounded-md text-[11px]'
+  if (logoUrl) return <img src={logoUrl} alt="" className={`${box} object-contain bg-white p-0.5`} />
+  return <span className={`${box} ${badgeColor(name)} text-white font-extrabold flex items-center justify-center`}>{initials(name)}</span>
+}
+
+export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader }) {
   // Tournament forms pass the registered clubs with their teams: the parent picks the club,
   // then the team on it, and we store "Club — Team" so staff rosters line up exactly.
   const clubMode = !!clubs && clubs.length > 0
@@ -44,7 +56,42 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     } catch { /* no window / bad params */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const clubTeams = clubMode ? (clubs!.find(c => c.name === d.clubName)?.teams ?? []) : []
+  const selectedClub = clubMode ? clubs!.find(c => c.name === d.clubName) : undefined
+  const clubTeams = selectedClub?.teams ?? []
+  // What the header chip shows as the parent picks: club (or the typed "other" name), then team.
+  const typedOther = String(d.teamOther || '').trim()
+  const chipClub: string = selectedClub ? selectedClub.name : d.clubName === '__other' ? typedOther : ''
+  const chipTeam: string = (() => {
+    if (!selectedClub) return ''
+    if (d.teamPick === '__other') return typedOther
+    const t = clubTeams.find(x => x.name === d.teamPick)
+    return t ? (t.division ? `${t.name} · ${t.division}` : t.name) : ''
+  })()
+  // Tournament forms render their own header (logo + title) so the club chip can live in it.
+  const headerEl = header ? (
+    <>
+      <header className="bg-[#0b1220] text-white">
+        <div className="max-w-2xl mx-auto px-6 py-6 flex flex-wrap items-center gap-3">
+          {header.logoUrl && <img src={header.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />}
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-[0.2em] text-teal-300">{header.eyebrow || 'Player Waiver'}</div>
+            <h1 className="text-xl font-extrabold leading-tight">{header.title}</h1>
+          </div>
+          {chipClub && !done && (
+            <div className="basis-full sm:basis-auto sm:ml-auto flex items-center gap-2.5 bg-white/10 border border-white/15 rounded-xl pl-2 pr-3 py-2 min-w-0">
+              <ClubMark name={chipClub} logoUrl={selectedClub?.logoUrl} size="lg" />
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-teal-300 leading-[14px]">Registering for</div>
+                <div className="text-[15px] font-extrabold leading-tight truncate">{chipClub}</div>
+                {chipTeam && <div className="text-xs text-slate-300 leading-snug truncate">{chipTeam}</div>}
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+      {!done && <p className="max-w-2xl mx-auto px-6 pt-6 text-sm text-slate-500">All players must complete this waiver to compete. Required fields are marked *.</p>}
+    </>
+  ) : null
   const resolvedTeam: string = (() => {
     const other = String(d.teamOther || '').trim()
     if (clubMode) {
@@ -82,6 +129,8 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     ['Hotel / rental', d.hotel], ['Where staying', d.hotelName], ['Signature', d.signature],
   ]
   if (done) return (
+    <>
+    {headerEl}
     <div className="max-w-xl mx-auto px-6 py-16">
       <div className="text-center">
         <CheckCircle2 size={48} className="mx-auto text-teal-500" />
@@ -107,9 +156,12 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           className="inline-block mt-4 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-full transition-colors">Create a parent account</a>
       </div>
     </div>
+    </>
   )
 
   return (
+    <>
+    {headerEl}
     <form onSubmit={submit} className="max-w-2xl mx-auto px-6 py-10 space-y-6">
       <Toaster position="top-right" />
 
@@ -125,11 +177,18 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           {fields.teamName && clubMode && (
             <>
               <div><label className={labelCls}>Club *</label>
-                <select className={inputCls} value={d.clubName} onChange={e => { const c = e.target.value; setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '' })) }} required>
-                  <option value="">Select your club…</option>
-                  {clubs!.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                  <option value="__other">Other / not listed</option>
-                </select>
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                    {chipClub
+                      ? <ClubMark name={chipClub} logoUrl={selectedClub?.logoUrl} size="sm" />
+                      : <span className="w-7 h-7 rounded-md bg-slate-100 text-slate-400 flex items-center justify-center"><Shield size={15} /></span>}
+                  </span>
+                  <select className={`${inputCls} pl-11`} value={d.clubName} onChange={e => { const c = e.target.value; setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '' })) }} required>
+                    <option value="">Select your club…</option>
+                    {clubs!.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                    <option value="__other">Other / not listed</option>
+                  </select>
+                </div>
               </div>
               {d.clubName && d.clubName !== '__other' && clubTeams.length > 0 && (
                 <div><label className={labelCls}>Team *</label>
@@ -209,5 +268,6 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         {submitting ? 'Submitting…' : 'Submit registration'}
       </button>
     </form>
+    </>
   )
 }

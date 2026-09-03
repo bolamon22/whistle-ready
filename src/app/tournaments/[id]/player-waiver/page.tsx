@@ -27,7 +27,7 @@ const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: tru
 
 export default async function TournamentPlayerWaiver({ params }: { params: { id: string } }) {
   const client = db()
-  const tRes = await client.execute({ sql: 'SELECT id, name, orgId FROM "Tournament" WHERE id = ?', args: [params.id] })
+  const tRes = await client.execute({ sql: 'SELECT id, name, orgId, logoUrl FROM "Tournament" WHERE id = ?', args: [params.id] })
   if (tRes.rows.length === 0) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-center px-6"><div><Trophy size={40} className="mx-auto text-slate-300" /><h1 className="mt-3 text-xl font-bold text-slate-800">Tournament not found</h1></div></div>
   }
@@ -53,18 +53,21 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
   let clubs: ClubOption[] = []
   try {
     const tr = await client.execute({
-      sql: 'SELECT r.clubName AS club, t.teamName AS team, t.division AS division FROM "TeamRegistration" r LEFT JOIN "RegisteredTeam" t ON t.registrationId = r.id WHERE r.tournamentId = ? AND r.deletedAt IS NULL ORDER BY r.clubName, t.teamName',
+      sql: 'SELECT r.clubName AS club, r.clubLogoUrl AS clubLogo, t.teamName AS team, t.division AS division, t.logoUrl AS teamLogo FROM "TeamRegistration" r LEFT JOIN "RegisteredTeam" t ON t.registrationId = r.id WHERE r.tournamentId = ? AND r.deletedAt IS NULL ORDER BY r.clubName, t.teamName',
       args: [params.id],
     })
     const byClub = new Map<string, Map<string, string>>()
+    const logoByClub = new Map<string, string>() // club logo from the registration, else a team's
     for (const row of tr.rows as any[]) {
       const club = String(row.club || '').trim()
       if (!club) continue
       if (!byClub.has(club)) byClub.set(club, new Map())
       const team = String(row.team || '').trim()
       if (team) byClub.get(club)!.set(team, String(row.division || '').trim())
+      const logo = String(row.clubLogo || '').trim() || String(row.teamLogo || '').trim()
+      if (logo && !logoByClub.has(club)) logoByClub.set(club, logo)
     }
-    clubs = [...byClub.entries()].map(([name, ts]) => ({ name, teams: [...ts.entries()].map(([n, division]) => ({ name: n, division })) }))
+    clubs = [...byClub.entries()].map(([name, ts]) => ({ name, logoUrl: logoByClub.get(name) || '', teams: [...ts.entries()].map(([n, division]) => ({ name: n, division })) }))
     teams = clubs.map(c => c.name)
   } catch { /* none */ }
 
@@ -77,8 +80,8 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <p className="max-w-2xl mx-auto px-6 pt-6 text-sm text-slate-500">All players must complete this waiver to compete. Required fields are marked *.</p>
-      <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name} />
+      <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name}
+        header={{ logoUrl: String(t.logoUrl || org.logoUrl || ''), title: String(t.name || '') }} />
     </div>
   )
 }
