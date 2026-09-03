@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
+import { allowRequest, clientIp, rateLimitedResponse } from '@/lib/rateLimit'
 
 // Public "want to run your tournaments on Whistle Ready?" inquiry.
 // No account is created — this captures a sales lead and notifies us.
@@ -21,6 +22,10 @@ function esc(s: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // Best-effort per-instance rate limit (see src/lib/rateLimit.ts) -- this is a
+  // fully public, no-account lead form.
+  const RL_WINDOW_MS = 60_000
+  if (!allowRequest(`inquiry:${clientIp(req)}`, 5, RL_WINDOW_MS)) return rateLimitedResponse(RL_WINDOW_MS)
   try {
     const body = await req.json().catch(() => ({}))
     const { hp_extra } = body

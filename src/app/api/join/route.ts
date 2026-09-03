@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
+import { allowRequest, clientIp, rateLimitedResponse } from '@/lib/rateLimit'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -43,6 +44,10 @@ export async function GET(req: NextRequest) {
 
 // POST — create (or link) a Worker + staff login
 export async function POST(req: NextRequest) {
+  // Best-effort per-instance rate limit (see src/lib/rateLimit.ts) -- this is a
+  // fully public signup endpoint, code-gated but still worth capping.
+  const RL_WINDOW_MS = 60_000
+  if (!allowRequest(`join:${clientIp(req)}`, 5, RL_WINDOW_MS)) return rateLimitedResponse(RL_WINDOW_MS)
   try {
     const body = await req.json()
 
