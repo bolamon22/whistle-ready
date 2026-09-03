@@ -3,11 +3,16 @@ import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 
 export async function GET(_: Request, { params }: { params:{id:string} }) {
-  return NextResponse.json(await prisma.game.findMany({
+  const games = await prisma.game.findMany({
     where: { tournamentId: params.id },
     orderBy: [{ date:'asc' },{ startTime:'asc' },{ location:'asc' }],
     include: { assignments:{ include:{ worker:true } } },
-  }))
+  })
+  // Short shared cache -- this is hit on every public schedule page load;
+  // event-weekend load-readiness pass, Sep 2026.
+  return NextResponse.json(games, {
+    headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=30' },
+  })
 }
 
 export async function POST(req: Request, { params }: { params:{id:string} }) {

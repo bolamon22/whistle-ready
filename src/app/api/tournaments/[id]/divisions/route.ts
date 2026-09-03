@@ -69,7 +69,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         return ((ai === -1 ? 1e9 : ai) - (bi === -1 ? 1e9 : bi)) || a.name.localeCompare(b.name)
       })
 
-    return NextResponse.json(divisions)
+    // Short shared cache -- multi-query aggregation hit on every public
+    // schedule page load; event-weekend load-readiness pass, Sep 2026.
+    return NextResponse.json(divisions, {
+      headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=30' },
+    })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to load divisions' }, { status: 500 })
