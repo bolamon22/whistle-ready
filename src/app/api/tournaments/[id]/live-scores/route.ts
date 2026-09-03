@@ -8,10 +8,17 @@ import { prisma } from '@/lib/db'
 //   { score1, score2, period, periodLabel, live, updatedAt }
 // GET is public (returns a map keyed by gameId). POST requires a staffer (the scorekeeper).
 
+// Guarded so the CREATE TABLE statement runs once per warm serverless
+// instance, not on every poll. GET here is hit every 20-30s by every open
+// spectator tab during a live event -- re-issuing a DDL statement on each
+// of those was pure waste (Sep 2026 load-readiness pass).
+let appSettingTableEnsured = false
 async function ensureTable() {
+  if (appSettingTableEnsured) return
   try {
     await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AppSetting" ("key" TEXT NOT NULL PRIMARY KEY, "value" TEXT NOT NULL, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
-  } catch { /* ignore */ }
+    appSettingTableEnsured = true
+  } catch { /* ignore, will retry next request */ }
 }
 
 const EXTERNAL_ROLES = ['coach', 'parent', 'club_director']
@@ -26,7 +33,12 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       const gameId = String(r.key).slice('liveScore:'.length)
       try { scores[gameId] = JSON.parse(r.value || '{}') } catch { /* skip */ }
     }
-    return NextResponse.json({ scores })
+    // Short shared cache: collapses many concurrent spectator polls into a
+    // handful of DB hits (event-weekend load-readiness pass, Sep 2026) while
+    // staying well under the 20-30s client poll interval.
+    return NextResponse.json({ scores }, {
+      headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=20' },
+    })
   } catch {
     return NextResponse.json({ scores: {} })
   }
