@@ -94,9 +94,9 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
           ? <img src={p.photoUrl} width={300} height={300} style={{ borderRadius: 28, objectFit: 'cover', border: `4px solid ${S100}` }} />
           : <div style={{ display: 'flex', width: 300, height: 300, borderRadius: 28, background: badgeHex(p.playerName), color: '#fff', alignItems: 'center', justifyContent: 'center', fontSize: 112, fontWeight: 800 }}>{initials(p.playerName)}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, justifyContent: 'center' }}>
-          <Mark name={p.clubName} url={p.clubLogoUrl} size={124} radius={24} />
-          <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.12, marginTop: 18, ...clamp(mode, 2) }}>{p.clubName || 'Club'}</div>
-          {teamLine && <div style={{ fontSize: 25, color: S700, marginTop: 8, lineHeight: 1.25, ...clamp(mode, 2) }}>{teamLine}</div>}
+          <Mark name={p.clubName} url={p.clubLogoUrl} size={176} radius={30} />
+          <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.12, marginTop: 12, ...clamp(mode, 2) }}>{p.clubName || 'Club'}</div>
+          {teamLine && <div style={{ fontSize: 24, color: S700, marginTop: 6, lineHeight: 1.25, ...clamp(mode, 1) }}>{teamLine}</div>}
         </div>
       </div>
 
