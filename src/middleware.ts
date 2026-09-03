@@ -1,7 +1,7 @@
 import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
 import permissionsConfig from './lib/role-permissions.json'
-import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES } from './lib/orgDomains'
+import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES } from './lib/orgDomains'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join']  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
@@ -66,6 +66,12 @@ export async function middleware(req: NextRequest) {
       if (bare !== '/' && LEGACY_JUNK_PREFIXES.some(p => bare.startsWith(p))) {
         return NextResponse.redirect(new URL('/', req.url), 301)
       }
+    }
+    // The org's own favicon / app icons / web manifest on its domain (see ORG_ICON_SLUGS).
+    if (ORG_ICON_FILES.has(pathname) && ORG_ICON_SLUGS.has(customSlug)) {
+      const url = req.nextUrl.clone()
+      url.pathname = `/org-icons/${customSlug}${pathname}`
+      return NextResponse.rewrite(url)
     }
     // NOTE: '/register' passthrough is EXACT match only — the org's own register
     // pages (/register/player, /register/vendor) must rewrite to /o/{slug}/register/*
@@ -155,5 +161,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|uploads).*)', ]
+  // favicon.ico is NOT excluded: on an org's custom domain it is rewritten to the org's icon.
+  matcher: ['/((?!_next/static|_next/image|uploads).*)', ]
 }

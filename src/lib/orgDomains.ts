@@ -10,6 +10,17 @@ export const ORG_DOMAINS: Record<string, string> = {
   'sunshineeventsgroup.com': 'sunshine-events-group',
 }
 
+// Orgs with their own icon set under public/org-icons/{slug}/ (favicon.ico,
+// icon-192.png, icon-512.png, icon-maskable-512.png, apple-touch-icon.png,
+// manifest.webmanifest). On that org's custom domain the middleware rewrites the
+// app's icon URLs to these files, so the HTML never changes — the same
+// <link rel="icon" href="/icon-192.png"> serves Whistle Ready's icon on
+// whistleready.app and the org's icon on their domain (tournament pages too).
+export const ORG_ICON_SLUGS = new Set<string>(['sunshine-events-group'])
+export const ORG_ICON_FILES = new Set<string>([
+  '/favicon.ico', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/manifest.webmanifest',
+])
+
 // Reverse map: org slug → its primary custom domain. Used by seo.ts to emit
 // canonical URLs (and the sitemap) on the org's own domain so search credit
 // accrues there instead of whistleready.app.

@@ -114,7 +114,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const description = clip(stripMd(about) || `${org.name}: upcoming tournaments, live schedules, standings and online team registration — all in one place.`)
   const url = orgAbs(params.slug)
   const images = org.logoUrl ? [org.logoUrl] : []
-  return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images }, twitter: { title, description, images } }
+  return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images }, twitter: { title, description, images }, appleWebApp: { title: org.name || title } }
 }
 
 export default async function OrgSite({ params }: { params: { slug: string } }) {

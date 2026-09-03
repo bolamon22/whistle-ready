@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image' },
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: 'Whistle Ready', statusBarStyle: 'default' },
-  icons: { icon: '/icon-192.png', apple: '/apple-touch-icon.png' },
+  icons: { icon: [{ url: '/favicon.ico', sizes: '48x48' }, { url: '/icon-192.png', type: 'image/png', sizes: '192x192' }], apple: '/apple-touch-icon.png' },
 }
 
 export const viewport: Viewport = {
