@@ -21,6 +21,9 @@ export type FormSubmission = {
   checkedInBy?: string | null
   /** Unguessable key of the player's pass page (/pass/<token>). Player waivers only. */
   passToken?: string | null
+  /** Archived (soft-deleted) by staff: not attending, a test entry… Hidden from lists, counts and badges by default. */
+  archivedAt?: string | null
+  archivedBy?: string | null
   updatedAt?: string
 }
 
@@ -53,7 +56,7 @@ export function ensureSubmissionsTable(): Promise<void> {
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_team" ON "OrgFormSubmission" ("orgId", "tournamentId", "teamName")`)
       // Game-day check-in (Sep 2026) and the player pass (Sep 2026): added after the table
       // shipped, so ALTER in place.
-      for (const col of ['"checkedInAt" TEXT', '"checkedInBy" TEXT', '"passToken" TEXT']) {
+      for (const col of ['"checkedInAt" TEXT', '"checkedInBy" TEXT', '"passToken" TEXT', '"archivedAt" TEXT', '"archivedBy" TEXT']) {
         try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgFormSubmission" ADD COLUMN ${col}`) } catch { /* already there */ }
       }
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_pass" ON "OrgFormSubmission" ("passToken")`)
@@ -90,6 +93,7 @@ function rowToSub(r: any): FormSubmission {
     edits: Array.isArray(edits) && edits.length ? edits : undefined,
     checkedInAt: r.checkedInAt || null, checkedInBy: r.checkedInBy || null,
     passToken: r.passToken || null,
+    archivedAt: r.archivedAt || null, archivedBy: r.archivedBy || null,
     updatedAt: r.updatedAt || undefined,
   }
 }
@@ -218,8 +222,17 @@ export async function setCheckIn(orgId: string, id: string, on: boolean, by?: st
   return getSubmission(orgId, id)
 }
 
+/** Archive (soft-delete) a submission, or bring it back. Archived rows leave lists, counts and badges but keep everything. */
+export async function setArchived(orgId: string, id: string, on: boolean, by?: string): Promise<FormSubmission | null> {
+  await ensureOrgMigrated(orgId)
+  await prisma.$executeRawUnsafe(
+    `UPDATE "OrgFormSubmission" SET "archivedAt" = ?, "archivedBy" = ?, "updatedAt" = ? WHERE "orgId" = ? AND "id" = ?`,
+    on ? new Date().toISOString() : null, on ? (by || null) : null, new Date().toISOString(), orgId, id)
+  return getSubmission(orgId, id)
+}
+
 /** Clear every check-in matching the filter (e.g. one team before day two). Returns rows affected. */
-export async function clearCheckIns(a: Pick<ListArgs, 'orgId' | 'formType' | 'tournamentId' | 'team'>): Promise<number> {
+export async function clearCheckIns(a: Pick<ListArgs, 'orgId' | 'formType' | 'tournamentId' | 'team' | 'archived'>): Promise<number> {
   await ensureOrgMigrated(a.orgId)
   const sql = buildWhere(a)
   const n = await prisma.$executeRawUnsafe(
@@ -257,6 +270,8 @@ export type ListArgs = {
   sort?: 'newest' | 'oldest' | 'name' | 'jersey'
   limit?: number
   offset?: number
+  /** Archived rows: left out by default ('live'), the archived ones only, or everything. */
+  archived?: 'live' | 'only' | 'all'
 }
 
 const ORDER: Record<string, string> = {
@@ -285,7 +300,7 @@ export async function countSubmissions(a: ListArgs): Promise<number> {
 }
 
 /** Distinct teams (raw teamName) with counts, for roster pickers. */
-export async function teamCounts(a: Pick<ListArgs, 'orgId' | 'formType' | 'tournamentId'>): Promise<{ name: string; count: number }[]> {
+export async function teamCounts(a: Pick<ListArgs, 'orgId' | 'formType' | 'tournamentId' | 'archived'>): Promise<{ name: string; count: number }[]> {
   await ensureOrgMigrated(a.orgId)
   const sql = buildWhere(a)
   const rows = await prisma.$queryRawUnsafe<any[]>(
@@ -304,8 +319,10 @@ export async function countsByType(orgId: string): Promise<Record<string, number
 }
 
 // WHERE builder with per-LIKE ESCAPE (SQLite wants `LIKE ? ESCAPE '\'` on each pattern).
-function buildWhere(a: Pick<ListArgs, 'orgId' | 'formType' | 'tournamentId' | 'team' | 'q'>): { sql: string; params: any[] } {
+function buildWhere(a: Pick<ListArgs, 'orgId' | 'formType' | 'tournamentId' | 'team' | 'q' | 'archived'>): { sql: string; params: any[] } {
   const conds = [`"orgId" = ?`]; const params: any[] = [a.orgId]
+  if ((a.archived || 'live') === 'live') conds.push(`"archivedAt" IS NULL`)
+  else if (a.archived === 'only') conds.push(`"archivedAt" IS NOT NULL`)
   if (a.formType) { conds.push(`"formType" = ?`); params.push(a.formType) }
   if (a.tournamentId) { conds.push(`"tournamentId" = ?`); params.push(a.tournamentId) }
   if (a.team) { conds.push(`"teamName" = ?`); params.push(a.team) }

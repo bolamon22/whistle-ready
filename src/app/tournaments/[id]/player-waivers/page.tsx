@@ -5,9 +5,9 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
-import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer } from 'lucide-react'
+import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer, Archive, ArchiveRestore, Trash2 } from 'lucide-react'
 
-type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[]; checkedInAt?: string | null; checkedInBy?: string | null }
+type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[]; checkedInAt?: string | null; checkedInBy?: string | null; archivedAt?: string | null; archivedBy?: string | null }
 
 // Friendly labels for the detail view (anything not listed falls back to a de-camelCased key).
 const LABELS: Record<string, string> = {
@@ -172,6 +172,10 @@ export default function PlayerWaiverEntries() {
   // A scanned player pass lands here as ?player=<submission id>: show that one player with a
   // big check-in button, above the list.
   const [passOn, setPassOn] = useState(false)   // the org's "Player pass" switch (Forms settings)
+  // Archived players (not attending, test entries…) live in their own view; they're out of every count.
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedTotal, setArchivedTotal] = useState(0)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [scanId, setScanId] = useState('')
   const [scan, setScan] = useState<Sub | null>(null)
   const [scanErr, setScanErr] = useState('')
@@ -203,7 +207,7 @@ export default function PlayerWaiverEntries() {
   // with thousands of waivers. A roster (team selected) reads best in jersey order.
   const effSort = sort === 'newest' && team ? 'jersey' : sort
   const queryUrl = (offset: number, limit = PAGE) =>
-    `/api/tournaments/${id}/player-waivers?q=${encodeURIComponent(qDebounced)}&team=${encodeURIComponent(team)}&sort=${effSort}&limit=${limit}&offset=${offset}`
+    `/api/tournaments/${id}/player-waivers?q=${encodeURIComponent(qDebounced)}&team=${encodeURIComponent(team)}&sort=${effSort}&limit=${limit}&offset=${offset}${showArchived ? '&archived=1' : ''}`
   useEffect(() => { const t = setTimeout(() => setQDebounced(q.trim()), 250); return () => clearTimeout(t) }, [q])
   useEffect(() => {
     let cancelled = false
@@ -212,12 +216,13 @@ export default function PlayerWaiverEntries() {
       if (cancelled || !d) return
       setSubs(Array.isArray(d.submissions) ? d.submissions : [])
       setPassOn(d.playerPass === true)
+      setArchivedTotal(Number(d.archivedTotal) || 0)
       setTotal(Number(d.total) || 0); setGrandTotal(Number(d.grandTotal) || 0); setCheckedIn(Number(d.checkedIn) || 0)
       setTeams(Array.isArray(d.teams) ? d.teams : [])
     }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, qDebounced, team, effSort, reloadTick])
+  }, [id, qDebounced, team, effSort, reloadTick, showArchived])
   // In check-in mode, coming back to this screen (after a parent signed on their phone)
   // re-pulls the list so the new waiver is there without a manual refresh.
   useEffect(() => {
@@ -338,6 +343,36 @@ export default function PlayerWaiverEntries() {
       toast.error(e?.message || 'Could not save check-in')
     }
   }
+  // ── archive / restore / delete ─────────────────────────────────────────────
+  async function setArchive(s: Sub, on: boolean) {
+    const name = s.data?.playerName || 'Player'
+    try {
+      const res = await fetch(`/api/tournaments/${id}/player-waivers`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id, archive: on }) })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not save')
+      setSubs(prev => prev.filter(x => x.id !== s.id))       // leaves whichever view we're in
+      setTotal(n => Math.max(0, n - 1))
+      setGrandTotal(n => Math.max(0, n + (on ? -1 : 1)))
+      setArchivedTotal(n => Math.max(0, n + (on ? 1 : -1)))
+      if (on && s.checkedInAt) setCheckedIn(n => Math.max(0, n - 1))
+      setOpen(null)
+      toast.success(on ? `${name} archived — find them under Archived` : `${name} restored`)
+    } catch (e: any) { toast.error(e?.message || 'Could not save') }
+  }
+  async function deleteForever(s: Sub) {
+    if (confirmDelete !== s.id) { setConfirmDelete(s.id); setTimeout(() => setConfirmDelete(cur => (cur === s.id ? null : cur)), 5000); return }
+    setConfirmDelete(null)
+    try {
+      const res = await fetch(`/api/tournaments/${id}/player-waivers`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id }) })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not delete')
+      setSubs(prev => prev.filter(x => x.id !== s.id))
+      setTotal(n => Math.max(0, n - 1)); setArchivedTotal(n => Math.max(0, n - 1))
+      setOpen(null)
+      toast.success(`${s.data?.playerName || 'Player'} deleted permanently`)
+    } catch (e: any) { toast.error(e?.message || 'Could not delete') }
+  }
+
   async function clearCheckIns() {
     if (!confirmClear) { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 4000); return }
     setConfirmClear(false)
@@ -424,9 +459,26 @@ export default function PlayerWaiverEntries() {
   ) : (
     <>
       <Detail d={s.data} />
-      <div className="flex items-center justify-between gap-3 mt-3">
-        <div className="text-xs text-slate-400">Submitted {fmt(s.submittedAt)}{s.edits?.length ? ` · edited ${fmtShort(s.edits[s.edits.length - 1].at)}` : ''}</div>
-        <button onClick={() => startEdit(s)} className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 rounded-lg px-2.5 py-1.5 flex-shrink-0"><Pencil size={13} /> Edit</button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
+        <div className="text-xs text-slate-400">
+          Submitted {fmt(s.submittedAt)}{s.edits?.length ? ` · edited ${fmtShort(s.edits[s.edits.length - 1].at)}` : ''}
+          {s.archivedAt ? ` · archived ${fmtShort(s.archivedAt)}${s.archivedBy ? ` by ${s.archivedBy}` : ''}` : ''}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {s.archivedAt ? (
+            <>
+              <button onClick={() => setArchive(s, false)} className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 rounded-lg px-2.5 py-1.5"><ArchiveRestore size={13} /> Restore</button>
+              <button onClick={() => deleteForever(s)} className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1.5 border ${confirmDelete === s.id ? 'bg-rose-600 border-rose-600 text-white hover:bg-rose-700' : 'text-rose-700 border-rose-200 hover:bg-rose-50'}`}>
+                <Trash2 size={13} /> {confirmDelete === s.id ? 'Tap again to delete forever' : 'Delete permanently'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setArchive(s, true)} title="Not attending, duplicate, or a test entry — hides the player from the list, counts and badges. You can restore later." className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg px-2.5 py-1.5"><Archive size={13} /> Archive</button>
+              <button onClick={() => startEdit(s)} className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 border border-teal-200 hover:bg-teal-50 rounded-lg px-2.5 py-1.5 flex-shrink-0"><Pencil size={13} /> Edit</button>
+            </>
+          )}
+        </div>
       </div>
     </>
   )
@@ -440,7 +492,14 @@ export default function PlayerWaiverEntries() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 sm:mt-6 mb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Player waivers</h1>
-            <p className="text-sm text-slate-500">{grandTotal} submission{grandTotal === 1 ? '' : 's'} for this tournament.</p>
+            <p className="text-sm text-slate-500">
+              {grandTotal} submission{grandTotal === 1 ? '' : 's'} for this tournament.
+              {(archivedTotal > 0 || showArchived) && (
+                <> {' '}<button onClick={() => { setShowArchived(v => !v); setOpen(null) }} className="inline-flex items-center gap-1 text-teal-700 hover:underline font-medium">
+                  {showArchived ? <><ArchiveRestore size={13} /> Back to active players</> : <><Archive size={13} /> Archived ({archivedTotal})</>}
+                </button></>
+              )}
+            </p>
           </div>
           <div className="grid grid-cols-2 sm:flex items-center gap-2">
             {grandTotal > 0 && (
@@ -489,8 +548,15 @@ export default function PlayerWaiverEntries() {
           </div>
         )}
 
+        {showArchived && (
+          <div className="bg-slate-100 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 mb-4 text-sm flex items-start gap-2">
+            <Archive size={16} className="mt-0.5 text-slate-500 flex-shrink-0" />
+            <div>Showing <span className="font-semibold">archived players</span> — not attending, duplicates, test entries. They're left out of counts, check-in and badges. Open one to restore it or delete it for good.</div>
+          </div>
+        )}
+
         {/* Search + roster picker */}
-        {(grandTotal > 0 || filtering) && (
+        {(grandTotal > 0 || filtering || showArchived) && (
           <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -515,15 +581,15 @@ export default function PlayerWaiverEntries() {
         {checkPanel}
 
         {loading && subs.length === 0 ? <p className="text-slate-400 text-center py-16">Loading…</p>
-          : grandTotal === 0 && !filtering ? (
+          : grandTotal === 0 && !filtering && !showArchived ? (
             <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400">
               <Inbox size={32} className="mx-auto mb-2" />
               No waivers submitted yet. Share the form from the public page or the link below.
             </div>
           ) : subs.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400">
-              No players match{q.trim() ? ` “${q.trim()}”` : ''}{team ? ` on ${teamLabel(team)}` : ''}.
-              <button onClick={() => { setQ(''); setTeam('') }} className="block mx-auto mt-2 text-sm text-teal-600 hover:underline">Clear filters</button>
+              {showArchived && !filtering ? 'No archived players.' : <>No players match{q.trim() ? ` “${q.trim()}”` : ''}{team ? ` on ${teamLabel(team)}` : ''}.</>}
+              {filtering && <button onClick={() => { setQ(''); setTeam('') }} className="block mx-auto mt-2 text-sm text-teal-600 hover:underline">Clear filters</button>}
             </div>
           ) : (
             <>

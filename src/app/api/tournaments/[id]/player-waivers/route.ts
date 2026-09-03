@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, requireDirector } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
-import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData, setCheckIn, clearCheckIns, countCheckedIn, ensurePassToken } from '@/lib/formSubmissions'
+import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData, setCheckIn, clearCheckIns, countCheckedIn, ensurePassToken, setArchived, deleteSubmission } from '@/lib/formSubmissions'
 import { playerPassEnabled } from '@/lib/playerPass'
 
 // Player-waiver submissions for ONE tournament (rows in "OrgFormSubmission", see
@@ -16,6 +16,10 @@ import { playerPassEnabled } from '@/lib/playerPass'
 //         submission and appends an audit entry; the signature / agreement are never editable.
 //   PATCH { id, checkIn: true|false }  game-day check-in: marks the player present (or undoes it).
 //   PATCH { clearCheckIns: true, team? } clears check-ins for the team (or the whole tournament).
+//   PATCH { id, archive: true|false }  archives a player (not attending, test entry…) or restores them.
+//         Archived rows keep everything but leave the list, counts, check-in and badges.
+//         GET ?archived=1 lists only archived rows; every GET also returns archivedTotal.
+//   DELETE { id }  permanently deletes one submission — directors/admins only, no undo.
 
 const EDITABLE = [
   'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'clubName', 'teamName', 'jerseyNumber', 'position',
@@ -52,20 +56,22 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const sort = (['newest', 'oldest', 'name', 'jersey'].includes(sortParam) ? sortParam : 'newest') as 'newest' | 'oldest' | 'name' | 'jersey'
   const limit = Math.max(1, Math.min(20000, parseInt(sp.get('limit') || '100', 10) || 100))
   const offset = Math.max(0, parseInt(sp.get('offset') || '0', 10) || 0)
+  const archived = sp.get('archived') === '1' ? 'only' as const : 'live' as const
   const scope = { orgId: g.orgId, formType: 'player', tournamentId: params.id }
   try {
-    const [submissions, total, grandTotal, teams, checkedIn, playerPass] = await Promise.all([
-      listSubmissions({ ...scope, q, team, sort, limit, offset }),
-      countSubmissions({ ...scope, q, team }),
+    const [submissions, total, grandTotal, teams, checkedIn, playerPass, archivedTotal] = await Promise.all([
+      listSubmissions({ ...scope, q, team, sort, limit, offset, archived }),
+      countSubmissions({ ...scope, q, team, archived }),
       countSubmissions(scope),
       teamCounts(scope),
       countCheckedIn({ ...scope, q, team }),
       playerPassEnabled(g.orgId),
+      countSubmissions({ ...scope, archived: 'only' }),
     ])
     if (sp.get('pass') === '1' && playerPass) {
       for (const s of submissions) if (!s.passToken) s.passToken = await ensurePassToken(g.orgId, s.id)
     }
-    return NextResponse.json({ submissions, total, grandTotal, teams, checkedIn, playerPass, limit, offset })
+    return NextResponse.json({ submissions, total, grandTotal, teams, checkedIn, playerPass, archivedTotal, archived: archived === 'only', limit, offset })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to load', submissions: [], total: 0, grandTotal: 0, teams: [] }, { status: 500 })
   }
@@ -86,6 +92,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const subId = String(body?.id || '')
   if (!subId) return NextResponse.json({ error: 'Missing submission id' }, { status: 400 })
+
+  // Archive / restore.
+  if (typeof body?.archive === 'boolean') {
+    const cur = await getSubmission(g.orgId, subId)
+    if (!cur || cur.formType !== 'player' || String(cur.data?.tournamentId || '') !== params.id) {
+      return NextResponse.json({ error: 'Submission not found' }, { status: 404 })
+    }
+    const submission = await setArchived(g.orgId, subId, body.archive, who)
+    return NextResponse.json({ ok: true, submission })
+  }
 
   // Game-day check-in toggle.
   if (typeof body?.checkIn === 'boolean') {
@@ -109,4 +125,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   const submission = await updateSubmissionData(g.orgId, subId, changes, g.gate.userId)
   return NextResponse.json({ ok: true, submission })
+}
+
+// Permanent delete — a signed waiver is a legal record, so this is directors/admins only.
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await requireDirector()
+  if (!gate.ok) return gate.res
+  const orgId = await tournamentOrgId(params.id)
+  if (!orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
+  if (gate.role !== 'admin' && gate.orgId && gate.orgId !== orgId) return NextResponse.json({ error: 'Not your organization' }, { status: 403 })
+  const body = await req.json().catch(() => ({})) as any
+  const subId = String(body?.id || '')
+  if (!subId) return NextResponse.json({ error: 'Missing submission id' }, { status: 400 })
+  const ok = await deleteSubmission(orgId, subId, 'player', params.id)
+  if (!ok) return NextResponse.json({ error: 'Submission not found' }, { status: 404 })
+  return NextResponse.json({ ok: true })
 }
