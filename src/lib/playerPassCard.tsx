@@ -78,7 +78,7 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
       {/* Header: tournament */}
       {/* Every section has a fixed height budget (sums to < 1140 with a little slack that marginTop: auto
           hands to the footer), so wider browser fonts in the live preview can't push things into each other. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: DARK, padding: '0 36px', height: 216, flexShrink: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: DARK, padding: '0 36px', height: 200, flexShrink: 0, overflow: 'hidden' }}>
         <Mark name={p.tournamentName || p.orgName} url={p.tournamentLogoUrl} size={116} radius={22} />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', fontSize: 19, fontWeight: 700, letterSpacing: 5, color: TEAL_LIGHT, textTransform: 'uppercase' }}>Player card</div>
@@ -101,18 +101,16 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
         </div>
       </div>
 
-      {/* Name + number */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '0 36px', height: 100, marginTop: 24, flexShrink: 0, overflow: 'hidden' }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: p.playerName.length > 22 ? 42 : 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, ...clamp(mode, p.playerName.length > 22 ? 2 : 1) }}>{p.playerName}</div>
-        {(p.jersey || p.position) && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
-            {p.jersey && (
-              <div style={{ display: 'flex', alignItems: 'baseline', color: TEAL }}>
-                <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, marginRight: 4 }}>#</div>
-                <div style={{ display: 'flex', fontSize: p.position ? 72 : 84, fontWeight: 800, lineHeight: 1 }}>{p.jersey}</div>
-              </div>
-            )}
-            {p.position && <div style={{ display: 'flex', fontSize: 16, fontWeight: 700, letterSpacing: 3, color: S500, textTransform: 'uppercase', marginTop: p.jersey ? 4 : 0 }}>{p.position}</div>}
+      {/* Name + position, number on the right */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '0 36px', height: 124, marginTop: 24, flexShrink: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: p.playerName.length > 22 ? 42 : 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, ...clamp(mode, p.playerName.length > 22 ? 2 : 1) }}>{p.playerName}</div>
+          {p.position && <div style={{ display: 'flex', fontSize: 27, fontWeight: 800, letterSpacing: 4, color: TEAL, textTransform: 'uppercase', marginTop: 6 }}>{p.position}</div>}
+        </div>
+        {p.jersey && (
+          <div style={{ display: 'flex', alignItems: 'baseline', color: TEAL, flexShrink: 0 }}>
+            <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, marginRight: 4 }}>#</div>
+            <div style={{ display: 'flex', fontSize: 84, fontWeight: 800, lineHeight: 1 }}>{p.jersey}</div>
           </div>
         )}
       </div>
