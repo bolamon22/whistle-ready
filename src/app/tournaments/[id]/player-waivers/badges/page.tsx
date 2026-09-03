@@ -19,6 +19,7 @@ export default function BadgeSheet() {
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(0)
   const [failed, setFailed] = useState(0)
+  const [passOn, setPassOn] = useState(true)
   useEffect(() => { try { setTeam(String(new URLSearchParams(window.location.search).get('team') || '')) } catch {} }, [])
 
   useEffect(() => {
@@ -30,11 +31,12 @@ export default function BadgeSheet() {
       if (!r.ok) { setError(j.error || 'Could not load players'); setSubs([]); return }
       setSubs(Array.isArray(j.submissions) ? j.submissions : [])
       setTeams(Array.isArray(j.teams) ? j.teams : [])
+      setPassOn(j.playerPass === true)
     }).catch(() => { if (!cancelled) setError('Could not load players') }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [id, team])
 
-  const cards = useMemo(() => subs.filter(s => s.passToken), [subs])
+  const cards = useMemo(() => (passOn ? subs.filter(s => s.passToken) : []), [subs, passOn])
   const ready = !loading && loaded + failed >= cards.length
 
   return (
@@ -74,7 +76,12 @@ export default function BadgeSheet() {
 
       <div className="max-w-6xl mx-auto px-4 py-6">
         {error && <p className="text-sm text-rose-600">{error}</p>}
-        {!loading && !error && cards.length === 0 && <p className="text-sm text-slate-500">No players{team ? ' on this team' : ''} yet.</p>}
+        {!loading && !error && !passOn && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
+            Player passes are turned off for this organization. Turn on <span className="font-semibold">Player pass</span> under Forms → Player waiver → Optional fields to print badges.
+          </div>
+        )}
+        {!loading && !error && passOn && cards.length === 0 && <p className="text-sm text-slate-500">No players{team ? ' on this team' : ''} yet.</p>}
         <div className="sheet grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {cards.map(s => (
             <img key={s.id} src={`/pass/${s.passToken}/card.png?v=${encodeURIComponent(s.updatedAt || s.submittedAt || '')}`} alt={`Badge for ${s.data?.playerName || 'player'}`}

@@ -57,7 +57,7 @@ By submitting this form, I verify that I have read and understood this waiver, t
 
 type PlayerForm = {
   waiverTitle: string; waiverText: string
-  fields: { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean }
+  fields: { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass: boolean }
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
 type VendorForm = {
@@ -74,7 +74,7 @@ type Forms = { player: PlayerForm; vendor: VendorForm; staff: StaffForm; registr
 const EMPTY: Forms = {
   player: {
     waiverTitle: 'Player Participation Waiver & Release of Liability', waiverText: DEFAULT_WAIVER,
-    fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false },
+    fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false },
     confirmationTitle: "You're registered!",
     confirmationMessage: "Thanks for registering. We've received your information and signed waiver. We'll be in touch with event details — see you on the field!",
     emailConfirmation: true,
@@ -107,6 +107,7 @@ const FIELD_LABELS: { key: keyof PlayerForm['fields']; label: string; hint: stri
   { key: 'parent2', label: 'Second parent', hint: 'Name, email, phone' },
   { key: 'hotelQuestion', label: 'Hotel / rental question', hint: 'Are you staying at a hotel?' },
   { key: 'newsletter', label: 'Newsletter opt-in', hint: 'Subscribe to updates' },
+  { key: 'playerPass', label: 'Player pass', hint: 'Photo upload on tournament waivers + a credential card with a QR code for check-in; staff can print badges' },
 ]
 
 const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-3 mb-1'

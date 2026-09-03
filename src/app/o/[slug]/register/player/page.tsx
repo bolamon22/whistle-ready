@@ -34,7 +34,7 @@ I grant permission to use photographs or video taken during activities for promo
 ## 4. Electronic Signature
 By submitting this form I confirm I have read and agree to this waiver and that my typed name is my legal electronic signature.`
 
-const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false }
+const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false }
 
 export default async function PlayerRegistrationPage({ params }: { params: { slug: string } }) {
   const client = db()

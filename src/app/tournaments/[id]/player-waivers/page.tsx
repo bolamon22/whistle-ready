@@ -170,6 +170,7 @@ export default function PlayerWaiverEntries() {
   useEffect(() => { try { setCheckMode(localStorage.getItem('wr-waiver-checkin') === '1') } catch {} }, [])
   // A scanned player pass lands here as ?player=<submission id>: show that one player with a
   // big check-in button, above the list.
+  const [passOn, setPassOn] = useState(false)   // the org's "Player pass" switch (Forms settings)
   const [scanId, setScanId] = useState('')
   const [scan, setScan] = useState<Sub | null>(null)
   const [scanErr, setScanErr] = useState('')
@@ -209,6 +210,7 @@ export default function PlayerWaiverEntries() {
     fetch(queryUrl(0)).then(r => r.ok ? r.json() : null).then(d => {
       if (cancelled || !d) return
       setSubs(Array.isArray(d.submissions) ? d.submissions : [])
+      setPassOn(d.playerPass === true)
       setTotal(Number(d.total) || 0); setGrandTotal(Number(d.grandTotal) || 0); setCheckedIn(Number(d.checkedIn) || 0)
       setTeams(Array.isArray(d.teams) ? d.teams : [])
     }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false) })
@@ -447,7 +449,7 @@ export default function PlayerWaiverEntries() {
               </button>
             )}
             <Link href={`/tournaments/${id}/player-waiver`} target="_blank" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><ExternalLink size={14} /> Open form</Link>
-            {grandTotal > 0 && <Link href={`/tournaments/${id}/player-waivers/badges${team ? `?team=${encodeURIComponent(team)}` : ''}`} className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Printer size={14} /> Print badges</Link>}
+            {grandTotal > 0 && passOn && <Link href={`/tournaments/${id}/player-waivers/badges${team ? `?team=${encodeURIComponent(team)}` : ''}`} className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Printer size={14} /> Print badges</Link>}
             {grandTotal > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Download size={14} /> Export{filtering ? ` (${total})` : ' CSV'}</button>}
           </div>
         </div>

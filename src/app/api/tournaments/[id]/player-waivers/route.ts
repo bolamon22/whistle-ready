@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData, setCheckIn, clearCheckIns, countCheckedIn, ensurePassToken } from '@/lib/formSubmissions'
+import { playerPassEnabled } from '@/lib/playerPass'
 
 // Player-waiver submissions for ONE tournament (rows in "OrgFormSubmission", see
 // src/lib/formSubmissions.ts).
@@ -53,17 +54,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const offset = Math.max(0, parseInt(sp.get('offset') || '0', 10) || 0)
   const scope = { orgId: g.orgId, formType: 'player', tournamentId: params.id }
   try {
-    const [submissions, total, grandTotal, teams, checkedIn] = await Promise.all([
+    const [submissions, total, grandTotal, teams, checkedIn, playerPass] = await Promise.all([
       listSubmissions({ ...scope, q, team, sort, limit, offset }),
       countSubmissions({ ...scope, q, team }),
       countSubmissions(scope),
       teamCounts(scope),
       countCheckedIn({ ...scope, q, team }),
+      playerPassEnabled(g.orgId),
     ])
-    if (sp.get('pass') === '1') {
+    if (sp.get('pass') === '1' && playerPass) {
       for (const s of submissions) if (!s.passToken) s.passToken = await ensurePassToken(g.orgId, s.id)
     }
-    return NextResponse.json({ submissions, total, grandTotal, teams, checkedIn, limit, offset })
+    return NextResponse.json({ submissions, total, grandTotal, teams, checkedIn, playerPass, limit, offset })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to load', submissions: [], total: 0, grandTotal: 0, teams: [] }, { status: 500 })
   }

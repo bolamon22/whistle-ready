@@ -63,9 +63,20 @@ export function teamOnly(data: any): string {
   return full === '__other' ? '' : full
 }
 
+/** The org's "Player pass" switch (Forms settings → Player waiver → Optional fields). Off by default. */
+export async function playerPassEnabled(orgId: string): Promise<boolean> {
+  if (!orgId) return false
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgForms:${orgId}`)
+    const cfg = rows?.[0]?.value ? JSON.parse(String(rows[0].value) || '{}') : {}
+    return cfg?.player?.fields?.playerPass === true
+  } catch { return false }
+}
+
 export async function loadPlayerPass(token: string, base: string): Promise<PlayerPass | null> {
   const sub = await getSubmissionByPassToken(token)
   if (!sub || sub.formType !== 'player') return null
+  if (!(await playerPassEnabled(sub.orgId))) return null   // switched off → the pass does not exist
   const data = sub.data || {}
 
   let tournament: any = null, org: any = null

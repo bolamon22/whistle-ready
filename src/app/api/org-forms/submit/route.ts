@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, emailEnabled } from '@/lib/email'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import { insertSubmission, countsByType } from '@/lib/formSubmissions'
-import { appBaseUrl } from '@/lib/playerPass'
+import { appBaseUrl, playerPassEnabled } from '@/lib/playerPass'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
 // exists, then stores the submission as its own row (see src/lib/formSubmissions.ts —
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const saved = await insertSubmission({ orgId, formType, data })
     // Tournament player waivers get a pass (/pass/<token>): shown on the confirmation
     // screen, linked in the email, scanned at check-in.
-    const passUrl = formType === 'player' && saved.passToken && data.tournamentId ? `${appBaseUrl(req)}/pass/${saved.passToken}` : ''
+    const passUrl = formType === 'player' && saved.passToken && data.tournamentId && await playerPassEnabled(orgId) ? `${appBaseUrl(req)}/pass/${saved.passToken}` : ''
 
     // Confirmation email (non-blocking) — uses the org's configured confirmation text.
     try {
