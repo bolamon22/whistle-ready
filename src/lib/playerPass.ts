@@ -9,11 +9,13 @@ import { getSubmissionByPassToken, passCode, type FormSubmission } from '@/lib/f
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 export { cleanCardLink, qrLabelFor }
-import type { PassCardData } from '@/lib/playerPassCard'
+import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
+import { CARD_THEMES } from '@/lib/playerPassCard'
 
 export type PlayerPass = {
   submission: FormSubmission & { orgId: string; tournamentId: string }
   card: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>
+  theme: CardTheme
   /** What the player's QR opens: the link the family chose (highlight reel, Instagram…), else the card page. */
   qrUrl: string
   /** What the event / organization QR opens (see eventQrFor). */
@@ -72,21 +74,25 @@ export function teamOnly(data: any): string {
 export type EventQrChoice = 'event' | 'instagram' | 'facebook' | 'website' | 'custom'
 export type PlayerPassConfig = {
   enabled: boolean
+  /** Card look (Forms settings → Player card → Card style). */
+  theme: CardTheme
   /** The second QR on the card (Forms settings → Player card): what it opens + caption. */
   eventQr: EventQrChoice
   eventLink: string
   eventLabel: string
 }
 export async function playerPassConfig(orgId: string): Promise<PlayerPassConfig> {
-  const off: PlayerPassConfig = { enabled: false, eventQr: 'event', eventLink: '', eventLabel: '' }
+  const off: PlayerPassConfig = { enabled: false, theme: 'classic', eventQr: 'event', eventLink: '', eventLabel: '' }
   if (!orgId) return off
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgForms:${orgId}`)
     const cfg = rows?.[0]?.value ? JSON.parse(String(rows[0].value) || '{}') : {}
     const p = cfg?.player || {}
     const choice = String(p.cardEventQr || 'event') as EventQrChoice
+    const theme = String(p.cardTheme || 'classic') as CardTheme
     return {
       enabled: p?.fields?.playerPass === true,
+      theme: CARD_THEMES.some(t => t.id === theme) ? theme : 'classic',
       eventQr: (['event', 'instagram', 'facebook', 'website', 'custom'] as string[]).includes(choice) ? choice : 'event',
       eventLink: String(p.cardEventLink || '').trim(),
       eventLabel: String(p.cardEventLabel || '').trim(),
@@ -208,7 +214,7 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
     qrLabel: cardLink ? qrLabelFor(cardLink) : 'My player card',
     qr2Label: eventQr.label,
   }
-  return { submission: sub, card, qrUrl, qr2Url: eventQr.url, passUrl }
+  return { submission: sub, card, theme: cfg.theme, qrUrl, qr2Url: eventQr.url, passUrl }
 }
 
 // ── images for Satori ────────────────────────────────────────────────────────

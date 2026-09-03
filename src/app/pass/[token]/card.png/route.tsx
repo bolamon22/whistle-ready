@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     loadPassFonts().catch(() => undefined),
   ])
   const p = { ...pass.card, photoUrl, clubLogoUrl, tournamentLogoUrl, orgLogoUrl, qrDataUrl: qr, qr2DataUrl: qr2 }
-  return new ImageResponse(<PassCard p={p} />, {
+  return new ImageResponse(<PassCard p={p} theme={pass.theme} />, {
     width: PASS_W, height: PASS_H,
     ...(fonts ? { fonts } : {}),
     headers: {

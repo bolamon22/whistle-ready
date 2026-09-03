@@ -60,6 +60,7 @@ type PlayerForm = {
   fields: { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass: boolean; position: boolean }
   /** Player card: what the second (event / organization) QR code opens. */
   cardEventQr: 'event' | 'instagram' | 'facebook' | 'website' | 'custom'; cardEventLink: string; cardEventLabel: string
+  cardTheme: 'classic' | 'brushed' | 'gold' | 'frost'
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
 type VendorForm = {
@@ -77,7 +78,7 @@ const EMPTY: Forms = {
   player: {
     waiverTitle: 'Player Participation Waiver & Release of Liability', waiverText: DEFAULT_WAIVER,
     fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true },
-    cardEventQr: 'event', cardEventLink: '', cardEventLabel: '',
+    cardEventQr: 'event', cardEventLink: '', cardEventLabel: '', cardTheme: 'classic',
     confirmationTitle: "You're registered!",
     confirmationMessage: "Thanks for registering. We've received your information and signed waiver. We'll be in touch with event details — see you on the field!",
     emailConfirmation: true,
@@ -276,7 +277,16 @@ function FormsInner() {
                 </div>
                 {pf.fields.playerPass && (
                   <div className="mt-3 border border-teal-100 bg-teal-50/40 rounded-lg p-3">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-700">Player card · second QR code</div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-700">Player card · style</div>
+                    <div className="grid sm:grid-cols-4 gap-2 mt-2">
+                      {([['classic', 'Classic', 'White, navy, teal'], ['brushed', 'Brushed Steel', 'Silver metal, cyan glow'], ['gold', 'Gold Edition', 'Ivory + gold frame'], ['frost', 'Frost', 'Frosted glass, round photo']] as const).map(([id, label, hint]) => (
+                        <label key={id} className={`flex items-start gap-2 border rounded-lg p-2.5 cursor-pointer ${(pf.cardTheme || 'classic') === id ? 'border-teal-400 bg-white' : 'border-slate-200 hover:bg-white'}`}>
+                          <input type="radio" name="cardTheme" className="mt-0.5 accent-teal-500" checked={(pf.cardTheme || 'classic') === id} onChange={() => setF(v => ({ ...v, player: { ...v.player, cardTheme: id } }))} />
+                          <span><span className="text-sm text-slate-700 font-medium">{label}</span><br /><span className="text-xs text-slate-400">{hint}</span></span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-700 mt-4">Player card · second QR code</div>
                     <p className="text-xs text-slate-500 mt-1">The card has two QR codes: the family's own link, and this one for you. Pick what it opens.</p>
                     <div className="grid sm:grid-cols-2 gap-2 mt-2">
                       <select className={inputCls} value={pf.cardEventQr || 'event'} onChange={e => setF(v => ({ ...v, player: { ...v.player, cardEventQr: e.target.value as PlayerForm['cardEventQr'] } }))}>
@@ -307,6 +317,7 @@ function FormsInner() {
                 <div><div className={labelCls}>Waiver title</div>{ro(pf.waiverTitle)}</div>
                 <div><div className={labelCls}>Waiver text</div><div className="text-sm text-slate-600 whitespace-pre-line max-h-44 overflow-y-auto bg-slate-50 rounded-lg p-3 border border-slate-100">{pf.waiverText}</div></div>
                 <div><div className={labelCls}>Optional fields</div><div className="flex flex-wrap gap-1.5">{enabledFields.length ? enabledFields.map(l => <span key={l} className="text-xs bg-teal-50 text-teal-700 rounded-full px-2.5 py-1">{l}</span>) : <span className="text-slate-400 text-sm">None</span>}</div></div>
+                {pf.fields.playerPass && <div className="text-sm text-slate-600">Card style: <span className="font-medium">{({ classic: 'Classic', brushed: 'Brushed Steel', gold: 'Gold Edition', frost: 'Frost' } as Record<string, string>)[pf.cardTheme || 'classic']}</span></div>}
                 {pf.fields.playerPass && <div className="text-sm text-slate-600">Card's second QR code: <span className="font-medium">{({ event: 'Tournament event page', instagram: 'Instagram', facebook: 'Facebook', website: 'Website', custom: pf.cardEventLink || 'Custom link' } as Record<string, string>)[pf.cardEventQr || 'event']}</span>{pf.cardEventLabel ? ` · “${pf.cardEventLabel}”` : ''}</div>}
                 <div><div className={labelCls}>Confirmation</div>{ro(pf.confirmationTitle)}<div className="text-sm text-slate-500 mt-0.5">{pf.confirmationMessage}</div></div>
                 <div className="text-sm text-slate-600">Email confirmation: <span className="font-medium">{pf.emailConfirmation ? 'On' : 'Off'}</span></div>

@@ -5,7 +5,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2 } from 'lucide-react'
 import { uploadPlayerPhoto, uploadClubLogo } from '@/lib/photoClient'
 import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
-import type { PassCardData } from '@/lib/playerPassCard'
+import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
 import CardPreview from './CardPreview'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean }
@@ -17,7 +17,7 @@ export const POSITIONS = ['Attack', 'Midfield', 'Defense', 'Goalie', 'FOGO', 'LS
 export type ClubOption = { name: string; logoUrl?: string; teams: { name: string; division: string }[] }
 export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
 /** What the live card preview needs that the form doesn't collect: event + org branding, and the event QR. */
-export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string; eventQrUrl: string; eventQrLabel: string }
+export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string; eventQrUrl: string; eventQrLabel: string; theme: CardTheme }
 
 // Club identity beside the picker and in the header: the club's logo when its director uploaded
 // one at team registration, otherwise an initials badge in a color picked from the name.
@@ -103,9 +103,9 @@ function ClubPicker({ clubs, value, otherName, onChange }: { clubs: ClubOption[]
 // The player card extras (tournament forms with the org's "Player pass" switch on): an
 // optional photo, and the link the card's QR code should open. Both can be changed later
 // from the card page. Photo prep + upload live in src/lib/photoClient.ts.
-function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2Text, clubLogo }: {
+function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2Text, theme, clubLogo }: {
   photoUrl: string; cardLink: string; onPhoto: (url: string) => void; onLink: (url: string) => void
-  preview: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>; qrText: string; qr2Text: string
+  preview: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>; qrText: string; qr2Text: string; theme: CardTheme
   /** Offer a club-logo upload when the chosen club has none (or was typed in). */
   clubLogo?: { clubName: string; url: string; onChange: (url: string) => void }
 }) {
@@ -130,7 +130,7 @@ function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2T
     <div className="mb-4 pb-4 border-b border-slate-100">
       {/* On phones and tablets the live card sits right here; on wide screens it rides along in the side column. */}
       <div className="lg:hidden mb-4">
-        <CardPreview p={preview} qrText={qrText} qr2Text={qr2Text} className="w-56 mx-auto rounded-xl shadow-lg ring-1 ring-slate-200" />
+        <CardPreview p={preview} qrText={qrText} qr2Text={qr2Text} theme={theme} className="w-56 mx-auto rounded-xl shadow-lg ring-1 ring-slate-200" />
         <p className="text-center text-xs text-slate-400 mt-2">Your card builds itself as you type.</p>
       </div>
       {clubLogo && (
@@ -363,7 +363,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Player information</h2>
-        {preview && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl}
+        {preview && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme}
           clubLogo={d.clubName && !selectedClub?.logoUrl ? { clubName: selectedClub ? selectedClub.name : '', url: d.clubLogoUrl, onChange: u => set('clubLogoUrl', u) } : undefined} />}
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
@@ -459,7 +459,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     {preview && (
       <aside className="hidden lg:block sticky top-6">
         <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-2">Your player card</div>
-        <CardPreview p={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
+        <CardPreview p={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
         <p className="text-xs text-slate-400 mt-2 leading-relaxed">Builds itself as you type. The player ID and QR code are set when you submit; you can change the photo or the link any time after.</p>
       </aside>
     )}

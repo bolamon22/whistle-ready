@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
-import { PassCard, PASS_W, PASS_H, type PassCardData } from '@/lib/playerPassCard'
+import { PassCard, PASS_W, PASS_H, type PassCardData, type CardTheme } from '@/lib/playerPassCard'
 
 // Live preview of the player card while the family fills in the form: the very same
 // component that becomes the PNG, rendered in the browser at 720×1140 and scaled to fit.
@@ -21,7 +21,7 @@ function useQr(text: string) {
   return qr
 }
 
-export default function CardPreview({ p, qrText, qr2Text, className }: { p: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>; qrText: string; qr2Text: string; className?: string }) {
+export default function CardPreview({ p, qrText, qr2Text, theme = 'classic', className }: { p: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>; qrText: string; qr2Text: string; theme?: CardTheme; className?: string }) {
   const box = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.4)
   const qr = useQr(qrText), qr2 = useQr(qr2Text)
@@ -38,7 +38,7 @@ export default function CardPreview({ p, qrText, qr2Text, className }: { p: Omit
   return (
     <div ref={box} className={className} style={{ height: Math.round(PASS_H * scale), position: 'relative', overflow: 'hidden', background: '#fff' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, width: PASS_W, height: PASS_H, transform: `scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none' }} aria-hidden>
-        <PassCard mode="dom" p={{ ...p, qrDataUrl: qr, qr2DataUrl: qr2 }} />
+        <PassCard mode="dom" theme={theme} p={{ ...p, qrDataUrl: qr, qr2DataUrl: qr2 }} />
       </div>
     </div>
   )

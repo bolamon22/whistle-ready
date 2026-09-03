@@ -85,7 +85,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
       tournamentName: String(t.name || ''), tournamentLogoUrl: String(t.logoUrl || org.logoUrl || ''),
       tournamentDates: fmtRange(String(t.startDate || ''), String(t.endDate || '')), location: String(t.location || ''),
       orgName: String(org.name || ''), orgLogoUrl: String(org.logoUrl || ''), orgSite,
-      eventQrUrl: eventQr.url, eventQrLabel: eventQr.label,
+      eventQrUrl: eventQr.url, eventQrLabel: eventQr.label, theme: cfg.theme,
     }
   }
 
