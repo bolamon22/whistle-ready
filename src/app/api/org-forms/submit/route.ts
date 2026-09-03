@@ -20,6 +20,17 @@ export async function POST(req: NextRequest) {
     const org = await prisma.$queryRawUnsafe<any[]>('SELECT id FROM "Organization" WHERE id = ?', orgId)
     if (!org || org.length === 0) return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     const saved = await insertSubmission({ orgId, formType, data })
+    // A family added their club's logo because the registration had none: keep it on the
+    // registration too, so every card for that club (and the staff pages) get it. First one
+    // in wins; staff can change it from the team registration afterwards.
+    try {
+      const logo = String(data.clubLogoUrl || '').trim(), club = String(data.clubName || '').trim(), tid = String(data.tournamentId || '').trim()
+      if (formType === 'player' && /^\/api\/img\/[A-Za-z0-9_-]+$/.test(logo) && club && tid) {
+        await prisma.$executeRawUnsafe(
+          'UPDATE "TeamRegistration" SET "clubLogoUrl" = ? WHERE "tournamentId" = ? AND "clubName" = ? AND "deletedAt" IS NULL AND ("clubLogoUrl" IS NULL OR "clubLogoUrl" = \'\')',
+          logo, tid, club)
+      }
+    } catch { /* the card still works from the submission's own copy */ }
     // Tournament player waivers get a pass (/pass/<token>): shown on the confirmation
     // screen, linked in the email, scanned at check-in.
     const passUrl = formType === 'player' && saved.passToken && data.tournamentId && await playerPassEnabled(orgId) ? `${appBaseUrl(req)}/pass/${saved.passToken}` : ''

@@ -13,9 +13,11 @@ import type { PassCardData } from '@/lib/playerPassCard'
 
 export type PlayerPass = {
   submission: FormSubmission & { orgId: string; tournamentId: string }
-  card: Omit<PassCardData, 'qrDataUrl'>
-  /** What the QR opens: the link the family chose (highlight reel, Instagram…), else the card page. */
+  card: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>
+  /** What the player's QR opens: the link the family chose (highlight reel, Instagram…), else the card page. */
   qrUrl: string
+  /** What the event / organization QR opens (see eventQrFor). */
+  qr2Url: string
   /** Absolute URL of the card page itself (email, share). */
   passUrl: string
 }
@@ -66,20 +68,84 @@ export function teamOnly(data: any): string {
   return full === '__other' ? '' : full
 }
 
-/** The org's "Player pass" switch (Forms settings → Player waiver → Optional fields). Off by default. */
-export async function playerPassEnabled(orgId: string): Promise<boolean> {
-  if (!orgId) return false
+// ── org settings for the card ────────────────────────────────────────────────
+export type EventQrChoice = 'event' | 'instagram' | 'facebook' | 'website' | 'custom'
+export type PlayerPassConfig = {
+  enabled: boolean
+  /** The second QR on the card (Forms settings → Player card): what it opens + caption. */
+  eventQr: EventQrChoice
+  eventLink: string
+  eventLabel: string
+}
+export async function playerPassConfig(orgId: string): Promise<PlayerPassConfig> {
+  const off: PlayerPassConfig = { enabled: false, eventQr: 'event', eventLink: '', eventLabel: '' }
+  if (!orgId) return off
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgForms:${orgId}`)
     const cfg = rows?.[0]?.value ? JSON.parse(String(rows[0].value) || '{}') : {}
-    return cfg?.player?.fields?.playerPass === true
-  } catch { return false }
+    const p = cfg?.player || {}
+    const choice = String(p.cardEventQr || 'event') as EventQrChoice
+    return {
+      enabled: p?.fields?.playerPass === true,
+      eventQr: (['event', 'instagram', 'facebook', 'website', 'custom'] as string[]).includes(choice) ? choice : 'event',
+      eventLink: String(p.cardEventLink || '').trim(),
+      eventLabel: String(p.cardEventLabel || '').trim(),
+    }
+  } catch { return off }
+}
+/** The org's "Player pass" switch (Forms settings → Player waiver → Optional fields). Off by default. */
+export async function playerPassEnabled(orgId: string): Promise<boolean> { return (await playerPassConfig(orgId)).enabled }
+
+/** Org website config (logo override + socials) from the site editor. */
+export async function orgSiteConfig(orgId: string): Promise<{ logo: string; socials: { instagram: string; facebook: string; website: string } }> {
+  const out = { logo: '', socials: { instagram: '', facebook: '', website: '' } }
+  if (!orgId) return out
+  try {
+    const s = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgSite:${orgId}`)
+    const c = s?.[0]?.value ? JSON.parse(String(s[0].value) || '{}') : {}
+    out.logo = String(c.logo || '')
+    out.socials = { instagram: String(c.socials?.instagram || ''), facebook: String(c.socials?.facebook || ''), website: String(c.socials?.website || '') }
+  } catch {}
+  return out
+}
+
+/** Instagram handle or URL → URL; anything already a URL passes through cleanCardLink. */
+function socialUrl(kind: 'instagram' | 'facebook', v: string): string {
+  const s = String(v || '').trim()
+  if (!s) return ''
+  if (/^https?:\/\//i.test(s) || s.includes('.')) return cleanCardLink(s)
+  const handle = s.replace(/^@/, '')
+  return kind === 'instagram' ? `https://instagram.com/${handle}` : `https://facebook.com/${handle}`
+}
+
+/**
+ * The event / organization QR on the card, per the org's setting: the tournament's event page
+ * on the org's own domain (default), the org's Instagram or Facebook, its website, or a custom
+ * link. Falls back down the list when the chosen one is blank.
+ */
+export function eventQrFor(a: { cfg: PlayerPassConfig; socials: { instagram: string; facebook: string; website: string }; tournamentId: string; orgSite: string; base: string }): { url: string; label: string } {
+  const siteBase = a.orgSite ? `https://${a.orgSite}` : a.base
+  const event = a.tournamentId ? { url: `${siteBase}/tournaments/${a.tournamentId}/event`, label: 'Event info' } : null
+  const insta = socialUrl('instagram', a.socials.instagram); const fb = socialUrl('facebook', a.socials.facebook)
+  const web = cleanCardLink(a.socials.website) || (a.orgSite ? `https://${a.orgSite}` : '')
+  const custom = cleanCardLink(a.cfg.eventLink)
+  const pick = (): { url: string; label: string } | null => {
+    switch (a.cfg.eventQr) {
+      case 'custom': return custom ? { url: custom, label: a.cfg.eventLabel || 'Scan me' } : null
+      case 'instagram': return insta ? { url: insta, label: a.cfg.eventLabel || 'Follow us on Instagram' } : null
+      case 'facebook': return fb ? { url: fb, label: a.cfg.eventLabel || 'Find us on Facebook' } : null
+      case 'website': return web ? { url: web, label: a.cfg.eventLabel || a.orgSite || 'Our website' } : null
+      default: return event ? { ...event, label: a.cfg.eventLabel || event.label } : null
+    }
+  }
+  return pick() || event || (insta ? { url: insta, label: 'Follow us on Instagram' } : null) || (web ? { url: web, label: a.orgSite || 'Our website' } : null) || { url: a.base, label: 'Whistle Ready' }
 }
 
 export async function loadPlayerPass(token: string, base: string): Promise<PlayerPass | null> {
   const sub = await getSubmissionByPassToken(token)
   if (!sub || sub.formType !== 'player') return null
-  if (!(await playerPassEnabled(sub.orgId))) return null   // switched off → the pass does not exist
+  const cfg = await playerPassConfig(sub.orgId)
+  if (!cfg.enabled) return null   // switched off → the card does not exist
   const data = sub.data || {}
 
   let tournament: any = null, org: any = null
@@ -87,12 +153,10 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
     try { const r = await prisma.$queryRawUnsafe<any[]>('SELECT id, name, logoUrl, startDate, endDate, location, orgId FROM "Tournament" WHERE id = ?', sub.tournamentId); tournament = r?.[0] || null } catch {}
   }
   const orgId = sub.orgId || tournament?.orgId || ''
+  const site = await orgSiteConfig(orgId)
   if (orgId) {
     try { const r = await prisma.$queryRawUnsafe<any[]>('SELECT id, name, slug, logoUrl FROM "Organization" WHERE id = ?', orgId); org = r?.[0] || null } catch {}
-    try {
-      const s = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgSite:${orgId}`)
-      if (s?.[0]?.value && org) { const c = JSON.parse(String(s[0].value) || '{}'); if (c.logo) org.logoUrl = c.logo }
-    } catch {}
+    if (org && site.logo) org.logoUrl = site.logo
   }
 
   // Club logo + division come from the club's team registration for this tournament.
@@ -113,10 +177,14 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
       if (!clubLogoUrl) for (const r of rows || []) { const l = String(r.clubLogo || r.teamLogo || '').trim(); if (l) { clubLogoUrl = l; break } }
     } catch {}
   }
+  // A logo the family uploaded on the form when the club had none (also "Other / not listed" clubs).
+  if (!clubLogoUrl) clubLogoUrl = String(data.clubLogoUrl || '').trim()
 
   const passUrl = `${base}/pass/${token}`
   const cardLink = cleanCardLink(data.cardLink)
   const qrUrl = cardLink || passUrl
+  const orgSite = (org?.slug && DOMAIN_BY_SLUG[String(org.slug)]) || ''
+  const eventQr = eventQrFor({ cfg, socials: site.socials, tournamentId: sub.tournamentId, orgSite, base })
   const card: PlayerPass['card'] = {
     code: passCode(token),
     playerName: String(data.playerName || '').trim() || 'Player',
@@ -134,11 +202,12 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
     location: String(tournament?.location || '').trim(),
     orgName: String(org?.name || '').trim(),
     orgLogoUrl: String(org?.logoUrl || '').trim(),
-    orgSite: (org?.slug && DOMAIN_BY_SLUG[String(org.slug)]) || '',
+    orgSite,
     signedOn: fmtDate(sub.submittedAt),
     qrLabel: cardLink ? qrLabelFor(cardLink) : 'My player card',
+    qr2Label: eventQr.label,
   }
-  return { submission: sub, card, qrUrl, passUrl }
+  return { submission: sub, card, qrUrl, qr2Url: eventQr.url, passUrl }
 }
 
 // ── images for Satori ────────────────────────────────────────────────────────

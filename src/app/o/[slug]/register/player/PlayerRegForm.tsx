@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2 } from 'lucide-react'
-import { uploadPlayerPhoto } from '@/lib/photoClient'
+import { uploadPlayerPhoto, uploadClubLogo } from '@/lib/photoClient'
 import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 import type { PassCardData } from '@/lib/playerPassCard'
 import CardPreview from './CardPreview'
@@ -15,8 +15,8 @@ const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '1
 
 export type ClubOption = { name: string; logoUrl?: string; teams: { name: string; division: string }[] }
 export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
-/** What the live card preview needs that the form doesn't collect: event + org branding. */
-export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string }
+/** What the live card preview needs that the form doesn't collect: event + org branding, and the event QR. */
+export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string; eventQrUrl: string; eventQrLabel: string }
 
 // Club identity beside the picker and in the header: the club's logo when its director uploaded
 // one at team registration, otherwise an initials badge in a color picked from the name.
@@ -102,22 +102,54 @@ function ClubPicker({ clubs, value, otherName, onChange }: { clubs: ClubOption[]
 // The player card extras (tournament forms with the org's "Player pass" switch on): an
 // optional photo, and the link the card's QR code should open. Both can be changed later
 // from the card page. Photo prep + upload live in src/lib/photoClient.ts.
-function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText }: { photoUrl: string; cardLink: string; onPhoto: (url: string) => void; onLink: (url: string) => void; preview: Omit<PassCardData, 'qrDataUrl'>; qrText: string }) {
+function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2Text, clubLogo }: {
+  photoUrl: string; cardLink: string; onPhoto: (url: string) => void; onLink: (url: string) => void
+  preview: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>; qrText: string; qr2Text: string
+  /** Offer a club-logo upload when the chosen club has none (or was typed in). */
+  clubLogo?: { clubName: string; url: string; onChange: (url: string) => void }
+}) {
   const [busy, setBusy] = useState(false)
+  const [logoBusy, setLogoBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const logoRef = useRef<HTMLInputElement>(null)
   async function pick(file: File) {
     setBusy(true)
     try { onPhoto(await uploadPlayerPhoto(file)) }
     catch (e: any) { toast.error(e?.message || 'Could not upload the photo') }
     finally { setBusy(false); if (inputRef.current) inputRef.current.value = '' }
   }
+  async function pickLogo(file: File) {
+    if (!clubLogo) return
+    setLogoBusy(true)
+    try { clubLogo.onChange(await uploadClubLogo(file)) }
+    catch (e: any) { toast.error(e?.message || 'Could not upload the logo') }
+    finally { setLogoBusy(false); if (logoRef.current) logoRef.current.value = '' }
+  }
   return (
     <div className="mb-4 pb-4 border-b border-slate-100">
       {/* On phones and tablets the live card sits right here; on wide screens it rides along in the side column. */}
       <div className="lg:hidden mb-4">
-        <CardPreview p={preview} qrText={qrText} className="w-56 mx-auto rounded-xl shadow-lg ring-1 ring-slate-200" />
+        <CardPreview p={preview} qrText={qrText} qr2Text={qr2Text} className="w-56 mx-auto rounded-xl shadow-lg ring-1 ring-slate-200" />
         <p className="text-center text-xs text-slate-400 mt-2">Your card builds itself as you type.</p>
       </div>
+      {clubLogo && (
+        <div className="flex items-center gap-4 mb-4">
+          <button type="button" onClick={() => logoRef.current?.click()} disabled={logoBusy} aria-label={clubLogo.url ? 'Change club logo' : 'Add club logo'}
+            className="relative flex-none w-16 h-16 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 overflow-hidden flex items-center justify-center text-slate-400 disabled:opacity-60">
+            {clubLogo.url ? <img src={clubLogo.url} alt="" className="w-full h-full object-contain p-1" /> : <Shield size={22} />}
+            {logoBusy && <span className="absolute inset-0 bg-white/75 flex items-center justify-center text-[10px] font-semibold text-slate-600">Uploading…</span>}
+          </button>
+          <div className="text-sm min-w-0">
+            <div className="font-medium text-slate-700">{clubLogo.clubName ? `${clubLogo.clubName} logo` : 'Club logo'} <span className="text-slate-400 font-normal">(optional)</span></div>
+            <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">We don't have a logo for this club yet — add one and it goes on the card{clubLogo.clubName ? ' (and on every card for the club)' : ''}.</p>
+            <div className="mt-1.5 flex gap-3 text-xs font-semibold">
+              <button type="button" onClick={() => logoRef.current?.click()} disabled={logoBusy} className="text-teal-700 hover:underline">{clubLogo.url ? 'Change logo' : 'Add logo'}</button>
+              {clubLogo.url && <button type="button" onClick={() => clubLogo.onChange('')} className="text-slate-500 hover:underline">Remove</button>}
+            </div>
+          </div>
+          <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) pickLogo(f) }} />
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label={photoUrl ? 'Change player photo' : 'Add player photo'}
           className="relative flex-none w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 overflow-hidden flex items-center justify-center text-slate-400 disabled:opacity-60">
@@ -151,7 +183,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const [done, setDone] = useState(false)
   const [passToken, setPassToken] = useState('')   // set when the submission got a player pass
   const [d, setD] = useState<any>({
-    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', photoUrl: '', cardLink: '',
+    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', photoUrl: '', cardLink: '', clubLogoUrl: '',
     parentName: '', parentEmail: '', parentPhone: '',
     parent2Name: '', parent2Email: '', parent2Phone: '',
     emergencyName: '', emergencyPhone: '',
@@ -179,6 +211,9 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   }, [])
   const selectedClub = clubMode ? clubs!.find(c => c.name === d.clubName) : undefined
   const clubTeams = selectedClub?.teams ?? []
+  // The club's logo: from its team registration, else the one the family uploads on this form.
+  const clubLogoUrl: string = selectedClub?.logoUrl || String(d.clubLogoUrl || '')
+  const clubsShown: ClubOption[] = clubMode ? clubs!.map(c => c.name === d.clubName && !c.logoUrl && d.clubLogoUrl ? { ...c, logoUrl: d.clubLogoUrl } : c) : []
   // What the header chip shows as the parent picks: club (or the typed "other" name), then team.
   const typedOther = String(d.teamOther || '').trim()
   const chipClub: string = selectedClub ? selectedClub.name : d.clubName === '__other' ? typedOther : ''
@@ -192,7 +227,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   // what they've typed so far, placeholders for the rest.
   const cardOn = !!(cardContext && fields.playerPass && tournamentId)
   const previewLink = cleanCardLink(d.cardLink)
-  const preview: Omit<PassCardData, 'qrDataUrl'> | null = cardOn ? {
+  const preview: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'> | null = cardOn ? {
     code: '···-···',
     playerName: String(d.playerName || '').trim() || 'Player name',
     clubName: chipClub || 'Your club',
@@ -200,7 +235,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     division: selectedClub ? (clubTeams.find(x => x.name === d.teamPick)?.division || '') : '',
     jersey: String(d.jerseyNumber || '').trim().replace(/^#/, ''),
     photoUrl: d.photoUrl,
-    clubLogoUrl: selectedClub?.logoUrl || '',
+    clubLogoUrl,
     tournamentName: cardContext!.tournamentName || tournamentName || '',
     tournamentLogoUrl: cardContext!.tournamentLogoUrl,
     tournamentDates: cardContext!.tournamentDates,
@@ -210,6 +245,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     orgSite: cardContext!.orgSite,
     signedOn: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     qrLabel: previewLink ? qrLabelFor(previewLink) : 'My player card',
+    qr2Label: cardContext!.eventQrLabel,
   } : null
   const previewQr = previewLink || (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '')
   // Tournament forms render their own header (logo + title) so the club chip can live in it.
@@ -224,7 +260,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           </div>
           {chipClub && !done && (
             <div className="basis-full sm:basis-auto sm:ml-auto flex items-center gap-2.5 bg-white/10 border border-white/15 rounded-xl pl-2 pr-3 py-2 min-w-0">
-              <ClubMark name={chipClub} logoUrl={selectedClub?.logoUrl} size="lg" />
+              <ClubMark name={chipClub} logoUrl={clubLogoUrl || undefined} size="lg" />
               <div className="min-w-0">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-teal-300 leading-[14px]">Registering for</div>
                 <div className="text-[15px] font-extrabold leading-tight truncate">{chipClub}</div>
@@ -325,7 +361,8 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Player information</h2>
-        {preview && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={preview} qrText={previewQr} />}
+        {preview && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl}
+          clubLogo={d.clubName && !selectedClub?.logoUrl ? { clubName: selectedClub ? selectedClub.name : '', url: d.clubLogoUrl, onChange: u => set('clubLogoUrl', u) } : undefined} />}
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
           <div><label className={labelCls}>Player email</label><input className={inputCls} type="email" value={d.playerEmail} onChange={e => set('playerEmail', e.target.value)} /></div>
@@ -336,7 +373,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           {fields.teamName && clubMode && (
             <>
               <div><label className={labelCls}>Club *</label>
-                <ClubPicker clubs={clubs!} value={d.clubName} otherName={typedOther} onChange={c => setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '' }))} />
+                <ClubPicker clubs={clubsShown} value={d.clubName} otherName={typedOther} onChange={c => setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '', clubLogoUrl: '' }))} />
               </div>
               {d.clubName && d.clubName !== '__other' && clubTeams.length > 0 && (
                 <div><label className={labelCls}>Team *</label>
@@ -419,7 +456,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     {preview && (
       <aside className="hidden lg:block sticky top-6">
         <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-2">Your player card</div>
-        <CardPreview p={preview} qrText={previewQr} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
+        <CardPreview p={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
         <p className="text-xs text-slate-400 mt-2 leading-relaxed">Builds itself as you type. The player ID and QR code are set when you submit; you can change the photo or the link any time after.</p>
       </aside>
     )}

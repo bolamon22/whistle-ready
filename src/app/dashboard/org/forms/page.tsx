@@ -58,6 +58,8 @@ By submitting this form, I verify that I have read and understood this waiver, t
 type PlayerForm = {
   waiverTitle: string; waiverText: string
   fields: { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass: boolean }
+  /** Player card: what the second (event / organization) QR code opens. */
+  cardEventQr: 'event' | 'instagram' | 'facebook' | 'website' | 'custom'; cardEventLink: string; cardEventLabel: string
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
 type VendorForm = {
@@ -75,6 +77,7 @@ const EMPTY: Forms = {
   player: {
     waiverTitle: 'Player Participation Waiver & Release of Liability', waiverText: DEFAULT_WAIVER,
     fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false },
+    cardEventQr: 'event', cardEventLink: '', cardEventLabel: '',
     confirmationTitle: "You're registered!",
     confirmationMessage: "Thanks for registering. We've received your information and signed waiver. We'll be in touch with event details — see you on the field!",
     emailConfirmation: true,
@@ -270,6 +273,25 @@ function FormsInner() {
                     </label>
                   ))}
                 </div>
+                {pf.fields.playerPass && (
+                  <div className="mt-3 border border-teal-100 bg-teal-50/40 rounded-lg p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-700">Player card · second QR code</div>
+                    <p className="text-xs text-slate-500 mt-1">The card has two QR codes: the family's own link, and this one for you. Pick what it opens.</p>
+                    <div className="grid sm:grid-cols-2 gap-2 mt-2">
+                      <select className={inputCls} value={pf.cardEventQr || 'event'} onChange={e => setF(v => ({ ...v, player: { ...v.player, cardEventQr: e.target.value as PlayerForm['cardEventQr'] } }))}>
+                        <option value="event">Tournament event page (on your site)</option>
+                        <option value="instagram">Your Instagram (from Site settings)</option>
+                        <option value="facebook">Your Facebook (from Site settings)</option>
+                        <option value="website">Your website</option>
+                        <option value="custom">Custom link</option>
+                      </select>
+                      <input className={inputCls} value={pf.cardEventLabel} onChange={e => setF(v => ({ ...v, player: { ...v.player, cardEventLabel: e.target.value } }))} placeholder="Caption under the code (optional), e.g. Follow us" />
+                    </div>
+                    {pf.cardEventQr === 'custom' && (
+                      <input className={`${inputCls} mt-2`} value={pf.cardEventLink} onChange={e => setF(v => ({ ...v, player: { ...v.player, cardEventLink: e.target.value } }))} inputMode="url" placeholder="https://…" />
+                    )}
+                  </div>
+                )}
                 <label className={labelCls}>Confirmation title</label>
                 <input className={inputCls} value={pf.confirmationTitle} onChange={e => setF(v => ({ ...v, player: { ...v.player, confirmationTitle: e.target.value } }))} />
                 <label className={labelCls}>Confirmation message</label>
@@ -284,6 +306,7 @@ function FormsInner() {
                 <div><div className={labelCls}>Waiver title</div>{ro(pf.waiverTitle)}</div>
                 <div><div className={labelCls}>Waiver text</div><div className="text-sm text-slate-600 whitespace-pre-line max-h-44 overflow-y-auto bg-slate-50 rounded-lg p-3 border border-slate-100">{pf.waiverText}</div></div>
                 <div><div className={labelCls}>Optional fields</div><div className="flex flex-wrap gap-1.5">{enabledFields.length ? enabledFields.map(l => <span key={l} className="text-xs bg-teal-50 text-teal-700 rounded-full px-2.5 py-1">{l}</span>) : <span className="text-slate-400 text-sm">None</span>}</div></div>
+                {pf.fields.playerPass && <div className="text-sm text-slate-600">Card's second QR code: <span className="font-medium">{({ event: 'Tournament event page', instagram: 'Instagram', facebook: 'Facebook', website: 'Website', custom: pf.cardEventLink || 'Custom link' } as Record<string, string>)[pf.cardEventQr || 'event']}</span>{pf.cardEventLabel ? ` · “${pf.cardEventLabel}”` : ''}</div>}
                 <div><div className={labelCls}>Confirmation</div>{ro(pf.confirmationTitle)}<div className="text-sm text-slate-500 mt-0.5">{pf.confirmationMessage}</div></div>
                 <div className="text-sm text-slate-600">Email confirmation: <span className="font-medium">{pf.emailConfirmation ? 'On' : 'Off'}</span></div>
               </div>

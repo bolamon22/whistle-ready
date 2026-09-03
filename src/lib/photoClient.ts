@@ -17,6 +17,31 @@ export async function squareJpeg(file: File, size: number): Promise<Blob> {
   } finally { URL.revokeObjectURL(url) }
 }
 
+/** Club logo: no crop, fit inside `max`×`max`, PNG so transparent backgrounds survive. */
+export async function fitPng(file: File, max: number): Promise<Blob> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("That file isn't an image we can read")); i.src = url })
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
+    const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k))
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Could not process the image')
+    ctx.drawImage(img, 0, 0, w, h)
+    const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/png'))
+    if (!blob) throw new Error('Could not process the image')
+    return blob
+  } finally { URL.revokeObjectURL(url) }
+}
+
+export async function uploadClubLogo(file: File): Promise<string> {
+  const blob = await fitPng(file, 512)
+  const fd = new FormData(); fd.append('file', new File([blob], 'club-logo.png', { type: 'image/png' }))
+  const res = await fetch('/api/upload', { method: 'POST', body: fd })
+  const j = await res.json().catch(() => ({}))
+  if (!res.ok || !j.url) throw new Error(j.error || 'Upload failed')
+  return String(j.url)
+}
+
 export async function uploadPlayerPhoto(file: File): Promise<string> {
   const blob = await squareJpeg(file, 640)
   const fd = new FormData(); fd.append('file', new File([blob], 'player.jpg', { type: 'image/jpeg' }))

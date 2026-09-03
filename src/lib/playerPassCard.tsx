@@ -28,8 +28,10 @@ export type PassCardData = {
   orgLogoUrl: string
   orgSite: string              // org's own domain, e.g. "sunshineeventsgroup.com", may be ''
   signedOn: string             // formatted date the waiver was signed
-  qrDataUrl: string            // PNG data URL of the QR code
-  qrLabel: string              // what the QR opens: "Highlight reel", "Instagram", "My player card"…
+  qrDataUrl: string            // PNG data URL of the player's QR code
+  qrLabel: string              // what it opens: "Highlight reel", "Instagram", "My player card"…
+  qr2DataUrl: string           // the event / organization QR code (tournament page, org Instagram…)
+  qr2Label: string             // "Event info", "Follow us on Instagram"…
 }
 
 export const PASS_W = 720
@@ -73,7 +75,9 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: PASS_W, height: PASS_H, background: '#fff', fontFamily: font, color: S900, boxSizing: 'border-box', lineHeight: 1.2, overflow: 'hidden' }}>
       {/* Header: tournament */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: DARK, padding: '34px 36px', minHeight: 200, flexShrink: 0 }}>
+      {/* Every section has a fixed height budget (sums to < 1140 with a little slack that marginTop: auto
+          hands to the footer), so wider browser fonts in the live preview can't push things into each other. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: DARK, padding: '0 36px', height: 216, flexShrink: 0, overflow: 'hidden' }}>
         <Mark name={p.tournamentName || p.orgName} url={p.tournamentLogoUrl} size={116} radius={22} />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', fontSize: 19, fontWeight: 700, letterSpacing: 5, color: TEAL_LIGHT, textTransform: 'uppercase' }}>Player card</div>
@@ -85,10 +89,10 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
       </div>
 
       {/* Photo + club */}
-      <div style={{ display: 'flex', gap: 28, padding: '34px 36px 0', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 28, padding: '34px 36px 0', height: 334, flexShrink: 0, overflow: 'hidden' }}>
         {p.photoUrl
-          ? <img src={p.photoUrl} width={320} height={320} style={{ borderRadius: 28, objectFit: 'cover', border: `4px solid ${S100}` }} />
-          : <div style={{ display: 'flex', width: 320, height: 320, borderRadius: 28, background: badgeHex(p.playerName), color: '#fff', alignItems: 'center', justifyContent: 'center', fontSize: 120, fontWeight: 800 }}>{initials(p.playerName)}</div>}
+          ? <img src={p.photoUrl} width={300} height={300} style={{ borderRadius: 28, objectFit: 'cover', border: `4px solid ${S100}` }} />
+          : <div style={{ display: 'flex', width: 300, height: 300, borderRadius: 28, background: badgeHex(p.playerName), color: '#fff', alignItems: 'center', justifyContent: 'center', fontSize: 112, fontWeight: 800 }}>{initials(p.playerName)}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, justifyContent: 'center' }}>
           <Mark name={p.clubName} url={p.clubLogoUrl} size={124} radius={24} />
           <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.12, marginTop: 18, ...clamp(mode, 2) }}>{p.clubName || 'Club'}</div>
@@ -97,8 +101,8 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
       </div>
 
       {/* Name + number */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '30px 36px 0', flexShrink: 0 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: p.playerName.length > 22 ? 42 : 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, ...clamp(mode, 2) }}>{p.playerName}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '0 36px', height: 100, marginTop: 24, flexShrink: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: p.playerName.length > 22 ? 42 : 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, ...clamp(mode, p.playerName.length > 22 ? 2 : 1) }}>{p.playerName}</div>
         {p.jersey && (
           <div style={{ display: 'flex', alignItems: 'baseline', color: TEAL, flexShrink: 0 }}>
             <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, marginRight: 4 }}>#</div>
@@ -107,28 +111,31 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
         )}
       </div>
 
-      {/* QR + ID */}
-      {/* flex: 1 + minHeight: 0 so this section gives way (browsers won't shrink a flex item below its content otherwise) and the footer always stays on the card */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 32, margin: '30px 36px 0', paddingTop: 30, borderTop: `2px solid ${S100}`, flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <img src={p.qrDataUrl} width={224} height={224} style={{ borderRadius: 12 }} />
-          <div style={{ display: 'flex', fontSize: 15, fontWeight: 700, letterSpacing: 3, color: S500, marginTop: 10, textTransform: 'uppercase' }}>{p.qrLabel}</div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', fontSize: 17, fontWeight: 700, letterSpacing: 4, color: S500, textTransform: 'uppercase' }}>Player ID</div>
-          <div style={{ display: 'flex', fontSize: 46, fontWeight: 800, letterSpacing: 3, marginTop: 4 }}>{p.code}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 22 }}>
-            <div style={{ display: 'flex', width: 30, height: 30, borderRadius: 15, background: '#d1fae5', color: '#047857', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800 }}>✓</div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', fontSize: 21, fontWeight: 700, color: '#047857' }}>Waiver on file</div>
-              <div style={{ display: 'flex', fontSize: 19, color: S500 }}>{p.signedOn}</div>
-            </div>
+      {/* Two QR codes: the player's own link, and the event / organization */}
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-start', margin: '26px 36px 0', paddingTop: 26, borderTop: `2px solid ${S100}`, height: 250, flexShrink: 0, overflow: 'hidden' }}>
+        {[[p.qrDataUrl, p.qrLabel], [p.qr2DataUrl, p.qr2Label]].map(([src, label], i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 300 }}>
+            {src ? <img src={src} width={196} height={196} style={{ borderRadius: 12 }} /> : <div style={{ display: 'flex', width: 196, height: 196, borderRadius: 12, background: S100 }} />}
+            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 2.5, color: S500, marginTop: 8, textTransform: 'uppercase', textAlign: 'center', ...clamp(mode, 1) }}>{label}</div>
           </div>
+        ))}
+      </div>
+
+      {/* Player ID + waiver line */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 36px 0', height: 44, flexShrink: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <div style={{ display: 'flex', fontSize: 15, fontWeight: 700, letterSpacing: 3, color: S500, textTransform: 'uppercase' }}>Player ID</div>
+          <div style={{ display: 'flex', fontSize: 34, fontWeight: 800, letterSpacing: 2 }}>{p.code}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', width: 26, height: 26, borderRadius: 13, background: '#d1fae5', color: '#047857', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800 }}>✓</div>
+          <div style={{ display: 'flex', fontSize: 18, fontWeight: 700, color: '#047857' }}>Waiver on file</div>
+          <div style={{ display: 'flex', fontSize: 17, color: S500 }}>· {p.signedOn}</div>
         </div>
       </div>
 
       {/* Footer: the organization's branding */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: DARK, padding: '0 36px', height: 92, marginTop: 30, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: DARK, padding: '0 36px', height: 92, marginTop: 'auto', flexShrink: 0 }}>
         {p.orgLogoUrl
           ? <div style={{ display: 'flex', width: 60, height: 60, borderRadius: 12, background: '#fff', padding: 5, alignItems: 'center', justifyContent: 'center' }}><img src={p.orgLogoUrl} width={50} height={50} style={{ objectFit: 'contain' }} /></div>
           : null}

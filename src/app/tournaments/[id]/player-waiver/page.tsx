@@ -1,8 +1,9 @@
 import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
-import PlayerRegForm, { type ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
-import { fmtRange } from '@/lib/playerPass'
+import PlayerRegForm, { type ClubOption, type CardContext } from '@/app/o/[slug]/register/player/PlayerRegForm'
+import { fmtRange, playerPassConfig, orgSiteConfig, eventQrFor, appBaseUrl } from '@/lib/playerPass'
+import { headers } from 'next/headers'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 
 // Cache policy for published pages.
@@ -73,6 +74,21 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
     teams = clubs.map(c => c.name)
   } catch { /* none */ }
 
+  // Everything the live card preview shows that the form doesn't collect (only when the org's
+  // Player pass switch is on).
+  let cardContext: CardContext | undefined
+  if ((forms.player?.fields || {}).playerPass === true && orgId) {
+    const [cfg, site] = await Promise.all([playerPassConfig(orgId), orgSiteConfig(orgId)])
+    const orgSite = (org.slug && DOMAIN_BY_SLUG[String(org.slug)]) || ''
+    const eventQr = eventQrFor({ cfg, socials: site.socials, tournamentId: t.id, orgSite, base: appBaseUrl(headers()) })
+    cardContext = {
+      tournamentName: String(t.name || ''), tournamentLogoUrl: String(t.logoUrl || org.logoUrl || ''),
+      tournamentDates: fmtRange(String(t.startDate || ''), String(t.endDate || '')), location: String(t.location || ''),
+      orgName: String(org.name || ''), orgLogoUrl: String(org.logoUrl || ''), orgSite,
+      eventQrUrl: eventQr.url, eventQrLabel: eventQr.label,
+    }
+  }
+
   const pf = forms.player || {}
   const waiverTitle = pf.waiverTitle || 'Player Participation Waiver & Release of Liability'
   const waiverHtml = mdToHtml(pf.waiverText || DEFAULT_WAIVER)
@@ -84,11 +100,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
     <div className="min-h-screen bg-slate-50">
       <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name}
         header={{ logoUrl: String(t.logoUrl || org.logoUrl || ''), title: String(t.name || '') }}
-        cardContext={fields.playerPass ? {
-          tournamentName: String(t.name || ''), tournamentLogoUrl: String(t.logoUrl || org.logoUrl || ''),
-          tournamentDates: fmtRange(String(t.startDate || ''), String(t.endDate || '')), location: String(t.location || ''),
-          orgName: String(org.name || ''), orgLogoUrl: String(org.logoUrl || ''), orgSite: (org.slug && DOMAIN_BY_SLUG[String(org.slug)]) || '',
-        } : undefined} />
+        cardContext={cardContext} />
     </div>
   )
 }
