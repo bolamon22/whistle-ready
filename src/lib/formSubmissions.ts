@@ -63,7 +63,7 @@ export function ensureSubmissionsTable(): Promise<void> {
 }
 
 // ── derived columns ──────────────────────────────────────────────────────────
-const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature', 'photoUrl'])
+const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature', 'photoUrl', 'cardLink'])
 function derived(data: any) {
   const d = data || {}
   const playerName = String(d.playerName || d.name || d.companyName || '').trim()

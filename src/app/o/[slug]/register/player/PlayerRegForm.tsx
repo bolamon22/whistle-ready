@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink } from 'lucide-react'
+import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2 } from 'lucide-react'
+import { uploadPlayerPhoto } from '@/lib/photoClient'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -93,56 +94,41 @@ function ClubPicker({ clubs, value, otherName, onChange }: { clubs: ClubOption[]
   )
 }
 
-// Player photo for the pass: cropped to a square (biased toward the top, where faces are in
-// portrait shots), shrunk to 640px and re-encoded as JPEG in the browser, so a 12 MB phone
-// photo becomes ~60 KB before it goes to /api/upload.
-async function squareJpeg(file: File, size: number): Promise<Blob> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("That file isn't a photo we can read")); i.src = url })
-    const side = Math.min(img.naturalWidth, img.naturalHeight)
-    const sx = (img.naturalWidth - side) / 2, sy = (img.naturalHeight - side) * 0.25
-    const out = Math.min(size, side)
-    const canvas = document.createElement('canvas'); canvas.width = out; canvas.height = out
-    const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Could not process the photo')
-    ctx.drawImage(img, sx, sy, side, side, 0, 0, out, out)
-    const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', 0.86))
-    if (!blob) throw new Error('Could not process the photo')
-    return blob
-  } finally { URL.revokeObjectURL(url) }
-}
-
-function PhotoField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+// The player card extras (tournament forms with the org's "Player pass" switch on): an
+// optional photo, and the link the card's QR code should open. Both can be changed later
+// from the card page. Photo prep + upload live in src/lib/photoClient.ts.
+function CardFields({ photoUrl, cardLink, onPhoto, onLink }: { photoUrl: string; cardLink: string; onPhoto: (url: string) => void; onLink: (url: string) => void }) {
   const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   async function pick(file: File) {
     setBusy(true)
-    try {
-      const blob = await squareJpeg(file, 640)
-      const fd = new FormData(); fd.append('file', new File([blob], 'player.jpg', { type: 'image/jpeg' }))
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || !j.url) throw new Error(j.error || 'Upload failed')
-      onChange(String(j.url))
-    } catch (e: any) { toast.error(e?.message || 'Could not upload the photo') }
+    try { onPhoto(await uploadPlayerPhoto(file)) }
+    catch (e: any) { toast.error(e?.message || 'Could not upload the photo') }
     finally { setBusy(false); if (inputRef.current) inputRef.current.value = '' }
   }
   return (
-    <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-100">
-      <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label={value ? 'Change player photo' : 'Add player photo'}
-        className="relative flex-none w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 overflow-hidden flex items-center justify-center text-slate-400 disabled:opacity-60">
-        {value ? <img src={value} alt="" className="w-full h-full object-cover" /> : <Camera size={28} />}
-        {busy && <span className="absolute inset-0 bg-white/75 flex items-center justify-center text-xs font-semibold text-slate-600">Uploading…</span>}
-      </button>
-      <div className="text-sm min-w-0">
-        <div className="font-medium text-slate-700">Player photo <span className="text-slate-400 font-normal">(optional)</span></div>
-        <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">Goes on the player's pass for check-in. Take one now or pick from your photos.</p>
-        <div className="mt-1.5 flex gap-3 text-xs font-semibold">
-          <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className="text-teal-700 hover:underline">{value ? 'Change photo' : 'Add photo'}</button>
-          {value && <button type="button" onClick={() => onChange('')} className="text-slate-500 hover:underline">Remove</button>}
+    <div className="mb-4 pb-4 border-b border-slate-100">
+      <div className="flex items-center gap-4">
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label={photoUrl ? 'Change player photo' : 'Add player photo'}
+          className="relative flex-none w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 overflow-hidden flex items-center justify-center text-slate-400 disabled:opacity-60">
+          {photoUrl ? <img src={photoUrl} alt="" className="w-full h-full object-cover" /> : <Camera size={28} />}
+          {busy && <span className="absolute inset-0 bg-white/75 flex items-center justify-center text-xs font-semibold text-slate-600">Uploading…</span>}
+        </button>
+        <div className="text-sm min-w-0">
+          <div className="font-medium text-slate-700">Player photo <span className="text-slate-400 font-normal">(optional)</span></div>
+          <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">Goes on the player card you get after registering. Take one now or pick from your photos — you can change it later.</p>
+          <div className="mt-1.5 flex gap-3 text-xs font-semibold">
+            <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className="text-teal-700 hover:underline">{photoUrl ? 'Change photo' : 'Add photo'}</button>
+            {photoUrl && <button type="button" onClick={() => onPhoto('')} className="text-slate-500 hover:underline">Remove</button>}
+          </div>
         </div>
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) pick(f) }} />
       </div>
-      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) pick(f) }} />
+      <div className="mt-3">
+        <label className={labelCls}><span className="inline-flex items-center gap-1.5"><Link2 size={14} className="text-slate-400" /> Link for the card's QR code <span className="text-slate-400 font-normal">(optional)</span></span></label>
+        <input className={inputCls} value={cardLink} onChange={e => onLink(e.target.value)} inputMode="url" placeholder="Highlight reel, Instagram, Hudl… e.g. https://youtube.com/…" />
+        <p className="text-xs text-slate-400 mt-1">Leave blank and the code opens the player's card.</p>
+      </div>
     </div>
   )
 }
@@ -155,7 +141,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const [done, setDone] = useState(false)
   const [passToken, setPassToken] = useState('')   // set when the submission got a player pass
   const [d, setD] = useState<any>({
-    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', photoUrl: '',
+    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', photoUrl: '', cardLink: '',
     parentName: '', parentEmail: '', parentPhone: '',
     parent2Name: '', parent2Email: '', parent2Phone: '',
     emergencyName: '', emergencyPhone: '',
@@ -265,12 +251,12 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
       {passToken && (
         <div className="mt-8 bg-[#0b1220] rounded-2xl p-5 text-white">
-          <div className="text-xs uppercase tracking-[0.2em] text-teal-300">Player pass</div>
-          <p className="text-sm text-slate-300 mt-1 leading-relaxed">Save it to your phone and show it at check-in — staff scan the code to confirm the signed waiver. The link is in your confirmation email too.</p>
-          <img src={`/pass/${passToken}/card.png`} alt="Player pass" width={720} height={1140} className="w-full max-w-[300px] mx-auto mt-4 rounded-xl shadow-2xl shadow-black/50 bg-white" />
+          <div className="text-xs uppercase tracking-[0.2em] text-teal-300">Player card</div>
+          <p className="text-sm text-slate-300 mt-1 leading-relaxed">Save it, share it, show it off. Open the card to change the photo or the link its QR code opens — the link is in your confirmation email too.</p>
+          <img src={`/pass/${passToken}/card.png`} alt="Player card" width={720} height={1140} className="w-full max-w-[300px] mx-auto mt-4 rounded-xl shadow-2xl shadow-black/50 bg-white" />
           <div className="grid grid-cols-2 gap-2.5 max-w-[300px] mx-auto mt-4">
-            <a href={`/pass/${passToken}/card.png`} download="player-pass.png" className="inline-flex items-center justify-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-[#0b1220] font-bold rounded-xl py-2.5 text-sm"><Download size={15} /> Save to phone</a>
-            <a href={`/pass/${passToken}`} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 border border-white/15 font-semibold rounded-xl py-2.5 text-sm"><ExternalLink size={15} /> Open pass</a>
+            <a href={`/pass/${passToken}/card.png`} download="player-card.png" className="inline-flex items-center justify-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-[#0b1220] font-bold rounded-xl py-2.5 text-sm"><Download size={15} /> Save to phone</a>
+            <a href={`/pass/${passToken}`} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 border border-white/15 font-semibold rounded-xl py-2.5 text-sm"><ExternalLink size={15} /> Open card</a>
           </div>
         </div>
       )}
@@ -304,7 +290,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Player information</h2>
-        {tournamentId && fields.playerPass && <PhotoField value={d.photoUrl} onChange={u => set('photoUrl', u)} />}
+        {tournamentId && fields.playerPass && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} />}
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
           <div><label className={labelCls}>Player email</label><input className={inputCls} type="email" value={d.playerEmail} onChange={e => set('playerEmail', e.target.value)} /></div>

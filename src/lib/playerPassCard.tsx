@@ -1,6 +1,7 @@
-// The player pass: a credential card (tournament + club logos, photo, name, team, jersey #,
-// player ID, QR code) rendered to a PNG with Satori (next/og). Parents save it to their
-// phone from /pass/<token>; staff print the same image on the badge sheet.
+// The player card: a keepsake credential (tournament + club logos, photo, name, team,
+// jersey #, player ID, a QR code to the player's own link, org branding) rendered to a PNG
+// with Satori (next/og). Parents save it to their phone from /pass/<token>; staff print the
+// same image on the badge sheet.
 //
 // Satori rules that shape this file: every element with more than one child needs
 // `display: 'flex'`, text must sit inside an element, images need width + height, and
@@ -22,8 +23,11 @@ export type PassCardData = {
   tournamentDates: string      // already formatted, may be ''
   location: string
   orgName: string
+  orgLogoUrl: string
+  orgSite: string              // org's own domain, e.g. "sunshineeventsgroup.com", may be ''
   signedOn: string             // formatted date the waiver was signed
-  qrDataUrl: string            // PNG data URL of the check-in QR code
+  qrDataUrl: string            // PNG data URL of the QR code
+  qrLabel: string              // what the QR opens: "Highlight reel", "Instagram", "My player card"…
 }
 
 export const PASS_W = 720
@@ -60,7 +64,7 @@ export function PassCard({ p }: { p: PassCardData }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: DARK, padding: '34px 36px', minHeight: 200 }}>
         <Mark name={p.tournamentName || p.orgName} url={p.tournamentLogoUrl} size={116} radius={22} />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', fontSize: 19, fontWeight: 700, letterSpacing: 5, color: TEAL_LIGHT, textTransform: 'uppercase' }}>Player pass</div>
+          <div style={{ display: 'flex', fontSize: 19, fontWeight: 700, letterSpacing: 5, color: TEAL_LIGHT, textTransform: 'uppercase' }}>Player card</div>
           <div style={{ display: 'block', fontSize: (p.tournamentName || p.orgName).length > 26 ? 31 : 40, fontWeight: 800, color: '#fff', lineHeight: 1.12, marginTop: 6, lineClamp: 2 }}>{p.tournamentName || p.orgName}</div>
           {(p.tournamentDates || p.location) && (
             <div style={{ display: 'block', fontSize: 21, color: '#cbd5e1', marginTop: 8, lineClamp: 1 }}>{[p.tournamentDates, p.location].filter(Boolean).join('  ·  ')}</div>
@@ -95,7 +99,7 @@ export function PassCard({ p }: { p: PassCardData }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 32, margin: '30px 36px 0', paddingTop: 30, borderTop: `2px solid ${S100}`, flex: 1 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img src={p.qrDataUrl} width={224} height={224} style={{ borderRadius: 12 }} />
-          <div style={{ display: 'flex', fontSize: 15, fontWeight: 700, letterSpacing: 3, color: S500, marginTop: 10, textTransform: 'uppercase' }}>Scan at check-in</div>
+          <div style={{ display: 'flex', fontSize: 15, fontWeight: 700, letterSpacing: 3, color: S500, marginTop: 10, textTransform: 'uppercase' }}>{p.qrLabel}</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', fontSize: 17, fontWeight: 700, letterSpacing: 4, color: S500, textTransform: 'uppercase' }}>Player ID</div>
@@ -103,17 +107,23 @@ export function PassCard({ p }: { p: PassCardData }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 22 }}>
             <div style={{ display: 'flex', width: 30, height: 30, borderRadius: 15, background: '#d1fae5', color: '#047857', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800 }}>✓</div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', fontSize: 21, fontWeight: 700, color: '#047857' }}>Waiver signed</div>
+              <div style={{ display: 'flex', fontSize: 21, fontWeight: 700, color: '#047857' }}>Waiver on file</div>
               <div style={{ display: 'flex', fontSize: 19, color: S500 }}>{p.signedOn}</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: S100, padding: '0 36px', height: 62, marginTop: 30 }}>
-        <div style={{ display: 'flex', fontSize: 18, color: S500 }}>Present this pass at check-in</div>
-        <div style={{ display: 'flex', fontSize: 18, fontWeight: 700, color: S400 }}>{p.orgName}</div>
+      {/* Footer: the organization's branding */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: DARK, padding: '0 36px', height: 92, marginTop: 30 }}>
+        {p.orgLogoUrl
+          ? <div style={{ display: 'flex', width: 60, height: 60, borderRadius: 12, background: '#fff', padding: 5, alignItems: 'center', justifyContent: 'center' }}><img src={p.orgLogoUrl} width={50} height={50} style={{ objectFit: 'contain' }} /></div>
+          : null}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', fontSize: 13, fontWeight: 700, letterSpacing: 3, color: TEAL_LIGHT, textTransform: 'uppercase' }}>Presented by</div>
+          <div style={{ display: 'block', fontSize: 24, fontWeight: 800, color: '#fff', lineClamp: 1, marginTop: 2 }}>{p.orgName}</div>
+        </div>
+        {p.orgSite && <div style={{ display: 'flex', fontSize: 17, fontWeight: 700, color: '#94a3b8' }}>{p.orgSite}</div>}
       </div>
     </div>
   )

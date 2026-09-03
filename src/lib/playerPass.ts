@@ -6,15 +6,45 @@ import QRCode from 'qrcode'
 import { createClient } from '@libsql/client'
 import { prisma } from '@/lib/db'
 import { getSubmissionByPassToken, passCode, type FormSubmission } from '@/lib/formSubmissions'
+import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 import type { PassCardData } from '@/lib/playerPassCard'
 
 export type PlayerPass = {
   submission: FormSubmission & { orgId: string; tournamentId: string }
   card: Omit<PassCardData, 'qrDataUrl'>
-  /** Where the QR sends staff: this player's row on the check-in page. */
-  checkInUrl: string
-  /** Absolute URL of the pass page itself (email, share). */
+  /** What the QR opens: the link the family chose (highlight reel, Instagram…), else the card page. */
+  qrUrl: string
+  /** Absolute URL of the card page itself (email, share). */
   passUrl: string
+}
+
+// ── the family's own QR link ─────────────────────────────────────────────────
+/** Accepts an http(s) URL (adds https:// to a bare "youtube.com/…"); '' when unusable. */
+export function cleanCardLink(raw: unknown): string {
+  let s = String(raw || '').trim()
+  if (!s) return ''
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`
+  try {
+    const u = new URL(s)
+    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) return ''
+    return u.toString().slice(0, 300)
+  } catch { return '' }
+}
+
+/** Short caption printed under the QR, from the link's host. */
+export function qrLabelFor(url: string): string {
+  const host = (() => { try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase() } catch { return '' } })()
+  if (!host) return 'My player card'
+  if (/youtube\.com$|youtu\.be$/.test(host)) return 'Highlight reel'
+  if (/hudl\.com$/.test(host)) return 'Hudl highlights'
+  if (/instagram\.com$/.test(host)) return 'Instagram'
+  if (/tiktok\.com$/.test(host)) return 'TikTok'
+  if (/facebook\.com$|fb\.com$/.test(host)) return 'Facebook'
+  if (/twitter\.com$|x\.com$/.test(host)) return 'Follow me on X'
+  if (/snapchat\.com$/.test(host)) return 'Snapchat'
+  if (/twitch\.tv$/.test(host)) return 'Twitch'
+  if (/vimeo\.com$/.test(host)) return 'Highlight reel'
+  return `Scan · ${host}`
 }
 
 /** Public origin for absolute links. NEXTAUTH_URL in production; the request's host otherwise. */
@@ -85,7 +115,7 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
   }
   const orgId = sub.orgId || tournament?.orgId || ''
   if (orgId) {
-    try { const r = await prisma.$queryRawUnsafe<any[]>('SELECT id, name, logoUrl FROM "Organization" WHERE id = ?', orgId); org = r?.[0] || null } catch {}
+    try { const r = await prisma.$queryRawUnsafe<any[]>('SELECT id, name, slug, logoUrl FROM "Organization" WHERE id = ?', orgId); org = r?.[0] || null } catch {}
     try {
       const s = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgSite:${orgId}`)
       if (s?.[0]?.value && org) { const c = JSON.parse(String(s[0].value) || '{}'); if (c.logo) org.logoUrl = c.logo }
@@ -111,6 +141,9 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
     } catch {}
   }
 
+  const passUrl = `${base}/pass/${token}`
+  const cardLink = cleanCardLink(data.cardLink)
+  const qrUrl = cardLink || passUrl
   const card: PlayerPass['card'] = {
     code: passCode(token),
     playerName: String(data.playerName || '').trim() || 'Player',
@@ -127,10 +160,12 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
     tournamentDates: fmtRange(String(tournament?.startDate || ''), String(tournament?.endDate || '')),
     location: String(tournament?.location || '').trim(),
     orgName: String(org?.name || '').trim(),
+    orgLogoUrl: String(org?.logoUrl || '').trim(),
+    orgSite: (org?.slug && DOMAIN_BY_SLUG[String(org.slug)]) || '',
     signedOn: fmtDate(sub.submittedAt),
+    qrLabel: cardLink ? qrLabelFor(cardLink) : 'My player card',
   }
-  const checkInUrl = sub.tournamentId ? `${base}/tournaments/${sub.tournamentId}/player-waivers?player=${encodeURIComponent(sub.id)}` : `${base}/pass/${token}`
-  return { submission: sub, card, checkInUrl, passUrl: `${base}/pass/${token}` }
+  return { submission: sub, card, qrUrl, passUrl }
 }
 
 // ── images for Satori ────────────────────────────────────────────────────────

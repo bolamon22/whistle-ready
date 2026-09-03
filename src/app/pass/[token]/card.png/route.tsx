@@ -13,14 +13,15 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const pass = await loadPlayerPass(params.token, base)
   if (!pass) return new NextResponse('Not found', { status: 404 })
 
-  const [photoUrl, clubLogoUrl, tournamentLogoUrl, qr, fonts] = await Promise.all([
+  const [photoUrl, clubLogoUrl, tournamentLogoUrl, orgLogoUrl, qr, fonts] = await Promise.all([
     imageForSatori(pass.card.photoUrl, base),
     imageForSatori(pass.card.clubLogoUrl, base),
     imageForSatori(pass.card.tournamentLogoUrl, base),
-    qrDataUrl(pass.checkInUrl),
+    imageForSatori(pass.card.orgLogoUrl, base),
+    qrDataUrl(pass.qrUrl),
     loadPassFonts().catch(() => undefined),
   ])
-  const p = { ...pass.card, photoUrl, clubLogoUrl, tournamentLogoUrl, qrDataUrl: qr }
+  const p = { ...pass.card, photoUrl, clubLogoUrl, tournamentLogoUrl, orgLogoUrl, qrDataUrl: qr }
   return new ImageResponse(<PassCard p={p} />, {
     width: PASS_W, height: PASS_H,
     ...(fonts ? { fonts } : {}),
