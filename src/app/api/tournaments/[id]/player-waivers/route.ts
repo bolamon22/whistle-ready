@@ -18,7 +18,7 @@ import { playerPassEnabled } from '@/lib/playerPass'
 //   PATCH { clearCheckIns: true, team? } clears check-ins for the team (or the whole tournament).
 
 const EDITABLE = [
-  'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'clubName', 'teamName', 'jerseyNumber',
+  'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'clubName', 'teamName', 'jerseyNumber', 'position',
   'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone',
   'emergencyName', 'emergencyPhone', 'hotel', 'hotelName',
 ] as const

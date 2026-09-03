@@ -12,14 +12,14 @@ type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; b
 // Friendly labels for the detail view (anything not listed falls back to a de-camelCased key).
 const LABELS: Record<string, string> = {
   playerName: 'Player', playerEmail: 'Player email', usLacrosse: 'US Lacrosse #', dob: 'Date of birth', gender: 'Gender',
-  grade: 'Grade', clubName: 'Club', teamName: 'Team', jerseyNumber: 'Jersey #', parentName: 'Parent', parentEmail: 'Parent email',
+  grade: 'Grade', clubName: 'Club', teamName: 'Team', jerseyNumber: 'Jersey #', position: 'Position', parentName: 'Parent', parentEmail: 'Parent email',
   parentPhone: 'Parent phone', parent2Name: 'Parent 2', parent2Email: 'Parent 2 email', parent2Phone: 'Parent 2 phone',
   emergencyName: 'Emergency contact', emergencyPhone: 'Emergency phone', hotel: 'Hotel / rental', hotelName: 'Where staying',
   newsletter: 'Newsletter', signature: 'Signature', cardLink: 'Card QR link',
 }
 const DETAIL_ORDER = Object.keys(LABELS)
 const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl']
-const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber', 'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone', 'hotel', 'hotelName', 'signature']
+const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber', 'position', 'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone', 'hotel', 'hotelName', 'signature']
 const PAGE = 100
 
 const teamLabel = (t: any) => { const s = String(t || '').trim(); return !s ? '—' : s === '__other' ? 'Other / not listed' : s }
@@ -46,6 +46,7 @@ const EDIT_FIELDS: { key: string; label: string; type?: string; options?: string
   { key: 'usLacrosse', label: 'US Lacrosse #' }, { key: 'dob', label: 'Date of birth', type: 'date' },
   { key: 'gender', label: 'Gender', options: ['', 'Female', 'Male'] }, { key: 'grade', label: 'Grade', options: ['', ...GRADES] },
   { key: 'teamName', label: 'Team', team: true }, { key: 'jerseyNumber', label: 'Jersey #' },
+  { key: 'position', label: 'Position', options: ['', 'Attack', 'Midfield', 'Defense', 'Goalie', 'FOGO', 'LSM', 'Multiple / not sure'] },
   { key: 'parentName', label: 'Parent' }, { key: 'parentEmail', label: 'Parent email', type: 'email' }, { key: 'parentPhone', label: 'Parent phone', type: 'tel' },
   { key: 'parent2Name', label: 'Parent 2' }, { key: 'parent2Email', label: 'Parent 2 email', type: 'email' }, { key: 'parent2Phone', label: 'Parent 2 phone', type: 'tel' },
   { key: 'emergencyName', label: 'Emergency contact' }, { key: 'emergencyPhone', label: 'Emergency phone', type: 'tel' },

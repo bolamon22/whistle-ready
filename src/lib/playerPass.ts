@@ -194,6 +194,7 @@ export async function loadPlayerPass(token: string, base: string): Promise<Playe
     teamName: clubName ? team : '',
     division,
     jersey: String(data.jerseyNumber || '').trim().replace(/^#/, ''),
+    position: String(data.position || '').trim(),
     photoUrl: String(data.photoUrl || '').trim(),
     clubLogoUrl,
     tournamentName: String(tournament?.name || '').trim(),

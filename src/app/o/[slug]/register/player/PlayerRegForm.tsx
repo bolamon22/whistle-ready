@@ -8,10 +8,11 @@ import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 import type { PassCardData } from '@/lib/playerPassCard'
 import CardPreview from './CardPreview'
 
-type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean }
+type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1'
 const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+export const POSITIONS = ['Attack', 'Midfield', 'Defense', 'Goalie', 'FOGO', 'LSM', 'Multiple / not sure']
 
 export type ClubOption = { name: string; logoUrl?: string; teams: { name: string; division: string }[] }
 export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
@@ -183,7 +184,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const [done, setDone] = useState(false)
   const [passToken, setPassToken] = useState('')   // set when the submission got a player pass
   const [d, setD] = useState<any>({
-    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', photoUrl: '', cardLink: '', clubLogoUrl: '',
+    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', position: '', photoUrl: '', cardLink: '', clubLogoUrl: '',
     parentName: '', parentEmail: '', parentPhone: '',
     parent2Name: '', parent2Email: '', parent2Phone: '',
     emergencyName: '', emergencyPhone: '',
@@ -234,6 +235,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     teamName: selectedClub ? (d.teamPick === '__other' ? typedOther : String(d.teamPick || '')) : '',
     division: selectedClub ? (clubTeams.find(x => x.name === d.teamPick)?.division || '') : '',
     jersey: String(d.jerseyNumber || '').trim().replace(/^#/, ''),
+    position: String(d.position || ''),
     photoUrl: d.photoUrl,
     clubLogoUrl,
     tournamentName: cardContext!.tournamentName || tournamentName || '',
@@ -303,7 +305,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
   const receiptRows: [string, string][] = [
     ['Player name', d.playerName], ['Player email', d.playerEmail], ['US Lacrosse #', d.usLacrosse], ['Date of birth', d.dob],
-    ['Gender', d.gender], ['Grade', d.grade], ['Team', resolvedTeam], ['Jersey #', d.jerseyNumber],
+    ['Gender', d.gender], ['Grade', d.grade], ['Team', resolvedTeam], ['Jersey #', d.jerseyNumber], ['Position', d.position],
     ['Parent', d.parentName], ['Parent email', d.parentEmail], ['Parent phone', d.parentPhone],
     ['Parent 2', d.parent2Name], ['Parent 2 email', d.parent2Email], ['Parent 2 phone', d.parent2Phone],
     ['Emergency contact', d.emergencyName], ['Emergency phone', d.emergencyPhone],
@@ -396,6 +398,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
             : <input className={inputCls} value={d.teamName} onChange={e => set('teamName', e.target.value)} required />}</div>}
           {fields.teamName && !clubMode && d.teamName === '__other' && <div><label className={labelCls}>Enter your team or club name *</label><input className={inputCls} value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required /></div>}
           <div><label className={labelCls}>Jersey number</label><input className={inputCls} value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value)} /></div>
+          {fields.position !== false && <div><label className={labelCls}>Position</label><select className={inputCls} value={d.position} onChange={e => set('position', e.target.value)}><option value="">Select…</option>{POSITIONS.map(p => <option key={p}>{p}</option>)}</select></div>}
         </div>
       </div>
 

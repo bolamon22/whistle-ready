@@ -26,7 +26,7 @@ function db() {
 
 const DEFAULT_WAIVER = `## Player Participation Waiver & Release of Liability
 By submitting this form I confirm I have read and agree to this waiver, that I am at least 18 years of age, that I am the participant or the legal parent/guardian of the minor participant, and that my typed name is my legal electronic signature.`
-const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false }
+const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true }
 
 export default async function TournamentPlayerWaiver({ params }: { params: { id: string } }) {
   const client = db()

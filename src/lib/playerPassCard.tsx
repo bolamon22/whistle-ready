@@ -18,6 +18,7 @@ export type PassCardData = {
   teamName: string             // team without the club prefix, may be ''
   division: string
   jersey: string
+  position: string             // "Attack", "Goalie"… may be ''
   photoUrl: string             // '' when the parent skipped the photo
   clubLogoUrl: string
   tournamentName: string
@@ -103,10 +104,15 @@ export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: Rende
       {/* Name + number */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '0 36px', height: 100, marginTop: 24, flexShrink: 0, overflow: 'hidden' }}>
         <div style={{ flex: 1, minWidth: 0, fontSize: p.playerName.length > 22 ? 42 : 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, ...clamp(mode, p.playerName.length > 22 ? 2 : 1) }}>{p.playerName}</div>
-        {p.jersey && (
-          <div style={{ display: 'flex', alignItems: 'baseline', color: TEAL, flexShrink: 0 }}>
-            <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, marginRight: 4 }}>#</div>
-            <div style={{ display: 'flex', fontSize: 84, fontWeight: 800, lineHeight: 1 }}>{p.jersey}</div>
+        {(p.jersey || p.position) && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
+            {p.jersey && (
+              <div style={{ display: 'flex', alignItems: 'baseline', color: TEAL }}>
+                <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, marginRight: 4 }}>#</div>
+                <div style={{ display: 'flex', fontSize: p.position ? 72 : 84, fontWeight: 800, lineHeight: 1 }}>{p.jersey}</div>
+              </div>
+            )}
+            {p.position && <div style={{ display: 'flex', fontSize: 16, fontWeight: 700, letterSpacing: 3, color: S500, textTransform: 'uppercase', marginTop: p.jersey ? 4 : 0 }}>{p.position}</div>}
           </div>
         )}
       </div>
