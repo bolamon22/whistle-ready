@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2 } from 'lucide-react'
 import { uploadPlayerPhoto } from '@/lib/photoClient'
+import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
+import type { PassCardData } from '@/lib/playerPassCard'
+import CardPreview from './CardPreview'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -12,6 +15,8 @@ const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '1
 
 export type ClubOption = { name: string; logoUrl?: string; teams: { name: string; division: string }[] }
 export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
+/** What the live card preview needs that the form doesn't collect: event + org branding. */
+export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string }
 
 // Club identity beside the picker and in the header: the club's logo when its director uploaded
 // one at team registration, otherwise an initials badge in a color picked from the name.
@@ -97,7 +102,7 @@ function ClubPicker({ clubs, value, otherName, onChange }: { clubs: ClubOption[]
 // The player card extras (tournament forms with the org's "Player pass" switch on): an
 // optional photo, and the link the card's QR code should open. Both can be changed later
 // from the card page. Photo prep + upload live in src/lib/photoClient.ts.
-function CardFields({ photoUrl, cardLink, onPhoto, onLink }: { photoUrl: string; cardLink: string; onPhoto: (url: string) => void; onLink: (url: string) => void }) {
+function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText }: { photoUrl: string; cardLink: string; onPhoto: (url: string) => void; onLink: (url: string) => void; preview: Omit<PassCardData, 'qrDataUrl'>; qrText: string }) {
   const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   async function pick(file: File) {
@@ -108,6 +113,11 @@ function CardFields({ photoUrl, cardLink, onPhoto, onLink }: { photoUrl: string;
   }
   return (
     <div className="mb-4 pb-4 border-b border-slate-100">
+      {/* On phones and tablets the live card sits right here; on wide screens it rides along in the side column. */}
+      <div className="lg:hidden mb-4">
+        <CardPreview p={preview} qrText={qrText} className="w-56 mx-auto rounded-xl shadow-lg ring-1 ring-slate-200" />
+        <p className="text-center text-xs text-slate-400 mt-2">Your card builds itself as you type.</p>
+      </div>
       <div className="flex items-center gap-4">
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label={photoUrl ? 'Change player photo' : 'Add player photo'}
           className="relative flex-none w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 overflow-hidden flex items-center justify-center text-slate-400 disabled:opacity-60">
@@ -133,7 +143,7 @@ function CardFields({ photoUrl, cardLink, onPhoto, onLink }: { photoUrl: string;
   )
 }
 
-export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader }) {
+export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header, cardContext }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader; cardContext?: CardContext }) {
   // Tournament forms pass the registered clubs with their teams: the parent picks the club,
   // then the team on it, and we store "Club — Team" so staff rosters line up exactly.
   const clubMode = !!clubs && clubs.length > 0
@@ -178,11 +188,35 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     const t = clubTeams.find(x => x.name === d.teamPick)
     return t ? (t.division ? `${t.name} · ${t.division}` : t.name) : ''
   })()
+  // Live card preview (tournament forms with the org's "Player pass" switch on): built from
+  // what they've typed so far, placeholders for the rest.
+  const cardOn = !!(cardContext && fields.playerPass && tournamentId)
+  const previewLink = cleanCardLink(d.cardLink)
+  const preview: Omit<PassCardData, 'qrDataUrl'> | null = cardOn ? {
+    code: '···-···',
+    playerName: String(d.playerName || '').trim() || 'Player name',
+    clubName: chipClub || 'Your club',
+    teamName: selectedClub ? (d.teamPick === '__other' ? typedOther : String(d.teamPick || '')) : '',
+    division: selectedClub ? (clubTeams.find(x => x.name === d.teamPick)?.division || '') : '',
+    jersey: String(d.jerseyNumber || '').trim().replace(/^#/, ''),
+    photoUrl: d.photoUrl,
+    clubLogoUrl: selectedClub?.logoUrl || '',
+    tournamentName: cardContext!.tournamentName || tournamentName || '',
+    tournamentLogoUrl: cardContext!.tournamentLogoUrl,
+    tournamentDates: cardContext!.tournamentDates,
+    location: cardContext!.location,
+    orgName: cardContext!.orgName,
+    orgLogoUrl: cardContext!.orgLogoUrl,
+    orgSite: cardContext!.orgSite,
+    signedOn: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    qrLabel: previewLink ? qrLabelFor(previewLink) : 'My player card',
+  } : null
+  const previewQr = previewLink || (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '')
   // Tournament forms render their own header (logo + title) so the club chip can live in it.
   const headerEl = header ? (
     <>
       <header className="bg-[#0b1220] text-white">
-        <div className="max-w-2xl mx-auto px-6 py-6 flex flex-wrap items-center gap-3">
+        <div className={`${cardOn ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl'} mx-auto px-6 py-6 flex flex-wrap items-center gap-3`}>
           {header.logoUrl && <img src={header.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />}
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.2em] text-teal-300">{header.eyebrow || 'Player Waiver'}</div>
@@ -200,7 +234,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           )}
         </div>
       </header>
-      {!done && <p className="max-w-2xl mx-auto px-6 pt-6 text-sm text-slate-500">All players must complete this waiver to compete. Required fields are marked *.</p>}
+      {!done && <p className={`${cardOn ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl'} mx-auto px-6 pt-6 text-sm text-slate-500`}>All players must complete this waiver to compete. Required fields are marked *.</p>}
     </>
   ) : null
   const resolvedTeam: string = (() => {
@@ -285,12 +319,13 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   return (
     <>
     {headerEl}
-    <form onSubmit={submit} className="max-w-2xl mx-auto px-6 py-10 space-y-6">
+    <div className={`${cardOn ? 'max-w-2xl lg:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-8 lg:items-start' : 'max-w-2xl'} mx-auto px-6 py-10`}>
+    <form onSubmit={submit} className="space-y-6 min-w-0">
       <Toaster position="top-right" />
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Player information</h2>
-        {tournamentId && fields.playerPass && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} />}
+        {preview && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={preview} qrText={previewQr} />}
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
           <div><label className={labelCls}>Player email</label><input className={inputCls} type="email" value={d.playerEmail} onChange={e => set('playerEmail', e.target.value)} /></div>
@@ -381,6 +416,14 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         {submitting ? 'Submitting…' : 'Submit registration'}
       </button>
     </form>
+    {preview && (
+      <aside className="hidden lg:block sticky top-6">
+        <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-2">Your player card</div>
+        <CardPreview p={preview} qrText={previewQr} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
+        <p className="text-xs text-slate-400 mt-2 leading-relaxed">Builds itself as you type. The player ID and QR code are set when you submit; you can change the photo or the link any time after.</p>
+      </aside>
+    )}
+    </div>
     </>
   )
 }

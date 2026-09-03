@@ -9,6 +9,8 @@
 // Keep it free of Next/DB imports so it can be rendered anywhere (it is unit-rendered
 // with plain Satori in development).
 
+import type { CSSProperties } from 'react'
+
 export type PassCardData = {
   code: string                 // human-readable player ID, e.g. "K7M-3PX"
   playerName: string
@@ -33,6 +35,15 @@ export type PassCardData = {
 export const PASS_W = 720
 export const PASS_H = 1140
 
+// The same component renders two ways: 'satori' → the PNG (next/og), 'dom' → the live preview
+// in the browser while the family fills in the form. The only differences are how text is
+// clamped and which font stack is named.
+export type RenderMode = 'satori' | 'dom'
+const clamp = (mode: RenderMode, lines: number): CSSProperties =>
+  mode === 'dom'
+    ? { display: '-webkit-box', WebkitLineClamp: lines, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden' }
+    : ({ display: 'block', lineClamp: lines } as any)
+
 // Same palette + hash as the form's initials badge, so the pass matches what the parent saw.
 const BADGE_HEX = ['#0d9488', '#2563eb', '#4f46e5', '#7c3aed', '#e11d48', '#f97316', '#059669', '#334155']
 export function initials(name: string) { const w = name.trim().split(/\s+/).filter(Boolean); return ((w[0]?.[0] || '') + (w[1]?.[0] || '')).toUpperCase() || '?' }
@@ -56,37 +67,38 @@ function Mark({ name, url, size, radius }: { name: string; url: string; size: nu
   )
 }
 
-export function PassCard({ p }: { p: PassCardData }) {
+export function PassCard({ p, mode = 'satori' }: { p: PassCardData; mode?: RenderMode }) {
   const teamLine = [p.teamName, p.division].filter(Boolean).join(' · ')
+  const font = mode === 'dom' ? 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' : 'Inter'
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: PASS_W, height: PASS_H, background: '#fff', fontFamily: 'Inter', color: S900 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: PASS_W, height: PASS_H, background: '#fff', fontFamily: font, color: S900, boxSizing: 'border-box', lineHeight: 1.2, overflow: 'hidden' }}>
       {/* Header: tournament */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: DARK, padding: '34px 36px', minHeight: 200 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: DARK, padding: '34px 36px', minHeight: 200, flexShrink: 0 }}>
         <Mark name={p.tournamentName || p.orgName} url={p.tournamentLogoUrl} size={116} radius={22} />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', fontSize: 19, fontWeight: 700, letterSpacing: 5, color: TEAL_LIGHT, textTransform: 'uppercase' }}>Player card</div>
-          <div style={{ display: 'block', fontSize: (p.tournamentName || p.orgName).length > 26 ? 31 : 40, fontWeight: 800, color: '#fff', lineHeight: 1.12, marginTop: 6, lineClamp: 2 }}>{p.tournamentName || p.orgName}</div>
+          <div style={{ fontSize: (p.tournamentName || p.orgName).length > 26 ? 31 : 40, fontWeight: 800, color: '#fff', lineHeight: 1.12, marginTop: 6, ...clamp(mode, 2) }}>{p.tournamentName || p.orgName}</div>
           {(p.tournamentDates || p.location) && (
-            <div style={{ display: 'block', fontSize: 21, color: '#cbd5e1', marginTop: 8, lineClamp: 1 }}>{[p.tournamentDates, p.location].filter(Boolean).join('  ·  ')}</div>
+            <div style={{ fontSize: 21, color: '#cbd5e1', marginTop: 8, ...clamp(mode, 1) }}>{[p.tournamentDates, p.location].filter(Boolean).join('  ·  ')}</div>
           )}
         </div>
       </div>
 
       {/* Photo + club */}
-      <div style={{ display: 'flex', gap: 28, padding: '34px 36px 0' }}>
+      <div style={{ display: 'flex', gap: 28, padding: '34px 36px 0', flexShrink: 0 }}>
         {p.photoUrl
           ? <img src={p.photoUrl} width={320} height={320} style={{ borderRadius: 28, objectFit: 'cover', border: `4px solid ${S100}` }} />
           : <div style={{ display: 'flex', width: 320, height: 320, borderRadius: 28, background: badgeHex(p.playerName), color: '#fff', alignItems: 'center', justifyContent: 'center', fontSize: 120, fontWeight: 800 }}>{initials(p.playerName)}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, justifyContent: 'center' }}>
           <Mark name={p.clubName} url={p.clubLogoUrl} size={124} radius={24} />
-          <div style={{ display: 'block', fontSize: 34, fontWeight: 800, lineHeight: 1.12, marginTop: 18, lineClamp: 2 }}>{p.clubName || 'Club'}</div>
-          {teamLine && <div style={{ display: 'block', fontSize: 25, color: S700, marginTop: 8, lineHeight: 1.25, lineClamp: 2 }}>{teamLine}</div>}
+          <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.12, marginTop: 18, ...clamp(mode, 2) }}>{p.clubName || 'Club'}</div>
+          {teamLine && <div style={{ fontSize: 25, color: S700, marginTop: 8, lineHeight: 1.25, ...clamp(mode, 2) }}>{teamLine}</div>}
         </div>
       </div>
 
       {/* Name + number */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '30px 36px 0' }}>
-        <div style={{ display: 'block', flex: 1, minWidth: 0, fontSize: p.playerName.length > 22 ? 42 : 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, lineClamp: 2 }}>{p.playerName}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '30px 36px 0', flexShrink: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: p.playerName.length > 22 ? 42 : 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, ...clamp(mode, 2) }}>{p.playerName}</div>
         {p.jersey && (
           <div style={{ display: 'flex', alignItems: 'baseline', color: TEAL, flexShrink: 0 }}>
             <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, marginRight: 4 }}>#</div>
@@ -96,7 +108,8 @@ export function PassCard({ p }: { p: PassCardData }) {
       </div>
 
       {/* QR + ID */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 32, margin: '30px 36px 0', paddingTop: 30, borderTop: `2px solid ${S100}`, flex: 1 }}>
+      {/* flex: 1 + minHeight: 0 so this section gives way (browsers won't shrink a flex item below its content otherwise) and the footer always stays on the card */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 32, margin: '30px 36px 0', paddingTop: 30, borderTop: `2px solid ${S100}`, flex: 1, minHeight: 0 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img src={p.qrDataUrl} width={224} height={224} style={{ borderRadius: 12 }} />
           <div style={{ display: 'flex', fontSize: 15, fontWeight: 700, letterSpacing: 3, color: S500, marginTop: 10, textTransform: 'uppercase' }}>{p.qrLabel}</div>
@@ -115,15 +128,15 @@ export function PassCard({ p }: { p: PassCardData }) {
       </div>
 
       {/* Footer: the organization's branding */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: DARK, padding: '0 36px', height: 92, marginTop: 30 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: DARK, padding: '0 36px', height: 92, marginTop: 30, flexShrink: 0 }}>
         {p.orgLogoUrl
           ? <div style={{ display: 'flex', width: 60, height: 60, borderRadius: 12, background: '#fff', padding: 5, alignItems: 'center', justifyContent: 'center' }}><img src={p.orgLogoUrl} width={50} height={50} style={{ objectFit: 'contain' }} /></div>
           : null}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', fontSize: 13, fontWeight: 700, letterSpacing: 3, color: TEAL_LIGHT, textTransform: 'uppercase' }}>Presented by</div>
-          <div style={{ display: 'block', fontSize: 24, fontWeight: 800, color: '#fff', lineClamp: 1, marginTop: 2 }}>{p.orgName}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginTop: 2, ...clamp(mode, 1) }}>{p.orgName}</div>
         </div>
-        {p.orgSite && <div style={{ display: 'flex', fontSize: 17, fontWeight: 700, color: '#94a3b8' }}>{p.orgSite}</div>}
+        {p.orgSite && <div style={{ display: 'flex', fontSize: 15, fontWeight: 700, color: '#94a3b8', flexShrink: 0 }}>{p.orgSite}</div>}
       </div>
     </div>
   )

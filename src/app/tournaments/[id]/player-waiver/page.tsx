@@ -2,6 +2,8 @@ import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import PlayerRegForm, { type ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
+import { fmtRange } from '@/lib/playerPass'
+import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 
 // Cache policy for published pages.
 //
@@ -27,7 +29,7 @@ const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: tru
 
 export default async function TournamentPlayerWaiver({ params }: { params: { id: string } }) {
   const client = db()
-  const tRes = await client.execute({ sql: 'SELECT id, name, orgId, logoUrl FROM "Tournament" WHERE id = ?', args: [params.id] })
+  const tRes = await client.execute({ sql: 'SELECT id, name, orgId, logoUrl, startDate, endDate, location FROM "Tournament" WHERE id = ?', args: [params.id] })
   if (tRes.rows.length === 0) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-center px-6"><div><Trophy size={40} className="mx-auto text-slate-300" /><h1 className="mt-3 text-xl font-bold text-slate-800">Tournament not found</h1></div></div>
   }
@@ -36,7 +38,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
 
   let org: any = { name: '', logoUrl: '' }
   if (orgId) {
-    const oRes = await client.execute({ sql: 'SELECT name, logoUrl FROM "Organization" WHERE id = ?', args: [orgId] })
+    const oRes = await client.execute({ sql: 'SELECT name, slug, logoUrl FROM "Organization" WHERE id = ?', args: [orgId] })
     if (oRes.rows.length) org = oRes.rows[0]
   }
 
@@ -81,7 +83,12 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
   return (
     <div className="min-h-screen bg-slate-50">
       <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name}
-        header={{ logoUrl: String(t.logoUrl || org.logoUrl || ''), title: String(t.name || '') }} />
+        header={{ logoUrl: String(t.logoUrl || org.logoUrl || ''), title: String(t.name || '') }}
+        cardContext={fields.playerPass ? {
+          tournamentName: String(t.name || ''), tournamentLogoUrl: String(t.logoUrl || org.logoUrl || ''),
+          tournamentDates: fmtRange(String(t.startDate || ''), String(t.endDate || '')), location: String(t.location || ''),
+          orgName: String(org.name || ''), orgLogoUrl: String(org.logoUrl || ''), orgSite: (org.slug && DOMAIN_BY_SLUG[String(org.slug)]) || '',
+        } : undefined} />
     </div>
   )
 }

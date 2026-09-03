@@ -7,6 +7,8 @@ import { createClient } from '@libsql/client'
 import { prisma } from '@/lib/db'
 import { getSubmissionByPassToken, passCode, type FormSubmission } from '@/lib/formSubmissions'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
+import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
+export { cleanCardLink, qrLabelFor }
 import type { PassCardData } from '@/lib/playerPassCard'
 
 export type PlayerPass = {
@@ -16,35 +18,6 @@ export type PlayerPass = {
   qrUrl: string
   /** Absolute URL of the card page itself (email, share). */
   passUrl: string
-}
-
-// ── the family's own QR link ─────────────────────────────────────────────────
-/** Accepts an http(s) URL (adds https:// to a bare "youtube.com/…"); '' when unusable. */
-export function cleanCardLink(raw: unknown): string {
-  let s = String(raw || '').trim()
-  if (!s) return ''
-  if (!/^https?:\/\//i.test(s)) s = `https://${s}`
-  try {
-    const u = new URL(s)
-    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) return ''
-    return u.toString().slice(0, 300)
-  } catch { return '' }
-}
-
-/** Short caption printed under the QR, from the link's host. */
-export function qrLabelFor(url: string): string {
-  const host = (() => { try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase() } catch { return '' } })()
-  if (!host) return 'My player card'
-  if (/youtube\.com$|youtu\.be$/.test(host)) return 'Highlight reel'
-  if (/hudl\.com$/.test(host)) return 'Hudl highlights'
-  if (/instagram\.com$/.test(host)) return 'Instagram'
-  if (/tiktok\.com$/.test(host)) return 'TikTok'
-  if (/facebook\.com$|fb\.com$/.test(host)) return 'Facebook'
-  if (/twitter\.com$|x\.com$/.test(host)) return 'Follow me on X'
-  if (/snapchat\.com$/.test(host)) return 'Snapchat'
-  if (/twitch\.tv$/.test(host)) return 'Twitch'
-  if (/vimeo\.com$/.test(host)) return 'Highlight reel'
-  return `Scan · ${host}`
 }
 
 /** Public origin for absolute links. NEXTAUTH_URL in production; the request's host otherwise. */
@@ -70,7 +43,7 @@ function fmtDate(iso: string): string {
 }
 
 /** "2026-10-17" + "2026-10-18" → "Oct 17–18, 2026"; tolerant of blanks and odd formats. */
-function fmtRange(start: string, end: string): string {
+export function fmtRange(start: string, end: string): string {
   const parse = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null }
   const a = parse(start), b = parse(end)
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', timeZone: 'UTC' }
