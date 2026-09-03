@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import { CheckCircle2, Shield } from 'lucide-react'
+import { CheckCircle2, Shield, ChevronDown, Check } from 'lucide-react'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -21,6 +21,76 @@ function ClubMark({ name, logoUrl, size }: { name: string; logoUrl?: string; siz
   const box = size === 'lg' ? 'w-10 h-10 rounded-lg text-sm' : 'w-7 h-7 rounded-md text-[11px]'
   if (logoUrl) return <img src={logoUrl} alt="" className={`${box} object-contain bg-white p-0.5`} />
   return <span className={`${box} ${badgeColor(name)} text-white font-extrabold flex items-center justify-center`}>{initials(name)}</span>
+}
+const OTHER = '__other'
+
+// The club picker is a custom dropdown (not a native <select>) so each row can show the club's
+// logo. Keyboard: arrows move, Enter/Space picks, Escape closes, typing a letter jumps.
+function ClubPicker({ clubs, value, otherName, onChange }: { clubs: ClubOption[]; value: string; otherName: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(-1)
+  const ref = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const options: { value: string; label: string; logoUrl?: string }[] = [...clubs.map(c => ({ value: c.name, label: c.name, logoUrl: c.logoUrl })), { value: OTHER, label: 'Other / not listed' }]
+  const selected = clubs.find(c => c.name === value)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent | TouchEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc); document.addEventListener('touchstart', onDoc)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('touchstart', onDoc) }
+  }, [open])
+  useEffect(() => {
+    if (!open || active < 0) return
+    listRef.current?.children[active]?.scrollIntoView?.({ block: 'nearest' })
+  }, [open, active])
+  const openAt = (i: number) => { setActive(i); setOpen(true) }
+  const pick = (v: string) => { onChange(v); setOpen(false) }
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const cur = active >= 0 ? active : Math.max(0, options.findIndex(o => o.value === value))
+    if (e.key === 'ArrowDown') { e.preventDefault(); openAt(open ? Math.min(options.length - 1, cur + 1) : cur) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); openAt(open ? Math.max(0, cur - 1) : cur) }
+    else if (e.key === 'Home' && open) { e.preventDefault(); setActive(0) }
+    else if (e.key === 'End' && open) { e.preventDefault(); setActive(options.length - 1) }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (open && active >= 0) pick(options[active].value); else openAt(cur) }
+    else if (e.key === 'Escape' && open) { e.preventDefault(); setOpen(false) }
+    else if (e.key.length === 1 && /\S/.test(e.key)) {
+      const k = e.key.toLowerCase(), start = open ? cur + 1 : 0
+      const i = [...options.keys()].map(j => (start + j) % options.length).find(j => options[j].label.toLowerCase().startsWith(k))
+      if (i !== undefined) { if (open) setActive(i); else pick(options[i].value) }
+    }
+  }
+  const mark = value === OTHER && !otherName.trim()
+    ? <span className="w-7 h-7 rounded-md bg-slate-100 text-slate-400 flex items-center justify-center"><Shield size={15} /></span>
+    : value ? <ClubMark name={selected ? selected.name : otherName} logoUrl={selected?.logoUrl} size="sm" />
+    : <span className="w-7 h-7 rounded-md bg-slate-100 text-slate-400 flex items-center justify-center"><Shield size={15} /></span>
+  const label = value === OTHER ? 'Other / not listed' : selected ? selected.name : 'Select your club…'
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" role="combobox" aria-expanded={open} aria-haspopup="listbox" aria-controls="club-picker-list" onClick={() => (open ? setOpen(false) : openAt(Math.max(0, options.findIndex(o => o.value === value))))} onKeyDown={onKeyDown}
+        className={`${inputCls} pl-11 pr-9 text-left flex items-center ${open ? 'ring-2 ring-teal-400 border-teal-400' : ''}`}>
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">{mark}</span>
+        <span className={`truncate ${value ? 'text-slate-900' : 'text-slate-500'}`}>{label}</span>
+        <ChevronDown size={16} className={`absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <ul ref={listRef} id="club-picker-list" role="listbox" className="absolute z-20 left-0 right-0 mt-1 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg p-1.5">
+          {options.map((o, i) => {
+            const isSel = o.value === value
+            return (
+              <li key={o.value} role="option" aria-selected={isSel} onMouseEnter={() => setActive(i)} onMouseDown={e => e.preventDefault()} onClick={() => pick(o.value)}
+                className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer text-sm select-none ${active === i ? 'bg-teal-50 text-teal-900' : 'text-slate-800'} ${o.value === OTHER ? 'text-slate-500' : ''}`}>
+                {o.value === OTHER
+                  ? <span className="w-7 h-7 rounded-md bg-slate-100 text-slate-400 flex items-center justify-center"><Shield size={15} /></span>
+                  : <ClubMark name={o.label} logoUrl={o.logoUrl} size="sm" />}
+                <span className="truncate">{o.label}</span>
+                {isSel && <Check size={16} className="ml-auto text-teal-600 flex-none" />}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader }) {
@@ -177,18 +247,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           {fields.teamName && clubMode && (
             <>
               <div><label className={labelCls}>Club *</label>
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                    {chipClub
-                      ? <ClubMark name={chipClub} logoUrl={selectedClub?.logoUrl} size="sm" />
-                      : <span className="w-7 h-7 rounded-md bg-slate-100 text-slate-400 flex items-center justify-center"><Shield size={15} /></span>}
-                  </span>
-                  <select className={`${inputCls} pl-11`} value={d.clubName} onChange={e => { const c = e.target.value; setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '' })) }} required>
-                    <option value="">Select your club…</option>
-                    {clubs!.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                    <option value="__other">Other / not listed</option>
-                  </select>
-                </div>
+                <ClubPicker clubs={clubs!} value={d.clubName} otherName={typedOther} onChange={c => setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '' }))} />
               </div>
               {d.clubName && d.clubName !== '__other' && clubTeams.length > 0 && (
                 <div><label className={labelCls}>Team *</label>
