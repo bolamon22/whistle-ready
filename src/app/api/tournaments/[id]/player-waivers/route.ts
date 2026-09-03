@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
-import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData, setCheckIn, clearCheckIns, countCheckedIn } from '@/lib/formSubmissions'
+import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData, setCheckIn, clearCheckIns, countCheckedIn, ensurePassToken } from '@/lib/formSubmissions'
 
 // Player-waiver submissions for ONE tournament (rows in "OrgFormSubmission", see
 // src/lib/formSubmissions.ts).
 //   GET   ?q=&team=&sort=newest|name|jersey&limit=&offset=
 //         → { submissions, total, grandTotal, teams:[{name,count}], limit, offset }
 //         Search and paging are server-side so the page stays quick at thousands of waivers.
+//         &pass=1 makes sure every returned row has a passToken (the badge sheet prints
+//         /pass/<token>/card.png; waivers from before passes existed get one minted here).
+//   GET   ?id=<submission id> → { submission } — one row, for the scanned-pass check-in panel.
 //   PATCH { id, data: { teamName?, jerseyNumber?, … } } edits the whitelisted fields of one
 //         submission and appends an audit entry; the signature / agreement are never editable.
 //   PATCH { id, checkIn: true|false }  game-day check-in: marks the player present (or undoes it).
@@ -34,6 +37,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const g = await gateForTournament(params.id)
   if ('res' in g) return g.res
   const sp = new URL(req.url).searchParams
+  const one = String(sp.get('id') || '').trim()
+  if (one) {
+    const submission = await getSubmission(g.orgId, one)
+    if (!submission || submission.formType !== 'player' || String(submission.data?.tournamentId || '') !== params.id) {
+      return NextResponse.json({ error: 'Player not found in this tournament' }, { status: 404 })
+    }
+    return NextResponse.json({ submission })
+  }
   const q = String(sp.get('q') || '').trim()
   const team = String(sp.get('team') || '')
   const sortParam = String(sp.get('sort') || 'newest')
@@ -49,6 +60,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       teamCounts(scope),
       countCheckedIn({ ...scope, q, team }),
     ])
+    if (sp.get('pass') === '1') {
+      for (const s of submissions) if (!s.passToken) s.passToken = await ensurePassToken(g.orgId, s.id)
+    }
     return NextResponse.json({ submissions, total, grandTotal, teams, checkedIn, limit, offset })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to load', submissions: [], total: 0, grandTotal: 0, teams: [] }, { status: 500 })

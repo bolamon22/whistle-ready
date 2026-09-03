@@ -19,6 +19,9 @@ export type FormSubmission = {
   /** Game-day check-in (player waivers): when / by whom the player was marked present. */
   checkedInAt?: string | null
   checkedInBy?: string | null
+  /** Unguessable key of the player's pass page (/pass/<token>). Player waivers only. */
+  passToken?: string | null
+  updatedAt?: string
 }
 
 export type FormType = 'player' | 'vendor' | 'staff' | string
@@ -48,17 +51,19 @@ export function ensureSubmissionsTable(): Promise<void> {
       )`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_scope" ON "OrgFormSubmission" ("orgId", "formType", "tournamentId", "submittedAt")`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_team" ON "OrgFormSubmission" ("orgId", "tournamentId", "teamName")`)
-      // Game-day check-in (Sep 2026): added after the table shipped, so ALTER in place.
-      for (const col of ['"checkedInAt" TEXT', '"checkedInBy" TEXT']) {
+      // Game-day check-in (Sep 2026) and the player pass (Sep 2026): added after the table
+      // shipped, so ALTER in place.
+      for (const col of ['"checkedInAt" TEXT', '"checkedInBy" TEXT', '"passToken" TEXT']) {
         try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgFormSubmission" ADD COLUMN ${col}`) } catch { /* already there */ }
       }
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_pass" ON "OrgFormSubmission" ("passToken")`)
     })().catch(e => { tableReady = null; throw e })
   }
   return tableReady
 }
 
 // ── derived columns ──────────────────────────────────────────────────────────
-const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature'])
+const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature', 'photoUrl'])
 function derived(data: any) {
   const d = data || {}
   const playerName = String(d.playerName || d.name || d.companyName || '').trim()
@@ -84,11 +89,53 @@ function rowToSub(r: any): FormSubmission {
     id: r.id, formType: r.formType, submittedAt: r.submittedAt, data,
     edits: Array.isArray(edits) && edits.length ? edits : undefined,
     checkedInAt: r.checkedInAt || null, checkedInBy: r.checkedInBy || null,
+    passToken: r.passToken || null,
+    updatedAt: r.updatedAt || undefined,
   }
 }
 
 export function newSubmissionId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+}
+
+// ── player pass ──────────────────────────────────────────────────────────────
+// The pass URL is the only thing protecting a child's name and photo, so the token is
+// 128 bits of real randomness (the submission id is timestamp-based and guessable).
+export function newPassToken() {
+  const uuid = globalThis.crypto?.randomUUID?.()
+  if (uuid) return uuid.replace(/-/g, '')
+  let t = ''; for (let i = 0; i < 32; i++) t += Math.floor(Math.random() * 16).toString(16)
+  return t
+}
+
+/** Short human-readable player ID printed on the pass, derived from the token (no lookalike letters). */
+export function passCode(token: string) {
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let h1 = 0x811c9dc5, h2 = 0x01000193
+  for (let i = 0; i < token.length; i++) { const c = token.charCodeAt(i); h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0; h2 = Math.imul(h2 + c, 0x9e3779b1) >>> 0 }
+  let out = ''
+  for (let i = 0; i < 6; i++) { const v = i < 3 ? (h1 >>> (i * 5)) : (h2 >>> ((i - 3) * 5)); out += ALPHABET[v & 31] }
+  return out.slice(0, 3) + '-' + out.slice(3)
+}
+
+export async function getSubmissionByPassToken(token: string): Promise<(FormSubmission & { orgId: string; tournamentId: string }) | null> {
+  if (!token || !/^[a-f0-9]{32}$/i.test(token)) return null
+  await ensureSubmissionsTable()
+  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "OrgFormSubmission" WHERE "passToken" = ? LIMIT 1`, token)
+  if (!rows?.[0]) return null
+  return { ...rowToSub(rows[0]), orgId: String(rows[0].orgId || ''), tournamentId: String(rows[0].tournamentId || '') }
+}
+
+/** Waivers submitted before passes existed have no token yet: mint one on first use. */
+export async function ensurePassToken(orgId: string, id: string): Promise<string | null> {
+  await ensureOrgMigrated(orgId)
+  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT "passToken" FROM "OrgFormSubmission" WHERE "orgId" = ? AND "id" = ? LIMIT 1`, orgId, id)
+  if (!rows?.[0]) return null
+  if (rows[0].passToken) return String(rows[0].passToken)
+  const token = newPassToken()
+  await prisma.$executeRawUnsafe(`UPDATE "OrgFormSubmission" SET "passToken" = ? WHERE "orgId" = ? AND "id" = ? AND "passToken" IS NULL`, token, orgId, id)
+  const again = await prisma.$queryRawUnsafe<any[]>(`SELECT "passToken" FROM "OrgFormSubmission" WHERE "orgId" = ? AND "id" = ? LIMIT 1`, orgId, id)
+  return again?.[0]?.passToken ? String(again[0].passToken) : token
 }
 
 // ── one-time copy of the old blob ────────────────────────────────────────────
@@ -132,11 +179,13 @@ export async function insertSubmission(args: { orgId: string; formType: FormType
   const submittedAt = new Date().toISOString()
   const data = args.data || {}
   const dv = derived(data)
+  const formType = String(args.formType || 'player')
+  const passToken = formType === 'player' ? newPassToken() : null
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "OrgFormSubmission" ("id","orgId","formType","tournamentId","submittedAt","playerName","teamName","clubName","jersey","search","data","edits","updatedAt") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    id, args.orgId, String(args.formType || 'player'), String(data.tournamentId || ''), submittedAt,
-    dv.playerName, dv.teamName, dv.clubName, dv.jersey, dv.search, JSON.stringify(data), '[]', submittedAt)
-  return { id, formType: String(args.formType || 'player'), submittedAt, data }
+    `INSERT INTO "OrgFormSubmission" ("id","orgId","formType","tournamentId","submittedAt","playerName","teamName","clubName","jersey","search","data","edits","updatedAt","passToken") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    id, args.orgId, formType, String(data.tournamentId || ''), submittedAt,
+    dv.playerName, dv.teamName, dv.clubName, dv.jersey, dv.search, JSON.stringify(data), '[]', submittedAt, passToken)
+  return { id, formType, submittedAt, data, passToken }
 }
 
 export async function getSubmission(orgId: string, id: string): Promise<FormSubmission | null> {

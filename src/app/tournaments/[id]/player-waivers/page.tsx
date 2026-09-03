@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
-import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw } from 'lucide-react'
+import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer } from 'lucide-react'
 
 type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[]; checkedInAt?: string | null; checkedInBy?: string | null }
 
@@ -18,11 +18,18 @@ const LABELS: Record<string, string> = {
   newsletter: 'Newsletter', signature: 'Signature',
 }
 const DETAIL_ORDER = Object.keys(LABELS)
-const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick']
+const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl']
 const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber', 'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone', 'hotel', 'hotelName', 'signature']
 const PAGE = 100
 
 const teamLabel = (t: any) => { const s = String(t || '').trim(); return !s ? '—' : s === '__other' ? 'Other / not listed' : s }
+// Player photo from the waiver (parents can add one for the pass), else initials.
+const initialsOf = (name: string) => { const w = String(name || '').trim().split(/\s+/).filter(Boolean); return ((w[0]?.[0] || '') + (w[1]?.[0] || '')).toUpperCase() || '?' }
+function Avatar({ d, size }: { d: any; size: number }) {
+  const cls = `flex-shrink-0 rounded-lg object-cover bg-slate-200 text-slate-600 font-bold flex items-center justify-center`
+  if (d?.photoUrl) return <img src={d.photoUrl} alt="" width={size} height={size} style={{ width: size, height: size }} className={cls} />
+  return <span style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }} className={cls}>{initialsOf(d?.playerName)}</span>
+}
 const isPhone = (k: string) => /phone/i.test(k)
 const isEmail = (k: string) => /email/i.test(k)
 
@@ -161,6 +168,28 @@ export default function PlayerWaiverEntries() {
   const [confirmClear, setConfirmClear] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
   useEffect(() => { try { setCheckMode(localStorage.getItem('wr-waiver-checkin') === '1') } catch {} }, [])
+  // A scanned player pass lands here as ?player=<submission id>: show that one player with a
+  // big check-in button, above the list.
+  const [scanId, setScanId] = useState('')
+  const [scan, setScan] = useState<Sub | null>(null)
+  const [scanErr, setScanErr] = useState('')
+  useEffect(() => { try { setScanId(String(new URLSearchParams(window.location.search).get('player') || '')) } catch {} }, [])
+  useEffect(() => {
+    if (!scanId) { setScan(null); setScanErr(''); return }
+    let cancelled = false
+    setScan(null); setScanErr('')
+    fetch(`/api/tournaments/${id}/player-waivers?id=${encodeURIComponent(scanId)}`).then(async r => {
+      const j = await r.json().catch(() => ({}))
+      if (cancelled) return
+      if (r.ok && j.submission) setScan(j.submission)
+      else setScanErr(j.error || 'Player not found in this tournament')
+    }).catch(() => { if (!cancelled) setScanErr('Could not load that player') })
+    return () => { cancelled = true }
+  }, [scanId, id])
+  const closeScan = () => {
+    setScanId('')
+    try { const u = new URL(window.location.href); u.searchParams.delete('player'); window.history.replaceState(null, '', u.toString()) } catch {}
+  }
   const toggleCheckMode = () => {
     const next = !checkMode
     setCheckMode(next)
@@ -288,6 +317,24 @@ export default function PlayerWaiverEntries() {
       toast.error(e?.message || 'Could not save check-in')
     }
   }
+  async function toggleScanCheckIn() {
+    if (!scan) return
+    const on = !scan.checkedInAt
+    const prev = scan
+    setScan({ ...scan, checkedInAt: on ? new Date().toISOString() : null, checkedInBy: on ? 'you' : null })
+    try {
+      const res = await fetch(`/api/tournaments/${id}/player-waivers`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: scan.id, checkIn: on }) })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not save')
+      const upd = j.submission || {}
+      setScan(cur => cur ? { ...cur, checkedInAt: upd.checkedInAt ?? null, checkedInBy: upd.checkedInBy ?? null } : cur)
+      setSubs(list => list.map(x => x.id === scan.id ? { ...x, checkedInAt: upd.checkedInAt ?? null, checkedInBy: upd.checkedInBy ?? null } : x))
+      setCheckedIn(n => Math.max(0, n + (on ? 1 : -1)))
+    } catch (e: any) {
+      setScan(prev)
+      toast.error(e?.message || 'Could not save check-in')
+    }
+  }
   async function clearCheckIns() {
     if (!confirmClear) { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 4000); return }
     setConfirmClear(false)
@@ -400,9 +447,44 @@ export default function PlayerWaiverEntries() {
               </button>
             )}
             <Link href={`/tournaments/${id}/player-waiver`} target="_blank" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><ExternalLink size={14} /> Open form</Link>
+            {grandTotal > 0 && <Link href={`/tournaments/${id}/player-waivers/badges${team ? `?team=${encodeURIComponent(team)}` : ''}`} className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Printer size={14} /> Print badges</Link>}
             {grandTotal > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Download size={14} /> Export{filtering ? ` (${total})` : ' CSV'}</button>}
           </div>
         </div>
+
+        {/* Scanned player pass */}
+        {scanId && (
+          <div className="bg-white border-2 border-teal-300 rounded-2xl p-4 mb-4 shadow-sm">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700 inline-flex items-center gap-1.5"><ScanLine size={14} /> Scanned pass</div>
+              <button onClick={closeScan} className="text-xs font-semibold text-slate-500 hover:text-slate-700 inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1"><X size={12} /> Done</button>
+            </div>
+            {scanErr ? (
+              <p className="text-sm text-rose-600">{scanErr}</p>
+            ) : !scan ? (
+              <p className="text-sm text-slate-500">Loading…</p>
+            ) : (() => { const d = scan.data || {}; const on = !!scan.checkedInAt; return (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <Avatar d={d} size={72} />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-lg font-bold text-slate-900 truncate">{d.playerName || '—'}</span>
+                      {d.jerseyNumber && <span className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5 flex-shrink-0">#{d.jerseyNumber}</span>}
+                    </div>
+                    <div className="text-sm text-slate-600 truncate">{teamLabel(d.teamName)}{d.grade ? ` · Grade ${d.grade}` : ''}</div>
+                    <div className="text-xs text-emerald-700 font-medium mt-0.5 inline-flex items-center gap-1"><CheckCircle2 size={13} /> Waiver signed {fmtShort(scan.submittedAt)}</div>
+                    {on && <div className="text-xs text-slate-500 mt-0.5">Checked in {timeOf(scan.checkedInAt)}{scan.checkedInBy && scan.checkedInBy !== 'you' ? ` · ${scan.checkedInBy}` : ''}</div>}
+                  </div>
+                </div>
+                <button onClick={toggleScanCheckIn} aria-pressed={on}
+                  className={`sm:w-52 text-base font-bold rounded-xl px-4 py-3.5 inline-flex items-center justify-center gap-2 border transition-colors ${on ? 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700' : 'bg-white border-emerald-400 text-emerald-700 hover:bg-emerald-50'}`}>
+                  {on ? <><CheckCircle2 size={20} /> Checked in</> : <><Circle size={20} /> Check in</>}
+                </button>
+              </div>
+            ) })()}
+          </div>
+        )}
 
         {/* Search + roster picker */}
         {(grandTotal > 0 || filtering) && (
@@ -466,6 +548,7 @@ export default function PlayerWaiverEntries() {
                       <div className="flex items-stretch">
                         {checkMode && <div className="flex items-center pl-2">{checkBtn(s, 34)}</div>}
                         <button onClick={() => setOpen(isOpen ? null : s.id)} className="min-w-0 flex-1 text-left px-3 py-2.5 flex items-start gap-3">
+                          <Avatar d={d} size={40} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className={`font-semibold truncate ${done ? 'text-emerald-900' : 'text-slate-800'}`}>{d.playerName || '—'}</span>
@@ -503,7 +586,7 @@ export default function PlayerWaiverEntries() {
                         <React.Fragment key={s.id}>
                           <tr className={`cursor-pointer ${done ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'hover:bg-slate-50'}`} onClick={() => setOpen(open === s.id ? null : s.id)}>
                             {checkMode && <td className="pl-4 pr-1 py-1.5">{checkBtn(s, 26)}</td>}
-                            <td className="px-4 py-2.5 font-medium text-slate-800">{d.playerName || '—'}{d.jerseyNumber && <span className="ml-2 text-xs font-semibold text-teal-700">#{d.jerseyNumber}</span>}</td>
+                            <td className="px-4 py-2.5 font-medium text-slate-800"><span className="inline-flex items-center gap-2.5"><Avatar d={d} size={28} />{d.playerName || '—'}{d.jerseyNumber && <span className="text-xs font-semibold text-teal-700">#{d.jerseyNumber}</span>}</span></td>
                             <td className="px-4 py-2.5 text-slate-600">{teamLabel(d.teamName)}</td>
                             <td className="px-4 py-2.5 text-slate-600">{d.grade || '—'}</td>
                             <td className="px-4 py-2.5 text-slate-600">{d.parentName || '—'}<br /><span className="text-xs text-slate-400">{d.parentEmail}</span></td>

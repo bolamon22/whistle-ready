@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, emailEnabled } from '@/lib/email'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import { insertSubmission, countsByType } from '@/lib/formSubmissions'
+import { appBaseUrl } from '@/lib/playerPass'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
 // exists, then stores the submission as its own row (see src/lib/formSubmissions.ts —
@@ -18,7 +19,10 @@ export async function POST(req: NextRequest) {
     if (!orgId) return NextResponse.json({ error: 'Missing organization' }, { status: 400 })
     const org = await prisma.$queryRawUnsafe<any[]>('SELECT id FROM "Organization" WHERE id = ?', orgId)
     if (!org || org.length === 0) return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
-    await insertSubmission({ orgId, formType, data })
+    const saved = await insertSubmission({ orgId, formType, data })
+    // Tournament player waivers get a pass (/pass/<token>): shown on the confirmation
+    // screen, linked in the email, scanned at check-in.
+    const passUrl = formType === 'player' && saved.passToken && data.tournamentId ? `${appBaseUrl(req)}/pass/${saved.passToken}` : ''
 
     // Confirmation email (non-blocking) — uses the org's configured confirmation text.
     try {
@@ -32,16 +36,25 @@ export async function POST(req: NextRequest) {
           const orgName = orgRows?.[0]?.name || 'the tournament'
           const title = cfg.confirmationTitle || (formType === 'vendor' ? 'Vendor request received!' : formType === 'staff' ? 'Application received!' : "You're registered!")
           const bodyHtml = mdToHtml(cfg.confirmationMessage || (formType === 'staff' ? "Thanks for your interest in working our events! We've received your application and will be in touch." : "Thanks for registering. We've received your information and signed waiver."))
+          const playerName = String(data.playerName || '').trim().replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string))
+          const passHtml = passUrl
+            ? `<div style="margin-top:24px;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc">
+                 <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#0f766e;font-weight:700">Player pass</div>
+                 <p style="color:#334155;font-size:15px;line-height:1.6;margin:6px 0 12px">${playerName ? `${playerName}'s` : 'Your'} player pass is ready. Save it to your phone and show it at check-in \u2014 staff scan the code to confirm the signed waiver.</p>
+                 <a href="${passUrl}" style="display:inline-block;background:#0d9488;color:#fff;font-weight:700;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px">Open player pass</a>
+                 <p style="color:#94a3b8;font-size:12px;margin:12px 0 0;word-break:break-all">${passUrl}</p>
+               </div>`
+            : ''
           await sendEmail({
             to,
             subject: `${formType === 'vendor' ? 'Vendor request received' : formType === 'staff' ? 'Application received' : 'Registration received'} \u2014 ${orgName}`,
-            html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto"><h1 style="font-size:20px;color:#0f172a">${title}</h1><div style="color:#475569;font-size:15px;line-height:1.6">${bodyHtml}</div><p style="color:#94a3b8;font-size:12px;margin-top:24px">${orgName} \u00b7 ${formType === 'vendor' ? 'Vendor request' : formType === 'staff' ? 'Staff application' : 'Player registration'} confirmation</p></div>`,
+            html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto"><h1 style="font-size:20px;color:#0f172a">${title}</h1><div style="color:#475569;font-size:15px;line-height:1.6">${bodyHtml}</div>${passHtml}<p style="color:#94a3b8;font-size:12px;margin-top:24px">${orgName} \u00b7 ${formType === 'vendor' ? 'Vendor request' : formType === 'staff' ? 'Staff application' : 'Player registration'} confirmation</p></div>`,
           })
         }
       }
     } catch { /* email failure must not fail the submission */ }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, id: saved.id, passToken: passUrl ? saved.passToken : undefined, passUrl: passUrl || undefined })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to submit' }, { status: 500 })
   }
