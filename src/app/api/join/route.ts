@@ -3,6 +3,22 @@ import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
+import { sendEmail, orgSender } from '@/lib/email'
+
+const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
+
+/** Upcoming/current events for an org — shown as checkboxes on the signup form. */
+async function upcomingEvents(client: ReturnType<typeof db>, orgId: string) {
+  const res = await client.execute({
+    sql: `SELECT id, name, startDate, endDate, location FROM "Tournament" WHERE orgId = ? ORDER BY CASE WHEN startDate = '' THEN 1 ELSE 0 END, startDate ASC`,
+    args: [orgId],
+  })
+  const today = new Date().toISOString().slice(0, 10)
+  return (res.rows as unknown as Record<string, unknown>[])
+    .filter(t => { const last = String(t.endDate || '') || String(t.startDate || ''); return !last || last >= today })
+    .slice(0, 8)
+    .map(t => ({ id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''), location: String(t.location || '') }))
+}
 import { allowRequest, clientIp, rateLimitedResponse } from '@/lib/rateLimit'
 
 function db() {
@@ -51,7 +67,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'This signup link is not active. Ask your coordinator for the current link.' }, { status: 404 })
   }
   const org = await orgById(orgId)
-  return NextResponse.json({ orgName: org?.name ?? null })
+  return NextResponse.json({ orgName: org?.name ?? null, events: await upcomingEvents(db(), orgId) })
 }
 
 // POST — create (or link) a Worker + staff login
@@ -112,11 +128,69 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Optional headshot (client-compressed data URL) — goes on their staff ID card.
+    const photo = typeof body.photo === 'string' && body.photo.startsWith('data:image/') && body.photo.length < 400000 ? body.photo : null
+    if (photo) {
+      await client.execute({ sql: `UPDATE "Worker" SET photoUrl = ?, updatedAt = datetime('now') WHERE id = ?`, args: [photo, workerId] })
+    }
+
+    // Events they said they can work → straight onto those rosters (same pool the
+    // Staff Roster page and Assigner read).
+    const wanted = Array.isArray(body.tournamentIds) ? body.tournamentIds.filter((x: unknown): x is string => typeof x === 'string').slice(0, 8) : []
+    const valid = await upcomingEvents(client, orgId)
+    const joined: { id: string; name: string; startDate: string; endDate: string }[] = []
+    for (const tid of wanted) {
+      const ev = valid.find(e => e.id === tid)
+      if (!ev) continue
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO "RosterEntry" (id, workerId, tournamentId, gameTarget, createdAt) VALUES (?, ?, ?, 0, datetime('now'))`,
+        args: [crypto.randomUUID(), workerId, tid],
+      })
+      joined.push({ id: ev.id, name: ev.name, startDate: ev.startDate, endDate: ev.endDate })
+    }
+
     const hashed = await bcrypt.hash(password, 12)
     const user = await prisma.user.create({ data: { name, email, password: hashed, role: 'staff' } })
     try { await client.execute({ sql: `UPDATE "User" SET orgId = ? WHERE id = ?`, args: [orgId, user.id] }) } catch { /* raw column */ }
 
-    return NextResponse.json({ ok: true, linked, workerId }, { status: 201 })
+    // Welcome letter, from the org (the employer — same rule as staff invites).
+    const org = await orgById(orgId)
+    const orgLabel = org?.name || 'Whistle Ready'
+    const firstName = name.split(/\s+/)[0] || ''
+    const eventLines = joined.length
+      ? `<p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;"><strong>You signed up to work:</strong></p><ul style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;padding-left:20px;">${joined.map(e => `<li>${e.name}${e.startDate ? ` — ${e.startDate}${e.endDate && e.endDate !== e.startDate ? ` to ${e.endDate}` : ''}` : ''}</li>`).join('')}</ul>`
+      : ''
+    await sendEmail({
+      ...orgSender(org),
+      to: email,
+      subject: `Welcome to the ${orgLabel} staff team`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+          <h2 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 8px;">Welcome to the crew${firstName ? `, ${firstName}` : ''}!</h2>
+          <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 20px;">
+            You're on the ${orgLabel} staff list. Your staff portal is where your events, schedule,
+            availability, and assignments live.
+          </p>
+          ${eventLines}
+          <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
+            <strong>What happens next:</strong><br>
+            1. Sign in to your staff portal.<br>
+            2. Set your availability for each event.<br>
+            3. Game assignments land in your portal — pay follows each event.
+          </p>
+          <a href="${APP_URL}/login"
+            style="display: inline-block; background: #14b8a6; color: white; font-weight: 600;
+                   font-size: 15px; padding: 12px 28px; border-radius: 10px; text-decoration: none;">
+            Sign in to your portal &rarr;
+          </a>
+          <p style="color: #94a3b8; font-size: 13px; margin: 24px 0 0;">
+            Questions? Just reply to this email.
+          </p>
+        </div>
+      `,
+    })
+
+    return NextResponse.json({ ok: true, linked, workerId, events: joined.map(e => e.name) }, { status: 201 })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to sign up' }, { status: 500 })
