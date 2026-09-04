@@ -91,7 +91,27 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Aug 28, 2026)
+## Current state (as of Sep 4, 2026)
+
+- **Staff portal + self-signup + ID cards (Sep 4)** — the staff-side experience Bo asked for:
+  - `/api/staff-portal` + "My events" on `/dashboard/staff` (aliased to `/dashboard/ref`): staff
+    sign themselves up for upcoming org events (creates the SAME RosterEntry the Staff Roster and
+    Assigner read — self-signup IS roster membership; leaving is blocked once games are assigned).
+    Game-day tools are role-filtered via the TOOLS map (setup checklist = field_ops only).
+  - `/join` rebuilt to Bo's approved mockup: benefits strip, event checkboxes (self-signup at
+    signup), optional headshot (client-compressed ≤512px data URL → Worker.photoUrl), welcome
+    done-page, and a welcome email sent AS the org (orgSender). GET /api/join returns upcoming
+    events; POST takes tournamentIds + photo.
+  - **Printable staff ID card** at `/dashboard/staff/id-card` ("Credential" layout, role-themed:
+    teal ref / amber scorekeeper / rose trainer / slate field ops): true CR80 print size via
+    print-CSS visibility trick, photo/initials, cert line, working events, staff ID
+    ({ORG}-{year}-{last4 of worker id}), QR → PUBLIC `/verify/[workerId]` (+ `/api/verify-staff`)
+    exposing ONLY name/roles/org. `/verify` added to PUBLIC_ROUTES. New dep: `qrcode`
+    (client-side dynamic import).
+  - Design mockups live on the Claude artifact "Staff Signup + ID Card" (canvas with the three
+    card directions; Bo approved Credential + per-role theming).
+
+## Earlier state (as of Aug 28, 2026)
 
 - **Ref recruiting link + duplicate merge (Aug 28)** — Staff Pool "Recruiting link" button copies a
   shareable signup URL (`/join?org=&code=`); the secret code lives in AppSetting `joinCode:{orgId}`
