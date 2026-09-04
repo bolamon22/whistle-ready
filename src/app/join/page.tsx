@@ -101,6 +101,7 @@ function JoinForm() {
   const [doneEvents, setDoneEvents] = useState<{ name: string; logoUrl?: string }[]>([])
   const [doneWorkerId, setDoneWorkerId] = useState('')
   const [doneQr, setDoneQr] = useState('')
+  const [appQr, setAppQr] = useState<string | null>(null)
   const [linked, setLinked] = useState(false)
 
   useEffect(() => {
@@ -123,6 +124,14 @@ function JoinForm() {
     import('qrcode').then(m => m.default.toDataURL(url, { width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }))
       .then(setDoneQr).catch(() => setDoneQr(''))
   }, [doneWorkerId])
+
+  // Game-day QR (Bo): scan the badge -> the live app, where scoring, comms and the
+  // rest of the day-of tools live. Same target for everyone, so it's generated once
+  // on mount and even the in-progress preview card carries a real scannable code.
+  useEffect(() => {
+    import('qrcode').then(m => m.default.toDataURL(`${window.location.origin}/dashboard/staff`, { width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }))
+      .then(setAppQr).catch(() => {})
+  }, [])
 
   function toggleEvent(id: string) {
     setSelEvents(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -220,6 +229,7 @@ function JoinForm() {
             orgName={orgName || 'Whistle Ready'}
             photoUrl={photo || null}
             qrDataUrl={doneQr || null}
+            appQrDataUrl={appQr}
             workerId={doneWorkerId || null}
           />
         </div>
@@ -409,6 +419,7 @@ function JoinForm() {
             <div className="flex justify-center py-1">
               <StaffIdCard
                 scale={1.05}
+                appQrDataUrl={appQr}
                 name={name}
                 defaultRole={role || 'ref'}
                 gender={role === 'ref' ? gender : ''}
@@ -471,6 +482,7 @@ function JoinForm() {
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Your staff ID</p>
         <StaffIdCard
           scale={1.4}
+          appQrDataUrl={appQr}
           name={name}
           defaultRole={role || 'ref'}
           gender={role === 'ref' ? gender : ''}

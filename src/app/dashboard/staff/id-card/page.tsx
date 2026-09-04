@@ -22,6 +22,7 @@ export default function StaffIdCardPage() {
   const [portal, setPortal] = useState<Portal | null>(null)
   const [loading, setLoading] = useState(true)
   const [qr, setQr] = useState('')
+  const [appQr, setAppQr] = useState('')
 
   useEffect(() => {
     if (status !== 'authenticated') return
@@ -35,6 +36,12 @@ export default function StaffIdCardPage() {
     import('qrcode').then(m => m.default.toDataURL(url, { width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }))
       .then(setQr).catch(() => setQr(''))
   }, [portal?.worker?.id])
+
+  // Static game-day QR -> the staff portal (scoring, comms, schedules)
+  useEffect(() => {
+    import('qrcode').then(m => m.default.toDataURL(`${window.location.origin}/dashboard/staff`, { width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }))
+      .then(setAppQr).catch(() => setAppQr(''))
+  }, [])
 
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
 
@@ -74,6 +81,7 @@ export default function StaffIdCardPage() {
           orgName={portal?.orgName || 'Whistle Ready'}
           photoUrl={w.photoUrl}
           qrDataUrl={qr || null}
+          appQrDataUrl={appQr || null}
           workerId={w.id}
         />
       </div>

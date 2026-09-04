@@ -22,7 +22,7 @@ export const STAFF_ROLE_THEMES: Record<string, { label: string; color: string; h
 
 export const STAFF_CERT_LABELS: Record<string, string> = { youth: 'Youth certified', hs: 'High School certified', college: 'College certified' }
 
-export default function StaffIdCard({ cardId, name, defaultRole, gender, certLevel, association, events, orgName, photoUrl, qrDataUrl, workerId, scale = 1 }: {
+export default function StaffIdCard({ cardId, name, defaultRole, gender, certLevel, association, events, orgName, photoUrl, qrDataUrl, appQrDataUrl, workerId, scale = 1 }: {
   cardId?: string
   name: string
   defaultRole: string
@@ -33,6 +33,7 @@ export default function StaffIdCard({ cardId, name, defaultRole, gender, certLev
   orgName: string
   photoUrl?: string | null
   qrDataUrl?: string | null
+  appQrDataUrl?: string | null
   workerId?: string | null
   scale?: number
 }) {
@@ -104,14 +105,25 @@ export default function StaffIdCard({ cardId, name, defaultRole, gender, certLev
           <div>
             <div style={{ fontSize: 5.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.12em' }}>STAFF ID</div>
             <div style={{ fontSize: 8, fontWeight: 800, color: '#0f172a', letterSpacing: '0.04em' }}>{staffId}</div>
-            <div style={{ fontSize: 5, color: '#94a3b8', marginTop: 2 }}>Scan to verify</div>
           </div>
-          {qrDataUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={qrDataUrl} alt="Verify QR" style={{ width: 44, height: 44, borderRadius: 4, border: '1px solid #e2e8f0' }} />
-          ) : (
-            <div style={{ width: 44, height: 44, borderRadius: 4, border: '1.5px dashed #cbd5e1', background: '#f8fafc' }} />
-          )}
+          <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
+            {appQrDataUrl && (
+              <div style={{ textAlign: 'center' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={appQrDataUrl} alt="Open the game-day app" style={{ width: 38, height: 38, borderRadius: 4, border: '1px solid #e2e8f0', display: 'block' }} />
+                <div style={{ fontSize: 4.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', marginTop: 2 }}>GAME DAY</div>
+              </div>
+            )}
+            <div style={{ textAlign: 'center' }}>
+              {qrDataUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={qrDataUrl} alt="Verify QR" style={{ width: 38, height: 38, borderRadius: 4, border: '1px solid #e2e8f0', display: 'block' }} />
+              ) : (
+                <div style={{ width: 38, height: 38, borderRadius: 4, border: '1.5px dashed #cbd5e1', background: '#f8fafc' }} />
+              )}
+              <div style={{ fontSize: 4.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', marginTop: 2 }}>VERIFY</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
