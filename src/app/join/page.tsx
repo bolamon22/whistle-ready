@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, Check, Clock, CreditCard, Camera, Printer } from 'lucide-react'
+import { CalendarDays, Check, Clock, CreditCard, Camera, Printer, FileText } from 'lucide-react'
 import StaffIdCard from '@/components/StaffIdCard'
 
 const ROLES = [
@@ -88,6 +88,13 @@ function JoinForm() {
   const [photo, setPhoto] = useState('')
   const [photoBusy, setPhotoBusy] = useState(false)
   const photoRef = useRef<HTMLInputElement>(null)
+  const [payMethod, setPayMethod] = useState('check')
+  const [payHandle, setPayHandle] = useState('')
+  const [mailingAddress, setMailingAddress] = useState('')
+  const [w9, setW9] = useState('')
+  const [w9Name, setW9Name] = useState('')
+  const [w9Busy, setW9Busy] = useState(false)
+  const w9Ref = useRef<HTMLInputElement>(null)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [hpExtra, setHpExtra] = useState('') // honeypot — humans never see it
@@ -132,6 +139,29 @@ function JoinForm() {
     finally { setPhotoBusy(false); if (photoRef.current) photoRef.current.value = '' }
   }
 
+  async function handleW9(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setW9Busy(true)
+    try {
+      if (file.type === 'application/pdf') {
+        if (file.size > 1400000) { setError('That PDF is too large — keep it under 1.4 MB, or upload a photo of it'); return }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const fr = new FileReader()
+          fr.onload = () => resolve(String(fr.result))
+          fr.onerror = () => reject(new Error('read failed'))
+          fr.readAsDataURL(file)
+        })
+        setW9(dataUrl)
+      } else {
+        setW9(await compressPhoto(file))
+      }
+      setW9Name(file.name)
+      setError('')
+    } catch { setError('Could not read that file — try another') }
+    finally { setW9Busy(false); if (w9Ref.current) w9Ref.current.value = '' }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!role) { setError('Please select your role'); return }
@@ -147,6 +177,7 @@ function JoinForm() {
       body: JSON.stringify({
         org: orgId, code, name, email, phone: phone || null, role, gender, certLevel, password,
         tournamentIds: Array.from(selEvents), photo: photo || null, hp_extra: hpExtra,
+        payMethod, payHandle: payHandle || null, mailingAddress: mailingAddress || null, w9: w9 || null,
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -355,6 +386,43 @@ function JoinForm() {
               </div>
             </div>
           )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-2">How do you want to get paid?</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[{ v: 'check', l: 'Check' }, { v: 'venmo', l: 'Venmo' }, { v: 'zelle', l: 'Zelle' }].map(m => (
+                <button key={m.v} type="button" onClick={() => setPayMethod(m.v)}
+                  className={`py-2 text-xs font-semibold rounded-xl border transition-all ${payMethod === m.v ? 'border-teal-400 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                  {m.l}
+                </button>
+              ))}
+            </div>
+            {(payMethod === 'venmo' || payMethod === 'zelle') && (
+              <input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                value={payHandle} onChange={e => setPayHandle(e.target.value)}
+                placeholder={payMethod === 'venmo' ? '@your-venmo-username' : 'Zelle phone or email'} />
+            )}
+            <div className="mt-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Mailing address <span className="font-medium text-slate-400">(for checks and tax forms)</span></label>
+              <textarea rows={2} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500"
+                value={mailingAddress} onChange={e => setMailingAddress(e.target.value)} placeholder="Street, city, state, ZIP" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3.5 border-[1.5px] border-dashed border-slate-300 rounded-xl p-3 bg-slate-50">
+            <div className={`w-[52px] h-[52px] rounded-full flex items-center justify-center shrink-0 ${w9 ? 'bg-teal-100' : 'bg-slate-200'}`}>
+              <FileText size={22} className={w9 ? 'text-teal-700' : 'text-slate-400'} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-slate-700">Add your W-9 <span className="font-medium text-slate-400">(optional)</span></p>
+              <p className="text-[10.5px] text-slate-500 leading-relaxed mt-0.5">{w9 ? `Attached: ${w9Name}` : 'Needed before your first paycheck. Photo or PDF — stored encrypted, visible only to the event director.'}</p>
+            </div>
+            <button type="button" onClick={() => w9Ref.current?.click()} disabled={w9Busy}
+              className="text-[11px] font-bold text-teal-700 border border-teal-200 bg-teal-50 rounded-lg px-3 py-1.5 disabled:opacity-50">
+              {w9Busy ? '…' : w9 ? 'Change' : 'Upload'}
+            </button>
+            <input ref={w9Ref} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleW9} />
+          </div>
 
           <div>
             <div className="flex items-baseline justify-between mb-2">

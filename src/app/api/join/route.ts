@@ -4,6 +4,7 @@ import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
 import { sendEmail, orgSender } from '@/lib/email'
+import { encrypt } from '@/lib/encrypt'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 
@@ -95,6 +96,10 @@ export async function POST(req: NextRequest) {
     const gender = GENDERS.has(String(body.gender)) ? String(body.gender) : 'both'
     const certLevel = CERTS.has(String(body.certLevel)) ? String(body.certLevel) : 'youth'
     const password = String(body.password ?? '')
+    // Payment details — stored on the Worker so they carry to every future event.
+    const payMethod = ['check', 'venmo', 'zelle'].includes(String(body.payMethod)) ? String(body.payMethod) : 'check'
+    const payHandle = body.payHandle ? String(body.payHandle).slice(0, 120) : null
+    const mailingAddress = body.mailingAddress ? String(body.mailingAddress).slice(0, 400) : null
 
     if (!name || !email || !password) return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 })
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
@@ -106,6 +111,10 @@ export async function POST(req: NextRequest) {
     }
 
     const client = db()
+
+    // Raw Worker columns for payment/tax details (guarded, same pattern as association)
+    try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "mailingAddress" TEXT`) } catch { /* exists */ }
+    try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "w9OnFile" INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
 
     // Duplicate guard: already in this org's pool by email → link, don't duplicate
     const wRes = await client.execute({ sql: `SELECT * FROM "Worker" WHERE lower(email) = ? AND orgId = ?`, args: [email, orgId] })
@@ -119,12 +128,18 @@ export async function POST(req: NextRequest) {
       if (!w.phone && phone) {
         await client.execute({ sql: `UPDATE "Worker" SET phone = ?, updatedAt = datetime('now') WHERE id = ?`, args: [phone, workerId] })
       }
+      if (!w.payHandle && !(w as Record<string, unknown>).mailingAddress && (payHandle || mailingAddress)) {
+        await client.execute({
+          sql: `UPDATE "Worker" SET payMethod = ?, payHandle = ?, mailingAddress = ?, updatedAt = datetime('now') WHERE id = ?`,
+          args: [payMethod, payHandle, mailingAddress, workerId],
+        })
+      }
     } else {
       workerId = crypto.randomUUID()
       await client.execute({
-        sql: `INSERT INTO "Worker" (id, name, email, phone, certLevel, defaultRole, roles, isAssigner, gender, payMethod, orgId, createdAt, updatedAt)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 'check', ?, datetime('now'), datetime('now'))`,
-        args: [workerId, name, email, phone, certLevel, role, JSON.stringify([role]), gender, orgId],
+        sql: `INSERT INTO "Worker" (id, name, email, phone, certLevel, defaultRole, roles, isAssigner, gender, payMethod, payHandle, mailingAddress, orgId, createdAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        args: [workerId, name, email, phone, certLevel, role, JSON.stringify([role]), gender, payMethod, payHandle, mailingAddress, orgId],
       })
     }
 
@@ -132,6 +147,16 @@ export async function POST(req: NextRequest) {
     const photo = typeof body.photo === 'string' && body.photo.startsWith('data:image/') && body.photo.length < 400000 ? body.photo : null
     if (photo) {
       await client.execute({ sql: `UPDATE "Worker" SET photoUrl = ?, updatedAt = datetime('now') WHERE id = ?`, args: [photo, workerId] })
+    }
+
+    // W-9 (photo or PDF): encrypted at rest (AES-256-GCM, src/lib/encrypt), stored under
+    // AppSetting w9:{workerId} — NOT on the Worker row, so it never rides along in list
+    // payloads. Retrieval is director-only (/api/workers/[id]/w9).
+    const w9 = typeof body.w9 === 'string' && (body.w9.startsWith('data:image/') || body.w9.startsWith('data:application/pdf')) && body.w9.length < 2000000 ? body.w9 : null
+    if (w9) {
+      const value = encrypt(w9)
+      await prisma.appSetting.upsert({ where: { key: `w9:${workerId}` }, update: { value }, create: { key: `w9:${workerId}`, value } })
+      await client.execute({ sql: `UPDATE "Worker" SET w9OnFile = 1, updatedAt = datetime('now') WHERE id = ?`, args: [workerId] })
     }
 
     // Events they said they can work → straight onto those rosters (same pool the
@@ -172,6 +197,10 @@ export async function POST(req: NextRequest) {
             availability, and assignments live.
           </p>
           ${eventLines}
+          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+            You're set up to be paid by <strong>${payMethod === 'venmo' ? 'Venmo' : payMethod === 'zelle' ? 'Zelle' : 'check'}</strong>${payHandle ? ` (${payHandle})` : ''}.
+            ${w9 ? 'Your W-9 is on file.' : 'One thing before your first paycheck: we\'ll need a completed W-9 — you can send it to us anytime.'}
+          </p>
           <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
             <strong>What happens next:</strong><br>
             1. Sign in to your staff portal.<br>
