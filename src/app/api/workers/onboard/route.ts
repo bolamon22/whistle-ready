@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgById } from '@/lib/org'
+import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 
@@ -36,9 +37,7 @@ export async function POST(req: Request) {
   if (workerIds.length > 50) return NextResponse.json({ error: 'Max 50 per request — send in batches' }, { status: 400 })
 
   const client = db()
-  // Self-heal the raw StaffInvite columns (same pattern as orgId in /api/org/users)
-  try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "orgId" TEXT`) } catch { /* exists */ }
-  try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "workerId" TEXT`) } catch { /* exists */ }
+  await ensureStaffInviteTable()
 
   const orgs = new Map<string, Awaited<ReturnType<typeof orgById>>>()
   async function orgFor(orgId: string | null) {

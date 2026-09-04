@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
+import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -47,6 +48,7 @@ function parseWorkerRoles(worker: Record<string, unknown>): string[] {
 
 // GET — validate token
 export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
+  await ensureStaffInviteTable()
   const claim = await claimInvite(params.token)
   if (claim) {
     if (claim.usedAt) return NextResponse.json({ error: 'This invite has already been used' }, { status: 410 })
@@ -87,6 +89,8 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
     const body = await req.json()
+
+    await ensureStaffInviteTable()
 
     // ── Claim invite: link the EXISTING Worker, don't create one ──
     const claim = await claimInvite(params.token)

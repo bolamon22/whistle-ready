@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 import crypto from 'crypto'
+import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 
@@ -10,6 +11,8 @@ export async function POST(req: NextRequest) {
   try {
     const { email, name, tournamentId } = await req.json()
     if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+
+    await ensureStaffInviteTable()
 
     // Check if worker already exists
     const existing = await prisma.worker.findFirst({ where: { email: email.toLowerCase() } })

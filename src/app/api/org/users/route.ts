@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
 import { sendEmail } from '@/lib/email'
+import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 import crypto from 'crypto'
 
 // Owner/director self-serve management of THEIR organization's users.
@@ -22,8 +23,8 @@ async function ctx() {
   return { s, role: (s?.user as any)?.role as string | undefined, orgId: (s?.user as any)?.orgId as string | null, email: s?.user?.email ?? null }
 }
 const canManage = (role?: string) => role === 'director'
-async function ensureInviteCol(client: any) {
-  try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "orgId" TEXT`) } catch { /* exists */ }
+async function ensureInviteCol(_client: unknown) {
+  await ensureStaffInviteTable() // table + raw columns — prod Turso never had the table
 }
 
 export async function GET() {
