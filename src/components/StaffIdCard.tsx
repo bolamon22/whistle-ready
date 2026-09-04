@@ -9,12 +9,15 @@
 
 import React from 'react'
 
-export const STAFF_ROLE_THEMES: Record<string, { label: string; color: string }> = {
-  ref: { label: 'REFEREE', color: '#0f766e' },
-  scorekeeper: { label: 'SCOREKEEPER', color: '#b45309' },
-  athletic_trainer: { label: 'ATHLETIC TRAINER', color: '#be123c' },
-  field_ops: { label: 'FIELD OPS', color: '#334155' },
-  assigner: { label: 'ASSIGNER', color: '#0f766e' },
+// Bo's role palette (Sep 4): the whole header changes with the role, not just the
+// rail — black refs (stripes energy), yellow scorekeepers, red athletic trainers /
+// medical, blue field ops. Yellow gets dark text; the rest run white-on-color.
+export const STAFF_ROLE_THEMES: Record<string, { label: string; color: string; header: string; headerText: string; headerSub: string; pillText: string }> = {
+  ref: { label: 'REFEREE', color: '#111827', header: '#111827', headerText: '#ffffff', headerSub: '#9ca3af', pillText: '#ffffff' },
+  scorekeeper: { label: 'SCOREKEEPER', color: '#facc15', header: '#facc15', headerText: '#0f172a', headerSub: '#854d0e', pillText: '#713f12' },
+  athletic_trainer: { label: 'ATHLETIC TRAINER', color: '#dc2626', header: '#dc2626', headerText: '#ffffff', headerSub: '#fecaca', pillText: '#ffffff' },
+  field_ops: { label: 'FIELD OPS', color: '#2563eb', header: '#2563eb', headerText: '#ffffff', headerSub: '#bfdbfe', pillText: '#ffffff' },
+  assigner: { label: 'ASSIGNER', color: '#0f766e', header: '#0f1f3d', headerText: '#ffffff', headerSub: '#2dd4bf', pillText: '#ffffff' },
 }
 
 export const STAFF_CERT_LABELS: Record<string, string> = { youth: 'Youth certified', hs: 'High School certified', college: 'College certified' }
@@ -49,13 +52,13 @@ export default function StaffIdCard({ cardId, name, defaultRole, certLevel, asso
         boxShadow: '0 8px 24px rgba(15,23,42,0.18)', position: 'relative', transform: `scale(${scale})`, transformOrigin: 'top left',
         fontFamily: 'system-ui, sans-serif', borderLeft: `5px solid ${theme.color}`, boxSizing: 'border-box',
       }}>
-        <div style={{ background: '#0f1f3d', height: 74, padding: '8px 12px 0 12px', boxSizing: 'border-box' }}>
+        <div style={{ background: theme.header, height: 74, padding: '8px 12px 0 12px', boxSizing: 'border-box' }}>
           <div style={{ width: 24, height: 7, background: '#f1f5f9', borderRadius: 999, margin: '0 auto' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
             <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#14b8a6', color: '#fff', fontSize: 6.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{orgInitials}</div>
             <div>
-              <div style={{ fontSize: 8.5, fontWeight: 800, color: '#ffffff', letterSpacing: '0.02em' }}>{orgName.toUpperCase()}</div>
-              <div style={{ fontSize: 5.5, fontWeight: 700, color: '#2dd4bf', letterSpacing: '0.14em' }}>OFFICIAL EVENT STAFF · {season}</div>
+              <div style={{ fontSize: 8.5, fontWeight: 800, color: theme.headerText, letterSpacing: '0.02em' }}>{orgName.toUpperCase()}</div>
+              <div style={{ fontSize: 5.5, fontWeight: 700, color: theme.headerSub, letterSpacing: '0.14em' }}>OFFICIAL EVENT STAFF · {season}</div>
             </div>
           </div>
         </div>
@@ -69,7 +72,7 @@ export default function StaffIdCard({ cardId, name, defaultRole, certLevel, asso
         </div>
         <div style={{ textAlign: 'center', padding: '6px 12px 0 12px' }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name.trim() || 'Your name'}</div>
-          <div style={{ display: 'inline-block', marginTop: 4, background: theme.color, color: '#ffffff', fontSize: 6.5, fontWeight: 800, letterSpacing: '0.16em', borderRadius: 999, padding: '3px 10px' }}>{theme.label}</div>
+          <div style={{ display: 'inline-block', marginTop: 4, background: theme.color, color: theme.pillText, fontSize: 6.5, fontWeight: 800, letterSpacing: '0.16em', borderRadius: 999, padding: '3px 10px' }}>{theme.label}</div>
           {certLine && <div style={{ fontSize: 6.5, color: '#64748b', marginTop: 4 }}>{certLine}</div>}
         </div>
         <div style={{ margin: '8px 12px 0 12px', borderTop: '1px solid #e2e8f0', paddingTop: 6 }}>

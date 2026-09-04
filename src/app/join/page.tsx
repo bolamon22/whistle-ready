@@ -376,6 +376,9 @@ function JoinForm() {
                 value={payHandle} onChange={e => setPayHandle(e.target.value)}
                 placeholder={payMethod === 'venmo' ? '@your-venmo-username' : 'Zelle phone or email'} />
             )}
+            {payMethod === 'venmo' && (
+              <p className="text-[10.5px] text-amber-600 mt-1.5">Heads up: Venmo has transfer limits, so payment can take longer than Zelle.</p>
+            )}
             <div className="mt-2">
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Mailing address <span className="font-medium text-slate-400">(for checks and tax forms)</span></label>
               <textarea rows={2} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500"
