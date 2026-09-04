@@ -350,6 +350,10 @@ function JoinForm() {
                       <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${on ? 'bg-teal-500' : 'border-2 border-slate-300 bg-white'}`}>
                         {on && <Check size={13} className="text-white" strokeWidth={3.5} />}
                       </span>
+                      {ev.logoUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={ev.logoUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-100" />
+                      ) : null}
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-bold text-slate-800 truncate">{ev.name}</span>
                         <span className="block text-[11px] text-slate-500 mt-0.5">{[fmtRange(ev.startDate, ev.endDate), ev.location].filter(Boolean).join(' · ')}</span>
