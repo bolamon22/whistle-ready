@@ -21,6 +21,17 @@ export const ORG_ICON_FILES = new Set<string>([
   '/favicon.ico', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/manifest.webmanifest',
 ])
 
+// Event vanity domains: the whole domain (any path, www or not) 301s to one page on the
+// org's site. Point the domain's DNS at Vercel and add it to the project; nothing else.
+// jinglebrawllax.com used to be a standalone Hostinger site for the Jingle Brawl — its
+// backlinks and printed URLs now land on the event page.
+export const ALIAS_REDIRECTS: Record<string, string> = {
+  'jinglebrawllax.com': 'https://sunshineeventsgroup.com/tournaments/cmq4t90bx0000r4hfrxclirox/event',
+}
+export function aliasRedirectForHost(host?: string | null): string | null {
+  return ALIAS_REDIRECTS[hostOnly(host).replace(/^www\./, '')] || null
+}
+
 // Reverse map: org slug → its primary custom domain. Used by seo.ts to emit
 // canonical URLs (and the sitemap) on the org's own domain so search credit
 // accrues there instead of whistleready.app.

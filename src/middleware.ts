@@ -1,7 +1,7 @@
 import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
 import permissionsConfig from './lib/role-permissions.json'
-import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES } from './lib/orgDomains'
+import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES, aliasRedirectForHost } from './lib/orgDomains'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join']  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
@@ -42,6 +42,11 @@ function roleCanAccess(role: string, pathname: string): boolean {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // --- Event vanity domains (jinglebrawllax.com → the Jingle Brawl event page) ---
+  // Everything on the host goes to the one page, permanently.
+  const alias = aliasRedirectForHost(req.headers.get('host'))
+  if (alias) return NextResponse.redirect(alias, 301)
 
   // --- Custom org domains (e.g. sunshinelax.com → Sunshine Events Group) ---
   // Serve the org's public pages at the domain root; keep global routes
