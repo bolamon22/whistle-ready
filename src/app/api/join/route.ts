@@ -96,10 +96,14 @@ export async function POST(req: NextRequest) {
     const gender = GENDERS.has(String(body.gender)) ? String(body.gender) : 'both'
     const certLevel = CERTS.has(String(body.certLevel)) ? String(body.certLevel) : 'youth'
     const password = String(body.password ?? '')
-    // Payment details — stored on the Worker so they carry to every future event.
+    // Payment details — ALL methods are collected and stored on the Worker (Bo: "if we
+    // can't pay them one way, we'd rather try the next"); payMethod is the PREFERENCE.
+    // payHandle mirrors the preferred method's handle so existing payroll code keeps working.
     const payMethod = ['check', 'venmo', 'zelle'].includes(String(body.payMethod)) ? String(body.payMethod) : 'check'
-    const payHandle = body.payHandle ? String(body.payHandle).slice(0, 120) : null
+    const venmoHandle = body.venmoHandle ? String(body.venmoHandle).slice(0, 120) : null
+    const zelleHandle = body.zelleHandle ? String(body.zelleHandle).slice(0, 120) : null
     const mailingAddress = body.mailingAddress ? String(body.mailingAddress).slice(0, 400) : null
+    const payHandle = payMethod === 'venmo' ? venmoHandle : payMethod === 'zelle' ? zelleHandle : null
 
     if (!name || !email || !password) return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 })
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
@@ -114,6 +118,8 @@ export async function POST(req: NextRequest) {
 
     // Raw Worker columns for payment/tax details (guarded, same pattern as association)
     try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "mailingAddress" TEXT`) } catch { /* exists */ }
+    try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "venmoHandle" TEXT`) } catch { /* exists */ }
+    try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "zelleHandle" TEXT`) } catch { /* exists */ }
     try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "w9OnFile" INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
 
     // Duplicate guard: already in this org's pool by email → link, don't duplicate
@@ -128,18 +134,19 @@ export async function POST(req: NextRequest) {
       if (!w.phone && phone) {
         await client.execute({ sql: `UPDATE "Worker" SET phone = ?, updatedAt = datetime('now') WHERE id = ?`, args: [phone, workerId] })
       }
-      if (!w.payHandle && !(w as Record<string, unknown>).mailingAddress && (payHandle || mailingAddress)) {
+      const wr = w as Record<string, unknown>
+      if (!wr.payHandle && !wr.mailingAddress && !wr.venmoHandle && !wr.zelleHandle && (venmoHandle || zelleHandle || mailingAddress)) {
         await client.execute({
-          sql: `UPDATE "Worker" SET payMethod = ?, payHandle = ?, mailingAddress = ?, updatedAt = datetime('now') WHERE id = ?`,
-          args: [payMethod, payHandle, mailingAddress, workerId],
+          sql: `UPDATE "Worker" SET payMethod = ?, payHandle = ?, venmoHandle = ?, zelleHandle = ?, mailingAddress = ?, updatedAt = datetime('now') WHERE id = ?`,
+          args: [payMethod, payHandle, venmoHandle, zelleHandle, mailingAddress, workerId],
         })
       }
     } else {
       workerId = crypto.randomUUID()
       await client.execute({
-        sql: `INSERT INTO "Worker" (id, name, email, phone, certLevel, defaultRole, roles, isAssigner, gender, payMethod, payHandle, mailingAddress, orgId, createdAt, updatedAt)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-        args: [workerId, name, email, phone, certLevel, role, JSON.stringify([role]), gender, payMethod, payHandle, mailingAddress, orgId],
+        sql: `INSERT INTO "Worker" (id, name, email, phone, certLevel, defaultRole, roles, isAssigner, gender, payMethod, payHandle, venmoHandle, zelleHandle, mailingAddress, orgId, createdAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        args: [workerId, name, email, phone, certLevel, role, JSON.stringify([role]), gender, payMethod, payHandle, venmoHandle, zelleHandle, mailingAddress, orgId],
       })
     }
 
@@ -198,7 +205,7 @@ export async function POST(req: NextRequest) {
           </p>
           ${eventLines}
           <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-            You're set up to be paid by <strong>${payMethod === 'venmo' ? 'Venmo' : payMethod === 'zelle' ? 'Zelle' : 'check'}</strong>${payHandle ? ` (${payHandle})` : ''}.
+            You're set up to be paid by <strong>${payMethod === 'venmo' ? 'Venmo' : payMethod === 'zelle' ? 'Zelle' : 'check'}</strong>${payHandle ? ` (${payHandle})` : ''}${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).length ? `, with ${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).join(' and ')} as backup` : ''}.
             ${w9 ? 'Your W-9 is on file.' : 'One thing before your first paycheck: we\'ll need a completed W-9 — you can send it to us anytime.'}
           </p>
           <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">

@@ -16,16 +16,19 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const b=await req.json()
   // Background-check date (Aug 2026): raw column, not in the Prisma schema.
   // Used by the county Exhibit A affidavit -- re-screen required every 12 months.
-  // Mailing address (raw column, for check payments + tax forms) — same raw pattern.
-  if (b.mailingAddress !== undefined) {
-    try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "mailingAddress" TEXT`) } catch { /* exists */ }
-    try { await prisma.$executeRawUnsafe(`UPDATE "Worker" SET "mailingAddress" = ? WHERE id = ?`, b.mailingAddress ? String(b.mailingAddress).slice(0, 400) : null, params.id) } catch {}
-    const rest0 = { ...b }; delete rest0.mailingAddress
-    if (Object.keys(rest0).length === 0) {
-      const w = await prisma.worker.findUnique({ where: { id: params.id } })
-      return NextResponse.json(w ?? { ok: true })
-    }
-    delete b.mailingAddress
+  // Mailing address + Venmo/Zelle handles (raw columns) — staff keep all three payment
+  // routes on file so payroll can fall back when the preferred one bounces; payMethod
+  // marks the preference and payHandle mirrors the preferred handle for old callers.
+  const RAW_TEXT_COLS: Array<[string, number]> = [['mailingAddress', 400], ['venmoHandle', 120], ['zelleHandle', 120]]
+  for (const [col, max] of RAW_TEXT_COLS) {
+    if (b[col] === undefined) continue
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "${col}" TEXT`) } catch { /* exists */ }
+    try { await prisma.$executeRawUnsafe(`UPDATE "Worker" SET "${col}" = ? WHERE id = ?`, b[col] ? String(b[col]).slice(0, max) : null, params.id) } catch {}
+    delete b[col]
+  }
+  if (Object.keys(b).length === 0) {
+    const w = await prisma.worker.findUnique({ where: { id: params.id } })
+    return NextResponse.json(w ?? { ok: true })
   }
   if (b.bgCheckDate !== undefined) {
     try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "bgCheckDate" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }

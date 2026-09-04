@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { certLabel, CERT_LEVELS, WORKER_ROLES, PAY_METHODS, isHourlyRole } from '@/lib/utils'
 
-interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
+interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
 const GENDERS=[{value:'both',label:'Girls & Boys'},{value:'boys',label:'Boys'},{value:'girls',label:'Girls'}]
-const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',roles:['ref'],isAssigner:false,gender:'both',payRateOverride:'',hourlyRate:'',payMethod:'check',payHandle:'',mailingAddress:'',notes:''}
+const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',roles:['ref'],isAssigner:false,gender:'both',payRateOverride:'',hourlyRate:'',payMethod:'check',payHandle:'',venmoHandle:'',zelleHandle:'',mailingAddress:'',notes:''}
 
 type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'|'appStatus'
 type SortDir = 'asc'|'desc'
@@ -33,7 +33,6 @@ function StaffEditForm({
     // keep defaultRole in sync with first role
     return {...f, roles:next.length?next:cur, defaultRole:next[0]??cur[0]}
   })
-  const needsHandle=(m:string)=>m==='venmo'||m==='zelle'
   const hasRef=roles.includes('ref')
   const hasHourly=roles.some(r=>isHourlyRole(r))
 
@@ -63,8 +62,9 @@ function StaffEditForm({
         <div><label className="label">Pay Rate Override ($/game)</label><input className="input" type="number" min="0" step="0.01" value={String(form.payRateOverride??'')} onChange={e=>setForm(f=>({...f,payRateOverride:e.target.value}))} placeholder="Leave blank = default"/></div>
       </>}
       {hasHourly&&<div><label className="label">Hourly Rate ($/hr)</label><input className="input" type="number" min="0" step="0.01" value={String(form.hourlyRate??'')} onChange={e=>setForm(f=>({...f,hourlyRate:e.target.value}))}/></div>}
-      <div><label className="label">Pay Method</label><select className="select" value={String(form.payMethod??'check')} onChange={e=>setForm(f=>({...f,payMethod:e.target.value}))}>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
-      {needsHandle(String(form.payMethod??''))&&<div><label className="label">{String(form.payMethod)==='venmo'?'Venmo':'Zelle'} Handle</label><input className="input" value={String(form.payHandle??'')} onChange={e=>setForm(f=>({...f,payHandle:e.target.value}))} placeholder={String(form.payMethod)==='venmo'?'@username':'phone or email'}/></div>}
+      <div><label className="label">Preferred pay method</label><select className="select" value={String(form.payMethod??'check')} onChange={e=>setForm(f=>({...f,payMethod:e.target.value}))}>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
+      <div><label className="label">Venmo <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.venmoHandle??'')} onChange={e=>setForm(f=>({...f,venmoHandle:e.target.value}))} placeholder="@username"/></div>
+      <div><label className="label">Zelle <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.zelleHandle??'')} onChange={e=>setForm(f=>({...f,zelleHandle:e.target.value}))} placeholder="phone or email"/></div>
       <div className="flex items-end"><label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={Boolean(form.isAssigner)} onChange={e=>setForm(f=>({...f,isAssigner:e.target.checked}))}/>Also serves as Assigner</label></div>
       <div className="sm:col-span-2 lg:col-span-3">
         <label className="label">Mailing address <span className="text-slate-400 font-normal">(checks + tax forms)</span></label>
@@ -159,13 +159,13 @@ export default function StaffPage() {
     if(expandedId===w.id&&expandMode===mode){setExpandedId(null);return}
     setExpandedId(w.id);setExpandMode(mode)
     if(mode==='edit'){
-      setEditForm({name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,association:w.association??''  ,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',mailingAddress:w.mailingAddress??'',notes:w.notes??''})
+      setEditForm({name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,association:w.association??''  ,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',venmoHandle:w.venmoHandle??(w.payMethod==='venmo'?w.payHandle??'':''),zelleHandle:w.zelleHandle??(w.payMethod==='zelle'?w.payHandle??'':''),mailingAddress:w.mailingAddress??'',notes:w.notes??''})
     }
   }
 
   async function saveEdit(e:React.FormEvent,workerId:string){
     e.preventDefault();setSaving(true)
-    const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:editForm.payHandle||null,mailingAddress:editForm.mailingAddress||null,notes:editForm.notes||null,roles:editForm.roles}
+    const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:(editForm.payMethod==='venmo'?editForm.venmoHandle:editForm.payMethod==='zelle'?editForm.zelleHandle:'')||null,venmoHandle:editForm.venmoHandle||null,zelleHandle:editForm.zelleHandle||null,mailingAddress:editForm.mailingAddress||null,notes:editForm.notes||null,roles:editForm.roles}
     const res=await fetch(`/api/workers/${workerId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     if(res.ok){toast.success('Updated');setExpandedId(null);load()}else toast.error('Failed')
     setSaving(false)
@@ -193,7 +193,7 @@ export default function StaffPage() {
 
   async function addNew(e:React.FormEvent){
     e.preventDefault();setSaving(true)
-    const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:editForm.payHandle||null,notes:editForm.notes||null,roles:editForm.roles,orgId:previewOrgId()}
+    const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:(editForm.payMethod==='venmo'?editForm.venmoHandle:editForm.payMethod==='zelle'?editForm.zelleHandle:'')||null,notes:editForm.notes||null,roles:editForm.roles,orgId:previewOrgId()}
     const res=await fetch('/api/workers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     if(res.ok){toast.success('Added');setExpandedId(null);setEditForm(EMPTY_FORM);load()}else toast.error('Failed')
     setSaving(false)
@@ -377,7 +377,9 @@ export default function StaffPage() {
               <div><p className="text-slate-400 text-xs mb-0.5">Association</p><p className="text-white">{w.association||'\u2014'}</p></div>
               <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p className="text-white">{gLabel(w.gender)}</p></div>
             </>}
-            <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
+            <div><p className="text-slate-400 text-xs mb-0.5">Preferred pay</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
+                                  <div><p className="text-slate-400 text-xs mb-0.5">Venmo</p><p className="text-white">{w.venmoHandle||'—'}</p></div>
+                                  <div><p className="text-slate-400 text-xs mb-0.5">Zelle</p><p className="text-white">{w.zelleHandle||'—'}</p></div>
                                   <div><p className="text-slate-400 text-xs mb-0.5">Mailing address</p><p className="text-white">{w.mailingAddress||'—'}</p></div>
                                   <div><p className="text-slate-400 text-xs mb-0.5">W-9</p>{w.w9OnFile?<a href={`/api/workers/${w.id}/w9`} target="_blank" rel="noreferrer" className="text-teal-300 hover:text-teal-200 font-medium">View W-9 →</a>:<p className="text-white">Not on file</p>}</div>
             {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p className="text-white">${w.payRateOverride}/game</p></div>}
