@@ -9,7 +9,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, Check, Clock, CreditCard, Camera } from 'lucide-react'
+import { CalendarDays, Check, Clock, CreditCard, Camera, Printer } from 'lucide-react'
+import StaffIdCard from '@/components/StaffIdCard'
 
 const ROLES = [
   { value: 'ref', label: 'Referee', desc: 'Officiate games on the field',
@@ -94,6 +95,8 @@ function JoinForm() {
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [doneEvents, setDoneEvents] = useState<string[]>([])
+  const [doneWorkerId, setDoneWorkerId] = useState('')
+  const [doneQr, setDoneQr] = useState('')
   const [linked, setLinked] = useState(false)
 
   useEffect(() => {
@@ -108,6 +111,14 @@ function JoinForm() {
       })
       .catch(() => setLinkState('invalid'))
   }, [orgId, code])
+
+  // Real QR for the finished card on the welcome screen (workerId comes back from the signup)
+  useEffect(() => {
+    if (!doneWorkerId) return
+    const url = `${window.location.origin}/verify/${doneWorkerId}`
+    import('qrcode').then(m => m.default.toDataURL(url, { width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }))
+      .then(setDoneQr).catch(() => setDoneQr(''))
+  }, [doneWorkerId])
 
   function toggleEvent(id: string) {
     setSelEvents(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -143,6 +154,7 @@ function JoinForm() {
 
     setLinked(!!data.linked)
     setDoneEvents(Array.isArray(data.events) ? data.events : [])
+    setDoneWorkerId(typeof data.workerId === 'string' ? data.workerId : '')
     setDone(true)
   }
 
@@ -184,6 +196,30 @@ function JoinForm() {
             ))}
           </div>
         )}
+        <style>{`
+          @media print {
+            body * { visibility: hidden !important; }
+            #staff-card, #staff-card * { visibility: visible !important; }
+            #staff-card { position: fixed !important; left: 0.5in; top: 0.5in; margin: 0; box-shadow: none !important; transform: none !important; }
+          }
+        `}</style>
+        <div className="flex justify-center mt-5">
+          <StaffIdCard
+            cardId="staff-card"
+            scale={1.15}
+            name={name}
+            defaultRole={role || 'ref'}
+            certLevel={role === 'ref' ? certLevel : ''}
+            events={doneEvents}
+            orgName={orgName || 'Whistle Ready'}
+            photoUrl={photo || null}
+            qrDataUrl={doneQr || null}
+            workerId={doneWorkerId || null}
+          />
+        </div>
+        <button onClick={() => window.print()} className="inline-flex items-center gap-2 text-xs font-bold text-teal-700 border border-teal-200 bg-teal-50 rounded-xl px-4 py-2 mt-3">
+          <Printer size={14} /> Print my staff ID
+        </button>
         <div className="text-left mt-6 space-y-3">
           {['Sign in to your staff portal — your events and schedule live there.',
             'Set your availability for each event you signed up for.',
@@ -319,6 +355,24 @@ function JoinForm() {
               </div>
             </div>
           )}
+
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <label className="text-xs font-semibold text-slate-600">Your staff ID card</label>
+              <span className="text-[10px] text-slate-400">builds as you fill this out</span>
+            </div>
+            <div className="flex justify-center py-1">
+              <StaffIdCard
+                scale={1.05}
+                name={name}
+                defaultRole={role || 'ref'}
+                certLevel={role === 'ref' ? certLevel : ''}
+                events={events.filter(e => selEvents.has(e.id)).map(e => e.name)}
+                orgName={orgName || 'Whistle Ready'}
+                photoUrl={photo || null}
+              />
+            </div>
+          </div>
 
           <div className="flex items-center gap-3.5 border-[1.5px] border-dashed border-slate-300 rounded-xl p-3 bg-slate-50">
             {photo ? (
