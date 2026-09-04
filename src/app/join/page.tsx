@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, Check, Clock, CreditCard, Camera, Printer, FileText } from 'lucide-react'
+import { CalendarDays, Check, Clock, CreditCard, Camera, Printer } from 'lucide-react'
 import StaffIdCard from '@/components/StaffIdCard'
 
 const ROLES = [
@@ -91,10 +91,6 @@ function JoinForm() {
   const [payMethod, setPayMethod] = useState('check')
   const [payHandle, setPayHandle] = useState('')
   const [mailingAddress, setMailingAddress] = useState('')
-  const [w9, setW9] = useState('')
-  const [w9Name, setW9Name] = useState('')
-  const [w9Busy, setW9Busy] = useState(false)
-  const w9Ref = useRef<HTMLInputElement>(null)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [hpExtra, setHpExtra] = useState('') // honeypot — humans never see it
@@ -139,29 +135,6 @@ function JoinForm() {
     finally { setPhotoBusy(false); if (photoRef.current) photoRef.current.value = '' }
   }
 
-  async function handleW9(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setW9Busy(true)
-    try {
-      if (file.type === 'application/pdf') {
-        if (file.size > 1400000) { setError('That PDF is too large — keep it under 1.4 MB, or upload a photo of it'); return }
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const fr = new FileReader()
-          fr.onload = () => resolve(String(fr.result))
-          fr.onerror = () => reject(new Error('read failed'))
-          fr.readAsDataURL(file)
-        })
-        setW9(dataUrl)
-      } else {
-        setW9(await compressPhoto(file))
-      }
-      setW9Name(file.name)
-      setError('')
-    } catch { setError('Could not read that file — try another') }
-    finally { setW9Busy(false); if (w9Ref.current) w9Ref.current.value = '' }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!role) { setError('Please select your role'); return }
@@ -177,7 +150,7 @@ function JoinForm() {
       body: JSON.stringify({
         org: orgId, code, name, email, phone: phone || null, role, gender, certLevel, password,
         tournamentIds: Array.from(selEvents), photo: photo || null, hp_extra: hpExtra,
-        payMethod, payHandle: payHandle || null, mailingAddress: mailingAddress || null, w9: w9 || null,
+        payMethod, payHandle: payHandle || null, mailingAddress: mailingAddress || null,
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -269,8 +242,9 @@ function JoinForm() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full max-w-md overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex justify-center px-4 py-8">
+      <div className="w-full max-w-4xl lg:flex lg:justify-center lg:items-start lg:gap-8">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full max-w-md mx-auto lg:mx-0 overflow-hidden">
 
         {/* Header */}
         <div className="bg-[#0f1f3d] px-6 py-5">
@@ -409,22 +383,7 @@ function JoinForm() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3.5 border-[1.5px] border-dashed border-slate-300 rounded-xl p-3 bg-slate-50">
-            <div className={`w-[52px] h-[52px] rounded-full flex items-center justify-center shrink-0 ${w9 ? 'bg-teal-100' : 'bg-slate-200'}`}>
-              <FileText size={22} className={w9 ? 'text-teal-700' : 'text-slate-400'} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-700">Add your W-9 <span className="font-medium text-slate-400">(optional)</span></p>
-              <p className="text-[10.5px] text-slate-500 leading-relaxed mt-0.5">{w9 ? `Attached: ${w9Name}` : 'Needed before your first paycheck. Photo or PDF — stored encrypted, visible only to the event director.'}</p>
-            </div>
-            <button type="button" onClick={() => w9Ref.current?.click()} disabled={w9Busy}
-              className="text-[11px] font-bold text-teal-700 border border-teal-200 bg-teal-50 rounded-lg px-3 py-1.5 disabled:opacity-50">
-              {w9Busy ? '…' : w9 ? 'Change' : 'Upload'}
-            </button>
-            <input ref={w9Ref} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleW9} />
-          </div>
-
-          <div>
+          <div className="lg:hidden">
             <div className="flex items-baseline justify-between mb-2">
               <label className="text-xs font-semibold text-slate-600">Your staff ID card</label>
               <span className="text-[10px] text-slate-400">builds as you fill this out</span>
@@ -486,6 +445,22 @@ function JoinForm() {
             Already have an account? <Link href="/login" className="text-teal-600 hover:underline">Sign in</Link>
           </p>
         </form>
+      </div>
+
+      {/* Right rail: the ID card builds beside the form (desktop) */}
+      <div className="hidden lg:block w-[260px] shrink-0 sticky top-8 self-start">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Your staff ID</p>
+        <StaffIdCard
+          scale={1.2}
+          name={name}
+          defaultRole={role || 'ref'}
+          certLevel={role === 'ref' ? certLevel : ''}
+          events={events.filter(e => selEvents.has(e.id)).map(e => e.name)}
+          orgName={orgName || 'Whistle Ready'}
+          photoUrl={photo || null}
+        />
+        <p className="text-[10.5px] text-slate-400 mt-3 leading-relaxed">Builds as you fill out the form. After you join, you can print it anytime from your staff portal.</p>
+      </div>
       </div>
     </div>
   )
