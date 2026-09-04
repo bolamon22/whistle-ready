@@ -245,8 +245,8 @@ function JoinForm() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center px-4 py-8">
-      <div className="w-full max-w-4xl lg:flex lg:justify-center lg:items-start lg:gap-8">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full max-w-md mx-auto lg:mx-0 overflow-hidden">
+      <div className="w-full max-w-5xl lg:flex lg:justify-center lg:items-start lg:gap-10">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full max-w-md lg:max-w-2xl mx-auto lg:mx-0 overflow-hidden">
 
         {/* Header */}
         <div className="bg-[#0f1f3d] px-6 py-5">
@@ -297,7 +297,7 @@ function JoinForm() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-2">What's your role? *</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               {ROLES.map(r => (
                 <button key={r.value} type="button" onClick={() => setRole(r.value)}
                   className={`p-3 rounded-xl border text-left transition-all ${role === r.value ? 'border-teal-400 bg-teal-50 ring-1 ring-teal-400 text-teal-700' : 'border-slate-200 hover:border-slate-300 text-slate-600'}`}>
@@ -342,7 +342,7 @@ function JoinForm() {
                 <label className="text-xs font-semibold text-slate-600">Which events can you work?</label>
                 <span className="text-[10px] text-slate-400">optional — pick any</span>
               </div>
-              <div className="space-y-2">
+              <div className="grid gap-2 lg:grid-cols-2">
                 {events.map(ev => {
                   const on = selEvents.has(ev.id)
                   return (
@@ -467,10 +467,10 @@ function JoinForm() {
       </div>
 
       {/* Right rail: the ID card builds beside the form (desktop) */}
-      <div className="hidden lg:block w-[260px] shrink-0 sticky top-8 self-start">
+      <div className="hidden lg:block w-[300px] shrink-0 sticky top-8 self-start">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Your staff ID</p>
         <StaffIdCard
-          scale={1.2}
+          scale={1.4}
           name={name}
           defaultRole={role || 'ref'}
           gender={role === 'ref' ? gender : ''}
