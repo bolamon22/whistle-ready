@@ -63,8 +63,8 @@ function StaffEditForm({
       </>}
       {hasHourly&&<div><label className="label">Hourly Rate ($/hr)</label><input className="input" type="number" min="0" step="0.01" value={String(form.hourlyRate??'')} onChange={e=>setForm(f=>({...f,hourlyRate:e.target.value}))}/></div>}
       <div><label className="label">Preferred pay method</label><select className="select" value={String(form.payMethod??'check')} onChange={e=>setForm(f=>({...f,payMethod:e.target.value}))}>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
-      <div><label className="label">Venmo <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.venmoHandle??'')} onChange={e=>setForm(f=>({...f,venmoHandle:e.target.value}))} placeholder="@username"/></div>
       <div><label className="label">Zelle <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.zelleHandle??'')} onChange={e=>setForm(f=>({...f,zelleHandle:e.target.value}))} placeholder="phone or email"/></div>
+      <div><label className="label">Venmo <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.venmoHandle??'')} onChange={e=>setForm(f=>({...f,venmoHandle:e.target.value}))} placeholder="@username"/></div>
       <div className="flex items-end"><label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={Boolean(form.isAssigner)} onChange={e=>setForm(f=>({...f,isAssigner:e.target.checked}))}/>Also serves as Assigner</label></div>
       <div className="sm:col-span-2 lg:col-span-3">
         <label className="label">Mailing address <span className="text-slate-400 font-normal">(checks + tax forms)</span></label>
@@ -378,8 +378,8 @@ export default function StaffPage() {
               <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p className="text-white">{gLabel(w.gender)}</p></div>
             </>}
             <div><p className="text-slate-400 text-xs mb-0.5">Preferred pay</p><p className="text-white">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
-                                  <div><p className="text-slate-400 text-xs mb-0.5">Venmo</p><p className="text-white">{w.venmoHandle||'—'}</p></div>
                                   <div><p className="text-slate-400 text-xs mb-0.5">Zelle</p><p className="text-white">{w.zelleHandle||'—'}</p></div>
+                                  <div><p className="text-slate-400 text-xs mb-0.5">Venmo</p><p className="text-white">{w.venmoHandle||'—'}</p></div>
                                   <div><p className="text-slate-400 text-xs mb-0.5">Mailing address</p><p className="text-white">{w.mailingAddress||'—'}</p></div>
                                   <div><p className="text-slate-400 text-xs mb-0.5">W-9</p>{w.w9OnFile?<a href={`/api/workers/${w.id}/w9`} target="_blank" rel="noreferrer" className="text-teal-300 hover:text-teal-200 font-medium">View W-9 →</a>:<p className="text-white">Not on file</p>}</div>
             {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p className="text-white">${w.payRateOverride}/game</p></div>}

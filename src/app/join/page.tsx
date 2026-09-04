@@ -383,7 +383,7 @@ function JoinForm() {
             </div>
             <p className="text-[10.5px] text-slate-400 mb-2">Fill in whatever you have — if one method doesn't work out, we'll use the next. Tap your preferred one.</p>
             <div className="grid grid-cols-3 gap-2">
-              {[{ v: 'check', l: 'Check' }, { v: 'venmo', l: 'Venmo' }, { v: 'zelle', l: 'Zelle' }].map(m => (
+              {[{ v: 'zelle', l: 'Zelle' }, { v: 'check', l: 'Check' }, { v: 'venmo', l: 'Venmo' }].map(m => (
                 <button key={m.v} type="button" onClick={() => setPayMethod(m.v)}
                   className={`relative py-2 text-xs font-semibold rounded-xl border transition-all ${payMethod === m.v ? 'border-teal-400 bg-teal-50 text-teal-700 ring-1 ring-teal-400' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
                   {m.l}
@@ -391,23 +391,23 @@ function JoinForm() {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Zelle <span className="font-medium text-slate-400">(optional)</span></label>
+                <input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  value={zelleHandle} onChange={e => setZelleHandle(e.target.value)} placeholder="Zelle phone or email" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Mailing address <span className="font-medium text-slate-400">(checks + tax forms)</span></label>
+                <textarea rows={2} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  value={mailingAddress} onChange={e => setMailingAddress(e.target.value)} placeholder="Street, city, state, ZIP" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Venmo <span className="font-medium text-slate-400">(optional)</span></label>
                 <input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   value={venmoHandle} onChange={e => setVenmoHandle(e.target.value)} placeholder="@your-venmo-username" />
                 <p className="text-[10px] text-amber-600 mt-1">Venmo has transfer limits — can take longer than Zelle.</p>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Zelle <span className="font-medium text-slate-400">(optional)</span></label>
-                <input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  value={zelleHandle} onChange={e => setZelleHandle(e.target.value)} placeholder="Zelle phone or email" />
-              </div>
-            </div>
-            <div className="mt-3">
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Mailing address <span className="font-medium text-slate-400">(for checks and tax forms)</span></label>
-              <textarea rows={2} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500"
-                value={mailingAddress} onChange={e => setMailingAddress(e.target.value)} placeholder="Street, city, state, ZIP" />
             </div>
           </div>
 

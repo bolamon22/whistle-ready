@@ -48,9 +48,9 @@ export const CERT_LEVELS = [
 ]
 
 export const PAY_METHODS = [
+  { value: 'zelle',  label: 'Zelle' },
   { value: 'check',  label: 'Check' },
   { value: 'venmo',  label: 'Venmo' },
-  { value: 'zelle',  label: 'Zelle' },
   { value: 'cash',   label: 'Cash' },
   { value: 'other',  label: 'Other' },
 ]
