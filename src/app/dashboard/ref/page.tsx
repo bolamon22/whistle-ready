@@ -5,9 +5,23 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2 } from 'lucide-react'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
+interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number }
+interface Portal { worker: { id: string; name: string; defaultRole: string; roles: string[] } | null; events: PortalEvent[] }
+
+// Which game-day tools each role actually uses — a referee has no business in the
+// setup checklist (Bo, Sep 4). Multi-role workers see the union; no linked worker
+// record falls back to showing everything.
+const TOOLS: { href: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; roles: string[] | null }[] = [
+  { href: 'communications', label: 'Field Request',   icon: Radio,          roles: null },
+  { href: 'scoring',        label: 'Live scoring',    icon: Timer,          roles: ['ref', 'scorekeeper', 'field_ops'] },
+  { href: 'scores',         label: 'Post scores',     icon: Target,         roles: ['ref', 'scorekeeper', 'field_ops'] },
+  { href: 'directory',      label: 'Staff contacts',  icon: Users,          roles: null },
+  { href: 'checklist',      label: 'Setup checklist', icon: ClipboardCheck, roles: ['field_ops'] },
+  { href: 'incidents',      label: 'Incidents',       icon: TriangleAlert,  roles: null },
+]
 interface Assignment { id: string; role: string; payRate: number; game: Game }
 interface Game {
   id: string; gameNumber: string; date: string; startTime: string
@@ -26,6 +40,8 @@ export default function RefDashboard() {
   const [loading, setLoading] = useState(true)
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set())
   const [punch, setPunch] = useState<any>(null)      // { worker, open, entries }
+  const [portal, setPortal] = useState<Portal | null>(null)
+  const [eventBusy, setEventBusy] = useState('')
   const [punchBusy, setPunchBusy] = useState(false)
   const [, setNowTick] = useState(0)                  // re-render the elapsed timer
 
@@ -35,10 +51,15 @@ export default function RefDashboard() {
     Promise.all([
       fetch('/api/ref/assignments').then(r => r.json()),
       fetch('/api/tournaments').then(r => r.json()),
-    ]).then(([a, t]) => {
+      fetch('/api/staff-portal').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([a, t, p]) => {
       setAssignments(Array.isArray(a) ? a : [])
       setTournaments(Array.isArray(t) ? t : [])
-      if (Array.isArray(t) && t.length > 0) { setSelTournament(t[0].id); loadAllGames(t[0].id) }
+      setPortal(p && Array.isArray(p.events) ? p : null)
+      // Default to the first event they're actually working, else the first tournament
+      const firstWorking = p && Array.isArray(p.events) ? p.events.find((e: PortalEvent) => e.working) : null
+      const def = firstWorking?.id || (Array.isArray(t) && t.length > 0 ? t[0].id : '')
+      if (def) { setSelTournament(def); loadAllGames(def) }
       setLoading(false)
     })
   }, [status])
@@ -53,6 +74,30 @@ export default function RefDashboard() {
     setCheckedIn(s => { const n = new Set(s); n.add(id); return n })
     toast.success('Checked in ✓')
   }
+
+  // ── My events: put yourself on / off an event's roster (see /api/staff-portal) ──
+  async function setWorkingEvent(ev: PortalEvent, join: boolean) {
+    if (eventBusy) return
+    if (!join && !confirm(`Take yourself off ${ev.name}?`)) return
+    setEventBusy(ev.id)
+    try {
+      const res = await fetch('/api/staff-portal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tournamentId: ev.id, action: join ? 'join' : 'leave' }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'Could not update'); return }
+      setPortal(pt => pt ? { ...pt, events: pt.events.map(e => e.id === ev.id ? { ...e, working: join } : e) } : pt)
+      toast.success(join ? `You're on the list for ${ev.name} — set your availability!` : `Removed from ${ev.name}`)
+      if (join) { setSelTournament(ev.id); loadAllGames(ev.id) }
+    } catch { toast.error('Could not update') } finally { setEventBusy('') }
+  }
+
+  const fmtRange = (a: string, b: string) => {
+    const f = (d: string) => { const t = new Date(d.includes('T') ? d : d + 'T12:00:00'); return isNaN(t.getTime()) ? '' : t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
+    const s1 = f(a), s2 = b && b !== a ? f(b) : ''
+    return s1 ? (s2 ? `${s1} – ${s2}` : s1) : 'Dates TBD'
+  }
+
+  const myRoles = portal?.worker?.roles ?? null
+  const visibleTools = TOOLS.filter(t => !t.roles || !myRoles || t.roles.some(r => myRoles.includes(r)))
 
   // ── Punch clock (hourly staff: field ops + trainers) ──
   async function loadPunch(tid: string) {
@@ -144,6 +189,43 @@ export default function RefDashboard() {
         <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'} 👋</h1>
       </div>
 
+      {/* My events — sign up for the tournaments you can work */}
+      {portal && portal.events.length > 0 && (
+        <div className="mb-5">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">My events</p>
+          <div className="space-y-2">
+            {portal.events.map(ev => (
+              <div key={ev.id} className={`rounded-2xl border p-4 card ${ev.working ? 'border-emerald-300 bg-emerald-50/60' : 'border-gray-200 bg-white'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">{ev.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><CalendarDays size={12} /> {fmtRange(ev.startDate, ev.endDate)}{ev.location ? ` · ${ev.location}` : ''}</p>
+                    {ev.working && ev.assignedGames > 0 && <p className="text-[11px] text-emerald-700 mt-1">{ev.assignedGames} game{ev.assignedGames === 1 ? '' : 's'} assigned</p>}
+                  </div>
+                  {ev.working ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full"><CheckCircle2 size={12} /> Working</span>
+                  ) : (
+                    <button onClick={() => setWorkingEvent(ev, true)} disabled={!!eventBusy || !portal.worker}
+                      className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50">
+                      Sign up to work
+                    </button>
+                  )}
+                </div>
+                {ev.working && (
+                  <div className="flex items-center gap-3 mt-2">
+                    <Link href={`/tournaments/${ev.id}/availability`} className="text-xs font-semibold text-teal-700 hover:text-teal-900">Set my availability →</Link>
+                    {ev.assignedGames === 0 && (
+                      <button onClick={() => setWorkingEvent(ev, false)} disabled={!!eventBusy} className="text-xs text-gray-400 hover:text-gray-600 ml-auto">Can't work it</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {!portal.worker && <p className="text-[11px] text-gray-400 mt-2">Your login isn't linked to a staff record yet — contact your coordinator to sign up for events.</p>}
+        </div>
+      )}
+
       {/* Time clock — hourly staff (field ops & athletic trainers) */}
       {punch?.worker && (punch.worker.defaultRole === 'field_ops' || punch.worker.defaultRole === 'athletic_trainer') && (() => {
         const open = punch.open
@@ -171,12 +253,12 @@ export default function RefDashboard() {
         <div className="mb-5">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Game day</p>
           <div className="grid grid-cols-2 gap-2">
-            <Link href={`/tournaments/${selTournament}/communications`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Radio size={18} className="text-teal-600" /> Field Request</Link>
-            <Link href={`/tournaments/${selTournament}/scoring`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Timer size={18} className="text-teal-600" /> Live scoring</Link>
-            <Link href={`/tournaments/${selTournament}/scores`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Target size={18} className="text-teal-600" /> Post scores</Link>
-            <Link href={`/tournaments/${selTournament}/directory`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Users size={18} className="text-teal-600" /> Staff contacts</Link>
-            <Link href={`/tournaments/${selTournament}/checklist`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><ClipboardCheck size={18} className="text-teal-600" /> Setup checklist</Link>
-            <Link href={`/tournaments/${selTournament}/incidents`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><TriangleAlert size={18} className="text-teal-600" /> Incidents</Link>
+            {visibleTools.map(tool => {
+              const Icon = tool.icon
+              return (
+                <Link key={tool.href} href={`/tournaments/${selTournament}/${tool.href}`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Icon size={18} className="text-teal-600" /> {tool.label}</Link>
+              )
+            })}
           </div>
         </div>
       )}
