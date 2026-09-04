@@ -213,6 +213,7 @@ function JoinForm() {
             scale={1.15}
             name={name}
             defaultRole={role || 'ref'}
+            gender={role === 'ref' ? gender : ''}
             certLevel={role === 'ref' ? certLevel : ''}
             events={doneEvents}
             orgName={orgName || 'Whistle Ready'}
@@ -396,6 +397,7 @@ function JoinForm() {
                 scale={1.05}
                 name={name}
                 defaultRole={role || 'ref'}
+                gender={role === 'ref' ? gender : ''}
                 certLevel={role === 'ref' ? certLevel : ''}
                 events={events.filter(e => selEvents.has(e.id)).map(e => e.name)}
                 orgName={orgName || 'Whistle Ready'}
@@ -457,6 +459,7 @@ function JoinForm() {
           scale={1.2}
           name={name}
           defaultRole={role || 'ref'}
+          gender={role === 'ref' ? gender : ''}
           certLevel={role === 'ref' ? certLevel : ''}
           events={events.filter(e => selEvents.has(e.id)).map(e => e.name)}
           orgName={orgName || 'Whistle Ready'}

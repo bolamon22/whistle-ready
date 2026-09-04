@@ -73,7 +73,7 @@ export async function GET() {
   return NextResponse.json({
     orgName,
     worker: worker
-      ? { id: String(worker.id), name: String(worker.name ?? ''), defaultRole: String(worker.defaultRole ?? 'ref'), roles: workerRoles(worker), photoUrl: (worker.photoUrl as string | null) ?? null, certLevel: String(worker.certLevel ?? ''), association: (worker.association as string | null) ?? null }
+      ? { id: String(worker.id), name: String(worker.name ?? ''), defaultRole: String(worker.defaultRole ?? 'ref'), roles: workerRoles(worker), gender: String(worker.gender ?? 'both'), photoUrl: (worker.photoUrl as string | null) ?? null, certLevel: String(worker.certLevel ?? ''), association: (worker.association as string | null) ?? null }
       : null,
     events: upcoming.map(t => ({
       id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''),

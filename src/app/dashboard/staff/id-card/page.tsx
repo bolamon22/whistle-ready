@@ -12,7 +12,7 @@ import { Printer, ArrowLeft } from 'lucide-react'
 import StaffIdCard from '@/components/StaffIdCard'
 
 type Portal = {
-  worker: { id: string; name: string; defaultRole: string; roles: string[]; photoUrl?: string | null; certLevel?: string; association?: string | null } | null
+  worker: { id: string; name: string; defaultRole: string; roles: string[]; gender?: string; photoUrl?: string | null; certLevel?: string; association?: string | null } | null
   events: { id: string; name: string; startDate: string; working: boolean }[]
   orgName?: string | null
 }
@@ -67,6 +67,7 @@ export default function StaffIdCardPage() {
           scale={1.7}
           name={w.name}
           defaultRole={w.defaultRole}
+          gender={w.roles.includes('ref') ? w.gender : ''}
           certLevel={w.certLevel}
           association={w.association}
           events={(portal?.events ?? []).filter(e => e.working).map(e => e.name)}

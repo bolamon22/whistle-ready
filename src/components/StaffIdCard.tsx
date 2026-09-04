@@ -22,10 +22,11 @@ export const STAFF_ROLE_THEMES: Record<string, { label: string; color: string; h
 
 export const STAFF_CERT_LABELS: Record<string, string> = { youth: 'Youth certified', hs: 'High School certified', college: 'College certified' }
 
-export default function StaffIdCard({ cardId, name, defaultRole, certLevel, association, events, orgName, photoUrl, qrDataUrl, workerId, scale = 1 }: {
+export default function StaffIdCard({ cardId, name, defaultRole, gender, certLevel, association, events, orgName, photoUrl, qrDataUrl, workerId, scale = 1 }: {
   cardId?: string
   name: string
   defaultRole: string
+  gender?: string
   certLevel?: string
   association?: string | null
   events: string[]
@@ -44,6 +45,8 @@ export default function StaffIdCard({ cardId, name, defaultRole, certLevel, asso
     : `${orgInitials}-${year}-····`
   const initials = (name.trim() || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase()
   const certLine = [STAFF_CERT_LABELS[certLevel ?? ''], association || ''].filter(Boolean).join(' · ')
+  // Refs only (callers pass gender just for them): list BOTH when they work both.
+  const genderParts = gender === 'both' ? ['BOYS', 'GIRLS'] : gender === 'boys' ? ['BOYS'] : gender === 'girls' ? ['GIRLS'] : []
 
   return (
     <div style={{ width: 204 * scale, height: 324 * scale }}>
@@ -73,6 +76,13 @@ export default function StaffIdCard({ cardId, name, defaultRole, certLevel, asso
         <div style={{ textAlign: 'center', padding: '6px 12px 0 12px' }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name.trim() || 'Your name'}</div>
           <div style={{ display: 'inline-block', marginTop: 4, background: theme.color, color: theme.pillText, fontSize: 6.5, fontWeight: 800, letterSpacing: '0.16em', borderRadius: 999, padding: '3px 10px' }}>{theme.label}</div>
+          {genderParts.length > 0 && (
+            <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 4 }}>
+              {genderParts.map(g => (
+                <span key={g} style={{ fontSize: 5.5, fontWeight: 800, letterSpacing: '0.1em', color: '#334155', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 7px' }}>{g}</span>
+              ))}
+            </div>
+          )}
           {certLine && <div style={{ fontSize: 6.5, color: '#64748b', marginTop: 4 }}>{certLine}</div>}
         </div>
         <div style={{ margin: '8px 12px 0 12px', borderTop: '1px solid #e2e8f0', paddingTop: 6 }}>
