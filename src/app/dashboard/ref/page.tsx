@@ -192,7 +192,10 @@ export default function RefDashboard() {
       {/* My events — sign up for the tournaments you can work */}
       {portal && portal.events.length > 0 && (
         <div className="mb-5">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">My events</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">My events</p>
+            <Link href="/dashboard/staff/id-card" className="text-xs font-semibold text-teal-700 hover:text-teal-900">My staff ID →</Link>
+          </div>
           <div className="space-y-2">
             {portal.events.map(ev => (
               <div key={ev.id} className={`rounded-2xl border p-4 card ${ev.working ? 'border-emerald-300 bg-emerald-50/60' : 'border-gray-200 bg-white'}`}>

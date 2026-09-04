@@ -62,9 +62,18 @@ export async function GET() {
     for (const row of a.rows as unknown as Record<string, unknown>[]) assigned.set(String(row.tid), Number(row.n))
   }
 
+  let orgName: string | null = null
+  if (orgId) {
+    try {
+      const o = await client.execute({ sql: `SELECT name FROM "Organization" WHERE id = ?`, args: [orgId] })
+      orgName = (o.rows[0]?.name as string) ?? null
+    } catch { /* org table is raw */ }
+  }
+
   return NextResponse.json({
+    orgName,
     worker: worker
-      ? { id: String(worker.id), name: String(worker.name ?? ''), defaultRole: String(worker.defaultRole ?? 'ref'), roles: workerRoles(worker) }
+      ? { id: String(worker.id), name: String(worker.name ?? ''), defaultRole: String(worker.defaultRole ?? 'ref'), roles: workerRoles(worker), photoUrl: (worker.photoUrl as string | null) ?? null, certLevel: String(worker.certLevel ?? ''), association: (worker.association as string | null) ?? null }
       : null,
     events: upcoming.map(t => ({
       id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''),
