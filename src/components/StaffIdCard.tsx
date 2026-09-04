@@ -29,7 +29,7 @@ export default function StaffIdCard({ cardId, name, defaultRole, gender, certLev
   gender?: string
   certLevel?: string
   association?: string | null
-  events: string[]
+  events: { name: string; logoUrl?: string | null }[]
   orgName: string
   photoUrl?: string | null
   qrDataUrl?: string | null
@@ -88,7 +88,13 @@ export default function StaffIdCard({ cardId, name, defaultRole, gender, certLev
         <div style={{ margin: '8px 12px 0 12px', borderTop: '1px solid #e2e8f0', paddingTop: 6 }}>
           <div style={{ fontSize: 5.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.12em' }}>WORKING</div>
           {events.length ? events.slice(0, 3).map(e => (
-            <div key={e} style={{ fontSize: 7, fontWeight: 700, color: '#334155', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e}</div>
+            <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              {e.logoUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={e.logoUrl} alt="" style={{ width: 11, height: 11, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '0.5px solid #e2e8f0' }} />
+              ) : null}
+              <span style={{ fontSize: 7, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.name}</span>
+            </div>
           )) : (
             <div style={{ fontSize: 7, color: '#94a3b8', marginTop: 2 }}>Season staff</div>
           )}

@@ -13,7 +13,7 @@ import StaffIdCard from '@/components/StaffIdCard'
 
 type Portal = {
   worker: { id: string; name: string; defaultRole: string; roles: string[]; gender?: string; photoUrl?: string | null; certLevel?: string; association?: string | null } | null
-  events: { id: string; name: string; startDate: string; working: boolean }[]
+  events: { id: string; name: string; startDate: string; working: boolean; logoUrl?: string }[]
   orgName?: string | null
 }
 
@@ -70,7 +70,7 @@ export default function StaffIdCardPage() {
           gender={w.roles.includes('ref') ? w.gender : ''}
           certLevel={w.certLevel}
           association={w.association}
-          events={(portal?.events ?? []).filter(e => e.working).map(e => e.name)}
+          events={(portal?.events ?? []).filter(e => e.working).map(e => ({ name: e.name, logoUrl: e.logoUrl }))}
           orgName={portal?.orgName || 'Whistle Ready'}
           photoUrl={w.photoUrl}
           qrDataUrl={qr || null}

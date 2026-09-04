@@ -36,7 +36,7 @@ const CERT_LEVELS = [
   { value: 'none', label: 'N/A' },
 ]
 
-type JoinEvent = { id: string; name: string; startDate: string; endDate: string; location: string }
+type JoinEvent = { id: string; name: string; startDate: string; endDate: string; location: string; logoUrl?: string }
 
 function fmtRange(a: string, b: string) {
   const f = (d: string) => { const t = new Date(d.includes('T') ? d : d + 'T12:00:00'); return isNaN(t.getTime()) ? '' : t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
@@ -97,7 +97,7 @@ function JoinForm() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
-  const [doneEvents, setDoneEvents] = useState<string[]>([])
+  const [doneEvents, setDoneEvents] = useState<{ name: string; logoUrl?: string }[]>([])
   const [doneWorkerId, setDoneWorkerId] = useState('')
   const [doneQr, setDoneQr] = useState('')
   const [linked, setLinked] = useState(false)
@@ -196,7 +196,7 @@ function JoinForm() {
         {doneEvents.length > 0 && (
           <div className="flex flex-wrap gap-2 justify-center mt-4">
             {doneEvents.map(ev => (
-              <span key={ev} className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-3 py-1">{ev}</span>
+              <span key={ev.name} className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-3 py-1">{ev.name}</span>
             ))}
           </div>
         )}
@@ -399,7 +399,7 @@ function JoinForm() {
                 defaultRole={role || 'ref'}
                 gender={role === 'ref' ? gender : ''}
                 certLevel={role === 'ref' ? certLevel : ''}
-                events={events.filter(e => selEvents.has(e.id)).map(e => e.name)}
+                events={events.filter(e => selEvents.has(e.id)).map(e => ({ name: e.name, logoUrl: e.logoUrl }))}
                 orgName={orgName || 'Whistle Ready'}
                 photoUrl={photo || null}
               />
@@ -461,7 +461,7 @@ function JoinForm() {
           defaultRole={role || 'ref'}
           gender={role === 'ref' ? gender : ''}
           certLevel={role === 'ref' ? certLevel : ''}
-          events={events.filter(e => selEvents.has(e.id)).map(e => e.name)}
+          events={events.filter(e => selEvents.has(e.id)).map(e => ({ name: e.name, logoUrl: e.logoUrl }))}
           orgName={orgName || 'Whistle Ready'}
           photoUrl={photo || null}
         />

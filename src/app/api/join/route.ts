@@ -11,14 +11,14 @@ const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 /** Upcoming/current events for an org — shown as checkboxes on the signup form. */
 async function upcomingEvents(client: ReturnType<typeof db>, orgId: string) {
   const res = await client.execute({
-    sql: `SELECT id, name, startDate, endDate, location FROM "Tournament" WHERE orgId = ? ORDER BY CASE WHEN startDate = '' THEN 1 ELSE 0 END, startDate ASC`,
+    sql: `SELECT id, name, startDate, endDate, location, logoUrl FROM "Tournament" WHERE orgId = ? ORDER BY CASE WHEN startDate = '' THEN 1 ELSE 0 END, startDate ASC`,
     args: [orgId],
   })
   const today = new Date().toISOString().slice(0, 10)
   return (res.rows as unknown as Record<string, unknown>[])
     .filter(t => { const last = String(t.endDate || '') || String(t.startDate || ''); return !last || last >= today })
     .slice(0, 8)
-    .map(t => ({ id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''), location: String(t.location || '') }))
+    .map(t => ({ id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''), location: String(t.location || ''), logoUrl: String(t.logoUrl || '') }))
 }
 import { allowRequest, clientIp, rateLimitedResponse } from '@/lib/rateLimit'
 
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     // Staff Roster page and Assigner read).
     const wanted = Array.isArray(body.tournamentIds) ? body.tournamentIds.filter((x: unknown): x is string => typeof x === 'string').slice(0, 8) : []
     const valid = await upcomingEvents(client, orgId)
-    const joined: { id: string; name: string; startDate: string; endDate: string }[] = []
+    const joined: { id: string; name: string; startDate: string; endDate: string; logoUrl: string }[] = []
     for (const tid of wanted) {
       const ev = valid.find(e => e.id === tid)
       if (!ev) continue
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
         sql: `INSERT OR IGNORE INTO "RosterEntry" (id, workerId, tournamentId, gameTarget, createdAt) VALUES (?, ?, ?, 0, datetime('now'))`,
         args: [crypto.randomUUID(), workerId, tid],
       })
-      joined.push({ id: ev.id, name: ev.name, startDate: ev.startDate, endDate: ev.endDate })
+      joined.push({ id: ev.id, name: ev.name, startDate: ev.startDate, endDate: ev.endDate, logoUrl: ev.logoUrl })
     }
 
     const hashed = await bcrypt.hash(password, 12)
@@ -219,7 +219,7 @@ export async function POST(req: NextRequest) {
       `,
     })
 
-    return NextResponse.json({ ok: true, linked, workerId, events: joined.map(e => e.name) }, { status: 201 })
+    return NextResponse.json({ ok: true, linked, workerId, events: joined.map(e => ({ name: e.name, logoUrl: e.logoUrl })) }, { status: 201 })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to sign up' }, { status: 500 })
