@@ -24,10 +24,18 @@ export async function POST(req: Request) {
   const key = `joinCode:${orgId}`
   const existing = await prisma.appSetting.findUnique({ where: { key } })
   let code = existing?.value || ''
-  if (!code || body.regenerate === true) {
-    code = crypto.randomBytes(12).toString('hex')
+  // Mint when absent, on explicit regenerate, or when the stored code predates short
+  // links (legacy 24-hex from the first build) — Bo wanted a textable URL, not
+  // /join?org=<uuid>&code=<24 hex>.
+  if (!code || body.regenerate === true || code.length > 16) {
+    const old = code
+    code = crypto.randomBytes(6).toString('base64url') // 8 URL-safe chars
     await prisma.appSetting.upsert({ where: { key }, update: { value: code }, create: { key, value: code } })
+    if (old) { try { await prisma.appSetting.delete({ where: { key: `joinCodeMap:${old}` } }) } catch { /* no map */ } }
   }
+  // Reverse map so /join/<code> resolves the org from the code alone
+  const mapKey = `joinCodeMap:${code}`
+  await prisma.appSetting.upsert({ where: { key: mapKey }, update: { value: orgId }, create: { key: mapKey, value: orgId } })
 
-  return NextResponse.json({ url: `${APP_URL}/join?org=${encodeURIComponent(orgId)}&code=${code}` })
+  return NextResponse.json({ url: `${APP_URL}/join/${code}` })
 }

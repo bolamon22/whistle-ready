@@ -53,8 +53,8 @@ function JoinForm() {
   const [linked, setLinked] = useState(false)
 
   useEffect(() => {
-    if (!orgId || !code) { setLinkState('invalid'); return }
-    fetch(`/api/join?org=${encodeURIComponent(orgId)}&code=${encodeURIComponent(code)}`)
+    if (!code) { setLinkState('invalid'); return }
+    fetch(`/api/join?code=${encodeURIComponent(code)}${orgId ? `&org=${encodeURIComponent(orgId)}` : ''}`)
       .then(async r => {
         const d = await r.json().catch(() => ({}))
         if (!r.ok) { setLinkState('invalid'); return }

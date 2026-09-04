@@ -30,12 +30,24 @@ async function validCode(orgId: string, code: string): Promise<boolean> {
   return !!setting && setting.value === code
 }
 
+/** Short links carry only the code — resolve the org via joinCodeMap:{code},
+ *  double-checked against joinCode:{orgId} so rotated codes die. Legacy links
+ *  still pass an explicit org. Returns the orgId, or null when invalid. */
+async function resolveOrg(orgId: string, code: string): Promise<string | null> {
+  if (!code) return null
+  if (orgId) return (await validCode(orgId, code)) ? orgId : null
+  const map = await prisma.appSetting.findUnique({ where: { key: `joinCodeMap:${code}` } })
+  const mapped = map?.value || ''
+  if (!mapped) return null
+  return (await validCode(mapped, code)) ? mapped : null
+}
+
 // GET /api/join?org=&code= — validate a recruiting link, return the org name
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
-  const orgId = url.searchParams.get('org') || ''
   const code = url.searchParams.get('code') || ''
-  if (!(await validCode(orgId, code))) {
+  const orgId = await resolveOrg(url.searchParams.get('org') || '', code)
+  if (!orgId) {
     return NextResponse.json({ error: 'This signup link is not active. Ask your coordinator for the current link.' }, { status: 404 })
   }
   const org = await orgById(orgId)
@@ -54,9 +66,9 @@ export async function POST(req: NextRequest) {
     // Honeypot (same trick as /api/auth/register): bots fill it, humans never see it.
     if (body.hp_extra) return NextResponse.json({ ok: true }, { status: 201 })
 
-    const orgId = String(body.org ?? '')
     const code = String(body.code ?? '')
-    if (!(await validCode(orgId, code))) {
+    const orgId = await resolveOrg(String(body.org ?? ''), code)
+    if (!orgId) {
       return NextResponse.json({ error: 'This signup link is no longer active.' }, { status: 403 })
     }
 
