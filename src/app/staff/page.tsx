@@ -92,6 +92,89 @@ function StaffEditForm({
   )
 }
 
+// One invite letter, a dropdown decides who it goes to (Bo, Sep 5). 'staff' wording is
+// what /api/workers/onboard emails with each person's claim link; 'recruit' is copy-paste
+// text carrying the public /join link. Saved per org via /api/workers/invite-letter.
+function InviteLetterPanel(){
+  type Aud='staff'|'recruit'
+  const [aud,setAud]=useState<Aud>('staff')
+  const [tpl,setTpl]=useState<Record<Aud,{subject:string;body:string;custom?:boolean}>|null>(null)
+  const [orgName,setOrgName]=useState('')
+  const [events,setEvents]=useState<{id:string;name:string;startDate?:string;endDate?:string}[]>([])
+  const [busy,setBusy]=useState(false)
+  const [copying,setCopying]=useState(false)
+  const viewOrg=()=>{const m=document.cookie.match(/(?:^|; )preview-org=([^;]*)/);return m?decodeURIComponent(m[1]):null}
+  useEffect(()=>{
+    const v=viewOrg()
+    fetch(`/api/workers/invite-letter${v?`?viewOrgId=${encodeURIComponent(v)}`:''}`)
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{if(d){setTpl({staff:d.staff,recruit:d.recruit});setOrgName(d.orgName||'')}})
+      .catch(()=>{})
+    fetch('/api/tournaments').then(r=>r.ok?r.json():[]).then((ts:{id:string;name:string;startDate?:string;endDate?:string}[])=>{
+      const cutoff=Date.now()-86400000
+      setEvents((Array.isArray(ts)?ts:[]).filter(t=>{const d=Date.parse(String(t.endDate||t.startDate||''));return !isNaN(d)&&d>=cutoff}).slice(0,20))
+    }).catch(()=>{})
+  },[])
+  if(!tpl)return <div className="card p-6 mb-6 text-sm text-slate-400">Loading letter…</div>
+  const cur=tpl[aud]
+  const set=(patch:Partial<{subject:string;body:string}>)=>setTpl(t=>t?{...t,[aud]:{...t[aud],...patch}}:t)
+  async function save(reset:boolean){
+    setBusy(true)
+    const res=await fetch('/api/workers/invite-letter',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({audience:aud,viewOrgId:viewOrg(),...(reset?{reset:true}:{subject:cur.subject,body:cur.body})})})
+    const d=res.ok?await res.json():null
+    if(d?.letter){setTpl(t=>t?{...t,[aud]:d.letter}:t);toast.success(reset?'Back to the default letter':'Letter saved')}else toast.error('Failed to save')
+    setBusy(false)
+  }
+  async function copyLetter(){
+    setCopying(true)
+    try{
+      let link='{link}'
+      if(cur.body.includes('{link}')||cur.subject.includes('{link}')){
+        const r=await fetch('/api/workers/recruit-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewOrgId:viewOrg()})})
+        if(r.ok)link=(await r.json()).url||link
+      }
+      const merged=`${cur.subject}\n\n${cur.body}`.replace(/\{org\}/g,orgName||'our organization').replace(/\{link\}/g,link)
+      await navigator.clipboard.writeText(merged)
+      toast.success(aud==='recruit'?'Letter copied — {link} filled with your live signup link':'Letter copied — {firstName} and {link} fill in per person when emailed')
+    }catch{toast.error('Copy failed')}
+    setCopying(false)
+  }
+  function insertEvent(id:string){
+    const ev=events.find(e=>e.id===id);if(!ev)return
+    const dates=[ev.startDate,ev.endDate].filter(Boolean).map(d=>new Date(String(d)).toLocaleDateString('en-US',{month:'short',day:'numeric'})).join('–')
+    set({body:`${cur.body.trimEnd()}\n\n${ev.name}${dates?` (${dates})`:''}`})
+  }
+  return(
+    <div className="card p-6 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-1">
+        <h2 className="font-semibold">Invite letter</h2>
+        <select className="select w-auto text-sm" value={aud} onChange={e=>setAud(e.target.value as Aud)}>
+          <option value="staff">Existing staff — in your pool already</option>
+          <option value="recruit">New recruits — not in the pool yet</option>
+        </select>
+        {cur.custom&&<span className="badge bg-teal-50 text-teal-700">Customized</span>}
+      </div>
+      <p className="text-xs text-slate-400 mb-4">{aud==='staff'
+        ?'Goes out when you use “Send app invites” — each email carries that person’s own login link on the button.'
+        :'Copy this into an email or text (or hand it to your assigner) — {link} becomes your live signup link. People inquiring on the website use the signup form itself.'}</p>
+      <div className="space-y-3">
+        <div><label className="label">Subject</label><input className="input" value={cur.subject} onChange={e=>set({subject:e.target.value})}/></div>
+        <div><label className="label">Letter</label><textarea className="input w-full min-h-[160px] resize-y text-sm" value={cur.body} onChange={e=>set({body:e.target.value})}/></div>
+        <p className="text-[11px] text-slate-400">{'{firstName}'} {'{name}'} {'{org}'} and {'{link}'} fill in automatically. Blank line = new paragraph.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="btn-primary btn-sm" onClick={()=>save(false)} disabled={busy}>{busy?'Saving…':'Save letter'}</button>
+          <button className="btn-secondary btn-sm" onClick={copyLetter} disabled={copying}>{copying?'Copying…':'Copy letter'}</button>
+          <button className="btn-secondary btn-sm" onClick={()=>save(true)} disabled={busy||!cur.custom}>Reset to default</button>
+          {events.length>0&&<select className="select w-auto text-sm" value="" onChange={e=>insertEvent(e.target.value)}>
+            <option value="" disabled>Mention an event…</option>
+            {events.map(ev=><option key={ev.id} value={ev.id}>{ev.name}</option>)}
+          </select>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function StaffPage() {
   const [workers,setWorkers]=useState<Worker[]>([])
   const [loading,setLoading]=useState(true)
@@ -112,6 +195,7 @@ export default function StaffPage() {
   const [appFilter,setAppFilter]=useState('all')
   const [inviting,setInviting]=useState(false)
   const [recruitBusy,setRecruitBusy]=useState(false)
+  const [letterOpen,setLetterOpen]=useState(false)
   const [dupePairs,setDupePairs]=useState<DupePair[]>([])
   const [showDupes,setShowDupes]=useState(false)
   const [search,setSearch]=useState('')
@@ -437,11 +521,14 @@ export default function StaffPage() {
           <p className="text-sm text-slate-500 mt-1">Global staff database · {workers.length} total</p>
         </div>
         <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+          {tab==='roster'&&<button className="btn-secondary btn-sm" onClick={()=>setLetterOpen(o=>!o)}>{letterOpen?'Close letter':'Invite letter'}</button>}
           {tab==='roster'&&<button className="btn-secondary btn-sm" onClick={copyRecruitLink} disabled={recruitBusy}>{recruitBusy?'Copying…':'Recruiting link'}</button>}
           <button className={`btn-sm ${tab==='import'?'btn-primary':'btn-secondary'}`} onClick={()=>setTab(t=>t==='import'?'roster':'import')}>{tab==='import'?'← Pool':'↑ Bulk Import'}</button>
           {tab==='roster'&&<button className="btn-primary col-span-2 sm:col-span-1" onClick={()=>{setExpandedId('__new__');setExpandMode('edit');setEditForm(EMPTY_FORM)}}>+ Add Staff</button>}
         </div>
       </div>
+
+      {tab==='roster'&&letterOpen&&<InviteLetterPanel/>}
 
       {/* ── IMPORT ── */}
       {tab==='import'&&(

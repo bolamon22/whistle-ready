@@ -3,6 +3,7 @@ import { createClient } from '@libsql/client'
 import crypto from 'crypto'
 import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender } from '@/lib/email'
+import { inviteLetterFor, mergeLetter, letterBodyHtml, escapeHtml } from '@/lib/inviteLetter'
 import { orgById } from '@/lib/org'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 
@@ -44,6 +45,14 @@ export async function POST(req: Request) {
     if (!orgId) return null
     if (!orgs.has(orgId)) orgs.set(orgId, await orgById(orgId))
     return orgs.get(orgId) ?? null
+  }
+  // The wording is org-editable (Staff Pool -> Invite letter); default mirrors the old
+  // hardcoded copy. Cached per org like the org lookup above.
+  const letters = new Map<string, Awaited<ReturnType<typeof inviteLetterFor>>>()
+  async function letterFor(orgId: string | null) {
+    const k = orgId ?? ''
+    if (!letters.has(k)) letters.set(k, await inviteLetterFor(orgId, 'staff'))
+    return letters.get(k)!
   }
 
   type Result = { workerId: string; status: string; inviteUrl?: string }
@@ -97,32 +106,27 @@ export async function POST(req: Request) {
     const org = await orgFor(workerOrgId)
     const orgLabel = org?.name || 'Whistle Ready'
     const firstName = String(worker.name ?? '').trim().split(/\s+/)[0] || ''
+    const letter = await letterFor(workerOrgId)
+    const vals = { firstName: firstName || 'there', name: String(worker.name ?? '').trim(), org: orgLabel, link: inviteUrl }
+    const subject = mergeLetter(letter.subject, vals)
     // From the ORG, not the platform: the org is the employer recruiting this staffer
     // (Bo, Aug 28 2026) — orgSender degrades safely to the platform sender if the org's
     // domain isn't SendGrid-authenticated.
     await sendEmail({
       ...orgSender(org),
       to: email,
-      subject: `Create your ${orgLabel} staff login`,
+      subject,
       html: `
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
           <h2 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 8px;">
-            Set up your ${orgLabel} staff login
+            ${escapeHtml(subject)}
           </h2>
-          <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-            ${firstName ? `Hi ${firstName} — ` : ''}you're in the ${orgLabel} staff pool on Whistle Ready,
-            the app we use to run our events. Create your login to see your game assignments,
-            set your availability, and keep your pay details current.
-          </p>
+          ${letterBodyHtml(mergeLetter(letter.body, vals))}
           <a href="${inviteUrl}"
             style="display: inline-block; background: #14b8a6; color: white; font-weight: 600;
                    font-size: 15px; padding: 12px 28px; border-radius: 10px; text-decoration: none;">
             Create my login &rarr;
           </a>
-          <p style="color: #94a3b8; font-size: 13px; margin: 24px 0 0;">
-            Your role and details are already set up — you just choose a password.
-            This link expires in 30 days. If you weren't expecting this, you can ignore it.
-          </p>
         </div>
       `,
     })
