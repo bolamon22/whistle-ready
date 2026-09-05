@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import permissionsConfig from './lib/role-permissions.json'
 import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES, aliasRedirectForHost } from './lib/orgDomains'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify']  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
+const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing']  // /housing/[code] = housing company board (code IS the auth)  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
 
 const FEATURE_ROUTE_MAP: Record<string, string[]> = {}
@@ -88,7 +88,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
-      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass')
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass')
     if (!passthrough) {
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`

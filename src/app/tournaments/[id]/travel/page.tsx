@@ -77,7 +77,10 @@ export default function TravelPage({ params }: { params: { id: string } }) {
             update with actuals after the event. Totals feed sports-tourism grant applications and the post-event report.
           </p>
         </div>
-        <button onClick={() => window.print()} className="btn-primary btn-sm flex items-center gap-2"><Printer size={15} />Print</button>
+        <div className="flex gap-2">
+          <Link href="/staff/housing" className="btn-secondary btn-sm flex items-center gap-2"><Building2 size={15} />Housing company</Link>
+          <button onClick={() => window.print()} className="btn-primary btn-sm flex items-center gap-2"><Printer size={15} />Print</button>
+        </div>
       </div>
 
       {/* Totals */}

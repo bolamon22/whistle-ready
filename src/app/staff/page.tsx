@@ -1,5 +1,6 @@
 'use client'
 import OrgLogoMark from '@/app/OrgLogoMark'
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { certLabel, CERT_LEVELS, WORKER_ROLES, PAY_METHODS, isHourlyRole } from '@/lib/utils'
@@ -567,6 +568,7 @@ export default function StaffPage() {
           <p className="text-sm text-slate-500 mt-1">Global staff database · {workers.length} total</p>
         </div>
         <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+          {tab==='roster'&&<Link href="/staff/housing" className="btn-secondary btn-sm text-center">Housing</Link>}
           {tab==='roster'&&<button className="btn-secondary btn-sm" onClick={()=>setLetterOpen(o=>!o)}>{letterOpen?'Close letter':'Invite letter'}</button>}
           {tab==='roster'&&<button className="btn-secondary btn-sm" onClick={copyRecruitLink} disabled={recruitBusy}>{recruitBusy?'Copying…':'Recruiting link'}</button>}
           <button className={`btn-sm ${tab==='import'?'btn-primary':'btn-secondary'}`} onClick={()=>setTab(t=>t==='import'?'roster':'import')}>{tab==='import'?'← Pool':'↑ Bulk Import'}</button>

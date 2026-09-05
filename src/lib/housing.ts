@@ -1,0 +1,199 @@
+import crypto from 'crypto'
+import { prisma } from '@/lib/db'
+import { orgById } from '@/lib/org'
+import { sendEmail, orgSender } from '@/lib/email'
+
+// Team housing (Bo, Sep 5 2026): the org's housing company gets a weekly report of
+// which clubs still need hotel blocks, plus a magic-link board (no login) to log
+// bookings. It shares data with /tournaments/[id]/travel — clubs answer needsHotel at
+// registration, and the hotel/rooms/nights the housing contact logs are EXACTLY the
+// raw columns the grant room-night report totals. housingStatus/housingNotes are two
+// more raw TeamRegistration columns (house pattern: guarded ALTERs, not in the schema).
+
+const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL (stale in prod)
+
+export type HousingStatus = 'needs' | 'progress' | 'booked' | 'local'
+
+export async function ensureHousingCols() {
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelName" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelRooms" INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelNights" INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "housingStatus" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "housingNotes" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
+}
+
+// Explicit board status wins; otherwise derive: "No" at registration = local,
+// a named hotel with rooms+nights = booked, a named hotel alone = in progress.
+export function deriveStatus(r: { needsHotel?: unknown; housingStatus?: unknown; hotelName?: unknown; hotelRooms?: unknown; hotelNights?: unknown }): HousingStatus {
+  const hs = String(r.housingStatus || '')
+  if (hs === 'local') return 'local'
+  if (hs === 'booked' || hs === 'progress' || hs === 'needs') return hs
+  if (String(r.needsHotel || '') === 'No') return 'local'
+  const rooms = Number(r.hotelRooms) || 0
+  const nights = Number(r.hotelNights) || 0
+  if (String(r.hotelName || '').trim()) return rooms > 0 && nights > 0 ? 'booked' : 'progress'
+  return 'needs'
+}
+
+export type HousingSettings = { contactName: string; contactEmail: string; cadence: 'weekly' | 'twice' | 'manual'; includeContact: boolean; lastSentAt: string }
+const SETTINGS_DEFAULTS: HousingSettings = { contactName: '', contactEmail: '', cadence: 'weekly', includeContact: true, lastSentAt: '' }
+
+export async function housingSettings(orgId: string): Promise<HousingSettings> {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: `housing:${orgId}` } })
+    if (row?.value) return { ...SETTINGS_DEFAULTS, ...JSON.parse(row.value) }
+  } catch { /* defaults */ }
+  return { ...SETTINGS_DEFAULTS }
+}
+
+export async function saveHousingSettings(orgId: string, patch: Partial<HousingSettings>): Promise<HousingSettings> {
+  const merged = { ...(await housingSettings(orgId)), ...patch }
+  const key = `housing:${orgId}`
+  const value = JSON.stringify(merged)
+  await prisma.appSetting.upsert({ where: { key }, update: { value }, create: { key, value } })
+  return merged
+}
+
+// Board link code — same minting rules as the recruiting link (joinCode).
+export async function housingCode(orgId: string): Promise<string> {
+  const key = `housingCode:${orgId}`
+  const existing = await prisma.appSetting.findUnique({ where: { key } })
+  let code = existing?.value || ''
+  if (!code) {
+    code = crypto.randomBytes(6).toString('base64url')
+    await prisma.appSetting.upsert({ where: { key }, update: { value: code }, create: { key, value: code } })
+  }
+  const mapKey = `housingCodeMap:${code}`
+  await prisma.appSetting.upsert({ where: { key: mapKey }, update: { value: orgId }, create: { key: mapKey, value: orgId } })
+  return code
+}
+
+export async function rotateHousingCode(orgId: string): Promise<string> {
+  const old = (await prisma.appSetting.findUnique({ where: { key: `housingCode:${orgId}` } }))?.value
+  const code = crypto.randomBytes(6).toString('base64url')
+  await prisma.appSetting.upsert({ where: { key: `housingCode:${orgId}` }, update: { value: code }, create: { key: `housingCode:${orgId}`, value: code } })
+  await prisma.appSetting.upsert({ where: { key: `housingCodeMap:${code}` }, update: { value: orgId }, create: { key: `housingCodeMap:${code}`, value: orgId } })
+  if (old) { try { await prisma.appSetting.delete({ where: { key: `housingCodeMap:${old}` } }) } catch { /* no map */ } }
+  return code
+}
+
+export async function orgForHousingCode(code: string): Promise<string | null> {
+  if (!code || code.length > 16) return null
+  const map = await prisma.appSetting.findUnique({ where: { key: `housingCodeMap:${code}` } })
+  const orgId = map?.value || null
+  if (!orgId) return null
+  const current = await prisma.appSetting.findUnique({ where: { key: `housingCode:${orgId}` } })
+  return current?.value === code ? orgId : null // rotated-away links die
+}
+
+export function housingBoardUrl(code: string) { return `${APP_URL}/housing/${code}` }
+
+export type HousingClub = {
+  regId: string; clubName: string; clubContact: string; contactEmail: string; contactPhone: string
+  clubBasedIn: string; numTeams: number; needsHotel: string; status: HousingStatus
+  hotelName: string; hotelRooms: number; hotelNights: number; notes: string
+}
+export type HousingEvent = { id: string; name: string; startDate: string; endDate: string; location: string; clubs: HousingClub[] }
+
+// Upcoming tournaments for the org (same date rule as the staff signup's event list).
+export async function housingBoard(orgId: string): Promise<HousingEvent[]> {
+  await ensureHousingCols()
+  const ts: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+    `SELECT id, name, startDate, endDate, location FROM "Tournament" WHERE orgId = ? ORDER BY CASE WHEN startDate = '' THEN 1 ELSE 0 END, startDate ASC`, orgId)
+  const today = new Date().toISOString().slice(0, 10)
+  const upcoming = ts.filter(t => { const last = String(t.endDate || '') || String(t.startDate || ''); return !last || last >= today }).slice(0, 8)
+  const events: HousingEvent[] = []
+  for (const t of upcoming) {
+    const regs: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+      `SELECT id, clubName, clubContact, contactEmail, contactPhone, clubBasedIn, numTeams, needsHotel, hotelName, hotelRooms, hotelNights, housingStatus, housingNotes
+       FROM "TeamRegistration" WHERE tournamentId = ? AND deletedAt IS NULL ORDER BY clubName ASC`, String(t.id))
+    events.push({
+      id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''), location: String(t.location || ''),
+      clubs: regs.map(r => ({
+        regId: String(r.id), clubName: String(r.clubName ?? ''), clubContact: String(r.clubContact ?? ''),
+        contactEmail: String(r.contactEmail ?? ''), contactPhone: String(r.contactPhone ?? ''),
+        clubBasedIn: String(r.clubBasedIn ?? ''), numTeams: Number(r.numTeams) || 0, needsHotel: String(r.needsHotel ?? ''),
+        status: deriveStatus(r), hotelName: String(r.hotelName ?? ''), hotelRooms: Number(r.hotelRooms) || 0,
+        hotelNights: Number(r.hotelNights) || 0, notes: String(r.housingNotes ?? ''),
+      })),
+    })
+  }
+  return events
+}
+
+const STATUS_EMAIL: Record<HousingStatus, { label: string; color: string }> = {
+  needs: { label: 'NEEDS HOTELS', color: '#dc2626' },
+  progress: { label: 'IN PROGRESS', color: '#d97706' },
+  booked: { label: 'BOOKED', color: '#059669' },
+  local: { label: 'LOCAL — NOT NEEDED', color: '#64748b' },
+}
+const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+const fmtDates = (a: string, b: string) => {
+  const f = (d: string) => { const x = new Date(d); return isNaN(x.getTime()) ? '' : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+  const s = f(a), e = f(b)
+  return s && e && s !== e ? `${s}–${e}` : s || e
+}
+
+// Build + send the report (used by Send now AND the Monday/Thursday cron).
+export async function sendHousingReport(orgId: string): Promise<{ ok: boolean; error?: string; needs?: number }> {
+  const settings = await housingSettings(orgId)
+  if (!settings.contactEmail) return { ok: false, error: 'Add your housing contact’s email first' }
+  const events = (await housingBoard(orgId)).filter(e => e.clubs.length)
+  if (!events.length) return { ok: false, error: 'No upcoming events with registrations yet' }
+  const org = await orgById(orgId)
+  const orgLabel = org?.name || 'Whistle Ready'
+  const boardUrl = housingBoardUrl(await housingCode(orgId))
+  const all = events.flatMap(e => e.clubs)
+  const count = (s: HousingStatus) => all.filter(c => c.status === s).length
+  const needs = count('needs')
+
+  const chip = (n: number, label: string, color: string, bg: string) =>
+    `<td style="background:${bg};border-radius:10px;padding:8px 12px;text-align:center;"><div style="font-size:18px;font-weight:800;color:${color};">${n}</div><div style="font-size:10px;font-weight:700;color:${color};letter-spacing:0.04em;">${label}</div></td>`
+
+  const eventBlocks = events.map(ev => {
+    const rows = ev.clubs.map(c => {
+      const st = STATUS_EMAIL[c.status]
+      const booked = c.status === 'booked' && c.hotelRooms ? ` · ${c.hotelRooms} rm × ${c.hotelNights} nt${c.hotelName ? ` @ ${esc(c.hotelName)}` : ''}` : ''
+      const contact = settings.includeContact && (c.clubContact || c.contactEmail || c.contactPhone)
+        ? `<div style="font-size:11px;color:#64748b;">${esc([c.clubContact, c.contactPhone, c.contactEmail].filter(Boolean).join(' · '))}</div>` : ''
+      return `<tr><td style="padding:8px 4px;border-bottom:1px solid #f1f5f9;">
+          <div style="font-size:13px;font-weight:700;color:#0f172a;">${esc(c.clubName)} <span style="font-weight:400;color:#94a3b8;">· ${c.numTeams} team${c.numTeams === 1 ? '' : 's'} · ${esc(c.clubBasedIn || '')}</span></div>
+          ${contact}
+        </td>
+        <td style="padding:8px 4px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;"><span style="font-size:10px;font-weight:800;color:${st.color};">${st.label}</span><span style="font-size:10px;color:#64748b;">${booked}</span></td></tr>`
+    }).join('')
+    return `<div style="margin-top:20px;">
+      <div style="border-bottom:2px solid #0f1f3d;padding-bottom:5px;"><span style="font-size:14px;font-weight:800;color:#0f172a;">${esc(ev.name)}</span> <span style="font-size:11px;color:#64748b;">${esc(fmtDates(ev.startDate, ev.endDate))}${ev.location ? ` · ${esc(ev.location)}` : ''}</span></div>
+      <table style="width:100%;border-collapse:collapse;">${rows}</table>
+    </div>`
+  }).join('')
+
+  await sendEmail({
+    ...orgSender(org),
+    to: settings.contactEmail,
+    subject: `Housing report — ${needs} club${needs === 1 ? '' : 's'} still need${needs === 1 ? 's' : ''} hotels`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px;">
+        <div style="font-size:10px;font-weight:800;letter-spacing:0.12em;color:#0d9488;">${esc(orgLabel.toUpperCase())} · TEAM HOUSING</div>
+        <h2 style="font-size: 21px; font-weight: 800; color: #0f172a; margin: 6px 0 8px;">Housing report</h2>
+        <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+          ${settings.contactName ? `Hi ${esc(settings.contactName)} — here` : 'Here'}'s where hotel blocks stand for our upcoming events.
+          <strong style="color:#0f172a;">${needs} club${needs === 1 ? '' : 's'} still need${needs === 1 ? 's' : ''} rooms.</strong>
+        </p>
+        <table style="width:100%;border-collapse:separate;border-spacing:6px 0;"><tr>
+          ${chip(needs, 'NEED HOTELS', '#dc2626', '#fef2f2')}
+          ${chip(count('progress'), 'IN PROGRESS', '#d97706', '#fffbeb')}
+          ${chip(count('booked'), 'BOOKED', '#059669', '#ecfdf5')}
+        </tr></table>
+        ${eventBlocks}
+        <div style="margin-top:24px;">
+          <a href="${boardUrl}" style="display:inline-block;background:#14b8a6;color:#ffffff;font-weight:600;font-size:15px;padding:12px 28px;border-radius:10px;text-decoration:none;">Open the housing board &rarr;</a>
+          <p style="color:#94a3b8;font-size:11px;margin:8px 0 0;">Your private link — no login needed. Log bookings there and ${esc(orgLabel)} sees them instantly.</p>
+        </div>
+        <p style="border-top:1px solid #f1f5f9;margin-top:20px;padding-top:12px;color:#94a3b8;font-size:11px;line-height:1.5;">Sent by Whistle Ready for ${esc(orgLabel)}. Reply to this email to reach us directly.</p>
+      </div>
+    `,
+  })
+  await saveHousingSettings(orgId, { lastSentAt: new Date().toISOString() })
+  return { ok: true, needs }
+}
