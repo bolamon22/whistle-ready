@@ -141,7 +141,7 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
     try{
       await save(false,true) // what's on screen is what sends
       if(aud==='staff'){
-        const byEmail=new Map(workers.filter(w=>w.email).map(w=>[String(w.email).toLowerCase(),w]))
+        const byEmail=new Map<string,Worker>(workers.filter(w=>w.email).map(w=>[String(w.email).toLowerCase(),w] as [string,Worker]))
         const matched=emails.filter(e=>byEmail.has(e))
         const missing=emails.filter(e=>!byEmail.has(e))
         let sent=0,already=0

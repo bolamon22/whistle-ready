@@ -27,7 +27,7 @@ export async function ensureHousingCols() {
 export function deriveStatus(r: { needsHotel?: unknown; housingStatus?: unknown; hotelName?: unknown; hotelRooms?: unknown; hotelNights?: unknown }): HousingStatus {
   const hs = String(r.housingStatus || '')
   if (hs === 'local') return 'local'
-  if (hs === 'booked' || hs === 'progress' || hs === 'needs') return hs
+  if (hs === 'booked' || hs === 'progress' || hs === 'needs') return hs as HousingStatus
   if (String(r.needsHotel || '') === 'No') return 'local'
   const rooms = Number(r.hotelRooms) || 0
   const nights = Number(r.hotelNights) || 0
