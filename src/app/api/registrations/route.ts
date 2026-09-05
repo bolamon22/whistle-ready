@@ -43,7 +43,18 @@ export async function GET(req: NextRequest) {
     const extras: any[] = await prisma.$queryRawUnsafe(
       `SELECT id, "hotelName", "hotelRooms", "hotelNights", "instagramHandle" FROM "TeamRegistration" WHERE tournamentId = ?`, tournamentId)
     const byId = new Map(extras.map((e: any) => [e.id, e]))
-    return NextResponse.json(registrations.map((r: any) => ({ ...r, ...((byId.get(r.id) as any) || {}) })))
+    // Per-hotel bookings (a club can split across hotels; logged on the housing
+    // board). Table is created lazily by the housing feature — absent = no bookings.
+    const bookingsById = new Map<string, any[]>()
+    try {
+      const bs: any[] = await prisma.$queryRawUnsafe(
+        `SELECT b.id, b.regId, b.hotel, b.rooms, b.nights FROM "HousingBooking" b JOIN "TeamRegistration" r ON b.regId = r.id WHERE r.tournamentId = ? ORDER BY b.createdAt ASC`, tournamentId)
+      for (const b of bs) {
+        if (!bookingsById.has(b.regId)) bookingsById.set(b.regId, [])
+        bookingsById.get(b.regId)!.push({ id: b.id, hotel: b.hotel, rooms: Number(b.rooms) || 0, nights: Number(b.nights) || 0 })
+      }
+    } catch { /* table not there yet */ }
+    return NextResponse.json(registrations.map((r: any) => ({ ...r, ...((byId.get(r.id) as any) || {}), bookings: bookingsById.get(r.id) ?? [] })))
   } catch {
     return NextResponse.json(registrations)
   }

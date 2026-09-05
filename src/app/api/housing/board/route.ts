@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
-import { ensureHousingCols, housingBoard, housingSettings, orgForHousingCode, deriveStatus } from '@/lib/housing'
+import { ensureHousingCols, housingBoard, housingSettings, orgForHousingCode, deriveStatus, bookingsByReg, syncRegAggregates } from '@/lib/housing'
 
 // The housing board's data — two doors to the same rows:
 //   ?code=  : the housing company's magic link (no login; code is the secret)
@@ -27,11 +28,14 @@ export async function GET(req: Request) {
   const res = await resolveOrg(req)
   if (res instanceof NextResponse) return res
   const [events, settings, org] = await Promise.all([housingBoard(res.orgId), housingSettings(res.orgId), orgById(res.orgId)])
-  const hideContact = res.viaCode && !settings.includeContact
+  // On the housing company's door, contact info follows the org's toggle — and a
+  // LOCAL club never ships contact info at all (no rooms to chase, Bo).
+  const stripAll = res.viaCode && !settings.includeContact
   return NextResponse.json({
     orgName: org?.name || 'Whistle Ready',
-    events: hideContact
-      ? events.map(e => ({ ...e, clubs: e.clubs.map(c => ({ ...c, clubContact: '', contactEmail: '', contactPhone: '' })) }))
+    bookingUrl: settings.bookingUrl || '',
+    events: res.viaCode
+      ? events.map(e => ({ ...e, clubs: e.clubs.map(c => (stripAll || c.status === 'local') ? { ...c, clubContact: '', contactEmail: '', contactPhone: '' } : c) }))
       : events,
   })
 }
@@ -39,7 +43,12 @@ export async function GET(req: Request) {
 const STATUSES = ['needs', 'progress', 'booked', 'local']
 
 export async function POST(req: Request) {
-  let body: { code?: unknown; viewOrgId?: unknown; regId?: unknown; status?: unknown; hotelName?: unknown; hotelRooms?: unknown; hotelNights?: unknown; notes?: unknown } = {}
+  let body: {
+    code?: unknown; viewOrgId?: unknown; regId?: unknown; status?: unknown; notes?: unknown
+    addBooking?: { hotel?: unknown; rooms?: unknown; nights?: unknown }
+    updateBooking?: { id?: unknown; hotel?: unknown; rooms?: unknown; nights?: unknown }
+    removeBooking?: unknown
+  } = {}
   try { body = await req.json() } catch { /* validated below */ }
   const res = await resolveOrg(req, body)
   if (res instanceof NextResponse) return res
@@ -67,12 +76,43 @@ export async function POST(req: Request) {
       await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "needsHotel" = 'Yes' WHERE id = ?`, regId)
     }
   }
-  if (body.hotelName !== undefined) await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "hotelName" = ? WHERE id = ?`, String(body.hotelName ?? '').slice(0, 120), regId)
-  if (body.hotelRooms !== undefined) await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "hotelRooms" = ? WHERE id = ?`, Math.max(0, Number(body.hotelRooms) || 0), regId)
-  if (body.hotelNights !== undefined) await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "hotelNights" = ? WHERE id = ?`, Math.max(0, Number(body.hotelNights) || 0), regId)
   if (body.notes !== undefined) await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "housingNotes" = ? WHERE id = ?`, String(body.notes ?? '').slice(0, 500), regId)
+
+  // Bookings: one club can split across several hotels (they book through the housing
+  // company's site; Vinny logs each block that lands). Every mutation re-syncs the
+  // reg's aggregate columns so the travel/grant page and older readers stay truthful.
+  let touchedBookings = false
+  if (body.addBooking !== undefined) {
+    const b = body.addBooking ?? {}
+    await prisma.$executeRawUnsafe(`INSERT INTO "HousingBooking" (id, regId, hotel, rooms, nights) VALUES (?, ?, ?, ?, ?)`,
+      crypto.randomUUID(), regId, String(b.hotel ?? '').slice(0, 120), Math.max(0, Number(b.rooms) || 0), Math.max(0, Number(b.nights) || 0))
+    touchedBookings = true
+  }
+  if (body.updateBooking !== undefined) {
+    const b = body.updateBooking ?? {}
+    const bid = String(b.id ?? '')
+    const owned: Record<string, unknown>[] = bid ? await prisma.$queryRawUnsafe(
+      `SELECT id FROM "HousingBooking" WHERE id = ? AND regId = ?`, bid, regId) : []
+    if (!owned.length) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    if (b.hotel !== undefined) await prisma.$executeRawUnsafe(`UPDATE "HousingBooking" SET hotel = ?, updatedAt = datetime('now') WHERE id = ?`, String(b.hotel ?? '').slice(0, 120), bid)
+    if (b.rooms !== undefined) await prisma.$executeRawUnsafe(`UPDATE "HousingBooking" SET rooms = ?, updatedAt = datetime('now') WHERE id = ?`, Math.max(0, Number(b.rooms) || 0), bid)
+    if (b.nights !== undefined) await prisma.$executeRawUnsafe(`UPDATE "HousingBooking" SET nights = ?, updatedAt = datetime('now') WHERE id = ?`, Math.max(0, Number(b.nights) || 0), bid)
+    touchedBookings = true
+  }
+  if (body.removeBooking !== undefined) {
+    const bid = String(body.removeBooking ?? '')
+    if (bid) await prisma.$executeRawUnsafe(`DELETE FROM "HousingBooking" WHERE id = ? AND regId = ?`, bid, regId)
+    touchedBookings = true
+  }
+  if (touchedBookings) await syncRegAggregates(regId)
 
   const after: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
     `SELECT needsHotel, housingStatus, hotelName, hotelRooms, hotelNights FROM "TeamRegistration" WHERE id = ?`, regId)
-  return NextResponse.json({ ok: true, status: after.length ? deriveStatus(after[0]) : 'needs' })
+  const bookings = (await bookingsByReg([regId])).get(regId) ?? []
+  return NextResponse.json({
+    ok: true,
+    status: after.length ? deriveStatus(after[0]) : 'needs',
+    bookings,
+    roomNights: bookings.reduce((s, b) => s + b.rooms * b.nights, 0),
+  })
 }

@@ -20,6 +20,56 @@ export async function ensureHousingCols() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelNights" INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "housingStatus" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "housingNotes" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
+  // One club can split across multiple hotels (they book through the housing
+  // company's own site; Vinny logs what lands). Bookings are the source of truth;
+  // the reg's hotelName/hotelRooms/hotelNights become SYNCED AGGREGATES so older
+  // readers (confirmation payloads, exports) keep working. In-app table, not in
+  // schema.prisma — same lesson as StaffInvite: a repo migration means nothing.
+  try {
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "HousingBooking" (
+      id TEXT PRIMARY KEY,
+      regId TEXT NOT NULL,
+      hotel TEXT NOT NULL DEFAULT '',
+      rooms INTEGER NOT NULL DEFAULT 0,
+      nights INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'manual',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    )`)
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HousingBooking_regId" ON "HousingBooking"(regId)`)
+  } catch { /* exists */ }
+}
+
+export type HousingBookingRow = { id: string; hotel: string; rooms: number; nights: number }
+
+export async function bookingsByReg(regIds: string[]): Promise<Map<string, HousingBookingRow[]>> {
+  const map = new Map<string, HousingBookingRow[]>()
+  if (!regIds.length) return map
+  const ph = regIds.map(() => '?').join(',')
+  const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+    `SELECT id, regId, hotel, rooms, nights FROM "HousingBooking" WHERE regId IN (${ph}) ORDER BY createdAt ASC`, ...regIds)
+  for (const r of rows) {
+    const k = String(r.regId)
+    if (!map.has(k)) map.set(k, [])
+    map.get(k)!.push({ id: String(r.id), hotel: String(r.hotel ?? ''), rooms: Number(r.rooms) || 0, nights: Number(r.nights) || 0 })
+  }
+  return map
+}
+
+// Keep the reg's legacy single-hotel columns describing the bookings in aggregate,
+// so deriveStatus and every older reader stay truthful: total rooms/night, a
+// nights figure that makes rooms × nights equal the real room-night total, and a
+// name that says when a club is split.
+export async function syncRegAggregates(regId: string) {
+  const rows = (await bookingsByReg([regId])).get(regId) ?? []
+  const real = rows.filter(b => b.hotel.trim() || b.rooms || b.nights)
+  const sumRooms = real.reduce((s, b) => s + b.rooms, 0)
+  const roomNights = real.reduce((s, b) => s + b.rooms * b.nights, 0)
+  const name = real.length === 0 ? '' : real.length === 1 ? real[0].hotel : `${real.length} hotels`
+  const nights = sumRooms > 0 ? Math.round(roomNights / sumRooms) : (real.length ? real[0].nights : 0)
+  await prisma.$executeRawUnsafe(
+    `UPDATE "TeamRegistration" SET "hotelName" = ?, "hotelRooms" = ?, "hotelNights" = ? WHERE id = ?`,
+    name.slice(0, 120), sumRooms, nights, regId)
 }
 
 // Explicit board status wins; otherwise derive: "No" at registration = local,
@@ -35,8 +85,8 @@ export function deriveStatus(r: { needsHotel?: unknown; housingStatus?: unknown;
   return 'needs'
 }
 
-export type HousingSettings = { contactName: string; contactEmail: string; cadence: 'weekly' | 'twice' | 'manual'; includeContact: boolean; lastSentAt: string }
-const SETTINGS_DEFAULTS: HousingSettings = { contactName: '', contactEmail: '', cadence: 'weekly', includeContact: true, lastSentAt: '' }
+export type HousingSettings = { contactName: string; contactEmail: string; cadence: 'weekly' | 'twice' | 'manual'; includeContact: boolean; bookingUrl: string; lastSentAt: string }
+const SETTINGS_DEFAULTS: HousingSettings = { contactName: '', contactEmail: '', cadence: 'weekly', includeContact: true, bookingUrl: '', lastSentAt: '' }
 
 export async function housingSettings(orgId: string): Promise<HousingSettings> {
   try {
@@ -91,7 +141,7 @@ export function housingBoardUrl(code: string) { return `${APP_URL}/housing/${cod
 export type HousingClub = {
   regId: string; clubName: string; clubContact: string; contactEmail: string; contactPhone: string
   clubBasedIn: string; numTeams: number; needsHotel: string; status: HousingStatus
-  hotelName: string; hotelRooms: number; hotelNights: number; notes: string
+  bookings: HousingBookingRow[]; roomNights: number; notes: string
 }
 export type HousingEvent = { id: string; name: string; startDate: string; endDate: string; location: string; clubs: HousingClub[] }
 
@@ -107,15 +157,32 @@ export async function housingBoard(orgId: string): Promise<HousingEvent[]> {
     const regs: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
       `SELECT id, clubName, clubContact, contactEmail, contactPhone, clubBasedIn, numTeams, needsHotel, hotelName, hotelRooms, hotelNights, housingStatus, housingNotes
        FROM "TeamRegistration" WHERE tournamentId = ? AND deletedAt IS NULL ORDER BY clubName ASC`, String(t.id))
+    // Rows written before multi-hotel bookings existed carry a single hotel in the
+    // legacy columns — turn that into their first booking row, once.
+    const bookings = await bookingsByReg(regs.map(r => String(r.id)))
+    for (const r of regs) {
+      const id = String(r.id)
+      if (!bookings.has(id) && String(r.hotelName ?? '').trim()) {
+        const b: HousingBookingRow = { id: crypto.randomUUID(), hotel: String(r.hotelName).trim(), rooms: Number(r.hotelRooms) || 0, nights: Number(r.hotelNights) || 0 }
+        try {
+          await prisma.$executeRawUnsafe(`INSERT INTO "HousingBooking" (id, regId, hotel, rooms, nights, source) VALUES (?, ?, ?, ?, ?, 'legacy')`,
+            b.id, id, b.hotel, b.rooms, b.nights)
+          bookings.set(id, [b])
+        } catch { /* concurrent migrate */ }
+      }
+    }
     events.push({
       id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''), location: String(t.location || ''),
-      clubs: regs.map(r => ({
-        regId: String(r.id), clubName: String(r.clubName ?? ''), clubContact: String(r.clubContact ?? ''),
-        contactEmail: String(r.contactEmail ?? ''), contactPhone: String(r.contactPhone ?? ''),
-        clubBasedIn: String(r.clubBasedIn ?? ''), numTeams: Number(r.numTeams) || 0, needsHotel: String(r.needsHotel ?? ''),
-        status: deriveStatus(r), hotelName: String(r.hotelName ?? ''), hotelRooms: Number(r.hotelRooms) || 0,
-        hotelNights: Number(r.hotelNights) || 0, notes: String(r.housingNotes ?? ''),
-      })),
+      clubs: regs.map(r => {
+        const bs = bookings.get(String(r.id)) ?? []
+        return {
+          regId: String(r.id), clubName: String(r.clubName ?? ''), clubContact: String(r.clubContact ?? ''),
+          contactEmail: String(r.contactEmail ?? ''), contactPhone: String(r.contactPhone ?? ''),
+          clubBasedIn: String(r.clubBasedIn ?? ''), numTeams: Number(r.numTeams) || 0, needsHotel: String(r.needsHotel ?? ''),
+          status: deriveStatus(r), bookings: bs, roomNights: bs.reduce((s, b) => s + b.rooms * b.nights, 0),
+          notes: String(r.housingNotes ?? ''),
+        }
+      }),
     })
   }
   return events
@@ -153,8 +220,10 @@ export async function sendHousingReport(orgId: string): Promise<{ ok: boolean; e
   const eventBlocks = events.map(ev => {
     const rows = ev.clubs.map(c => {
       const st = STATUS_EMAIL[c.status]
-      const booked = c.status === 'booked' && c.hotelRooms ? ` · ${c.hotelRooms} rm × ${c.hotelNights} nt${c.hotelName ? ` @ ${esc(c.hotelName)}` : ''}` : ''
-      const contact = settings.includeContact && (c.clubContact || c.contactEmail || c.contactPhone)
+      const booked = c.bookings.length
+        ? ` · ${c.bookings.map(b => `${esc(b.hotel || 'Hotel TBD')} ${b.rooms}rm×${b.nights}nt`).join(' + ')}`
+        : ''
+      const contact = settings.includeContact && c.status !== 'local' && (c.clubContact || c.contactEmail || c.contactPhone)
         ? `<div style="font-size:11px;color:#64748b;">${esc([c.clubContact, c.contactPhone, c.contactEmail].filter(Boolean).join(' · '))}</div>` : ''
       return `<tr><td style="padding:8px 4px;border-bottom:1px solid #f1f5f9;">
           <div style="font-size:13px;font-weight:700;color:#0f172a;">${esc(c.clubName)} <span style="font-weight:400;color:#94a3b8;">· ${c.numTeams} team${c.numTeams === 1 ? '' : 's'} · ${esc(c.clubBasedIn || '')}</span></div>
@@ -186,6 +255,7 @@ export async function sendHousingReport(orgId: string): Promise<{ ok: boolean; e
           ${chip(count('booked'), 'BOOKED', '#059669', '#ecfdf5')}
         </tr></table>
         ${eventBlocks}
+        ${settings.bookingUrl ? `<p style="color:#475569;font-size:12px;margin:16px 0 0;">Clubs book their rooms at <a href="${esc(settings.bookingUrl)}" style="color:#0d9488;">${esc(settings.bookingUrl)}</a> — log what comes through on the board so we're counting the same rooms.</p>` : ''}
         <div style="margin-top:24px;">
           <a href="${boardUrl}" style="display:inline-block;background:#14b8a6;color:#ffffff;font-weight:600;font-size:15px;padding:12px 28px;border-radius:10px;text-decoration:none;">Open the housing board &rarr;</a>
           <p style="color:#94a3b8;font-size:11px;margin:8px 0 0;">Your private link — no login needed. Log bookings there and ${esc(orgLabel)} sees them instantly.</p>

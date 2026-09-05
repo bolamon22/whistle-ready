@@ -13,6 +13,7 @@ interface Reg {
   id: string; clubName: string; clubContact: string; clubBasedIn: string
   numTeams: number; needsHotel: string
   hotelName?: string; hotelRooms?: number; hotelNights?: number
+  bookings?: { id: string; hotel: string; rooms: number; nights: number }[]
   teams?: any[]
 }
 
@@ -49,18 +50,29 @@ export default function TravelPage({ params }: { params: { id: string } }) {
     setSavingId(null)
   }
 
-  const nights = (r: Reg) => (Number(r.hotelRooms) || 0) * (Number(r.hotelNights) || 0)
+  // A club can split across several hotels — bookings are logged on the housing
+  // board (Vinny). Regs without booking rows yet fall back to the legacy
+  // single-hotel columns so nothing disappears mid-migration.
+  const clubBookings = (r: Reg) => (r.bookings && r.bookings.length)
+    ? r.bookings
+    : ((r.hotelName || r.hotelRooms || r.hotelNights)
+      ? [{ id: 'legacy', hotel: r.hotelName || '', rooms: Number(r.hotelRooms) || 0, nights: Number(r.hotelNights) || 0 }]
+      : [])
+  const nights = (r: Reg) => clubBookings(r).reduce((s, b) => s + b.rooms * b.nights, 0)
   const totals = useMemo(() => {
     const staying = regs.filter(r => r.needsHotel === 'Yes' || nights(r) > 0)
     const roomNights = regs.reduce((s, r) => s + nights(r), 0)
-    const rooms = regs.reduce((s, r) => s + (Number(r.hotelRooms) || 0), 0)
+    const rooms = regs.reduce((s, r) => s + clubBookings(r).reduce((x, b) => x + b.rooms, 0), 0)
     const byHotel = new Map<string, number>()
     for (const r of regs) {
-      const n = nights(r); if (!n) continue
-      const key = (r.hotelName || '').trim() || 'Hotel TBD'
-      byHotel.set(key, (byHotel.get(key) || 0) + n)
+      for (const b of clubBookings(r)) {
+        const n = b.rooms * b.nights; if (!n) continue
+        const key = (b.hotel || '').trim() || 'Hotel TBD'
+        byHotel.set(key, (byHotel.get(key) || 0) + n)
+      }
     }
     return { staying: staying.length, roomNights, rooms, byHotel: Array.from(byHotel.entries()).sort((a, b) => b[1] - a[1]) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regs])
 
   const inputCls = 'border border-slate-300 rounded px-2 py-1 text-sm w-full'
@@ -121,18 +133,16 @@ export default function TravelPage({ params }: { params: { id: string } }) {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Hotel</label>
-                <input className={inputCls} value={r.hotelName || ''} placeholder="TBD" onChange={e => patchLocal(r.id, { hotelName: e.target.value })} onBlur={() => save(r)} />
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Hotels <span className="normal-case text-slate-300">(logged on the housing board)</span></label>
+                {clubBookings(r).length
+                  ? clubBookings(r).map(b => (
+                    <div key={b.id} className="text-sm text-slate-700">{b.hotel || 'Hotel TBD'}{(b.rooms || b.nights) ? <span className="text-slate-400"> — {b.rooms} rm × {b.nights} nt</span> : null}</div>
+                  ))
+                  : <div className="text-sm text-slate-300">TBD</div>}
               </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Rooms/night</label>
-                <input type="number" inputMode="numeric" min="0" className={inputCls} value={r.hotelRooms || ''} onChange={e => patchLocal(r.id, { hotelRooms: Number(e.target.value) })} onBlur={() => save(r)} />
+              <div className="col-span-3 flex items-center justify-between text-xs text-slate-400">
+                <span>{savingId === r.id ? 'Saving…' : ''}</span>
               </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Nights</label>
-                <input type="number" inputMode="numeric" min="0" className={inputCls} value={r.hotelNights || ''} onChange={e => patchLocal(r.id, { hotelNights: Number(e.target.value) })} onBlur={() => save(r)} />
-              </div>
-              <div className="flex items-end pb-2 text-xs text-slate-400">{savingId === r.id ? 'Saving…' : ''}</div>
             </div>
           </div>
         ))}
@@ -148,7 +158,7 @@ export default function TravelPage({ params }: { params: { id: string } }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              {['Club', 'Teams', 'Based in', 'Hotel?', 'Hotel', 'Rooms/night', 'Nights', 'Room nights', ''].map((h, i) => (
+              {['Club', 'Teams', 'Based in', 'Hotel?', 'Hotels (rooms × nights)', 'Room nights', ''].map((h, i) => (
                 <th key={i} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -165,31 +175,33 @@ export default function TravelPage({ params }: { params: { id: string } }) {
                     <option>Yes</option><option>No</option><option>Maybe</option>
                   </select>
                 </td>
-                <td className="px-3 py-2 min-w-[140px]"><input className={inputCls} value={r.hotelName || ''} placeholder="TBD"
-                  onChange={e => patchLocal(r.id, { hotelName: e.target.value })} onBlur={() => save(r)} /></td>
-                <td className="px-3 py-2 w-24"><input type="number" min="0" className={inputCls} value={r.hotelRooms || ''}
-                  onChange={e => patchLocal(r.id, { hotelRooms: Number(e.target.value) })} onBlur={() => save(r)} /></td>
-                <td className="px-3 py-2 w-20"><input type="number" min="0" className={inputCls} value={r.hotelNights || ''}
-                  onChange={e => patchLocal(r.id, { hotelNights: Number(e.target.value) })} onBlur={() => save(r)} /></td>
+                <td className="px-3 py-2 min-w-[200px]">
+                  {clubBookings(r).length
+                    ? clubBookings(r).map(b => (
+                      <div key={b.id} className="text-sm text-slate-700 whitespace-nowrap">{b.hotel || 'Hotel TBD'}{(b.rooms || b.nights) ? <span className="text-slate-400"> — {b.rooms} × {b.nights}</span> : null}</div>
+                    ))
+                    : <span className="text-slate-300 text-sm">TBD</span>}
+                </td>
                 <td className="px-3 py-2 font-semibold text-slate-800">{nights(r) || ''}</td>
                 <td className="px-3 py-2 text-xs text-slate-400">{savingId === r.id ? 'Saving…' : ''}</td>
               </tr>
             ))}
             {regs.length === 0 && (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400">No registrations yet.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No registrations yet.</td></tr>
             )}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-800">
-              <td className="px-3 py-2.5" colSpan={5}>Totals</td>
-              <td className="px-3 py-2.5">{totals.rooms}</td>
-              <td className="px-3 py-2.5"></td>
+              <td className="px-3 py-2.5" colSpan={4}>Totals</td>
+              <td className="px-3 py-2.5">{totals.rooms} rooms/night</td>
               <td className="px-3 py-2.5">{totals.roomNights}</td>
               <td></td>
             </tr>
           </tfoot>
         </table>
       </div>
+
+      <p className="text-xs text-slate-400 mb-6 print:hidden">Hotels, rooms, and nights are logged per booking on the <Link href="/staff/housing" className="text-teal-600 hover:underline">housing board</Link> — a club can split across several hotels, and each shows up in the by-hotel table below.</p>
 
       {/* By-hotel summary — mirrors the grant Post-Event Report "Hotel Information" table */}
       <div className="bg-white border border-slate-200 rounded-xl p-4">

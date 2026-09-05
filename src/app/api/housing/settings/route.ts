@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
-  let body: { viewOrgId?: unknown; rotate?: unknown; contactName?: unknown; contactEmail?: unknown; cadence?: unknown; includeContact?: unknown } = {}
+  let body: { viewOrgId?: unknown; rotate?: unknown; contactName?: unknown; contactEmail?: unknown; cadence?: unknown; includeContact?: unknown; bookingUrl?: unknown } = {}
   try { body = await req.json() } catch { /* validated below */ }
   const orgId = await orgFor(gate, body.viewOrgId)
   if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 400 })
@@ -32,6 +32,7 @@ export async function PUT(req: Request) {
   if (body.contactEmail !== undefined) patch.contactEmail = String(body.contactEmail ?? '').trim().toLowerCase().slice(0, 200)
   if (body.cadence !== undefined && ['weekly', 'twice', 'manual'].includes(String(body.cadence))) patch.cadence = String(body.cadence)
   if (body.includeContact !== undefined) patch.includeContact = body.includeContact === true
+  if (body.bookingUrl !== undefined) patch.bookingUrl = String(body.bookingUrl ?? '').trim().slice(0, 300)
   const settings = await saveHousingSettings(orgId, patch)
   return NextResponse.json({ ok: true, settings, boardUrl: housingBoardUrl(await housingCode(orgId)) })
 }

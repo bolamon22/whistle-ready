@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 import { BedDouble, Copy, RefreshCw, Send } from 'lucide-react'
 import HousingBoard, { HousingCounts } from '@/components/HousingBoard'
 
-type Settings = { contactName: string; contactEmail: string; cadence: 'weekly' | 'twice' | 'manual'; includeContact: boolean; lastSentAt: string }
+type Settings = { contactName: string; contactEmail: string; cadence: 'weekly' | 'twice' | 'manual'; includeContact: boolean; bookingUrl: string; lastSentAt: string }
 
 export default function HousingAdminPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -80,6 +80,10 @@ export default function HousingAdminPage() {
                 <input type="checkbox" checked={settings.includeContact} onChange={e => { setSettings(s => s ? { ...s, includeContact: e.target.checked } : s); put({ includeContact: e.target.checked }) }} />
                 Include coach contact info <span className="text-slate-400">(he reaches clubs directly)</span>
               </label>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Club booking link <span className="text-slate-400 font-normal">— the housing company's site where clubs book; shown on the board and in the report</span></label>
+              <input className="input" value={settings.bookingUrl} onChange={e => setSettings(s => s ? { ...s, bookingUrl: e.target.value } : s)} onBlur={e => put({ bookingUrl: e.target.value })} placeholder="https://…" />
             </div>
           </div>
           <div className="mt-4">
