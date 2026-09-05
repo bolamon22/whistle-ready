@@ -95,7 +95,7 @@ function StaffEditForm({
 // One invite letter, a dropdown decides who it goes to (Bo, Sep 5). 'staff' wording is
 // what /api/workers/onboard emails with each person's claim link; 'recruit' is copy-paste
 // text carrying the public /join link. Saved per org via /api/workers/invite-letter.
-function InviteLetterPanel(){
+function InviteLetterPanel({workers}:{workers:Worker[]}){
   type Aud='staff'|'recruit'
   const [aud,setAud]=useState<Aud>('staff')
   const [tpl,setTpl]=useState<Record<Aud,{subject:string;body:string;custom?:boolean}>|null>(null)
@@ -103,6 +103,9 @@ function InviteLetterPanel(){
   const [events,setEvents]=useState<{id:string;name:string;startDate?:string;endDate?:string}[]>([])
   const [busy,setBusy]=useState(false)
   const [copying,setCopying]=useState(false)
+  const [sendTo,setSendTo]=useState('')
+  const [sending,setSending]=useState(false)
+  const [sendMsg,setSendMsg]=useState('')
   const viewOrg=()=>{const m=document.cookie.match(/(?:^|; )preview-org=([^;]*)/);return m?decodeURIComponent(m[1]):null}
   useEffect(()=>{
     const v=viewOrg()
@@ -118,12 +121,47 @@ function InviteLetterPanel(){
   if(!tpl)return <div className="card p-6 mb-6 text-sm text-slate-400">Loading letter…</div>
   const cur=tpl[aud]
   const set=(patch:Partial<{subject:string;body:string}>)=>setTpl(t=>t?{...t,[aud]:{...t[aud],...patch}}:t)
-  async function save(reset:boolean){
+  async function save(reset:boolean,quiet=false){
     setBusy(true)
     const res=await fetch('/api/workers/invite-letter',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({audience:aud,viewOrgId:viewOrg(),...(reset?{reset:true}:{subject:cur.subject,body:cur.body})})})
     const d=res.ok?await res.json():null
-    if(d?.letter){setTpl(t=>t?{...t,[aud]:d.letter}:t);toast.success(reset?'Back to the default letter':'Letter saved')}else toast.error('Failed to save')
+    if(d?.letter){setTpl(t=>t?{...t,[aud]:d.letter}:t);if(!quiet)toast.success(reset?'Back to the default letter':'Letter saved')}else if(!quiet)toast.error('Failed to save')
     setBusy(false)
+    return !!d?.letter
+  }
+  // Send the on-screen letter straight from the panel (Bo). Recruit letters go out
+  // with the public join link; addresses already in the pool get their PERSONAL
+  // claim link via the existing onboard flow instead.
+  async function sendLetter(){
+    const emails=Array.from(new Set(sendTo.split(/[\s,;]+/).map(e=>e.trim().toLowerCase()).filter(e=>e.includes('@'))))
+    if(!emails.length){toast.error('Enter at least one email');return}
+    if(emails.length>10){toast.error('Max 10 addresses at a time');return}
+    setSending(true);setSendMsg('')
+    try{
+      await save(false,true) // what's on screen is what sends
+      if(aud==='staff'){
+        const byEmail=new Map(workers.filter(w=>w.email).map(w=>[String(w.email).toLowerCase(),w]))
+        const matched=emails.filter(e=>byEmail.has(e))
+        const missing=emails.filter(e=>!byEmail.has(e))
+        let sent=0,already=0
+        if(matched.length){
+          const res=await fetch('/api/workers/onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerIds:matched.map(e=>byEmail.get(e)!.id),mode:'send'})})
+          const d=res.ok?await res.json():null
+          for(const r of d?.results??[]){ if(r.status==='sent')sent++; else if(r.status==='already_registered')already++ }
+        }
+        const parts=[]
+        if(sent)parts.push(`Sent to ${sent}`)
+        if(already)parts.push(`${already} already have a login`)
+        if(missing.length)parts.push(`Not in your pool (switch to the recruit letter): ${missing.join(', ')}`)
+        setSendMsg(parts.join(' · ')||'Nothing sent')
+        if(sent){toast.success(`Invite sent to ${sent}`);setSendTo(missing.join(', '))}
+      }else{
+        const res=await fetch('/api/workers/invite-letter/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails,subject:cur.subject,body:cur.body,viewOrgId:viewOrg()})})
+        const d=res.ok?await res.json():null
+        if(d?.ok){toast.success(`Letter sent to ${d.results.length}`);setSendMsg(`Sent to ${emails.join(', ')} — with your live signup link`);setSendTo('')}
+        else{toast.error('Failed to send');setSendMsg('')}
+      }
+    }finally{setSending(false)}
   }
   async function copyLetter(){
     setCopying(true)
@@ -169,6 +207,14 @@ function InviteLetterPanel(){
             <option value="" disabled>Mention an event…</option>
             {events.map(ev=><option key={ev.id} value={ev.id}>{ev.name}</option>)}
           </select>}
+        </div>
+        <div className="border-t border-slate-100 pt-3 mt-1">
+          <label className="label">Send it now <span className="text-slate-400 font-normal">— {aud==='staff'?'each address gets their own login link':'goes out with your live signup link'}</span></label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input className="input flex-1" value={sendTo} onChange={e=>setSendTo(e.target.value)} placeholder="email@example.com, another@example.com" />
+            <button className="btn-primary btn-sm shrink-0" onClick={sendLetter} disabled={sending||!sendTo.trim()}>{sending?'Sending…':'Save + send'}</button>
+          </div>
+          {sendMsg&&<p className="text-xs text-slate-500 mt-1.5">{sendMsg}</p>}
         </div>
       </div>
     </div>
@@ -528,7 +574,7 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {tab==='roster'&&letterOpen&&<InviteLetterPanel/>}
+      {tab==='roster'&&letterOpen&&<InviteLetterPanel workers={workers}/>}
 
       {/* ── IMPORT ── */}
       {tab==='import'&&(
