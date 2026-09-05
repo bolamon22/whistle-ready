@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
-import { sendEmail, orgSender } from '@/lib/email'
+import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
 import { inviteLetterFor, mergeLetter, letterBodyHtml, escapeHtml } from '@/lib/inviteLetter'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL (stale in prod)
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
   `
   const results: { email: string; status: string }[] = []
   for (const to of emails) {
-    await sendEmail({ ...orgSender(org), to, subject, html })
+    await sendEmail({ ...orgSender(org), to, cc: OFFICE_CC, subject, html }) // office copy (Bo)
     results.push({ email: to, status: 'sent' })
   }
   return NextResponse.json({ ok: true, results })

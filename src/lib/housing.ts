@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { orgById } from '@/lib/org'
-import { sendEmail, orgSender } from '@/lib/email'
+import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
 
 // Team housing (Bo, Sep 5 2026): the org's housing company gets a weekly report of
 // which clubs still need hotel blocks, plus a magic-link board (no login) to log
@@ -240,6 +240,7 @@ export async function sendHousingReport(orgId: string): Promise<{ ok: boolean; e
   await sendEmail({
     ...orgSender(org),
     to: settings.contactEmail,
+    cc: OFFICE_CC, // office copy of every housing report (Bo)
     subject: `Housing report — ${needs} club${needs === 1 ? '' : 's'} still need${needs === 1 ? 's' : ''} hotels`,
     html: `
       <div style="font-family: sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px;">

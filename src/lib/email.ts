@@ -16,11 +16,18 @@ import sgMail from '@sendgrid/mail'
 const DEFAULT_FROM = process.env.EMAIL_FROM || process.env.INVITE_FROM_EMAIL || 'noreply@whistleready.app'
 const DEFAULT_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Whistle Ready'
 
+// Bo (Sep 5 2026): the Sunshine office inbox rides along on staff invites and the
+// housing report so there's a paper trail without opening SendGrid. One constant
+// so it's changeable in one place; if a second org ever onboards, move this into
+// per-org settings next to the sender identity.
+export const OFFICE_CC = 'info@sunshinelax.com'
+
 export type SendEmailArgs = {
   to: string | string[]
   subject: string
   html: string
   text?: string
+  cc?: string | string[]
   replyTo?: string
   /** Per-org sender. Only use a domain authenticated in SendGrid, or delivery fails. */
   fromEmail?: string
@@ -56,6 +63,14 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     .filter(Boolean)
   if (!recipients.length) return { ok: false, error: 'no recipient' }
 
+  // Same normalization for cc — and drop any cc that's already a recipient:
+  // SendGrid rejects the WHOLE send when an address appears in both to and cc.
+  const ccList = (Array.isArray(args.cc) ? args.cc : args.cc ? [args.cc] : [])
+    .flatMap(x => String(x ?? '').split(','))
+    .map(s => s.trim())
+    .filter(Boolean)
+    .filter(c => !recipients.some(r => r.toLowerCase() === c.toLowerCase()))
+
   try {
     sgMail.setApiKey(key)
     await sgMail.send({
@@ -64,6 +79,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       subject: args.subject,
       html: args.html,
       ...(args.text ? { text: args.text } : {}),
+      ...(ccList.length ? { cc: ccList } : {}),
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
     })
     return { ok: true }
