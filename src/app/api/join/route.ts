@@ -4,6 +4,7 @@ import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
 import { sendEmail, orgSender } from '@/lib/email'
+import { notifyStaffRegistered } from '@/lib/staffNotify'
 import { encrypt } from '@/lib/encrypt'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
@@ -225,6 +226,9 @@ export async function POST(req: NextRequest) {
         </div>
       `,
     })
+
+    // Office heads-up — Bo wants to know the moment someone registers
+    await notifyStaffRegistered({ org, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name) })
 
     return NextResponse.json({ ok: true, linked, workerId, events: joined.map(e => ({ name: e.name, logoUrl: e.logoUrl })) }, { status: 201 })
   } catch (e) {

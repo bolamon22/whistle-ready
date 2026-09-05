@@ -4,6 +4,7 @@ import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
+import { notifyStaffRegistered } from '@/lib/staffNotify'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -140,6 +141,12 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       }
 
       await client.execute({ sql: `UPDATE "StaffInvite" SET usedAt = datetime('now') WHERE token = ?`, args: [params.token] })
+
+      // Office heads-up — Bo wants to know the moment someone registers
+      await notifyStaffRegistered({
+        org: await orgById(workerOrgId), name: String(worker.name ?? claim.name ?? email), email,
+        phone: (worker.phone as string | null) ?? null, roles: parseWorkerRoles(worker), source: 'claim',
+      })
       return NextResponse.json({ ok: true, workerId: String(claim.workerId) })
     }
 
@@ -210,6 +217,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     // Mark invite as used
     await prisma.staffInvite.update({ where: { token: params.token }, data: { usedAt: new Date() } })
+
+    // Office heads-up — Bo wants to know the moment someone registers
+    await notifyStaffRegistered({ org: await orgById(orgId), name, email, phone: phone || null, roles: [defaultRole], source: 'invite' })
 
     return NextResponse.json({ ok: true, workerId })
   } catch (e) {
