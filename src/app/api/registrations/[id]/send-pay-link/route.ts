@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
+import { payLetterFor, mergePayLetter } from '@/lib/payLetter'
+import { letterBodyHtml } from '@/lib/inviteLetter'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -30,10 +32,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const org = await orgForTournament(reg.tournamentId)
     const teamsLabel = `${reg.teams.length} team${reg.teams.length !== 1 ? 's' : ''}`
 
+    // The note on top is the org-editable reminder letter (Bo) — previewed and
+    // optionally tweaked per send on the registrations page; the invoice table,
+    // Pay button, and fee note below it are fixed so the mechanics can't break.
+    let overrides: { subject?: unknown; body?: unknown } = {}
+    try { overrides = await req.json() } catch { /* no body = use the saved letter */ }
+    const letter = await payLetterFor((org as { id?: string } | null)?.id ?? null)
+    const subjectTpl = String(overrides.subject ?? '').trim().slice(0, 200) || letter.subject
+    const bodyTpl = String(overrides.body ?? '').trim().slice(0, 4000) || letter.body
+    const vals = {
+      contact: reg.clubContact || reg.clubName, club: reg.clubName, event: tName,
+      balance: fmt(balance), teams: teamsLabel, org: org?.name || 'the tournament team',
+    }
+    const subject = mergePayLetter(subjectTpl, vals)
+    const letterHtml = letterBodyHtml(mergePayLetter(bodyTpl, vals))
+    const letterText = mergePayLetter(bodyTpl, vals)
+
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
   <h2 style="color:#0f766e;margin-bottom:4px">${tName}</h2>
-  <p>Hi ${reg.clubContact || reg.clubName},</p>
-  <p>Here is the payment link for <strong>${reg.clubName}</strong> (${teamsLabel}) at ${tName}. You can pay your balance online by card &mdash; no need to re-register.</p>
+  ${letterHtml}
   <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
     <tr><td style="padding:6px 0;color:#64748b">Invoiced</td><td style="padding:6px 0;text-align:right">${fmt(due)}</td></tr>
     <tr><td style="padding:6px 0;color:#64748b">Paid</td><td style="padding:6px 0;text-align:right">${fmt(paid)}</td></tr>
@@ -45,16 +62,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   <p style="font-size:13px;color:#64748b">Pay by <strong>bank transfer (ACH) with no fee</strong>, or by card (3% processing fee &mdash; ${fmt(totalWithFee)} total). Prefer to pay by check? Just reply to this email.</p>
   <p style="font-size:13px;color:#64748b">If the button does not work, copy this link into your browser:<br>${link}</p>
 </div>`
-    const text = `Payment link for ${reg.clubName} (${teamsLabel}) at ${tName}\n\nInvoiced: ${fmt(due)}\nPaid: ${fmt(paid)}\nBalance due: ${fmt(balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee, ${fmt(totalWithFee)} total):\n${link}\n\nPrefer to pay by check? Just reply to this email.`
+    const text = `${letterText}\n\nInvoiced: ${fmt(due)}\nPaid: ${fmt(paid)}\nBalance due: ${fmt(balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee, ${fmt(totalWithFee)} total):\n${link}`
 
     const result = await sendEmail({
       to: reg.contactEmail,
-      subject: `Payment link for ${reg.clubName} — ${tName}`,
+      subject,
       html, text,
       ...orgSender(org),
     })
     if (!result.ok) return NextResponse.json({ error: result.error || 'Email failed to send' }, { status: 502 })
-    return NextResponse.json({ ok: true })
+
+    // Reminder date lives on the registration so the page can show "Reminded Sep 9"
+    // (raw column, house pattern — not in schema.prisma)
+    const now = new Date().toISOString()
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "lastPayReminderAt" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
+    try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "lastPayReminderAt" = ? WHERE id = ?`, now, reg.id) } catch { /* best effort */ }
+    return NextResponse.json({ ok: true, lastPayReminderAt: now })
   } catch (e: any) {
     console.error('send-pay-link failed:', e)
     return NextResponse.json({ error: e?.message || 'Failed to send' }, { status: 500 })

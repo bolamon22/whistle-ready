@@ -28,6 +28,7 @@ interface Registration {
   clubBasedIn: string; clubWebsite: string; numTeams: number
   needsHotel: string; paymentMethod: string; notes: string; createdAt: string
   invoiceAmount: number; discountAmount: number; discountNote: string
+  lastPayReminderAt?: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
 interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string }
@@ -655,16 +656,60 @@ export default function RegistrationsPage() {
   }
 
   const [sendingLink, setSendingLink] = useState<string | null>(null)
-  const emailPayLink = async (reg: Registration) => {
+  // Preview-before-send (Bo): the reminder note is org-editable with tokens; the
+  // invoice table + Pay button are fixed chrome the email always carries below it.
+  const [payReminderReg, setPayReminderReg] = useState<Registration | null>(null)
+  const [payLetter, setPayLetter] = useState<{ subject: string; body: string } | null>(null)
+  const [payOrgName, setPayOrgName] = useState('')
+  const [payEventName, setPayEventName] = useState('')
+  const [payLetterSaving, setPayLetterSaving] = useState(false)
+  const openPayReminder = (reg: Registration) => {
     if (!reg.contactEmail) { toast.error('No contact email on this registration'); return }
+    setPayReminderReg(reg)
+    if (!payLetter) {
+      fetch('/api/registrations/pay-letter').then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.letter) { setPayLetter({ subject: d.letter.subject, body: d.letter.body }); setPayOrgName(d.orgName || '') } })
+        .catch(() => {})
+    }
+    if (!payEventName) {
+      fetch(`/api/tournaments/${tournamentId}`).then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.name) setPayEventName(d.name) }).catch(() => {})
+    }
+  }
+  const mergePayPreview = (text: string, reg: Registration) => {
+    const paid = reg.payments.reduce((sum, p) => sum + p.amount, 0)
+    const bal = Math.max(0, reg.invoiceAmount - reg.discountAmount - paid)
+    return text
+      .replace(/\{contact\}/g, reg.clubContact || reg.clubName)
+      .replace(/\{club\}/g, reg.clubName)
+      .replace(/\{event\}/g, payEventName || 'the tournament')
+      .replace(/\{balance\}/g, fmt(bal))
+      .replace(/\{teams\}/g, `${reg.teams.length} team${reg.teams.length !== 1 ? 's' : ''}`)
+      .replace(/\{org\}/g, payOrgName || 'the tournament team')
+  }
+  const sendPayReminder = async () => {
+    const reg = payReminderReg
+    if (!reg || !payLetter) return
     setSendingLink(reg.id)
     try {
-      const res = await fetch(`/api/registrations/${reg.id}/send-pay-link`, { method: 'POST' })
+      const res = await fetch(`/api/registrations/${reg.id}/send-pay-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payLetter),
+      })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.ok) throw new Error(d.error || 'Send failed')
-      toast.success(`Payment link emailed to ${reg.contactEmail}`)
+      toast.success(`Payment reminder emailed to ${reg.contactEmail}`)
+      setPayReminderReg(null)
+      if (d.lastPayReminderAt) setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, lastPayReminderAt: d.lastPayReminderAt } : r))
     } catch (e: any) { toast.error(e?.message || 'Send failed') }
     finally { setSendingLink(null) }
+  }
+  const savePayLetter = async () => {
+    if (!payLetter) return
+    setPayLetterSaving(true)
+    const res = await fetch('/api/registrations/pay-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payLetter) })
+    if (res.ok) toast.success('Saved as your default reminder')
+    else toast.error('Failed to save')
+    setPayLetterSaving(false)
   }
 
   const [refundFor, setRefundFor] = useState<RegistrationPayment | null>(null)
@@ -1137,6 +1182,40 @@ export default function RegistrationsPage() {
         )}
 
         {/* Refund modal */}
+        {payReminderReg && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => sendingLink === null && setPayReminderReg(null)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-slate-800 mb-1">Payment reminder — {payReminderReg.clubName}</h3>
+              <p className="text-sm text-slate-500 mb-4">Goes to {payReminderReg.contactEmail}. {'{contact}'} {'{club}'} {'{event}'} {'{balance}'} {'{teams}'} and {'{org}'} fill in automatically; edits here apply to this send unless you save them as the default.</p>
+              {!payLetter ? <p className="text-sm text-slate-400 py-6 text-center">Loading letter…</p> : (
+                <>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Subject</label>
+                  <input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    value={payLetter.subject} onChange={e => setPayLetter(l => l ? { ...l, subject: e.target.value } : l)} />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Letter</label>
+                  <textarea className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[130px] resize-y focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    value={payLetter.body} onChange={e => setPayLetter(l => l ? { ...l, body: e.target.value } : l)} />
+                  <div className="mt-4">
+                    <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">PREVIEW — EXACTLY WHAT THEY GET</div>
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-700 space-y-2">
+                      <div className="font-semibold text-slate-900">{mergePayPreview(payLetter.subject, payReminderReg)}</div>
+                      {mergePayPreview(payLetter.body, payReminderReg).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
+                      <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">Invoiced / paid / balance table + the "Pay online" button appear here automatically</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-4">
+                    <button onClick={sendPayReminder} disabled={sendingLink !== null}
+                      className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{sendingLink ? 'Sending…' : 'Send reminder'}</button>
+                    <button onClick={savePayLetter} disabled={payLetterSaving}
+                      className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{payLetterSaving ? 'Saving…' : 'Save as default'}</button>
+                    <button onClick={() => setPayReminderReg(null)} className="text-sm text-slate-500 px-3 py-2">Cancel</button>
+                    {payReminderReg.lastPayReminderAt && <span className="text-xs text-slate-400 ml-auto">Last sent {new Date(payReminderReg.lastPayReminderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         {refundFor && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !refunding && setRefundFor(null)}>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
@@ -1754,8 +1833,9 @@ export default function RegistrationsPage() {
                       className="text-xs text-green-600 border border-green-300 hover:border-green-500 px-2.5 py-1 rounded-lg">+ Payment</button>
                     {balance > 0 && <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/pay/${reg.id}`); toast.success('Payment link copied') }}
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
-                    {balance > 0 && <button onClick={() => emailPayLink(reg)} disabled={sendingLink === reg.id}
-                      className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg disabled:opacity-50">{sendingLink === reg.id ? 'Sending…' : 'Email link'}</button>}
+                    {balance > 0 && <button onClick={() => openPayReminder(reg)} disabled={sendingLink === reg.id}
+                      className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg disabled:opacity-50">{sendingLink === reg.id ? 'Sending…' : 'Email reminder'}</button>}
+                    {reg.lastPayReminderAt && <span className="text-[11px] text-slate-400" title={new Date(reg.lastPayReminderAt).toLocaleString()}>Reminded {new Date(reg.lastPayReminderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                     {reg.qboInvoiceId ? (
                       <span className="inline-flex items-center gap-1 text-xs text-green-600 border border-green-200 bg-green-50 px-2.5 py-1 rounded-lg"><Check size={12} /> QB synced</span>
                     ) : (
