@@ -5,7 +5,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import { useOrg } from '@/lib/org-context'
 import { orgBaseUrl } from '@/lib/orgDomains'
-import { INVITE_TEMPLATES, RETURNING_TEMPLATE, eventsList, upcomingEvents } from '@/lib/inviteTemplates'
+import { INVITE_TEMPLATES, RETURNING_TEMPLATE, eventsList, upcomingEvents, type StoredTemplate } from '@/lib/inviteTemplates'
 
 interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string }
 interface Club {
@@ -51,21 +51,71 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   const [showTemplate, setShowTemplate] = useState(false)
   const [previewClub, setPreviewClub] = useState<Club | null>(null)
   const [templateKey, setTemplateKey] = useState(RETURNING_TEMPLATE.key)
-  function applyTemplate(key: string) {
-    const t = INVITE_TEMPLATES.find(x => x.key === key)
+  // Shipped letters until the org's saved ones come back (Bo can edit any of them
+  // and keep the edit, or save one of his own).
+  const [templates, setTemplates] = useState<StoredTemplate[]>(
+    INVITE_TEMPLATES.map(t => ({ ...t, builtIn: true, edited: false })))
+  const [savingTpl, setSavingTpl] = useState(false)
+  const [newName, setNewName] = useState<string | null>(null)
+  const activeTpl = templates.find(t => t.key === templateKey)
+  const tplDirty = !!activeTpl && (subject !== activeTpl.subject || body !== activeTpl.body)
+  const tplUrl = `/api/tournaments/${params.id}/returning-teams/templates`
+
+  function applyTemplate(key: string, list: StoredTemplate[] = templates) {
+    const t = list.find(x => x.key === key)
     if (!t) return
-    setTemplateKey(t.key); setSubject(t.subject); setBody(t.body)
+    setTemplateKey(t.key); setSubject(t.subject); setBody(t.body); setNewName(null)
+  }
+
+  /** Save over the letter that's open, or add one under a new name. */
+  async function saveTemplate(label?: string) {
+    if (!subject.trim() || !body.trim()) { toast.error('Subject and letter are both required'); return }
+    setSavingTpl(true)
+    try {
+      const res = await fetch(tplUrl, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: label ? undefined : templateKey, label: label ?? activeTpl?.label, subject, body }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data?.error || 'Could not save'); return }
+      setTemplates(data.templates); setTemplateKey(data.key); setNewName(null)
+      toast.success(label ? `Saved as "${label}"` : 'Saved')
+    } catch { toast.error('Could not save') } finally { setSavingTpl(false) }
+  }
+
+  /** Built-in → back to the shipped wording. His own → gone. */
+  async function dropTemplate() {
+    if (!activeTpl) return
+    setSavingTpl(true)
+    try {
+      const res = await fetch(`${tplUrl}?key=${encodeURIComponent(activeTpl.key)}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data?.error || 'Could not do that'); return }
+      const list: StoredTemplate[] = data.templates
+      setTemplates(list)
+      applyTemplate(list.some(t => t.key === activeTpl.key) ? activeTpl.key : RETURNING_TEMPLATE.key, list)
+      toast.success(activeTpl.builtIn ? 'Back to the original wording' : 'Deleted')
+    } catch { toast.error('Could not do that') } finally { setSavingTpl(false) }
   }
 
   useEffect(() => {
     fetch('/api/tournaments').then(r => r.json()).then((all: Tournament[]) => {
       setTournaments(all.filter(t => t.id !== params.id))
     })
-    fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(t => {
-      setThisTournament(t)
-      // Pre-fill tournament name in subject
-      setSubject(`Registration is open for ${t.name}`)
-    })
+    // The subject used to be pre-filled with the literal event name here. It isn't
+    // any more: {{tournamentName}} resolves to the same thing, and overwriting the
+    // subject would have clobbered whichever saved letter loads below.
+    fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(setThisTournament)
+    fetch(tplUrl).then(r => r.ok ? r.json() : null).then(d => {
+      const list: StoredTemplate[] = Array.isArray(d?.templates) && d.templates.length ? d.templates : []
+      if (!list.length) return
+      setTemplates(list)
+      // Open on the org's saved version of the default letter, not the shipped copy.
+      const first = list.find(t => t.key === RETURNING_TEMPLATE.key) ?? list[0]
+      setBody(prev => prev === DEFAULT_BODY ? first.body : prev)
+      setSubject(prev => prev === DEFAULT_SUBJECT ? first.subject : prev)
+      setTemplateKey(first.key)
+    }).catch(() => {})
     loadQueued()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id])
@@ -212,16 +262,17 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                   the whole season's schedule, or for a last-minute nudge (Bo) */}
               <div>
                 <div className="flex flex-wrap gap-1.5">
-                  {INVITE_TEMPLATES.map(t => (
+                  {templates.map(t => (
                     <button key={t.key} onClick={() => applyTemplate(t.key)} title={t.hint}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${templateKey === t.key ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}>
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 ${templateKey === t.key ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}>
                       {t.label}
+                      {t.edited && <span className={`w-1.5 h-1.5 rounded-full ${templateKey === t.key ? 'bg-teal-500' : 'bg-slate-300'}`} title="Saved by you" />}
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-slate-400 mt-2">
-                  {INVITE_TEMPLATES.find(t => t.key === templateKey)?.hint}
-                  <span className="text-slate-300"> · Picking one replaces the subject and body below — edit away, nothing sends until you say so.</span>
+                  {activeTpl?.hint}
+                  <span className="text-slate-300"> · Picking one replaces the subject and body below. A dot means it's your saved version.</span>
                 </p>
               </div>
 
@@ -246,8 +297,43 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                     <textarea rows={12} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-y font-mono"
                       value={body} onChange={e => setBody(e.target.value)} />
                   </div>
-                  <button onClick={() => applyTemplate(templateKey)}
-                    className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">Undo my edits to this template</button>
+                  {/* Keeping an edit (Bo) — save over this letter, or file it under a
+                      new name so the original stays where it was. */}
+                  {newName === null ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={() => saveTemplate()} disabled={savingTpl || !tplDirty}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${tplDirty ? 'border-teal-500 bg-teal-500 text-white hover:bg-teal-600' : 'border-slate-200 text-slate-300 cursor-default'}`}>
+                        {savingTpl ? 'Saving…' : tplDirty ? 'Save changes' : 'Saved'}
+                      </button>
+                      <button onClick={() => setNewName(`${activeTpl?.label ?? 'My letter'} copy`)} disabled={savingTpl}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:border-slate-300">
+                        Save as new…
+                      </button>
+                      {tplDirty && (
+                        <button onClick={() => applyTemplate(templateKey)}
+                          className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">Undo my edits</button>
+                      )}
+                      {activeTpl?.edited && !tplDirty && (
+                        <button onClick={dropTemplate} disabled={savingTpl}
+                          className="text-xs text-slate-400 hover:text-rose-600 underline underline-offset-2">
+                          {activeTpl.builtIn ? 'Reset to the original' : 'Delete this letter'}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && newName.trim()) saveTemplate(newName.trim()); if (e.key === 'Escape') setNewName(null) }}
+                        placeholder="Name this letter" maxLength={60}
+                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      <button onClick={() => newName.trim() && saveTemplate(newName.trim())} disabled={savingTpl || !newName.trim()}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-teal-500 bg-teal-500 text-white hover:bg-teal-600 disabled:opacity-40">
+                        {savingTpl ? 'Saving…' : 'Save'}
+                      </button>
+                      <button onClick={() => setNewName(null)}
+                        className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">Cancel</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Preview */}

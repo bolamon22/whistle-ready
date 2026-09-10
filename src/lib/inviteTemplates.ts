@@ -16,6 +16,14 @@ export type InviteTemplate = {
   body: string
 }
 
+/** A template as the page sees it: shipped, or saved by the org over the top. */
+export type StoredTemplate = InviteTemplate & {
+  /** Ships with the app (can be reset) vs. one the org wrote (can be deleted). */
+  builtIn: boolean
+  /** Has a saved version — either an edit of a built-in or their own letter. */
+  edited: boolean
+}
+
 export const INVITE_TEMPLATES: InviteTemplate[] = [
   {
     key: 'returning',

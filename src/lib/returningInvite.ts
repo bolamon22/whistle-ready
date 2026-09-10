@@ -3,6 +3,7 @@ import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { RETURNING_TEMPLATE, eventsList, upcomingEvents } from '@/lib/inviteTemplates'
+import { listInviteTemplates } from '@/lib/inviteTemplateStore'
 
 // "Come back and play" invites to clubs from past events, lifted out of the route
 // so the scheduler can run the same send later (Bo, Sep 10). One email per
@@ -59,9 +60,6 @@ export async function runReturningInvite(a: {
       : fmtDate(tournament.startDate)
     : 'TBD'
 
-  const subjectTemplate = a.subjectTemplate || RETURNING_DEFAULT_SUBJECT
-  const bodyTemplate = a.bodyTemplate || RETURNING_DEFAULT_BODY
-
   // Cold outreach to club directors -- it has to come from the tournament
   // company, not noreply@whistleready.app. Falls back to the platform sender
   // when the org has no SendGrid-authenticated address.
@@ -71,6 +69,23 @@ export async function runReturningInvite(a: {
   // ...and the link has to look like theirs too: sunshineeventsgroup.com/tournaments/...
   // rather than whistleready.app, which the director has no reason to trust.
   const regUrl = `${orgBaseUrl(org?.slug, APP_URL)}/tournaments/${a.tournamentId}/register`
+
+  // Whatever the caller sent wins. With nothing to go on, fall back to the org's
+  // SAVED default letter before the shipped one — otherwise "save my template"
+  // wouldn't hold for a send that arrived without wording attached.
+  let subjectTemplate = a.subjectTemplate || ''
+  let bodyTemplate = a.bodyTemplate || ''
+  if ((!subjectTemplate || !bodyTemplate) && org?.id) {
+    try {
+      const saved = (await listInviteTemplates(org.id)).find(t => t.key === RETURNING_TEMPLATE.key)
+      if (saved) {
+        subjectTemplate = subjectTemplate || saved.subject
+        bodyTemplate = bodyTemplate || saved.body
+      }
+    } catch { /* shipped wording below */ }
+  }
+  subjectTemplate = subjectTemplate || RETURNING_DEFAULT_SUBJECT
+  bodyTemplate = bodyTemplate || RETURNING_DEFAULT_BODY
 
   // {{ourEvents}} — the rest of the season, for the letter that invites a club to
   // more than one weekend. orgId is a raw column, so this can't go through Prisma's
