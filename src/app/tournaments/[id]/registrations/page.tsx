@@ -689,8 +689,9 @@ export default function RegistrationsPage() {
   const [commSending, setCommSending] = useState(false)
   const [commSaving, setCommSaving] = useState(false)
   const commLog = (reg: Registration): Record<string, string> => { try { return reg.commEmailLog ? JSON.parse(reg.commEmailLog) : {} } catch { return {} } }
-  const openComm = (reg?: Registration) => {
+  const openComm = (reg?: Registration, kind?: CommKind) => {
     setCommSel(new Set(reg ? [reg.id] : registrations.filter(r => r.contactEmail).map(r => r.id)))
+    if (kind) setCommKind(kind)
     setCommOpen(true)
     if (!commLetters) {
       fetch('/api/registrations/comm-letter').then(r => r.ok ? r.json() : null)
@@ -765,8 +766,8 @@ export default function RegistrationsPage() {
     const res = await fetch(`/api/registrations/${reg.id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resolve' }) })
     const d = await res.json().catch(() => ({}))
     if (res.ok && d.ok) {
-      toast.success('Handled — filed into this registration\u2019s notes')
-      setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, confirmStatus: '', confirmNote: '', notes: d.notes ?? r.notes } : r))
+      toast.success('Change made — filed into notes; they still need to confirm')
+      setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, confirmStatus: d.status ?? 'awaiting', confirmNote: '', notes: d.notes ?? r.notes } : r))
     } else toast.error('Failed')
   }
   const saveCommLetter = async () => {
@@ -1961,6 +1962,11 @@ export default function RegistrationsPage() {
                             <div className="text-sm font-semibold text-amber-600 inline-flex items-center gap-1" title={reg.confirmAt ? new Date(reg.confirmAt).toLocaleString() : ''}>
                               <AlertTriangle size={13} />Change
                             </div>
+                          ) : reg.confirmStatus === 'awaiting' ? (
+                            <button onClick={() => openComm(reg, 'confirm')} title="Change made — ask them to confirm the updated list"
+                              className="text-sm font-semibold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1">
+                              <RefreshCw size={12} />Re-confirm
+                            </button>
                           ) : (
                             <div className="text-sm text-slate-300">{commLog(reg).confirm ? 'Waiting' : '—'}</div>
                           )}
@@ -1980,8 +1986,8 @@ export default function RegistrationsPage() {
                     {reg.confirmStatus === 'change_requested' && reg.confirmNote && (
                       <div className="w-full flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
                         <p className="flex-1 text-xs text-amber-900 whitespace-pre-line">{reg.confirmNote}</p>
-                        <button onClick={() => resolveConfirm(reg)} title="Clears the flag and files the request into this registration's notes, stamped with both dates"
-                          className="text-[11px] font-bold text-amber-700 hover:text-amber-900 shrink-0 border border-amber-300 rounded-md px-2 py-0.5">Handled</button>
+                        <button onClick={() => resolveConfirm(reg)} title="Files this request into the registration's notes and marks the club as needing to confirm the updated list"
+                          className="text-[11px] font-bold text-amber-700 hover:text-amber-900 shrink-0 border border-amber-300 rounded-md px-2 py-0.5 whitespace-nowrap">Change made</button>
                       </div>
                     )}
                     {reg.qboInvoiceId ? (
@@ -2021,11 +2027,11 @@ export default function RegistrationsPage() {
                                 {t.division && <span className="text-xs text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full flex-shrink-0">{t.division}</span>}
                               </div>
                               {t.clubName && t.clubName !== reg.clubName && <div className="text-xs text-slate-500">{t.clubName}</div>}
-                              <div className="mt-1 text-xs">
+                              <Link href={`/tournaments/${tournamentId}/player-waivers?team=${encodeURIComponent(t.teamName)}`} className="mt-1 block text-xs">
                                 <span className="text-slate-400">Waivers </span>
-                                <span className={(t.waiverCount ?? 0) > 0 ? 'font-semibold text-slate-700' : 'font-semibold text-amber-600'}>{t.waiverCount ?? 0}</span>
-                                <span className="text-slate-400"> player{(t.waiverCount ?? 0) === 1 ? '' : 's'}</span>
-                              </div>
+                                <span className={(t.waiverCount ?? 0) > 0 ? 'font-semibold text-teal-700' : 'font-semibold text-amber-600'}>{t.waiverCount ?? 0}</span>
+                                <span className="text-slate-400"> player{(t.waiverCount ?? 0) === 1 ? '' : 's'} &rsaquo;</span>
+                              </Link>
                               {(t.coachName || t.coachPhone || t.coachEmail) && (
                                 <div className="mt-1.5 text-slate-600 space-y-0.5">
                                   {t.coachName && <div><span className="text-slate-400">Coach </span>{t.coachName}</div>}
@@ -2053,8 +2059,10 @@ export default function RegistrationsPage() {
                                 <td className="px-3 py-2">{t.clubName}</td>
                                 <td className="px-3 py-2 font-medium">{t.teamName}</td>
                                 <td className="px-3 py-2">{t.division}</td>
-                                <td className="px-3 py-2 text-center" title="Players who completed the online waiver for this team">
-                                  <span className={`inline-block min-w-[26px] rounded-full px-2 py-0.5 text-xs font-bold ${(t.waiverCount ?? 0) > 0 ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>{t.waiverCount ?? 0}</span>
+                                <td className="px-3 py-2 text-center">
+                                  <Link href={`/tournaments/${tournamentId}/player-waivers?team=${encodeURIComponent(t.teamName)}`}
+                                    title={`See the ${t.teamName} players who completed the waiver`}
+                                    className={`inline-block min-w-[26px] rounded-full px-2 py-0.5 text-xs font-bold hover:ring-2 hover:ring-teal-200 ${(t.waiverCount ?? 0) > 0 ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>{t.waiverCount ?? 0}</Link>
                                 </td>
                                 <td className="px-3 py-2">{t.coachName}</td>
                                 <td className="px-3 py-2">{t.coachPhone}</td>
@@ -2070,10 +2078,10 @@ export default function RegistrationsPage() {
                         const empty = reg.teams.filter(t => (t.waiverCount ?? 0) === 0).length
                         return (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 -mt-1">
-                            <span><span className="font-semibold text-slate-700">{total}</span> waiver{total === 1 ? '' : 's'} completed for {reg.clubName}</span>
+                            <Link href={`/tournaments/${tournamentId}/player-waivers?q=${encodeURIComponent(reg.clubName)}`} className="hover:underline"><span className="font-semibold text-slate-700">{total}</span> waiver{total === 1 ? '' : 's'} completed for {reg.clubName}</Link>
                             {!!reg.waiverUnassigned && <span className="text-amber-600">· {reg.waiverUnassigned} didn&rsquo;t pick a team</span>}
                             {!!empty && <span className="text-amber-600">· {empty} team{empty === 1 ? '' : 's'} with none yet</span>}
-                            <button onClick={() => openComm(reg)} className="text-teal-600 hover:underline font-semibold">Send a waiver reminder</button>
+                            <button onClick={() => openComm(reg, 'waiver')} className="text-teal-600 hover:underline font-semibold">Send a waiver reminder</button>
                           </div>
                         )
                       })()}

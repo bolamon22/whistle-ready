@@ -180,6 +180,8 @@ export default function PlayerWaiverEntries() {
   const [scan, setScan] = useState<Sub | null>(null)
   const [scanErr, setScanErr] = useState('')
   useEffect(() => { try { setScanId(String(new URLSearchParams(window.location.search).get('player') || '')) } catch {} }, [])
+  // ?team=<teamName> preselects that roster — the registrations page links waiver counts here
+  useEffect(() => { try { const t = new URLSearchParams(window.location.search).get('team'); if (t) setTeam(t) } catch {} }, [])
   useEffect(() => {
     if (!scanId) { setScan(null); setScanErr(''); return }
     let cancelled = false

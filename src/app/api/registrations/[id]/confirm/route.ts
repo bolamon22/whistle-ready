@@ -46,9 +46,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!reg || reg.deletedAt) return NextResponse.json({ error: 'This link is no longer valid' }, { status: 404 })
   const now = new Date().toISOString()
 
-  // Staff-side: clear the flag once the change has been handled — but keep the
-  // record (Bo): the request text files into the registration's notes with a
-  // handled-on stamp before the flag comes down.
+  // Staff-side: mark the requested change as made. The club is NOT confirmed by
+  // this (Bo) — they go to 'awaiting' until they re-confirm the updated list.
+  // The request text files into the registration's notes first, so there's a
+  // record after the flag comes down.
   if (action === 'resolve') {
     const gate = await requireStaff()
     if (!gate.ok) return gate.res
@@ -63,8 +64,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       notes = ((reg.notes ?? '').trim() ? `${String(reg.notes).trim()}\n${entry}` : entry)
       await prisma.teamRegistration.update({ where: { id: params.id }, data: { notes } })
     }
-    await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "confirmStatus" = '', "confirmNote" = '', "confirmAt" = ? WHERE id = ?`, now, params.id)
-    return NextResponse.json({ ok: true, notes })
+    await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "confirmStatus" = 'awaiting', "confirmNote" = '', "confirmAt" = ? WHERE id = ?`, now, params.id)
+    return NextResponse.json({ ok: true, notes, status: 'awaiting' })
   }
 
   if (action === 'confirm') {

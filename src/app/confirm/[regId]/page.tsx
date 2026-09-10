@@ -83,6 +83,16 @@ export default function ConfirmTeamsPage({ params }: { params: { regId: string }
                     Already confirmed{data.confirmAt ? ` on ${new Date(data.confirmAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''} — you can still send a change below.
                   </p>
                 )}
+                {data.confirmStatus === 'change_requested' && (
+                  <p className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                    We have your change request and we&rsquo;re working on it — we&rsquo;ll let you know once the list below is updated.
+                  </p>
+                )}
+                {data.confirmStatus === 'awaiting' && (
+                  <p className="text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mb-4">
+                    We made the change you asked for. Please give the list one more look and confirm.
+                  </p>
+                )}
                 <p className="text-sm text-slate-600 mb-3">Here's what we have for {data.clubName}. Take a quick look:</p>
                 <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 mb-5">
                   {data.teams.length ? data.teams.map((t, i) => (
