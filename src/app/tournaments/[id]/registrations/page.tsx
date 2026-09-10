@@ -33,6 +33,7 @@ interface Registration {
   commEmailLog?: string
   confirmStatus?: string; confirmNote?: string; confirmAt?: string
   waiverUnassigned?: number
+  hasAccount?: boolean; accountRole?: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
 interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string }
@@ -680,8 +681,8 @@ export default function RegistrationsPage() {
 
   // Pre-tournament club emails (Bo): waiver push, schedule announcement, team
   // confirmation — to the whole field or hand-picked clubs, same preview-first flow.
-  type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment'
-  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder' }
+  type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment' | 'account'
+  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder', account: 'Set up your account' }
   const [commOpen, setCommOpen] = useState(false)
   const [commKind, setCommKind] = useState<CommKind>('waiver')
   const [commLetters, setCommLetters] = useState<Record<CommKind, { subject: string; body: string }> | null>(null)
@@ -725,6 +726,7 @@ export default function RegistrationsPage() {
         : '• (each team\u2019s registered player count fills in here)')
       .replace(/\{playerCount\}/g, '(count)')
       .replace(/\{confirmLink\}/g, `${origin}/confirm/${reg.id}`)
+      .replace(/\{accountLink\}/g, `${origin}/claim/…`)
   }
   // The payment kind edits the SAME letter the per-club modal uses; the other
   // three edit their commLetters entry.
@@ -747,8 +749,9 @@ export default function RegistrationsPage() {
       const sent = (d.results || []).filter((r: any) => r.status === 'sent')
       const noEmail = (d.results || []).filter((r: any) => r.status === 'no_email').length
       const noBalance = (d.results || []).filter((r: any) => r.status === 'no_balance').length
+      const hadAccount = (d.results || []).filter((r: any) => r.status === 'has_account').length
       const failed = (d.results || []).filter((r: any) => r.status === 'failed').length
-      toast.success(`Sent to ${sent.length} club${sent.length !== 1 ? 's' : ''}${noEmail ? ` · ${noEmail} had no email` : ''}${noBalance ? ` · ${noBalance} already paid` : ''}${failed ? ` · ${failed} failed` : ''}`, { duration: 5000 })
+      toast.success(`Sent to ${sent.length} club${sent.length !== 1 ? 's' : ''}${noEmail ? ` · ${noEmail} had no email` : ''}${noBalance ? ` · ${noBalance} already paid` : ''}${hadAccount ? ` · ${hadAccount} already have a login` : ''}${failed ? ` · ${failed} failed` : ''}`, { duration: 5000 })
       const sentIds = new Set(sent.map((r: any) => r.regId))
       setRegistrations(rs => rs.map(r => {
         if (!sentIds.has(r.id)) return r
@@ -1259,8 +1262,8 @@ export default function RegistrationsPage() {
               <h3 className="font-bold text-slate-800 mb-1">Email clubs</h3>
               <p className="text-sm text-slate-500 mb-3">Goes to each club's team director — they pass it on to their families. {'{contact}'} {'{club}'} {'{event}'} {'{teamsList}'} and the links fill in per club.</p>
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {(['waiver', 'schedule', 'confirm', 'payment'] as const).map(k => (
-                  <button key={k} onClick={() => setCommKind(k)}
+                {(['waiver', 'schedule', 'confirm', 'payment', 'account'] as const).map(k => (
+                  <button key={k} onClick={() => { setCommKind(k); if (k === 'account') setCommSel(sel => new Set([...sel].filter(id => !registrations.find(r => r.id === id)?.hasAccount))) }}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${commKind === k ? 'bg-teal-600 text-white border-teal-600' : 'text-slate-600 border-slate-300 hover:border-slate-400'}`}>
                     {COMM_KIND_LABELS[k]}
                   </button>
@@ -1270,7 +1273,7 @@ export default function RegistrationsPage() {
                 <div className="flex items-baseline justify-between mb-1">
                   <label className="text-xs font-medium text-slate-600">Send to ({commSel.size} of {registrations.length} clubs)</label>
                   <span className="text-xs">
-                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set(registrations.filter(r => r.contactEmail).map(r => r.id)))}>All</button>
+                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set(registrations.filter(r => r.contactEmail && (commKind !== 'account' || !r.hasAccount)).map(r => r.id)))}>All</button>
                     <span className="text-slate-300 mx-1">·</span>
                     <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set())}>None</button>
                   </span>
@@ -1282,6 +1285,7 @@ export default function RegistrationsPage() {
                         onChange={e => setCommSel(sel => { const n = new Set(sel); if (e.target.checked) { n.add(r.id) } else { n.delete(r.id) } return n })} />
                       <span className="flex-1 truncate text-slate-700">{r.clubName}</span>
                       {commKind === 'payment' && <span className={`text-[10px] shrink-0 ${regBalance(r) > 0 ? 'text-amber-600 font-semibold' : 'text-slate-300'}`}>{regBalance(r) > 0 ? `owes ${fmt(regBalance(r))}` : 'paid'}</span>}
+                      {commKind === 'account' && <span className={`text-[10px] shrink-0 ${r.hasAccount ? 'text-slate-300' : 'text-amber-600 font-semibold'}`}>{r.hasAccount ? 'has login' : 'no login'}</span>}
                       {commKind === 'payment'
                         ? (r.lastPayReminderAt && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(r.lastPayReminderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)
                         : (commLog(r)[commKind] && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(commLog(r)[commKind]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)}
@@ -1310,7 +1314,13 @@ export default function RegistrationsPage() {
                         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-700 space-y-2">
                           <div className="font-semibold text-slate-900">{merge(commCur.subject, sample)}</div>
                           {merge(commCur.body, sample).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
-                          {commKind !== 'confirm' && <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{commKind === 'payment' ? 'Invoiced / paid / balance table + the "Pay online" button appear here automatically' : commKind === 'waiver' ? '"Open the player waiver" button appears here automatically' : '"View the schedule" button appears here automatically'}</div>}
+                          <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{({
+                            payment: 'Invoiced / paid / balance table + the "Pay online" button appear here automatically',
+                            waiver: '"Open the player waiver" button appears here automatically',
+                            schedule: '"View the schedule" button appears here automatically',
+                            confirm: '"Review + confirm your teams" button appears here automatically — their own private link',
+                            account: '"Set up my account" button appears here automatically — a single-use link tied to this registration',
+                          } as Record<CommKind, string>)[commKind]}</div>
                         </div>
                       </div>
                     )
@@ -1915,6 +1925,12 @@ export default function RegistrationsPage() {
                         : <span className="h-9 w-9 rounded-lg bg-slate-100 border border-slate-200 text-slate-400 text-sm font-semibold flex items-center justify-center flex-shrink-0">{(reg.clubName || reg.clubContact || '?').charAt(0).toUpperCase()}</span>}
                       <div className="min-w-0">
                         <div className="font-semibold text-slate-800 truncate">{reg.clubName || reg.clubContact}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {reg.clubContact && <span className="text-sm font-medium text-slate-600 truncate">{reg.clubContact}</span>}
+                          {reg.contactEmail && (reg.hasAccount
+                            ? <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full" title="This contact has a Whistle Ready login"><Check size={10} /> Account</span>
+                            : <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full" title="No login yet — send them the account setup letter">No account</span>)}
+                        </div>
                         <div className="text-sm text-slate-500 truncate">{reg.contactEmail} · {reg.contactPhone}</div>
                         <div className="text-xs text-slate-400 mt-0.5">Registered {reg.createdAt ? new Date(reg.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
                         {(() => {
@@ -1983,6 +1999,10 @@ export default function RegistrationsPage() {
                     {balance > 0 && <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/pay/${reg.id}`); toast.success('Payment link copied') }}
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
                     <button onClick={() => openComm(reg)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><Mail size={12} /> Email</button>
+                    {!reg.hasAccount && reg.contactEmail && (
+                      <button onClick={() => openComm(reg, 'account')} title="Email them a link to set up their Whistle Ready login"
+                        className="text-xs text-amber-700 border border-amber-300 bg-amber-50 hover:border-amber-400 px-2.5 py-1 rounded-lg">Account setup</button>
+                    )}
                     {reg.confirmStatus === 'change_requested' && reg.confirmNote && (
                       <div className="w-full flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
                         <p className="flex-1 text-xs text-amber-900 whitespace-pre-line">{reg.confirmNote}</p>

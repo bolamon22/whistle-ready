@@ -64,6 +64,18 @@ export async function GET(req: NextRequest) {
     // stored "Club — Team" tag has to be split before anything matches.
     const counts = await waiverCounts(tournamentId)
 
+    // Does the club contact have a Whistle Ready login? Matched by email, same
+    // way the claim flow and the Staff Pool's App column do it.
+    const accounts = new Map<string, string>()
+    try {
+      const emails = [...new Set(registrations.map((r: any) => String(r.contactEmail || '').trim().toLowerCase()).filter(Boolean))]
+      if (emails.length) {
+        const us: any[] = await prisma.$queryRawUnsafe(
+          `SELECT lower(email) AS email, role FROM "User" WHERE lower(email) IN (${emails.map(() => '?').join(',')})`, ...emails)
+        for (const u of us) accounts.set(String(u.email), String(u.role || ''))
+      }
+    } catch { /* no account info — the card just won't show a badge */ }
+
     return NextResponse.json(registrations.map((r: any) => {
       const sum = summarizeClub(counts, r.clubName, r.teams || [])
       return {
@@ -72,6 +84,8 @@ export async function GET(req: NextRequest) {
         bookings: bookingsById.get(r.id) ?? [],
         teams: (r.teams || []).map((t: any, i: number) => ({ ...t, waiverCount: sum.perTeam[i] ?? 0 })),
         waiverUnassigned: sum.unassigned,
+        hasAccount: accounts.has(String(r.contactEmail || '').trim().toLowerCase()),
+        accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase()) || '',
       }
     }))
   } catch {

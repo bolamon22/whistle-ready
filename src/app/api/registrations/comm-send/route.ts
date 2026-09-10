@@ -8,6 +8,7 @@ import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
+import { issueClaimToken, claimUrl } from '@/lib/claim'
 
 // Send one of the pre-tournament club letters to selected registrations (or the
 // whole field) — Bo: "send to the group or separately". Per-club token merge,
@@ -71,12 +72,25 @@ export async function POST(req: NextRequest) {
   const waiverLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/player-waiver`)
   const scheduleLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
   const eventDates = fmtDates(t.startDate as unknown as string, t.endDate as unknown as string)
+  // The account letter only makes sense for contacts without a login yet.
+  const hasAccount = new Set<string>()
+  if (kind === 'account') {
+    try {
+      const emails = [...new Set(regs.map(r => String(r.contactEmail || '').trim().toLowerCase()).filter(Boolean))]
+      if (emails.length) {
+        const us: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+          `SELECT lower(email) AS email FROM "User" WHERE lower(email) IN (${emails.map(() => '?').join(',')})`, ...emails)
+        for (const u of us) hasAccount.add(String(u.email))
+      }
+    } catch { /* can't tell — send anyway; the claim page handles an existing account */ }
+  }
+
   const kindMeta = kind === 'payment' ? null : COMM_KINDS[kind]
   const cta = kindMeta?.cta ?? null
   const sharedCtaUrl = cta === 'waiver' ? waiverLink : cta === 'schedule' ? scheduleLink : ''
   const now = new Date().toISOString()
 
-  const results: { regId: string; status: 'sent' | 'no_email' | 'no_balance' | 'failed' }[] = []
+  const results: { regId: string; status: 'sent' | 'no_email' | 'no_balance' | 'has_account' | 'failed' }[] = []
   for (const reg of regs) {
     if (!reg.contactEmail) { results.push({ regId: reg.id, status: 'no_email' }); continue }
 
@@ -101,9 +115,20 @@ export async function POST(req: NextRequest) {
       continue
     }
 
+    if (kind === 'account' && hasAccount.has(String(reg.contactEmail).trim().toLowerCase())) {
+      results.push({ regId: reg.id, status: 'has_account' }); continue
+    }
+
     const counts = kind === 'waiver' ? playerCountsFor(reg) : null
-    // The confirm button is per club — their registration id IS the key
-    const ctaUrl = cta === 'confirm' ? tournamentAbs(org?.slug, `/confirm/${reg.id}`) : sharedCtaUrl
+    // Confirm + account links are per club: their registration id (confirm) or a
+    // freshly minted single-use claim token (account) is the key.
+    let ctaUrl = sharedCtaUrl
+    if (cta === 'confirm') ctaUrl = tournamentAbs(org?.slug, `/confirm/${reg.id}`)
+    else if (cta === 'account') {
+      const token = await issueClaimToken(reg.id)
+      if (!token) { results.push({ regId: reg.id, status: 'failed' }); continue }
+      ctaUrl = claimUrl(tournamentAbs(org?.slug, ''), token)
+    }
     const vals = {
       contact: reg.clubContact || reg.clubName,
       club: reg.clubName,
@@ -117,6 +142,7 @@ export async function POST(req: NextRequest) {
       playerCounts: counts ? counts.text : '',
       playerCount: counts ? String(counts.total) : '',
       confirmLink: cta === 'confirm' ? ctaUrl : tournamentAbs(org?.slug, `/confirm/${reg.id}`),
+      accountLink: cta === 'account' ? ctaUrl : '',
     }
     const subject = mergeCommLetter(subjectTpl, vals)
     const bodyText = mergeCommLetter(bodyTpl, vals)

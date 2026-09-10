@@ -8,9 +8,9 @@ import { prisma } from '@/lib/db'
 // Same pattern as the pay/invite letters: AppSetting commLetter:{kind}:{orgId},
 // tokens merged at send time, fixed CTA button below the editable note.
 
-export type CommKind = 'waiver' | 'schedule' | 'confirm'
+export type CommKind = 'waiver' | 'schedule' | 'confirm' | 'account'
 
-export const COMM_KINDS: Record<CommKind, { label: string; cta: 'waiver' | 'schedule' | 'confirm' | null; ctaLabel: string; defaults: { subject: string; body: string } }> = {
+export const COMM_KINDS: Record<CommKind, { label: string; cta: 'waiver' | 'schedule' | 'confirm' | 'account' | null; ctaLabel: string; defaults: { subject: string; body: string } }> = {
   waiver: {
     label: 'Player waiver reminder',
     cta: 'waiver',
@@ -37,6 +37,19 @@ Please forward this to your parents and players today — each family fills it o
 Share it with your families — it's live, so if anything shifts it always shows the latest version. Standings and scores will post there during the event too.
 
 See you out there.`,
+    },
+  },
+  account: {
+    label: 'Set up your account',
+    cta: 'account',
+    ctaLabel: 'Set up my account',
+    defaults: {
+      subject: 'Set up your {org} account for {event}',
+      body: `Hi {contact} — {club} is registered for {event}, but there's no login on your account yet.
+
+Setting one up takes a minute and gives you one place for everything: your roster and player waivers, your balance and payment link, and the schedule the moment it posts.
+
+Use the button below — it's tied to your registration, so there's nothing to look up.`,
     },
   },
   confirm: {
@@ -70,5 +83,5 @@ export async function commLetterFor(orgId: string | null, kind: CommKind): Promi
 }
 
 export function mergeCommLetter(text: string, vals: Record<string, string>): string {
-  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount|confirmLink)\}/g, (_m, k: string) => vals[k] ?? '')
+  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount|confirmLink|accountLink)\}/g, (_m, k: string) => vals[k] ?? '')
 }
