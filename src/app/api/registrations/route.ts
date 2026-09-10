@@ -59,7 +59,26 @@ export async function GET(req: NextRequest) {
         bookingsById.get(b.regId)!.push({ id: b.id, hotel: b.hotel, rooms: Number(b.rooms) || 0, nights: Number(b.nights) || 0 })
       }
     } catch { /* table not there yet */ }
-    return NextResponse.json(registrations.map((r: any) => ({ ...r, ...((byId.get(r.id) as any) || {}), bookings: bookingsById.get(r.id) ?? [] })))
+    // Completed player waivers per team (Bo: show each team's count in the
+    // expanded card). Matched club-scoped on lower/trimmed names, same keying the
+    // waiver reminder email uses; '__other' = signed up without picking a team.
+    const waiverByKey = new Map<string, number>()
+    try {
+      const wr: any[] = await prisma.$queryRawUnsafe(
+        `SELECT lower(trim(clubName)) AS c, lower(trim(teamName)) AS tm, COUNT(*) AS n
+         FROM "OrgFormSubmission" WHERE tournamentId = ? AND formType = 'player'
+         GROUP BY lower(trim(clubName)), lower(trim(teamName))`, tournamentId)
+      for (const w of wr) waiverByKey.set(`${String(w.c)}|${String(w.tm)}`, Number(w.n) || 0)
+    } catch { /* waiver table not created yet — counts read as zero */ }
+    const wCount = (club: string, team: string) => waiverByKey.get(`${String(club || '').trim().toLowerCase()}|${String(team || '').trim().toLowerCase()}`) ?? 0
+
+    return NextResponse.json(registrations.map((r: any) => ({
+      ...r,
+      ...((byId.get(r.id) as any) || {}),
+      bookings: bookingsById.get(r.id) ?? [],
+      teams: (r.teams || []).map((t: any) => ({ ...t, waiverCount: wCount(t.clubName || r.clubName, t.teamName) })),
+      waiverUnassigned: wCount(r.clubName, '__other'),
+    })))
   } catch {
     return NextResponse.json(registrations)
   }
