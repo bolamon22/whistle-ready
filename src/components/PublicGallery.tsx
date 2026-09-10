@@ -91,7 +91,7 @@ export default function PublicGallery({ photos, tournaments, covers = {} }: { ph
         {current.map((ph, i) => (
           <button key={ph.id || i} onClick={() => setActive(i)} className="group block rounded-2xl overflow-hidden border border-slate-200 bg-white text-left">
             <div className="aspect-square overflow-hidden">
-              <img src={ph.url} alt={ph.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              <img src={ph.url} alt={ph.caption || ''} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
             </div>
             {(ph.caption || ph.credit) && (
               <div className="px-3 py-2">
@@ -130,7 +130,7 @@ function AlbumCard({ name, count, cover, onClick }: { name: string; count: numbe
   return (
     <button onClick={onClick} className="group text-left rounded-2xl overflow-hidden border border-slate-200 bg-white">
       <div className="aspect-[4/3] overflow-hidden relative">
-        {cover ? <img src={cover.url} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="w-full h-full bg-slate-100" />}
+        {cover ? <img src={cover.url} alt={name} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="w-full h-full bg-slate-100" />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
           <p className="font-semibold leading-tight">{name}</p>

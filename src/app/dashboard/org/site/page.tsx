@@ -156,18 +156,51 @@ function OrgSiteEditorInner() {
 
   const logoImg = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, logo: u })); else toast.error('Upload failed') }
   const heroImg = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, hero: { ...v.hero, imageUrl: u } })); else toast.error('Upload failed') }
+  // The cap is per folder, not per gallery: each tournament holds up to 100 photos, and the
+  // untagged pile gets its own 100 so a fresh upload batch always has somewhere to land.
   const GALLERY_MAX = 100
+  const galCount = (tid: string) => c.gallery.filter(g => (g.tournamentId || '') === tid).length
+  const galName = (tid: string) => tid ? (tournaments.find((t: any) => String(t.id) === tid)?.name || 'that tournament') : 'No tournament'
+
   const galleryAdd = async (files?: FileList | null) => {
     if (!files || !files.length) return
-    const room = GALLERY_MAX - c.gallery.length
-    if (room <= 0) { toast.error(`Gallery is full — ${GALLERY_MAX} photos max.`); return }
+    // Uploading while a tournament is filtered drops the photos straight into it — that's
+    // the upload → select all → apply tournament dance the folders were being built with.
+    const target = (galFilterT === 'all' || galFilterT === '__other') ? '' : galFilterT
+    const room = GALLERY_MAX - galCount(target)
+    if (room <= 0) { toast.error(`${galName(target)} is full — ${GALLERY_MAX} photos max per tournament.`); return }
     let list = Array.from(files)
-    if (list.length > room) { toast.error(`Only ${room} more photo${room === 1 ? '' : 's'} can be added (${GALLERY_MAX} max).`); list = list.slice(0, room) }
-    for (const f of list) { const u = await uploadImage(f); if (u) setC(v => ({ ...v, gallery: [...v.gallery, { id: uid(), url: u, caption: '', credit: '', tournamentId: '' }] })); else toast.error('Upload failed') }
+    if (list.length > room) { toast.error(`Only ${room} more photo${room === 1 ? '' : 's'} fit in ${galName(target)} (${GALLERY_MAX} max).`); list = list.slice(0, room) }
+    for (const f of list) { const u = await uploadImage(f); if (u) setC(v => ({ ...v, gallery: [...v.gallery, { id: uid(), url: u, caption: '', credit: '', tournamentId: target }] })); else toast.error('Upload failed') }
+    if (target) toast.success(`Added to ${galName(target)}.`)
   }
-  const galPatch = (id: string, patch: Partial<Photo>) => setC(v => ({ ...v, gallery: v.gallery.map(g => g.id === id ? { ...g, ...patch } : g) }))
+
+  /** Would moving `moving` photos into `tid` overflow that folder? Returns an error message, or ''. */
+  const galMoveError = (tid: string, moving: number) => {
+    if (moving <= 0) return ''   // re-tagging photos already in this folder changes nothing
+    const room = Math.max(0, GALLERY_MAX - galCount(tid))
+    return moving > room
+      ? `${galName(tid)} holds ${GALLERY_MAX} photos — room for ${room} more, not ${moving}.`
+      : ''
+  }
+  const galPatch = (id: string, patch: Partial<Photo>) => {
+    if (patch.tournamentId !== undefined) {
+      const cur = c.gallery.find(g => g.id === id)
+      const to = patch.tournamentId || ''
+      if (cur && (cur.tournamentId || '') !== to) { const err = galMoveError(to, 1); if (err) { toast.error(err); return } }
+    }
+    setC(v => ({ ...v, gallery: v.gallery.map(g => g.id === id ? { ...g, ...patch } : g) }))
+  }
   const galToggle = (id: string) => setGalSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const galApply = (patch: Partial<Photo>) => { setC(v => ({ ...v, gallery: v.gallery.map(g => (g.id && galSel.has(g.id)) ? { ...g, ...patch } : g) })) }
+  const galApply = (patch: Partial<Photo>) => {
+    if (patch.tournamentId !== undefined) {
+      const to = patch.tournamentId || ''
+      const moving = c.gallery.filter(g => g.id && galSel.has(g.id) && (g.tournamentId || '') !== to).length
+      const err = galMoveError(to, moving); if (err) { toast.error(err); return }
+      if (moving > 0) toast.success(`${moving} photo${moving === 1 ? '' : 's'} moved to ${galName(to)}.`)
+    }
+    setC(v => ({ ...v, gallery: v.gallery.map(g => (g.id && galSel.has(g.id)) ? { ...g, ...patch } : g) }))
+  }
   const galSetCover = (g: Photo) => { if (!g.tournamentId || !g.id) return; const tid = g.tournamentId; const pid = g.id; setC(v => ({ ...v, galleryCovers: { ...v.galleryCovers, [tid]: (v.galleryCovers[tid] === pid ? '' : pid) } })) }
   const galKnownIds = new Set(tournaments.map((t: any) => String(t.id)))
   const galView = c.gallery.filter(g => {
@@ -318,8 +351,11 @@ function OrgSiteEditorInner() {
       {/* Photo gallery */}
       <Sec isOpen={!!openSec.gallery} onToggle={() => setOpenSec(o => ({ ...o, gallery: !o.gallery }))} title="Photo gallery" summary={`${c.gallery.length} photo${c.gallery.length === 1 ? '' : 's'}`}>
         <div className="flex justify-between items-center mb-2">
-          <span className="text-xs text-slate-400">{c.gallery.length}/{GALLERY_MAX} photos</span>
-          <label className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 cursor-pointer"><Plus size={14} /> Add photos<input type="file" accept="image/*" multiple className="hidden" onChange={e => galleryAdd(e.target.files)} /></label>
+          <span className="text-xs text-slate-400">
+            {c.gallery.length} photo{c.gallery.length === 1 ? '' : 's'}
+            {galFilterT !== 'all' && <> · {galCount(galFilterT === '__other' ? '' : galFilterT)}/{GALLERY_MAX} in {galName(galFilterT === '__other' ? '' : galFilterT)}</>}
+          </span>
+          <label className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 cursor-pointer"><Plus size={14} /> Add photos{galFilterT !== 'all' && galFilterT !== '__other' ? ` to ${galName(galFilterT)}` : ''}<input type="file" accept="image/*" multiple className="hidden" onChange={e => galleryAdd(e.target.files)} /></label>
         </div>
         {c.gallery.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-3">
