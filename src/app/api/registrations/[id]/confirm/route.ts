@@ -46,12 +46,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!reg || reg.deletedAt) return NextResponse.json({ error: 'This link is no longer valid' }, { status: 404 })
   const now = new Date().toISOString()
 
-  // Staff-side: clear the flag once the change has been handled
+  // Staff-side: clear the flag once the change has been handled — but keep the
+  // record (Bo): the request text files into the registration's notes with a
+  // handled-on stamp before the flag comes down.
   if (action === 'resolve') {
     const gate = await requireStaff()
     if (!gate.ok) return gate.res
+    const cur: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+      `SELECT "confirmNote", "confirmAt" FROM "TeamRegistration" WHERE id = ?`, params.id)
+    const note = String(cur[0]?.confirmNote || '').trim()
+    let notes: string | null = reg.notes ?? null
+    if (note) {
+      const asked = String(cur[0]?.confirmAt || '')
+      const d = (iso: string) => { const x = new Date(iso); return isNaN(x.getTime()) ? '' : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
+      const entry = `[Change request${asked ? ` ${d(asked)}` : ''} — handled ${d(now)}] ${note}`
+      notes = ((reg.notes ?? '').trim() ? `${String(reg.notes).trim()}\n${entry}` : entry)
+      await prisma.teamRegistration.update({ where: { id: params.id }, data: { notes } })
+    }
     await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "confirmStatus" = '', "confirmNote" = '', "confirmAt" = ? WHERE id = ?`, now, params.id)
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, notes })
   }
 
   if (action === 'confirm') {

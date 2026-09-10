@@ -799,8 +799,11 @@ export default function RegistrationsPage() {
   }
   const resolveConfirm = async (reg: Registration) => {
     const res = await fetch(`/api/registrations/${reg.id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resolve' }) })
-    if (res.ok) { toast.success('Marked handled'); setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, confirmStatus: '', confirmNote: '' } : r)) }
-    else toast.error('Failed')
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.ok) {
+      toast.success('Handled — filed into this registration\u2019s notes')
+      setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, confirmStatus: '', confirmNote: '', notes: d.notes ?? r.notes } : r))
+    } else toast.error('Failed')
   }
   const saveCommLetter = async () => {
     if (!commCur) return
@@ -2032,7 +2035,7 @@ export default function RegistrationsPage() {
                     {reg.confirmStatus === 'change_requested' && reg.confirmNote && (
                       <div className="w-full flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
                         <p className="flex-1 text-xs text-amber-900 whitespace-pre-line">{reg.confirmNote}</p>
-                        <button onClick={() => resolveConfirm(reg)} title="Clear this after you've made the change"
+                        <button onClick={() => resolveConfirm(reg)} title="Clears the flag and files the request into this registration's notes, stamped with both dates"
                           className="text-[11px] font-bold text-amber-700 hover:text-amber-900 shrink-0 border border-amber-300 rounded-md px-2 py-0.5">Handled</button>
                       </div>
                     )}
