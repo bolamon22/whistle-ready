@@ -80,6 +80,16 @@ export const LEGACY_JUNK_PREFIXES = [
   '/testimonials-category/', '/trending/',
 ]
 
+/**
+ * Public base URL for an org: its own domain when it has one, else the platform.
+ * Links we mail to a club director have to read as the tournament company's, not
+ * whistleready.app — the recipient has never heard of the platform.
+ */
+export function orgBaseUrl(slug?: string | null, fallback = 'https://whistleready.app'): string {
+  const domain = slug ? DOMAIN_BY_SLUG[String(slug)] : ''
+  return domain ? `https://${domain}` : fallback
+}
+
 export function hostOnly(host?: string | null): string {
   return (host || '').toLowerCase().split(':')[0]
 }

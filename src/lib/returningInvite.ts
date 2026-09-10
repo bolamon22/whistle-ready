@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
+import { orgBaseUrl } from '@/lib/orgDomains'
 
 // "Come back and play" invites to clubs from past events, lifted out of the route
 // so the scheduler can run the same send later (Bo, Sep 10). One email per
@@ -25,7 +26,7 @@ Please don't hesitate to reach out with any questions.
 
 Best regards,
 Bo Lamon
-Whistle Ready`
+{{orgName}}`
 
 function applyVars(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -61,7 +62,6 @@ export async function runReturningInvite(a: {
   })
   if (!tournament) return { ok: false, error: 'Not found', status: 404 }
 
-  const regUrl = `${APP_URL}/tournaments/${a.tournamentId}/register`
   const fmtDate = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}/${y}` }
   const dateStr = tournament.startDate
     ? tournament.endDate && tournament.endDate !== tournament.startDate
@@ -78,6 +78,9 @@ export async function runReturningInvite(a: {
   const org = await orgForTournament(a.tournamentId)
   const sender = orgSender(org)
   const fromName = org?.name || tournament.name || 'Whistle Ready'
+  // ...and the link has to look like theirs too: sunshineeventsgroup.com/tournaments/...
+  // rather than whistleready.app, which the director has no reason to trust.
+  const regUrl = `${orgBaseUrl(org?.slug, APP_URL)}/tournaments/${a.tournamentId}/register`
 
   let sent = 0
   const errors: string[] = []
@@ -93,6 +96,7 @@ export async function runReturningInvite(a: {
       lastYearTeams: String(club.numTeams ?? '—'),
       lastYearDivisions: club.divisions?.join(', ') ?? '—',
       lastEvent: club.lastEvent || '',
+      orgName: fromName,
     }
 
     const subject = applyVars(subjectTemplate, vars)

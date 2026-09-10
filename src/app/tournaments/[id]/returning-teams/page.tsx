@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
+import { useOrg } from '@/lib/org-context'
+import { orgBaseUrl } from '@/lib/orgDomains'
 
 interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string }
 interface Club {
@@ -26,13 +28,14 @@ Please don't hesitate to reach out with any questions.
 
 Best regards,
 Bo Lamon
-Whistle Ready`
+{{orgName}}`
 
 function applyVars(template: string, vars: Record<string, string>) {
   return Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), template)
 }
 
 export default function ReturningTeamsPage({ params }: { params: { id: string } }) {
+  const org = useOrg()   // signs the letter and picks the domain the register link uses
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [thisTournament, setThisTournament] = useState<Tournament | null>(null)
   const [sourceIds, setSourceIds] = useState<string[]>([])
@@ -86,10 +89,12 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
       contactName: club?.contactName ?? '[Contact Name]',
       tournamentName: thisTournament?.name ?? '[Tournament]',
       dates: dateStr,
-      registerUrl: `${typeof window !== 'undefined' ? window.location.origin : 'https://whistleready.app'}/tournaments/${params.id}/register`,
+      // Same link the send builds, so the preview isn't a different URL to the real one.
+      registerUrl: `${orgBaseUrl(org?.slug)}/tournaments/${params.id}/register`,
       lastYearTeams: String(club?.numTeams ?? '—'),
       lastYearDivisions: club?.divisions?.join(', ') ?? '—',
       lastEvent: club?.lastEvent || '[Last Event]',
+      orgName: org?.name || '[Your organization]',
     }
   }
 
@@ -210,7 +215,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
               {/* Variables reference */}
               <div className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-500">
                 <span className="font-semibold text-slate-600">Available variables: </span>
-                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{registerUrl}}','{{lastYearTeams}}','{{lastYearDivisions}}','{{lastEvent}}'].map(v => (
+                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{registerUrl}}','{{lastYearTeams}}','{{lastYearDivisions}}','{{lastEvent}}','{{orgName}}'].map(v => (
                   <code key={v} className="bg-white border border-slate-200 rounded px-1.5 py-0.5 mx-0.5 text-teal-700">{v}</code>
                 ))}
               </div>
