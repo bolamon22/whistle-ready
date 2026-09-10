@@ -12,10 +12,14 @@ export async function GET(req: Request) {
   const viewOrgId = new URL(req.url).searchParams.get('viewOrgId')
   const orgId = gate.role === 'admin' ? String(viewOrgId || gate.orgId || '') : String(gate.orgId || '')
   if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 400 })
-  const [waiver, schedule, confirm, org] = await Promise.all([
-    commLetterFor(orgId, 'waiver'), commLetterFor(orgId, 'schedule'), commLetterFor(orgId, 'confirm'), orgById(orgId),
-  ])
-  return NextResponse.json({ letters: { waiver, schedule, confirm }, orgName: org?.name || '' })
+  // Every kind, straight off COMM_KINDS — the account letter was missing when this
+  // was a hand-written list, so its pill sat on "Loading letter…" forever.
+  const kinds = Object.keys(COMM_KINDS) as CommKind[]
+  const org = await orgById(orgId)
+  const loaded = await Promise.all(kinds.map(k => commLetterFor(orgId, k)))
+  const letters: Record<string, { subject: string; body: string; custom: boolean }> = {}
+  kinds.forEach((k, i) => { letters[k] = loaded[i] })
+  return NextResponse.json({ letters, orgName: org?.name || '' })
 }
 
 export async function PUT(req: Request) {

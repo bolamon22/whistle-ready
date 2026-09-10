@@ -45,11 +45,16 @@ See you out there.`,
     ctaLabel: 'Set up my account',
     defaults: {
       subject: 'Set up your {org} account for {event}',
-      body: `Hi {contact} — {club} is registered for {event}, but there's no login on your account yet.
+      body: `Hi {contact} — {club} is registered for {event}, but nobody has set up a login for it yet. It takes about a minute, and it's how you'll run your event with us.
 
-Setting one up takes a minute and gives you one place for everything: your roster and player waivers, your balance and payment link, and the schedule the moment it posts.
+Once you're in you can:
+• See your roster and check which players still owe a waiver
+• Check your balance and pay online
+• Get the schedule and live scores the moment they post
 
-Use the button below — it's tied to your registration, so there's nothing to look up.`,
+Use the button below — the link is tied to your registration, so there's nothing to look up. You'll just pick a password.
+
+Questions? Just reply to this email and we'll take care of you.`,
     },
   },
   confirm: {
