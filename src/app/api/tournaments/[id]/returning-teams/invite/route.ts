@@ -21,6 +21,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { clubs } = body
   if (!clubs?.length) return NextResponse.json({ error: 'clubs required' }, { status: 400 })
 
+  // One invite per address, whatever the caller sent (Bo: pulling several past
+  // events must never mail the same director twice). The page already merges
+  // clubs across events; this is the backstop for a stale list or a double-click.
+  const seen = new Set<string>()
+  const recipients = clubs.filter(c => {
+    const key = String(c.contactEmail || '').trim().toLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const skippedDupes = clubs.length - recipients.length
+  if (!recipients.length) return NextResponse.json({ error: 'No usable email addresses' }, { status: 400 })
+
   const tournament = await prisma.tournament.findUnique({
     where: { id: params.id },
     select: { name: true, startDate: true, endDate: true },
@@ -69,7 +82,7 @@ Whistle Ready`
   let sent = 0
   const errors: string[] = []
 
-  for (const club of clubs) {
+  for (const club of recipients) {
     const vars: Record<string, string> = {
       clubName: club.clubName,
       contactName: club.contactName || club.clubName,
@@ -78,6 +91,7 @@ Whistle Ready`
       registerUrl: regUrl,
       lastYearTeams: String(club.numTeams ?? '—'),
       lastYearDivisions: club.divisions?.join(', ') ?? '—',
+      lastEvent: (club as { lastEvent?: string }).lastEvent || '',
     }
 
     const subject = applyVars(subjectTemplate, vars)
@@ -116,5 +130,5 @@ Whistle Ready`
     }
   }
 
-  return NextResponse.json({ sent, errors })
+  return NextResponse.json({ sent, errors, skippedDupes })
 }

@@ -8,6 +8,7 @@ interface Tournament { id: string; name: string; startDate: string; endDate: str
 interface Club {
   id: string; clubName: string; contactName: string; contactEmail: string
   numTeams: number; divisions: string[]; registered: boolean
+  sources?: string[]; lastEvent?: string
 }
 
 const DEFAULT_SUBJECT = `{{tournamentName}} — Registration Now Open`
@@ -34,7 +35,7 @@ function applyVars(template: string, vars: Record<string, string>) {
 export default function ReturningTeamsPage({ params }: { params: { id: string } }) {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [thisTournament, setThisTournament] = useState<Tournament | null>(null)
-  const [sourceId, setSourceId] = useState('')
+  const [sourceIds, setSourceIds] = useState<string[]>([])
   const [clubs, setClubs] = useState<Club[]>([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<'all' | 'registered' | 'not-registered'>('all')
@@ -73,42 +74,46 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
       registerUrl: `${typeof window !== 'undefined' ? window.location.origin : 'https://whistleready.app'}/tournaments/${params.id}/register`,
       lastYearTeams: String(club?.numTeams ?? '—'),
       lastYearDivisions: club?.divisions?.join(', ') ?? '—',
+      lastEvent: club?.lastEvent || '[Last Event]',
     }
   }
 
-  async function loadComparison(fromId: string) {
-    if (!fromId) { setClubs([]); return }
+  async function loadComparison(fromIds: string[]) {
+    if (!fromIds.length) { setClubs([]); return }
     setLoading(true); setSelected(new Set())
-    const res = await fetch(`/api/tournaments/${params.id}/returning-teams?from=${fromId}`)
+    const res = await fetch(`/api/tournaments/${params.id}/returning-teams?from=${fromIds.join(',')}`)
     const data = await res.json()
     setClubs(Array.isArray(data) ? data : [])
     setLoading(false)
   }
+  function toggleSource(id: string) {
+    setSourceIds(prev => { const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]; loadComparison(next); return next })
+  }
 
-  function toggleSelect(clubName: string) {
-    setSelected(prev => { const s = new Set(prev); s.has(clubName) ? s.delete(clubName) : s.add(clubName); return s })
+  function toggleSelect(id: string) {
+    setSelected(prev => { const s = new Set(prev); if (s.has(id)) { s.delete(id) } else { s.add(id) } return s })
   }
 
   function selectAllUnregistered() {
-    setSelected(new Set(clubs.filter(c => !c.registered).map(c => c.clubName)))
+    setSelected(new Set(clubs.filter(c => !c.registered).map(c => c.id)))
   }
 
   async function sendInvites() {
-    const toSend = clubs.filter(c => selected.has(c.clubName) && !c.registered)
+    const toSend = clubs.filter(c => selected.has(c.id) && !c.registered)
     if (!toSend.length) { toast.error('No unregistered clubs selected'); return }
     setSending(true)
     const res = await fetch(`/api/tournaments/${params.id}/returning-teams/invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        clubs: toSend.map(c => ({ clubName: c.clubName, contactEmail: c.contactEmail, contactName: c.contactName, numTeams: c.numTeams, divisions: c.divisions })),
+        clubs: toSend.map(c => ({ clubName: c.clubName, contactEmail: c.contactEmail, contactName: c.contactName, numTeams: c.numTeams, divisions: c.divisions, lastEvent: c.lastEvent })),
         subjectTemplate: subject,
         bodyTemplate: body,
       }),
     })
     const data = await res.json()
     if (res.ok) {
-      toast.success(`Sent ${data.sent} invite${data.sent !== 1 ? 's' : ''}${data.errors?.length ? ` (${data.errors.length} failed)` : ''}`)
+      toast.success(`Sent ${data.sent} invite${data.sent !== 1 ? 's' : ''}${data.skippedDupes ? ` · ${data.skippedDupes} duplicate address${data.skippedDupes !== 1 ? 'es' : ''} skipped` : ''}${data.errors?.length ? ` (${data.errors.length} failed)` : ''}`, { duration: 5000 })
       setSelected(new Set())
     } else toast.error('Failed to send invites')
     setSending(false)
@@ -117,7 +122,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   const filtered = clubs.filter(c => filter === 'all' ? true : filter === 'registered' ? c.registered : !c.registered)
   const unregisteredCount = clubs.filter(c => !c.registered).length
   const registeredCount = clubs.filter(c => c.registered).length
-  const selectedUnregistered = clubs.filter(c => selected.has(c.clubName) && !c.registered)
+  const selectedUnregistered = clubs.filter(c => selected.has(c.id) && !c.registered)
   const previewVars = getVars(previewClub ?? clubs.find(c => !c.registered))
 
   return (
@@ -136,16 +141,32 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
           </Link>
         </div>
 
-        {/* Source picker */}
+        {/* Source picker — any number of past events; clubs are deduped across them */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-5">
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Compare against which tournament?</label>
-          <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-            value={sourceId} onChange={e => { setSourceId(e.target.value); loadComparison(e.target.value) }}>
-            <option value="">— Select a previous tournament —</option>
-            {tournaments.sort((a, b) => b.startDate.localeCompare(a.startDate)).map(t => (
-              <option key={t.id} value={t.id}>{t.name}{t.startDate ? ` (${t.startDate})` : ''}</option>
+          <div className="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
+            <label className="block text-sm font-semibold text-slate-700">Pull teams from which tournaments?</label>
+            <div className="text-xs">
+              <button className="text-teal-600 hover:underline font-semibold"
+                onClick={() => { const all = tournaments.map(t => t.id); setSourceIds(all); loadComparison(all) }}>All</button>
+              <span className="text-slate-300 mx-1.5">·</span>
+              <button className="text-teal-600 hover:underline font-semibold"
+                onClick={() => { setSourceIds([]); setClubs([]) }}>None</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-56 overflow-y-auto">
+            {[...tournaments].sort((a, b) => b.startDate.localeCompare(a.startDate)).map(t => (
+              <label key={t.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer text-sm transition-colors ${sourceIds.includes(t.id) ? 'border-teal-400 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <input type="checkbox" checked={sourceIds.includes(t.id)} onChange={() => toggleSource(t.id)} />
+                <span className="flex-1 truncate">{t.name}</span>
+                {t.startDate && <span className="text-xs text-slate-400 shrink-0">{t.startDate.slice(0, 7)}</span>}
+              </label>
             ))}
-          </select>
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            {sourceIds.length > 1
+              ? `Pulling from ${sourceIds.length} events — a club that played several only appears once, and only gets one invite.`
+              : 'Pick as many past events as you like — clubs that played more than one are merged into a single invite.'}
+          </p>
         </div>
 
         {/* Email template editor */}
@@ -165,7 +186,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
               {/* Variables reference */}
               <div className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-500">
                 <span className="font-semibold text-slate-600">Available variables: </span>
-                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{registerUrl}}','{{lastYearTeams}}','{{lastYearDivisions}}'].map(v => (
+                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{registerUrl}}','{{lastYearTeams}}','{{lastYearDivisions}}','{{lastEvent}}'].map(v => (
                   <code key={v} className="bg-white border border-slate-200 rounded px-1.5 py-0.5 mx-0.5 text-teal-700">{v}</code>
                 ))}
               </div>
@@ -216,9 +237,9 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
 
         {loading && <div className="text-center py-16 text-slate-400">Loading…</div>}
 
-        {!loading && sourceId && clubs.length === 0 && (
+        {!loading && sourceIds.length > 0 && clubs.length === 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
-            No team registrations found in that tournament.
+            No team registrations found in those tournaments.
           </div>
         )}
 
@@ -274,10 +295,15 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                       <td className="px-4 py-3">
                         {!club.registered && (
                           <input type="checkbox" className="w-4 h-4 accent-teal-600 cursor-pointer"
-                            checked={selected.has(club.clubName)} onChange={() => toggleSelect(club.clubName)} />
+                            checked={selected.has(club.id)} onChange={() => toggleSelect(club.id)} />
                         )}
                       </td>
-                      <td className="px-4 py-3"><div className="font-semibold text-slate-800">{club.clubName}</div></td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-800">{club.clubName}</div>
+                        {sourceIds.length > 1 && !!club.sources?.length && (
+                          <div className="text-[11px] text-slate-400 mt-0.5">{club.sources.join(' · ')}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="text-slate-700">{club.contactName}</div>
                         <div className="text-slate-400 text-xs">{club.contactEmail}</div>
