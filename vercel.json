@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/housing/report", "schedule": "0 12 * * 1,4" }
+    { "path": "/api/housing/report", "schedule": "0 12 * * 1,4" },
+    { "path": "/api/registrations/comm-cron", "schedule": "*/15 * * * *" }
   ]
 }

@@ -689,11 +689,28 @@ export default function RegistrationsPage() {
   const [commSel, setCommSel] = useState<Set<string>>(new Set())
   const [commSending, setCommSending] = useState(false)
   const [commSaving, setCommSaving] = useState(false)
+  // Send now, or queue it — the cron runs the identical send later (Bo)
+  const [commWhen, setCommWhen] = useState<'now' | 'later'>('now')
+  const [commAt, setCommAt] = useState('')
+  const [scheduled, setScheduled] = useState<any[]>([])
+  const loadScheduled = () => {
+    fetch(`/api/registrations/comm-schedule?tournamentId=${tournamentId}`).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.scheduled) setScheduled(d.scheduled) }).catch(() => {})
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tournamentId) loadScheduled() }, [tournamentId])
+  const cancelScheduled = async (id: string) => {
+    const res = await fetch(`/api/registrations/comm-schedule?id=${id}&tournamentId=${tournamentId}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Canceled'); setScheduled(s => s.filter(x => x.id !== id)) }
+    else toast.error('Could not cancel — it may have already gone out')
+  }
   const commLog = (reg: Registration): Record<string, string> => { try { return reg.commEmailLog ? JSON.parse(reg.commEmailLog) : {} } catch { return {} } }
   const openComm = (reg?: Registration, kind?: CommKind) => {
     setCommSel(new Set(reg ? [reg.id] : registrations.filter(r => r.contactEmail).map(r => r.id)))
     if (kind) setCommKind(kind)
+    setCommWhen('now'); setCommAt('')
     setCommOpen(true)
+    loadScheduled()
     if (!commLetters) {
       fetch('/api/registrations/comm-letter').then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.letters) { setCommLetters(d.letters); if (d.orgName) setPayOrgName(o => o || d.orgName) } })
@@ -738,14 +755,22 @@ export default function RegistrationsPage() {
   const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0))
   const sendComm = async () => {
     if (!commCur || commSel.size === 0) return
+    if (commWhen === 'later' && !commAt) { toast.error('Pick a date and time'); return }
     setCommSending(true)
     try {
+      const sendAtIso = commWhen === 'later' && commAt ? new Date(commAt).toISOString() : ''
       const res = await fetch('/api/registrations/comm-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [...commSel], ...commCur }),
+        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [...commSel], ...commCur, ...(sendAtIso ? { sendAt: sendAtIso } : {}) }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.ok) throw new Error(d.error || 'Send failed')
+      if (d.scheduled) {
+        toast.success(`Scheduled for ${new Date(d.scheduled.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`, { duration: 5000 })
+        setScheduled(s => [...s, d.scheduled].sort((a, b) => a.sendAt.localeCompare(b.sendAt)))
+        setCommOpen(false)
+        return
+      }
       const sent = (d.results || []).filter((r: any) => r.status === 'sent')
       const noEmail = (d.results || []).filter((r: any) => r.status === 'no_email').length
       const noBalance = (d.results || []).filter((r: any) => r.status === 'no_balance').length
@@ -1113,7 +1138,8 @@ export default function RegistrationsPage() {
           <button onClick={() => downloadCSV(registrations)} disabled={!registrations.length} className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Download size={15} /> CSV</button>
           <Link href={`/tournaments/${tournamentId}/register`} target="_blank" className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><ExternalLink size={15} /> Public form</Link>
           {activeTab === 'team' && <button onClick={() => openComm()} disabled={!registrations.length}
-            className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Mail size={15} /> Email clubs</button>}
+            className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Mail size={15} /> Email clubs
+            {scheduled.length > 0 && <span className="ml-0.5 text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-1.5 py-0.5">{scheduled.length} queued</span>}</button>}
         </div>
 
         {/* Import panel */}
@@ -1325,13 +1351,44 @@ export default function RegistrationsPage() {
                       </div>
                     )
                   })()}
-                  <div className="flex flex-wrap items-center gap-2 mt-4">
+                  <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100">
+                    <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden">
+                      {(['now', 'later'] as const).map(w => (
+                        <button key={w} onClick={() => setCommWhen(w)}
+                          className={`text-xs font-semibold px-3 py-2 ${commWhen === w ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                          {w === 'now' ? 'Send now' : 'Schedule'}
+                        </button>
+                      ))}
+                    </div>
+                    {commWhen === 'later' && (
+                      <input type="datetime-local" value={commAt} onChange={e => setCommAt(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
                     <button onClick={sendComm} disabled={commSending || commSel.size === 0}
-                      className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{commSending ? 'Sending…' : `Send to ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`}</button>
+                      className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{commSending ? (commWhen === 'later' ? 'Scheduling…' : 'Sending…') : commWhen === 'later' ? `Schedule for ${commSel.size} club${commSel.size !== 1 ? 's' : ''}` : `Send to ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`}</button>
                     <button onClick={saveCommLetter} disabled={commSaving}
                       className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{commSaving ? 'Saving…' : 'Save as default'}</button>
                     <button onClick={() => setCommOpen(false)} className="text-sm text-slate-500 px-3 py-2">Cancel</button>
                   </div>
+                  {scheduled.length > 0 && (
+                    <div className="mt-5 border-t border-slate-100 pt-3">
+                      <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">SCHEDULED</div>
+                      <div className="space-y-1">
+                        {scheduled.map(sc => (
+                          <div key={sc.id} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                            <span className="font-semibold text-slate-700">{COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind}</span>
+                            <span className="text-slate-400">·</span>
+                            <span>{sc.regIds.length} club{sc.regIds.length !== 1 ? 's' : ''}</span>
+                            <span className="text-slate-400">·</span>
+                            <span>{new Date(sc.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                            <button onClick={() => cancelScheduled(sc.id)} className="ml-auto text-slate-400 hover:text-red-500 font-semibold">Cancel</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
