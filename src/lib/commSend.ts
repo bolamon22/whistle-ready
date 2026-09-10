@@ -15,7 +15,7 @@ import { issueClaimToken, claimUrl } from '@/lib/claim'
 
 export type SendKind = CommKind | 'payment'
 export type SendStatus = 'sent' | 'no_email' | 'no_balance' | 'has_account' | 'failed'
-export type SendResult = { regId: string; status: SendStatus }
+export type SendResult = { regId: string; club: string; status: SendStatus }
 
 const fmtDates = (a?: string | null, b?: string | null) => {
   const f = (d?: string | null) => { if (!d) return ''; const x = new Date(d); return isNaN(x.getTime()) ? '' : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
@@ -34,6 +34,9 @@ export async function runCommSend(args: {
   /** Blank = whatever the org has saved for this letter at send time. */
   subject?: string
   body?: string
+  /** Email a receipt here when the run finishes — the scheduler passes the office
+   *  inbox so Bo can see a queued send actually went out. */
+  notifyTo?: string
 }): Promise<{ ok: true; sentAt: string; results: SendResult[] } | { ok: false; error: string; status: number }> {
   const { tournamentId, kind } = args
   const regIds = args.regIds.map(x => String(x)).filter(Boolean)
@@ -98,8 +101,10 @@ export async function runCommSend(args: {
   const now = new Date().toISOString()
 
   const results: SendResult[] = []
+  // The first email that actually goes out is kept as the receipt's copy.
+  let sample: { subject: string; html: string; to: string } | null = null
   for (const reg of regs) {
-    if (!reg.contactEmail) { results.push({ regId: reg.id, status: 'no_email' }); continue }
+    if (!reg.contactEmail) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_email' }); continue }
 
     // Payment reminders ride the same dialog but keep their own machinery:
     // balance math, invoice-table chrome, and the lastPayReminderAt stamp.
@@ -107,7 +112,7 @@ export async function runCommSend(args: {
       const paid = reg.payments.reduce((sum, pmt) => sum + pmt.amount, 0)
       const due = (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
       const balance = Math.round(Math.max(0, due - paid) * 100) / 100
-      if (balance <= 0) { results.push({ regId: reg.id, status: 'no_balance' }); continue }
+      if (balance <= 0) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_balance' }); continue }
       const { subject, html, text } = buildPayReminderEmail({
         clubName: reg.clubName, clubContact: reg.clubContact, teamsCount: reg.teams.length,
         tName: t.name || 'the tournament', link: tournamentAbs(org?.slug, `/pay/${reg.id}`),
@@ -117,13 +122,14 @@ export async function runCommSend(args: {
       const rr = await sendEmail({ to: reg.contactEmail, subject, html, text, ...orgSender(org) })
       if (rr.ok) {
         try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "lastPayReminderAt" = ? WHERE id = ?`, now, reg.id) } catch { /* best effort */ }
-        results.push({ regId: reg.id, status: 'sent' })
-      } else results.push({ regId: reg.id, status: 'failed' })
+        if (!sample) sample = { subject, html, to: reg.contactEmail }
+        results.push({ regId: reg.id, club: reg.clubName, status: 'sent' })
+      } else results.push({ regId: reg.id, club: reg.clubName, status: 'failed' })
       continue
     }
 
     if (kind === 'account' && hasAccount.has(String(reg.contactEmail).trim().toLowerCase())) {
-      results.push({ regId: reg.id, status: 'has_account' }); continue
+      results.push({ regId: reg.id, club: reg.clubName, status: 'has_account' }); continue
     }
 
     const pc = kind === 'waiver' ? playerCountsFor(reg) : null
@@ -133,7 +139,7 @@ export async function runCommSend(args: {
     if (cta === 'confirm') ctaUrl = tournamentAbs(org?.slug, `/confirm/${reg.id}`)
     else if (cta === 'account') {
       const token = await issueClaimToken(reg.id)
-      if (!token) { results.push({ regId: reg.id, status: 'failed' }); continue }
+      if (!token) { results.push({ regId: reg.id, club: reg.clubName, status: 'failed' }); continue }
       ctaUrl = claimUrl(tournamentAbs(org?.slug, ''), token)
     }
     const vals = {
@@ -167,10 +173,49 @@ export async function runCommSend(args: {
       try { const raw = logById.get(reg.id); if (raw) log = JSON.parse(raw) } catch { /* fresh log */ }
       log[kind] = now
       try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "commEmailLog" = ? WHERE id = ?`, JSON.stringify(log), reg.id) } catch { /* best effort */ }
-      results.push({ regId: reg.id, status: 'sent' })
+      if (!sample) sample = { subject, html, to: reg.contactEmail }
+      results.push({ regId: reg.id, club: reg.clubName, status: 'sent' })
     } else {
-      results.push({ regId: reg.id, status: 'failed' })
+      results.push({ regId: reg.id, club: reg.clubName, status: 'failed' })
     }
   }
+  if (args.notifyTo) await sendReceipt(args.notifyTo, org, t.name || 'the tournament', kind, results, sample)
   return { ok: true, sentAt: now, results }
+}
+
+const STATUS_WORDS: Record<SendStatus, string> = {
+  sent: 'sent', no_email: 'no email on file', no_balance: 'already paid',
+  has_account: 'already had a login', failed: 'FAILED',
+}
+const esc = (x: string) => x.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+
+// Receipt for a scheduled run (Bo: "I just want to make sure they go out") — the
+// tally, who got it, and the actual email one club received, inlined below.
+async function sendReceipt(
+  to: string, org: { name?: string | null } | null, tName: string,
+  kind: SendKind, results: SendResult[], sample: { subject: string; html: string; to: string } | null,
+) {
+  try {
+    const sent = results.filter(r => r.status === 'sent')
+    const label = kind === 'payment' ? 'Payment reminder' : COMM_KINDS[kind].label
+    const others = results.filter(r => r.status !== 'sent')
+    const line = (r: SendResult) => `<li style="margin:2px 0">${esc(r.club || r.regId)} <span style="color:#94a3b8">— ${STATUS_WORDS[r.status]}</span></li>`
+    await sendEmail({
+      ...orgSender(org),
+      to,
+      subject: `Sent: ${label} — ${sent.length} club${sent.length === 1 ? '' : 's'} (${tName})`,
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1e293b">
+  <p style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#0d9488;margin:0 0 4px">SCHEDULED SEND · ${esc(tName)}</p>
+  <h2 style="font-size:19px;margin:0 0 6px">${esc(label)} just went out</h2>
+  <p style="color:#475569;font-size:14px;margin:0 0 12px"><strong>${sent.length}</strong> club${sent.length === 1 ? '' : 's'} emailed${others.length ? `, ${others.length} skipped` : ''}.</p>
+  <ul style="font-size:13px;color:#334155;padding-left:18px;margin:0 0 8px">${sent.map(line).join('')}</ul>
+  ${others.length ? `<p style="font-size:12px;color:#94a3b8;margin:0 0 4px">Not emailed:</p><ul style="font-size:12.5px;color:#64748b;padding-left:18px;margin:0">${others.map(line).join('')}</ul>` : ''}
+  ${sample ? `<div style="border-top:1px solid #e2e8f0;margin:20px 0 0;padding-top:14px">
+    <p style="font-size:12px;color:#94a3b8;margin:0 0 2px">Copy of what they received — this one went to ${esc(sample.to)}:</p>
+    <p style="font-size:13px;color:#0f172a;font-weight:600;margin:0 0 10px">Subject: ${esc(sample.subject)}</p>
+    <div style="border:1px solid #e2e8f0;border-radius:10px;padding:6px 10px">${sample.html}</div>
+  </div>` : ''}
+</div>`,
+    })
+  } catch { /* a missing receipt must never fail the send itself */ }
 }
