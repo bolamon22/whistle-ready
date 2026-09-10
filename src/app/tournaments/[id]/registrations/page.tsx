@@ -10,7 +10,7 @@ import RegPricingEditor from '@/components/RegPricingEditor'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import toast, { Toaster } from 'react-hot-toast'
-import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle } from 'lucide-react'
+import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail } from 'lucide-react'
 import { nameKey } from '@/lib/names'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
@@ -29,6 +29,7 @@ interface Registration {
   needsHotel: string; paymentMethod: string; notes: string; createdAt: string
   invoiceAmount: number; discountAmount: number; discountNote: string
   lastPayReminderAt?: string
+  commEmailLog?: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
 interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string }
@@ -712,6 +713,78 @@ export default function RegistrationsPage() {
     setPayLetterSaving(false)
   }
 
+  // Pre-tournament club emails (Bo): waiver push, schedule announcement, team
+  // confirmation — to the whole field or hand-picked clubs, same preview-first flow.
+  type CommKind = 'waiver' | 'schedule' | 'confirm'
+  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams' }
+  const [commOpen, setCommOpen] = useState(false)
+  const [commKind, setCommKind] = useState<CommKind>('waiver')
+  const [commLetters, setCommLetters] = useState<Record<CommKind, { subject: string; body: string }> | null>(null)
+  const [commSel, setCommSel] = useState<Set<string>>(new Set())
+  const [commSending, setCommSending] = useState(false)
+  const [commSaving, setCommSaving] = useState(false)
+  const commLog = (reg: Registration): Record<string, string> => { try { return reg.commEmailLog ? JSON.parse(reg.commEmailLog) : {} } catch { return {} } }
+  const openComm = (reg?: Registration) => {
+    setCommSel(new Set(reg ? [reg.id] : registrations.filter(r => r.contactEmail).map(r => r.id)))
+    setCommOpen(true)
+    if (!commLetters) {
+      fetch('/api/registrations/comm-letter').then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.letters) { setCommLetters(d.letters); if (d.orgName) setPayOrgName(o => o || d.orgName) } })
+        .catch(() => {})
+    }
+    if (!payEventName) {
+      fetch(`/api/tournaments/${tournamentId}`).then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.name) setPayEventName(d.name) }).catch(() => {})
+    }
+  }
+  const mergeCommPreview = (text: string, reg: Registration) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    return text
+      .replace(/\{contact\}/g, reg.clubContact || reg.clubName)
+      .replace(/\{club\}/g, reg.clubName)
+      .replace(/\{event\}/g, payEventName || 'the tournament')
+      .replace(/\{teams\}/g, `${reg.teams.length} team${reg.teams.length !== 1 ? 's' : ''}`)
+      .replace(/\{org\}/g, payOrgName || 'the tournament team')
+      .replace(/\{waiverLink\}/g, `${origin}/tournaments/${tournamentId}/player-waiver`)
+      .replace(/\{scheduleLink\}/g, `${origin}/tournaments/${tournamentId}/public`)
+      .replace(/\{eventDates\}/g, 'the event dates')
+      .replace(/\{teamsList\}/g, reg.teams.length ? reg.teams.map(t => `• ${t.teamName}${t.division ? ` — ${t.division}` : ''}`).join('\n') : '• (no teams listed yet)')
+  }
+  const sendComm = async () => {
+    if (!commLetters || commSel.size === 0) return
+    setCommSending(true)
+    try {
+      const res = await fetch('/api/registrations/comm-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [...commSel], ...commLetters[commKind] }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.ok) throw new Error(d.error || 'Send failed')
+      const sent = (d.results || []).filter((r: any) => r.status === 'sent')
+      const noEmail = (d.results || []).filter((r: any) => r.status === 'no_email').length
+      const failed = (d.results || []).filter((r: any) => r.status === 'failed').length
+      toast.success(`Sent to ${sent.length} club${sent.length !== 1 ? 's' : ''}${noEmail ? ` · ${noEmail} had no email` : ''}${failed ? ` · ${failed} failed` : ''}`, { duration: 5000 })
+      const sentIds = new Set(sent.map((r: any) => r.regId))
+      setRegistrations(rs => rs.map(r => {
+        if (!sentIds.has(r.id)) return r
+        let log: Record<string, string> = {}
+        try { log = r.commEmailLog ? JSON.parse(r.commEmailLog) : {} } catch { /* fresh */ }
+        log[commKind] = d.sentAt
+        return { ...r, commEmailLog: JSON.stringify(log) }
+      }))
+      setCommOpen(false)
+    } catch (e: any) { toast.error(e?.message || 'Send failed') }
+    finally { setCommSending(false) }
+  }
+  const saveCommLetter = async () => {
+    if (!commLetters) return
+    setCommSaving(true)
+    const res = await fetch('/api/registrations/comm-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: commKind, ...commLetters[commKind] }) })
+    if (res.ok) toast.success('Saved as your default')
+    else toast.error('Failed to save')
+    setCommSaving(false)
+  }
+
   const [refundFor, setRefundFor] = useState<RegistrationPayment | null>(null)
   const [refundAmt, setRefundAmt] = useState('')
   const [refunding, setRefunding] = useState(false)
@@ -1040,6 +1113,8 @@ export default function RegistrationsPage() {
           <button onClick={() => { setPricingDraft(pricing); setDivisionsDraft(divisions); setNewDivision(''); setShowPricing(true) }} className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><Settings size={15} /> Settings</button>
           <button onClick={() => downloadCSV(registrations)} disabled={!registrations.length} className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Download size={15} /> CSV</button>
           <Link href={`/tournaments/${tournamentId}/register`} target="_blank" className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><ExternalLink size={15} /> Public form</Link>
+          {activeTab === 'team' && <button onClick={() => openComm()} disabled={!registrations.length}
+            className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Mail size={15} /> Email clubs</button>}
         </div>
 
         {/* Import panel */}
@@ -1182,6 +1257,76 @@ export default function RegistrationsPage() {
         )}
 
         {/* Refund modal */}
+        {commOpen && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !commSending && setCommOpen(false)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-slate-800 mb-1">Email clubs</h3>
+              <p className="text-sm text-slate-500 mb-3">Goes to each club's team director — they pass it on to their families. {'{contact}'} {'{club}'} {'{event}'} {'{teamsList}'} and the links fill in per club.</p>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {(['waiver', 'schedule', 'confirm'] as const).map(k => (
+                  <button key={k} onClick={() => setCommKind(k)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${commKind === k ? 'bg-teal-600 text-white border-teal-600' : 'text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+                    {COMM_KIND_LABELS[k]}
+                  </button>
+                ))}
+              </div>
+              <div className="mb-4">
+                <div className="flex items-baseline justify-between mb-1">
+                  <label className="text-xs font-medium text-slate-600">Send to ({commSel.size} of {registrations.length} clubs)</label>
+                  <span className="text-xs">
+                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set(registrations.filter(r => r.contactEmail).map(r => r.id)))}>All</button>
+                    <span className="text-slate-300 mx-1">·</span>
+                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set())}>None</button>
+                  </span>
+                </div>
+                <div className="border border-slate-200 rounded-lg max-h-36 overflow-y-auto divide-y divide-slate-100">
+                  {registrations.map(r => (
+                    <label key={r.id} className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer ${!r.contactEmail ? 'opacity-40' : ''}`}>
+                      <input type="checkbox" disabled={!r.contactEmail} checked={commSel.has(r.id)}
+                        onChange={e => setCommSel(sel => { const n = new Set(sel); if (e.target.checked) { n.add(r.id) } else { n.delete(r.id) } return n })} />
+                      <span className="flex-1 truncate text-slate-700">{r.clubName}</span>
+                      {commLog(r)[commKind] && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(commLog(r)[commKind]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                      {!r.contactEmail && <span className="text-[10px] text-slate-400 shrink-0">no email</span>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {!commLetters ? <p className="text-sm text-slate-400 py-6 text-center">Loading letter…</p> : (
+                <>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Subject</label>
+                  <input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    value={commLetters[commKind].subject}
+                    onChange={e => setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], subject: e.target.value } } : l)} />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Letter</label>
+                  <textarea className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[130px] resize-y focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    value={commLetters[commKind].body}
+                    onChange={e => setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], body: e.target.value } } : l)} />
+                  {(() => {
+                    const sample = registrations.find(r => commSel.has(r.id)) || registrations[0]
+                    if (!sample) return null
+                    return (
+                      <div className="mt-4">
+                        <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">PREVIEW — AS {sample.clubName.toUpperCase()} WILL GET IT</div>
+                        <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-700 space-y-2">
+                          <div className="font-semibold text-slate-900">{mergeCommPreview(commLetters[commKind].subject, sample)}</div>
+                          {mergeCommPreview(commLetters[commKind].body, sample).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
+                          {commKind !== 'confirm' && <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{commKind === 'waiver' ? '"Open the player waiver" button appears here automatically' : '"View the schedule" button appears here automatically'}</div>}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                  <div className="flex flex-wrap items-center gap-2 mt-4">
+                    <button onClick={sendComm} disabled={commSending || commSel.size === 0}
+                      className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{commSending ? 'Sending…' : `Send to ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`}</button>
+                    <button onClick={saveCommLetter} disabled={commSaving}
+                      className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{commSaving ? 'Saving…' : 'Save as default'}</button>
+                    <button onClick={() => setCommOpen(false)} className="text-sm text-slate-500 px-3 py-2">Cancel</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         {payReminderReg && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => sendingLink === null && setPayReminderReg(null)}>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -1835,7 +1980,13 @@ export default function RegistrationsPage() {
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
                     {balance > 0 && <button onClick={() => openPayReminder(reg)} disabled={sendingLink === reg.id}
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg disabled:opacity-50">{sendingLink === reg.id ? 'Sending…' : 'Email reminder'}</button>}
+                    <button onClick={() => openComm(reg)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Email…</button>
                     {reg.lastPayReminderAt && <span className="text-[11px] text-slate-400" title={new Date(reg.lastPayReminderAt).toLocaleString()}>Reminded {new Date(reg.lastPayReminderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                    {(['waiver', 'schedule', 'confirm'] as const).filter(k => commLog(reg)[k]).map(k => (
+                      <span key={k} className="text-[11px] text-slate-400" title={new Date(commLog(reg)[k]).toLocaleString()}>
+                        {k === 'waiver' ? 'Waivers' : k === 'schedule' ? 'Schedule' : 'Confirm'} {new Date(commLog(reg)[k]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    ))}
                     {reg.qboInvoiceId ? (
                       <span className="inline-flex items-center gap-1 text-xs text-green-600 border border-green-200 bg-green-50 px-2.5 py-1 rounded-lg"><Check size={12} /> QB synced</span>
                     ) : (
