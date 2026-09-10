@@ -30,6 +30,7 @@ interface Registration {
   invoiceAmount: number; discountAmount: number; discountNote: string
   lastPayReminderAt?: string
   commEmailLog?: string
+  confirmStatus?: string; confirmNote?: string; confirmAt?: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
 interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string }
@@ -758,6 +759,7 @@ export default function RegistrationsPage() {
         ? reg.teams.map(t => `• ${t.teamName}${t.division ? ` — ${t.division}` : ''}: (registered count fills in)`).join('\n') + `\nTotal for ${reg.clubName}: (fills in)`
         : '• (each team\u2019s registered player count fills in here)')
       .replace(/\{playerCount\}/g, '(count)')
+      .replace(/\{confirmLink\}/g, `${origin}/confirm/${reg.id}`)
   }
   // The payment kind edits the SAME letter the per-club modal uses; the other
   // three edit their commLetters entry.
@@ -794,6 +796,11 @@ export default function RegistrationsPage() {
       setCommOpen(false)
     } catch (e: any) { toast.error(e?.message || 'Send failed') }
     finally { setCommSending(false) }
+  }
+  const resolveConfirm = async (reg: Registration) => {
+    const res = await fetch(`/api/registrations/${reg.id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resolve' }) })
+    if (res.ok) { toast.success('Marked handled'); setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, confirmStatus: '', confirmNote: '' } : r)) }
+    else toast.error('Failed')
   }
   const saveCommLetter = async () => {
     if (!commCur) return
@@ -2012,6 +2019,23 @@ export default function RegistrationsPage() {
                         {k === 'waiver' ? 'Waivers' : k === 'schedule' ? 'Schedule' : 'Confirm'} {new Date(commLog(reg)[k]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     ))}
+                    {reg.confirmStatus === 'confirmed' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full" title={reg.confirmAt ? new Date(reg.confirmAt).toLocaleString() : ''}>
+                        <Check size={11} /> Confirmed{reg.confirmAt ? ` ${new Date(reg.confirmAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                      </span>
+                    )}
+                    {reg.confirmStatus === 'change_requested' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full" title={reg.confirmAt ? new Date(reg.confirmAt).toLocaleString() : ''}>
+                        <AlertTriangle size={11} /> Change requested{reg.confirmAt ? ` ${new Date(reg.confirmAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                      </span>
+                    )}
+                    {reg.confirmStatus === 'change_requested' && reg.confirmNote && (
+                      <div className="w-full flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
+                        <p className="flex-1 text-xs text-amber-900 whitespace-pre-line">{reg.confirmNote}</p>
+                        <button onClick={() => resolveConfirm(reg)} title="Clear this after you've made the change"
+                          className="text-[11px] font-bold text-amber-700 hover:text-amber-900 shrink-0 border border-amber-300 rounded-md px-2 py-0.5">Handled</button>
+                      </div>
+                    )}
                     {reg.qboInvoiceId ? (
                       <span className="inline-flex items-center gap-1 text-xs text-green-600 border border-green-200 bg-green-50 px-2.5 py-1 rounded-lg"><Check size={12} /> QB synced</span>
                     ) : (

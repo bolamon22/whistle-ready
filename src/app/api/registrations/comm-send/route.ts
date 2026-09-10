@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   const eventDates = fmtDates(t.startDate as unknown as string, t.endDate as unknown as string)
   const kindMeta = kind === 'payment' ? null : COMM_KINDS[kind]
   const cta = kindMeta?.cta ?? null
-  const ctaUrl = cta === 'waiver' ? waiverLink : cta === 'schedule' ? scheduleLink : ''
+  const sharedCtaUrl = cta === 'waiver' ? waiverLink : cta === 'schedule' ? scheduleLink : ''
   const now = new Date().toISOString()
 
   const results: { regId: string; status: 'sent' | 'no_email' | 'no_balance' | 'failed' }[] = []
@@ -111,6 +111,8 @@ export async function POST(req: NextRequest) {
     }
 
     const counts = kind === 'waiver' ? playerCountsFor(reg) : null
+    // The confirm button is per club — their registration id IS the key
+    const ctaUrl = cta === 'confirm' ? tournamentAbs(org?.slug, `/confirm/${reg.id}`) : sharedCtaUrl
     const vals = {
       contact: reg.clubContact || reg.clubName,
       club: reg.clubName,
@@ -123,6 +125,7 @@ export async function POST(req: NextRequest) {
         : '• (no teams listed yet — reply with your team names)',
       playerCounts: counts ? counts.text : '',
       playerCount: counts ? String(counts.total) : '',
+      confirmLink: cta === 'confirm' ? ctaUrl : tournamentAbs(org?.slug, `/confirm/${reg.id}`),
     }
     const subject = mergeCommLetter(subjectTpl, vals)
     const bodyText = mergeCommLetter(bodyTpl, vals)

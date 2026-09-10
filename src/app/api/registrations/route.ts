@@ -19,6 +19,9 @@ async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelNights" INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "lastPayReminderAt" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "commEmailLog" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "confirmStatus" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "confirmNote" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "confirmAt" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
 }
 
 // "@yourclub", "instagram.com/yourclub", "https://www.instagram.com/yourclub/" → "yourclub"
@@ -43,7 +46,7 @@ export async function GET(req: NextRequest) {
   // Raw columns (hotel/instagram) aren't in the Prisma schema -- merge them in.
   try {
     const extras: any[] = await prisma.$queryRawUnsafe(
-      `SELECT id, "hotelName", "hotelRooms", "hotelNights", "instagramHandle", "lastPayReminderAt", "commEmailLog" FROM "TeamRegistration" WHERE tournamentId = ?`, tournamentId)
+      `SELECT id, "hotelName", "hotelRooms", "hotelNights", "instagramHandle", "lastPayReminderAt", "commEmailLog", "confirmStatus", "confirmNote", "confirmAt" FROM "TeamRegistration" WHERE tournamentId = ?`, tournamentId)
     const byId = new Map(extras.map((e: any) => [e.id, e]))
     // Per-hotel bookings (a club can split across hotels; logged on the housing
     // board). Table is created lazily by the housing feature — absent = no bookings.

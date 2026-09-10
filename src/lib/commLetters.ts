@@ -10,7 +10,7 @@ import { prisma } from '@/lib/db'
 
 export type CommKind = 'waiver' | 'schedule' | 'confirm'
 
-export const COMM_KINDS: Record<CommKind, { label: string; cta: 'waiver' | 'schedule' | null; ctaLabel: string; defaults: { subject: string; body: string } }> = {
+export const COMM_KINDS: Record<CommKind, { label: string; cta: 'waiver' | 'schedule' | 'confirm' | null; ctaLabel: string; defaults: { subject: string; body: string } }> = {
   waiver: {
     label: 'Player waiver reminder',
     cta: 'waiver',
@@ -41,15 +41,15 @@ See you out there.`,
   },
   confirm: {
     label: 'Confirm your teams',
-    cta: null,
-    ctaLabel: '',
+    cta: 'confirm',
+    ctaLabel: 'Review + confirm your teams',
     defaults: {
       subject: 'Confirm your {club} teams for {event}',
       body: `Hi {contact} — {event} ({eventDates}) is almost here and we're locking in the field. We have {club} down for:
 
 {teamsList}
 
-Can you reply to confirm these teams are set — right names, right divisions? If anything changed (a team added, dropped, or renamed), reply with the update and we'll fix it before the schedule locks.`,
+Tap the button below to confirm in one click — takes ten seconds. If anything changed (a team added, dropped, or moved divisions), you can send us the correction right there instead, and we'll fix it before the schedule locks.`,
     },
   },
 }
@@ -70,5 +70,5 @@ export async function commLetterFor(orgId: string | null, kind: CommKind): Promi
 }
 
 export function mergeCommLetter(text: string, vals: Record<string, string>): string {
-  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount)\}/g, (_m, k: string) => vals[k] ?? '')
+  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount|confirmLink)\}/g, (_m, k: string) => vals[k] ?? '')
 }
