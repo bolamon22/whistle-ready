@@ -1999,10 +1999,6 @@ export default function RegistrationsPage() {
                     {balance > 0 && <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/pay/${reg.id}`); toast.success('Payment link copied') }}
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
                     <button onClick={() => openComm(reg)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><Mail size={12} /> Email</button>
-                    {!reg.hasAccount && reg.contactEmail && (
-                      <button onClick={() => openComm(reg, 'account')} title="Email them a link to set up their Whistle Ready login"
-                        className="text-xs text-amber-700 border border-amber-300 bg-amber-50 hover:border-amber-400 px-2.5 py-1 rounded-lg">Account setup</button>
-                    )}
                     {reg.confirmStatus === 'change_requested' && reg.confirmNote && (
                       <div className="w-full flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
                         <p className="flex-1 text-xs text-amber-900 whitespace-pre-line">{reg.confirmNote}</p>
