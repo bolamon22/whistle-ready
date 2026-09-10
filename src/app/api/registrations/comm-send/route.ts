@@ -7,6 +7,7 @@ import { tournamentAbs } from '@/lib/seo'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
+import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
 
 // Send one of the pre-tournament club letters to selected registrations (or the
 // whole field) — Bo: "send to the group or separately". Per-club token merge,
@@ -51,27 +52,17 @@ export async function POST(req: NextRequest) {
 
   // Registered-player counts per team, from completed waivers (Bo: directors should
   // see "you have 7 registered" and per-team splits so they know who's light).
-  const waiverCounts = new Map<string, number>()
-  if (kind === 'waiver') {
-    try {
-      const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
-        `SELECT lower(trim(clubName)) AS c, lower(trim(teamName)) AS tm, COUNT(*) AS n
-         FROM "OrgFormSubmission" WHERE tournamentId = ? AND formType = 'player'
-         GROUP BY lower(trim(clubName)), lower(trim(teamName))`, tournamentId)
-      for (const r of rows) waiverCounts.set(`${String(r.c)}|${String(r.tm)}`, Number(r.n) || 0)
-    } catch { /* waiver table not created yet — counts read as zero */ }
-  }
-  const countFor = (club: string, team: string) => waiverCounts.get(`${club.trim().toLowerCase()}|${team.trim().toLowerCase()}`) ?? 0
-  const playerCountsFor = (reg: { clubName: string; teams: { teamName: string; division: string }[] }) => {
-    const lines = reg.teams.map(tm => {
-      const n = countFor(reg.clubName, tm.teamName)
+  const counts = kind === 'waiver' ? await waiverCounts(tournamentId) : null
+  const playerCountsFor = (reg: { clubName: string; teams: { teamName: string; division: string; clubName?: string | null }[] }) => {
+    if (!counts) return { text: '', total: 0 }
+    const sum = summarizeClub(counts, reg.clubName, reg.teams)
+    const lines = reg.teams.map((tm, i) => {
+      const n = sum.perTeam[i] ?? 0
       return `• ${tm.teamName}${tm.division ? ` — ${tm.division}` : ''}: ${n === 0 ? 'no players registered yet' : `${n} player${n === 1 ? '' : 's'} registered`}`
     })
-    const other = countFor(reg.clubName, '__other')
-    if (other > 0) lines.push(`• Not sure which team: ${other} player${other === 1 ? '' : 's'}`)
-    const total = reg.teams.reduce((sum, tm) => sum + countFor(reg.clubName, tm.teamName), 0) + other
-    lines.push(`Total for ${reg.clubName}: ${total} player${total === 1 ? '' : 's'} registered`)
-    return { text: lines.join('\n'), total }
+    if (sum.unassigned > 0) lines.push(`• Not matched to a team: ${sum.unassigned} player${sum.unassigned === 1 ? '' : 's'}`)
+    lines.push(`Total for ${reg.clubName}: ${sum.total} player${sum.total === 1 ? '' : 's'} registered`)
+    return { text: lines.join('\n'), total: sum.total }
   }
   const logs: Record<string, unknown>[] = regs.length ? await prisma.$queryRawUnsafe(
     `SELECT id, "commEmailLog" FROM "TeamRegistration" WHERE id IN (${regs.map(() => '?').join(',')})`, ...regs.map(r => r.id)) : []

@@ -2027,7 +2027,7 @@ export default function RegistrationsPage() {
                                 {t.division && <span className="text-xs text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full flex-shrink-0">{t.division}</span>}
                               </div>
                               {t.clubName && t.clubName !== reg.clubName && <div className="text-xs text-slate-500">{t.clubName}</div>}
-                              <Link href={`/tournaments/${tournamentId}/player-waivers?team=${encodeURIComponent(t.teamName)}`} className="mt-1 block text-xs">
+                              <Link href={`/tournaments/${tournamentId}/player-waivers?q=${encodeURIComponent(`${t.clubName || reg.clubName} ${t.teamName}`)}`} className="mt-1 block text-xs">
                                 <span className="text-slate-400">Waivers </span>
                                 <span className={(t.waiverCount ?? 0) > 0 ? 'font-semibold text-teal-700' : 'font-semibold text-amber-600'}>{t.waiverCount ?? 0}</span>
                                 <span className="text-slate-400"> player{(t.waiverCount ?? 0) === 1 ? '' : 's'} &rsaquo;</span>
@@ -2060,7 +2060,7 @@ export default function RegistrationsPage() {
                                 <td className="px-3 py-2 font-medium">{t.teamName}</td>
                                 <td className="px-3 py-2">{t.division}</td>
                                 <td className="px-3 py-2 text-center">
-                                  <Link href={`/tournaments/${tournamentId}/player-waivers?team=${encodeURIComponent(t.teamName)}`}
+                                  <Link href={`/tournaments/${tournamentId}/player-waivers?q=${encodeURIComponent(`${t.clubName || reg.clubName} ${t.teamName}`)}`}
                                     title={`See the ${t.teamName} players who completed the waiver`}
                                     className={`inline-block min-w-[26px] rounded-full px-2 py-0.5 text-xs font-bold hover:ring-2 hover:ring-teal-200 ${(t.waiverCount ?? 0) > 0 ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>{t.waiverCount ?? 0}</Link>
                                 </td>
