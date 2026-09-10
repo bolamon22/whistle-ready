@@ -19,9 +19,11 @@ export const COMM_KINDS: Record<CommKind, { label: string; cta: 'waiver' | 'sche
       subject: 'Action needed — player waivers for {event}',
       body: `Hi {contact} — {event} is coming up, and every player needs a completed online waiver before they can take the field.
 
-Please forward this to your {club} parents and players today. Each family fills it out once at the link below — it takes about two minutes.
+Here's where {club} stands right now:
 
-Players without a waiver can't check in on game day, so knocking these out early saves everyone a scramble at the field. Reply here with any questions.`,
+{playerCounts}
+
+Please forward this to your parents and players today — each family fills it out once at the link below and it takes about two minutes. Players without a waiver can't check in on game day, so if a team looks light, now's the time to push it out. Reply here with any questions.`,
     },
   },
   schedule: {
@@ -68,5 +70,5 @@ export async function commLetterFor(orgId: string | null, kind: CommKind): Promi
 }
 
 export function mergeCommLetter(text: string, vals: Record<string, string>): string {
-  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates)\}/g, (_m, k: string) => vals[k] ?? '')
+  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount)\}/g, (_m, k: string) => vals[k] ?? '')
 }

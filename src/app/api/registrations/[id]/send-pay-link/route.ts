@@ -3,8 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
-import { payLetterFor, mergePayLetter } from '@/lib/payLetter'
-import { letterBodyHtml } from '@/lib/inviteLetter'
+import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -38,31 +37,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let overrides: { subject?: unknown; body?: unknown } = {}
     try { overrides = await req.json() } catch { /* no body = use the saved letter */ }
     const letter = await payLetterFor((org as { id?: string } | null)?.id ?? null)
-    const subjectTpl = String(overrides.subject ?? '').trim().slice(0, 200) || letter.subject
-    const bodyTpl = String(overrides.body ?? '').trim().slice(0, 4000) || letter.body
-    const vals = {
-      contact: reg.clubContact || reg.clubName, club: reg.clubName, event: tName,
-      balance: fmt(balance), teams: teamsLabel, org: org?.name || 'the tournament team',
-    }
-    const subject = mergePayLetter(subjectTpl, vals)
-    const letterHtml = letterBodyHtml(mergePayLetter(bodyTpl, vals))
-    const letterText = mergePayLetter(bodyTpl, vals)
-
-    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
-  <h2 style="color:#0f766e;margin-bottom:4px">${tName}</h2>
-  ${letterHtml}
-  <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
-    <tr><td style="padding:6px 0;color:#64748b">Invoiced</td><td style="padding:6px 0;text-align:right">${fmt(due)}</td></tr>
-    <tr><td style="padding:6px 0;color:#64748b">Paid</td><td style="padding:6px 0;text-align:right">${fmt(paid)}</td></tr>
-    <tr><td style="padding:6px 0;font-weight:bold;border-top:1px solid #e2e8f0">Balance due</td><td style="padding:6px 0;text-align:right;font-weight:bold;border-top:1px solid #e2e8f0">${fmt(balance)}</td></tr>
-  </table>
-  <p style="text-align:center;margin:24px 0">
-    <a href="${link}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">Pay ${fmt(balance)} online</a>
-  </p>
-  <p style="font-size:13px;color:#64748b">Pay by <strong>bank transfer (ACH) with no fee</strong>, or by card (3% processing fee &mdash; ${fmt(totalWithFee)} total). Prefer to pay by check? Just reply to this email.</p>
-  <p style="font-size:13px;color:#64748b">If the button does not work, copy this link into your browser:<br>${link}</p>
-</div>`
-    const text = `${letterText}\n\nInvoiced: ${fmt(due)}\nPaid: ${fmt(paid)}\nBalance due: ${fmt(balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee, ${fmt(totalWithFee)} total):\n${link}`
+    const { subject, html, text } = buildPayReminderEmail({
+      clubName: reg.clubName, clubContact: reg.clubContact, teamsCount: reg.teams.length,
+      tName, link, due, paid, balance,
+      orgName: org?.name || 'the tournament team',
+      subjectTpl: String(overrides.subject ?? '').trim().slice(0, 200) || letter.subject,
+      bodyTpl: String(overrides.body ?? '').trim().slice(0, 4000) || letter.body,
+    })
 
     const result = await sendEmail({
       to: reg.contactEmail,

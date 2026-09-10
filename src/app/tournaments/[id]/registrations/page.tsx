@@ -715,8 +715,8 @@ export default function RegistrationsPage() {
 
   // Pre-tournament club emails (Bo): waiver push, schedule announcement, team
   // confirmation — to the whole field or hand-picked clubs, same preview-first flow.
-  type CommKind = 'waiver' | 'schedule' | 'confirm'
-  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams' }
+  type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment'
+  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder' }
   const [commOpen, setCommOpen] = useState(false)
   const [commKind, setCommKind] = useState<CommKind>('waiver')
   const [commLetters, setCommLetters] = useState<Record<CommKind, { subject: string; body: string }> | null>(null)
@@ -730,6 +730,11 @@ export default function RegistrationsPage() {
     if (!commLetters) {
       fetch('/api/registrations/comm-letter').then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.letters) { setCommLetters(d.letters); if (d.orgName) setPayOrgName(o => o || d.orgName) } })
+        .catch(() => {})
+    }
+    if (!payLetter) {
+      fetch('/api/registrations/pay-letter').then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.letter) { setPayLetter({ subject: d.letter.subject, body: d.letter.body }); setPayOrgName(o => o || d.orgName || '') } })
         .catch(() => {})
     }
     if (!payEventName) {
@@ -749,24 +754,38 @@ export default function RegistrationsPage() {
       .replace(/\{scheduleLink\}/g, `${origin}/tournaments/${tournamentId}/public`)
       .replace(/\{eventDates\}/g, 'the event dates')
       .replace(/\{teamsList\}/g, reg.teams.length ? reg.teams.map(t => `• ${t.teamName}${t.division ? ` — ${t.division}` : ''}`).join('\n') : '• (no teams listed yet)')
+      .replace(/\{playerCounts\}/g, reg.teams.length
+        ? reg.teams.map(t => `• ${t.teamName}${t.division ? ` — ${t.division}` : ''}: (registered count fills in)`).join('\n') + `\nTotal for ${reg.clubName}: (fills in)`
+        : '• (each team\u2019s registered player count fills in here)')
+      .replace(/\{playerCount\}/g, '(count)')
   }
+  // The payment kind edits the SAME letter the per-club modal uses; the other
+  // three edit their commLetters entry.
+  const commCur = commKind === 'payment' ? payLetter : (commLetters ? commLetters[commKind] : null)
+  const setCommCur = (patch: Partial<{ subject: string; body: string }>) => {
+    if (commKind === 'payment') setPayLetter(l => l ? { ...l, ...patch } : l)
+    else setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], ...patch } } : l)
+  }
+  const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0))
   const sendComm = async () => {
-    if (!commLetters || commSel.size === 0) return
+    if (!commCur || commSel.size === 0) return
     setCommSending(true)
     try {
       const res = await fetch('/api/registrations/comm-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [...commSel], ...commLetters[commKind] }),
+        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [...commSel], ...commCur }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.ok) throw new Error(d.error || 'Send failed')
       const sent = (d.results || []).filter((r: any) => r.status === 'sent')
       const noEmail = (d.results || []).filter((r: any) => r.status === 'no_email').length
+      const noBalance = (d.results || []).filter((r: any) => r.status === 'no_balance').length
       const failed = (d.results || []).filter((r: any) => r.status === 'failed').length
-      toast.success(`Sent to ${sent.length} club${sent.length !== 1 ? 's' : ''}${noEmail ? ` · ${noEmail} had no email` : ''}${failed ? ` · ${failed} failed` : ''}`, { duration: 5000 })
+      toast.success(`Sent to ${sent.length} club${sent.length !== 1 ? 's' : ''}${noEmail ? ` · ${noEmail} had no email` : ''}${noBalance ? ` · ${noBalance} already paid` : ''}${failed ? ` · ${failed} failed` : ''}`, { duration: 5000 })
       const sentIds = new Set(sent.map((r: any) => r.regId))
       setRegistrations(rs => rs.map(r => {
         if (!sentIds.has(r.id)) return r
+        if (commKind === 'payment') return { ...r, lastPayReminderAt: d.sentAt }
         let log: Record<string, string> = {}
         try { log = r.commEmailLog ? JSON.parse(r.commEmailLog) : {} } catch { /* fresh */ }
         log[commKind] = d.sentAt
@@ -777,9 +796,11 @@ export default function RegistrationsPage() {
     finally { setCommSending(false) }
   }
   const saveCommLetter = async () => {
-    if (!commLetters) return
+    if (!commCur) return
     setCommSaving(true)
-    const res = await fetch('/api/registrations/comm-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: commKind, ...commLetters[commKind] }) })
+    const res = commKind === 'payment'
+      ? await fetch('/api/registrations/pay-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(commCur) })
+      : await fetch('/api/registrations/comm-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: commKind, ...commCur }) })
     if (res.ok) toast.success('Saved as your default')
     else toast.error('Failed to save')
     setCommSaving(false)
@@ -1263,7 +1284,7 @@ export default function RegistrationsPage() {
               <h3 className="font-bold text-slate-800 mb-1">Email clubs</h3>
               <p className="text-sm text-slate-500 mb-3">Goes to each club's team director — they pass it on to their families. {'{contact}'} {'{club}'} {'{event}'} {'{teamsList}'} and the links fill in per club.</p>
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {(['waiver', 'schedule', 'confirm'] as const).map(k => (
+                {(['waiver', 'schedule', 'confirm', 'payment'] as const).map(k => (
                   <button key={k} onClick={() => setCommKind(k)}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${commKind === k ? 'bg-teal-600 text-white border-teal-600' : 'text-slate-600 border-slate-300 hover:border-slate-400'}`}>
                     {COMM_KIND_LABELS[k]}
@@ -1285,32 +1306,36 @@ export default function RegistrationsPage() {
                       <input type="checkbox" disabled={!r.contactEmail} checked={commSel.has(r.id)}
                         onChange={e => setCommSel(sel => { const n = new Set(sel); if (e.target.checked) { n.add(r.id) } else { n.delete(r.id) } return n })} />
                       <span className="flex-1 truncate text-slate-700">{r.clubName}</span>
-                      {commLog(r)[commKind] && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(commLog(r)[commKind]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                      {commKind === 'payment' && <span className={`text-[10px] shrink-0 ${regBalance(r) > 0 ? 'text-amber-600 font-semibold' : 'text-slate-300'}`}>{regBalance(r) > 0 ? `owes ${fmt(regBalance(r))}` : 'paid'}</span>}
+                      {commKind === 'payment'
+                        ? (r.lastPayReminderAt && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(r.lastPayReminderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)
+                        : (commLog(r)[commKind] && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(commLog(r)[commKind]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)}
                       {!r.contactEmail && <span className="text-[10px] text-slate-400 shrink-0">no email</span>}
                     </label>
                   ))}
                 </div>
               </div>
-              {!commLetters ? <p className="text-sm text-slate-400 py-6 text-center">Loading letter…</p> : (
+              {!commCur ? <p className="text-sm text-slate-400 py-6 text-center">Loading letter…</p> : (
                 <>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Subject</label>
                   <input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                    value={commLetters[commKind].subject}
-                    onChange={e => setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], subject: e.target.value } } : l)} />
+                    value={commCur.subject}
+                    onChange={e => setCommCur({ subject: e.target.value })} />
                   <label className="block text-xs font-medium text-slate-600 mb-1">Letter</label>
                   <textarea className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[130px] resize-y focus:outline-none focus:ring-2 focus:ring-teal-400"
-                    value={commLetters[commKind].body}
-                    onChange={e => setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], body: e.target.value } } : l)} />
+                    value={commCur.body}
+                    onChange={e => setCommCur({ body: e.target.value })} />
                   {(() => {
                     const sample = registrations.find(r => commSel.has(r.id)) || registrations[0]
                     if (!sample) return null
+                    const merge = commKind === 'payment' ? mergePayPreview : mergeCommPreview
                     return (
                       <div className="mt-4">
                         <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">PREVIEW — AS {sample.clubName.toUpperCase()} WILL GET IT</div>
                         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-700 space-y-2">
-                          <div className="font-semibold text-slate-900">{mergeCommPreview(commLetters[commKind].subject, sample)}</div>
-                          {mergeCommPreview(commLetters[commKind].body, sample).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
-                          {commKind !== 'confirm' && <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{commKind === 'waiver' ? '"Open the player waiver" button appears here automatically' : '"View the schedule" button appears here automatically'}</div>}
+                          <div className="font-semibold text-slate-900">{merge(commCur.subject, sample)}</div>
+                          {merge(commCur.body, sample).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
+                          {commKind !== 'confirm' && <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{commKind === 'payment' ? 'Invoiced / paid / balance table + the "Pay online" button appear here automatically' : commKind === 'waiver' ? '"Open the player waiver" button appears here automatically' : '"View the schedule" button appears here automatically'}</div>}
                         </div>
                       </div>
                     )
