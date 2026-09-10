@@ -62,6 +62,7 @@ const payLabel = (m: string) => m === 'credit_card' ? 'Credit Card' : m === 'zel
 const fmtPayDate = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? `${+m[2]}/${+m[3]}/${m[1]}` : (s ? new Date(s).toLocaleDateString() : '') }
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const today = () => new Date().toISOString().slice(0, 10)
+const shortDate = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
 
 function calcInvoice(teams: TeamRow[], pricing: Pricing): number { return calcRegFee(teams, pricing) }
 
@@ -1913,22 +1914,55 @@ export default function RegistrationsPage() {
                         <div className="font-semibold text-slate-800 truncate">{reg.clubName || reg.clubContact}</div>
                         <div className="text-sm text-slate-500 truncate">{reg.contactEmail} · {reg.contactPhone}</div>
                         <div className="text-xs text-slate-400 mt-0.5">Registered {reg.createdAt ? new Date(reg.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+                        {(() => {
+                          // Waiver + schedule sends live here; pay + confirm get their own
+                          // stat columns on the right (Bo).
+                          const log = commLog(reg)
+                          const sent = ([['waiver', 'Waivers'], ['schedule', 'Schedule']] as const)
+                            .filter(([k]) => log[k]).map(([k, label]) => `${label} ${shortDate(log[k])}`)
+                          if (!sent.length) return null
+                          return <div className="text-[11px] text-slate-400 mt-0.5 truncate">Emailed · {sent.join(' · ')}</div>
+                        })()}
                       </div>
                     </button>
 
-                    {/* Billing summary */}
-                    <div className="flex items-center gap-4 text-sm flex-shrink-0 w-full sm:w-auto justify-between sm:justify-end border-t border-slate-100 pt-2 sm:border-0 sm:pt-0 pl-12 sm:pl-0">
-                      <div className="text-right">
-                        <div className="text-xs text-slate-400">Invoiced</div>
-                        <div className="font-medium text-slate-700">{fmt(due)}</div>
+                    {/* Billing + status — one aligned block so every card reads the same */}
+                    <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto border-t border-slate-100 pt-2 sm:border-0 sm:pt-0 pl-12 sm:pl-0">
+                      <div className="flex items-center gap-4 text-sm justify-between sm:justify-end">
+                        <div className="text-right">
+                          <div className="text-xs text-slate-400">Invoiced</div>
+                          <div className="font-medium text-slate-700">{fmt(due)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-slate-400">Paid</div>
+                          <div className="font-medium text-green-600">{fmt(totalPaid)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-slate-400">Balance</div>
+                          <div className={`font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(balance)}</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-xs text-slate-400">Paid</div>
-                        <div className="font-medium text-green-600">{fmt(totalPaid)}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-slate-400">Balance</div>
-                        <div className={`font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(balance)}</div>
+                      <div className="flex items-start gap-4 justify-between sm:justify-end border-t border-slate-100 pt-2">
+                        <div className="text-right">
+                          <div className="text-xs text-slate-400">Pay reminder</div>
+                          {reg.lastPayReminderAt
+                            ? <div className="text-sm font-medium text-slate-700" title={new Date(reg.lastPayReminderAt).toLocaleString()}>{shortDate(reg.lastPayReminderAt)}</div>
+                            : <div className="text-sm text-slate-300">—</div>}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-slate-400">Teams confirmed</div>
+                          {reg.confirmStatus === 'confirmed' ? (
+                            <div className="text-sm font-semibold text-emerald-600 inline-flex items-center gap-1" title={reg.confirmAt ? new Date(reg.confirmAt).toLocaleString() : ''}>
+                              <Check size={13} />{reg.confirmAt ? shortDate(reg.confirmAt) : 'Yes'}
+                            </div>
+                          ) : reg.confirmStatus === 'change_requested' ? (
+                            <div className="text-sm font-semibold text-amber-600 inline-flex items-center gap-1" title={reg.confirmAt ? new Date(reg.confirmAt).toLocaleString() : ''}>
+                              <AlertTriangle size={13} />Change
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-300">{commLog(reg).confirm ? 'Waiting' : '—'}</div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1941,32 +1975,6 @@ export default function RegistrationsPage() {
                     {balance > 0 && <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/pay/${reg.id}`); toast.success('Payment link copied') }}
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
                     <button onClick={() => openComm(reg)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><Mail size={12} /> Email</button>
-                    {(() => {
-                      const log = commLog(reg)
-                      const parts: { label: string; at: string }[] = []
-                      if (reg.lastPayReminderAt) parts.push({ label: 'Pay', at: reg.lastPayReminderAt })
-                      for (const k of ['waiver', 'schedule', 'confirm'] as const) {
-                        if (log[k]) parts.push({ label: k === 'waiver' ? 'Waivers' : k === 'schedule' ? 'Schedule' : 'Confirm', at: log[k] })
-                      }
-                      if (!parts.length) return null
-                      const d = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                      return (
-                        <span className="inline-flex items-center gap-1.5 text-[10.5px] text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1"
-                          title={parts.map(pt => `${pt.label} sent ${new Date(pt.at).toLocaleString()}`).join('\n')}>
-                          {parts.map(pt => `${pt.label} ${d(pt.at)}`).join(' · ')}
-                        </span>
-                      )
-                    })()}
-                    {reg.confirmStatus === 'confirmed' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full" title={reg.confirmAt ? new Date(reg.confirmAt).toLocaleString() : ''}>
-                        <Check size={11} /> Confirmed{reg.confirmAt ? ` ${new Date(reg.confirmAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-                      </span>
-                    )}
-                    {reg.confirmStatus === 'change_requested' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full" title={reg.confirmAt ? new Date(reg.confirmAt).toLocaleString() : ''}>
-                        <AlertTriangle size={11} /> Change requested{reg.confirmAt ? ` ${new Date(reg.confirmAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-                      </span>
-                    )}
                     {reg.confirmStatus === 'change_requested' && reg.confirmNote && (
                       <div className="w-full flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
                         <p className="flex-1 text-xs text-amber-900 whitespace-pre-line">{reg.confirmNote}</p>
