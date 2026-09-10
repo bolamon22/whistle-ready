@@ -67,11 +67,15 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     byMethod[reg.paymentMethod] = (byMethod[reg.paymentMethod] || 0) + 1
   }
 
-  // Division breakdown from registrations
+  // Division breakdown from registrations. Teams whose division was never set land in
+  // 'Unassigned' — the same key the dashboard files them under when it lists the teams, so
+  // the chip opens instead of reading "No team details found". Every team lands somewhere,
+  // so these counts always add up to totalTeams.
   const divisionCounts: Record<string, number> = {}
   for (const reg of registrations) {
     for (const team of reg.teams) {
-      divisionCounts[team.division] = (divisionCounts[team.division] || 0) + 1
+      const div = String(team.division || '').trim() || 'Unassigned'
+      divisionCounts[div] = (divisionCounts[div] || 0) + 1
     }
   }
 

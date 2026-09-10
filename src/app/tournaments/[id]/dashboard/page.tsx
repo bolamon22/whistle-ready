@@ -91,7 +91,7 @@ export default function DashboardPage() {
         const map: Record<string, DivTeam[]> = {}
         ;(Array.isArray(regs) ? regs : []).forEach(reg => {
           ;(reg.teams || []).forEach((t: any) => {
-            const div = t.division || 'Unassigned'
+            const div = String(t.division || '').trim() || 'Unassigned'   // same key the API counts under
             if (!map[div]) map[div] = []
             map[div].push({ teamName: t.teamName || t.clubName || 'Team', clubName: t.clubName || reg.clubName || '', logoUrl: t.logoUrl || '' })
           })
@@ -108,7 +108,11 @@ export default function DashboardPage() {
   const { tournament: t, games, staff, registrations: reg, financials: fin } = data
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
   const collectPct = reg.invoiced > 0 ? Math.round((reg.received / reg.invoiced) * 100) : 0
-  const topDivisions = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  // Every division, biggest first (name breaks ties so the order is stable between loads).
+  // NOT a top-N slice: these counts have to add up to the Teams KPI above, or the dashboard
+  // looks like it has lost teams — 21 registered, 19 shown was exactly that bug.
+  const divisionRows = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  const divisionTeams = divisionRows.reduce((s, [, n]) => s + n, 0)
 
   // Is the event happening today (for emphasising the Game Day console)?
   const isLive = (() => {
@@ -171,13 +175,13 @@ export default function DashboardPage() {
         </section>
 
         {/* ── Teams by division ─────────────────────────────────────────── */}
-        {topDivisions.length > 0 && (
+        {divisionRows.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Registered teams</h2>
             <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap a division to see teams</span></h3>
+              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400">· {divisionTeams} team{divisionTeams === 1 ? '' : 's'} in {divisionRows.length} division{divisionRows.length === 1 ? '' : 's'}</span><span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap one to see teams</span></h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {topDivisions.map(([div, count]) => {
+                {divisionRows.map(([div, count]) => {
                   const open = openDiv === div
                   return (
                     <button key={div} type="button" onClick={() => setOpenDiv(o => o === div ? null : div)}
