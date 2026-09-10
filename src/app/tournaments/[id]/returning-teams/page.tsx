@@ -41,6 +41,19 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   const [filter, setFilter] = useState<'all' | 'registered' | 'not-registered'>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sending, setSending] = useState(false)
+  // Send now or queue it — same cron that runs the club letters (Bo)
+  const [when, setWhen] = useState<'now' | 'later'>('now')
+  const [sendAt, setSendAt] = useState('')
+  const [queued, setQueued] = useState<any[]>([])
+  const loadQueued = () => {
+    fetch(`/api/registrations/comm-schedule?tournamentId=${params.id}`).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.scheduled) setQueued(d.scheduled.filter((x: any) => x.type === 'returning')) }).catch(() => {})
+  }
+  const cancelQueued = async (id: string) => {
+    const res = await fetch(`/api/registrations/comm-schedule?id=${id}&tournamentId=${params.id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Canceled'); setQueued(q => q.filter(x => x.id !== id)) }
+    else toast.error('Could not cancel — it may have already gone out')
+  }
 
   // Email template state
   const [subject, setSubject] = useState(DEFAULT_SUBJECT)
@@ -57,6 +70,8 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
       // Pre-fill tournament name in subject
       setSubject(`Registration is open for ${t.name}`)
     })
+    loadQueued()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id])
 
   function getVars(club?: Club) {
@@ -101,6 +116,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   async function sendInvites() {
     const toSend = clubs.filter(c => selected.has(c.id) && !c.registered)
     if (!toSend.length) { toast.error('No unregistered clubs selected'); return }
+    if (when === 'later' && !sendAt) { toast.error('Pick a date and time'); return }
     setSending(true)
     const res = await fetch(`/api/tournaments/${params.id}/returning-teams/invite`, {
       method: 'POST',
@@ -109,9 +125,17 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
         clubs: toSend.map(c => ({ clubName: c.clubName, contactEmail: c.contactEmail, contactName: c.contactName, numTeams: c.numTeams, divisions: c.divisions, lastEvent: c.lastEvent })),
         subjectTemplate: subject,
         bodyTemplate: body,
+        ...(when === 'later' && sendAt ? { sendAt: new Date(sendAt).toISOString() } : {}),
       }),
     })
     const data = await res.json()
+    if (res.ok && data.scheduled) {
+      toast.success(`Scheduled for ${new Date(data.scheduled.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — ${toSend.length} club${toSend.length !== 1 ? 's' : ''}`, { duration: 5000 })
+      setQueued(q => [...q, data.scheduled].sort((a, b) => a.sendAt.localeCompare(b.sendAt)))
+      setSelected(new Set()); setWhen('now'); setSendAt('')
+      setSending(false)
+      return
+    }
     if (res.ok) {
       toast.success(`Sent ${data.sent} invite${data.sent !== 1 ? 's' : ''}${data.skippedDupes ? ` · ${data.skippedDupes} duplicate address${data.skippedDupes !== 1 ? 'es' : ''} skipped` : ''}${data.errors?.length ? ` (${data.errors.length} failed)` : ''}`, { duration: 5000 })
       setSelected(new Set())
@@ -235,6 +259,22 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
           )}
         </div>
 
+        {queued.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5">
+            <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">SCHEDULED INVITES</div>
+            <div className="space-y-1">
+              {queued.map(q => (
+                <div key={q.id} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                  <span className="font-semibold text-slate-700">{(q.payload?.clubs?.length ?? 0)} club{(q.payload?.clubs?.length ?? 0) !== 1 ? 's' : ''}</span>
+                  <span className="text-slate-400">·</span>
+                  <span>{new Date(q.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                  <button onClick={() => cancelQueued(q.id)} className="ml-auto text-slate-400 hover:text-red-500 font-semibold">Cancel</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading && <div className="text-center py-16 text-slate-400">Loading…</div>}
 
         {!loading && sourceIds.length > 0 && clubs.length === 0 && (
@@ -270,9 +310,21 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                 </button>
                 {selected.size > 0 && <span className="text-xs text-slate-500">{selected.size} selected ({selectedUnregistered.length} unregistered)</span>}
                 <div className="flex-1" />
+                <div className="inline-flex rounded-lg border border-teal-300 overflow-hidden">
+                  {(['now', 'later'] as const).map(w => (
+                    <button key={w} onClick={() => setWhen(w)}
+                      className={`text-xs font-semibold px-3 py-2 transition-colors ${when === w ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                      {w === 'now' ? 'Send now' : 'Schedule'}
+                    </button>
+                  ))}
+                </div>
+                {when === 'later' && (
+                  <input type="datetime-local" value={sendAt} onChange={e => setSendAt(e.target.value)}
+                    className="border border-teal-300 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                )}
                 <button onClick={sendInvites} disabled={selectedUnregistered.length === 0 || sending}
                   className="bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
-                  {sending ? 'Sending…' : `✉ Send Invite${selectedUnregistered.length !== 1 ? 's' : ''} (${selectedUnregistered.length})`}
+                  {sending ? (when === 'later' ? 'Scheduling…' : 'Sending…') : when === 'later' ? `Schedule (${selectedUnregistered.length})` : `✉ Send Invite${selectedUnregistered.length !== 1 ? 's' : ''} (${selectedUnregistered.length})`}
                 </button>
               </div>
             )}

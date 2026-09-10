@@ -1,134 +1,50 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/db'
-import { sendEmail, orgSender } from '@/lib/email'
-import { orgForTournament } from '@/lib/org'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
+import { runReturningInvite, type InviteClub } from '@/lib/returningInvite'
+import { createScheduled } from '@/lib/commSchedule'
 
-const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
-
-function applyVars(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
-}
+// Invite past-event clubs back — now, or queued for later (Bo). The send itself
+// lives in src/lib/returningInvite.ts so the cron runs identical code.
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const body = await req.json() as {
-    clubs: { clubName: string; contactEmail: string; contactName: string; numTeams?: number; divisions?: string[] }[]
+    clubs: InviteClub[]
     subjectTemplate?: string
     bodyTemplate?: string
+    sendAt?: string
   }
   const { clubs } = body
   if (!clubs?.length) return NextResponse.json({ error: 'clubs required' }, { status: 400 })
 
-  // One invite per address, whatever the caller sent (Bo: pulling several past
-  // events must never mail the same director twice). The page already merges
-  // clubs across events; this is the backstop for a stale list or a double-click.
-  const seen = new Set<string>()
-  const recipients = clubs.filter(c => {
-    const key = String(c.contactEmail || '').trim().toLowerCase()
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-  const skippedDupes = clubs.length - recipients.length
-  if (!recipients.length) return NextResponse.json({ error: 'No usable email addresses' }, { status: 400 })
-
-  const tournament = await prisma.tournament.findUnique({
-    where: { id: params.id },
-    select: { name: true, startDate: true, endDate: true },
-  })
-  if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  const regUrl = `${APP_URL}/tournaments/${params.id}/register`
-  const fmtDate = (d: string) => {
-    if (!d) return ''
-    const [y, m, day] = d.split('-')
-    return `${parseInt(m)}/${parseInt(day)}/${y}`
-  }
-  const dateStr = tournament.startDate
-    ? tournament.endDate && tournament.endDate !== tournament.startDate
-      ? `${fmtDate(tournament.startDate)} – ${fmtDate(tournament.endDate)}`
-      : fmtDate(tournament.startDate)
-    : 'TBD'
-
-  const defaultSubject = `{{tournamentName}} — Registration Now Open`
-  const defaultBody = `Hi {{contactName}},
-
-We hope you had a great experience at our last event! We are excited to invite {{clubName}} back for {{tournamentName}}, taking place on {{dates}}.
-
-Last year, your club brought {{lastYearTeams}} team(s) competing in: {{lastYearDivisions}}.
-
-We would love to see you back on the field. Registration is now open — click the link below to secure your spot before divisions fill up.
-
-{{registerUrl}}
-
-Please don't hesitate to reach out with any questions.
-
-Best regards,
-Bo Lamon
-Whistle Ready`
-
-  const subjectTemplate = body.subjectTemplate ?? defaultSubject
-  const bodyTemplate = body.bodyTemplate ?? defaultBody
-
-  // Cold outreach to club directors -- it has to come from the tournament
-  // company, not noreply@whistleready.app. Falls back to the platform sender
-  // when the org has no SendGrid-authenticated address.
-  const org = await orgForTournament(params.id)
-  const sender = orgSender(org)
-  const fromName = org?.name || tournament.name || 'Whistle Ready'
-
-  let sent = 0
-  const errors: string[] = []
-
-  for (const club of recipients) {
-    const vars: Record<string, string> = {
-      clubName: club.clubName,
-      contactName: club.contactName || club.clubName,
-      tournamentName: tournament.name,
-      dates: dateStr,
-      registerUrl: regUrl,
-      lastYearTeams: String(club.numTeams ?? '—'),
-      lastYearDivisions: club.divisions?.join(', ') ?? '—',
-      lastEvent: (club as { lastEvent?: string }).lastEvent || '',
-    }
-
-    const subject = applyVars(subjectTemplate, vars)
-    const plainBody = applyVars(bodyTemplate, vars)
-
-    // Convert plain text body to simple HTML
-    const htmlBody = plainBody
-      .split('\n\n')
-      .map(para => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">${para.replace(/\n/g, '<br/>')}</p>`)
-      .join('')
-
-    {
-      const res = await sendEmail({
-        ...sender,
-        fromName,
-        to: club.contactEmail,
-        subject,
-        html: `
-          <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;padding:40px 28px;background:#ffffff;">
-            <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 24px;border-bottom:2px solid #e5e7eb;padding-bottom:16px;">
-              ${tournament.name}
-            </h2>
-            ${htmlBody}
-            <div style="margin:28px 0;">
-              <a href="${regUrl}"
-                style="display:inline-block;background:#0f172a;color:white;font-weight:600;
-                       font-size:15px;padding:13px 32px;border-radius:8px;text-decoration:none;letter-spacing:0.3px;">
-                Register Now →
-              </a>
-            </div>
-          </div>
-        `,
-      })
-      if (res.ok) sent++
-      else errors.push(`${club.clubName}: ${res.error}`)
-    }
+  const sendAt = String(body.sendAt || '').trim()
+  if (sendAt) {
+    const when = new Date(sendAt)
+    if (isNaN(when.getTime())) return NextResponse.json({ error: 'Bad send time' }, { status: 400 })
+    if (when.getTime() < Date.now() - 60_000) return NextResponse.json({ error: 'Pick a time in the future' }, { status: 400 })
+    if (clubs.length > 300) return NextResponse.json({ error: 'Max 300 clubs per scheduled send' }, { status: 400 })
+    const session = await getServerSession(authOptions)
+    const scheduled = await createScheduled({
+      tournamentId: params.id,
+      type: 'returning',
+      kind: 'returning',              // the kind column is for club letters; type drives dispatch
+      regIds: [],
+      subject: String(body.subjectTemplate || ''),
+      body: String(body.bodyTemplate || ''),
+      payload: { clubs },
+      sendAt: when.toISOString(),
+      createdBy: String((session?.user as { name?: string; email?: string } | undefined)?.name || (session?.user as { email?: string } | undefined)?.email || ''),
+    })
+    return NextResponse.json({ ok: true, scheduled })
   }
 
-  return NextResponse.json({ sent, errors, skippedDupes })
+  const res = await runReturningInvite({
+    tournamentId: params.id, clubs,
+    subjectTemplate: body.subjectTemplate, bodyTemplate: body.bodyTemplate,
+  })
+  if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
+  return NextResponse.json({ sent: res.sent, errors: res.errors, skippedDupes: res.skippedDupes })
 }

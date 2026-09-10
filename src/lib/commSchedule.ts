@@ -7,9 +7,15 @@ import type { SendKind, SendResult } from '@/lib/commSend'
 // flushes anything due through the very same runCommSend the Send-now button uses.
 // In-app table, created on demand — a migration file in the repo means nothing here.
 
+// 'comm' = the club letters; 'returning' = come-back invites to past-event clubs,
+// whose recipients aren't registrations of this tournament, so they ride in payload.
+export type ScheduledType = 'comm' | 'returning'
+
 export type ScheduledSend = {
   id: string
   tournamentId: string
+  type: ScheduledType
+  payload: Record<string, unknown>
   kind: SendKind
   regIds: string[]
   subject: string
@@ -39,6 +45,10 @@ export async function ensureScheduleTable() {
       results TEXT NOT NULL DEFAULT '[]'
     )`)
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CommScheduledSend_due" ON "CommScheduledSend"(status, sendAt)`)
+    // Added when returning-team invites learned to schedule — guarded so existing
+    // rows keep working as type 'comm'.
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE "CommScheduledSend" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'comm'`) } catch { /* exists */ }
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE "CommScheduledSend" ADD COLUMN "payload" TEXT NOT NULL DEFAULT '{}'`) } catch { /* exists */ }
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CommScheduledSend_tournament" ON "CommScheduledSend"(tournamentId, sendAt)`)
   } catch { /* exists */ }
 }
@@ -46,7 +56,10 @@ export async function ensureScheduleTable() {
 function row(r: Record<string, unknown>): ScheduledSend {
   const parse = <T,>(raw: unknown, fallback: T): T => { try { return JSON.parse(String(raw || '')) as T } catch { return fallback } }
   return {
-    id: String(r.id), tournamentId: String(r.tournamentId), kind: String(r.kind) as SendKind,
+    id: String(r.id), tournamentId: String(r.tournamentId),
+    type: (String(r.type || 'comm') as ScheduledType),
+    payload: parse<Record<string, unknown>>(r.payload, {}),
+    kind: String(r.kind) as SendKind,
     regIds: parse<string[]>(r.regIds, []), subject: String(r.subject ?? ''), body: String(r.body ?? ''),
     sendAt: String(r.sendAt), createdAt: String(r.createdAt), createdBy: String(r.createdBy ?? ''),
     status: (String(r.status || 'queued') as ScheduledSend['status']), sentAt: String(r.sentAt ?? ''),
@@ -55,17 +68,20 @@ function row(r: Record<string, unknown>): ScheduledSend {
 }
 
 export async function createScheduled(a: {
-  tournamentId: string; kind: SendKind; regIds: string[]
+  tournamentId: string; kind: SendKind | 'returning'; regIds: string[]
   subject: string; body: string; sendAt: string; createdBy: string
+  type?: ScheduledType; payload?: Record<string, unknown>
 }): Promise<ScheduledSend> {
   await ensureScheduleTable()
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
+  const type = a.type || 'comm'
+  const payload = JSON.stringify(a.payload || {})
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "CommScheduledSend" (id, tournamentId, kind, regIds, subject, body, sendAt, createdAt, createdBy, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued')`,
-    id, a.tournamentId, a.kind, JSON.stringify(a.regIds), a.subject.slice(0, 200), a.body.slice(0, 4000), a.sendAt, now, a.createdBy.slice(0, 120))
-  return { id, tournamentId: a.tournamentId, kind: a.kind, regIds: a.regIds, subject: a.subject, body: a.body, sendAt: a.sendAt, createdAt: now, createdBy: a.createdBy, status: 'queued', sentAt: '', results: [] }
+    `INSERT INTO "CommScheduledSend" (id, tournamentId, kind, regIds, subject, body, sendAt, createdAt, createdBy, status, type, payload)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+    id, a.tournamentId, a.kind, JSON.stringify(a.regIds), a.subject.slice(0, 200), a.body.slice(0, 4000), a.sendAt, now, a.createdBy.slice(0, 120), type, payload)
+  return { id, tournamentId: a.tournamentId, type, payload: a.payload || {}, kind: a.kind as SendKind, regIds: a.regIds, subject: a.subject, body: a.body, sendAt: a.sendAt, createdAt: now, createdBy: a.createdBy, status: 'queued', sentAt: '', results: [] }
 }
 
 /** Everything still queued for this tournament, soonest first. */
