@@ -2,6 +2,7 @@ import prisma from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
+import { RETURNING_TEMPLATE, eventsList, upcomingEvents } from '@/lib/inviteTemplates'
 
 // "Come back and play" invites to clubs from past events, lifted out of the route
 // so the scheduler can run the same send later (Bo, Sep 10). One email per
@@ -11,22 +12,11 @@ const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT 
 
 export type InviteClub = { clubName: string; contactEmail: string; contactName: string; numTeams?: number; divisions?: string[]; lastEvent?: string }
 
-export const RETURNING_DEFAULT_SUBJECT = `{{tournamentName}} — Registration Now Open`
-export const RETURNING_DEFAULT_BODY = `Hi {{contactName}},
-
-We hope you had a great experience at our last event! We are excited to invite {{clubName}} back for {{tournamentName}}, taking place on {{dates}}.
-
-Last year, your club brought {{lastYearTeams}} team(s) competing in: {{lastYearDivisions}}.
-
-We would love to see you back on the field. Registration is now open — click the link below to secure your spot before divisions fill up.
-
-{{registerUrl}}
-
-Please don't hesitate to reach out with any questions.
-
-Best regards,
-Bo Lamon
-{{orgName}}`
+// The 'Welcome back' preset is the fallback — same text the page shows, so a
+// scheduled send with a blank template mails what Bo saw. Other presets live
+// beside it in inviteTemplates.ts; the page sends whichever one he picked.
+export const RETURNING_DEFAULT_SUBJECT = RETURNING_TEMPLATE.subject
+export const RETURNING_DEFAULT_BODY = RETURNING_TEMPLATE.body
 
 function applyVars(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -82,6 +72,21 @@ export async function runReturningInvite(a: {
   // rather than whistleready.app, which the director has no reason to trust.
   const regUrl = `${orgBaseUrl(org?.slug, APP_URL)}/tournaments/${a.tournamentId}/register`
 
+  // {{ourEvents}} — the rest of the season, for the letter that invites a club to
+  // more than one weekend. orgId is a raw column, so this can't go through Prisma's
+  // typed client; a failure here just leaves the token empty rather than killing the send.
+  let ourEvents = ''
+  try {
+    if (org?.id) {
+      const rows: any[] = await prisma.$queryRawUnsafe(
+        'SELECT name, startDate, endDate FROM "Tournament" WHERE orgId = ? AND startDate >= ? ORDER BY startDate ASC LIMIT 25',
+        org.id, new Date().toISOString().slice(0, 10))
+      ourEvents = eventsList(upcomingEvents(rows.map(r => ({
+        name: String(r.name ?? ''), startDate: String(r.startDate ?? ''), endDate: String(r.endDate ?? ''),
+      }))))
+    }
+  } catch { /* the letter still goes out without the calendar */ }
+
   let sent = 0
   const errors: string[] = []
   let sample: { subject: string; html: string; to: string } | null = null
@@ -97,6 +102,7 @@ export async function runReturningInvite(a: {
       lastYearDivisions: club.divisions?.join(', ') ?? '—',
       lastEvent: club.lastEvent || '',
       orgName: fromName,
+      ourEvents,
     }
 
     const subject = applyVars(subjectTemplate, vars)

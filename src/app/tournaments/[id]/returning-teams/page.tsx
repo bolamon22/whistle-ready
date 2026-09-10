@@ -5,6 +5,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import { useOrg } from '@/lib/org-context'
 import { orgBaseUrl } from '@/lib/orgDomains'
+import { INVITE_TEMPLATES, RETURNING_TEMPLATE, eventsList, upcomingEvents } from '@/lib/inviteTemplates'
 
 interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string }
 interface Club {
@@ -13,22 +14,8 @@ interface Club {
   sources?: string[]; lastEvent?: string
 }
 
-const DEFAULT_SUBJECT = `{{tournamentName}} — Registration Now Open`
-const DEFAULT_BODY = `Hi {{contactName}},
-
-We hope you had a great experience at our last event! We are excited to invite {{clubName}} back for {{tournamentName}}, taking place on {{dates}}.
-
-Last year, your club brought {{lastYearTeams}} team(s) competing in: {{lastYearDivisions}}.
-
-We would love to see you back on the field. Registration is now open — click the link below to secure your spot before divisions fill up.
-
-{{registerUrl}}
-
-Please don't hesitate to reach out with any questions.
-
-Best regards,
-Bo Lamon
-{{orgName}}`
+const DEFAULT_SUBJECT = RETURNING_TEMPLATE.subject
+const DEFAULT_BODY = RETURNING_TEMPLATE.body
 
 function applyVars(template: string, vars: Record<string, string>) {
   return Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), template)
@@ -63,6 +50,12 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   const [body, setBody] = useState(DEFAULT_BODY)
   const [showTemplate, setShowTemplate] = useState(false)
   const [previewClub, setPreviewClub] = useState<Club | null>(null)
+  const [templateKey, setTemplateKey] = useState(RETURNING_TEMPLATE.key)
+  function applyTemplate(key: string) {
+    const t = INVITE_TEMPLATES.find(x => x.key === key)
+    if (!t) return
+    setTemplateKey(t.key); setSubject(t.subject); setBody(t.body)
+  }
 
   useEffect(() => {
     fetch('/api/tournaments').then(r => r.json()).then((all: Tournament[]) => {
@@ -95,6 +88,9 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
       lastYearDivisions: club?.divisions?.join(', ') ?? '—',
       lastEvent: club?.lastEvent || '[Last Event]',
       orgName: org?.name || '[Your organization]',
+      // This event plus everything else still ahead of us — /api/tournaments hands
+      // back the org's own list, and it filters this one out, so add it back.
+      ourEvents: eventsList(upcomingEvents([...(thisTournament ? [thisTournament] : []), ...tournaments])),
     }
   }
 
@@ -212,10 +208,27 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
 
           {showTemplate && (
             <div className="border-t border-slate-100 p-5 space-y-4">
+              {/* Presets — a different letter for a club that's never played us, for
+                  the whole season's schedule, or for a last-minute nudge (Bo) */}
+              <div>
+                <div className="flex flex-wrap gap-1.5">
+                  {INVITE_TEMPLATES.map(t => (
+                    <button key={t.key} onClick={() => applyTemplate(t.key)} title={t.hint}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${templateKey === t.key ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  {INVITE_TEMPLATES.find(t => t.key === templateKey)?.hint}
+                  <span className="text-slate-300"> · Picking one replaces the subject and body below — edit away, nothing sends until you say so.</span>
+                </p>
+              </div>
+
               {/* Variables reference */}
               <div className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-500">
                 <span className="font-semibold text-slate-600">Available variables: </span>
-                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{registerUrl}}','{{lastYearTeams}}','{{lastYearDivisions}}','{{lastEvent}}','{{orgName}}'].map(v => (
+                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{registerUrl}}','{{lastYearTeams}}','{{lastYearDivisions}}','{{lastEvent}}','{{orgName}}','{{ourEvents}}'].map(v => (
                   <code key={v} className="bg-white border border-slate-200 rounded px-1.5 py-0.5 mx-0.5 text-teal-700">{v}</code>
                 ))}
               </div>
@@ -233,8 +246,8 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                     <textarea rows={12} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-y font-mono"
                       value={body} onChange={e => setBody(e.target.value)} />
                   </div>
-                  <button onClick={() => { setSubject(DEFAULT_SUBJECT); setBody(DEFAULT_BODY) }}
-                    className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">Reset to default</button>
+                  <button onClick={() => applyTemplate(templateKey)}
+                    className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">Undo my edits to this template</button>
                 </div>
 
                 {/* Preview */}
