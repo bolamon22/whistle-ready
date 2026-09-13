@@ -32,6 +32,7 @@ model Tournament {
   paymentRecords      PaymentRecord[]
   teamRegistrations   TeamRegistration[]
   playerRegistrations PlayerRegistration[]
+  individualRegistrations IndividualRegistration[]
   transactions        TournamentTransaction[]
 }
 
@@ -249,6 +250,50 @@ model PlayerRegistration {
   parentLinks  ParentPlayerLink[]
 
   @@index([tournamentId])
+}
+
+// Paid single-player registration (the /individual-register link in
+// RegistrationTypesEditor). The TABLE has existed in Turso since it was created
+// by raw SQL in /api/admin/migrate, but the model was never added here -- so
+// `prisma generate` produced a client with no individualRegistration delegate
+// and EVERY route touching it threw at runtime (checkout 500'd before returning
+// the Stripe URL, so nobody could ever pay; the staff list swallowed the error
+// and showed an empty list, which is why it went unnoticed). Fields below mirror
+// that CREATE TABLE exactly -- do not drift from it without an ALTER.
+model IndividualRegistration {
+  id                    String   @id @default(cuid())
+  tournamentId          String
+  firstName             String
+  lastName              String
+  email                 String
+  phone                 String   @default("")
+  position              String
+  numberRequest         String   @default("")
+  jerseySize            String
+  shortsSize            String
+  usLacrosseNumber      String   @default("")
+  dateOfBirth           String   @default("")
+  guardianName          String   @default("")
+  guardianPhone         String   @default("")
+  guardianEmail         String   @default("")
+  emergencyContactName  String   @default("")
+  emergencyContactPhone String   @default("")
+  emergencyRelationship String   @default("")
+  medicalNotes          String   @default("")
+  waiverSigned          Boolean  @default(false)
+  waiverSignature       String   @default("")
+  feeTierId             String
+  feeTierName           String
+  feeTierAmount         Float
+  paymentStatus         String   @default("pending")
+  stripePaymentIntent   String?
+  stripeSessionId       String?
+  createdAt             DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId])
+  @@index([email])
 }
 
 model PaymentRecord {
