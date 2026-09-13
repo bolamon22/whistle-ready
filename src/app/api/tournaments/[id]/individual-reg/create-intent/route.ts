@@ -43,6 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     formData.append('metadata[playerName]', `${regData.firstName} ${regData.lastName}`)
     formData.append('metadata[tierId]', tierId)
     formData.append('metadata[type]', 'individual_registration')
+    // Pin to card. The page collects payment with Stripe's CardElement, and the
+    // fee above is card-shaped (2.9% + $0.30) -- leaving types unset attaches the
+    // account's whole payment-method configuration instead. Same fix as
+    // create-team-intent, where that mislabeled card payments as ACH.
+    formData.append('payment_method_types[]', 'card')
 
     const stripeRes = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',

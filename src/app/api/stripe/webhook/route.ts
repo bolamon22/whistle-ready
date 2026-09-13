@@ -108,6 +108,25 @@ export async function POST(req: NextRequest) {
         console.error('Failed to record webhook payment:', e)
       }
     }
+
+    // --- Player (individual) registration paid via the embedded card element ---
+    // /tournaments/[id]/register/individual -> individual-reg/create-intent, which
+    // stores the INTENT id in the row's stripeSessionId column. The browser PATCHes
+    // {paymentStatus:'paid'} afterwards, but anonymous callers have the money fields
+    // stripped by design, so that echo is a no-op -- THIS is the only thing that marks
+    // a player paid. Without it they pay in full and sit at 'pending' forever.
+    // updateMany to a fixed value, so a Stripe retry is harmless.
+    if (pi.metadata?.type === 'individual_registration') {
+      try {
+        const res = await prisma.individualRegistration.updateMany({
+          where: { stripeSessionId: pi.id },
+          data: { paymentStatus: 'paid', stripePaymentIntent: pi.id },
+        })
+        console.log(`Individual registration paid via webhook: ${pi.id} (${res.count} row(s))`)
+      } catch (e) {
+        console.error('Failed to mark individual registration paid:', e)
+      }
+    }
   }
 
   return NextResponse.json({ received: true })
