@@ -46,6 +46,19 @@ export async function orgById(orgId: string | null | undefined): Promise<Org | n
   }
 }
 
+/** One org by slug, or null. Never throws. Used on custom domains, where the
+ *  host is all we have to go on (login branding, public org pages). */
+export async function orgBySlug(slug: string | null | undefined): Promise<Org | null> {
+  if (!slug) return null
+  try {
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      'SELECT id, name, slug, contactEmail, contactPhone, logoUrl, website, zelleHandle FROM "Organization" WHERE slug = ?', slug)
+    return (rows?.[0] as Org) || null
+  } catch {
+    return null
+  }
+}
+
 /** Convenience: tournament id -> its org (or null). */
 export async function orgForTournament(tournamentId: string): Promise<Org | null> {
   return orgById(await tournamentOrgId(tournamentId))

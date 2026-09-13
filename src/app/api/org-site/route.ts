@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { orgById } from '@/lib/org'
 
 async function ensureTable() {
   try {
@@ -49,7 +50,10 @@ export async function POST(req: NextRequest) {
     })
     // Refresh this org's cached public pages so edits show up right away.
     try {
-      const orgRow = await prisma.organization.findUnique({ where: { id: orgId }, select: { slug: true } })
+      // Same reason as src/lib/org.ts: prisma.organization is undefined, so the
+      // old call threw and the revalidate below never ran -- org site edits sat
+      // behind a stale cache instead of showing up right away.
+      const orgRow = await orgById(orgId)
       if (orgRow?.slug) {
         for (const p of [`/o/${orgRow.slug}`, `/o/${orgRow.slug}/gallery`, `/o/${orgRow.slug}/results`]) {
           try { revalidatePath(p) } catch { /* best-effort */ }

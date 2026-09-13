@@ -1,5 +1,5 @@
 import { headers } from 'next/headers'
-import { prisma } from '@/lib/db'
+import { orgBySlug } from '@/lib/org'
 import { orgSlugForHost } from '@/lib/orgDomains'
 import LoginForm from './LoginForm'
 
@@ -13,7 +13,10 @@ export default async function LoginPage() {
   try {
     const slug = orgSlugForHost(headers().get('host'))
     if (slug) {
-      const org: any = await prisma.organization.findFirst({ where: { slug } })
+      // Organization is raw SQL, not a Prisma model -- prisma.organization is
+      // undefined on the typed client, so the old call threw and this whole
+      // block fell through to Whistle Ready branding on EVERY org domain.
+      const org = await orgBySlug(slug)
       if (org) { brandName = org.name || undefined; brandLogo = org.logoUrl || undefined }
     }
   } catch { /* fall back to Whistle Ready branding */ }
