@@ -10,6 +10,7 @@ import MarkdownField from '@/components/MarkdownField'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import PushToggle from '@/components/PushToggle'
 import { DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
+import { DEFAULT_VENDOR_TYPES, DEFAULT_APPROVAL_NOTICE, DEFAULT_VENDOR_DISCLAIMER, DEFAULT_CONFIRMATION_TITLE, DEFAULT_CONFIRMATION_MESSAGE, priceLabel, type VendorType, type VendorInstructions } from '@/lib/vendorForm'
 
 async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
   if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) return file
@@ -64,7 +65,11 @@ type PlayerForm = {
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
 type VendorForm = {
-  disclaimer: string; levels: string[]; paymentOptions: string[]
+  // `levels` / `paymentOptions` are the pre-2026 shape. They're still read (an org that
+  // customised its own level list keeps it) but nothing writes them any more: a vendor
+  // now picks a TYPE carrying its own booth fee, and payment happens after approval.
+  types: VendorType[]; approvalNotice: string; instructions: VendorInstructions
+  disclaimer: string
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
 type StaffForm = {
@@ -84,11 +89,12 @@ const EMPTY: Forms = {
     emailConfirmation: true,
   },
   vendor: {
-    disclaimer: "Vendors are not allowed to sell tournament merchandise unless receiving prior approval from the organizer. Items not pre-approved on this application must be removed from the booth or may result in denied future access. Products that do not fit the mission of the event or are deemed not family-friendly will not be allowed to be sold.",
-    levels: ['Food Vendor', 'Merchandise Vendor', 'Bronze Sponsor', 'Silver Sponsor', 'Gold Sponsor'],
-    paymentOptions: ['Check', 'Venmo', 'Zelle', 'Invoice me'],
-    confirmationTitle: 'Vendor request received!',
-    confirmationMessage: "Thanks! We've received your vendor request and will be in touch about next steps and payment.",
+    types: DEFAULT_VENDOR_TYPES,
+    approvalNotice: DEFAULT_APPROVAL_NOTICE,
+    instructions: { where: '', eventTimes: '', loadIn: '', loadOut: '', bring: '', contact: '' },
+    disclaimer: DEFAULT_VENDOR_DISCLAIMER,
+    confirmationTitle: DEFAULT_CONFIRMATION_TITLE,
+    confirmationMessage: DEFAULT_CONFIRMATION_MESSAGE,
     emailConfirmation: true,
   },
   staff: {
@@ -149,7 +155,15 @@ function FormsInner() {
         const p = d.player || {}; const vv = d.vendor || {}; const st = d.staff || {}
         const merged: Forms = {
           player: { ...EMPTY.player, ...p, fields: { ...EMPTY.player.fields, ...(p.fields || {}) } },
-          vendor: { ...EMPTY.vendor, ...vv, levels: Array.isArray(vv.levels) ? vv.levels : EMPTY.vendor.levels, paymentOptions: Array.isArray(vv.paymentOptions) ? vv.paymentOptions : EMPTY.vendor.paymentOptions },
+          // Same migration the public pages do: stored types win, a legacy `levels`
+          // list is carried across as types, and an org that never customised gets
+          // the current defaults.
+          vendor: { ...EMPTY.vendor, ...vv,
+            types: Array.isArray(vv.types) && vv.types.length ? vv.types
+              : Array.isArray(vv.levels) && vv.levels.length
+                ? vv.levels.map((n: string) => ({ id: String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: String(n), price: 0, selling: !/sponsor/i.test(String(n)), closed: false, note: '' }))
+                : EMPTY.vendor.types,
+            instructions: { ...EMPTY.vendor.instructions, ...(vv.instructions || {}) } },
           staff: { ...EMPTY.staff, ...st, positions: Array.isArray(st.positions) ? st.positions : EMPTY.staff.positions, refLevels: Array.isArray(st.refLevels) ? st.refLevels : EMPTY.staff.refLevels },
           registration: { ...EMPTY.registration, ...(d.registration || {}) },
         }
@@ -176,6 +190,10 @@ function FormsInner() {
 
   if (loading) return <div className="text-slate-400 text-center py-16">Loading…</div>
   const pf = f.player, vf = f.vendor, stf = f.staff, rf = f.registration
+
+  /** Patch one booth type in place, leaving the others alone. */
+  const setVType = (i: number, patch: Partial<VendorType>) =>
+    setF(v => ({ ...v, vendor: { ...v.vendor, types: v.vendor.types.map((t, j) => j === i ? { ...t, ...patch } : t) } }))
   // Counts come from the API now (submissions live in their own table); the list itself is no longer downloaded.
   const countOf = (t: string, fallback: any[]) => subCounts[t] ?? fallback.length
   const playerSubs = { length: countOf('player', subs.filter(s => s.formType !== 'vendor' && s.formType !== 'staff')) }
@@ -330,17 +348,72 @@ function FormsInner() {
 
       {/* VENDOR REQUEST */}
       <section className="card mb-4 overflow-hidden">
-        <Header k="vendor" icon={<ClipboardList size={16} />} title="Vendor request" desc="Vendors & sponsors apply to sell or sponsor at your events." summary={`${vf.levels.length} levels`} />
+        <Header k="vendor" icon={<ClipboardList size={16} />} title="Vendor request" desc="Vendors apply for a booth. You approve, then they pay." summary={`${vf.types.filter(t => !t.closed).length} open · ${vf.types.filter(t => t.closed).length} closed`} />
         {open.vendor && (
           <div className="px-4 pb-4 border-t border-slate-100 pt-4">
             <LinkRow path={vendorPath} />
             <div className="flex justify-end mb-3"><EditBar k="vendor" /></div>
             {editing.vendor ? (
               <>
-                <label className={labelCls}>Vendor / sponsor levels (comma separated)</label>
-                <input className={inputCls} value={vf.levels.join(', ')} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, levels: e.target.value.split(',').map(x => x.trim()).filter(Boolean) } }))} />
-                <label className={labelCls}>Payment options (comma separated)</label>
-                <input className={inputCls} value={vf.paymentOptions.join(', ')} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, paymentOptions: e.target.value.split(',').map(x => x.trim()).filter(Boolean) } }))} />
+                <label className={labelCls}>Booth types</label>
+                <p className="text-xs text-slate-500 -mt-1 mb-2">The fee is what an approved vendor is asked to pay. Set it to 0 and the form says &ldquo;confirmed on approval&rdquo; instead of showing a number.</p>
+                <div className="space-y-2 mb-3">
+                  {vf.types.map((t, i) => (
+                    <div key={i} className={`rounded-xl border p-3 ${t.closed ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}>
+                      <div className="flex gap-2">
+                        <input className={`${inputCls} flex-1`} value={t.name} placeholder="Onsite vendor"
+                          onChange={e => setVType(i, { name: e.target.value })} />
+                        <div className="relative w-28 shrink-0">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                          <input className={`${inputCls} pl-6 tabular-nums`} type="number" min={0} step={25} value={t.price || 0}
+                            onChange={e => setVType(i, { price: Math.max(0, Number(e.target.value) || 0) })} />
+                        </div>
+                        <button type="button" onClick={() => setF(v => ({ ...v, vendor: { ...v.vendor, types: v.vendor.types.filter((_, j) => j !== i) } }))}
+                          className="shrink-0 w-9 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="Remove this type"><X size={15} className="mx-auto" /></button>
+                      </div>
+                      <input className={`${inputCls} mt-2`} value={t.note} placeholder="One line the applicant sees under the name"
+                        onChange={e => setVType(i, { note: e.target.value })} />
+                      <div className="flex flex-wrap gap-4 mt-2">
+                        <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                          <input type="checkbox" className="accent-teal-500" checked={t.selling} onChange={e => setVType(i, { selling: e.target.checked })} />
+                          Sells product on site
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                          <input type="checkbox" className="accent-slate-500" checked={t.closed} onChange={e => setVType(i, { closed: e.target.checked })} />
+                          Listed but closed
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="text-sm font-semibold text-teal-700 hover:text-teal-800 mb-4"
+                  onClick={() => setF(v => ({ ...v, vendor: { ...v.vendor, types: [...v.vendor.types, { id: `type-${Date.now()}`, name: '', price: 0, selling: true, closed: false, note: '' }] } }))}>
+                  + Add a booth type
+                </button>
+
+                <label className={labelCls}>Approval notice</label>
+                <p className="text-xs text-slate-500 -mt-1 mb-1">Shown at the top of the form, so nobody assumes submitting reserves a spot.</p>
+                <MarkdownField value={vf.approvalNotice} onChange={val => setF(v => ({ ...v, vendor: { ...v.vendor, approvalNotice: val } }))} minHeight={80} />
+
+                <label className={labelCls}>Approved-vendor instructions</label>
+                <p className="text-xs text-slate-500 -mt-1 mb-2">What an approved vendor is told. Anything left blank is simply left out — fill these in as each event firms up.</p>
+                <div className="space-y-2 mb-4">
+                  {([
+                    ['where', 'Where to set up', 'Venue, which field, booth size, what you provide'],
+                    ['eventTimes', 'Event times', 'Gates, first game, last game \u2014 and when booths should be staffed'],
+                    ['loadIn', 'Load-in', 'Day, window, which gate, vehicle and tent-weight rules'],
+                    ['loadOut', 'Load-out', 'When it starts, and that breaking down early is not OK'],
+                    ['bring', 'What to bring', 'Tent, tables, weights, insurance certificate, trash bags'],
+                    ['contact', 'Who to contact', 'Vendor coordinator name and event-day phone'],
+                  ] as [keyof VendorInstructions, string, string][]).map(([k, label, ph]) => (
+                    <div key={k}>
+                      <div className="text-xs font-semibold text-slate-600 mb-1">{label}</div>
+                      <textarea className={`${inputCls} min-h-[64px]`} value={vf.instructions[k]} placeholder={ph}
+                        onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, instructions: { ...v.vendor.instructions, [k]: e.target.value } } }))} />
+                    </div>
+                  ))}
+                </div>
+
                 <label className={labelCls}>Vendor disclaimer</label>
                 <MarkdownField value={vf.disclaimer} onChange={val => setF(v => ({ ...v, vendor: { ...v.vendor, disclaimer: val } }))} minHeight={120} />
                 <label className={labelCls}>Confirmation title</label>
@@ -354,8 +427,26 @@ function FormsInner() {
               </>
             ) : (
               <div className="space-y-3">
-                <div><div className={labelCls}>Vendor / sponsor levels</div><div className="flex flex-wrap gap-1.5">{vf.levels.map(l => <span key={l} className="text-xs bg-teal-50 text-teal-700 rounded-full px-2.5 py-1">{l}</span>)}</div></div>
-                <div><div className={labelCls}>Payment options</div><div className="flex flex-wrap gap-1.5">{vf.paymentOptions.map(l => <span key={l} className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">{l}</span>)}</div></div>
+                <div>
+                  <div className={labelCls}>Booth types</div>
+                  <div className="space-y-1">
+                    {vf.types.map((t, i) => (
+                      <div key={i} className="flex items-baseline justify-between gap-3 text-sm border-b border-slate-50 py-1.5 last:border-0">
+                        <span className={t.closed ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}>{t.name || 'Untitled'}</span>
+                        <span className="tabular-nums font-semibold text-slate-600 shrink-0">
+                          {t.closed ? <span className="text-xs font-normal text-slate-400 no-underline">closed</span> : (priceLabel(t.price) || <span className="text-xs font-normal text-slate-400">on approval</span>)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div><div className={labelCls}>Approval notice</div><div className="text-sm text-slate-600">{vf.approvalNotice || <span className="text-slate-400">None</span>}</div></div>
+                <div>
+                  <div className={labelCls}>Approved-vendor instructions</div>
+                  {(Object.keys(vf.instructions) as (keyof VendorInstructions)[]).filter(k => String(vf.instructions[k]).trim()).length === 0
+                    ? <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Nothing filled in yet — approved vendors won&rsquo;t get setup details.</div>
+                    : <div className="flex flex-wrap gap-1.5">{(Object.keys(vf.instructions) as (keyof VendorInstructions)[]).filter(k => String(vf.instructions[k]).trim()).map(k => <span key={k} className="text-xs bg-teal-50 text-teal-700 rounded-full px-2.5 py-1">{k}</span>)}</div>}
+                </div>
                 <div><div className={labelCls}>Disclaimer</div><div className="text-sm text-slate-600 whitespace-pre-line max-h-32 overflow-y-auto bg-slate-50 rounded-lg p-3 border border-slate-100">{vf.disclaimer}</div></div>
                 <div><div className={labelCls}>Confirmation</div>{ro(vf.confirmationTitle)}<div className="text-sm text-slate-500 mt-0.5">{vf.confirmationMessage}</div></div>
                 <div className="text-sm text-slate-600">Email confirmation: <span className="font-medium">{vf.emailConfirmation ? 'On' : 'Off'}</span></div>

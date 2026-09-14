@@ -50,9 +50,15 @@ export type VendorConfig = {
 }
 
 export const DEFAULT_VENDOR_TYPES: VendorType[] = [
-  { id: 'retail',   name: 'Retail / merchandise vendor', price: 0, selling: true,  closed: false, note: 'Selling product from a booth on site.' },
-  { id: 'showcase', name: 'On-site showcase',            price: 0, selling: false, closed: false, note: 'Presenting, demoing or sampling only — no sales from the booth.' },
-  { id: 'food',     name: 'Food & beverage',             price: 0, selling: true,  closed: true,  note: 'Food and beverage is under contract for this event, so we are not accepting applications.' },
+  // Prices carried over from the Cognito form (SEGVendorRequestForm) this replaced.
+  // NOTE: that form held TWO price lists that disagreed -- the level dropdown a vendor
+  // picked from, and a second "Credit Card Payment" dropdown that was the one actually
+  // charging (Onsite Vendor $600 vs $500, Showcase $300 vs $250, and so on down the
+  // list). These are the published numbers, the ones vendors were quoted.
+  { id: 'vendor',   name: 'Onsite vendor',               price: 600,  selling: true,  closed: false, note: 'One booth space for the weekend. Sell from your own tent, your own setup.' },
+  { id: 'vendor-2', name: 'Onsite vendor, two locations', price: 1000, selling: true,  closed: false, note: 'Two spaces at opposite ends of the complex, so you catch both field clusters.' },
+  { id: 'showcase', name: 'Onsite showcase',             price: 300,  selling: false, closed: false, note: 'Present, demo or hand out samples. No sales from the booth \u2014 recruiting services, clinics, camps.' },
+  { id: 'food',     name: 'Food & beverage',             price: 0,    selling: true,  closed: true,  note: 'Concessions are contracted for the full season. We aren\u2019t taking food or drink applications.' },
 ]
 
 export const DEFAULT_APPROVAL_NOTICE =
