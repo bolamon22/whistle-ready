@@ -2,6 +2,7 @@ import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import VendorForm from '@/app/o/[slug]/register/vendor/VendorForm'
+import { vendorConfig } from '@/lib/vendorForm'
 
 // Cache policy for published pages.
 //
@@ -18,9 +19,6 @@ import VendorForm from '@/app/o/[slug]/register/vendor/VendorForm'
 export const revalidate = 30
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
-const D_DISCLAIMER = "Vendors are not allowed to sell tournament merchandise unless receiving prior approval from the organizer. Items not pre-approved on this application must be removed from the booth or may result in denied future access. Products that do not fit the mission of the event or are deemed not family-friendly will not be allowed to be sold."
-const D_LEVELS = ['Food Vendor', 'Merchandise Vendor', 'Bronze Sponsor', 'Silver Sponsor', 'Gold Sponsor']
-const D_PAY = ['Check', 'Venmo', 'Zelle', 'Invoice me']
 
 export default async function TournamentVendorRequest({ params }: { params: { id: string } }) {
   const client = db()
@@ -33,15 +31,14 @@ export default async function TournamentVendorRequest({ params }: { params: { id
   let forms: any = {}
   try { if (orgId) { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${orgId}`] }); if (r.rows.length) forms = JSON.parse(((r.rows[0] as any).value as string) || '{}') } } catch {}
   try { if (orgId) { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${orgId}`] }); if (s.rows.length) { const c = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (c.logo) org.logoUrl = c.logo } } } catch {}
-  const vf = forms.vendor || {}
-  const levels = Array.isArray(vf.levels) ? vf.levels : D_LEVELS
-  const paymentOptions = Array.isArray(vf.paymentOptions) ? vf.paymentOptions : D_PAY
-  const disclaimerHtml = mdToHtml(vf.disclaimer || D_DISCLAIMER)
-  const confirmationTitle = vf.confirmationTitle || 'Vendor request received!'
-  const confirmationHtml = mdToHtml(vf.confirmationMessage || "Thanks! We've received your vendor request and will be in touch about next steps and payment.")
+  // Types, copy and defaults all come from one normaliser so this page, the org
+  // page and the admin editor can never disagree about what a vendor can pick.
+  const cfg = vendorConfig(forms.vendor)
+  const disclaimerHtml = mdToHtml(cfg.disclaimer)
+  const confirmationHtml = mdToHtml(cfg.confirmationMessage)
   return (
     <div className="min-h-screen bg-slate-50">
-      <VendorForm orgId={orgId} levels={levels} paymentOptions={paymentOptions} disclaimerHtml={disclaimerHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} tournamentId={t.id} tournamentName={t.name} />
+      <VendorForm orgId={orgId} types={cfg.types} approvalNotice={cfg.approvalNotice} disclaimerHtml={disclaimerHtml} confirmationTitle={cfg.confirmationTitle} confirmationHtml={confirmationHtml} tournamentId={t.id} tournamentName={t.name} />
     </div>
   )
 }
