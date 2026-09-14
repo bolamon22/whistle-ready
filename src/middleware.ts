@@ -88,7 +88,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
-      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass')
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/vendor')
     if (!passthrough) {
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
@@ -117,6 +117,9 @@ export async function middleware(req: NextRequest) {
   if (/^\/claim(\/|$)/.test(pathname)) return NextResponse.next()
   // Pay-by-link for team registrations — public: the emailed link IS the authorization.
   if (/^\/pay(\/|$)/.test(pathname)) return NextResponse.next()
+  // Vendor approval (/vendor/<token>) — public for the same reason as /pass: the
+  // unguessable token IS the authorization, and the applicant has no account.
+  if (/^\/vendor(\/|$)/.test(pathname)) return NextResponse.next()
   // Player pass (/pass/<token>) — public: the unguessable token in the URL is the authorization.
   if (/^\/pass(\/|$)/.test(pathname)) return NextResponse.next()
 

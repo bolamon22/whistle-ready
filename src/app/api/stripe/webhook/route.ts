@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { prisma } from '@/lib/db'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
+import { markVendorPaid } from '@/lib/formSubmissions'
 
 export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -28,6 +29,21 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session
     const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null
 
+    // --- Vendor booth paid from the approval page (/vendor/<token>) ---
+    // Card sessions arrive here already paid. ACH sessions complete UNPAID and settle
+    // days later as payment_intent.succeeded (handled below), so only act on a paid one.
+    if (session.metadata?.type === 'vendor_booth' && session.metadata?.vendorToken) {
+      try {
+        if (session.payment_status === 'paid') {
+          const ok = await markVendorPaid(session.metadata.vendorToken, paymentIntent || session.id)
+          console.log(`Vendor booth paid: ${session.metadata.vendorToken} (${ok ? 'marked' : 'no row'})`)
+        } else {
+          console.log(`Vendor booth session completed unpaid (ACH pending): ${session.id}`)
+        }
+      } catch (e) {
+        console.error('Failed to mark vendor booth paid:', e)
+      }
+    }
     // --- Individual player registration ---
     if (session.metadata?.tournamentId) {
       try {
@@ -116,6 +132,16 @@ export async function POST(req: NextRequest) {
     // stripped by design, so that echo is a no-op -- THIS is the only thing that marks
     // a player paid. Without it they pay in full and sit at 'pending' forever.
     // updateMany to a fixed value, so a Stripe retry is harmless.
+    // Vendor booth settling later (ACH). Card booths were already marked on the session
+    // above; markVendorPaid writes the same values either way, so a double hit is fine.
+    if (pi.metadata?.type === 'vendor_booth' && pi.metadata?.vendorToken) {
+      try {
+        const ok = await markVendorPaid(pi.metadata.vendorToken, pi.id)
+        console.log(`Vendor booth paid via intent: ${pi.id} (${ok ? 'marked' : 'no row'})`)
+      } catch (e) {
+        console.error('Failed to mark vendor booth paid:', e)
+      }
+    }
     if (pi.metadata?.type === 'individual_registration') {
       try {
         const res = await prisma.individualRegistration.updateMany({

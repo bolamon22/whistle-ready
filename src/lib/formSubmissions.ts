@@ -24,6 +24,16 @@ export type FormSubmission = {
   /** Archived (soft-deleted) by staff: not attending, a test entry… Hidden from lists, counts and badges by default. */
   archivedAt?: string | null
   archivedBy?: string | null
+  /** Vendor applications: '' = awaiting review, then 'approved' | 'declined'. */
+  status?: string
+  statusAt?: string | null
+  statusBy?: string | null
+  /** What an approved vendor owes, frozen at approval so a later price edit can't change it. */
+  amountDue?: number
+  /** '' | 'paid'. Set by the Stripe webhook, never by the browser. */
+  paymentStatus?: string
+  paidAt?: string | null
+  stripeRef?: string | null
   updatedAt?: string
 }
 
@@ -56,7 +66,10 @@ export function ensureSubmissionsTable(): Promise<void> {
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_team" ON "OrgFormSubmission" ("orgId", "tournamentId", "teamName")`)
       // Game-day check-in (Sep 2026) and the player pass (Sep 2026): added after the table
       // shipped, so ALTER in place.
-      for (const col of ['"checkedInAt" TEXT', '"checkedInBy" TEXT', '"passToken" TEXT', '"archivedAt" TEXT', '"archivedBy" TEXT']) {
+      // Vendor approval + booth payment (Sep 2026). Same ALTER-in-place pattern.
+      for (const col of ['"checkedInAt" TEXT', '"checkedInBy" TEXT', '"passToken" TEXT', '"archivedAt" TEXT', '"archivedBy" TEXT',
+                         '"status" TEXT', '"statusAt" TEXT', '"statusBy" TEXT', '"amountDue" REAL',
+                         '"paymentStatus" TEXT', '"paidAt" TEXT', '"stripeRef" TEXT']) {
         try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgFormSubmission" ADD COLUMN ${col}`) } catch { /* already there */ }
       }
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_pass" ON "OrgFormSubmission" ("passToken")`)
@@ -94,6 +107,9 @@ function rowToSub(r: any): FormSubmission {
     checkedInAt: r.checkedInAt || null, checkedInBy: r.checkedInBy || null,
     passToken: r.passToken || null,
     archivedAt: r.archivedAt || null, archivedBy: r.archivedBy || null,
+    status: String(r.status || ''), statusAt: r.statusAt || null, statusBy: r.statusBy || null,
+    amountDue: Number(r.amountDue) || 0,
+    paymentStatus: String(r.paymentStatus || ''), paidAt: r.paidAt || null, stripeRef: r.stripeRef || null,
     updatedAt: r.updatedAt || undefined,
   }
 }
@@ -229,6 +245,41 @@ export async function setArchived(orgId: string, id: string, on: boolean, by?: s
     `UPDATE "OrgFormSubmission" SET "archivedAt" = ?, "archivedBy" = ?, "updatedAt" = ? WHERE "orgId" = ? AND "id" = ?`,
     on ? new Date().toISOString() : null, on ? (by || null) : null, new Date().toISOString(), orgId, id)
   return getSubmission(orgId, id)
+}
+
+/** Approve or decline a vendor application.
+ *
+ *  `amountDue` is frozen here on purpose: the booth fee lives in editable org config,
+ *  and a vendor who was approved at $600 must still owe $600 after someone edits the
+ *  price list. Passing '' clears the decision and puts it back in the queue. */
+export async function setSubmissionStatus(orgId: string, id: string, status: '' | 'approved' | 'declined', by?: string, amountDue?: number): Promise<FormSubmission | null> {
+  await ensureOrgMigrated(orgId)
+  const now = new Date().toISOString()
+  if (status === 'approved') {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "OrgFormSubmission" SET "status" = ?, "statusAt" = ?, "statusBy" = ?, "amountDue" = ?, "updatedAt" = ? WHERE "orgId" = ? AND "id" = ?`,
+      status, now, by || null, Number(amountDue) || 0, now, orgId, id)
+  } else {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "OrgFormSubmission" SET "status" = ?, "statusAt" = ?, "statusBy" = ?, "updatedAt" = ? WHERE "orgId" = ? AND "id" = ?`,
+      status, status ? now : null, status ? (by || null) : null, now, orgId, id)
+  }
+  return getSubmission(orgId, id)
+}
+
+/** Mark a booth paid. Keyed on the approval token because that's all the Stripe
+ *  session carries back, and written only from the webhook -- the browser can't
+ *  reach this, same reason team registrations don't trust a client "paid" echo.
+ *  Idempotent: a Stripe retry rewrites the same values. */
+export async function markVendorPaid(token: string, ref: string): Promise<boolean> {
+  if (!token || !/^[a-f0-9]{32}$/i.test(token)) return false
+  await ensureSubmissionsTable()
+  const now = new Date().toISOString()
+  await prisma.$executeRawUnsafe(
+    `UPDATE "OrgFormSubmission" SET "paymentStatus" = 'paid', "paidAt" = COALESCE("paidAt", ?), "stripeRef" = ?, "updatedAt" = ? WHERE "passToken" = ?`,
+    now, ref, now, token)
+  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT "paymentStatus" FROM "OrgFormSubmission" WHERE "passToken" = ? LIMIT 1`, token)
+  return String(rows?.[0]?.paymentStatus || '') === 'paid'
 }
 
 /** Clear every check-in matching the filter (e.g. one team before day two). Returns rows affected. */

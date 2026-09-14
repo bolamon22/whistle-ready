@@ -78,6 +78,19 @@ export const DEFAULT_CONFIRMATION_MESSAGE =
 
 const EMPTY_INSTRUCTIONS: VendorInstructions = { where: '', eventTimes: '', loadIn: '', loadOut: '', bring: '', contact: '' }
 
+// The level list this app shipped as its built-in default before booth types existed.
+// An org whose saved `levels` is exactly this never actually chose anything -- opening
+// the Forms editor once was enough to persist the defaults -- so it should move to the
+// current types rather than be frozen on Bronze/Silver/Gold forever. A list that
+// differs in any way WAS a real choice and is preserved.
+const LEGACY_DEFAULT_LEVELS = ['Food Vendor', 'Merchandise Vendor', 'Bronze Sponsor', 'Silver Sponsor', 'Gold Sponsor']
+export function isUntouchedLegacyLevels(levels: unknown): boolean {
+  if (!Array.isArray(levels) || levels.length !== LEGACY_DEFAULT_LEVELS.length) return false
+  const a = levels.map(x => String(x).trim().toLowerCase()).sort()
+  const b = LEGACY_DEFAULT_LEVELS.map(x => x.toLowerCase()).sort()
+  return a.every((v, i) => v === b[i])
+}
+
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'type'
 
 /** Normalise whatever is stored (new shape, legacy `levels`, or nothing) into one config. */
@@ -94,7 +107,7 @@ export function vendorConfig(raw: any): VendorConfig {
       closed: Boolean(t?.closed),
       note: String(t?.note || ''),
     }))
-  } else if (Array.isArray(vf.levels) && vf.levels.length) {
+  } else if (Array.isArray(vf.levels) && vf.levels.length && !isUntouchedLegacyLevels(vf.levels)) {
     // Legacy: an org that customised its own list keeps it verbatim. Names are all
     // we had, so everything is open and priced at approval until they edit it.
     types = vf.levels.map((name: string, i: number) => ({

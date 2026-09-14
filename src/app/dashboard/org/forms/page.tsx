@@ -10,7 +10,7 @@ import MarkdownField from '@/components/MarkdownField'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import PushToggle from '@/components/PushToggle'
 import { DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { DEFAULT_VENDOR_TYPES, DEFAULT_APPROVAL_NOTICE, DEFAULT_VENDOR_DISCLAIMER, DEFAULT_CONFIRMATION_TITLE, DEFAULT_CONFIRMATION_MESSAGE, priceLabel, type VendorType, type VendorInstructions } from '@/lib/vendorForm'
+import { isUntouchedLegacyLevels, DEFAULT_VENDOR_TYPES, DEFAULT_APPROVAL_NOTICE, DEFAULT_VENDOR_DISCLAIMER, DEFAULT_CONFIRMATION_TITLE, DEFAULT_CONFIRMATION_MESSAGE, priceLabel, type VendorType, type VendorInstructions } from '@/lib/vendorForm'
 
 async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
   if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) return file
@@ -160,7 +160,7 @@ function FormsInner() {
           // the current defaults.
           vendor: { ...EMPTY.vendor, ...vv,
             types: Array.isArray(vv.types) && vv.types.length ? vv.types
-              : Array.isArray(vv.levels) && vv.levels.length
+              : Array.isArray(vv.levels) && vv.levels.length && !isUntouchedLegacyLevels(vv.levels)
                 ? vv.levels.map((n: string) => ({ id: String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: String(n), price: 0, selling: !/sponsor/i.test(String(n)), closed: false, note: '' }))
                 : EMPTY.vendor.types,
             instructions: { ...EMPTY.vendor.instructions, ...(vv.instructions || {}) } },
