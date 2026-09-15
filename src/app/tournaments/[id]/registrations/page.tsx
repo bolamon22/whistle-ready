@@ -1639,7 +1639,7 @@ export default function RegistrationsPage() {
                       <input type="tel" value={indivPhone} onChange={e => setIndivPhone(e.target.value)} className={inputCls} /></div>
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
                       <input type="date" value={indivDob} onChange={e => setIndivDob(e.target.value)} className={inputCls} /></div>
-                    <div><label className="block text-sm font-medium text-slate-700 mb-1">US Lacrosse #</label>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">USA Lacrosse #</label>
                       <input value={indivUsLacrosse} onChange={e => setIndivUsLacrosse(e.target.value)} className={inputCls} /></div>
                   </div>
                 </div>

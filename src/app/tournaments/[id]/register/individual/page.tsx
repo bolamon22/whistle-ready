@@ -6,6 +6,7 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import { USA_LACROSSE_LABEL, USA_LACROSSE_LOOKUP, USA_LACROSSE_LOOKUP_TEXT } from '@/lib/usaLacrosse'
 
 interface FeeTier { id: string; name: string; price: number; description: string }
 interface TournamentInfo {
@@ -359,10 +360,10 @@ export default function IndividualRegPage() {
                 <input className={inputCls} type="date" value={dob} onChange={e => setDob(e.target.value)} required />
               </div>
               <div>
-                <label className={labelCls}>US Lacrosse Member # *</label>
+                <label className={labelCls}>{USA_LACROSSE_LABEL} *</label>
                 <input className={inputCls} value={usLax} onChange={e => setUsLax(e.target.value)} placeholder="e.g. 1234567" required />
-                <a href="https://www.uslacrosse.org/membership" target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-teal-600 hover:underline mt-1 inline-block">US Lacrosse Member Look Up →</a>
+                <a href={USA_LACROSSE_LOOKUP} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-teal-600 hover:text-teal-800 hover:underline mt-1 inline-block">{USA_LACROSSE_LOOKUP_TEXT} →</a>
               </div>
             </div>
           </div>

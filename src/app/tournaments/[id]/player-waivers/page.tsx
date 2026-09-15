@@ -6,12 +6,13 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer, Archive, ArchiveRestore, Trash2 } from 'lucide-react'
+import { USA_LACROSSE_SHORT } from '@/lib/usaLacrosse'
 
 type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[]; checkedInAt?: string | null; checkedInBy?: string | null; archivedAt?: string | null; archivedBy?: string | null }
 
 // Friendly labels for the detail view (anything not listed falls back to a de-camelCased key).
 const LABELS: Record<string, string> = {
-  playerName: 'Player', playerEmail: 'Player email', usLacrosse: 'US Lacrosse #', dob: 'Date of birth', gender: 'Gender',
+  playerName: 'Player', playerEmail: 'Player email', usLacrosse: USA_LACROSSE_SHORT, dob: 'Date of birth', gender: 'Gender',
   grade: 'Grade', clubName: 'Club', teamName: 'Team', jerseyNumber: 'Jersey #', position: 'Position', parentName: 'Parent', parentEmail: 'Parent email',
   parentPhone: 'Parent phone', parent2Name: 'Parent 2', parent2Email: 'Parent 2 email', parent2Phone: 'Parent 2 phone',
   emergencyName: 'Emergency contact', emergencyPhone: 'Emergency phone', hotel: 'Hotel / rental', hotelName: 'Where staying',
@@ -43,7 +44,7 @@ function detailEntries(d: any): [string, any][] {
 const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 const EDIT_FIELDS: { key: string; label: string; type?: string; options?: string[]; team?: boolean }[] = [
   { key: 'playerName', label: 'Player' }, { key: 'playerEmail', label: 'Player email', type: 'email' },
-  { key: 'usLacrosse', label: 'US Lacrosse #' }, { key: 'dob', label: 'Date of birth', type: 'date' },
+  { key: 'usLacrosse', label: USA_LACROSSE_SHORT }, { key: 'dob', label: 'Date of birth', type: 'date' },
   { key: 'gender', label: 'Gender', options: ['', 'Female', 'Male'] }, { key: 'grade', label: 'Grade', options: ['', ...GRADES] },
   { key: 'teamName', label: 'Team', team: true }, { key: 'jerseyNumber', label: 'Jersey #' },
   { key: 'position', label: 'Position', options: ['', 'Attack', 'Midfield', 'Defense', 'Goalie', 'FOGO', 'LSM', 'Multiple / not sure'] },
@@ -570,7 +571,7 @@ export default function PlayerWaiverEntries() {
           <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search player, parent, email, phone, US Lacrosse #…"
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search player, parent, email, phone, USA Lacrosse #…"
                 className="w-full border border-slate-300 rounded-lg pl-9 pr-9 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400" />
               {q && <button onClick={() => setQ('')} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"><X size={14} /></button>}
             </div>

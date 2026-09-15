@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2, Printer } from 'lucide-react'
 import { cardPrintCss, CARD_PRINT_NOTE } from '@/lib/cardPrint'
+import { USA_LACROSSE_LABEL, USA_LACROSSE_SHORT, USA_LACROSSE_LOOKUP, USA_LACROSSE_LOOKUP_TEXT } from '@/lib/usaLacrosse'
 import { uploadPlayerPhoto, uploadClubLogo } from '@/lib/photoClient'
 import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
@@ -305,7 +306,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   }
 
   const receiptRows: [string, string][] = [
-    ['Player name', d.playerName], ['Player email', d.playerEmail], ['US Lacrosse #', d.usLacrosse], ['Date of birth', d.dob],
+    ['Player name', d.playerName], ['Player email', d.playerEmail], [USA_LACROSSE_SHORT, d.usLacrosse], ['Date of birth', d.dob],
     ['Gender', d.gender], ['Grade', d.grade], ['Team', resolvedTeam], ['Jersey #', d.jerseyNumber], ['Position', d.position],
     ['Parent', d.parentName], ['Parent email', d.parentEmail], ['Parent phone', d.parentPhone],
     ['Parent 2', d.parent2Name], ['Parent 2 email', d.parent2Email], ['Parent 2 phone', d.parent2Phone],
@@ -375,7 +376,14 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
           <div><label className={labelCls}>Player email</label><input className={inputCls} type="email" value={d.playerEmail} onChange={e => set('playerEmail', e.target.value)} /></div>
-          <div><label className={labelCls}>US Lacrosse member # *</label><input className={inputCls} value={d.usLacrosse} onChange={e => set('usLacrosse', e.target.value)} required /></div>
+          <div>
+            <label className={labelCls}>{USA_LACROSSE_LABEL} *</label>
+            <input className={inputCls} value={d.usLacrosse} onChange={e => set('usLacrosse', e.target.value)} required />
+            {/* Required field, and the number lives on a card in a drawer somewhere.
+                Without this the parent abandons the form to go hunting. */}
+            <a href={USA_LACROSSE_LOOKUP} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-teal-600 hover:text-teal-800 hover:underline mt-1 inline-block">{USA_LACROSSE_LOOKUP_TEXT} &rarr;</a>
+          </div>
           <div><label className={labelCls}>Date of birth *</label><input className={inputCls} type="date" value={d.dob} onChange={e => set('dob', e.target.value)} required /></div>
           {fields.gender && <div><label className={labelCls}>Gender *</label><select className={inputCls} value={d.gender} onChange={e => set('gender', e.target.value)} required><option value="">Select…</option><option>Female</option><option>Male</option></select></div>}
           {fields.grade && <div><label className={labelCls}>Player grade *</label><select className={inputCls} value={d.grade} onChange={e => set('grade', e.target.value)} required><option value="">Select…</option>{GRADES.map(g => <option key={g}>{g}</option>)}</select></div>}
