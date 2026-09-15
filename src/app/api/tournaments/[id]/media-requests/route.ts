@@ -5,6 +5,7 @@ import { listSubmissions, deleteSubmission, getSubmission, setSubmissionStatus, 
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { sendEmail, orgSender, emailEnabled } from '@/lib/email'
 import { mediaConfig } from '@/lib/mediaForm'
+import { ensureProfileFromApplication } from '@/lib/photographers'
 import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 import { prisma } from '@/lib/db'
 
@@ -81,6 +82,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const token = await ensurePassToken(g.orgId, subId)
     const updated = await setSubmissionStatus(g.orgId, subId, 'approved', String(g.gate.session?.user?.email || '') || undefined)
 
+    // Approving someone for bookings creates their public page from what they
+    // already typed. Idempotent, so approving them for a second event reuses the
+    // page they already have rather than making another one.
+    let profileSlug = ''
+    const wantsBookings = (Array.isArray(cur.data?.levels) ? cur.data.levels : []).includes('book')
+    if (wantsBookings) {
+      try { profileSlug = await ensureProfileFromApplication(g.orgId, cur.data) } catch { /* the credential still stands */ }
+    }
+
     let emailed = false
     const to = String(cur.data?.email || '').trim()
     if (token && to && emailEnabled()) {
@@ -110,6 +120,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           ].join('')),
           button(link, 'Open your credential'),
           `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8;word-break:break-all">${link}</p>`,
+          profileSlug
+            ? panel('Your booking page', [
+                `We&rsquo;ve set up <strong style="color:#0f172a">${base}/photographers/${esc(profileSlug)}</strong> so teams and families can book you directly.`,
+                ' It&rsquo;s live now with your name and contact details \u2014 <strong style="color:#0f172a">add your bio, prices and a few sample shots from your credential page</strong> and it starts working for you.',
+                ' We take no cut of anything you book.',
+              ].join(''))
+            : '',
           `<p style="margin:18px 0 0">Anything you need before the weekend, just reply to this email.</p>`,
         ].join('')
 
@@ -127,7 +144,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       } catch { /* the approval stands; staff can resend the link by hand */ }
     }
 
-    return NextResponse.json({ ok: true, submission: updated, token, emailed })
+    return NextResponse.json({ ok: true, submission: updated, token, emailed, profileSlug })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Could not update this application' }, { status: 500 })
   }

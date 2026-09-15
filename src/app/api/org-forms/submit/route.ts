@@ -197,6 +197,37 @@ export async function POST(req: NextRequest) {
             }),
           })
         }
+        // --- and a copy to the organizer ---
+        // The org isn't a party to this sale, but it credentialed the photographer and
+        // is the one who has to answer for them, so it needs to know a booking happened
+        // and who made it. Sent, not just stored: nobody checks a list they don't know
+        // has changed.
+        let notify = ''
+        try {
+          const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${orgId}` } })
+          notify = String(mediaConfig(JSON.parse(row?.value || '{}').media).notifyEmail || '').trim()
+        } catch { /* fall through to the org contact */ }
+        notify = notify || String(org.contactEmail || OFFICE_CC).trim()
+        if (notify && emailEnabled()) {
+          const link = `${base}${data.tournamentId ? `/tournaments/${data.tournamentId}/photo-requests` : ''}`
+          const body = [
+            `<p style="margin:0 0 4px">A family booked <strong style="color:#0f172a">${esc(shooter)}</strong>${evName ? ` for <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
+            detailRows([
+              ['Photographer', shooter],
+              ['Booked by', String(data.contactName || '')],
+              ['Email', String(data.email || '')],
+              ['Phone', String(data.phone || '')],
+              ...rows,
+            ]),
+            data.tournamentId ? button(link, 'See all photo bookings') : '',
+            `<p style="margin:14px 0 0;font-size:13px;color:#94a3b8">For your records only \u2014 the booking, the price and the photos are between the family and ${esc(shooter)}.</p>`,
+          ].join('')
+          await sendEmail({
+            ...orgSender(org), to: notify,
+            subject: `Photo booking \u2014 ${shooter}${evName ? ` (${evName})` : ''}`,
+            html: renderEmail({ orgName, logoUrl: logo, eyebrow: 'Photo booking', title: `${esc(String(data.contactName || 'A family'))} booked ${shooter}`, body }),
+          })
+        }
       } catch { /* mail must never fail the submission */ }
       return NextResponse.json({ ok: true, id: saved.id })
     }

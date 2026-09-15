@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation'
 import { Camera, Check, Clock, MapPin, Upload, Phone, ShieldAlert } from 'lucide-react'
 import { loadMediaApproval } from '@/lib/mediaApproval'
+import { ensureProfileFromApplication, profileBySlug, DEFAULT_PACKAGES } from '@/lib/photographers'
+import { orgBaseUrl } from '@/lib/orgDomains'
+import ProfileEditor from './ProfileEditor'
 
 // PUBLIC (see src/middleware.ts): a photographer's credential page. The 128-bit token
 // in the URL is the authorization -- they have no account, and the link only ever went
@@ -32,6 +35,17 @@ export default async function MediaCredentialPage({ params }: { params: { token:
   const person = String(d.name || '')
   const ins = a.cfg.instructions
   const hasPacket = Object.values(ins).some(v => String(v || '').trim())
+
+  // Self-serve: an approved photographer who asked for bookings owns their public
+  // page and edits it from here, so nobody at the org has to retype a bio.
+  const wantsBookings = (Array.isArray(d.levels) ? d.levels : []).includes('book')
+  let profile: any = null
+  if (a.approved && wantsBookings) {
+    try {
+      const slug = await ensureProfileFromApplication(a.orgId, d)
+      if (slug) profile = await profileBySlug(a.orgId, slug)
+    } catch { /* the credential still renders without the editor */ }
+  }
 
   if (a.declined) {
     return (
@@ -121,6 +135,22 @@ export default async function MediaCredentialPage({ params }: { params: { token:
               this page before the event &mdash; same link, so keep it.
             </p>
           </div>
+        )}
+
+        {profile && (
+          <ProfileEditor
+            token={params.token}
+            pageUrl={`${orgBaseUrl(a.org?.slug)}/photographers/${profile.slug}`}
+            initial={{
+              slug: String(profile.slug || ''), name: String(profile.name || ''), business: String(profile.business || ''),
+              location: String(profile.location || ''), bio: String(profile.bio || ''),
+              website: String(profile.website || ''), instagram: String(profile.instagram || ''),
+              bookingEmail: String(profile.bookingEmail || ''), avatarUrl: String(profile.avatarUrl || ''),
+              coverUrl: String(profile.coverUrl || ''),
+              packages: Array.isArray(profile.packages) && profile.packages.length ? profile.packages : DEFAULT_PACKAGES.map(x => ({ ...x })),
+              samples: Array.isArray(profile.samples) ? profile.samples : [],
+            }}
+          />
         )}
 
         <div className="mt-8 text-[12.5px] text-slate-500 leading-relaxed bg-white border border-slate-200 rounded-2xl p-5">
