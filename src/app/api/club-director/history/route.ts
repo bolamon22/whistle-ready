@@ -1,15 +1,19 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { viewAs } from '@/lib/clubDirectorView'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
+  if (!as.ok) return as.res
+
   // Get all club links for this user across all tournaments
   const links = await prisma.clubDirectorLink.findMany({
-    where: { userId: session.user.id },
+    where: { userId: as.userId },
   })
   if (links.length === 0) return NextResponse.json([])
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { AlertTriangle, CalendarDays, Check, ClipboardList, CreditCard, Eye, Globe, RefreshCw, Trophy, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
@@ -128,8 +129,9 @@ function ReregisterModal({ entry, tournaments, onClose }: {
         </div>
 
         {targetTournament && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4 text-sm text-yellow-800">
-            ⚠️ Invoice amount will be set to $0 — the tournament admin will confirm your pricing.
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4 text-sm text-yellow-800 flex items-start gap-2">
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span>Invoice amount will be set to $0 — the tournament admin will confirm your pricing.</span>
           </div>
         )}
 
@@ -161,14 +163,23 @@ export default function ClubDirectorDashboard() {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [reregEntry, setReregEntry] = useState<HistoryEntry | null>(null)
+  // Staff (admin/director) can open a club director's own portal with ?userId=,
+  // so a report like "my Overview shows no teams" is seen rather than guessed
+  // (Bo, Sep 15 2026). Read from location instead of useSearchParams so the page
+  // needs no Suspense boundary. Empty for a director viewing their own portal.
+  const [viewUserId, setViewUserId] = useState('')
+  const [viewingUser, setViewingUser] = useState<{ name: string; email: string } | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
     if (status !== 'authenticated') return
+    const vu = typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('userId') || '')
+    setViewUserId(vu)
+    const q = vu ? `?userId=${encodeURIComponent(vu)}` : ''
     Promise.all([
       fetch('/api/tournaments').then(r => r.json()),
-      fetch('/api/club-director/links').then(r => r.json()),
-      fetch('/api/club-director/permissions').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/club-director/links${q}`).then(r => r.json()),
+      fetch(`/api/club-director/permissions${q}`).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([t, linkRes, p]) => {
       if (p && !p.error) setPerms(p)
       // /api/tournaments returns [] for anyone without an orgId, which is every
@@ -183,14 +194,15 @@ export default function ClubDirectorDashboard() {
       setTournaments(list)
       const linkedIds = [...new Set((links as { tournamentId: string }[]).map(l => l.tournamentId))]
       const first = list.find(x => linkedIds.includes(x.id)) || list[0]
-      if (first) { setSelTournament(first.id); loadData(first.id) }
+      if (!Array.isArray(linkRes) && linkRes?.viewing) setViewingUser(linkRes.viewing)
+      if (first) { setSelTournament(first.id); loadData(first.id, vu) }
       setLoading(false)
     })
   }, [status])
 
-  const loadData = async (tournamentId: string) => {
+  const loadData = async (tournamentId: string, uid = viewUserId) => {
     setDataLoading(true)
-    const res = await fetch(`/api/club-director/data?tournamentId=${tournamentId}`)
+    const res = await fetch(`/api/club-director/data?tournamentId=${tournamentId}${uid ? `&userId=${encodeURIComponent(uid)}` : ''}`)
     const d = await res.json()
     setData(d)
     setDataLoading(false)
@@ -199,7 +211,7 @@ export default function ClubDirectorDashboard() {
   const loadHistory = async () => {
     if (history.length > 0) return
     setHistoryLoading(true)
-    const res = await fetch('/api/club-director/history')
+    const res = await fetch(`/api/club-director/history${viewUserId ? `?userId=${encodeURIComponent(viewUserId)}` : ''}`)
     const h = await res.json()
     setHistory(Array.isArray(h) ? h : [])
     setHistoryLoading(false)
@@ -215,7 +227,9 @@ export default function ClubDirectorDashboard() {
   if (noLinks) return (
     <div className="max-w-lg mx-auto py-16 text-center">
       <div className="bg-white border border-gray-200 rounded-2xl p-10">
-        <div className="text-5xl mb-4">🏒</div>
+        <div className="h-14 w-14 mx-auto mb-4 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center">
+          <Users size={26} className="text-violet-500" />
+        </div>
         <h1 className="text-xl font-bold text-gray-800 mb-2">Welcome, {session?.user?.name}!</h1>
         <p className="text-gray-500">Your account hasn't been linked to a club yet.</p>
         <p className="text-sm text-gray-400 mt-2">Please contact your tournament administrator to get linked to your club.</p>
@@ -244,18 +258,29 @@ export default function ClubDirectorDashboard() {
   const totalPaid = data?.registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0) ?? 0
   const balance = totalInvoiced - totalPaid
 
-  const TABS: { key: typeof tab; label: string; perm?: string }[] = [
-    { key: 'overview',  label: '📋 Overview',  perm: 'cd_overview' },
-    { key: 'players',   label: '👤 Players & waivers', perm: 'cd_players'  },
-    { key: 'schedule',  label: '📅 Schedule',  perm: 'cd_schedule' },
-    { key: 'billing',   label: '💰 Billing',   perm: 'cd_billing'  },
-    { key: 'history',   label: '🏆 History'                        },
+  const TABS: { key: typeof tab; label: string; Icon: typeof Users; perm?: string }[] = [
+    { key: 'overview',  label: 'Overview',           Icon: ClipboardList, perm: 'cd_overview' },
+    { key: 'players',   label: 'Players & waivers',  Icon: Users,         perm: 'cd_players'  },
+    { key: 'schedule',  label: 'Schedule',           Icon: CalendarDays,  perm: 'cd_schedule' },
+    { key: 'billing',   label: 'Billing',            Icon: CreditCard,    perm: 'cd_billing'  },
+    { key: 'history',   label: 'History',            Icon: Trophy                             },
   ]
 
   return (
     <div className="max-w-5xl mx-auto py-8">
       {reregEntry && (
         <ReregisterModal entry={reregEntry} tournaments={tournaments} onClose={() => setReregEntry(null)} />
+      )}
+
+      {viewUserId && (
+        <div className="mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Eye size={16} className="shrink-0 mt-0.5" />
+          <span>
+            <strong className="font-semibold">Staff view.</strong> This is{' '}
+            {viewingUser?.name ? `${viewingUser.name}’s` : 'this club director’s'} portal, exactly as they see it
+            {viewingUser?.email ? ` (${viewingUser.email})` : ''}. Buttons that would act on their behalf are hidden.
+          </span>
+        </div>
       )}
 
       {/* Header */}
@@ -294,17 +319,17 @@ export default function ClubDirectorDashboard() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5 border-b border-gray-200 overflow-x-auto items-end">
-        {TABS.filter(t => !t.perm || perms[t.perm] !== false).map(t => (
-          <button key={t.key} onClick={() => switchTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${tab === t.key ? 'border-violet-500 text-violet-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            {t.label}
+        {TABS.filter(t => !t.perm || perms[t.perm] !== false).map(({ key, label, Icon }) => (
+          <button key={key} onClick={() => switchTab(key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${tab === key ? 'border-violet-500 text-violet-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <Icon size={15} className="shrink-0" /> {label}
           </button>
         ))}
         <div className="flex-1" />
         {selTournament && (
           <a href={`/tournaments/${selTournament}/public`} target="_blank" rel="noopener noreferrer"
-            className="px-3 py-2 text-sm font-semibold text-rose-600 hover:text-rose-700 whitespace-nowrap border-b-2 border-transparent hover:border-rose-300 transition-colors flex items-center gap-1">
-            🌐 Public View
+            className="px-3 py-2 text-sm font-semibold text-rose-600 hover:text-rose-700 whitespace-nowrap border-b-2 border-transparent hover:border-rose-300 transition-colors flex items-center gap-1.5">
+            <Globe size={15} className="shrink-0" /> Public view
           </a>
         )}
       </div>
@@ -330,10 +355,12 @@ export default function ClubDirectorDashboard() {
                         <div className="font-bold text-gray-800">{tournament.name}</div>
                         <div className="text-xs text-gray-500">{tournament.startDate}{tournament.endDate && tournament.endDate !== tournament.startDate ? ` – ${tournament.endDate}` : ''} · {tournament.location}</div>
                       </div>
-                      <button onClick={() => setReregEntry(entry)}
-                        className="shrink-0 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
-                        🔄 Register Again
-                      </button>
+                      {!viewUserId && (
+                        <button onClick={() => setReregEntry(entry)}
+                          className="shrink-0 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                          <RefreshCw size={12} className="shrink-0" /> Register again
+                        </button>
+                      )}
                     </div>
 
                     <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -353,7 +380,7 @@ export default function ClubDirectorDashboard() {
                           <div className="mt-3">
                             {championshipWins.map((c, j) => (
                               <div key={j} className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1">
-                                🏆 {c}
+                                <Trophy size={12} className="shrink-0" /> {c}
                               </div>
                             ))}
                           </div>
@@ -442,8 +469,8 @@ export default function ClubDirectorDashboard() {
                           <div className="font-semibold text-gray-800">{reg.clubName}</div>
                           <div className="text-sm text-gray-500">{reg.clubContact} · {reg.contactEmail}</div>
                         </div>
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${bal <= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {bal <= 0 ? '✓ Paid' : `Balance: ${fmt(bal)}`}
+                        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${bal <= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {bal <= 0 ? <><Check size={12} className="shrink-0" /> Paid</> : `Balance: ${fmt(bal)}`}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -564,7 +591,7 @@ export default function ClubDirectorDashboard() {
                       <div className="w-14 text-center flex-shrink-0">
                         <div className="text-xs text-gray-400">{g.date}</div>
                         <div className="text-sm font-semibold text-gray-700">{g.startTime}</div>
-                        {g.isChampionship && <div className="text-xs text-amber-600 font-bold">🏆 Final</div>}
+                        {g.isChampionship && <div className="text-xs text-amber-600 font-bold flex items-center justify-center gap-1"><Trophy size={11} className="shrink-0" /> Final</div>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-800 flex items-center gap-1.5">

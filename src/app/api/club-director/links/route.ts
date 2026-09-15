@@ -2,23 +2,31 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { viewAs } from '@/lib/clubDirectorView'
 
 // GET - fetch club director's linked clubs
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const userId = req.nextUrl.searchParams.get('userId') || session.user.id
-
-  // Only admin can look up other users
-  if (userId !== session.user.id && session.user.role !== 'admin') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
+  if (!as.ok) return as.res
+  const userId = as.userId
 
   const links = await prisma.clubDirectorLink.findMany({
     where: { userId },
     orderBy: { createdAt: 'desc' },
   })
+
+  // Who the portal belongs to, so staff viewing it can see whose screen this is
+  // rather than mistaking it for their own.
+  let viewing: { name: string; email: string } | null = null
+  if (as.viewingOther) {
+    try {
+      const u = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } })
+      if (u) viewing = { name: u.name || '', email: u.email || '' }
+    } catch { /* banner falls back to "this club director" */ }
+  }
 
   // The tournaments these links point at, returned alongside.
   //
@@ -40,7 +48,7 @@ export async function GET(req: NextRequest) {
       })
     } catch { /* the picker falls back to nothing rather than 500ing */ }
   }
-  return NextResponse.json({ links, tournaments })
+  return NextResponse.json({ links, tournaments, viewing })
 }
 
 // POST - create a link (admin only)

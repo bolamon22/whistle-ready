@@ -33,7 +33,7 @@ interface Registration {
   commEmailLog?: string
   confirmStatus?: string; confirmNote?: string; confirmAt?: string
   waiverUnassigned?: number
-  hasAccount?: boolean; accountRole?: string
+  hasAccount?: boolean; accountRole?: string; accountUserId?: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
 interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string }
@@ -1985,7 +1985,17 @@ export default function RegistrationsPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           {reg.clubContact && <span className="text-sm font-medium text-slate-600 truncate">{reg.clubContact}</span>}
                           {reg.contactEmail && (reg.hasAccount
-                            ? <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full" title="This contact has a Whistle Ready login"><Check size={10} /> Account</span>
+                            // A club director's chip opens their own portal, so a
+                            // report like "my Overview shows no teams" can be seen
+                            // instead of reconstructed (Bo, Sep 15 2026). Stop the
+                            // click bubbling or the card just expands underneath.
+                            ? (reg.accountRole === 'club_director' && reg.accountUserId
+                              ? <a href={`/dashboard/club-director?userId=${encodeURIComponent(reg.accountUserId)}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  title={`Open ${reg.clubContact || 'their'} club portal — see exactly what they see`}
+                                  className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 px-1.5 py-0.5 rounded-full transition-colors"><Check size={10} /> Account <ExternalLink size={9} className="opacity-70" /></a>
+                              : <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full" title="This contact has a Whistle Ready login"><Check size={10} /> Account</span>)
                             : <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full" title="No login yet — send them the account setup letter">No account</span>)}
                         </div>
                         <div className="text-sm text-slate-500 truncate">{reg.contactEmail} · {reg.contactPhone}</div>

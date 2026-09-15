@@ -66,13 +66,15 @@ export async function GET(req: NextRequest) {
 
     // Does the club contact have a Whistle Ready login? Matched by email, same
     // way the claim flow and the Staff Pool's App column do it.
-    const accounts = new Map<string, string>()
+    const accounts = new Map<string, { id: string; role: string }>()
     try {
       const emails = [...new Set(registrations.map((r: any) => String(r.contactEmail || '').trim().toLowerCase()).filter(Boolean))]
       if (emails.length) {
         const us: any[] = await prisma.$queryRawUnsafe(
-          `SELECT lower(email) AS email, role FROM "User" WHERE lower(email) IN (${emails.map(() => '?').join(',')})`, ...emails)
-        for (const u of us) accounts.set(String(u.email), String(u.role || ''))
+          `SELECT id, lower(email) AS email, role FROM "User" WHERE lower(email) IN (${emails.map(() => '?').join(',')})`, ...emails)
+        // id comes along so the Account chip can open that person's own club
+        // portal (Bo, Sep 15 2026) -- reading the bug report beat guessing.
+        for (const u of us) accounts.set(String(u.email), { id: String(u.id || ''), role: String(u.role || '') })
       }
     } catch { /* no account info — the card just won't show a badge */ }
 
@@ -85,7 +87,8 @@ export async function GET(req: NextRequest) {
         teams: (r.teams || []).map((t: any, i: number) => ({ ...t, waiverCount: sum.perTeam[i] ?? 0 })),
         waiverUnassigned: sum.unassigned,
         hasAccount: accounts.has(String(r.contactEmail || '').trim().toLowerCase()),
-        accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase()) || '',
+        accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.role || '',
+        accountUserId: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id || '',
       }
     }))
   } catch {
