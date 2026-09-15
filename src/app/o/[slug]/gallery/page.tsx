@@ -66,7 +66,13 @@ export default async function GalleryPage({ params }: { params: { slug: string }
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <OrgHeader org={org} homeHref={base || '/'} nav={nav} registerHref={registerHref} />
       <main className="max-w-6xl mx-auto px-6 py-14 w-full flex-1">
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 mb-8">Gallery</h1>
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-8">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">Gallery</h1>
+          <Link href={`${base}/gallery/shoot`}
+            className="text-[14px] font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5">
+            Shoot with us &rarr;
+          </Link>
+        </div>
         <PublicGallery photos={photos} tournaments={tournaments} covers={covers} />
       </main>
       <OrgFooter org={org} contact={contact} socials={socials} />

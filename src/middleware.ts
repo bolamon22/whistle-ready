@@ -88,7 +88,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
-      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/vendor')
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/vendor') || pathname.startsWith('/media')
     if (!passthrough) {
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
@@ -111,7 +111,7 @@ export async function middleware(req: NextRequest) {
   // share with players. It's a 5-line redirect to /register/individual (which IS
   // public) -- but it was never listed here, so this gate fired BEFORE the redirect
   // could run and every player who clicked the advertised link landed on /login.
-  if (/^\/tournaments\/[^/]+\/(register|individual-register|player-register|player-waiver|vendor-request|work|event|rules|p|today)(\/|$)/.test(pathname)) return NextResponse.next()
+  if (/^\/tournaments\/[^/]+\/(register|individual-register|player-register|player-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/.test(pathname)) return NextResponse.next()
   // "Claim your team" — MUST be public: the coach following this link has no account
   // yet (creating one is the whole point). The token in the URL is the authorization.
   if (/^\/claim(\/|$)/.test(pathname)) return NextResponse.next()
@@ -120,6 +120,11 @@ export async function middleware(req: NextRequest) {
   // Vendor approval (/vendor/<token>) — public for the same reason as /pass: the
   // unguessable token IS the authorization, and the applicant has no account.
   if (/^\/vendor(\/|$)/.test(pathname)) return NextResponse.next()
+  // Media credential (/media/<token>) — public for the same reason as /vendor and
+  // /pass: the photographer has no account, and the 128-bit token IS the
+  // authorization. Gating it behind /login is what made the individual-registration
+  // link bounce the exact people it was sent to.
+  if (/^\/media(\/|$)/.test(pathname)) return NextResponse.next()
   // Player pass (/pass/<token>) — public: the unguessable token in the URL is the authorization.
   if (/^\/pass(\/|$)/.test(pathname)) return NextResponse.next()
 

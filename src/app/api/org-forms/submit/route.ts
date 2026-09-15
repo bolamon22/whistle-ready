@@ -10,6 +10,7 @@ import { orgSender, OFFICE_CC } from '@/lib/email'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { orgLogoUrl } from '@/lib/org'
 import { vendorConfig, priceLabel } from '@/lib/vendorForm'
+import { mediaConfig, photographerSharePct } from '@/lib/mediaForm'
 import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     // its own application. They share a groupId so they can be recognised as one
     // submission later. Everything downstream (staff lists, approval, payment, packets)
     // then works unchanged.
-    const eventIds: string[] = formType === 'vendor' && Array.isArray(data.tournamentIds)
+    const eventIds: string[] = (formType === 'vendor' || formType === 'media') && Array.isArray(data.tournamentIds)
       ? ([...new Set(data.tournamentIds.map((x: any) => String(x || '')).filter(Boolean))] as string[])
       : []
     const siblings: { id: string; tournamentId: string; name: string }[] = []
@@ -127,6 +128,84 @@ export async function POST(req: NextRequest) {
         }
       } catch { /* mail must never fail the submission */ }
       return NextResponse.json({ ok: true, id: saved.id })
+    }
+
+    // Media credential applications. Same shape as a vendor application -- reviewed,
+    // then approved -- but nobody is charged, so there is no fee to freeze and no
+    // payment link. The applicant gets a confirmation; the organizer gets told,
+    // because until the review page is open this email is how they find out at all.
+    if (formType === 'media') {
+      try {
+        const orgRows = await prisma.$queryRawUnsafe<any[]>('SELECT name, slug, logoUrl, contactEmail FROM "Organization" WHERE id = ?', orgId)
+        const org = orgRows?.[0] || {}
+        const orgName = String(org.name || '')
+        const base = orgBaseUrl(org.slug)
+        const logo = absUrl(base, await orgLogoUrl(orgId, org.logoUrl))
+
+        let cfg = mediaConfig({})
+        try {
+          const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${orgId}` } })
+          cfg = mediaConfig(JSON.parse(row?.value || '{}').media)
+        } catch { /* defaults are fine for the email */ }
+
+        const who = String(data.company || data.name || 'there')
+        const evNames = siblings.length ? siblings.map(x => x.name).filter(Boolean) : [String(data.tournamentName || '')].filter(Boolean)
+        const evName = evNames.join(', ')
+        const picked = cfg.levels.filter(l => (Array.isArray(data.levels) ? data.levels : []).includes(l.id))
+        const rows: [string, string][] = [
+          [evNames.length > 1 ? 'Events' : 'Event', evName],
+          ['Applying to', picked.map(l => l.name).join(' \u00b7 ')],
+          ['Portfolio', String(data.portfolio || '')],
+        ]
+
+        // --- to the applicant ---
+        const to = String(data.email || '').trim()
+        if (to && emailEnabled()) {
+          const body = [
+            `<p style="margin:0 0 14px">Thanks \u2014 we&rsquo;ve got your credential application${evName ? ` for <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
+            detailRows(rows),
+            panel('What happens next', [
+              '<strong style="color:#0f172a">We look at the work, not the gear.</strong> Someone opens your portfolio link and reads it properly, so give us a day or two.',
+              '<br><br>If you&rsquo;re approved you&rsquo;ll get your credential, where to check in, the field rules, and the link to upload what you shoot.',
+              '<br><br><strong style="color:#0f172a">You keep the copyright in everything you shoot.</strong> Nothing you send us gets resold, and you can pull a photo down whenever you like.',
+            ].join('')),
+            `<p style="margin:18px 0 0">Questions in the meantime? Just reply to this email.</p>`,
+          ].join('')
+          await sendEmail({
+            ...orgSender(org), to,
+            subject: `Media credential application received${evName ? ` \u2014 ${evName}` : ''}`,
+            html: renderEmail({
+              orgName, logoUrl: logo, eyebrow: 'Media credential',
+              title: `We\u2019ve got it, ${who}`,
+              body,
+              footerNote: `You&rsquo;re receiving this because you applied for a media credential${evName ? ` at ${esc(evName)}` : ''}.`,
+            }),
+          })
+        }
+
+        // --- to the organizer ---
+        const notify = String(cfg.notifyEmail || org.contactEmail || OFFICE_CC).trim()
+        if (notify && emailEnabled()) {
+          const link = `${base}${data.tournamentId ? `/tournaments/${data.tournamentId}/media-requests` : '/dashboard/org/forms'}`
+          const body = [
+            `<p style="margin:0 0 4px">A photographer just applied for a credential${evName ? ` at <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
+            detailRows([
+              ['Name', String(data.name || '')], ['Business', String(data.company || '')],
+              ['Email', String(data.email || '')], ['Phone', String(data.phone || '')],
+              ['Gear', String(data.gear || '')], ['Insurance', String(data.insurance || '')],
+              ...rows,
+            ]),
+            button(link, 'Review this application'),
+            `<p style="margin:14px 0 0;font-size:13px;color:#94a3b8">Open the portfolio link before you decide \u2014 it&rsquo;s the only real gate on this form.</p>`,
+          ].join('')
+          await sendEmail({
+            ...orgSender(org), to: notify,
+            subject: `Media credential application \u2014 ${who}${evName ? ` (${evName})` : ''}`,
+            html: renderEmail({ orgName, logoUrl: logo, eyebrow: 'Needs review', title: `${who} wants to shoot`, body }),
+          })
+        }
+      } catch { /* mail must never fail the submission */ }
+      return NextResponse.json({ ok: true, id: saved.id, applications: siblings.length || 1 })
     }
 
     // Vendor applications get their own mail: a branded confirmation to the applicant
