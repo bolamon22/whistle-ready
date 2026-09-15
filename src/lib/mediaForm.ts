@@ -34,6 +34,32 @@ export type MediaInstructions = {
   contact: string
 }
 
+/**
+ * What the org asks for in return for the credential.
+ *
+ * A credential is a trade -- field access for content -- and saying so plainly is
+ * better for both sides than hoping people contribute. Stated as numbers rather
+ * than "please share your work": a photographer can tell whether they met it, and
+ * the org can tell whether to credential them again.
+ *
+ * Note the scope: photos they are HAPPY to have used, not everything they shot.
+ * A pro doing paid team sessions is not going to hand over their best frames, and
+ * a term that pretends otherwise just gets ignored.
+ */
+export type MediaCommitments = {
+  show: boolean
+  /** How many photos, and by when. 0 disables that line. */
+  minPhotos: number
+  withinDays: number
+  /** The org's handle, without the @. Blank hides the social lines. */
+  socialHandle: string
+  tagRequired: boolean
+  /** Instagram Collab: one post, both grids, one set of likes. */
+  collabRequired: boolean
+  /** Anything else, one per line. */
+  extra: string[]
+}
+
 export type MediaConfig = {
   levels: MediaLevel[]
   heroImage: string
@@ -57,6 +83,7 @@ export type MediaConfig = {
   minorsNotice: string
   confirmationTitle: string
   confirmationMessage: string
+  commitments: MediaCommitments
   instructions: MediaInstructions
 }
 
@@ -90,6 +117,16 @@ export const DEFAULT_MEDIA_MINORS =
   'Every player at our events is registered under a waiver covering event photography. A parent may ask ' +
   'for any photo of their child to be removed, and we will take it down without asking why. Do not ' +
   'photograph anyone who asks you not to.'
+
+export const DEFAULT_COMMITMENTS: MediaCommitments = {
+  show: true,
+  minPhotos: 20,
+  withinDays: 7,
+  socialHandle: '',
+  tagRequired: true,
+  collabRequired: true,
+  extra: [],
+}
 
 export const DEFAULT_MEDIA_HERO = '/api/img/0875f7bb-2de6-40ef-8a04-831025c9f6e8'
 
@@ -130,6 +167,17 @@ export function mediaConfig(raw: any): MediaConfig {
     confirmationTitle: str(raw?.confirmationTitle) || 'Application received',
     confirmationMessage: str(raw?.confirmationMessage) ||
       'Thanks — we have your application and we will come back to you within a few days.',
+    commitments: {
+      show: raw?.commitments?.show !== false,
+      minPhotos: Number(raw?.commitments?.minPhotos) >= 0 && raw?.commitments?.minPhotos !== undefined
+        ? Math.floor(Number(raw.commitments.minPhotos)) : DEFAULT_COMMITMENTS.minPhotos,
+      withinDays: Number(raw?.commitments?.withinDays) >= 0 && raw?.commitments?.withinDays !== undefined
+        ? Math.floor(Number(raw.commitments.withinDays)) : DEFAULT_COMMITMENTS.withinDays,
+      socialHandle: str(raw?.commitments?.socialHandle).replace(/^@/, ''),
+      tagRequired: raw?.commitments?.tagRequired !== false,
+      collabRequired: raw?.commitments?.collabRequired !== false,
+      extra: Array.isArray(raw?.commitments?.extra) ? raw.commitments.extra.map(str).filter(Boolean) : [],
+    },
     instructions: {
       where: str(raw?.instructions?.where),
       checkIn: str(raw?.instructions?.checkIn),
@@ -144,6 +192,20 @@ export function mediaConfig(raw: any): MediaConfig {
 /** What the photographer keeps, as a whole number. */
 export function photographerSharePct(cfg: MediaConfig): number {
   return Math.max(0, Math.min(100, 100 - cfg.orgSharePct))
+}
+
+/** The commitments as plain sentences, for the page, the form and the email. */
+export function commitmentLines(c: MediaCommitments): string[] {
+  if (!c.show) return []
+  const out: string[] = []
+  if (c.minPhotos > 0) {
+    out.push(c.withinDays > 0
+      ? `Upload at least ${c.minPhotos} photos you\u2019re happy for us to use, within ${c.withinDays} days of the event`
+      : `Upload at least ${c.minPhotos} photos you\u2019re happy for us to use`)
+  }
+  if (c.socialHandle && c.tagRequired) out.push(`Tag @${c.socialHandle} in anything you post from the event`)
+  if (c.socialHandle && c.collabRequired) out.push(`Accept a Collab invite on posts we share \u2014 it runs on both our grids, under your name`)
+  return [...out, ...c.extra]
 }
 
 /** Level ids -> the names an email or a list can show. */
