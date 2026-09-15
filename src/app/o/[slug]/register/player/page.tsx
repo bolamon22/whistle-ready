@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { orgBase } from '../../_chrome'
 import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { mdToHtml } from '../../_md'
@@ -70,9 +71,11 @@ export default async function PlayerRegistrationPage({ params }: { params: { slu
     <div className="min-h-screen bg-slate-50">
       <header className="bg-[#0b1220] text-white">
         <div className="max-w-2xl mx-auto px-6 py-6 flex items-center gap-3">
-          {org.logoUrl
-            ? <img src={org.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />
-            : <Link href={`/o/${params.slug}`} className="font-extrabold text-lg">{org.name}</Link>}
+          <Link href={orgBase(params.slug) || '/'} aria-label={`${org.name} home`}>
+            {org.logoUrl
+              ? <img src={org.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />
+              : <span className="font-extrabold text-lg">{org.name}</span>}
+          </Link>
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-teal-300">Player Waiver</div>
             <h1 className="text-xl font-extrabold leading-tight">{org.name}</h1>

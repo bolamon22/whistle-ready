@@ -3,6 +3,7 @@ import { Trophy } from 'lucide-react'
 import ShootPage from './ShootPage'
 import { mediaConfig, photographerSharePct } from '@/lib/mediaForm'
 import { upcomingOrgEvents } from '@/lib/vendorApproval'
+import { orgShell, OrgShell } from '../../_shell'
 import type { Metadata } from 'next'
 import { orgAbs, clip } from '@/lib/seo'
 
@@ -50,12 +51,16 @@ export default async function Page({ params }: { params: { slug: string } }) {
     clubs = Number((r.rows[0] as any)?.clubs || 0)
   } catch { /* stats are a nicety */ }
 
+  const shell = await orgShell({ slug: params.slug })
+
   return (
+    <OrgShell data={shell!}>
     <ShootPage
       orgId={String(org.id)} orgName={String(org.name || '')} orgLogo={String(org.logoUrl || '')}
       contactEmail={String(cfg.notifyEmail || org.contactEmail || '')}
       cfg={cfg} keepPct={photographerSharePct(cfg)} events={events}
       liveStats={{ teams, clubs, events: events.length }}
     />
+    </OrgShell>
   )
 }

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import BookingForm from './BookingForm'
 import { photographerList, findPhotographer, displayName } from '@/lib/photographers'
 import { upcomingOrgEvents } from '@/lib/vendorApproval'
+import { orgShell, OrgShell } from '../../_shell'
 import type { Metadata } from 'next'
 import { orgAbs, clip } from '@/lib/seo'
 
@@ -59,11 +60,15 @@ export default async function Page({ params }: { params: { slug: string; who: st
     } catch { teamsByEvent[e.id] = [] }
   }
 
+  const shell = await orgShell({ orgId: String(org.id) })
+
   return (
+    <OrgShell data={shell!}>
     <BookingForm
       orgId={String(org.id)} orgName={String(org.name || '')}
       photographer={ph} events={events} teamsByEvent={teamsByEvent}
       disclaimer={`${org.name} credentials photographers but doesn’t employ them. Pricing, delivery and payment are between you and ${displayName(ph)}.`}
     />
+    </OrgShell>
   )
 }

@@ -4,6 +4,7 @@ import { mdToHtml } from '../../_md'
 import VendorForm from './VendorForm'
 import { vendorConfig } from '@/lib/vendorForm'
 import { upcomingOrgEvents } from '@/lib/vendorApproval'
+import { orgShell, OrgShell } from '../../_shell'
 
 // Cache policy for published pages.
 //
@@ -36,7 +37,10 @@ export default async function VendorPage({ params }: { params: { slug: string } 
   const confirmationHtml = mdToHtml(cfg.confirmationMessage)
   const events = await upcomingOrgEvents(org.id)
 
+  const shell = await orgShell({ slug: params.slug })
+
   return (
+    <OrgShell data={shell!}>
     <VendorForm orgId={org.id} types={cfg.types} approvalNotice={cfg.approvalNotice}
       disclaimerHtml={disclaimerHtml} confirmationTitle={cfg.confirmationTitle} confirmationHtml={confirmationHtml}
       orgName={org.name} orgLogo={org.logoUrl || undefined}
@@ -45,5 +49,6 @@ export default async function VendorPage({ params }: { params: { slug: string } 
         webAddOn={cfg.webAddOn}
         sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''} events={events}
     />
+    </OrgShell>
   )
 }
