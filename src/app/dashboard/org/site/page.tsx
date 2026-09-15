@@ -28,6 +28,8 @@ type Content = {
   gallery: Photo[]
   galleryCovers: Record<string, string>
   instagram: Insta
+  seoTitle: string
+  seoDescription: string
 }
 const EMPTY: Content = {
   logo: '',
@@ -41,6 +43,8 @@ const EMPTY: Content = {
   gallery: [],
   galleryCovers: {},
   instagram: { username: '', token: '' },
+  seoTitle: '',
+  seoDescription: '',
 }
 
 const slugify = (t: string) => t.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
@@ -289,6 +293,17 @@ function OrgSiteEditorInner() {
           <GalleryPicker label="From library" onPick={(url) => setC(v => ({ ...v, hero: { ...v.hero, imageUrl: url } }))} />
           {c.hero.imageUrl && <button onClick={() => setC(v => ({ ...v, hero: { ...v.hero, imageUrl: '' } }))} className="text-sm text-slate-400 hover:text-red-600">Remove</button>}
         </div>
+      </Sec>
+
+      {/* Search engines — what Google and AI answer engines show */}
+      <Sec isOpen={!!openSec.seo} onToggle={() => setOpenSec(o => ({ ...o, seo: !o.seo }))} title="Search engines" summary={c.seoTitle ? 'Custom' : 'Using defaults'}>
+        <p className="text-xs text-slate-500 mb-3">How this site appears in Google results. Leave blank to use the automatic version. Lead with what people search for — the sport and where you play — not the organization name.</p>
+        <label className="label">Page title</label>
+        <input className="input" value={c.seoTitle} onChange={e => setC(v => ({ ...v, seoTitle: e.target.value }))} placeholder={`${org?.name || 'Your organization'} \u2014 Tournaments, schedules & team registration`} />
+        <p className="text-[11px] text-slate-400 mt-1">{c.seoTitle.length}/60 characters before Google truncates it.</p>
+        <label className="label mt-3">Description</label>
+        <textarea className="input min-h-[72px]" value={c.seoDescription} onChange={e => setC(v => ({ ...v, seoDescription: e.target.value }))} placeholder="Falls back to your hero subtext." />
+        <p className="text-[11px] text-slate-400 mt-1">{c.seoDescription.length}/155 characters.</p>
       </Sec>
 
       {/* About */}

@@ -111,9 +111,14 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   try { const r = await client.execute({ sql: 'SELECT id, name, logoUrl FROM "Organization" WHERE slug = ?', args: [params.slug] }); if (r.rows.length) org = r.rows[0] } catch {}
   if (!org) return { title: 'Organization' }
   let about = ''
-  try { const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${org.id}`] }); if (cr.rows.length) { const c = JSON.parse(((cr.rows[0] as any).value as string) || '{}'); about = c.hero?.subtext || c.about?.body || ''; if (c.logo) org.logoUrl = c.logo } } catch {}
-  const title = `${org.name} — Tournaments, schedules & team registration`
-  const description = clip(stripMd(about) || `${org.name}: upcoming tournaments, live schedules, standings and online team registration — all in one place.`)
+  let seoTitle = ''
+  let seoDescription = ''
+  try { const cr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${org.id}`] }); if (cr.rows.length) { const c = JSON.parse(((cr.rows[0] as any).value as string) || '{}'); about = c.hero?.subtext || c.about?.body || ''; seoTitle = String(c.seoTitle || ''); seoDescription = String(c.seoDescription || ''); if (c.logo) org.logoUrl = c.logo } } catch {}
+  // The generic "{Org} — Tournaments, schedules & team registration" default wins no
+  // non-brand searches: it carries no sport and no geography, which is what people
+  // actually type. Orgs can override both from Dashboard → Website → Search engines.
+  const title = seoTitle || `${org.name} — Tournaments, schedules & team registration`
+  const description = clip(seoDescription || stripMd(about) || `${org.name}: upcoming tournaments, live schedules, standings and online team registration — all in one place.`)
   const url = orgAbs(params.slug)
   const images = org.logoUrl ? [org.logoUrl] : []
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images }, twitter: { title, description, images }, appleWebApp: { title: org.name || title } }
