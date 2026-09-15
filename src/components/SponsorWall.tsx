@@ -17,10 +17,12 @@ type Props = {
   sponsors: Sponsor[]
   /** 'full' = event page (presenting slot + grid). 'compact' = home page strip. */
   variant?: 'full' | 'compact'
-  /** Where "your brand here" goes. Omit to hide the open slot entirely. */
+  /** Where the sponsorship call to action goes. Omit to hide it entirely. */
   inquireHref?: string
-  /** Small line inside the open slot, e.g. "Two spots open for October". */
-  openSlotNote?: string
+  /** The line above the button. */
+  ctaLine?: string
+  /** The button itself. */
+  ctaLabel?: string
   title?: string
   subtitle?: string
 }
@@ -58,18 +60,36 @@ function Card({ s, size }: { s: Sponsor; size: number }) {
     : <div className={cls}>{inner}</div>
 }
 
-function OpenSlot({ href, note, compact }: { href: string; note?: string; compact?: boolean }) {
+/**
+ * The ask, as its own strip under the wall rather than a dashed cell inside it.
+ *
+ * As a grid cell it had two problems: an empty dashed box next to real paying
+ * logos reads as a gap rather than an invitation, and with four partners it wrapped
+ * onto a row of its own and just looked like something was missing. A strip always
+ * sits where it is meant to, and "Advertise with us" is a button a business
+ * recognises instead of a placeholder tile.
+ */
+function SponsorCta({ href, line, label }: { href: string; line: string; label: string }) {
   return (
-    <Link href={href}
-      className={`flex flex-col items-center justify-center gap-2 text-center rounded-2xl border-[1.5px] border-dashed border-slate-300 bg-slate-50/60 hover:border-teal-500 hover:bg-teal-50/60 transition-colors px-4 ${compact ? 'py-5' : 'py-5 min-h-[150px]'}`}>
-      <span className="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center text-lg font-bold leading-none">+</span>
-      <span className="block font-bold text-[13.5px] text-slate-900">Your brand here</span>
-      {note && <span className="block text-[11.5px] text-slate-500 max-w-[18ch] leading-snug">{note}</span>}
-    </Link>
+    <div className="mt-5 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-5 py-4 sm:px-6 sm:py-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+      <div className="min-w-0">
+        <div className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-teal-600">Sponsorship</div>
+        <p className="text-[15px] font-semibold text-slate-900 mt-1 leading-snug">{line}</p>
+      </div>
+      <Link href={href}
+        className="inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] rounded-full px-5 py-2.5 whitespace-nowrap transition-colors shrink-0 shadow-sm shadow-teal-600/20">
+        {label} <span aria-hidden>&rarr;</span>
+      </Link>
+    </div>
   )
 }
 
-export default function SponsorWall({ sponsors, variant = 'full', inquireHref, openSlotNote, title, subtitle }: Props) {
+export default function SponsorWall({
+  sponsors, variant = 'full', inquireHref,
+  ctaLine = 'Put your brand in front of every family here.',
+  ctaLabel = 'Advertise with us',
+  title, subtitle,
+}: Props) {
   if (!sponsors.length) return null
   const { presenting, official } = splitSponsors(sponsors)
   const compact = variant === 'compact'
@@ -114,8 +134,9 @@ export default function SponsorWall({ sponsors, variant = 'full', inquireHref, o
       <div className={grid}>
         {/* Compact keeps everyone equal — the home page isn't where a tier gets sold. */}
         {(compact ? sponsors : official).map((s, i) => <Card key={i} s={s} size={compact ? 52 : 62} />)}
-        {inquireHref && <OpenSlot href={inquireHref} note={openSlotNote} compact={compact} />}
       </div>
+
+      {inquireHref && <SponsorCta href={inquireHref} line={ctaLine} label={ctaLabel} />}
     </div>
   )
 }

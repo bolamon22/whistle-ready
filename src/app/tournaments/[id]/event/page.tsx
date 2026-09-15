@@ -309,8 +309,9 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         <SponsorWall
           sponsors={spons}
           subtitle={spons.length ? 'The businesses and agencies that put this weekend on.' : undefined}
-          inquireHref={sponsorHref}
-          openSlotNote={pitch.show ? 'Spots open for this event' : undefined}
+          inquireHref={pitch.show ? undefined : sponsorHref}
+          ctaLabel={pitch.wallCtaLabel}
+          ctaLine={pitch.wallCtaLine || `Put your brand in front of every family at ${t.name}.`}
         />
         <SponsorPitch
           pitch={pitch}

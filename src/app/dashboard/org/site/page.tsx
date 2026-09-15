@@ -12,7 +12,7 @@ import AiGenerateButton from '@/components/AiGenerateButton'
 
 type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string }
 type PitchStat = { value: string; label: string }
-type Pitch = { show: boolean; headline: string; sub: string; benefits: string[]; stats: PitchStat[]; ctaLabel: string }
+type Pitch = { show: boolean; headline: string; sub: string; benefits: string[]; stats: PitchStat[]; ctaLabel: string; wallCtaLabel: string; wallCtaLine: string }
 type Page = { title: string; slug: string; body: string; group: string; heroImage?: string }
 type Photo = { id?: string; url: string; caption: string; credit?: string; tournamentId?: string }
 type Insta = { username: string; token: string }
@@ -34,7 +34,7 @@ const EMPTY: Content = {
   hero: { headline: '', subtext: '', imageUrl: '' },
   about: { heading: '', body: '' },
   sponsors: [],
-  sponsorPitch: { show: false, headline: '', sub: '', benefits: [], stats: [], ctaLabel: '' },
+  sponsorPitch: { show: false, headline: '', sub: '', benefits: [], stats: [], ctaLabel: '', wallCtaLabel: '', wallCtaLine: '' },
   contact: { email: '', phone: '', hours: '', address: '' },
   socials: { facebook: '', instagram: '', website: '' },
   pages: [],
@@ -315,6 +315,21 @@ function OrgSiteEditorInner() {
               )}
             </div>
           ))}
+        </div>
+
+        {/* The button under the partner wall. Shown on the home page always, and on
+            event pages when the fuller pitch below is switched off. */}
+        <div className="mt-5 pt-4 border-t border-slate-200">
+          <p className="text-xs font-semibold text-slate-600 mb-2">The &ldquo;advertise with us&rdquo; button under the wall</p>
+          <div className="grid sm:grid-cols-[200px_1fr] gap-2">
+            <input className="input" value={c.sponsorPitch.wallCtaLabel}
+              onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, wallCtaLabel: e.target.value } }))}
+              placeholder="Advertise with us" />
+            <input className="input" value={c.sponsorPitch.wallCtaLine}
+              onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, wallCtaLine: e.target.value } }))}
+              placeholder="Put your brand in front of every family at our events." />
+          </div>
+          <p className="text-xs text-slate-400 mt-1.5">Leave blank for those defaults. The line names the event automatically on event pages.</p>
         </div>
 
         {/* The pitch that runs under the wall on every event page. Off until it's

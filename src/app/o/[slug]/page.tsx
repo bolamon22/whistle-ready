@@ -7,7 +7,7 @@ import type { Metadata } from 'next'
 import { SITE_URL, abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import SponsorWall from '@/components/SponsorWall'
-import { sponsorList } from '@/lib/sponsors'
+import { sponsorList, sponsorPitch } from '@/lib/sponsors'
 
 // Cache policy for published pages.
 //
@@ -157,6 +157,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
   const base = orgBase(params.slug)
   const spons = sponsorList(sponsors)
+  const spitch = sponsorPitch(content.sponsorPitch)
   const workHref = (forms.staff?.enabled !== false) ? `${base}/work` : undefined
   const nav = buildNav(base, pages, gallery.length > 0, workHref)
 
@@ -286,7 +287,8 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
               title="Our partners"
               subtitle="The businesses and agencies behind our events."
               inquireHref={`${base}/register/vendor#sponsor`}
-              openSlotNote="Ask about sponsoring"
+              ctaLabel={spitch.wallCtaLabel}
+              ctaLine={spitch.wallCtaLine || "Put your brand in front of every family at our events."}
             />
           </div>
         </section>

@@ -35,6 +35,9 @@ export type SponsorPitch = {
   /** Numbers the org fills in. Live counts are prepended by the caller. */
   stats: SponsorStat[]
   ctaLabel: string
+  /** The button under the partner wall, and the line above it. */
+  wallCtaLabel: string
+  wallCtaLine: string
   /** Fallback copy for the side panel when no sponsorship levels are set. */
   note: string
 }
@@ -103,6 +106,8 @@ export function sponsorPitch(raw: any): SponsorPitch {
     benefits: benefits.length ? benefits : DEFAULT_PITCH_BENEFITS,
     stats,
     ctaLabel: str(raw?.ctaLabel) || 'Become a sponsor',
+    wallCtaLabel: str(raw?.wallCtaLabel) || 'Advertise with us',
+    wallCtaLine: str(raw?.wallCtaLine) || '',
     note: str(raw?.note) || DEFAULT_PITCH_NOTE,
   }
 }
