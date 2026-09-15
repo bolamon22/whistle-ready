@@ -99,7 +99,7 @@ export default function NavBar() {
   if (!session && (pathname === '/' || pathname === '/find')) return null
 
   return (
-    <div className="sticky top-0 z-40">
+    <div data-app-chrome className="sticky top-0 z-40">
       {/* Preview banner */}
       {isPreview && (
         <div className="bg-amber-400 text-amber-900 text-xs font-semibold px-4 py-1.5 flex items-center justify-between">
