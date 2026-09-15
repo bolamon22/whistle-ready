@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { Camera, Check, Lock } from 'lucide-react'
+import { Camera, Check, Lock, Instagram, Handshake } from 'lucide-react'
 import type { MediaConfig } from '@/lib/mediaForm'
+import { commitmentLines } from '@/lib/mediaForm'
 
 type OrgEvent = { id: string; name: string; dates: string }
 type Props = {
@@ -23,7 +24,7 @@ const num = (n: number) => n.toLocaleString('en-US')
 
 export default function ShootPage(p: Props) {
   const [f, setF] = useState({
-    name: '', company: '', email: '', phone: '', portfolio: '',
+    name: '', company: '', email: '', phone: '', portfolio: '', instagram: '',
     gear: '', insurance: '', notes: '',
   })
   const set = (k: keyof typeof f, v: string) => setF(s => ({ ...s, [k]: v }))
@@ -53,6 +54,7 @@ export default function ShootPage(p: Props) {
           orgId: p.orgId, formType: 'media',
           data: {
             ...f, tournamentIds: eventIds, levels,
+            agreedCommitments: commits.join(' | '),
             levelNames: p.cfg.levels.filter(l => levels.includes(l.id)).map(l => l.name).join(', '),
           },
         }),
@@ -81,6 +83,8 @@ export default function ShootPage(p: Props) {
       </div>
     )
   }
+
+  const commits = commitmentLines(p.cfg.commitments)
 
   const stats: { value: string; label: string }[] = [
     ...(p.liveStats.teams > 0 ? [{ value: num(p.liveStats.teams), label: p.liveStats.teams === 1 ? 'Team' : 'Teams' }] : []),
@@ -158,6 +162,42 @@ export default function ShootPage(p: Props) {
         </div>
       </section>
 
+      {/* What we ask in return. Stated up front and as numbers -- a credential is a
+          trade, and the photographers worth having would rather know the terms than
+          be chased for photos afterwards. */}
+      {commits.length > 0 && (
+        <section className="max-w-5xl mx-auto px-6 py-12">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <Handshake size={18} className="text-teal-600" />
+              <h2 className="text-[22px] font-bold tracking-tight text-slate-900">What we ask in return</h2>
+            </div>
+            <p className="text-slate-500 text-[14.5px] mb-5 max-w-[62ch]">
+              The credential is free because it&rsquo;s a trade. Here is our half of it, in numbers rather than good intentions.
+            </p>
+            <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-3">
+              {commits.map((c, i) => (
+                <li key={i} className="flex gap-2.5 text-[15px] text-slate-700">
+                  <span className="mt-1 w-[17px] h-[17px] rounded-full bg-teal-100 border border-teal-300 shrink-0 flex items-center justify-center">
+                    <Check size={11} className="text-teal-700" strokeWidth={3} />
+                  </span>
+                  <span>{c}</span>
+                </li>
+              ))}
+            </ul>
+            {p.cfg.commitments.socialHandle && (
+              <p className="text-[13.5px] text-slate-500 mt-5 pt-4 border-t border-slate-100 leading-relaxed">
+                <Instagram size={13} className="inline -mt-0.5 mr-1.5 text-slate-400" />
+                A Collab post runs on both grids at once and shares its likes and comments, so our audience
+                lands on your name rather than a reposted screenshot. Our account is{' '}
+                <a href={`https://instagram.com/${p.cfg.commitments.socialHandle}`} target="_blank" rel="noreferrer"
+                  className="font-semibold text-teal-700 hover:text-teal-900">@{p.cfg.commitments.socialHandle}</a>.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Application */}
       <section id="apply" className="max-w-2xl mx-auto px-6 py-14 scroll-mt-6">
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Media credential application</h2>
@@ -172,9 +212,21 @@ export default function ShootPage(p: Props) {
             <div><label className={label}>Email *</label><input className={input} type="email" required value={f.email} onChange={e => set('email', e.target.value)} /></div>
             <div><label className={label}>Phone *</label><input className={input} type="tel" required value={f.phone} onChange={e => set('phone', e.target.value)} /></div>
           </div>
-          <div>
-            <label className={label}>Portfolio or social link * <span className="font-normal text-slate-400">the work you want us to judge you on</span></label>
-            <input className={input} required placeholder="instagram.com/… or yoursite.com" value={f.portfolio} onChange={e => set('portfolio', e.target.value)} />
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className={label}>Portfolio link * <span className="font-normal text-slate-400">what we judge you on</span></label>
+              <input className={input} required placeholder="yoursite.com" value={f.portfolio} onChange={e => set('portfolio', e.target.value)} />
+            </div>
+            <div>
+              {/* Asked for on its own, not folded into the portfolio link: we need the
+                  handle itself to tag them and send Collab invites. */}
+              <label className={label}>Instagram handle {p.cfg.commitments.socialHandle ? '*' : <span className="font-normal text-slate-400">optional</span>}</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">@</span>
+                <input className={`${input} pl-7`} required={!!p.cfg.commitments.socialHandle} placeholder="yourhandle"
+                  value={f.instagram} onChange={e => set('instagram', e.target.value.replace(/^@/, ''))} />
+              </div>
+            </div>
           </div>
 
           {p.events.length > 0 && (
@@ -232,6 +284,9 @@ export default function ShootPage(p: Props) {
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-[12.5px] text-slate-600 leading-relaxed space-y-3">
             <p><strong className="text-slate-900">What you agree to.</strong> {p.cfg.terms}</p>
             <p><strong className="text-slate-900">Photos of minors.</strong> {p.cfg.minorsNotice}</p>
+            {commits.length > 0 && (
+              <p><strong className="text-slate-900">Your half of the trade.</strong> {commits.join('. ')}.</p>
+            )}
           </div>
 
           <label className="flex gap-3 items-start border border-slate-200 rounded-xl px-3.5 py-3 cursor-pointer hover:border-slate-300">

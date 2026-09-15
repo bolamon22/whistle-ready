@@ -10,7 +10,7 @@ import { orgSender, OFFICE_CC } from '@/lib/email'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { orgLogoUrl } from '@/lib/org'
 import { vendorConfig, priceLabel } from '@/lib/vendorForm'
-import { mediaConfig, photographerSharePct } from '@/lib/mediaForm'
+import { mediaConfig, photographerSharePct, commitmentLines } from '@/lib/mediaForm'
 import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
@@ -130,6 +130,77 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, id: saved.id })
     }
 
+    // A family booking a photographer. The org is not a party to this sale -- it
+    // credentialed the photographer and hosts the page -- so the request goes TO the
+    // photographer, reply-to the family, and the org is only copied for the record.
+    if (formType === 'photo-request') {
+      try {
+        const orgRows = await prisma.$queryRawUnsafe<any[]>('SELECT name, slug, logoUrl, contactEmail FROM "Organization" WHERE id = ?', orgId)
+        const org = orgRows?.[0] || {}
+        const orgName = String(org.name || '')
+        const base = orgBaseUrl(org.slug)
+        const logo = absUrl(base, await orgLogoUrl(orgId, org.logoUrl))
+
+        const shooter = String(data.photographerName || 'the photographer')
+        const shooterEmail = String(data.photographerEmail || '').trim()
+        const evName = String(data.tournamentName || '')
+        const price = Number(data.packagePrice) || 0
+        const rows: [string, string][] = [
+          ['Event', evName],
+          ['Package', `${String(data.packageName || '')}${price > 0 ? ` \u00b7 ${priceLabel(price)}` : ''}`],
+          ['Player', String(data.playerName || '')],
+          ['Club / team', String(data.club || '')],
+          ['Division', String(data.division || '')],
+          ['Jersey', String(data.jersey || '')],
+          ['Notes', String(data.notes || '').slice(0, 300)],
+        ]
+
+        // --- to the photographer, so they can reply straight to the family ---
+        if (shooterEmail && emailEnabled()) {
+          const body = [
+            `<p style="margin:0 0 14px">A family asked to book you${evName ? ` at <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
+            detailRows([
+              ['Contact', String(data.contactName || '')],
+              ['Email', String(data.email || '')],
+              ['Phone', String(data.phone || '')],
+              ...rows,
+            ]),
+            `<p style="margin:16px 0 0">Reply to this email and it goes straight to them.</p>`,
+          ].join('')
+          await sendEmail({
+            ...orgSender(org), to: shooterEmail,
+            replyTo: String(data.email || '') || undefined,
+            subject: `Photo request \u2014 ${String(data.playerName || 'a player')}${evName ? ` (${evName})` : ''}`,
+            html: renderEmail({ orgName, logoUrl: logo, eyebrow: 'Photo request', title: `New booking request`, body }),
+          })
+        }
+
+        // --- receipt to the family ---
+        const to = String(data.email || '').trim()
+        if (to && emailEnabled()) {
+          const body = [
+            `<p style="margin:0 0 14px">Thanks \u2014 your request has gone to <strong style="color:#0f172a">${esc(shooter)}</strong>. They&rsquo;ll come back to you directly to confirm details and price.</p>`,
+            detailRows(rows),
+            panel('Worth knowing', [
+              `<strong style="color:#0f172a">Nothing has been charged.</strong> ${esc(orgName)} credentials photographers but doesn&rsquo;t employ them \u2014 the booking, the price and the photos are between you and ${esc(shooter)}.`,
+            ].join('')),
+          ].join('')
+          await sendEmail({
+            ...orgSender(org), to,
+            replyTo: shooterEmail || undefined,
+            subject: `Photo request sent to ${shooter}`,
+            html: renderEmail({
+              orgName, logoUrl: logo, eyebrow: 'Photo request',
+              title: `We passed it on`,
+              body,
+              footerNote: `You&rsquo;re receiving this because you requested photos${evName ? ` at ${esc(evName)}` : ''}.`,
+            }),
+          })
+        }
+      } catch { /* mail must never fail the submission */ }
+      return NextResponse.json({ ok: true, id: saved.id })
+    }
+
     // Media credential applications. Same shape as a vendor application -- reviewed,
     // then approved -- but nobody is charged, so there is no fee to freeze and no
     // payment link. The applicant gets a confirmation; the organizer gets told,
@@ -169,6 +240,12 @@ export async function POST(req: NextRequest) {
               '<br><br>If you&rsquo;re approved you&rsquo;ll get your credential, where to check in, the field rules, and the link to upload what you shoot.',
               '<br><br><strong style="color:#0f172a">You keep the copyright in everything you shoot.</strong> Nothing you send us gets resold, and you can pull a photo down whenever you like.',
             ].join('')),
+            (() => {
+              const commits = commitmentLines(cfg.commitments)
+              return commits.length
+                ? panel('What you agreed to', commits.map(c => `&bull; ${esc(c)}`).join('<br>'))
+                : ''
+            })(),
             `<p style="margin:18px 0 0">Questions in the meantime? Just reply to this email.</p>`,
           ].join('')
           await sendEmail({
@@ -192,6 +269,7 @@ export async function POST(req: NextRequest) {
             detailRows([
               ['Name', String(data.name || '')], ['Business', String(data.company || '')],
               ['Email', String(data.email || '')], ['Phone', String(data.phone || '')],
+              ['Instagram', data.instagram ? `@${String(data.instagram)}` : ''],
               ['Gear', String(data.gear || '')], ['Insurance', String(data.insurance || '')],
               ...rows,
             ]),
