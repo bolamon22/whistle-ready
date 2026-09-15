@@ -22,15 +22,33 @@ export async function GET(req: NextRequest) {
 
   const clubNames = links.map(l => l.clubName)
 
-  // Get registrations for their clubs only
+  // Get registrations for their clubs only.
+  //
+  // Selected field by field rather than returned whole. TeamRegistration also
+  // carries `notes`, which is where staff write things like "Merged in the Sep 1
+  // registration -- it listed based in Brandenton, FL; pay method check". That
+  // is back-office bookkeeping about the club, not for the club, and returning
+  // the model wholesale shipped it to their browser whether or not the page drew
+  // it. Everything below is something the club's own director should be able to
+  // read about themselves.
   const registrations = await prisma.teamRegistration.findMany({
     // deletedAt: null, or a registration staff removed still counts against
     // the club. LaxManiax saw $8,970 owing on an account paid in full,
     // because deleted duplicates kept their invoice while only the live
     // registration's payments were credited (Sep 15 2026).
     where: { tournamentId, clubName: { in: clubNames }, deletedAt: null },
-    include: {
-      teams: true,
+    select: {
+      id: true, clubName: true, clubContact: true, contactEmail: true, contactPhone: true,
+      clubBasedIn: true, needsHotel: true, paymentMethod: true, clubLogoUrl: true,
+      invoiceAmount: true, discountAmount: true, discountNote: true, createdAt: true,
+      teams: {
+        select: {
+          id: true, teamName: true, division: true, logoUrl: true,
+          coachName: true, coachPhone: true, coachEmail: true,
+        },
+      },
+      // No payment reference: the Stripe payment-intent id staff use for
+      // reconciliation means nothing to a club and is not theirs to hold.
       payments: { select: { amount: true, method: true, receivedAt: true } },
     },
   })

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ClipboardList, CreditCard, Eye, Globe, RefreshCw, Trophy, Users } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, ClipboardList, ExternalLink, Eye, Globe, RefreshCw, Trophy, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
@@ -13,9 +13,13 @@ interface Waiver {
   signed: boolean; submittedAt: string
 }
 interface Registration {
-  id: string; clubName: string; clubContact: string; contactEmail: string
-  invoiceAmount: number; discountAmount: number
-  teams: { id: string; teamName: string; division: string; logoUrl?: string }[]
+  id: string; clubName: string; clubContact: string; contactEmail: string; contactPhone: string
+  clubBasedIn: string; needsHotel: string; paymentMethod: string; clubLogoUrl: string
+  invoiceAmount: number; discountAmount: number; discountNote: string; createdAt: string
+  teams: {
+    id: string; teamName: string; division: string; logoUrl?: string
+    coachName: string; coachPhone: string; coachEmail: string
+  }[]
   payments: { amount: number; method: string; receivedAt: string }[]
 }
 interface PlayerReg {
@@ -42,6 +46,16 @@ interface HistoryEntry {
 }
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+const shortDate = (d: string) =>
+  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+
+// The stored value is a slug ('check', 'card'); clubs read the label.
+const PAY_LABEL: Record<string, string> = {
+  check: 'Check', card: 'Credit card', credit_card: 'Credit card', stripe: 'Credit card',
+  ach: 'Bank transfer (ACH)', cash: 'Cash', paypal: 'PayPal', venmo: 'Venmo', invoice: 'Invoice',
+}
+const payLabel = (m: string) => PAY_LABEL[String(m || '').toLowerCase()] || (m ? m[0].toUpperCase() + m.slice(1) : '—')
 
 // Re-register modal
 function ReregisterModal({ entry, tournaments, onClose }: {
@@ -157,7 +171,7 @@ export default function ClubDirectorDashboard() {
   const [linkClubs, setLinkClubs] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
-  const [tab, setTab] = useState<'overview' | 'players' | 'schedule' | 'billing' | 'history'>('overview')
+  const [tab, setTab] = useState<'overview' | 'players' | 'schedule' | 'history'>('overview')
   const [noLinks, setNoLinks] = useState(false)
   const [perms, setPerms] = useState<Record<string, boolean>>({ cd_overview: true, cd_players: true, cd_schedule: true, cd_billing: true })
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -242,11 +256,18 @@ export default function ClubDirectorDashboard() {
   // Waivers land on the team whose name they carry. Normalized both sides
   // because the form writes "Club \u2014 Team" and people type inconsistently.
   const normName = (x: unknown) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  // One grouping feeds BOTH the Overview table and the Players tab, so the count
+  // on the summary row can never disagree with the names listed under a team.
   const teamRows = (data?.registrations ?? []).flatMap(r =>
     r.teams.map(t => ({
       key: t.id,
+      regId: r.id,
       teamName: t.teamName,
       division: t.division,
+      logoUrl: t.logoUrl,
+      coachName: t.coachName,
+      coachPhone: t.coachPhone,
+      coachEmail: t.coachEmail,
       players: waivers.filter(w => normName(w.team) === normName(t.teamName)),
     }))
   )
@@ -258,11 +279,18 @@ export default function ClubDirectorDashboard() {
   const totalPaid = data?.registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0) ?? 0
   const balance = totalInvoiced - totalPaid
 
-  const TABS: { key: typeof tab; label: string; Icon: typeof Users; perm?: string }[] = [
+  // Billing is gone as a tab — the invoice now sits under the teams it paid for,
+  // on Overview. Schedule only appears once there is one: an empty tab during
+  // the weeks before the draw just reads as broken (Bo, Sep 15 2026).
+  const hasSchedule = (data?.games?.length ?? 0) > 0
+  // cd_billing used to decide whether the Billing TAB appeared. With the invoice
+  // folded into Overview it has to gate the money itself, or removing the tab
+  // would quietly grant billing visibility to clubs that had it switched off.
+  const showMoney = perms.cd_billing !== false
+  const TABS: { key: typeof tab; label: string; Icon: typeof Users; perm?: string; when?: boolean }[] = [
     { key: 'overview',  label: 'Overview',           Icon: ClipboardList, perm: 'cd_overview' },
-    { key: 'players',   label: 'Players & waivers',  Icon: Users,         perm: 'cd_players'  },
-    { key: 'schedule',  label: 'Schedule',           Icon: CalendarDays,  perm: 'cd_schedule' },
-    { key: 'billing',   label: 'Billing',            Icon: CreditCard,    perm: 'cd_billing'  },
+    { key: 'players',   label: 'Player waivers',     Icon: Users,         perm: 'cd_players'  },
+    { key: 'schedule',  label: 'Schedule',           Icon: CalendarDays,  perm: 'cd_schedule', when: hasSchedule },
     { key: 'history',   label: 'History',            Icon: Trophy                             },
   ]
 
@@ -305,9 +333,11 @@ export default function ClubDirectorDashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {[
             { label: 'Teams', value: totalTeams, color: 'text-violet-600' },
-            { label: 'Players', value: totalPlayers, color: 'text-blue-600' },
-            { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800' },
-            { label: 'Balance Due', value: fmt(balance), color: balance > 0 ? 'text-red-600' : 'text-green-600' },
+            { label: 'Waivers filed', value: totalPlayers, color: 'text-blue-600' },
+            ...(showMoney ? [
+              { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800' },
+              { label: 'Balance due', value: fmt(balance), color: balance > 0 ? 'text-red-600' : 'text-green-600' },
+            ] : []),
           ].map(s => (
             <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
               <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
@@ -319,7 +349,7 @@ export default function ClubDirectorDashboard() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5 border-b border-gray-200 overflow-x-auto items-end">
-        {TABS.filter(t => !t.perm || perms[t.perm] !== false).map(({ key, label, Icon }) => (
+        {TABS.filter(t => (!t.perm || perms[t.perm] !== false) && t.when !== false).map(({ key, label, Icon }) => (
           <button key={key} onClick={() => switchTab(key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${tab === key ? 'border-violet-500 text-violet-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             <Icon size={15} className="shrink-0" /> {label}
@@ -342,7 +372,7 @@ export default function ClubDirectorDashboard() {
           ) : (
             <div className="space-y-5">
               {history.map((entry, i) => {
-                const { tournament, record, championshipWins, finance, teams } = entry
+                const { tournament, record, championshipWins, teams } = entry
                 const hasRecord = record.gamesPlayed > 0
                 return (
                   <div key={i} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
@@ -363,80 +393,46 @@ export default function ClubDirectorDashboard() {
                       )}
                     </div>
 
-                    <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-5">
-                      {/* Teams & record */}
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Teams ({teams.length})</p>
-                        <div className="space-y-1.5">
-                          {teams.map((t, j) => (
-                            <div key={j} className="flex items-center gap-2">
-                              {t.logoUrl && <img src={t.logoUrl} alt="" className="h-5 w-5 object-contain rounded" />}
-                              <span className="text-sm text-gray-700">{t.teamName}</span>
-                              <span className="text-xs text-gray-400">· {t.division}</span>
+                    {/* Past events read as a record of what the club brought and
+                        how it did. The old third column repeated last year's
+                        invoice and payment lines, which is bookkeeping the club
+                        has no use for a season later — current money lives on
+                        Overview now (Bo, Sep 15 2026). */}
+                    <div className="p-5 flex flex-col sm:flex-row gap-5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Teams brought ({teams.length})</p>
+                        {teams.length === 0
+                          ? <p className="text-sm text-gray-400">No teams recorded</p>
+                          : (
+                            <div className="space-y-1.5">
+                              {teams.map((t, j) => (
+                                <div key={j} className="flex items-center gap-2 min-w-0">
+                                  {t.logoUrl && <img src={t.logoUrl} alt="" className="h-5 w-5 object-contain rounded flex-shrink-0" />}
+                                  <span className="text-sm text-gray-700 truncate">{t.teamName}</span>
+                                  <span className="text-xs text-gray-400 truncate">· {t.division}</span>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                        {championshipWins.length > 0 && (
-                          <div className="mt-3">
-                            {championshipWins.map((c, j) => (
-                              <div key={j} className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1">
-                                <Trophy size={12} className="shrink-0" /> {c}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                          )}
                       </div>
 
-                      {/* Record */}
-                      <div>
+                      <div className="sm:w-56 flex-shrink-0 border-t border-gray-100 pt-4 sm:border-t-0 sm:pt-0 sm:border-l sm:border-gray-100 sm:pl-5">
                         <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Record</p>
                         {hasRecord ? (
-                          <div className="flex items-center gap-3">
-                            <div className="text-center">
-                              <div className="text-2xl font-bold text-green-600">{record.wins}</div>
-                              <div className="text-xs text-gray-400">W</div>
-                            </div>
-                            <div className="text-gray-300 text-xl">–</div>
-                            <div className="text-center">
-                              <div className="text-2xl font-bold text-red-500">{record.losses}</div>
-                              <div className="text-xs text-gray-400">L</div>
-                            </div>
-                            {record.ties > 0 && <>
-                              <div className="text-gray-300 text-xl">–</div>
-                              <div className="text-center">
-                                <div className="text-2xl font-bold text-gray-500">{record.ties}</div>
-                                <div className="text-xs text-gray-400">T</div>
-                              </div>
-                            </>}
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-2xl font-bold text-gray-800">
+                              {record.wins}–{record.losses}{record.ties > 0 ? `–${record.ties}` : ''}
+                            </span>
+                            <span className="text-xs text-gray-400">W–L{record.ties > 0 ? '–T' : ''}</span>
                           </div>
                         ) : (
                           <p className="text-sm text-gray-400">No games recorded</p>
                         )}
-                      </div>
-
-                      {/* Payments */}
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Payments</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Invoiced</span>
-                            <span className="font-medium text-gray-800">{fmt(finance.invoiceTotal)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Paid</span>
-                            <span className="font-medium text-green-700">{fmt(finance.paidTotal)}</span>
-                          </div>
-                          <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
-                            <span className="text-gray-500">Balance</span>
-                            <span className={`font-bold ${finance.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(finance.balance)}</span>
-                          </div>
-                        </div>
-                        {finance.payments.length > 0 && (
-                          <div className="mt-3 space-y-0.5">
-                            {finance.payments.map((p, j) => (
-                              <div key={j} className="flex justify-between text-xs text-gray-400">
-                                <span>{new Date(p.receivedAt).toLocaleDateString()} · {p.method}</span>
-                                <span className="text-green-600 font-medium">{fmt(p.amount)}</span>
+                        {championshipWins.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            {championshipWins.map((c, j) => (
+                              <div key={j} className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                                <Trophy size={12} className="shrink-0" /> {c}
                               </div>
                             ))}
                           </div>
@@ -455,35 +451,181 @@ export default function ClubDirectorDashboard() {
       {tab !== 'history' && (
         dataLoading ? <div className="text-center py-12 text-gray-400">Loading…</div> : (
           <>
-            {/* Overview */}
+            {/* Overview — the whole club on one page.
+                Mirrors the staff registration card Bo works from, minus what is
+                staff-only: the internal merge notes, the Stripe payment refs, and
+                every action button (payment, refund, merge, delete). A club
+                director should be able to answer "what did we bring, who is
+                coaching it, who still owes a waiver, and what do we owe" without
+                changing tabs. */}
             {tab === 'overview' && (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {data?.registrations.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">No registration on file for this event yet.</div>
+                )}
                 {data?.registrations.map(reg => {
                   const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
                   const due = reg.invoiceAmount - reg.discountAmount
                   const bal = due - paid
+                  const rows = teamRows.filter(t => t.regId === reg.id)
+                  const filed = rows.reduce((s, t) => s + t.players.length, 0)
+                  const noneYet = rows.filter(t => t.players.length === 0).length
                   return (
-                    <div key={reg.id} className="bg-white border border-gray-200 rounded-xl p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <div className="font-semibold text-gray-800">{reg.clubName}</div>
-                          <div className="text-sm text-gray-500">{reg.clubContact} · {reg.contactEmail}</div>
+                    <div key={reg.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+
+                      {/* Club + money */}
+                      <div className="px-5 pt-5 pb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {reg.clubLogoUrl
+                            ? <img src={reg.clubLogoUrl} alt="" className="h-11 w-11 rounded-lg object-contain bg-white border border-gray-200 flex-shrink-0" />
+                            : <span className="h-11 w-11 rounded-lg bg-gray-100 border border-gray-200 text-gray-400 font-semibold flex items-center justify-center flex-shrink-0">{(reg.clubName || '?').charAt(0).toUpperCase()}</span>}
+                          <div className="min-w-0">
+                            <div className="font-bold text-gray-800 truncate">{reg.clubName}</div>
+                            {reg.clubContact && <div className="text-sm text-gray-600 truncate">{reg.clubContact}</div>}
+                            <div className="text-sm text-gray-500 truncate">{reg.contactEmail}{reg.contactPhone ? ` · ${reg.contactPhone}` : ''}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">Registered {shortDate(reg.createdAt)}</div>
+                          </div>
                         </div>
-                        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${bal <= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {bal <= 0 ? <><Check size={12} className="shrink-0" /> Paid</> : `Balance: ${fmt(bal)}`}
-                        </span>
+                        {showMoney && (
+                        <div className="flex items-center gap-5 text-sm flex-shrink-0 justify-between sm:justify-end border-t border-gray-100 pt-3 sm:border-0 sm:pt-0">
+                          <div className="text-right">
+                            <div className="text-xs text-gray-400">Invoiced</div>
+                            <div className="font-medium text-gray-700">{fmt(due)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-400">Paid</div>
+                            <div className="font-medium text-green-600">{fmt(paid)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-400">Balance</div>
+                            <div className={`font-semibold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</div>
+                          </div>
+                        </div>
+                        )}
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {reg.teams.map(t => (
-                          <div key={t.id} className="flex items-center gap-1.5 text-xs bg-violet-50 text-violet-700 px-2 py-1 rounded-lg">
-                            {t.logoUrl && <img src={t.logoUrl} alt="" className="h-4 w-4 object-contain rounded" />}
-                            {t.teamName} · {t.division}
+
+                      {/* Registration facts */}
+                      <div className="px-5 py-2.5 bg-gray-50 border-y border-gray-100 flex flex-wrap gap-x-8 gap-y-1 text-sm">
+                        {reg.clubBasedIn && <span className="text-gray-500">Based in: <span className="text-gray-700 font-medium">{reg.clubBasedIn}</span></span>}
+                        <span className="text-gray-500">Hotel: <span className="text-gray-700 font-medium">{reg.needsHotel || 'No'}</span></span>
+                        <span className="text-gray-500">Pay method: <span className="text-gray-700 font-medium">{payLabel(reg.paymentMethod)}</span></span>
+                      </div>
+
+                      {/* Teams — a real table on desktop, stacked rows on a phone,
+                          from one set of markup so neither can drift. */}
+                      <div className="hidden sm:grid grid-cols-12 gap-x-4 px-5 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        <div className="col-span-3">Team</div>
+                        <div className="col-span-3">Division</div>
+                        <div className="col-span-1 text-center">Waivers</div>
+                        <div className="col-span-2">Coach</div>
+                        <div className="col-span-3">Contact</div>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {rows.length === 0 && <div className="px-5 py-4 text-sm text-gray-400">No teams on this registration.</div>}
+                        {rows.map(t => (
+                          <div key={t.key} className="px-5 py-3 grid grid-cols-1 sm:grid-cols-12 gap-x-4 gap-y-1 sm:items-center">
+                            <div className="sm:col-span-3 flex items-center gap-2 min-w-0">
+                              {t.logoUrl && <img src={t.logoUrl} alt="" className="h-5 w-5 object-contain rounded flex-shrink-0" />}
+                              <span className="font-semibold text-gray-800 truncate">{t.teamName}</span>
+                            </div>
+                            <div className="sm:col-span-3 text-sm text-gray-600 truncate">{t.division}</div>
+                            <div className="sm:col-span-1 sm:text-center">
+                              <span className={`inline-flex items-center justify-center min-w-[1.75rem] text-xs font-semibold px-2 py-0.5 rounded-full ${t.players.length > 0 ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                {t.players.length}
+                              </span>
+                              <span className="sm:hidden text-xs text-gray-400 ml-1.5">waiver{t.players.length === 1 ? '' : 's'} filed</span>
+                            </div>
+                            <div className="sm:col-span-2 text-sm text-gray-600 truncate">{t.coachName || '—'}</div>
+                            {/* Phone over email rather than side by side: on one
+                                line a club address breaks mid-word ("kpaglino@laxm
+                                / aniax.com"). Truncated with the full value on
+                                hover; the mailto still carries all of it. */}
+                            <div className="sm:col-span-3 text-sm text-gray-500 min-w-0 leading-snug">
+                              {t.coachPhone && <div><a href={`tel:${t.coachPhone}`} className="hover:text-violet-600">{t.coachPhone}</a></div>}
+                              {t.coachEmail && <div className="truncate"><a href={`mailto:${t.coachEmail}`} title={t.coachEmail} className="hover:text-violet-600">{t.coachEmail}</a></div>}
+                              {!t.coachPhone && !t.coachEmail && '—'}
+                            </div>
                           </div>
                         ))}
                       </div>
+
+                      {/* Waiver standing — the same numbers the tournament staff see */}
+                      <div className="px-5 py-3 border-t border-gray-100 text-sm flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-gray-700"><span className="font-semibold">{filed}</span> waiver{filed === 1 ? '' : 's'} completed for {reg.clubName}</span>
+                        {noneYet > 0 && <span className="text-amber-600">· {noneYet} team{noneYet === 1 ? '' : 's'} with none yet</span>}
+                        {selTournament && (
+                          <a href={`/tournaments/${selTournament}/player-waiver`} target="_blank" rel="noopener noreferrer"
+                            className="ml-auto inline-flex items-center gap-1.5 text-violet-600 hover:text-violet-700 font-medium">
+                            <ExternalLink size={13} className="shrink-0" /> Waiver form to send parents
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Invoice & payments — folded in from the old Billing tab,
+                          so the money sits with the teams it paid for. */}
+                      {showMoney && (
+                      <div className="px-5 py-4 border-t border-gray-100 bg-gray-50">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <h3 className="font-semibold text-gray-800">Invoice &amp; payments</h3>
+                          {bal <= 0 && due > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
+                              <Check size={12} className="shrink-0" /> Paid in full
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm mb-3">
+                          <span className="text-gray-500">Invoice: <span className="font-medium text-gray-800">{fmt(reg.invoiceAmount)}</span></span>
+                          {reg.discountAmount > 0 && (
+                            <span className="text-gray-500">Discount: <span className="font-medium text-amber-600">-{fmt(reg.discountAmount)}</span>{reg.discountNote ? <span className="text-gray-400"> ({reg.discountNote})</span> : null}</span>
+                          )}
+                          <span className="text-gray-500">Paid: <span className="font-medium text-green-600">{fmt(paid)}</span></span>
+                          <span className="text-gray-500">Balance: <span className={`font-semibold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</span></span>
+                        </div>
+                        {reg.payments.length === 0
+                          ? <p className="text-sm text-gray-400">No payments recorded yet.</p>
+                          : (
+                            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                              <div className="hidden sm:grid grid-cols-12 gap-x-4 px-4 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                <div className="col-span-5">Date</div>
+                                <div className="col-span-4">Method</div>
+                                <div className="col-span-3 text-right">Amount</div>
+                              </div>
+                              <div className="divide-y divide-gray-100">
+                                {reg.payments.map((p, i) => (
+                                  <div key={i} className="px-4 py-2 grid grid-cols-2 sm:grid-cols-12 gap-x-4 text-sm">
+                                    <div className="sm:col-span-5 text-gray-700">{shortDate(p.receivedAt)}</div>
+                                    <div className="sm:col-span-4 text-gray-500 order-last sm:order-none col-span-2 sm:col-auto">{payLabel(p.method)}</div>
+                                    <div className="sm:col-span-3 text-right font-medium text-green-600">{fmt(p.amount)}</div>
+                                  </div>
+                                ))}
+                                <div className="px-4 py-2 grid grid-cols-2 sm:grid-cols-12 gap-x-4 text-sm bg-gray-50">
+                                  <div className="sm:col-span-9 font-semibold text-gray-700">Balance due</div>
+                                  <div className={`sm:col-span-3 text-right font-bold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                      )}
                     </div>
                   )
                 })}
+
+                {/* A waiver whose team name matches nothing on the registration
+                    still counts in the club's total, so say so rather than let
+                    the tile read 5 while the rows add to 4. This is real: one
+                    Monster Mash waiver is filed under a club spelling that does
+                    not match any registered team. */}
+                {unassignedWaivers.length > 0 && (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                    <span>
+                      {unassignedWaivers.length} waiver{unassignedWaivers.length === 1 ? '' : 's'} could not be matched to one of your teams
+                      {' '}({unassignedWaivers.slice(0, 3).map(w => w.playerName).filter(Boolean).join(', ')}
+                      {unassignedWaivers.length > 3 ? ', …' : ''}). They still count toward your club total — ask the tournament staff to correct the team on them.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -615,49 +757,6 @@ export default function ClubDirectorDashboard() {
               </div>
             )}
 
-            {/* Billing */}
-            {tab === 'billing' && (
-              <div className="space-y-4">
-                {data?.registrations.map(reg => {
-                  const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
-                  const due = reg.invoiceAmount - reg.discountAmount
-                  const bal = due - paid
-                  return (
-                    <div key={reg.id} className="bg-white border border-gray-200 rounded-xl p-5">
-                      <h3 className="font-semibold text-gray-800 mb-4">{reg.clubName}</h3>
-                      <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
-                        <div className="bg-gray-50 rounded-xl p-3 text-center">
-                          <div className="font-bold text-gray-800">{fmt(reg.invoiceAmount)}</div>
-                          <div className="text-xs text-gray-500">Invoice</div>
-                        </div>
-                        <div className="bg-green-50 rounded-xl p-3 text-center">
-                          <div className="font-bold text-green-700">{fmt(paid)}</div>
-                          <div className="text-xs text-gray-500">Paid</div>
-                        </div>
-                        <div className={`rounded-xl p-3 text-center ${bal > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
-                          <div className={`font-bold ${bal > 0 ? 'text-red-700' : 'text-green-700'}`}>{fmt(bal)}</div>
-                          <div className="text-xs text-gray-500">Balance</div>
-                        </div>
-                      </div>
-                      {reg.payments.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Payment History</p>
-                          <div className="space-y-1">
-                            {reg.payments.map((p, i) => (
-                              <div key={i} className="flex justify-between text-sm text-gray-600">
-                                <span>{new Date(p.receivedAt).toLocaleDateString()} · {p.method}</span>
-                                <span className="font-medium text-green-700">{fmt(p.amount)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {reg.payments.length === 0 && <p className="text-sm text-gray-400">No payments recorded yet.</p>}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
           </>
         )
       )}
