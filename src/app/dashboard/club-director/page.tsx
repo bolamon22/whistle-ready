@@ -10,7 +10,7 @@ interface Tournament { id: string; name: string; startDate: string; logoUrl: str
 interface Waiver {
   id: string; playerName: string; team: string; club: string
   jersey: string | number | null; grade: string; parentName: string
-  position: string; photoUrl: string; parentPhone: string; parentEmail: string
+  position: string; photoUrl: string; dob: string; parentPhone: string; parentEmail: string
   signed: boolean; submittedAt: string
 }
 interface Registration {
@@ -62,6 +62,14 @@ const initials = (n: string) =>
   String(n || '?').trim().split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?'
 
 const fileDate = (d: string) => { try { return new Date(d).toLocaleDateString() } catch { return '' } }
+
+// The waiver form stores dob as YYYY-MM-DD. Parsed as a Date that reads as UTC
+// midnight and renders a day early west of Greenwich, so read the parts directly.
+const dobDate = (d: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''))
+  if (m) return `${Number(m[2])}/${Number(m[3])}/${m[1]}`
+  try { return d ? new Date(d).toLocaleDateString() : '' } catch { return '' }
+}
 
 // A player card needs a block of color behind the initials when there is no
 // photo. Hashed off the name so the same player keeps the same one, rather than
@@ -702,7 +710,11 @@ export default function ClubDirectorDashboard() {
                                 const sel = openPlayer === w.id
                                 return (
                                   <button key={w.id} type="button" onClick={() => setOpenPlayer(sel ? null : w.id)}
-                                    className={`text-left border rounded-xl overflow-hidden transition-colors ${sel ? 'border-violet-400 ring-2 ring-violet-100' : 'border-gray-200 hover:border-violet-300'}`}>
+                                    // h-full + flex column: a two-line name made one card taller
+                                    // than its neighbours, because a grid item that is a <button>
+                                    // does not stretch on its own. The footer pins to mt-auto so
+                                    // every "Waiver on file" line sits on the same baseline.
+                                    className={`h-full flex flex-col text-left border rounded-xl overflow-hidden transition-colors ${sel ? 'border-violet-400 ring-2 ring-violet-100' : 'border-gray-200 hover:border-violet-300'}`}>
                                     {/* Deliberately NOT the full keepsake card: no QR
                                         codes, no player id, no presented-by footer.
                                         A coach is checking a face against a name. */}
@@ -712,17 +724,27 @@ export default function ClubDirectorDashboard() {
                                         : <span className="h-5 w-5 rounded bg-white text-gray-900 text-[8px] font-extrabold grid place-items-center shrink-0">{initials(row.teamName)}</span>}
                                       <span className="text-[10px] font-semibold text-gray-200 truncate">{row.teamName}</span>
                                     </div>
-                                    <div className="flex gap-2.5 p-2.5">
-                                      <span className={`h-[60px] w-[52px] rounded-lg grid place-items-center shrink-0 overflow-hidden text-white font-extrabold text-[17px] ${avatarTone(w.playerName)}`}>
-                                        {w.photoUrl ? <img src={w.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(w.playerName)}
-                                      </span>
-                                      <span className="min-w-0 flex-1">
-                                        <span className="block font-bold text-[13.5px] leading-tight text-gray-800 line-clamp-2 [overflow-wrap:anywhere]">{w.playerName || 'Player'}</span>
-                                        {w.position && <span className="block text-[9.5px] font-bold uppercase tracking-widest text-teal-600 mt-0.5">{w.position}</span>}
-                                        {w.jersey ? <span className="block text-[19px] font-extrabold text-gray-800 leading-none mt-1.5"><span className="text-[11px] text-gray-400">#</span>{w.jersey}</span> : null}
+                                    {/* Name across the full card, not beside the
+                                        avatar. Sharing the row left it about 100px,
+                                        and a real surname ("Kourkoumelis") broke
+                                        mid-word into an orphan letter. It also scans
+                                        better: a coach reads down a column of names. */}
+                                    <div className="p-2.5 flex flex-col gap-2">
+                                      <span className="block font-bold text-[13.5px] leading-tight text-gray-800 line-clamp-2 [overflow-wrap:anywhere]">{w.playerName || 'Player'}</span>
+                                      <span className="flex gap-2.5 items-center">
+                                        <span className={`h-[52px] w-[46px] rounded-lg grid place-items-center shrink-0 overflow-hidden text-white font-extrabold text-[15px] ${avatarTone(w.playerName)}`}>
+                                          {w.photoUrl ? <img src={w.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(w.playerName)}
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                          {w.position && <span className="block text-[9.5px] font-bold uppercase tracking-widest text-teal-600 truncate">{w.position}</span>}
+                                          <span className="flex items-baseline gap-1.5 mt-0.5">
+                                            {w.jersey ? <span className="text-[19px] font-extrabold text-gray-800 leading-none"><span className="text-[11px] text-gray-400">#</span>{w.jersey}</span> : null}
+                                            {w.grade && <span className="text-[10.5px] font-semibold text-gray-400 leading-none">Gr {w.grade}</span>}
+                                          </span>
+                                        </span>
                                       </span>
                                     </div>
-                                    <div className="border-t border-gray-100 bg-gray-50 px-2.5 py-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold text-teal-700">
+                                    <div className="mt-auto border-t border-gray-100 bg-gray-50 px-2.5 py-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold text-teal-700">
                                       <Check size={12} className="shrink-0" /> Waiver on file
                                     </div>
                                   </button>
@@ -746,6 +768,7 @@ export default function ClubDirectorDashboard() {
                                     {([
                                       ['Team', `${row.teamName}${row.division ? ` · ${row.division}` : ''}`],
                                       ['Grade', w.grade],
+                                      ['Date of birth', dobDate(w.dob)],
                                       ['Parent', w.parentName],
                                       ['Parent phone', w.parentPhone],
                                       ['Parent email', w.parentEmail],
@@ -769,7 +792,7 @@ export default function ClubDirectorDashboard() {
                             <table className="w-full text-sm">
                               <thead className="bg-gray-50">
                                 <tr>
-                                  {['Player', 'Grade', 'Jersey', 'Parent', 'Filed'].map(h => (
+                                  {['Player', 'DOB', 'Grade', 'Jersey', 'Parent', 'Filed'].map(h => (
                                     <th key={h} className="text-left px-4 py-2 text-gray-500 font-semibold text-xs">{h}</th>
                                   ))}
                                 </tr>
@@ -778,6 +801,7 @@ export default function ClubDirectorDashboard() {
                                 {row.players.map(w => (
                                   <tr key={w.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-2 font-medium text-gray-800">{w.playerName || '—'}</td>
+                                    <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{dobDate(w.dob) || '—'}</td>
                                     <td className="px-4 py-2 text-gray-500">{w.grade || '—'}</td>
                                     <td className="px-4 py-2 text-gray-500">{w.jersey ? `#${w.jersey}` : '—'}</td>
                                     <td className="px-4 py-2 text-gray-500">{w.parentName || '—'}</td>

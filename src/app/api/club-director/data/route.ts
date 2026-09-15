@@ -109,6 +109,9 @@ export async function GET(req: NextRequest) {
         // No signature, no date of birth, no USA Lacrosse number: a coach needs
         // to know the waiver is done, not to hold the family's identifiers.
         position: d.position || '', photoUrl: d.photoUrl || '',
+        // Date of birth: a coach checks it against the division's age cutoff,
+        // which is the whole reason the waiver asks for it.
+        dob: d.dob || '',
         parentPhone: d.parentPhone || '', parentEmail: d.parentEmail || '',
         signed: !!(d.signature || d.playerName),
         submittedAt: String(r.submittedAt || ''),
