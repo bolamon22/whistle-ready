@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2 } from 'lucide-react'
+import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2, Printer } from 'lucide-react'
+import { cardPrintCss, CARD_PRINT_NOTE } from '@/lib/cardPrint'
 import { uploadPlayerPhoto, uploadClubLogo } from '@/lib/photoClient'
 import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
@@ -313,6 +314,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   ]
   if (done) return (
     <>
+    <style>{cardPrintCss('pass-card')}</style>
     {headerEl}
     <div className="max-w-xl mx-auto px-6 py-16">
       <div className="text-center">
@@ -323,13 +325,18 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
       {passToken && (
         <div className="mt-8 bg-[#0b1220] rounded-2xl p-5 text-white">
-          <div className="text-xs uppercase tracking-[0.2em] text-teal-300">Player card</div>
-          <p className="text-sm text-slate-300 mt-1 leading-relaxed">Save it, share it, show it off. Open the card to change the photo or the link its QR code opens — the link is in your confirmation email too.</p>
-          <img src={`/pass/${passToken}/card.png`} alt="Player card" width={720} height={1140} className="w-full max-w-[300px] mx-auto mt-4 rounded-xl shadow-2xl shadow-black/50 bg-white" />
-          <div className="grid grid-cols-2 gap-2.5 max-w-[300px] mx-auto mt-4">
-            <a href={`/pass/${passToken}/card.png`} download="player-card.png" className="inline-flex items-center justify-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-[#0b1220] font-bold rounded-xl py-2.5 text-sm"><Download size={15} /> Save to phone</a>
-            <a href={`/pass/${passToken}`} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 border border-white/15 font-semibold rounded-xl py-2.5 text-sm"><ExternalLink size={15} /> Open card</a>
+          <div className="text-xs uppercase tracking-[0.2em] text-teal-300 print:hidden">Player card</div>
+          <p className="text-sm text-slate-300 mt-1 leading-relaxed print:hidden">Save it, print it, share it. Open the card to change the photo or the link its QR code opens &mdash; the link is in your confirmation email too.</p>
+          <img id="pass-card" src={`/pass/${passToken}/card.png`} alt="Player card" width={720} height={1140} className="w-full max-w-[300px] mx-auto mt-4 rounded-xl shadow-2xl shadow-black/50 bg-white" />
+          <div className="grid grid-cols-3 gap-2.5 max-w-[340px] mx-auto mt-4 print:hidden">
+            <a href={`/pass/${passToken}/card.png`} download="player-card.png" className="inline-flex items-center justify-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-[#0b1220] font-bold rounded-xl py-2.5 text-xs"><Download size={15} /> Save</a>
+            {/* Printing is offered here as well as on the card page: this is the
+                moment a parent has the card in front of them and is deciding what
+                to do with it, and sending them elsewhere first loses most of them. */}
+            <button type="button" onClick={() => window.print()} className="inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 border border-white/15 font-semibold rounded-xl py-2.5 text-xs"><Printer size={15} /> Print</button>
+            <a href={`/pass/${passToken}`} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/15 border border-white/15 font-semibold rounded-xl py-2.5 text-xs"><ExternalLink size={15} /> Open</a>
           </div>
+          <p className="text-[11.5px] text-slate-400 text-center mt-2.5 leading-relaxed print:hidden">{CARD_PRINT_NOTE}</p>
         </div>
       )}
 

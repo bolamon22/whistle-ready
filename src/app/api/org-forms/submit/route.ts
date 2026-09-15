@@ -423,7 +423,8 @@ export async function POST(req: NextRequest) {
           const passHtml = passUrl
             ? `<div style="margin-top:24px;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc">
                  <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#0f766e;font-weight:700">Player card</div>
-                 <p style="color:#334155;font-size:15px;line-height:1.6;margin:6px 0 12px">${playerName ? `${playerName}'s` : 'Your'} player card is ready \u2014 save it, share it, show it off. Open it any time to change the photo or the link its QR code opens.</p>
+                 <p style="color:#334155;font-size:15px;line-height:1.6;margin:6px 0 12px">${playerName ? `${playerName}'s` : 'Your'} player card is ready \u2014 save it, print it, share it. Open it any time to change the photo or the link its QR code opens.</p>
+                 <p style="color:#475569;font-size:13.5px;line-height:1.6;margin:0 0 12px"><strong style="color:#0f172a">Printing it?</strong> The Print button on the card page sizes it to a real badge (2.125\u2033 \u00d7 3.375\u2033) \u2014 cut along the edge and it fits a standard lanyard holder.</p>
                  <a href="${passUrl}" style="display:inline-block;background:#0d9488;color:#fff;font-weight:700;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px">Open player card</a>
                  <p style="color:#94a3b8;font-size:12px;margin:12px 0 0;word-break:break-all">${passUrl}</p>
                </div>`

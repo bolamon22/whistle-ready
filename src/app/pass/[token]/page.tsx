@@ -4,7 +4,8 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { Download } from 'lucide-react'
 import { appBaseUrl, loadPlayerPass } from '@/lib/playerPass'
-import CardTools from './PassActions'
+import CardTools, { PrintCardButton } from './PassActions'
+import { cardPrintCss, CARD_PRINT_NOTE } from '@/lib/cardPrint'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,7 @@ export default async function PlayerPassPage({ params }: { params: { token: stri
 
   return (
     <div className="min-h-screen bg-[#0b1220] text-white">
+      <style>{cardPrintCss('pass-card')}</style>
       <div className="max-w-md mx-auto px-5 py-8 sm:py-12">
         <div className="text-center mb-5">
           <div className="text-xs uppercase tracking-[0.2em] text-teal-300">Player card</div>
@@ -31,15 +33,20 @@ export default async function PlayerPassPage({ params }: { params: { token: stri
         </div>
 
         {/* The card itself — the same PNG families save and staff print. */}
-        <img src={cardPng} alt={`Player card for ${card.playerName}`} width={720} height={1140}
+        <img id="pass-card" src={cardPng} alt={`Player card for ${card.playerName}`} width={720} height={1140}
           className="w-full max-w-[360px] mx-auto rounded-2xl shadow-2xl shadow-black/50 ring-1 ring-white/10 bg-white" />
 
-        <div className="max-w-[360px] mx-auto mt-5">
-          <a href={cardPng} download={`player-card-${card.code.replace('-', '')}.png`}
-            className="flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#0b1220] font-bold rounded-xl py-3 text-sm">
-            <Download size={16} /> Save to phone
-          </a>
-          <p className="text-center text-xs text-slate-400 mt-2 leading-relaxed">On iPhone, press and hold the card to add it to Photos.</p>
+        <div className="max-w-[360px] mx-auto mt-5 print:hidden">
+          <div className="grid grid-cols-2 gap-2.5">
+            <a href={cardPng} download={`player-card-${card.code.replace('-', '')}.png`}
+              className="flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#0b1220] font-bold rounded-xl py-3 text-sm">
+              <Download size={16} /> Save to phone
+            </a>
+            <PrintCardButton className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-semibold rounded-xl py-3 text-sm" />
+          </div>
+          <p className="text-center text-xs text-slate-400 mt-2 leading-relaxed">
+            On iPhone, press and hold the card to add it to Photos. {CARD_PRINT_NOTE}
+          </p>
         </div>
         <CardTools token={params.token} url={pass.passUrl} title={`${card.playerName} — player card`} photoUrl={card.photoUrl} cardLink={String(submission.data?.cardLink || '')} />
 

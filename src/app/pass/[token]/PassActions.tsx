@@ -2,8 +2,18 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Share2, Check, Camera, Link2, Loader2 } from 'lucide-react'
+import { Share2, Check, Camera, Link2, Loader2, Printer } from 'lucide-react'
 import { uploadPlayerPhoto } from '@/lib/photoClient'
+
+// window.print() needs a client component, and the page that owns the card is a
+// server one -- so the button lives here with the family's other card controls.
+export function PrintCardButton({ className = '' }: { className?: string }) {
+  return (
+    <button type="button" onClick={() => window.print()} className={className}>
+      <Printer size={16} /> Print card
+    </button>
+  )
+}
 
 // The family's controls under their card: share the link, change the photo, and pick the
 // link the QR code opens (highlight reel, Instagram…). Edits go to /api/pass/<token>; the
