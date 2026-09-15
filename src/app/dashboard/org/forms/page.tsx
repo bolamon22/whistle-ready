@@ -71,6 +71,7 @@ type VendorForm = {
   types: VendorType[]; approvalNotice: string; instructions: VendorInstructions
   heroImage: string; headline: string; subhead: string
   sponsorShow: boolean; sponsorBlurb: string; sponsorTiers: { name: string; price: number }[]; sponsorEmail: string
+  notifyEmail: string
   disclaimer: string
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
@@ -93,7 +94,7 @@ const EMPTY: Forms = {
   vendor: {
     types: DEFAULT_VENDOR_TYPES,
     heroImage: DEFAULT_VENDOR_HERO, headline: DEFAULT_HEADLINE, subhead: DEFAULT_SUBHEAD,
-    sponsorShow: true, sponsorBlurb: DEFAULT_SPONSOR_BLURB, sponsorTiers: DEFAULT_SPONSOR_TIERS, sponsorEmail: '',
+    sponsorShow: true, sponsorBlurb: DEFAULT_SPONSOR_BLURB, sponsorTiers: DEFAULT_SPONSOR_TIERS, sponsorEmail: '', notifyEmail: '',
     approvalNotice: DEFAULT_APPROVAL_NOTICE,
     instructions: { where: '', eventTimes: '', loadIn: '', loadOut: '', bring: '', contact: '' },
     disclaimer: DEFAULT_VENDOR_DISCLAIMER,
@@ -413,6 +414,11 @@ function FormsInner() {
                   onClick={() => setF(v => ({ ...v, vendor: { ...v.vendor, types: [...v.vendor.types, { id: `type-${Date.now()}`, name: '', price: 0, selling: true, closed: false, note: '' }] } }))}>
                   + Add a booth type
                 </button>
+
+                <label className={labelCls}>Notify me at</label>
+                <p className="text-xs text-slate-500 -mt-1 mb-1">Emailed the moment a vendor applies, so you aren&rsquo;t refreshing the requests page. Blank uses your org contact address.</p>
+                <input className={inputCls} type="email" value={vf.notifyEmail} placeholder="you@yourorg.com"
+                  onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, notifyEmail: e.target.value } }))} />
 
                 <label className={labelCls}>Approval notice</label>
                 <p className="text-xs text-slate-500 -mt-1 mb-1">Shown at the top of the form, so nobody assumes submitting reserves a spot.</p>

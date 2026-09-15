@@ -5,7 +5,8 @@ import { listSubmissions, deleteSubmission, getSubmission, setSubmissionStatus, 
 import { orgById } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { sendEmail, orgSender, emailEnabled } from '@/lib/email'
-import { vendorConfig } from '@/lib/vendorForm'
+import { vendorConfig, priceLabel } from '@/lib/vendorForm'
+import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 import { prisma } from '@/lib/db'
 
 // Staff: vendor requests for THIS tournament (rows in "OrgFormSubmission" tagged with
@@ -75,15 +76,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // The fee: whatever staff typed, else the type's current price, else what the
     // applicant was shown when they applied.
+    let cfgRaw: any = {}
+    try {
+      const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${g.orgId}` } })
+      cfgRaw = row ? JSON.parse(row.value || '{}').vendor : {}
+    } catch { /* fall through to what they were quoted */ }
+    const cfgForMail = vendorConfig(cfgRaw)
+
     let amount = Number(body.amount)
     if (!(amount > 0)) {
-      let cfgRaw: any = {}
-      try {
-        const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${g.orgId}` } })
-        cfgRaw = row ? JSON.parse(row.value || '{}').vendor : {}
-      } catch { /* fall through to what they were quoted */ }
-      const cfg = vendorConfig(cfgRaw)
-      amount = cfg.types.find(t => t.id === String(cur.data?.vendorType || ''))?.price || Number(cur.data?.boothFee) || 0
+      amount = cfgForMail.types.find(t => t.id === String(cur.data?.vendorType || ''))?.price || Number(cur.data?.boothFee) || 0
     }
 
     const token = await ensurePassToken(g.orgId, subId)
@@ -94,27 +96,41 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (token && to && emailEnabled()) {
       try {
         const org = await orgById(g.orgId)
-        const link = `${orgBaseUrl(org?.slug)}/vendor/${token}`
         const orgName = org?.name || 'Sunshine Events Group'
         const company = String(cur.data?.companyName || 'your company')
         const typeName = String(cur.data?.vendorTypeName || cur.data?.level || 'your booth')
         const evName = String(cur.data?.tournamentName || '')
-        const fee = amount > 0 ? `$${amount.toLocaleString('en-US')}` : ''
+        const base = orgBaseUrl(org?.slug)
+        const link = `${base}/vendor/${token}`
+        const logo = absUrl(base, org?.logoUrl)
+        const feeText = amount > 0 ? priceLabel(amount) : ''
+        const hasPacket = Object.values(cfgForMail.instructions).some(v => String(v || '').trim())
+
+        const body = [
+          `<p style="margin:0 0 14px">We&rsquo;ve approved your application for <strong style="color:#0f172a">${esc(typeName)}</strong>${evName ? ` at <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}. You have a spot.</p>`,
+          detailRows([['Event', evName], ['Booth type', typeName], ['Booth fee', feeText || 'Confirmed separately']]),
+          panel('Your booth page', [
+            hasPacket
+              ? 'Everything you need is on one page — where to set up, event times, load-in and load-out.'
+              : 'Your booth page is where your setup details will appear as the event gets closer.',
+            feeText ? ` It&rsquo;s also where you pay the ${esc(feeText)} booth fee — card or bank transfer.` : '',
+            '<br><br><strong style="color:#0f172a">Keep the link.</strong> It&rsquo;s the only way back to that page, so don&rsquo;t forward it to anyone you wouldn&rsquo;t want paying on your behalf.',
+          ].join('')),
+          button(link, feeText ? `Open your booth page & pay ${feeText}` : 'Open your booth page'),
+          `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8;word-break:break-all">${link}</p>`,
+          `<p style="margin:18px 0 0">Anything you need before the weekend, just reply to this email.</p>`,
+        ].join('')
+
         await sendEmail({
           ...orgSender(org),
           to,
           subject: `You're approved — ${typeName}${evName ? ` at ${evName}` : ''}`,
-          html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:8px">
-            <h1 style="font-size:21px;color:#0f172a;margin:0 0 6px">You're in, ${escapeHtml(company)}</h1>
-            <p style="color:#475569;font-size:15px;line-height:1.65;margin:0 0 18px">
-              We've approved your application for <strong>${escapeHtml(typeName)}</strong>${evName ? ` at <strong>${escapeHtml(evName)}</strong>` : ''}.
-              Your booth page has your setup details${fee ? ` and the ${fee} booth fee` : ''} — it's also where you pay.
-            </p>
-            <a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;font-weight:700;text-decoration:none;padding:12px 24px;border-radius:10px;font-size:15px">Open your booth page</a>
-            <p style="color:#94a3b8;font-size:12px;margin:18px 0 0;word-break:break-all">${link}</p>
-            <p style="color:#94a3b8;font-size:12px;margin:18px 0 0">Keep this link — it's the only way back to that page.</p>
-            <p style="color:#94a3b8;font-size:12px;margin:22px 0 0">${escapeHtml(orgName)}</p>
-          </div>`,
+          html: renderEmail({
+            orgName, logoUrl: logo, bannerUrl: absUrl(base, cfgForMail.heroImage),
+            eyebrow: 'Approved', title: `You’re in, ${company}`,
+            body,
+            footerNote: `This link is unique to ${esc(company)}.`,
+          }),
         })
         emailed = true
       } catch { /* the approval stands; staff can resend the link by hand */ }
@@ -126,6 +142,3 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-function escapeHtml(x: string) {
-  return x.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
-}

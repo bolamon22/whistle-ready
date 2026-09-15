@@ -55,6 +55,8 @@ export type VendorConfig = {
   sponsorBlurb: string
   sponsorTiers: SponsorTier[]
   sponsorEmail: string
+  /** Where 'a vendor applied' lands. Blank falls back to the org contact address. */
+  notifyEmail: string
   approvalNotice: string
   disclaimer: string
   confirmationTitle: string
@@ -162,6 +164,7 @@ export function vendorConfig(raw: any): VendorConfig {
     sponsorBlurb: typeof vf.sponsorBlurb === 'string' && vf.sponsorBlurb.trim() ? vf.sponsorBlurb : DEFAULT_SPONSOR_BLURB,
     sponsorTiers: tiers,
     sponsorEmail: String(vf.sponsorEmail || ''),
+    notifyEmail: String(vf.notifyEmail || ''),
     approvalNotice: typeof vf.approvalNotice === 'string' ? vf.approvalNotice : DEFAULT_APPROVAL_NOTICE,
     disclaimer: vf.disclaimer || DEFAULT_VENDOR_DISCLAIMER,
     confirmationTitle: vf.confirmationTitle || DEFAULT_CONFIRMATION_TITLE,

@@ -6,6 +6,10 @@ import { sendEmail, emailEnabled } from '@/lib/email'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import { insertSubmission, countsByType } from '@/lib/formSubmissions'
 import { appBaseUrl, playerPassEnabled } from '@/lib/playerPass'
+import { orgSender, OFFICE_CC } from '@/lib/email'
+import { orgBaseUrl } from '@/lib/orgDomains'
+import { vendorConfig, priceLabel } from '@/lib/vendorForm'
+import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
 // exists, then stores the submission as its own row (see src/lib/formSubmissions.ts —
@@ -34,6 +38,90 @@ export async function POST(req: NextRequest) {
     // Tournament player waivers get a pass (/pass/<token>): shown on the confirmation
     // screen, linked in the email, scanned at check-in.
     const passUrl = formType === 'player' && saved.passToken && data.tournamentId && await playerPassEnabled(orgId) ? `${appBaseUrl(req)}/pass/${saved.passToken}` : ''
+
+    // Vendor applications get their own mail: a branded confirmation to the applicant
+    // that says what they actually applied for, and — new — a heads-up to the organizer,
+    // who until now only found out by refreshing the requests page.
+    if (formType === 'vendor') {
+      try {
+        const orgRows = await prisma.$queryRawUnsafe<any[]>('SELECT name, slug, logoUrl, contactEmail FROM "Organization" WHERE id = ?', orgId)
+        const org = orgRows?.[0] || {}
+        const orgName = String(org.name || 'Sunshine Events Group')
+        const base = orgBaseUrl(org.slug)
+        const logo = absUrl(base, org.logoUrl)
+
+        let cfg = vendorConfig({})
+        let wantsConfirmation = true
+        try {
+          const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${orgId}` } })
+          const raw = row ? JSON.parse(row.value || '{}').vendor : {}
+          cfg = vendorConfig(raw)
+          // Honour the same "email a confirmation" switch the other forms use. It only
+          // silences the APPLICANT's copy -- the organizer still gets told.
+          wantsConfirmation = raw?.emailConfirmation !== false
+        } catch { /* defaults are fine for the email */ }
+
+        const company = String(data.companyName || 'your company')
+        const evName = String(data.tournamentName || '')
+        const typeName = String(data.vendorTypeName || data.level || '')
+        const fee = Number(data.boothFee) || 0
+        const feeText = fee > 0 ? priceLabel(fee) : 'Confirmed on approval'
+        const rows: [string, string][] = [
+          ['Event', evName], ['Booth type', typeName], ['Booth fee', feeText],
+          [data.selling === false ? 'Showcasing' : 'Products', String(data.products || '').slice(0, 180)],
+        ]
+
+        // --- to the applicant ---
+        const to = String(data.email || '').trim()
+        if (to && emailEnabled() && wantsConfirmation) {
+          const body = [
+            `<p style="margin:0 0 14px">Thanks — we&rsquo;ve got your application${evName ? ` for <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}. Here&rsquo;s what you sent us.</p>`,
+            detailRows(rows),
+            panel('What happens next', [
+              '<strong style="color:#0f172a">We read every application.</strong> We look at what you sell, how it fits a youth sports event, and whether it collides with something already under contract.',
+              '<br><br>If you&rsquo;re approved you&rsquo;ll get a link to your own booth page — your setup location, load-in and load-out times, and the place to pay. If you aren&rsquo;t, we&rsquo;ll tell you that too.',
+              '<br><br><strong style="color:#0f172a">Nothing has been charged.</strong> Applying doesn&rsquo;t reserve a spot and doesn&rsquo;t cost anything.',
+            ].join('')),
+            `<p style="margin:18px 0 0">Questions in the meantime? Just reply to this email.</p>`,
+          ].join('')
+          await sendEmail({
+            ...orgSender(org),
+            to,
+            subject: `Vendor application received${evName ? ` — ${evName}` : ''}`,
+            html: renderEmail({
+              orgName, logoUrl: logo, eyebrow: 'Vendor application',
+              title: `We’ve got it, ${company}`,
+              body,
+              footerNote: `You&rsquo;re receiving this because you applied for a vendor booth${evName ? ` at ${esc(evName)}` : ''}.`,
+            }),
+          })
+        }
+
+        // --- to the organizer ---
+        const notify = String(cfg.notifyEmail || org.contactEmail || OFFICE_CC).trim()
+        if (notify && emailEnabled()) {
+          const link = `${base}${data.tournamentId ? `/tournaments/${data.tournamentId}/vendor-requests` : '/dashboard/org/forms'}`
+          const body = [
+            `<p style="margin:0 0 4px">A new vendor application just came in${evName ? ` for <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
+            detailRows([
+              ['Company', company], ['Contact', String(data.companyContact || '')],
+              ['Email', String(data.email || '')], ['Phone', String(data.phone || '')],
+              ['Website', String(data.website || '')],
+              ...rows,
+            ]),
+            button(link, 'Review this application'),
+            `<p style="margin:14px 0 0;font-size:13px;color:#94a3b8">Approving from that page emails them their booth page and payment link.</p>`,
+          ].join('')
+          await sendEmail({
+            ...orgSender(org),
+            to: notify,
+            subject: `New vendor application — ${company}${evName ? ` (${evName})` : ''}`,
+            html: renderEmail({ orgName, logoUrl: logo, eyebrow: 'Needs review', title: `${company} applied for a booth`, body }),
+          })
+        }
+      } catch { /* mail must never fail the submission */ }
+      return NextResponse.json({ ok: true, id: saved.id })
+    }
 
     // Confirmation email (non-blocking) — uses the org's configured confirmation text.
     try {
