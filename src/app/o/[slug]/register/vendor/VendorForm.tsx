@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { CheckCircle2, Lock } from 'lucide-react'
-import type { VendorType, SponsorTier } from '@/lib/vendorForm'
+import type { VendorType, SponsorTier, WebAddOn } from '@/lib/vendorForm'
 import { priceLabel } from '@/lib/vendorForm'
 
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400'
@@ -28,6 +28,7 @@ type Props = {
   sponsorShow: boolean
   sponsorBlurb: string
   sponsorTiers: SponsorTier[]
+  webAddOn: WebAddOn
   sponsorEmail: string
   tournamentId?: string
   tournamentName?: string
@@ -68,7 +69,11 @@ export default function VendorForm(p: Props) {
   // A showcase vendor doesn't sell, so "list the products you plan to sell" is the wrong
   // question — and as a required field it blocked them from submitting at all.
   const selling = chosen ? chosen.selling : true
-  const perEvent = chosen?.price || 0
+  // The web add-on is per application, same as the booth: two weekends is two
+  // listings, because the pre-promotion for each runs on that event's pages.
+  const addOnOn = p.webAddOn.enabled && !!chosen && !chosen.closed && d.webSponsor === true
+  const addOnFee = addOnOn ? (p.webAddOn.price || 0) : 0
+  const perEvent = (chosen?.price || 0) + addOnFee
   // A booth is priced per event, so two events is two booths.
   const total = perEvent * Math.max(chosenEvents.length, 1)
 
@@ -85,8 +90,12 @@ export default function VendorForm(p: Props) {
         // `level` stays in step with the chosen type so existing staff lists, exports
         // and saved views keep reading the field they always have.
         level: chosen.name,
-        vendorTypeName: chosen.name,
-        boothFee: chosen.price || 0,
+        vendorTypeName: addOnOn ? `${chosen.name} + ${p.webAddOn.name.replace(/^Add /i, '')}` : chosen.name,
+        boothFee: perEvent,
+        // Recorded as its own flag, not just folded into the fee: this is what tells
+        // the sponsor wall to list them once they've paid.
+        webSponsor: addOnOn,
+        webSponsorFee: addOnFee,
         selling: chosen.selling,
         // One application per event is created server-side from these; the first is
         // also the row's own tournamentId so existing staff lists keep working.
@@ -131,6 +140,7 @@ export default function VendorForm(p: Props) {
               ['Company', d.companyName], ['Contact', d.companyContact], ['Email', d.email], ['Phone', d.phone],
               ['Events', chosenEvents.map(e => e.name).join(', ') || p.tournamentName || ''],
               ['Booth type', chosen?.name || ''],
+              ['Web sponsorship', addOnOn ? `Yes \u00b7 +${priceLabel(p.webAddOn.price)} per event` : ''],
               ['Booth fee', chosen ? (perEvent > 0 ? (chosenEvents.length > 1 ? `${priceLabel(perEvent)} × ${chosenEvents.length} = ${priceLabel(total)}` : priceLabel(perEvent)) : 'Confirmed on approval') : ''],
               [selling ? 'Products' : 'Showcasing', d.products],
             ] as [string, string][]).filter(([, v]) => v && String(v).trim()).map(([k, v]) => (
@@ -225,6 +235,33 @@ export default function VendorForm(p: Props) {
             })}
           </div>
           {open.length === 0 && <p className="text-sm text-slate-500 mt-4">We aren&rsquo;t accepting vendor applications for this event right now.</p>}
+
+          {/* The upsell, placed where someone has already decided to spend the booth
+              fee. Hidden until a booth is picked so it reads as an addition rather
+              than a fifth option competing with the four above. */}
+          {p.webAddOn.enabled && chosen && !chosen.closed && (
+            <label className={`mt-3 flex gap-3.5 items-start rounded-2xl border p-5 cursor-pointer transition-all ${d.webSponsor ? 'border-teal-500 bg-teal-50/40 ring-1 ring-teal-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+              <input type="checkbox" className="mt-1 w-[18px] h-[18px] accent-teal-600 shrink-0"
+                checked={!!d.webSponsor} onChange={e => set('webSponsor', e.target.checked)} />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                  <span className="font-bold text-slate-900">{p.webAddOn.name}</span>
+                  <span className="font-extrabold text-teal-700 tabular-nums">+{priceLabel(p.webAddOn.price)}</span>
+                  {p.webAddOn.compareAt > p.webAddOn.price && (
+                    <span className="text-[12.5px] text-slate-400">
+                      <span className="line-through">{priceLabel(p.webAddOn.compareAt)}</span> on its own
+                    </span>
+                  )}
+                </span>
+                <span className="block text-sm text-slate-500 mt-1.5 leading-relaxed">{p.webAddOn.note}</span>
+                {d.webSponsor && (
+                  <span className="block text-[12.5px] text-teal-800 bg-white border border-teal-200 rounded-lg px-3 py-2 mt-3 leading-relaxed">
+                    Send your logo to us after you&rsquo;re approved and we&rsquo;ll put it up &mdash; it stays up through the event.
+                  </span>
+                )}
+              </span>
+            </label>
+          )}
           {chosen && perEvent > 0 && chosenEvents.length > 1 && (
             <div className="mt-4 flex flex-wrap items-baseline justify-between gap-3 bg-white border border-slate-200 rounded-xl px-5 py-4">
               <span className="text-sm text-slate-600">{priceLabel(perEvent)} × {chosenEvents.length} events</span>
@@ -260,6 +297,15 @@ export default function VendorForm(p: Props) {
             <div>
               <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Looking to sponsor, not sell?</h2>
               <p className="text-teal-100/80 mt-2.5 leading-relaxed text-[15px]">{p.sponsorBlurb}</p>
+              {/* The band sells web placement at full price; the form above sells the
+                  same thing bundled. Without this line the two read as competing
+                  offers and the cheaper one looks like a mistake. */}
+              {p.webAddOn.enabled && p.webAddOn.price > 0 && (
+                <p className="mt-3 text-[13.5px] text-teal-100/70 leading-relaxed">
+                  Taking a booth as well? Add web placement to your booth for{' '}
+                  <strong className="text-white">+{priceLabel(p.webAddOn.price)}</strong> on the form above.
+                </p>
+              )}
               {sponsorSent ? (
                 <p className="mt-5 text-teal-100 text-[15px] bg-white/10 border border-white/15 rounded-lg px-4 py-3">
                   Got it &mdash; we&rsquo;ll be in touch with the deck shortly.

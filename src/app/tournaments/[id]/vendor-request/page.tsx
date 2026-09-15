@@ -47,6 +47,7 @@ export default async function TournamentVendorRequest({ params }: { params: { id
       showHero={false}
         heroImage={cfg.heroImage} headline={cfg.headline} subhead={cfg.subhead}
         sponsorShow={cfg.sponsorShow} sponsorBlurb={cfg.sponsorBlurb} sponsorTiers={cfg.sponsorTiers}
+        webAddOn={cfg.webAddOn}
         sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''} events={events}
     />
   )

@@ -10,7 +10,7 @@ import MarkdownField from '@/components/MarkdownField'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import PushToggle from '@/components/PushToggle'
 import { DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { isUntouchedLegacyLevels, DEFAULT_VENDOR_HERO, DEFAULT_HEADLINE, DEFAULT_SUBHEAD, DEFAULT_SPONSOR_BLURB, DEFAULT_SPONSOR_TIERS, DEFAULT_VENDOR_TYPES, DEFAULT_APPROVAL_NOTICE, DEFAULT_VENDOR_DISCLAIMER, DEFAULT_CONFIRMATION_TITLE, DEFAULT_CONFIRMATION_MESSAGE, priceLabel, type VendorType, type VendorInstructions } from '@/lib/vendorForm'
+import { isUntouchedLegacyLevels, DEFAULT_VENDOR_HERO, DEFAULT_HEADLINE, DEFAULT_SUBHEAD, DEFAULT_SPONSOR_BLURB, DEFAULT_SPONSOR_TIERS, DEFAULT_VENDOR_TYPES, DEFAULT_APPROVAL_NOTICE, DEFAULT_VENDOR_DISCLAIMER, DEFAULT_CONFIRMATION_TITLE, DEFAULT_CONFIRMATION_MESSAGE, priceLabel, type VendorType, type VendorInstructions, DEFAULT_WEB_ADDON } from '@/lib/vendorForm'
 
 async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
   if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) return file
@@ -71,6 +71,7 @@ type VendorForm = {
   types: VendorType[]; approvalNotice: string; instructions: VendorInstructions
   heroImage: string; headline: string; subhead: string
   sponsorShow: boolean; sponsorBlurb: string; sponsorTiers: { name: string; price: number }[]; sponsorEmail: string
+  webAddOn: { enabled: boolean; name: string; price: number; compareAt: number; note: string }
   notifyEmail: string
   disclaimer: string
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
@@ -95,6 +96,7 @@ const EMPTY: Forms = {
     types: DEFAULT_VENDOR_TYPES,
     heroImage: DEFAULT_VENDOR_HERO, headline: DEFAULT_HEADLINE, subhead: DEFAULT_SUBHEAD,
     sponsorShow: true, sponsorBlurb: DEFAULT_SPONSOR_BLURB, sponsorTiers: DEFAULT_SPONSOR_TIERS, sponsorEmail: '', notifyEmail: '',
+    webAddOn: DEFAULT_WEB_ADDON,
     approvalNotice: DEFAULT_APPROVAL_NOTICE,
     instructions: { where: '', eventTimes: '', loadIn: '', loadOut: '', bring: '', contact: '' },
     disclaimer: DEFAULT_VENDOR_DISCLAIMER,
@@ -169,7 +171,8 @@ function FormsInner() {
                 ? vv.levels.map((n: string) => ({ id: String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: String(n), price: 0, selling: !/sponsor/i.test(String(n)), closed: false, note: '' }))
                 : EMPTY.vendor.types,
             instructions: { ...EMPTY.vendor.instructions, ...(vv.instructions || {}) },
-            sponsorTiers: Array.isArray(vv.sponsorTiers) ? vv.sponsorTiers : EMPTY.vendor.sponsorTiers },
+            sponsorTiers: Array.isArray(vv.sponsorTiers) ? vv.sponsorTiers : EMPTY.vendor.sponsorTiers,
+            webAddOn: { ...EMPTY.vendor.webAddOn, ...(vv.webAddOn || {}) } },
           staff: { ...EMPTY.staff, ...st, positions: Array.isArray(st.positions) ? st.positions : EMPTY.staff.positions, refLevels: Array.isArray(st.refLevels) ? st.refLevels : EMPTY.staff.refLevels },
           registration: { ...EMPTY.registration, ...(d.registration || {}) },
         }
@@ -442,6 +445,30 @@ function FormsInner() {
                     </div>
                   ))}
                 </div>
+
+                {/* The web-sponsorship add-on: a checkbox on the booth form rather than
+                    a fifth booth type, so it composes with all of them and lands at the
+                    moment someone has already decided to spend the booth fee. */}
+                <label className="flex items-start gap-2 mb-2 cursor-pointer">
+                  <input type="checkbox" className="mt-0.5 accent-teal-500" checked={vf.webAddOn.enabled}
+                    onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, webAddOn: { ...v.vendor.webAddOn, enabled: e.target.checked } } }))} />
+                  <span className="text-sm font-semibold text-slate-700">Offer web sponsorship as a booth add-on</span>
+                </label>
+                {vf.webAddOn.enabled && (
+                  <div className="pl-6 mb-4 space-y-2">
+                    <div className="flex gap-2">
+                      <input className={`${inputCls} flex-1`} value={vf.webAddOn.name} placeholder="Add featured web sponsor"
+                        onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, webAddOn: { ...v.vendor.webAddOn, name: e.target.value } } }))} />
+                      <input className={`${inputCls} w-24 tabular-nums`} type="number" min={0} step={25} value={vf.webAddOn.price} title="Add-on price"
+                        onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, webAddOn: { ...v.vendor.webAddOn, price: Math.max(0, Number(e.target.value) || 0) } } }))} />
+                      <input className={`${inputCls} w-24 tabular-nums`} type="number" min={0} step={25} value={vf.webAddOn.compareAt} title="What it costs on its own — shown struck through"
+                        onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, webAddOn: { ...v.vendor.webAddOn, compareAt: Math.max(0, Number(e.target.value) || 0) } } }))} />
+                    </div>
+                    <textarea className={`${inputCls} min-h-[64px]`} value={vf.webAddOn.note}
+                      onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, webAddOn: { ...v.vendor.webAddOn, note: e.target.value } } }))} />
+                    <p className="text-xs text-slate-400">Price, then what it costs bought on its own (shown struck through so the saving is visible). Charged per event, like the booth.</p>
+                  </div>
+                )}
 
                 <label className="flex items-start gap-2 mb-2 cursor-pointer">
                   <input type="checkbox" className="mt-0.5 accent-teal-500" checked={vf.sponsorShow} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorShow: e.target.checked } }))} />

@@ -42,6 +42,28 @@ export type VendorInstructions = {
 
 export type SponsorTier = { name: string; price: number }
 
+/**
+ * The web-sponsorship add-on, offered on top of whichever booth they pick.
+ *
+ * WHY AN ADD-ON AND NOT ANOTHER BOOTH TYPE: as a type it would have to be
+ * duplicated for every booth (vendor+web, two-locations+web, showcase+web) and
+ * the list stops being a list of what you get and starts being a price matrix.
+ * As a checkbox it composes with all of them and, more to the point, it appears
+ * at the moment someone has already decided to spend $600 -- which is the only
+ * moment an upsell converts.
+ *
+ * It is also the one thing on the form that starts working the day it is bought
+ * rather than on event weekend, which is the whole reason to sell it early.
+ */
+export type WebAddOn = {
+  enabled: boolean
+  name: string
+  price: number
+  note: string
+  /** Shown next to the price as the saving, e.g. the standalone web-sponsor tier. */
+  compareAt: number
+}
+
 export type VendorConfig = {
   types: VendorType[]
   /** Photo behind the page header. Defaults to a shot from the SEG gallery that
@@ -54,6 +76,7 @@ export type VendorConfig = {
   sponsorShow: boolean
   sponsorBlurb: string
   sponsorTiers: SponsorTier[]
+  webAddOn: WebAddOn
   sponsorEmail: string
   /** Where 'a vendor applied' lands. Blank falls back to the org contact address. */
   notifyEmail: string
@@ -88,6 +111,17 @@ export const DEFAULT_SPONSOR_TIERS: SponsorTier[] = [
   { name: 'Field name sponsor', price: 2000 },
   { name: 'Featured web sponsor', price: 500 },
 ]
+
+// $250 on top of a $600 booth, against $500 for the same placement bought on its
+// own (the "Featured web sponsor" tier below). Half price for saying yes in the
+// same breath as the booth, and it still leaves the standalone tier worth selling.
+export const DEFAULT_WEB_ADDON: WebAddOn = {
+  enabled: true,
+  name: 'Add featured web sponsor',
+  price: 250,
+  compareAt: 500,
+  note: 'Your logo and link on the event page, the schedule and the results page \u2014 live from the day you pay, not just event weekend. Bought on its own it\u2019s $500.',
+}
 
 export const DEFAULT_APPROVAL_NOTICE =
   'Every vendor is reviewed before a spot is confirmed — submitting this form does not reserve one, and nothing is charged today. ' +
@@ -154,6 +188,17 @@ export function vendorConfig(raw: any): VendorConfig {
     ? vf.sponsorTiers.map((t: any) => ({ name: String(t?.name || ''), price: Number(t?.price) || 0 })).filter((t: SponsorTier) => t.name)
     : DEFAULT_SPONSOR_TIERS
 
+  const wa = (vf.webAddOn && typeof vf.webAddOn === 'object' ? vf.webAddOn : {}) as any
+  const webAddOn: WebAddOn = {
+    // Off only when the org explicitly turns it off -- a missing key means "never
+    // configured", and the default is the whole point of shipping it.
+    enabled: wa.enabled !== false,
+    name: String(wa.name || '').trim() || DEFAULT_WEB_ADDON.name,
+    price: Number(wa.price) >= 0 && wa.price !== undefined && wa.price !== '' ? Number(wa.price) : DEFAULT_WEB_ADDON.price,
+    compareAt: Number(wa.compareAt) > 0 ? Number(wa.compareAt) : DEFAULT_WEB_ADDON.compareAt,
+    note: String(wa.note || '').trim() || DEFAULT_WEB_ADDON.note,
+  }
+
   const ins = (vf.instructions && typeof vf.instructions === 'object' ? vf.instructions : {}) as any
   return {
     types,
@@ -163,6 +208,7 @@ export function vendorConfig(raw: any): VendorConfig {
     sponsorShow: vf.sponsorShow !== false,
     sponsorBlurb: typeof vf.sponsorBlurb === 'string' && vf.sponsorBlurb.trim() ? vf.sponsorBlurb : DEFAULT_SPONSOR_BLURB,
     sponsorTiers: tiers,
+    webAddOn,
     sponsorEmail: String(vf.sponsorEmail || ''),
     notifyEmail: String(vf.notifyEmail || ''),
     approvalNotice: typeof vf.approvalNotice === 'string' ? vf.approvalNotice : DEFAULT_APPROVAL_NOTICE,
