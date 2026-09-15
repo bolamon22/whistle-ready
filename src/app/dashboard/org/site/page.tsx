@@ -10,7 +10,7 @@ import MarkdownField from '@/components/MarkdownField'
 import GalleryPicker from '@/components/GalleryPicker'
 import AiGenerateButton from '@/components/AiGenerateButton'
 
-type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string }
+type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string; eventIds?: string[] }
 type PitchStat = { value: string; label: string }
 type Pitch = { show: boolean; headline: string; sub: string; benefits: string[]; stats: PitchStat[]; ctaLabel: string; wallCtaLabel: string; wallCtaLine: string }
 type Page = { title: string; slug: string; body: string; group: string; heroImage?: string }
@@ -28,8 +28,6 @@ type Content = {
   gallery: Photo[]
   galleryCovers: Record<string, string>
   instagram: Insta
-  seoTitle: string
-  seoDescription: string
 }
 const EMPTY: Content = {
   logo: '',
@@ -43,8 +41,6 @@ const EMPTY: Content = {
   gallery: [],
   galleryCovers: {},
   instagram: { username: '', token: '' },
-  seoTitle: '',
-  seoDescription: '',
 }
 
 const slugify = (t: string) => t.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
@@ -295,17 +291,6 @@ function OrgSiteEditorInner() {
         </div>
       </Sec>
 
-      {/* Search engines — what Google and AI answer engines show */}
-      <Sec isOpen={!!openSec.seo} onToggle={() => setOpenSec(o => ({ ...o, seo: !o.seo }))} title="Search engines" summary={c.seoTitle ? 'Custom' : 'Using defaults'}>
-        <p className="text-xs text-slate-500 mb-3">How this site appears in Google results. Leave blank to use the automatic version. Lead with what people search for — the sport and where you play — not the organization name.</p>
-        <label className="label">Page title</label>
-        <input className="input" value={c.seoTitle} onChange={e => setC(v => ({ ...v, seoTitle: e.target.value }))} placeholder={`${org?.name || 'Your organization'} \u2014 Tournaments, schedules & team registration`} />
-        <p className="text-[11px] text-slate-400 mt-1">{c.seoTitle.length}/60 characters before Google truncates it.</p>
-        <label className="label mt-3">Description</label>
-        <textarea className="input min-h-[72px]" value={c.seoDescription} onChange={e => setC(v => ({ ...v, seoDescription: e.target.value }))} placeholder="Falls back to your hero subtext." />
-        <p className="text-[11px] text-slate-400 mt-1">{c.seoDescription.length}/155 characters.</p>
-      </Sec>
-
       {/* About */}
       <Sec isOpen={!!openSec.about} onToggle={() => setOpenSec(o => ({ ...o, about: !o.about }))} title="About" summary={c.about.body ? 'Set' : 'Empty'}>
         <label className="label">Heading</label>
@@ -317,9 +302,16 @@ function OrgSiteEditorInner() {
       {/* Sponsors */}
       <Sec isOpen={!!openSec.sponsors} onToggle={() => setOpenSec(o => ({ ...o, sponsors: !o.sponsors }))} title="Sponsors & partners" summary={`${c.sponsors.length}`}>
         <div className="flex justify-end mb-2">
-          <button onClick={() => setC(v => ({ ...v, sponsors: [...v.sponsors, { name: '', logoUrl: '', url: '', role: '', tier: 'official', blurb: '' }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add</button>
+          <button onClick={() => setC(v => ({ ...v, sponsors: [...v.sponsors, { name: '', logoUrl: '', url: '', role: '', tier: 'official', blurb: '', eventIds: [] }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add</button>
         </div>
         {c.sponsors.length === 0 && <p className="text-sm text-slate-400">No sponsors yet.</p>}
+        {c.sponsors.length > 0 && (
+          <p className="text-xs text-slate-400 mb-2">
+            A partner with <strong className="font-semibold text-slate-500">Every event</strong> selected appears on all of
+            your event pages. Pick specific events for a host city or a county grant partner so they only
+            appear where they belong.
+          </p>
+        )}
         {c.sponsors.length > 1 && (
           <p className="text-xs text-slate-400 mb-2">
             Drag the handle to reorder, or use the arrows. This is the order they appear in &mdash;
@@ -366,6 +358,37 @@ function OrgSiteEditorInner() {
                 <GalleryPicker label="Library" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: url } : s) }))} />
                 <button onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
               </div>
+              {/* WHICH EVENTS. The list is org-wide, so before this every event page
+                  credited every partner -- Fall Classic in Martin County was
+                  thanking Palm Beach County's sports commission. Nothing selected
+                  means org-wide, which is what every row saved before this looks
+                  like, so existing partners keep showing everywhere until somebody
+                  says otherwise. */}
+              {tournaments.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-slate-400 mr-0.5">Shows at:</span>
+                  <button type="button"
+                    onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, eventIds: [] } : x) }))}
+                    className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${!(s.eventIds?.length) ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+                    Every event
+                  </button>
+                  {tournaments.map((t: any) => {
+                    const tid = String(t.id)
+                    const on = (s.eventIds || []).includes(tid)
+                    return (
+                      <button key={tid} type="button"
+                        onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => {
+                          if (j !== i) return x
+                          const cur = x.eventIds || []
+                          return { ...x, eventIds: cur.includes(tid) ? cur.filter(y => y !== tid) : [...cur, tid] }
+                        }) }))}
+                        className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                        {String(t.name || 'Event')}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               {/* Only the presenting row has space for a sentence, so only ask for one there. */}
               {s.tier === 'presenting' && (
                 <input className="input mt-2 w-full" value={s.blurb || ''} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, blurb: e.target.value } : x) }))} placeholder="One line about what they do for the event (shown only on the featured row)" />

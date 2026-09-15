@@ -22,6 +22,19 @@ export type Sponsor = {
   tier: SponsorTierKey
   /** Only shown for the presenting slot, which has room for a sentence. */
   blurb: string
+  /**
+   * Which events this partner belongs to. EMPTY MEANS EVERY EVENT, which is what
+   * makes this safe to add to a list that has been saved for months: nothing was
+   * scoped before, so nothing changes until somebody scopes it.
+   *
+   * WHY IT EXISTS: the list is org-level, so every event page showed every
+   * partner. Sunshine Fall Classic is in Martin County and was crediting the Palm
+   * Beach County Sports Commission and Wellington Parks & Rec -- two partners of
+   * a different tournament in a different county. That is not a typo to correct
+   * once; grant partners and host cities are per-event by nature and change every
+   * season, so the list has to be able to say which event a partner is for.
+   */
+  eventIds: string[]
 }
 
 export type SponsorStat = { value: string; label: string }
@@ -72,11 +85,29 @@ export function sponsorRec(raw: any): Sponsor | null {
     role: str(raw?.role),
     tier: str(raw?.tier).toLowerCase() === 'presenting' ? 'presenting' : 'official',
     blurb: str(raw?.blurb),
+    eventIds: (Array.isArray(raw?.eventIds) ? raw.eventIds : []).map(str).filter(Boolean),
   }
 }
 
 export function sponsorList(raw: unknown): Sponsor[] {
   return (Array.isArray(raw) ? raw : []).map(sponsorRec).filter((s): s is Sponsor => !!s)
+}
+
+/**
+ * The partners that belong on one event's page.
+ *
+ * A row with no events listed is org-wide and shows everywhere -- that is the
+ * default, and it is what every row saved before scoping existed looks like.
+ */
+export function sponsorsForEvent(list: Sponsor[], tournamentId: string): Sponsor[] {
+  const id = str(tournamentId)
+  if (!id) return list
+  return list.filter(s => s.eventIds.length === 0 || s.eventIds.includes(id))
+}
+
+/** True when a partner is pinned to specific events rather than shown org-wide. */
+export function isEventScoped(s: Sponsor): boolean {
+  return s.eventIds.length > 0
 }
 
 /**

@@ -22,7 +22,7 @@ import JsonLd from '@/components/JsonLd'
 import { resolveRules } from '@/lib/rules'
 import SponsorWall from '@/components/SponsorWall'
 import SponsorPitch from '@/components/SponsorPitch'
-import { sponsorList, sponsorPitch, statNum } from '@/lib/sponsors'
+import { sponsorList, sponsorsForEvent, sponsorPitch, statNum } from '@/lib/sponsors'
 import { vendorConfig } from '@/lib/vendorForm'
 
 // Cache policy for published pages.
@@ -145,7 +145,9 @@ export default async function TournamentEventPage({ params }: { params: { id: st
 
   // Sponsors & partners: normalize once, here, so the wall, the pitch and the open
   // slot all agree on the same list.
-  const spons = sponsorList(sponsors)
+  // Only this event's partners. The list is org-wide, so without the filter a
+  // Martin County tournament credits Palm Beach County's sports commission.
+  const spons = sponsorsForEvent(sponsorList(sponsors), params.id)
   const pitch = sponsorPitch(pitchRaw)
   const sponsorHref = `/tournaments/${params.id}/vendor-request#sponsor`
   // Counted stats first (we can stand behind those), then whatever the org typed in.

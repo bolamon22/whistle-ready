@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@libsql/client'
+import { sponsorList, sponsorsForEvent } from '@/lib/sponsors'
 import { ClipboardList, ScrollText, Utensils, ListChecks, CalendarDays, MapPin, Zap } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
 import EventInfoNav from '@/components/EventInfoNav'
@@ -46,7 +47,9 @@ export default async function EventChrome({ tournamentId, children }: { tourname
     (cs.hotelsUrl || cs.hotels) && { href: `${base}/event#hotels`, label: 'Hotels' },
     cs.rules && { href: `${base}/rules`, label: 'Rules' },
     (Array.isArray(cs.contacts) && cs.contacts.length) && { href: `${base}/event#contacts`, label: 'Contacts' },
-    (sponsors.length > 0 || wantsSponsors) && { href: `${base}/event#sponsors`, label: 'Sponsors & partners' },
+    // Counted the same way the section is rendered, or an event with no partners
+    // of its own still advertises a link to an empty section.
+    (sponsorsForEvent(sponsorList(sponsors), tournamentId).length > 0 || wantsSponsors) && { href: `${base}/event#sponsors`, label: 'Sponsors & partners' },
     { href: `${base}/vendor-request`, label: 'Vendor Request' },
     { href: `${base}/work`, label: 'Work at our event' },
   ].filter(Boolean) as { href: string; label: string }[]
