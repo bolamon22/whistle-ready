@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ClipboardList, ExternalLink, Eye, Globe, RefreshCw, Trophy, Users } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, Globe, LayoutGrid, List, RefreshCw, Trophy, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface Waiver {
   id: string; playerName: string; team: string; club: string
   jersey: string | number | null; grade: string; parentName: string
+  position: string; photoUrl: string; parentPhone: string; parentEmail: string
   signed: boolean; submittedAt: string
 }
 interface Registration {
@@ -56,6 +57,21 @@ const PAY_LABEL: Record<string, string> = {
   ach: 'Bank transfer (ACH)', cash: 'Cash', paypal: 'PayPal', venmo: 'Venmo', invoice: 'Invoice',
 }
 const payLabel = (m: string) => PAY_LABEL[String(m || '').toLowerCase()] || (m ? m[0].toUpperCase() + m.slice(1) : '—')
+
+const initials = (n: string) =>
+  String(n || '?').trim().split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?'
+
+const fileDate = (d: string) => { try { return new Date(d).toLocaleDateString() } catch { return '' } }
+
+// A player card needs a block of color behind the initials when there is no
+// photo. Hashed off the name so the same player keeps the same one, rather than
+// re-rolling on every render.
+const TONES = ['bg-rose-600', 'bg-violet-600', 'bg-teal-600', 'bg-indigo-600', 'bg-amber-600', 'bg-sky-600']
+const avatarTone = (n: string) => {
+  let h = 0
+  for (const ch of String(n || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return TONES[h % TONES.length]
+}
 
 // Re-register modal
 function ReregisterModal({ entry, tournaments, onClose }: {
@@ -168,6 +184,8 @@ export default function ClubDirectorDashboard() {
   const [selTournament, setSelTournament] = useState('')
   const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[] } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
+  const [playerView, setPlayerView] = useState<'cards' | 'list'>('cards')
+  const [openPlayer, setOpenPlayer] = useState<string | null>(null)
   const [linkClubs, setLinkClubs] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
@@ -262,6 +280,7 @@ export default function ClubDirectorDashboard() {
     r.teams.map(t => ({
       key: t.id,
       regId: r.id,
+      clubLogoUrl: r.clubLogoUrl,
       teamName: t.teamName,
       division: t.division,
       logoUrl: t.logoUrl,
@@ -629,34 +648,45 @@ export default function ClubDirectorDashboard() {
               </div>
             )}
 
-            {/* Players */}
+            {/* Player waivers — cards or list.
+                Grouped by team either way, because a club director chases
+                waivers one team at a time ("who on Middle School Select still
+                owes me one"), not by scrolling the whole club alphabetically.
+                Counts match what staff see on the registrations page: both read
+                the same submissions. */}
             {tab === 'players' && (
               <div className="space-y-3">
-                {/* Grouped by team, because a club director chases waivers one
-                    team at a time — "who on Middle School Select still owes me
-                    one" — not by scrolling an alphabetical list of the whole
-                    club. The counts match what staff see on the registrations
-                    page: both read the same waiver submissions. */}
-                <p className="text-sm text-gray-500">
-                  {waivers.length} waiver{waivers.length === 1 ? '' : 's'} filed across your {teamRows.length} team{teamRows.length === 1 ? '' : 's'}.
-                  {teamRows.some(t => t.players.length === 0) && ' Tap a team to see who has filed.'}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">
+                    {waivers.length} waiver{waivers.length === 1 ? '' : 's'} filed across your {teamRows.length} team{teamRows.length === 1 ? '' : 's'}.
+                    {teamRows.some(t => t.players.length === 0) && ' Tap a team to see who has filed.'}
+                  </p>
+                  {/* Cards to recognize a face, list to chase a parent. */}
+                  <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white shrink-0">
+                    {([['cards', 'Cards', LayoutGrid], ['list', 'List', List]] as const).map(([k, label, Ico]) => (
+                      <button key={k} onClick={() => setPlayerView(k)} aria-pressed={playerView === k}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${playerView === k ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:text-gray-700'} ${k === 'list' ? 'border-l border-gray-300' : ''}`}>
+                        <Ico size={14} className="shrink-0" /> {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {teamRows.map(row => {
                   const open = openTeam === row.key
                   return (
                     <div key={row.key} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                      <button onClick={() => setOpenTeam(open ? null : row.key)}
+                      <button onClick={() => { setOpenTeam(open ? null : row.key); setOpenPlayer(null) }}
                         className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50">
                         <span className="min-w-0">
                           <span className="font-semibold text-gray-800">{row.teamName}</span>
                           {row.division && <span className="text-gray-400 text-sm"> · {row.division}</span>}
                         </span>
                         <span className="flex items-center gap-2 shrink-0">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${row.players.length ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${row.players.length ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
                             {row.players.length} waiver{row.players.length === 1 ? '' : 's'}
                           </span>
-                          <span className="text-gray-300">{open ? '\u2212' : '+'}</span>
+                          {open ? <ChevronUp size={16} className="text-gray-400 shrink-0" /> : <ChevronDown size={16} className="text-gray-400 shrink-0" />}
                         </span>
                       </button>
 
@@ -665,6 +695,75 @@ export default function ClubDirectorDashboard() {
                           <p className="px-4 pb-4 text-sm text-gray-400">
                             Nobody on this team has filed a waiver yet. Every player needs one before they step on a field.
                           </p>
+                        ) : playerView === 'cards' ? (
+                          <div className="border-t border-gray-100">
+                            <div className="grid gap-3 p-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(158px, 1fr))' }}>
+                              {row.players.map(w => {
+                                const sel = openPlayer === w.id
+                                return (
+                                  <button key={w.id} type="button" onClick={() => setOpenPlayer(sel ? null : w.id)}
+                                    className={`text-left border rounded-xl overflow-hidden transition-colors ${sel ? 'border-violet-400 ring-2 ring-violet-100' : 'border-gray-200 hover:border-violet-300'}`}>
+                                    {/* Deliberately NOT the full keepsake card: no QR
+                                        codes, no player id, no presented-by footer.
+                                        A coach is checking a face against a name. */}
+                                    <div className="bg-gray-900 px-2.5 py-1.5 flex items-center gap-1.5">
+                                      {row.clubLogoUrl
+                                        ? <img src={row.clubLogoUrl} alt="" className="h-5 w-5 rounded bg-white object-contain shrink-0" />
+                                        : <span className="h-5 w-5 rounded bg-white text-gray-900 text-[8px] font-extrabold grid place-items-center shrink-0">{initials(row.teamName)}</span>}
+                                      <span className="text-[10px] font-semibold text-gray-200 truncate">{row.teamName}</span>
+                                    </div>
+                                    <div className="flex gap-2.5 p-2.5">
+                                      <span className={`h-[60px] w-[52px] rounded-lg grid place-items-center shrink-0 overflow-hidden text-white font-extrabold text-[17px] ${avatarTone(w.playerName)}`}>
+                                        {w.photoUrl ? <img src={w.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(w.playerName)}
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block font-bold text-[13.5px] leading-tight text-gray-800 line-clamp-2 [overflow-wrap:anywhere]">{w.playerName || 'Player'}</span>
+                                        {w.position && <span className="block text-[9.5px] font-bold uppercase tracking-widest text-teal-600 mt-0.5">{w.position}</span>}
+                                        {w.jersey ? <span className="block text-[19px] font-extrabold text-gray-800 leading-none mt-1.5"><span className="text-[11px] text-gray-400">#</span>{w.jersey}</span> : null}
+                                      </span>
+                                    </div>
+                                    <div className="border-t border-gray-100 bg-gray-50 px-2.5 py-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold text-teal-700">
+                                      <Check size={12} className="shrink-0" /> Waiver on file
+                                    </div>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            {(() => {
+                              const w = row.players.find(p => p.id === openPlayer)
+                              if (!w) return null
+                              return (
+                                <div className="mx-4 mb-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+                                  <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                                    <span className="font-semibold text-gray-800">{w.playerName || 'Player'}</span>
+                                    {w.jersey ? <span className="text-xs font-semibold text-gray-500">#{w.jersey}</span> : null}
+                                    {w.position && <span className="text-xs font-semibold text-gray-500">· {w.position}</span>}
+                                    <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700">
+                                      <Check size={12} className="shrink-0" /> Filed {fileDate(w.submittedAt)}
+                                    </span>
+                                  </div>
+                                  <dl className="grid gap-x-5 gap-y-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))' }}>
+                                    {([
+                                      ['Team', `${row.teamName}${row.division ? ` · ${row.division}` : ''}`],
+                                      ['Grade', w.grade],
+                                      ['Parent', w.parentName],
+                                      ['Parent phone', w.parentPhone],
+                                      ['Parent email', w.parentEmail],
+                                    ] as [string, string][]).filter(([, v]) => v).map(([k, v]) => (
+                                      <div key={k} className="min-w-0">
+                                        <dt className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400">{k}</dt>
+                                        <dd className="text-[13.5px] font-semibold text-gray-800 break-words mt-0.5">
+                                          {k === 'Parent phone' ? <a href={`tel:${v}`} className="hover:text-violet-600">{v}</a>
+                                            : k === 'Parent email' ? <a href={`mailto:${v}`} className="hover:text-violet-600">{v}</a>
+                                            : v}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                </div>
+                              )
+                            })()}
+                          </div>
                         ) : (
                           <div className="border-t border-gray-100 overflow-x-auto">
                             <table className="w-full text-sm">
@@ -678,13 +777,11 @@ export default function ClubDirectorDashboard() {
                               <tbody className="divide-y divide-gray-100">
                                 {row.players.map(w => (
                                   <tr key={w.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-2 font-medium text-gray-800">{w.playerName || '\u2014'}</td>
-                                    <td className="px-4 py-2 text-gray-500">{w.grade || '\u2014'}</td>
-                                    <td className="px-4 py-2 text-gray-500">{w.jersey ? `#${w.jersey}` : '\u2014'}</td>
-                                    <td className="px-4 py-2 text-gray-500">{w.parentName || '\u2014'}</td>
-                                    <td className="px-4 py-2 text-gray-400 text-xs">
-                                      {(() => { try { return new Date(w.submittedAt).toLocaleDateString() } catch { return '' } })()}
-                                    </td>
+                                    <td className="px-4 py-2 font-medium text-gray-800">{w.playerName || '—'}</td>
+                                    <td className="px-4 py-2 text-gray-500">{w.grade || '—'}</td>
+                                    <td className="px-4 py-2 text-gray-500">{w.jersey ? `#${w.jersey}` : '—'}</td>
+                                    <td className="px-4 py-2 text-gray-500">{w.parentName || '—'}</td>
+                                    <td className="px-4 py-2 text-gray-400 text-xs">{fileDate(w.submittedAt)}</td>
                                   </tr>
                                 ))}
                               </tbody>

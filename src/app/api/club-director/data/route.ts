@@ -105,6 +105,11 @@ export async function GET(req: NextRequest) {
         team, club: String(r.clubName || club || ''),
         jersey: r.jersey ?? d.jerseyNumber ?? null,
         grade: d.grade || '', parentName: d.parentName || '',
+        // The card view shows a face, a position and a way to reach the parent.
+        // No signature, no date of birth, no USA Lacrosse number: a coach needs
+        // to know the waiver is done, not to hold the family's identifiers.
+        position: d.position || '', photoUrl: d.photoUrl || '',
+        parentPhone: d.parentPhone || '', parentEmail: d.parentEmail || '',
         signed: !!(d.signature || d.playerName),
         submittedAt: String(r.submittedAt || ''),
       }
