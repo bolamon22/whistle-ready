@@ -84,6 +84,32 @@ function SponsorCta({ href, line, label }: { href: string; line: string; label: 
   )
 }
 
+/**
+ * Column count that fills the row rather than leaving a hole on the right.
+ *
+ * A fixed `lg:grid-cols-4` looks wrong for every count that isn't a multiple of
+ * four -- three partners sat in three quarters of the width with an empty quarter
+ * beside them, which reads as a missing sponsor rather than a design. So: up to
+ * five, use exactly as many columns as there are cards; beyond that, pick the
+ * widest row that divides evenly, and fall back to four.
+ *
+ * Classes are spelled out in full because Tailwind only ships the class names it
+ * can see in the source -- a template-built `grid-cols-${n}` compiles to nothing.
+ */
+const GRID_COLS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-2 sm:grid-cols-3',
+  4: 'grid-cols-2 sm:grid-cols-4',
+  5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+}
+
+export function gridColsFor(n: number): string {
+  if (n <= 5) return GRID_COLS[Math.max(n, 1)] || GRID_COLS[4]
+  for (const c of [5, 4, 3]) if (n % c === 0) return GRID_COLS[c]
+  return GRID_COLS[4]
+}
+
 export default function SponsorWall({
   sponsors, variant = 'full', inquireHref,
   ctaLine = 'Put your brand in front of every family here.',
@@ -93,7 +119,8 @@ export default function SponsorWall({
   if (!sponsors.length) return null
   const { presenting, official } = splitSponsors(sponsors)
   const compact = variant === 'compact'
-  const grid = 'grid gap-3.5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+  const cells = compact ? sponsors : official
+  const grid = `grid gap-3.5 ${gridColsFor(cells.length)}`
 
   return (
     <div>
@@ -133,7 +160,7 @@ export default function SponsorWall({
 
       <div className={grid}>
         {/* Compact keeps everyone equal — the home page isn't where a tier gets sold. */}
-        {(compact ? sponsors : official).map((s, i) => <Card key={i} s={s} size={compact ? 52 : 62} />)}
+        {cells.map((s, i) => <Card key={i} s={s} size={compact ? 52 : 62} />)}
       </div>
 
       {inquireHref && <SponsorCta href={inquireHref} line={ctaLine} label={ctaLabel} />}
