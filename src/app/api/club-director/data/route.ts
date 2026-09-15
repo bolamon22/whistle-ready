@@ -39,9 +39,6 @@ export async function GET(req: NextRequest) {
 
   // Get games involving their teams
   const teamNames = registrations.flatMap(r => r.teams.map(t => t.teamName)).filter(Boolean)
-  // A waiver filed through a plain team dropdown carries no club, so it is
-  // claimed by whichever of this club's teams matches the name.
-  const teamNamesForClub = new Set(teamNames.map(n => String(n).toLowerCase().replace(/[^a-z0-9]+/g, '')))
   const games = await prisma.game.findMany({
     where: {
       tournamentId,
@@ -89,7 +86,15 @@ export async function GET(req: NextRequest) {
         signed: !!(d.signature || d.playerName),
         submittedAt: String(r.submittedAt || ''),
       }
-    }).filter(w => mine.has(norm(w.club)) || (!w.club && teamNamesForClub.has(norm(w.team))))
+    })
+      // Club match ONLY. A waiver we cannot confidently attribute to this club is
+      // not shown to it: these are children's names, parents' names and jersey
+      // numbers, and team names here are generic enough to collide across clubs
+      // ("HS Select", "2031/32", "Middle School Select" are all in use). Falling
+      // back to a bare team-name match would hand one club another club's minors.
+      // Nothing is lost by being strict — the club is recoverable from the
+      // "Club — Team" tag when the clubName column is blank, which is done above.
+      .filter(w => mine.has(norm(w.club)))
   } catch { /* no waivers table yet -- the tab shows none rather than failing */ }
 
   return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers })

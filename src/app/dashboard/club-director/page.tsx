@@ -152,6 +152,7 @@ export default function ClubDirectorDashboard() {
   const [selTournament, setSelTournament] = useState('')
   const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[] } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
+  const [linkClubs, setLinkClubs] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [tab, setTab] = useState<'overview' | 'players' | 'schedule' | 'billing' | 'history'>('overview')
@@ -177,6 +178,7 @@ export default function ClubDirectorDashboard() {
       const links = Array.isArray(linkRes) ? linkRes : (linkRes?.links ?? [])
       const linked: Tournament[] = (Array.isArray(linkRes) ? [] : (linkRes?.tournaments ?? []))
       if (!links || links.length === 0) { setNoLinks(true); setLoading(false); return }
+      setLinkClubs([...new Set((links as { clubName: string }[]).map(l => l.clubName).filter(Boolean))])
       const list: Tournament[] = linked.length ? linked : (Array.isArray(t) ? t : [])
       setTournaments(list)
       const linkedIds = [...new Set((links as { tournamentId: string }[]).map(l => l.tournamentId))]
@@ -221,6 +223,7 @@ export default function ClubDirectorDashboard() {
     </div>
   )
 
+  const selTournamentName = tournaments.find(t => t.id === selTournament)?.name || ''
   const waivers: Waiver[] = data?.waivers ?? []
   // Waivers land on the team whose name they carry. Normalized both sides
   // because the form writes "Club \u2014 Team" and people type inconsistently.
@@ -258,8 +261,11 @@ export default function ClubDirectorDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Club Director Dashboard</h1>
-          <p className="text-violet-600 text-sm font-medium mt-0.5">{data?.clubs.join(', ')}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-600">Club director</p>
+          <h1 className="text-2xl font-bold text-gray-800 mt-0.5">
+            {(data?.clubs?.length ? data.clubs : linkClubs).join(', ') || 'Your club'}
+          </h1>
+          {selTournamentName && <p className="text-sm text-gray-500 mt-0.5">{selTournamentName}</p>}
         </div>
         {tab !== 'history' && (
           <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadData(e.target.value) }}
