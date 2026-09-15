@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -13,6 +13,13 @@ export default function LoginForm({ brandName, brandLogo }: { brandName?: string
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  // Sent here by the claim flow after a role promotion (see /api/claim): the
+  // NextAuth token only picks up a new role at sign-in, so the stale session has
+  // to be cleared. Without a word of explanation that reads as a random logout.
+  const [claimed, setClaimed] = useState(false)
+  useEffect(() => {
+    try { setClaimed(new URLSearchParams(window.location.search).get('claimed') === '1') } catch { /* ignore */ }
+  }, [])
   const [loading, setLoading] = useState(false)
   // Show-password toggle (Bo) — long passwords on a phone keyboard are a guess
   // otherwise, and "Invalid email or password" doesn't say which one was wrong.
@@ -95,6 +102,11 @@ export default function LoginForm({ brandName, brandLogo }: { brandName?: string
             </button>
           </div>
 
+          {claimed && !error && (
+            <p className="text-sm text-teal-300 bg-teal-950/40 border border-teal-900/40 rounded-xl px-3 py-2">
+              Your team is linked. Sign in once more and you&rsquo;ll land in your club portal.
+            </p>
+          )}
           {error && <p className="text-sm text-red-400 bg-red-950/50 border border-red-900/40 rounded-xl px-3 py-2">{error}</p>}
 
           <button type="submit" disabled={loading}

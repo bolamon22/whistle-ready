@@ -90,6 +90,30 @@ export async function POST(req: NextRequest) {
 
     if (!userId) return NextResponse.json({ error: 'Could not complete sign-in.' }, { status: 400 })
 
+    // Claiming a team IS the club-director credential, so the account doing the
+    // claiming has to end up with the role that opens the portal.
+    //
+    // Only the brand-new branch above set it, so anyone who already had an
+    // account -- or who signed up first and clicked the link second -- got the
+    // ClubDirectorLink and kept whatever role they had. A 'parent' has ZERO
+    // permissions in role-permissions.json, so they landed on the parent
+    // dashboard locked out of the roster, the balance and the schedule the
+    // invitation email had just promised them, with no way to fix it: roles are
+    // only editable on the admin Users page. (Joe Frederick of LaxManiax, Sep 15
+    // 2026 -- "I followed the process, but it appears I'm registered as a Parent.")
+    //
+    // Promote WEAK roles only. A director or admin claiming a team on behalf of a
+    // club must never be demoted to club_director.
+    const PROMOTABLE = new Set(['', 'parent', 'coach', 'viewer'])
+    let rolePromoted = false
+    try {
+      const who = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+      if (PROMOTABLE.has(String(who?.role || ''))) {
+        await prisma.user.update({ where: { id: userId }, data: { role: 'club_director' } })
+        rolePromoted = true
+      }
+    } catch { /* the link still stands; staff can set the role by hand */ }
+
     // Link this user to THIS club for THIS tournament (idempotent).
     await prisma.clubDirectorLink.upsert({
       where: { userId_tournamentId_clubName: { userId, tournamentId: info.tournamentId, clubName: info.clubName } },
@@ -99,7 +123,13 @@ export async function POST(req: NextRequest) {
 
     await markClaimed(info.registrationId, userId)
 
-    return NextResponse.json({ ok: true, clubName: info.clubName, tournamentName: info.tournamentName })
+    // The role lives in the NextAuth JWT and is only written at sign-in, so a
+    // promoted user keeps the stale one until they authenticate again. The page
+    // uses this to decide whether its own re-sign-in is enough.
+    return NextResponse.json({
+      ok: true, clubName: info.clubName, tournamentName: info.tournamentName,
+      rolePromoted, wasSignedIn: !!(session?.user as any)?.id,
+    })
   } catch (e: any) {
     console.error('[claim] redeem failed:', e)
     return NextResponse.json({ error: 'Something went wrong claiming this team.' }, { status: 500 })

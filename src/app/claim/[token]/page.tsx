@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { signIn, signOut } from 'next-auth/react'
 import { ClipboardList, Check, ShieldCheck, Users, CreditCard, CalendarDays } from 'lucide-react'
 
 type Info = {
@@ -54,6 +54,17 @@ export default function ClaimPage() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(d.error || 'Could not complete that.'); setBusy(false); return }
 
+      // The role is written into the NextAuth token at sign-in and never
+      // refreshed, so a promotion only takes effect on the next authentication.
+      if (d.wasSignedIn && d.rolePromoted) {
+        // Already signed in, so there is no password here to re-authenticate
+        // with. Clearing the stale session is the only way the new role lands —
+        // otherwise they bounce straight back out of the portal they just earned.
+        setDone(true)
+        await signOut({ redirect: false }).catch(() => {})
+        setTimeout(() => router.push('/login?claimed=1'), 900)
+        return
+      }
       // Sign them in so they land inside the portal, not on a login screen.
       await signIn('credentials', {
         email: info?.contactEmail, password, redirect: false,
