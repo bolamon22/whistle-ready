@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save, Star, Search, Library } from 'lucide-react'
+import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save, Star, Search, Library, GripVertical } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import GalleryPicker from '@/components/GalleryPicker'
 import AiGenerateButton from '@/components/AiGenerateButton'
@@ -154,6 +154,22 @@ function OrgSiteEditorInner() {
     } catch { toast.error('Save failed') } finally { setSaving(false) }
   }
 
+  // Sponsor order is display order, so it needs to be changeable. Drag for a mouse,
+  // arrows for everything else -- HTML5 drag events do not fire on iOS at all, and
+  // this admin gets used from an iPad.
+  const [dragSpon, setDragSpon] = useState<number | null>(null)
+  const [overSpon, setOverSpon] = useState<number | null>(null)
+  // Only armed while the grip is held: a permanently draggable row swallows
+  // click-and-drag text selection inside the inputs it contains.
+  const [gripArmed, setGripArmed] = useState(false)
+  const moveSponsor = (from: number, to: number) => setC(v => {
+    if (to < 0 || to >= v.sponsors.length || from === to) return v
+    const a = [...v.sponsors]
+    const [m] = a.splice(from, 1)
+    a.splice(to, 0, m)
+    return { ...v, sponsors: a }
+  })
+
   const movePage = (i: number, dir: -1 | 1) => setC(v => { const a = [...v.pages]; const j = i + dir; if (j < 0 || j >= a.length) return v; [a[i], a[j]] = [a[j], a[i]]; return { ...v, pages: a } })
 
   if (loading) return <div className="text-slate-400 text-center py-16">Loading…</div>
@@ -289,10 +305,36 @@ function OrgSiteEditorInner() {
           <button onClick={() => setC(v => ({ ...v, sponsors: [...v.sponsors, { name: '', logoUrl: '', url: '', role: '', tier: 'official', blurb: '' }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add</button>
         </div>
         {c.sponsors.length === 0 && <p className="text-sm text-slate-400">No sponsors yet.</p>}
+        {c.sponsors.length > 1 && (
+          <p className="text-xs text-slate-400 mb-2">
+            Drag the handle to reorder, or use the arrows. This is the order they appear in &mdash;
+            presenting sponsors always show above the grid regardless of where they sit in this list.
+          </p>
+        )}
         <div className="space-y-3">
           {c.sponsors.map((s, i) => (
-            <div key={i} className="border border-slate-200 rounded-xl p-3">
+            <div key={i}
+              draggable={gripArmed}
+              onDragStart={e => { setDragSpon(i); e.dataTransfer.effectAllowed = 'move' }}
+              onDragOver={e => { if (dragSpon !== null) { e.preventDefault(); setOverSpon(i) } }}
+              onDrop={() => { if (dragSpon !== null) moveSponsor(dragSpon, i); setDragSpon(null); setOverSpon(null); setGripArmed(false) }}
+              onDragEnd={() => { setDragSpon(null); setOverSpon(null); setGripArmed(false) }}
+              className={`border rounded-xl p-3 bg-white transition-colors ${dragSpon === i ? 'opacity-40' : ''} ${overSpon === i && dragSpon !== null && dragSpon !== i ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200'}`}>
               <div className="flex items-start gap-3">
+                {/* Grip arms the drag; the arrows are the whole story on a touch screen. */}
+                <div className="flex flex-col items-center pt-0.5 shrink-0">
+                  <span
+                    onPointerDown={() => setGripArmed(true)}
+                    onPointerUp={() => setGripArmed(false)}
+                    className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"
+                    title="Drag to reorder">
+                    <GripVertical size={16} />
+                  </span>
+                  <button type="button" onClick={() => moveSponsor(i, i - 1)} disabled={i === 0}
+                    className="text-slate-300 hover:text-slate-600 disabled:opacity-30" title="Move up"><ChevronUp size={14} /></button>
+                  <button type="button" onClick={() => moveSponsor(i, i + 1)} disabled={i === c.sponsors.length - 1}
+                    className="text-slate-300 hover:text-slate-600 disabled:opacity-30" title="Move down"><ChevronDown size={14} /></button>
+                </div>
                 {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-12 w-12 object-contain rounded-lg border border-slate-100 flex-shrink-0" /> : <div className="h-12 w-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 flex-shrink-0"><ImagePlus size={16} /></div>}
                 <div className="flex-1 grid sm:grid-cols-2 gap-2">
                   <input className="input" value={s.name} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))} placeholder="Sponsor name" />
