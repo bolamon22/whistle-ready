@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { X, ChevronLeft, ChevronRight, Share2, Check, Camera, ArrowLeft, Images } from 'lucide-react'
 
@@ -9,7 +10,11 @@ type Tourn = { id: string; name: string }
 // folders (albums) — one per tournament plus an "All photos" album and "Other" for
 // untagged — each with a cover photo. Opening a folder shows its photos with a
 // click-to-expand lightbox (prev/next + keyboard) and per-photo share (deep link).
-export default function PublicGallery({ photos, tournaments, covers = {} }: { photos: Photo[]; tournaments: Tourn[]; covers?: Record<string, string> }) {
+export default function PublicGallery({ photos, tournaments, covers = {}, creditLinks = {} }: { photos: Photo[]; tournaments: Tourn[]; covers?: Record<string, string>; creditLinks?: Record<string, string> }) {
+  // A credit only becomes a link when the server matched it to a photographer we
+  // credential. Everything else stays the grey text it has always been, so an
+  // unrecognised credit can never render as a link to nowhere.
+  const creditHref = (c?: string) => (c ? creditLinks[c] || '' : '')
   const nameOf = useMemo(() => { const m: Record<string, string> = {}; tournaments.forEach(t => { m[t.id] = t.name }); return m }, [tournaments])
 
   const albums = useMemo(() => {
@@ -88,19 +93,32 @@ export default function PublicGallery({ photos, tournaments, covers = {} }: { ph
       {heading && <h2 className="text-xl font-bold text-slate-900 mb-4">{heading} <span className="text-slate-400 font-normal text-base">· {current.length}</span></h2>}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {current.map((ph, i) => (
-          <button key={ph.id || i} onClick={() => setActive(i)} className="group block rounded-2xl overflow-hidden border border-slate-200 bg-white text-left">
-            <div className="aspect-square overflow-hidden">
-              <img src={ph.url} alt={ph.caption || ''} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        {current.map((ph, i) => {
+          const href = creditHref(ph.credit)
+          return (
+            <div key={ph.id || i} className="group rounded-2xl overflow-hidden border border-slate-200 bg-white">
+              <button onClick={() => setActive(i)} className="block w-full text-left">
+                <div className="aspect-square overflow-hidden">
+                  <img src={ph.url} alt={ph.caption || ''} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                </div>
+              </button>
+              {(ph.caption || ph.credit) && (
+                <div className="px-3 py-2">
+                  {ph.caption && <p className="text-xs text-slate-600 truncate">{ph.caption}</p>}
+                  {ph.credit && (href ? (
+                    <Link href={href} className="text-[11px] text-teal-700 hover:text-teal-900 hover:underline flex items-center gap-1 min-w-0">
+                      <Camera size={11} className="shrink-0" /><span className="truncate">{ph.credit}</span>
+                    </Link>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 flex items-center gap-1 min-w-0">
+                      <Camera size={11} className="shrink-0" /><span className="truncate">{ph.credit}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
-            {(ph.caption || ph.credit) && (
-              <div className="px-3 py-2">
-                {ph.caption && <p className="text-xs text-slate-600 truncate">{ph.caption}</p>}
-                {ph.credit && <p className="text-[11px] text-slate-400 truncate flex items-center gap-1"><Camera size={11} /> {ph.credit}</p>}
-              </div>
-            )}
-          </button>
-        ))}
+          )
+        })}
       </div>
 
       {cur && (
@@ -113,7 +131,13 @@ export default function PublicGallery({ photos, tournaments, covers = {} }: { ph
             <div className="mt-3 flex items-start justify-between gap-4">
               <div className="text-white min-w-0">
                 {cur.caption && <p className="text-sm font-medium">{cur.caption}</p>}
-                <p className="text-xs text-white/60 truncate">{[cur.credit ? `Photo: ${cur.credit}` : '', cur.tournamentId ? nameOf[cur.tournamentId] : ''].filter(Boolean).join(' · ')}</p>
+                <p className="text-xs text-white/60 truncate">
+                  {cur.credit && (creditHref(cur.credit) ? (
+                    <>Photo: <Link href={creditHref(cur.credit)} className="text-white/90 underline decoration-white/40 underline-offset-2 hover:decoration-white">{cur.credit}</Link></>
+                  ) : <>Photo: {cur.credit}</>)}
+                  {cur.credit && cur.tournamentId && nameOf[cur.tournamentId] ? ' · ' : ''}
+                  {cur.tournamentId ? nameOf[cur.tournamentId] : ''}
+                </p>
               </div>
               <button onClick={() => share(cur)} className="shrink-0 inline-flex items-center gap-1.5 text-sm bg-white/10 hover:bg-white/20 text-white rounded-lg px-3 py-1.5">
                 {copied ? <><Check size={15} /> Link copied</> : <><Share2 size={15} /> Share</>}

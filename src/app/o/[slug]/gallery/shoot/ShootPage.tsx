@@ -16,6 +16,9 @@ type Props = {
   events: OrgEvent[]
   /** Preselected weekends. Arriving from an event page means that one. */
   defaultEventIds?: string[]
+  /** What the invite email already knew about them. Someone who was asked by
+   *  name should not have to type that name back in. */
+  prefill?: { name?: string; company?: string; email?: string }
   liveStats: { teams: number; clubs: number; events: number }
 }
 
@@ -25,7 +28,8 @@ const num = (n: number) => n.toLocaleString('en-US')
 
 export default function ShootPage(p: Props) {
   const [f, setF] = useState({
-    name: '', company: '', email: '', phone: '', portfolio: '', instagram: '',
+    name: p.prefill?.name || '', company: p.prefill?.company || '', email: p.prefill?.email || '',
+    phone: '', portfolio: '', instagram: '',
     gear: '', insurance: '', notes: '',
   })
   const set = (k: keyof typeof f, v: string) => setF(s => ({ ...s, [k]: v }))

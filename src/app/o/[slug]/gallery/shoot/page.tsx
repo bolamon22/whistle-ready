@@ -22,7 +22,10 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
 }
 
-export default async function Page({ params }: { params: { slug: string } }) {
+type Search = { [k: string]: string | string[] | undefined }
+const one = (v: string | string[] | undefined): string => (Array.isArray(v) ? v[0] : v) || ''
+
+export default async function Page({ params, searchParams }: { params: { slug: string }; searchParams?: Search }) {
   const client = db()
   const orgRes = await client.execute({ sql: 'SELECT id, name, logoUrl, contactEmail FROM "Organization" WHERE slug = ?', args: [params.slug] })
   if (orgRes.rows.length === 0) {
@@ -53,12 +56,24 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
   const shell = await orgShell({ slug: params.slug })
 
+  // An invite email links here with the event and the person already filled in
+  // (see src/lib/mediaInvite.ts). The event id is only honoured if it is really
+  // one of ours -- a made-up ?event= must not preselect a phantom weekend.
+  const wantEvent = one(searchParams?.event)
+  const defaultEventIds = wantEvent && events.some(e => e.id === wantEvent) ? [wantEvent] : undefined
+  const prefill = {
+    name: one(searchParams?.name).slice(0, 120),
+    company: one(searchParams?.co).slice(0, 120),
+    email: one(searchParams?.email).slice(0, 160),
+  }
+
   return (
     <OrgShell data={shell!}>
     <ShootPage
       orgId={String(org.id)} orgName={String(org.name || '')} orgLogo={String(org.logoUrl || '')}
       contactEmail={String(cfg.notifyEmail || org.contactEmail || '')}
       cfg={cfg} keepPct={photographerSharePct(cfg)} events={events}
+      defaultEventIds={defaultEventIds} prefill={prefill}
       liveStats={{ teams, clubs, events: events.length }}
     />
     </OrgShell>

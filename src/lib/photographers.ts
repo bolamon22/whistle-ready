@@ -253,3 +253,58 @@ export async function savePhotographerSelf(orgId: string, slug: string, patch: a
   await writePhotographers(orgId, list)
   return true
 }
+
+// ── photo credits ────────────────────────────────────────────────────────────
+// Every gallery photo carries a free-text `credit` line ("Coyote Magic Action
+// Shots"). That line is most of what a photographer gets in return for handing
+// over a weekend of work, and until now it was a dead string sitting under a
+// thumbnail. Resolving it back to the profile turns each credit into a link to
+// the page where that person can actually be booked -- which is the trade the
+// application page promises, finally kept.
+//
+// Matching is deliberately strict. Sending a family to the wrong photographer is
+// worse than sending them nowhere, so a credit resolves only when it equals the
+// profile's slug, business or name once normalized -- never on a partial or fuzzy
+// match. Anything unmatched keeps rendering as the plain grey text it is today.
+
+/** "Photo by Coyote Magic Action Shots." -> "coyote magic action shots" */
+function normCredit(s: string): string {
+  return str(s)
+    .replace(/^\s*(photos?|images?|video)\s*(?:by|:)\s*/i, '')
+    .replace(/^@/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+/** The credentialed photographer a credit line names, or null. */
+export function photographerForCredit(credit: string, list: Photographer[]): Photographer | null {
+  const want = normCredit(credit)
+  if (!want) return null
+  return list.find(p => p.active && (
+    normCredit(p.slug) === want ||
+    normCredit(p.business) === want ||
+    normCredit(p.name) === want
+  )) || null
+}
+
+/**
+ * Every distinct credit in a gallery -> the profile href it should link to.
+ *
+ * Built once on the server: the client component then needs a plain string map
+ * rather than the photographer list, and 193 photos cost one pass over a handful
+ * of profiles instead of a lookup per thumbnail. Credits with no match are simply
+ * absent from the map, which is what makes the fallback automatic.
+ */
+export function creditLinks(photos: { credit?: string }[], list: Photographer[], base: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const seen = new Set<string>()
+  for (const ph of photos) {
+    const credit = str(ph?.credit)
+    if (!credit || seen.has(credit)) continue
+    seen.add(credit)
+    const hit = photographerForCredit(credit, list)
+    if (hit) out[credit] = `${base}/photographers/${hit.slug}`
+  }
+  return out
+}

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
+import InvitePanel from './InvitePanel'
 import { Camera, ChevronRight, ExternalLink, Download, Trash2, Check, X, Link2 } from 'lucide-react'
 
 type Sub = { id: string; submittedAt: string; data: any; status?: string; passToken?: string | null }
@@ -161,6 +162,8 @@ export default function MediaRequestEntries() {
             {subs.length > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Download size={14} /> Export CSV</button>}
           </div>
         </div>
+
+        <InvitePanel id={id} />
 
         {loading ? <p className="text-slate-400 text-center py-16">Loading…</p>
           : subs.length === 0 ? (

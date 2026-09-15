@@ -5,7 +5,7 @@ import { Trophy } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import PublicGallery from '@/components/PublicGallery'
 import PhotographerTiles from '@/components/PhotographerTiles'
-import { photographerList } from '@/lib/photographers'
+import { photographerList, creditLinks } from '@/lib/photographers'
 
 // Cache policy for published pages.
 //
@@ -72,6 +72,11 @@ export default async function GalleryPage({ params }: { params: { slug: string }
   const tournaments = (tRes.rows as any[]).map(t => ({ id: String(t.id), name: String(t.name || 'Tournament') }))
   const photos = gallery.map((p: any, i: number) => ({ ...p, id: p.id || `p${i}` }))
   const covers = (content.galleryCovers && typeof content.galleryCovers === 'object') ? content.galleryCovers : {}
+  // The credit under each photo is the photographer's payment for contributing
+  // it. Resolved here rather than in the client component so the browser gets a
+  // small string map instead of every profile.
+  const shooterList = photographerList(shooters)
+  const creditHrefs = creditLinks(photos, shooterList, base)
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -90,11 +95,11 @@ export default async function GalleryPage({ params }: { params: { slug: string }
             </Link>
           </div>
         </div>
-        <PublicGallery photos={photos} tournaments={tournaments} covers={covers} />
+        <PublicGallery photos={photos} tournaments={tournaments} covers={covers} creditLinks={creditHrefs} />
 
         <div className="mt-16 pt-12 border-t border-slate-200">
           <PhotographerTiles
-            photographers={photographerList(shooters)}
+            photographers={shooterList}
             base={base}
             limit={4}
             title="Book a photographer"
