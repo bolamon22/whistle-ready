@@ -9,6 +9,7 @@ import { priceLabel } from '@/lib/vendorForm'
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400'
 const labelCls = 'block text-sm font-semibold text-slate-700 mb-1.5'
 const card = 'bg-white rounded-2xl border border-slate-200'
+const sponsorInput = 'w-full bg-white/10 border border-white/25 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-teal-100/50 focus:outline-none focus:ring-2 focus:ring-white/40'
 const h2 = 'text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight'
 const eyebrow = 'text-[11px] font-bold uppercase tracking-[0.15em] text-teal-700'
 
@@ -48,6 +49,15 @@ export default function VendorForm(p: Props) {
   const events = p.events || []
   // On a tournament page its own event starts ticked; the org page starts empty.
   const [picked, setPicked] = useState<string[]>(p.tournamentId ? [p.tournamentId] : [])
+  // Sponsorship is a lead, not a booth sale: a short form that actually reaches the
+  // organizer, rather than a mailto: that opens the visitor's mail client (and does
+  // nothing at all on a phone with no mail app set up).
+  const [sponsorOpen, setSponsorOpen] = useState(false)
+  const [sponsorSent, setSponsorSent] = useState(false)
+  const [sponsorBusy, setSponsorBusy] = useState(false)
+  const [sp, setSp] = useState<any>({ companyName: '', contactName: '', email: '', phone: '', message: '' })
+  const setS = (k: string, v: any) => setSp((prev: any) => ({ ...prev, [k]: v }))
+
   const [d, setD] = useState<any>({ companyName: '', companyContact: '', phone: '', email: '', website: '', vendorType: '', products: '', agree: false })
   const toggleEvent = (id: string) => setPicked(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   const chosenEvents = events.filter(e => picked.includes(e.id))
@@ -88,6 +98,24 @@ export default function VendorForm(p: Props) {
       if (res.ok) { setDone(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }
       else { const err = await res.json().catch(() => ({})); toast.error(err.error || 'Submission failed') }
     } catch { toast.error('Submission failed') } finally { setSubmitting(false) }
+  }
+
+  async function submitSponsor(e: React.FormEvent) {
+    e.preventDefault()
+    if (!sp.companyName.trim() || !sp.email.trim()) { toast.error('Company and email, please'); return }
+    setSponsorBusy(true)
+    try {
+      const res = await fetch('/api/org-forms/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId: p.orgId, formType: 'sponsor', data: {
+          ...sp,
+          tournamentId: p.tournamentId || '',
+          tournamentName: p.tournamentName || '',
+        } }),
+      })
+      if (res.ok) setSponsorSent(true)
+      else { const err = await res.json().catch(() => ({})); toast.error(err.error || 'Could not send that') }
+    } catch { toast.error('Could not send that') } finally { setSponsorBusy(false) }
   }
 
   if (done) return (
@@ -232,11 +260,32 @@ export default function VendorForm(p: Props) {
             <div>
               <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Looking to sponsor, not sell?</h2>
               <p className="text-teal-100/80 mt-2.5 leading-relaxed text-[15px]">{p.sponsorBlurb}</p>
-              {p.sponsorEmail && (
-                <a href={`mailto:${p.sponsorEmail}?subject=Sponsorship%20%E2%80%94%20${encodeURIComponent(p.tournamentName || p.orgName)}`}
+              {sponsorSent ? (
+                <p className="mt-5 text-teal-100 text-[15px] bg-white/10 border border-white/15 rounded-lg px-4 py-3">
+                  Got it &mdash; we&rsquo;ll be in touch with the deck shortly.
+                </p>
+              ) : !sponsorOpen ? (
+                <button type="button" onClick={() => setSponsorOpen(true)}
                   className="inline-block mt-5 border border-white/40 hover:bg-white/10 text-white font-bold text-sm rounded-lg px-5 py-2.5 transition-colors">
                   Request the sponsorship deck
-                </a>
+                </button>
+              ) : (
+                <form onSubmit={submitSponsor} className="mt-5 space-y-2.5">
+                  <div className="grid sm:grid-cols-2 gap-2.5">
+                    <input className={sponsorInput} placeholder="Company *" value={sp.companyName} onChange={e => setS('companyName', e.target.value)} required />
+                    <input className={sponsorInput} placeholder="Your name" value={sp.contactName} onChange={e => setS('contactName', e.target.value)} />
+                    <input className={sponsorInput} type="email" placeholder="Email *" value={sp.email} onChange={e => setS('email', e.target.value)} required />
+                    <input className={sponsorInput} type="tel" placeholder="Phone" value={sp.phone} onChange={e => setS('phone', e.target.value)} />
+                  </div>
+                  <textarea className={`${sponsorInput} min-h-[72px]`} placeholder="What are you trying to reach? Anything you already have in mind." value={sp.message} onChange={e => setS('message', e.target.value)} />
+                  <div className="flex items-center gap-3 pt-1">
+                    <button type="submit" disabled={sponsorBusy}
+                      className="bg-white text-[#0b4a37] hover:bg-teal-50 disabled:opacity-60 font-bold text-sm rounded-lg px-5 py-2.5 transition-colors">
+                      {sponsorBusy ? 'Sending…' : 'Send it over'}
+                    </button>
+                    <button type="button" onClick={() => setSponsorOpen(false)} className="text-teal-100/70 hover:text-white text-sm">Cancel</button>
+                  </div>
+                </form>
               )}
             </div>
             {p.sponsorTiers.length > 0 && (

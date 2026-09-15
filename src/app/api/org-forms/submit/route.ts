@@ -71,6 +71,63 @@ export async function POST(req: NextRequest) {
     // screen, linked in the email, scanned at check-in.
     const passUrl = formType === 'player' && saved.passToken && data.tournamentId && await playerPassEnabled(orgId) ? `${appBaseUrl(req)}/pass/${saved.passToken}` : ''
 
+    // Sponsorship enquiries. These used to be a mailto: link on the vendor page, which
+    // sent us nothing and did nothing at all on a phone with no mail app configured.
+    // It's a lead, so it gets stored and it gets emailed.
+    if (formType === 'sponsor') {
+      try {
+        const orgRows = await prisma.$queryRawUnsafe<any[]>('SELECT name, slug, logoUrl, contactEmail FROM "Organization" WHERE id = ?', orgId)
+        const org = orgRows?.[0] || {}
+        const orgName = String(org.name || 'Sunshine Events Group')
+        const base = orgBaseUrl(org.slug)
+        const logo = absUrl(base, org.logoUrl)
+        let cfg = vendorConfig({})
+        try {
+          const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${orgId}` } })
+          cfg = vendorConfig(row ? JSON.parse(row.value || '{}').vendor : {})
+        } catch { /* defaults are fine */ }
+
+        const company = String(data.companyName || 'A company')
+        const evName = String(data.tournamentName || '')
+        const rows: [string, string][] = [
+          ['Company', company], ['Contact', String(data.contactName || '')],
+          ['Email', String(data.email || '')], ['Phone', String(data.phone || '')],
+          ['Event they were on', evName],
+          ['What they said', String(data.message || '').slice(0, 400)],
+        ]
+
+        // to the organizer — sponsorship notes go to the sponsorship address when one
+        // is set, otherwise wherever vendor applications already land.
+        const notify = String(cfg.sponsorEmail || cfg.notifyEmail || org.contactEmail || OFFICE_CC).trim()
+        if (notify && emailEnabled()) {
+          await sendEmail({
+            ...orgSender(org), to: notify,
+            subject: `Sponsorship enquiry — ${company}`,
+            html: renderEmail({ orgName, logoUrl: logo, eyebrow: 'Sponsorship', title: `${company} wants the deck`,
+              body: `<p style="margin:0 0 4px">Someone asked for the sponsorship deck from the vendor page.</p>${detailRows(rows)}<p style="margin:16px 0 0;font-size:13px;color:#94a3b8">Reply straight to this email to reach them.</p>`,
+            }),
+            ...(String(data.email || '').trim() ? { replyTo: String(data.email).trim() } : {}),
+          })
+        }
+
+        // to them
+        const to = String(data.email || '').trim()
+        if (to && emailEnabled()) {
+          await sendEmail({
+            ...orgSender(org), to,
+            subject: `Sponsorship — ${orgName}`,
+            html: renderEmail({ orgName, logoUrl: logo, eyebrow: 'Sponsorship', title: `Thanks, ${company}`,
+              body: `<p style="margin:0 0 14px">We&rsquo;ve got your note and we&rsquo;ll come back to you with the deck and what&rsquo;s still available.</p>`
+                + panel('What happens next', 'Sponsorship is built around what you&rsquo;re trying to reach, so we&rsquo;d rather talk than send a price list. Expect a reply from a person, not an autoresponder.')
+                + `<p style="margin:16px 0 0">If it&rsquo;s easier, just reply here.</p>`,
+              footerNote: 'You asked about sponsorship on our vendor page.',
+            }),
+          })
+        }
+      } catch { /* mail must never fail the submission */ }
+      return NextResponse.json({ ok: true, id: saved.id })
+    }
+
     // Vendor applications get their own mail: a branded confirmation to the applicant
     // that says what they actually applied for, and — new — a heads-up to the organizer,
     // who until now only found out by refreshing the requests page.
