@@ -401,9 +401,21 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}`, href: panelIds.has('divisions') ? '#divisions' : undefined },
     minFee && { icon: <DollarSign size={22} />, label: 'TEAM FEE', value: minFee, href: registerHref || (panelIds.has('fees') ? '#fees' : undefined) },
     (c.hotelsUrl || c.hotels) && { icon: <Hotel size={22} />, label: 'HOTELS', value: 'Book hotels', href: c.hotelsUrl || (panelIds.has('hotels') ? '#hotels' : undefined) },
+    // Every player needs one signed before they step on a field, and it was only
+    // reachable from the rail card and the Event info menu -- two places a parent
+    // scrolling on a phone does not necessarily look. It sits with the other two
+    // do-this-now links rather than up among the facts about the event.
+    // Label short, words in the value: "PLAYER WAIVER" as a label wrapped to two
+    // lines in a six-across bar at tablet width (measured at 820px, 128px cells),
+    // and this way round matches the two neighbours anyway -- HOTELS/Book hotels,
+    // SCHEDULE/View games, WAIVER/Player waiver.
+    { icon: <ScrollText size={22} />, label: 'WAIVER', value: 'Player waiver', href: `${base}/player-waiver` },
     { icon: <ListChecks size={22} />, label: 'SCHEDULE', value: 'View games', href: `${base}/public` },
   ].filter(Boolean) as any[]
-  const factCols = ({ 1: 'sm:grid-cols-2', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6' } as any)[quickFacts.length] || 'sm:grid-cols-4' 
+  // Tailwind only ships classes it can see, so these are written out rather than
+  // built from the count. Seven across is tight but each cell is a short label and
+  // two words; below lg it drops to four and wraps.
+  const factCols = ({ 1: 'sm:grid-cols-2', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6', 7: 'sm:grid-cols-4 lg:grid-cols-7' } as any)[quickFacts.length] || 'sm:grid-cols-4' 
 
   // All in-page sections, stacked in order. Previously these were tab panels, which
   // meant only ONE section rendered at a time — a coach had to click through to see
