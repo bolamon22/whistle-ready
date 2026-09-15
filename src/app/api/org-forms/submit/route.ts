@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
             `<p style="margin:0 0 14px">Thanks \u2014 your request has gone to <strong style="color:#0f172a">${esc(shooter)}</strong>. They&rsquo;ll come back to you directly to confirm details and price.</p>`,
             detailRows(rows),
             panel('Worth knowing', [
-              `<strong style="color:#0f172a">Nothing has been charged.</strong> ${esc(orgName)} credentials photographers but doesn&rsquo;t employ them \u2014 the booking, the price and the photos are between you and ${esc(shooter)}.`,
+              `<strong style="color:#0f172a">Nothing has been charged.</strong> ${esc(orgName)} credentials them but doesn&rsquo;t employ them \u2014 the booking, the price and the photos are between you and ${esc(shooter)}.`,
             ].join('')),
           ].join('')
           await sendEmail({
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
           const body = [
             `<p style="margin:0 0 4px">A family booked <strong style="color:#0f172a">${esc(shooter)}</strong>${evName ? ` for <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
             detailRows([
-              ['Photographer', shooter],
+              ['Booked', shooter],
               ['Booked by', String(data.contactName || '')],
               ['Email', String(data.email || '')],
               ['Phone', String(data.phone || '')],
@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
         if (notify && emailEnabled()) {
           const link = `${base}${data.tournamentId ? `/tournaments/${data.tournamentId}/media-requests` : '/dashboard/org/forms'}`
           const body = [
-            `<p style="margin:0 0 4px">A photographer just applied for a credential${evName ? ` at <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
+            `<p style="margin:0 0 4px">Someone just applied for a media credential${evName ? ` at <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}.</p>`,
             detailRows([
               ['Name', String(data.name || '')], ['Business', String(data.company || '')],
               ['Email', String(data.email || '')], ['Phone', String(data.phone || '')],

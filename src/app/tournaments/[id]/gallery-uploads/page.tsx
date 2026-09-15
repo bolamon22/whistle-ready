@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import TournamentNav from '../TournamentNav'
 import { Images, Check, EyeOff, Trash2, Film, Loader2, CheckSquare, Square } from 'lucide-react'
 
-// What photographers sent in, and whether it goes on the website.
+// What credentialed photographers and creators sent in, and whether it goes on the website.
 //
 // The review exists because a credential is permission to be on the field, not
 // permission to publish to the front of the website. These are photographs of
@@ -100,7 +100,7 @@ export default function GalleryUploads() {
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 sm:mt-6 mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Photos from photographers</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Photos &amp; video sent in</h1>
             <p className="text-sm text-slate-500">
               {pending > 0 ? `${n(pending)} waiting on you.` : 'Nothing waiting on you.'} Nothing reaches the public gallery until you publish it.
             </p>

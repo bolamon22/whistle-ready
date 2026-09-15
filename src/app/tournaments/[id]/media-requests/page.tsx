@@ -196,7 +196,7 @@ export default function MediaRequestEntries() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-left text-xs uppercase tracking-wide">
                     <tr>
-                      <th className="px-4 py-2.5 font-semibold">Photographer</th>
+                      <th className="px-4 py-2.5 font-semibold">Applicant</th>
                       <th className="px-4 py-2.5 font-semibold">Contact</th>
                       <th className="px-4 py-2.5 font-semibold">Wants to</th>
                       <th className="px-4 py-2.5 font-semibold">Status</th>

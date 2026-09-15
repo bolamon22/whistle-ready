@@ -124,7 +124,7 @@ export default function InvitePanel({ id }: { id: string }) {
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50">
         <span className="flex items-center gap-2 min-w-0">
           <Mail size={16} className="text-teal-600 shrink-0" />
-          <span className="font-semibold text-slate-800 text-sm">Invite a photographer</span>
+          <span className="font-semibold text-slate-800 text-sm">Invite someone to shoot</span>
           <span className="text-xs text-slate-400 truncate">
             {invites.length ? `${invites.length} invited for this event` : 'Nobody invited yet'}
           </span>
