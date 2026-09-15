@@ -19,7 +19,28 @@ export async function GET(req: NextRequest) {
     where: { userId },
     orderBy: { createdAt: 'desc' },
   })
-  return NextResponse.json(links)
+
+  // The tournaments these links point at, returned alongside.
+  //
+  // WHY: the dashboard used to build its event picker from /api/tournaments,
+  // which returns [] for any user without an orgId -- which is every club
+  // director, since they belong to a club and not to the organizing body. So the
+  // picker was empty, no event was ever selected, and Overview / Players /
+  // Schedule / Billing all rendered zeros while History (which builds its own
+  // list from these links) showed the real thing. Joe Frederick, LaxManiax,
+  // Sep 15 2026: "When I look at the Overview screen it shows no teams."
+  const ids = [...new Set(links.map(l => l.tournamentId))]
+  let tournaments: any[] = []
+  if (ids.length) {
+    try {
+      tournaments = await prisma.tournament.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, startDate: true, endDate: true, location: true, logoUrl: true },
+        orderBy: { startDate: 'desc' },
+      })
+    } catch { /* the picker falls back to nothing rather than 500ing */ }
+  }
+  return NextResponse.json({ links, tournaments })
 }
 
 // POST - create a link (admin only)

@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
+interface Waiver {
+  id: string; playerName: string; team: string; club: string
+  jersey: string | number | null; grade: string; parentName: string
+  signed: boolean; submittedAt: string
+}
 interface Registration {
   id: string; clubName: string; clubContact: string; contactEmail: string
   invoiceAmount: number; discountAmount: number
@@ -145,7 +150,8 @@ export default function ClubDirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selTournament, setSelTournament] = useState('')
-  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[] } | null>(null)
+  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[] } | null>(null)
+  const [openTeam, setOpenTeam] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [tab, setTab] = useState<'overview' | 'players' | 'schedule' | 'billing' | 'history'>('overview')
@@ -162,12 +168,19 @@ export default function ClubDirectorDashboard() {
       fetch('/api/tournaments').then(r => r.json()),
       fetch('/api/club-director/links').then(r => r.json()),
       fetch('/api/club-director/permissions').then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([t, links, p]) => {
-      setTournaments(t)
+    ]).then(([t, linkRes, p]) => {
       if (p && !p.error) setPerms(p)
+      // /api/tournaments returns [] for anyone without an orgId, which is every
+      // club director — they belong to a club, not to the organizing body. So the
+      // picker is built from the linked tournaments the links route now returns,
+      // and only falls back to the org list for a staff member viewing this page.
+      const links = Array.isArray(linkRes) ? linkRes : (linkRes?.links ?? [])
+      const linked: Tournament[] = (Array.isArray(linkRes) ? [] : (linkRes?.tournaments ?? []))
       if (!links || links.length === 0) { setNoLinks(true); setLoading(false); return }
-      const linkedTournamentIds = [...new Set((links as { tournamentId: string }[]).map(l => l.tournamentId))]
-      const first = t.find((x: Tournament) => linkedTournamentIds.includes(x.id)) || t[0]
+      const list: Tournament[] = linked.length ? linked : (Array.isArray(t) ? t : [])
+      setTournaments(list)
+      const linkedIds = [...new Set((links as { tournamentId: string }[]).map(l => l.tournamentId))]
+      const first = list.find(x => linkedIds.includes(x.id)) || list[0]
       if (first) { setSelTournament(first.id); loadData(first.id) }
       setLoading(false)
     })
@@ -208,7 +221,21 @@ export default function ClubDirectorDashboard() {
     </div>
   )
 
-  const totalPlayers = data?.playerRegs.length ?? 0
+  const waivers: Waiver[] = data?.waivers ?? []
+  // Waivers land on the team whose name they carry. Normalized both sides
+  // because the form writes "Club \u2014 Team" and people type inconsistently.
+  const normName = (x: unknown) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const teamRows = (data?.registrations ?? []).flatMap(r =>
+    r.teams.map(t => ({
+      key: t.id,
+      teamName: t.teamName,
+      division: t.division,
+      players: waivers.filter(w => normName(w.team) === normName(t.teamName)),
+    }))
+  )
+  const claimed = new Set(teamRows.flatMap(r => r.players.map(p => p.id)))
+  const unassignedWaivers = waivers.filter(w => !claimed.has(w.id))
+  const totalPlayers = waivers.length || (data?.playerRegs.length ?? 0)
   const totalTeams = data?.registrations.reduce((s, r) => s + r.teams.length, 0) ?? 0
   const totalInvoiced = data?.registrations.reduce((s, r) => s + r.invoiceAmount - r.discountAmount, 0) ?? 0
   const totalPaid = data?.registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0) ?? 0
@@ -216,7 +243,7 @@ export default function ClubDirectorDashboard() {
 
   const TABS: { key: typeof tab; label: string; perm?: string }[] = [
     { key: 'overview',  label: '📋 Overview',  perm: 'cd_overview' },
-    { key: 'players',   label: '👤 Players',   perm: 'cd_players'  },
+    { key: 'players',   label: '👤 Players & waivers', perm: 'cd_players'  },
     { key: 'schedule',  label: '📅 Schedule',  perm: 'cd_schedule' },
     { key: 'billing',   label: '💰 Billing',   perm: 'cd_billing'  },
     { key: 'history',   label: '🏆 History'                        },
@@ -429,38 +456,86 @@ export default function ClubDirectorDashboard() {
 
             {/* Players */}
             {tab === 'players' && (
-              <div>
-                <p className="text-sm text-gray-500 mb-3">{totalPlayers} registered players across your club</p>
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        {['Player', 'Team', 'Grade', 'Jersey', 'Parent', 'Waiver'].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-gray-500 font-semibold text-xs">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {data?.playerRegs.map(p => (
-                        <tr key={p.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2.5 font-medium text-gray-800">{p.playerName}</td>
-                          <td className="px-4 py-2.5 text-gray-500">{p.teamClubName}</td>
-                          <td className="px-4 py-2.5 text-gray-500">{p.grade}</td>
-                          <td className="px-4 py-2.5 text-gray-500">#{p.jerseyNumber || '—'}</td>
-                          <td className="px-4 py-2.5 text-gray-500">{p.parentName}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${p.waiverSignature ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                              {p.waiverSignature ? '✓ Signed' : 'Missing'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                      {!data?.playerRegs.length && (
-                        <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No players registered yet</td></tr>
+              <div className="space-y-3">
+                {/* Grouped by team, because a club director chases waivers one
+                    team at a time — "who on Middle School Select still owes me
+                    one" — not by scrolling an alphabetical list of the whole
+                    club. The counts match what staff see on the registrations
+                    page: both read the same waiver submissions. */}
+                <p className="text-sm text-gray-500">
+                  {waivers.length} waiver{waivers.length === 1 ? '' : 's'} filed across your {teamRows.length} team{teamRows.length === 1 ? '' : 's'}.
+                  {teamRows.some(t => t.players.length === 0) && ' Tap a team to see who has filed.'}
+                </p>
+
+                {teamRows.map(row => {
+                  const open = openTeam === row.key
+                  return (
+                    <div key={row.key} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setOpenTeam(open ? null : row.key)}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50">
+                        <span className="min-w-0">
+                          <span className="font-semibold text-gray-800">{row.teamName}</span>
+                          {row.division && <span className="text-gray-400 text-sm"> · {row.division}</span>}
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${row.players.length ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {row.players.length} waiver{row.players.length === 1 ? '' : 's'}
+                          </span>
+                          <span className="text-gray-300">{open ? '\u2212' : '+'}</span>
+                        </span>
+                      </button>
+
+                      {open && (
+                        row.players.length === 0 ? (
+                          <p className="px-4 pb-4 text-sm text-gray-400">
+                            Nobody on this team has filed a waiver yet. Every player needs one before they step on a field.
+                          </p>
+                        ) : (
+                          <div className="border-t border-gray-100 overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  {['Player', 'Grade', 'Jersey', 'Parent', 'Filed'].map(h => (
+                                    <th key={h} className="text-left px-4 py-2 text-gray-500 font-semibold text-xs">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {row.players.map(w => (
+                                  <tr key={w.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-2 font-medium text-gray-800">{w.playerName || '\u2014'}</td>
+                                    <td className="px-4 py-2 text-gray-500">{w.grade || '\u2014'}</td>
+                                    <td className="px-4 py-2 text-gray-500">{w.jersey ? `#${w.jersey}` : '\u2014'}</td>
+                                    <td className="px-4 py-2 text-gray-500">{w.parentName || '\u2014'}</td>
+                                    <td className="px-4 py-2 text-gray-400 text-xs">
+                                      {(() => { try { return new Date(w.submittedAt).toLocaleDateString() } catch { return '' } })()}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
                       )}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                  )
+                })}
+
+                {unassignedWaivers.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <p className="text-sm font-semibold text-amber-900">
+                      {unassignedWaivers.length} waiver{unassignedWaivers.length === 1 ? '' : 's'} not matched to a team
+                    </p>
+                    <p className="text-xs text-amber-800 mt-1">
+                      {unassignedWaivers.map(w => w.playerName).filter(Boolean).join(', ')}
+                      {' '}\u2014 filed under a team name that doesn\u2019t match your registration. They still count; ask the organizer to re-tag them.
+                    </p>
+                  </div>
+                )}
+
+                {teamRows.length === 0 && (
+                  <div className="bg-white border border-gray-200 rounded-xl px-4 py-8 text-center text-gray-400">No teams registered yet</div>
+                )}
               </div>
             )}
 

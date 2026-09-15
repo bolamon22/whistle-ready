@@ -31,7 +31,11 @@ export async function GET() {
 
     // Registrations & payments
     const registrations = await prisma.teamRegistration.findMany({
-      where: { tournamentId: t.id, clubName: { in: clubNames } },
+      // deletedAt: null, or a registration staff removed still counts against
+      // the club. LaxManiax saw $8,970 owing on an account paid in full,
+      // because deleted duplicates kept their invoice while only the live
+      // registration's payments were credited (Sep 15 2026).
+      where: { tournamentId: t.id, clubName: { in: clubNames }, deletedAt: null },
       include: {
         teams: true,
         payments: { orderBy: { receivedAt: 'asc' } },
