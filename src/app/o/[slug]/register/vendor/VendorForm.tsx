@@ -31,6 +31,10 @@ type Props = {
   tournamentId?: string
   tournamentName?: string
   eventDates?: string
+  /** False inside EventChrome (the tournament page), which already renders a hero with
+   *  the event photo, logo, name and dates. Two stacked heroes and two <h1>s is the
+   *  result of rendering ours there anyway. */
+  showHero?: boolean
 }
 
 export default function VendorForm(p: Props) {
@@ -97,7 +101,7 @@ export default function VendorForm(p: Props) {
       <Toaster position="top-right" />
 
       {/* Hero — the photo does the selling; the copy just names the offer. */}
-      <header className="relative overflow-hidden bg-[#0b1220]">
+      {p.showHero !== false && <header className="relative overflow-hidden bg-[#0b1220]">
         {p.heroImage && <img src={p.heroImage} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" style={{ objectPosition: '50% 38%' }} />}
         <div className="absolute inset-0" style={{ background: 'linear-gradient(103deg,rgba(8,19,31,.95) 0%,rgba(8,19,31,.85) 42%,rgba(8,19,31,.55) 100%)' }} />
         <div className="relative max-w-3xl mx-auto px-6 py-14 sm:py-20">
@@ -114,9 +118,19 @@ export default function VendorForm(p: Props) {
             </div>
           )}
         </div>
-      </header>
+      </header>}
 
       <div className="max-w-3xl mx-auto px-6 py-10 space-y-10">
+
+        {/* Inside EventChrome the event is already established above, so this is the
+            offer in one line rather than a second full-bleed hero. */}
+        {p.showHero === false && (
+          <div>
+            <div className={eyebrow}>Vendor booths</div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1.5">{p.headline}</h2>
+            <p className="text-slate-500 mt-2.5 max-w-[56ch] leading-relaxed">{p.subhead}</p>
+          </div>
+        )}
 
         {p.approvalNotice.trim() && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">

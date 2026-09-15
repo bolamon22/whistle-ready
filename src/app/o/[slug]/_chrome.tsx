@@ -17,7 +17,10 @@ export function orgBase(slug: string): string {
 
 // Build the ordered nav (with dropdown groups) from the org's pages.
 export function buildNav(base: string, pages: PageRec[], hasGallery: boolean, workHref?: string): NavItem[] {
-  const items: NavItem[] = [{ type: 'link', title: 'Tournaments', href: base || '/' }]
+  // Straight to the event list, not the top of the home page: on the home page itself
+  // `base || '/'` just reloaded and appeared to do nothing, and from /gallery or /work
+  // it left you scrolling for the events. Same target as the hero's "See all events".
+  const items: NavItem[] = [{ type: 'link', title: 'Tournaments', href: base ? `${base}#tournaments` : '/#tournaments' }]
   if (hasGallery) items.push({ type: 'link', title: 'Gallery', href: `${base}/gallery` })
   const groupAt: Record<string, number> = {}
   for (const p of pages) {

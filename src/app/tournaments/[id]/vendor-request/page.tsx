@@ -41,6 +41,7 @@ export default async function TournamentVendorRequest({ params }: { params: { id
       disclaimerHtml={disclaimerHtml} confirmationTitle={cfg.confirmationTitle} confirmationHtml={confirmationHtml}
       orgName={org.name || ''} orgLogo={org.logoUrl || undefined}
       tournamentId={t.id} tournamentName={t.name} eventDates={fmtDates(t.startDate, t.endDate)}
+      showHero={false}
         heroImage={cfg.heroImage} headline={cfg.headline} subhead={cfg.subhead}
         sponsorShow={cfg.sponsorShow} sponsorBlurb={cfg.sponsorBlurb} sponsorTiers={cfg.sponsorTiers}
         sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''}
