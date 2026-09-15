@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, Suspense } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -75,15 +76,15 @@ function RegisterInner() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input required type="password" value={password} onChange={e => setPassword(e.target.value)}
+            <PasswordInput required value={password} onChange={setPassword}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
               placeholder="At least 6 characters" autoComplete="new-password" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-            <input required type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+            <PasswordInput required value={confirm} onChange={setConfirm}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              placeholder="••••••••" autoComplete="new-password" />
+              placeholder="Repeat your password" autoComplete="new-password" />
           </div>
 
           {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}

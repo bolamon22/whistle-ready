@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
@@ -145,7 +146,7 @@ export default function Landing() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
-                  <input required type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••" className={inputCls} />
+                  <PasswordInput required value={password} onChange={setPassword} autoComplete="current-password" placeholder="••••••••" className={inputCls} />
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <label className="flex items-center gap-2 font-medium text-slate-600"><input type="checkbox" className="w-auto" /> Remember me</label>

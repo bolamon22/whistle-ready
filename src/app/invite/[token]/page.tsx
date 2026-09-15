@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -239,18 +240,18 @@ export default function AcceptInvitePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Password</label>
-              <input
+              <PasswordInput
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                value={password} onChange={e => setPassword(e.target.value)}
-                type="password" placeholder="Min 6 chars" required autoComplete="new-password"
+                value={password} onChange={setPassword}
+                placeholder="Min 6 chars" required autoComplete="new-password"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Confirm</label>
-              <input
+              <PasswordInput
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                value={confirm} onChange={e => setConfirm(e.target.value)}
-                type="password" placeholder="Repeat password" required autoComplete="new-password"
+                value={confirm} onChange={setConfirm}
+                placeholder="Repeat password" required autoComplete="new-password"
               />
             </div>
           </div>

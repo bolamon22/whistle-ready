@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -46,10 +47,10 @@ export default function ResetPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
-            <input required type="password" value={password} onChange={e => setPassword(e.target.value)}
+            <PasswordInput required tone="dark" value={password} onChange={setPassword}
               className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="New password (6+ characters)" autoComplete="new-password" />
-            <input required type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+            <PasswordInput required tone="dark" value={confirm} onChange={setConfirm}
               className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Confirm new password" autoComplete="new-password" />
 

@@ -2,6 +2,7 @@
 
 import OrgLogoMark from '@/app/OrgLogoMark'
 import { useEffect, useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -214,8 +215,8 @@ export default function AdminUsersPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Password *</label>
-              <input required type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                placeholder="Min 6 characters"
+              <PasswordInput required value={newPassword} onChange={setNewPassword}
+                placeholder="Min 6 characters" autoComplete="new-password"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
             </div>
             <div>
@@ -315,8 +316,8 @@ export default function AdminUsersPage() {
             <h2 className="text-lg font-semibold text-gray-800 mb-1">Reset Password</h2>
             <p className="text-sm text-gray-500 mb-4">Set a new password for {users.find(u => u.id === resetUserId)?.name}</p>
             <form onSubmit={doResetPassword} className="space-y-3">
-              <input required type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)}
-                placeholder="New password (min 6 chars)"
+              <PasswordInput required value={resetPassword} onChange={setResetPassword}
+                placeholder="New password (min 6 chars)" autoComplete="new-password"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
               <div className="flex gap-2">
                 <button type="submit" disabled={resetting}

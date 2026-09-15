@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
@@ -196,20 +197,20 @@ export default function ProfilePage() {
         <form onSubmit={changePassword} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-            <input required type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
-              placeholder="••••••••"
+            <PasswordInput required value={currentPassword} onChange={setCurrentPassword}
+              placeholder="Your current password" autoComplete="current-password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-            <input required type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-              placeholder="At least 6 characters"
+            <PasswordInput required value={newPassword} onChange={setNewPassword}
+              placeholder="At least 6 characters" autoComplete="new-password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-            <input required type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
+            <PasswordInput required value={confirmPassword} onChange={setConfirmPassword}
+              placeholder="Repeat the new password" autoComplete="new-password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
           </div>
           <button type="submit" disabled={changingPw}

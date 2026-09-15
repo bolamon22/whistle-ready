@@ -7,6 +7,7 @@
 // and the welcome email. Redesigned Sep 2026 to Bo's approved mockup.
 
 import { useEffect, useRef, useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { CalendarDays, Check, Clock, CreditCard, Camera, Printer } from 'lucide-react'
@@ -454,13 +455,13 @@ function JoinForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Password *</label>
-              <input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Min 6 chars" required autoComplete="new-password" />
+              <PasswordInput className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                value={password} onChange={setPassword} placeholder="Min 6 chars" required autoComplete="new-password" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Confirm *</label>
-              <input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                value={confirm} onChange={e => setConfirm(e.target.value)} type="password" placeholder="Repeat" required autoComplete="new-password" />
+              <PasswordInput className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                value={confirm} onChange={setConfirm} placeholder="Repeat" required autoComplete="new-password" />
             </div>
           </div>
 

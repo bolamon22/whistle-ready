@@ -4,6 +4,7 @@
 // Reached from the confirmation letter/email. The token in the URL is the authorization.
 
 import { useEffect, useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 import { useParams, useRouter } from 'next/navigation'
 import { signIn, signOut } from 'next-auth/react'
 import { ClipboardList, Check, ShieldCheck, Users, CreditCard, CalendarDays } from 'lucide-react'
@@ -165,7 +166,7 @@ export default function ClaimPage() {
           <label className="block text-xs font-medium text-slate-600 mb-1">
             {info.accountExists ? 'Your existing password' : 'Create a password'}
           </label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+          <PasswordInput value={password} onChange={setPassword} required
             minLength={info.accountExists ? 1 : 8} autoComplete={info.accountExists ? 'current-password' : 'new-password'}
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
           <p className="text-[11px] text-slate-400 mt-1">
