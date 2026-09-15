@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Camera, Check, Lock, Instagram, Handshake } from 'lucide-react'
 import type { MediaConfig } from '@/lib/mediaForm'
 import { commitmentLines } from '@/lib/mediaForm'
+import CredentialPreview from './CredentialPreview'
 
 type OrgEvent = { id: string; name: string; dates: string }
 type Props = {
@@ -85,6 +86,30 @@ export default function ShootPage(p: Props) {
   }
 
   const commits = commitmentLines(p.cfg.commitments)
+
+  // The card builds as they type. Everything on it comes from the form except the
+  // credential id and the approval, which are set by us — that is the whole point of
+  // showing it: they can see exactly what they are applying for.
+  const chosen = p.events.filter(e => eventIds.includes(e.id))
+  const cardData = {
+    code: '',
+    role: 'media' as const,
+    status: 'pending' as const,
+    name: f.name,
+    business: f.company,
+    title: levels.includes('sell') ? 'Photographer \u00b7 Sales' : levels.includes('book') ? 'Photographer \u00b7 Bookings' : 'Photographer',
+    photoUrl: '',
+    eventNames: chosen.map(e => e.name).join(', '),
+    eventDates: chosen.length === 1 ? chosen[0].dates : chosen.length > 1 ? `${chosen.length} events` : '',
+    location: '',
+    clearances: p.cfg.levels.filter(l => levels.includes(l.id)).map(l => l.name),
+    orgName: p.orgName,
+    orgLogoUrl: p.orgLogo,
+    orgSite: '',
+    qrLabel: 'My credential',
+    qr2Label: p.cfg.commitments.socialHandle ? `Follow @${p.cfg.commitments.socialHandle}` : 'Event info',
+    issuedOn: '',
+  }
 
   const stats: { value: string; label: string }[] = [
     ...(p.liveStats.teams > 0 ? [{ value: num(p.liveStats.teams), label: p.liveStats.teams === 1 ? 'Team' : 'Teams' }] : []),
@@ -203,7 +228,8 @@ export default function ShootPage(p: Props) {
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Media credential application</h2>
         <p className="text-slate-500 text-[14.5px] mt-1.5">{p.cfg.approvalNotice}</p>
 
-        <form onSubmit={submit} className="mt-7 space-y-4">
+        <div className="mt-7 grid lg:grid-cols-[1fr_300px] lg:gap-10 items-start">
+        <form onSubmit={submit} className="space-y-4 order-2 lg:order-1">
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Your name *</label><input className={input} required value={f.name} onChange={e => set('name', e.target.value)} /></div>
             <div><label className={label}>Business name <span className="font-normal text-slate-400">if any</span></label><input className={input} value={f.company} onChange={e => set('company', e.target.value)} /></div>
@@ -301,6 +327,18 @@ export default function ShootPage(p: Props) {
             {busy ? 'Sending…' : 'Send my application'}
           </button>
         </form>
+
+        <aside className="order-1 lg:order-2 mb-8 lg:mb-0 lg:sticky lg:top-6">
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-2.5">Your credential</div>
+          <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+            <CredentialPreview p={cardData} qrText="" qr2Text={p.cfg.commitments.socialHandle ? `https://instagram.com/${p.cfg.commitments.socialHandle}` : ''} />
+          </div>
+          <p className="text-[12.5px] text-slate-500 mt-3 leading-relaxed">
+            Builds itself as you type. It says <strong className="text-slate-700">not valid yet</strong> until we approve you &mdash;
+            then the colour turns on, the credential number is set, and you can print it.
+          </p>
+        </aside>
+        </div>
       </section>
     </div>
   )
