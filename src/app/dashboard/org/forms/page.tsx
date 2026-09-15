@@ -10,7 +10,7 @@ import MarkdownField from '@/components/MarkdownField'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import PushToggle from '@/components/PushToggle'
 import { DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { isUntouchedLegacyLevels, DEFAULT_VENDOR_TYPES, DEFAULT_APPROVAL_NOTICE, DEFAULT_VENDOR_DISCLAIMER, DEFAULT_CONFIRMATION_TITLE, DEFAULT_CONFIRMATION_MESSAGE, priceLabel, type VendorType, type VendorInstructions } from '@/lib/vendorForm'
+import { isUntouchedLegacyLevels, DEFAULT_VENDOR_HERO, DEFAULT_HEADLINE, DEFAULT_SUBHEAD, DEFAULT_SPONSOR_BLURB, DEFAULT_SPONSOR_TIERS, DEFAULT_VENDOR_TYPES, DEFAULT_APPROVAL_NOTICE, DEFAULT_VENDOR_DISCLAIMER, DEFAULT_CONFIRMATION_TITLE, DEFAULT_CONFIRMATION_MESSAGE, priceLabel, type VendorType, type VendorInstructions } from '@/lib/vendorForm'
 
 async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
   if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) return file
@@ -69,6 +69,8 @@ type VendorForm = {
   // customised its own level list keeps it) but nothing writes them any more: a vendor
   // now picks a TYPE carrying its own booth fee, and payment happens after approval.
   types: VendorType[]; approvalNotice: string; instructions: VendorInstructions
+  heroImage: string; headline: string; subhead: string
+  sponsorShow: boolean; sponsorBlurb: string; sponsorTiers: { name: string; price: number }[]; sponsorEmail: string
   disclaimer: string
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
@@ -90,6 +92,8 @@ const EMPTY: Forms = {
   },
   vendor: {
     types: DEFAULT_VENDOR_TYPES,
+    heroImage: DEFAULT_VENDOR_HERO, headline: DEFAULT_HEADLINE, subhead: DEFAULT_SUBHEAD,
+    sponsorShow: true, sponsorBlurb: DEFAULT_SPONSOR_BLURB, sponsorTiers: DEFAULT_SPONSOR_TIERS, sponsorEmail: '',
     approvalNotice: DEFAULT_APPROVAL_NOTICE,
     instructions: { where: '', eventTimes: '', loadIn: '', loadOut: '', bring: '', contact: '' },
     disclaimer: DEFAULT_VENDOR_DISCLAIMER,
@@ -163,7 +167,8 @@ function FormsInner() {
               : Array.isArray(vv.levels) && vv.levels.length && !isUntouchedLegacyLevels(vv.levels)
                 ? vv.levels.map((n: string) => ({ id: String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: String(n), price: 0, selling: !/sponsor/i.test(String(n)), closed: false, note: '' }))
                 : EMPTY.vendor.types,
-            instructions: { ...EMPTY.vendor.instructions, ...(vv.instructions || {}) } },
+            instructions: { ...EMPTY.vendor.instructions, ...(vv.instructions || {}) },
+            sponsorTiers: Array.isArray(vv.sponsorTiers) ? vv.sponsorTiers : EMPTY.vendor.sponsorTiers },
           staff: { ...EMPTY.staff, ...st, positions: Array.isArray(st.positions) ? st.positions : EMPTY.staff.positions, refLevels: Array.isArray(st.refLevels) ? st.refLevels : EMPTY.staff.refLevels },
           registration: { ...EMPTY.registration, ...(d.registration || {}) },
         }
@@ -186,6 +191,7 @@ function FormsInner() {
   const startEdit = (key: string) => { setSnap(f); setEditing(e => ({ ...e, [key]: true })); setOpen(o => ({ ...o, [key]: true })) }
   const cancelEdit = (key: string) => { setF(snap); setEditing(e => ({ ...e, [key]: false })) }
   const toggle = (key: string) => setOpen(o => ({ ...o, [key]: !o[key] }))
+  const vendorHero = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setF(v => ({ ...v, vendor: { ...v.vendor, heroImage: u } })); else toast.error('Upload failed') }
   const staffHero = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setF(v => ({ ...v, staff: { ...v.staff, heroImage: u } })); else toast.error('Upload failed') }
 
   if (loading) return <div className="text-slate-400 text-center py-16">Loading…</div>
@@ -355,6 +361,23 @@ function FormsInner() {
             <div className="flex justify-end mb-3"><EditBar k="vendor" /></div>
             {editing.vendor ? (
               <>
+                <label className={labelCls}>Header photo</label>
+                <p className="text-xs text-slate-500 -mt-1 mb-2">Sits behind the headline. Defaults to a shot from your gallery with the vendor row in it — swap it once you have a proper booth photo.</p>
+                <div className="flex items-center gap-3 mb-4">
+                  {vf.heroImage ? <img src={vf.heroImage} alt="" className="h-14 w-28 object-cover rounded-lg border border-slate-200" /> : <div className="h-14 w-28 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={16} /></div>}
+                  <div>
+                    <label className="text-sm font-semibold text-teal-700 hover:text-teal-800 cursor-pointer">
+                      Upload<input type="file" accept="image/*" className="hidden" onChange={e => vendorHero(e.target.files?.[0])} />
+                    </label>
+                    {vf.heroImage && <button type="button" onClick={() => setF(v => ({ ...v, vendor: { ...v.vendor, heroImage: '' } }))} className="text-xs text-slate-400 hover:text-red-600 ml-3">Remove</button>}
+                  </div>
+                </div>
+
+                <label className={labelCls}>Headline</label>
+                <input className={inputCls} value={vf.headline} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, headline: e.target.value } }))} />
+                <label className={labelCls}>Sub-headline</label>
+                <textarea className={`${inputCls} min-h-[60px]`} value={vf.subhead} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, subhead: e.target.value } }))} />
+
                 <label className={labelCls}>Booth types</label>
                 <p className="text-xs text-slate-500 -mt-1 mb-2">The fee is what an approved vendor is asked to pay. Set it to 0 and the form says &ldquo;confirmed on approval&rdquo; instead of showing a number.</p>
                 <div className="space-y-2 mb-3">
@@ -413,6 +436,30 @@ function FormsInner() {
                     </div>
                   ))}
                 </div>
+
+                <label className="flex items-start gap-2 mb-2 cursor-pointer">
+                  <input type="checkbox" className="mt-0.5 accent-teal-500" checked={vf.sponsorShow} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorShow: e.target.checked } }))} />
+                  <span className="text-sm font-semibold text-slate-700">Show the sponsorship section</span>
+                </label>
+                {vf.sponsorShow && (
+                  <div className="pl-6 mb-4 space-y-2">
+                    <textarea className={`${inputCls} min-h-[70px]`} value={vf.sponsorBlurb} onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorBlurb: e.target.value } }))} />
+                    {vf.sponsorTiers.map((t, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input className={`${inputCls} flex-1`} value={t.name} placeholder="Presenting sponsor"
+                          onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorTiers: v.vendor.sponsorTiers.map((x, j) => j === i ? { ...x, name: e.target.value } : x) } }))} />
+                        <input className={`${inputCls} w-28 tabular-nums`} type="number" min={0} step={50} value={t.price}
+                          onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorTiers: v.vendor.sponsorTiers.map((x, j) => j === i ? { ...x, price: Math.max(0, Number(e.target.value) || 0) } : x) } }))} />
+                        <button type="button" className="w-9 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                          onClick={() => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorTiers: v.vendor.sponsorTiers.filter((_, j) => j !== i) } }))}><X size={15} className="mx-auto" /></button>
+                      </div>
+                    ))}
+                    <button type="button" className="text-sm font-semibold text-teal-700 hover:text-teal-800"
+                      onClick={() => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorTiers: [...v.vendor.sponsorTiers, { name: '', price: 0 }] } }))}>+ Add a sponsorship level</button>
+                    <input className={inputCls} value={vf.sponsorEmail} placeholder="Where deck requests go (defaults to your org contact email)"
+                      onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, sponsorEmail: e.target.value } }))} />
+                  </div>
+                )}
 
                 <label className={labelCls}>Vendor disclaimer</label>
                 <MarkdownField value={vf.disclaimer} onChange={val => setF(v => ({ ...v, vendor: { ...v.vendor, disclaimer: val } }))} minHeight={120} />

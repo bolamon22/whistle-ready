@@ -22,7 +22,7 @@ function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, auth
 
 export default async function VendorPage({ params }: { params: { slug: string } }) {
   const client = db()
-  const orgRes = await client.execute({ sql: 'SELECT id, name, logoUrl FROM "Organization" WHERE slug = ?', args: [params.slug] })
+  const orgRes = await client.execute({ sql: 'SELECT id, name, logoUrl, contactEmail FROM "Organization" WHERE slug = ?', args: [params.slug] })
   if (orgRes.rows.length === 0) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-center px-6"><div><Trophy size={40} className="mx-auto text-slate-300" /><h1 className="mt-3 text-xl font-bold text-slate-800">Form not found</h1></div></div>
   const org = orgRes.rows[0] as any
   let forms: any = {}
@@ -34,9 +34,12 @@ export default async function VendorPage({ params }: { params: { slug: string } 
   const disclaimerHtml = mdToHtml(cfg.disclaimer)
   const confirmationHtml = mdToHtml(cfg.confirmationMessage)
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-[#0b1220] text-white"><div className="max-w-2xl mx-auto px-6 py-6 flex items-center gap-3">{org.logoUrl && <img src={org.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />}<div><div className="text-xs uppercase tracking-[0.2em] text-teal-300">Vendor Request</div><h1 className="text-xl font-extrabold leading-tight">{org.name}</h1></div></div></header>
-      <VendorForm orgId={org.id} types={cfg.types} approvalNotice={cfg.approvalNotice} disclaimerHtml={disclaimerHtml} confirmationTitle={cfg.confirmationTitle} confirmationHtml={confirmationHtml} />
-    </div>
+    <VendorForm orgId={org.id} types={cfg.types} approvalNotice={cfg.approvalNotice}
+      disclaimerHtml={disclaimerHtml} confirmationTitle={cfg.confirmationTitle} confirmationHtml={confirmationHtml}
+      orgName={org.name} orgLogo={org.logoUrl || undefined}
+        heroImage={cfg.heroImage} headline={cfg.headline} subhead={cfg.subhead}
+        sponsorShow={cfg.sponsorShow} sponsorBlurb={cfg.sponsorBlurb} sponsorTiers={cfg.sponsorTiers}
+        sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''}
+    />
   )
 }

@@ -40,8 +40,21 @@ export type VendorInstructions = {
   contact: string
 }
 
+export type SponsorTier = { name: string; price: number }
+
 export type VendorConfig = {
   types: VendorType[]
+  /** Photo behind the page header. Defaults to a shot from the SEG gallery that
+   *  actually has the vendor row in it; swap it in the Forms editor. */
+  heroImage: string
+  headline: string
+  subhead: string
+  /** Sponsorship is a different sale -- a conversation and a deck, not a booth
+   *  checkbox. The form points at it instead of trying to take the order. */
+  sponsorShow: boolean
+  sponsorBlurb: string
+  sponsorTiers: SponsorTier[]
+  sponsorEmail: string
   approvalNotice: string
   disclaimer: string
   confirmationTitle: string
@@ -59,6 +72,19 @@ export const DEFAULT_VENDOR_TYPES: VendorType[] = [
   { id: 'vendor-2', name: 'Onsite vendor, two locations', price: 1000, selling: true,  closed: false, note: 'Two spaces at opposite ends of the complex, so you catch both field clusters.' },
   { id: 'showcase', name: 'Onsite showcase',             price: 300,  selling: false, closed: false, note: 'Present, demo or hand out samples. No sales from the booth \u2014 recruiting services, clinics, camps.' },
   { id: 'food',     name: 'Food & beverage',             price: 0,    selling: true,  closed: true,  note: 'Concessions are contracted for the full season. We aren\u2019t taking food or drink applications.' },
+]
+
+// A frame from the org gallery with the vendor row visible behind the play. Real,
+// and already hosted -- so the page is never shipping a stock photo of someone
+// else's event. Replace it in Org -> Forms once there's a proper booth shot.
+export const DEFAULT_VENDOR_HERO = '/api/img/0875f7bb-2de6-40ef-8a04-831025c9f6e8'
+export const DEFAULT_HEADLINE = 'Set up where the families already are.'
+export const DEFAULT_SUBHEAD = 'A weekend of lacrosse, and a parent on the sideline for six hours with nothing to do between games.'
+export const DEFAULT_SPONSOR_BLURB = "Field naming, presenting rights and web placement are a different conversation \u2014 they're built around what you're trying to reach, and they don't fit in a booth form. Tell us what you have in mind and we'll send the deck."
+export const DEFAULT_SPONSOR_TIERS: SponsorTier[] = [
+  { name: 'Presenting sponsor', price: 3000 },
+  { name: 'Field name sponsor', price: 2000 },
+  { name: 'Featured web sponsor', price: 500 },
 ]
 
 export const DEFAULT_APPROVAL_NOTICE =
@@ -122,9 +148,20 @@ export function vendorConfig(raw: any): VendorConfig {
     types = DEFAULT_VENDOR_TYPES
   }
 
+  const tiers: SponsorTier[] = Array.isArray(vf.sponsorTiers)
+    ? vf.sponsorTiers.map((t: any) => ({ name: String(t?.name || ''), price: Number(t?.price) || 0 })).filter((t: SponsorTier) => t.name)
+    : DEFAULT_SPONSOR_TIERS
+
   const ins = (vf.instructions && typeof vf.instructions === 'object' ? vf.instructions : {}) as any
   return {
     types,
+    heroImage: typeof vf.heroImage === 'string' ? vf.heroImage : DEFAULT_VENDOR_HERO,
+    headline: typeof vf.headline === 'string' && vf.headline.trim() ? vf.headline : DEFAULT_HEADLINE,
+    subhead: typeof vf.subhead === 'string' ? (vf.subhead || DEFAULT_SUBHEAD) : DEFAULT_SUBHEAD,
+    sponsorShow: vf.sponsorShow !== false,
+    sponsorBlurb: typeof vf.sponsorBlurb === 'string' && vf.sponsorBlurb.trim() ? vf.sponsorBlurb : DEFAULT_SPONSOR_BLURB,
+    sponsorTiers: tiers,
+    sponsorEmail: String(vf.sponsorEmail || ''),
     approvalNotice: typeof vf.approvalNotice === 'string' ? vf.approvalNotice : DEFAULT_APPROVAL_NOTICE,
     disclaimer: vf.disclaimer || DEFAULT_VENDOR_DISCLAIMER,
     confirmationTitle: vf.confirmationTitle || DEFAULT_CONFIRMATION_TITLE,
