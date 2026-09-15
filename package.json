@@ -19,6 +19,7 @@
     "@stripe/stripe-js": "^9.7.0",
     "@types/bcryptjs": "^2.4.6",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/blob": "^2.8.0",
     "@vercel/speed-insights": "^2.0.0",
     "ai": "^6.0.197",
     "bcryptjs": "^3.0.3",

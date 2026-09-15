@@ -4,6 +4,7 @@ import { loadMediaApproval } from '@/lib/mediaApproval'
 import { ensureProfileFromApplication, profileBySlug, DEFAULT_PACKAGES } from '@/lib/photographers'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import ProfileEditor from './ProfileEditor'
+import Uploader from './Uploader'
 
 // PUBLIC (see src/middleware.ts): a photographer's credential page. The 128-bit token
 // in the URL is the authorization -- they have no account, and the link only ever went
@@ -136,6 +137,10 @@ export default async function MediaCredentialPage({ params }: { params: { token:
             </p>
           </div>
         )}
+
+        {/* Contributing is what the credential was issued for, so the drop zone sits
+            above the booking-page editor rather than below it. */}
+        <Uploader token={params.token} eventName={a.tournamentName} />
 
         {profile && (
           <ProfileEditor

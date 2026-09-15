@@ -6,6 +6,7 @@ import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import PublicGallery from '@/components/PublicGallery'
 import PhotographerTiles from '@/components/PhotographerTiles'
 import { photographerList, creditLinks } from '@/lib/photographers'
+import { publishedSummary } from '@/lib/galleryStore'
 
 // Cache policy for published pages.
 //
@@ -76,6 +77,12 @@ export default async function GalleryPage({ params }: { params: { slug: string }
   // it. Resolved here rather than in the client component so the browser gets a
   // small string map instead of every profile.
   const shooterList = photographerList(shooters)
+
+  // Contributed media is counted here and fetched by the browser per album. The
+  // page renders Bo's curated set, which is small because he picks it by hand;
+  // shipping a photographer's whole weekend into this HTML is the thing the table
+  // exists to stop.
+  const contributed = await publishedSummary(String(org.id))
   const creditHrefs = creditLinks(photos, shooterList, base)
 
   return (
@@ -95,7 +102,10 @@ export default async function GalleryPage({ params }: { params: { slug: string }
             </Link>
           </div>
         </div>
-        <PublicGallery photos={photos} tournaments={tournaments} covers={covers} creditLinks={creditHrefs} />
+        <PublicGallery
+          photos={photos} tournaments={tournaments} covers={covers} creditLinks={creditHrefs}
+          feed={{ orgSlug: params.slug, total: contributed.total, byTournament: contributed.byTournament, covers: contributed.covers }}
+        />
 
         <div className="mt-16 pt-12 border-t border-slate-200">
           <PhotographerTiles
