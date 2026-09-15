@@ -139,6 +139,9 @@ export type ListArgs = {
   status?: GalleryStatus | 'all'
   tournamentId?: string
   submissionId?: string
+  /** 'video' powers the Video album: clips are worth browsing on their own
+   *  rather than being scattered through a few hundred stills. */
+  kind?: GalleryKind
   limit?: number
   offset?: number
 }
@@ -149,6 +152,7 @@ function where(a: ListArgs): { sql: string; args: any[] } {
   if (a.status && a.status !== 'all') { parts.push('"status" = ?'); args.push(a.status) }
   if (a.tournamentId) { parts.push('"tournamentId" = ?'); args.push(a.tournamentId) }
   if (a.submissionId) { parts.push('"submissionId" = ?'); args.push(a.submissionId) }
+  if (a.kind) { parts.push('"kind" = ?'); args.push(a.kind) }
   return { sql: parts.join(' AND '), args }
 }
 
@@ -240,8 +244,10 @@ export async function publishedSummary(orgId: string): Promise<{
   total: number
   byTournament: Record<string, number>
   covers: Record<string, string>
+  /** Clips across every event — the Video album's count. */
+  videoTotal: number
 }> {
-  const out = { total: 0, byTournament: {} as Record<string, number>, covers: {} as Record<string, string> }
+  const out = { total: 0, byTournament: {} as Record<string, number>, covers: {} as Record<string, string>, videoTotal: 0 }
   if (!orgId) return out
   await ensureGalleryTable()
   try {
@@ -268,6 +274,7 @@ export async function publishedSummary(orgId: string): Promise<{
       const n = int((r as any).n)
       out.byTournament[key] = (out.byTournament[key] || 0) + n
       out.total += n
+      out.videoTotal += n
     }
   } catch { /* an empty summary just means no contributed section */ }
   return out

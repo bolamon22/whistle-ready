@@ -88,20 +88,20 @@ export type MediaConfig = {
 }
 
 export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
-  { id: 'contribute', name: 'Contribute photos to the gallery', closed: false,
-    note: 'Free. Your name and link under every shot you upload.' },
+  { id: 'contribute', name: 'Contribute photos and video to the gallery', closed: false,
+    note: 'Free. Your name and link under everything you upload — stills or clips.' },
   { id: 'book', name: 'Take bookings from teams and families', closed: false,
     note: 'You get a profile page with your packages. You keep 100% of what you book — we take no cut.' },
   // Closed until the media release covers commercial use. Selling images of a
   // registered minor under a promotion-only waiver is not a gap to paper over,
   // so the level ships visible-but-locked rather than quietly missing.
-  { id: 'sell', name: 'Sell individual photos in the gallery', closed: true,
+  { id: 'sell', name: 'Sell your work in the gallery', closed: true,
     note: 'Opening soon. We handle watermarking, hosting and payment; you set your prices and keep most of it.' },
 ]
 
 export const DEFAULT_MEDIA_BENEFITS = [
   'Sideline access for the whole weekend',
-  'Your name and link under every photo you upload',
+  'Your name and link under every photo and clip you upload',
   'A profile page on this site that parents and coaches can book from',
   'Team and player requests sent straight to you',
   'You keep the copyright in everything you shoot',
@@ -109,7 +109,7 @@ export const DEFAULT_MEDIA_BENEFITS = [
 
 export const DEFAULT_MEDIA_TERMS =
   'You keep full copyright in everything you shoot. You grant us a non-exclusive licence to use the ' +
-  'photos you upload here to promote our events, with your credit attached — we do not resell your ' +
+  'photos and video you upload here to promote our events, with your credit attached — we do not resell your ' +
   'work, and you can pull any photo down at any time. You agree to follow the field rules we send with ' +
   'your credential, to wear it visibly, and to stay out of team areas and behind the restraining line.'
 
@@ -155,7 +155,7 @@ export function mediaConfig(raw: any): MediaConfig {
     heroImage: str(raw?.heroImage) || DEFAULT_MEDIA_HERO,
     headline: str(raw?.headline) || 'Shoot our tournaments. Keep your work. Get the clients.',
     subhead: str(raw?.subhead) ||
-      'Field access at every event, your name on every frame, and a page on this site where coaches and parents book you directly. Credentials are free.',
+      'Photo or video, field access at every event, your name on every frame, and a page on this site where coaches and parents book you directly. Credentials are free.',
     benefits: benefits.length ? benefits : DEFAULT_MEDIA_BENEFITS,
     orgSharePct: Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 30,
     stats,
@@ -199,9 +199,11 @@ export function commitmentLines(c: MediaCommitments): string[] {
   if (!c.show) return []
   const out: string[] = []
   if (c.minPhotos > 0) {
+    // Photos OR clips: a videographer who turns in twenty ten-second clips has
+    // done what was asked, and the old wording told them they had not.
     out.push(c.withinDays > 0
-      ? `Upload at least ${c.minPhotos} photos you\u2019re happy for us to use, within ${c.withinDays} days of the event`
-      : `Upload at least ${c.minPhotos} photos you\u2019re happy for us to use`)
+      ? `Upload at least ${c.minPhotos} photos or clips you\u2019re happy for us to use, within ${c.withinDays} days of the event`
+      : `Upload at least ${c.minPhotos} photos or clips you\u2019re happy for us to use`)
   }
   if (c.socialHandle && c.tagRequired) out.push(`Tag @${c.socialHandle} in anything you post from the event`)
   if (c.socialHandle && c.collabRequired) out.push(`Accept a Collab invite on posts we share \u2014 it runs on both our grids, under your name`)

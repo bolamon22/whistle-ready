@@ -16,6 +16,10 @@ type Feed = {
   total: number
   byTournament: Record<string, number>
   covers: Record<string, string>
+  /** Clips across every event. They get their own album: video is what people
+   *  actually share, and it is unfindable scattered through a few hundred
+   *  stills sorted by date. */
+  videoTotal?: number
 }
 
 // Public photo gallery. When photos are tagged to more than one tournament it shows
@@ -49,6 +53,11 @@ export default function PublicGallery({ photos, tournaments, covers = {}, credit
         cover: ps.find(p => p.id === covers[t.id]) || ps[0] || (coverUrl ? { url: coverUrl } : null),
       })
     })
+    // Video first: it is the thing someone came back for, and it is the smallest
+    // list, so burying it under five event albums hides it completely.
+    if (feed?.videoTotal) {
+      list.unshift({ id: '__video', name: 'Video', photos: [], count: feed.videoTotal, cover: null })
+    }
     const otherExtra = feed?.byTournament?.[''] || 0
     if (other.length || otherExtra) {
       list.push({ id: '__other', name: 'Other', photos: other, count: other.length + otherExtra, cover: other[0] || (feed?.covers?.[''] ? { url: feed.covers[''] } : null) })
@@ -79,7 +88,8 @@ export default function PublicGallery({ photos, tournaments, covers = {}, credit
       const q = new URLSearchParams({ org: feed.orgSlug, offset: String(offset), limit: '60' })
       // '__all' asks for everything; '__other' is the empty tournament id, which is
       // exactly what untagged rows carry.
-      if (key !== '__all') q.set('t', key === '__other' ? '' : key)
+      if (key === '__video') q.set('kind', 'video')
+      else if (key !== '__all') q.set('t', key === '__other' ? '' : key)
       const r = await fetch(`/api/gallery/feed?${q}`)
       if (!r.ok) return
       const d = await r.json()
@@ -97,7 +107,9 @@ export default function PublicGallery({ photos, tournaments, covers = {}, credit
     if (!feed?.total) return
     const key = folderKey
     if (fetched[key] !== undefined) return
-    const has = key === '__all' ? feed.total : (feed.byTournament?.[key === '__other' ? '' : key] || 0)
+    const has = key === '__all' ? feed.total
+      : key === '__video' ? (feed.videoTotal || 0)
+      : (feed.byTournament?.[key === '__other' ? '' : key] || 0)
     if (!has) return
     setFetched(prev => ({ ...prev, [key]: [] }))
     loadMore(key)
@@ -154,7 +166,7 @@ export default function PublicGallery({ photos, tournaments, covers = {}, credit
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <AlbumCard name="All photos" count={totalCount} cover={photos[0] || (albums.find(a => a.cover)?.cover ?? null)} onClick={() => openFolder('__all')} />
-        {albums.map(a => <AlbumCard key={a.id} name={a.name} count={a.count} cover={a.cover} onClick={() => openFolder(a.id)} />)}
+        {albums.map(a => <AlbumCard key={a.id} name={a.name} count={a.count} cover={a.cover} noun={a.id === '__video' ? 'clip' : 'photo'} onClick={() => openFolder(a.id)} />)}
       </div>
     )
   }
@@ -182,8 +194,9 @@ export default function PublicGallery({ photos, tournaments, covers = {}, credit
                   {ph.kind === 'video' ? (
                     // The poster frame is the video itself with preload=metadata:
                     // a few KB rather than the whole clip, and no second file to
-                    // generate, store and keep in sync.
-                    <video src={ph.url} preload="metadata" muted playsInline className="w-full h-full object-cover" />
+                    // generate, store and keep in sync. Contained, not cropped --
+                    // most of this will be shot vertically on a phone.
+                    <video src={ph.url} preload="metadata" muted playsInline className="w-full h-full object-contain bg-slate-900" />
                   ) : (
                     <img src={ph.url} alt={ph.caption || ''} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   )}
@@ -256,7 +269,7 @@ export default function PublicGallery({ photos, tournaments, covers = {}, credit
   )
 }
 
-function AlbumCard({ name, count, cover, onClick }: { name: string; count: number; cover: Photo | null; onClick: () => void }) {
+function AlbumCard({ name, count, cover, onClick, noun = 'photo' }: { name: string; count: number; cover: Photo | null; onClick: () => void; noun?: string }) {
   return (
     <button onClick={onClick} className="group text-left rounded-2xl overflow-hidden border border-slate-200 bg-white">
       <div className="aspect-[4/3] overflow-hidden relative">
@@ -264,7 +277,7 @@ function AlbumCard({ name, count, cover, onClick }: { name: string; count: numbe
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
           <p className="font-semibold leading-tight">{name}</p>
-          <p className="text-xs text-white/80 flex items-center gap-1"><Images size={12} /> {count} photo{count === 1 ? '' : 's'}</p>
+          <p className="text-xs text-white/80 flex items-center gap-1"><Images size={12} /> {count.toLocaleString('en-US')} {noun}{count === 1 ? '' : 's'}</p>
         </div>
       </div>
     </button>

@@ -192,7 +192,7 @@ export default function ShootPage(p: Props) {
       </section>
 
       {/* What we ask in return. Stated up front and as numbers -- a credential is a
-          trade, and the photographers worth having would rather know the terms than
+          trade, and the people worth having on your sideline would rather know the terms than
           be chased for photos afterwards. */}
       {commits.length > 0 && (
         <section className="max-w-5xl mx-auto px-6 py-12">

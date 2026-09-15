@@ -26,12 +26,15 @@ export async function GET(req: NextRequest) {
   if (!org?.id) return NextResponse.json({ items: [], total: 0 })
 
   const tournamentId = String(q.get('t') || '').trim()
+  // The Video album asks for clips across every event, so it sends kind without t.
+  const kindParam = String(q.get('kind') || '').trim()
+  const kind = kindParam === 'video' || kindParam === 'photo' ? kindParam : undefined
   const offset = Math.max(0, Number(q.get('offset')) || 0)
   const limit = Math.min(Math.max(Number(q.get('limit')) || 60, 1), MAX)
 
   const [rows, total] = await Promise.all([
-    listGalleryMedia({ orgId: org.id, status: 'published', tournamentId: tournamentId || undefined, limit, offset }),
-    countGalleryMedia({ orgId: org.id, status: 'published', tournamentId: tournamentId || undefined }),
+    listGalleryMedia({ orgId: org.id, status: 'published', tournamentId: tournamentId || undefined, kind, limit, offset }),
+    countGalleryMedia({ orgId: org.id, status: 'published', tournamentId: tournamentId || undefined, kind }),
   ])
 
   return NextResponse.json({

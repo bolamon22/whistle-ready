@@ -110,7 +110,7 @@ export default function PhotographersAdmin() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Photographers</h1>
-            <p className="text-sm text-slate-500">Who appears on your Book a photographer page.</p>
+            <p className="text-sm text-slate-500">Who appears on your Book photo & video page.</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => { setList(v => [...v, { ...BLANK, packages: DEFAULT_PACKAGES.map(p => ({ ...p })) }]); setOpen(list.length) }}

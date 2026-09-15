@@ -15,7 +15,7 @@ function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, auth
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const client = db(); let name = params.slug
   try { const r = await client.execute({ sql: 'SELECT name FROM "Organization" WHERE slug = ?', args: [params.slug] }); if (r.rows.length) name = (r.rows[0] as any).name } catch {}
-  const title = `Event photographers — ${name}`
+  const title = `Photo & video — ${name}`
   const description = clip(`Credentialed photographers shooting ${name} tournaments. Book team and player photos directly.`)
   const url = orgAbs(params.slug, '/photographers')
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
@@ -49,7 +49,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <OrgHeader org={org} homeHref={base || '/'} nav={nav} />
       <main className="max-w-5xl mx-auto px-6 py-14 w-full flex-1">
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">Event photographers</h1>
+        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">Photo &amp; video</h1>
         <p className="text-slate-500 mt-2.5 max-w-[60ch]">
           Credentialed by {org.name} and shooting our events. Book them directly &mdash; we take no cut of what you pay.
         </p>

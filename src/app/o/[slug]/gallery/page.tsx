@@ -94,7 +94,7 @@ export default async function GalleryPage({ params }: { params: { slug: string }
           <div className="flex items-center gap-4">
             <Link href={`${base}/photographers`}
               className="text-[14px] font-semibold text-slate-600 hover:text-slate-900">
-              Book a photographer
+              Book photo &amp; video
             </Link>
             <Link href={`${base}/gallery/shoot`}
               className="text-[14px] font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5">
@@ -104,7 +104,7 @@ export default async function GalleryPage({ params }: { params: { slug: string }
         </div>
         <PublicGallery
           photos={photos} tournaments={tournaments} covers={covers} creditLinks={creditHrefs}
-          feed={{ orgSlug: params.slug, total: contributed.total, byTournament: contributed.byTournament, covers: contributed.covers }}
+          feed={{ orgSlug: params.slug, total: contributed.total, byTournament: contributed.byTournament, covers: contributed.covers, videoTotal: contributed.videoTotal }}
         />
 
         <div className="mt-16 pt-12 border-t border-slate-200">
@@ -112,7 +112,7 @@ export default async function GalleryPage({ params }: { params: { slug: string }
             photographers={shooterList}
             base={base}
             limit={4}
-            title="Book a photographer"
+            title="Book photo &amp; video"
             subtitle={`Credentialed by ${org.name} and shooting our events. You book them directly \u2014 we take no cut.`}
           />
         </div>
