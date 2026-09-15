@@ -59,18 +59,36 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
       sql: 'SELECT r.clubName AS club, r.clubLogoUrl AS clubLogo, t.teamName AS team, t.division AS division, t.logoUrl AS teamLogo FROM "TeamRegistration" r LEFT JOIN "RegisteredTeam" t ON t.registrationId = r.id WHERE r.tournamentId = ? AND r.deletedAt IS NULL ORDER BY r.clubName, t.teamName',
       args: [params.id],
     })
-    const byClub = new Map<string, Map<string, string>>()
+    // Keyed by name AND division, not name alone.
+    //
+    // H44 registered four teams for Monster Mash -- U12 A, U14 A, HS A, HS B --
+    // and named every one of them "H44". Keyed by name, each row overwrote the
+    // last and all four collapsed into a single dropdown entry whose division was
+    // whichever row the database happened to return last. A parent could only
+    // pick one of their four teams, and the waiver was filed against the wrong
+    // division. Naming every team after the club is completely normal; the map
+    // was wrong, not the data.
+    const byClub = new Map<string, Map<string, { name: string; division: string }>>()
     const logoByClub = new Map<string, string>() // club logo from the registration, else a team's
     for (const row of tr.rows as any[]) {
       const club = String(row.club || '').trim()
       if (!club) continue
       if (!byClub.has(club)) byClub.set(club, new Map())
       const team = String(row.team || '').trim()
-      if (team) byClub.get(club)!.set(team, String(row.division || '').trim())
+      const division = String(row.division || '').trim()
+      if (team) byClub.get(club)!.set(`${team}||${division}`, { name: team, division })
       const logo = String(row.clubLogo || '').trim() || String(row.teamLogo || '').trim()
       if (logo && !logoByClub.has(club)) logoByClub.set(club, logo)
     }
-    clubs = [...byClub.entries()].map(([name, ts]) => ({ name, logoUrl: logoByClub.get(name) || '', teams: [...ts.entries()].map(([n, division]) => ({ name: n, division })) }))
+    clubs = [...byClub.entries()].map(([name, ts]) => ({
+      name,
+      logoUrl: logoByClub.get(name) || '',
+      // Sorted by division so a club's four teams read in a sensible order rather
+      // than whatever order the rows arrived in.
+      teams: [...ts.entries()]
+        .map(([id, t]) => ({ id, name: t.name, division: t.division }))
+        .sort((a, b) => a.division.localeCompare(b.division) || a.name.localeCompare(b.name)),
+    }))
     teams = clubs.map(c => c.name)
   } catch { /* none */ }
 

@@ -16,7 +16,10 @@ const labelCls = 'block text-sm font-medium text-slate-700 mb-1'
 const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 export const POSITIONS = ['Attack', 'Midfield', 'Defense', 'Goalie', 'FOGO', 'LSM', 'Multiple / not sure']
 
-export type ClubOption = { name: string; logoUrl?: string; teams: { name: string; division: string }[] }
+// `id` distinguishes two teams a club gave the same name -- see the note in
+// tournaments/[id]/player-waiver/page.tsx. The dropdown's value is the id; the
+// name is what gets submitted and printed on the card.
+export type ClubOption = { name: string; logoUrl?: string; teams: { id: string; name: string; division: string }[] }
 export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
 /** What the live card preview needs that the form doesn't collect: event + org branding, and the event QR. */
 export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string; eventQrUrl: string; eventQrLabel: string; theme: CardTheme }
@@ -204,7 +207,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       if (clubMode) {
         const c = clubs!.find(x => x.name === club)
         if (!c) return
-        const t = team && c.teams.some(x => x.name === team) ? team : ''
+        const t = team ? (c.teams.find(x => x.id === team) || c.teams.find(x => x.name === team))?.id || '' : ''
         setD((p: any) => ({ ...p, clubName: c.name, teamPick: t }))
       } else if (team && Array.isArray(teams) && teams.includes(team)) {
         setD((p: any) => ({ ...p, teamName: team }))
@@ -219,11 +222,14 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const clubsShown: ClubOption[] = clubMode ? clubs!.map(c => c.name === d.clubName && !c.logoUrl && d.clubLogoUrl ? { ...c, logoUrl: d.clubLogoUrl } : c) : []
   // What the header chip shows as the parent picks: club (or the typed "other" name), then team.
   const typedOther = String(d.teamOther || '').trim()
+  // One resolution of the picked option, reused everywhere below -- the card
+  // label, the submitted team name and the division all have to agree.
+  const pickedTeam = clubTeams.find(x => x.id === d.teamPick)
   const chipClub: string = selectedClub ? selectedClub.name : d.clubName === '__other' ? typedOther : ''
   const chipTeam: string = (() => {
     if (!selectedClub) return ''
     if (d.teamPick === '__other') return typedOther
-    const t = clubTeams.find(x => x.name === d.teamPick)
+    const t = pickedTeam
     return t ? (t.division ? `${t.name} · ${t.division}` : t.name) : ''
   })()
   // Live card preview (tournament forms with the org's "Player pass" switch on): built from
@@ -234,8 +240,8 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     code: '···-···',
     playerName: String(d.playerName || '').trim() || 'Player name',
     clubName: chipClub || 'Your club',
-    teamName: selectedClub ? (d.teamPick === '__other' ? typedOther : String(d.teamPick || '')) : '',
-    division: selectedClub ? (clubTeams.find(x => x.name === d.teamPick)?.division || '') : '',
+    teamName: selectedClub ? (d.teamPick === '__other' ? typedOther : String(pickedTeam?.name || '')) : '',
+    division: selectedClub ? (pickedTeam?.division || '') : '',
     jersey: String(d.jerseyNumber || '').trim().replace(/^#/, ''),
     position: String(d.position || ''),
     photoUrl: d.photoUrl,
@@ -283,7 +289,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       if (d.clubName === '__other') return other
       if (!d.clubName) return ''
       if (d.teamPick === '__other') return other ? `${d.clubName} — ${other}` : d.clubName
-      return d.teamPick ? `${d.clubName} — ${d.teamPick}` : d.clubName
+      return pickedTeam ? `${d.clubName} — ${pickedTeam.division || pickedTeam.name}` : d.clubName
     }
     return d.teamName === '__other' ? other : d.teamName
   })()
@@ -396,7 +402,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
                 <div><label className={labelCls}>Team *</label>
                   <select className={inputCls} value={d.teamPick} onChange={e => set('teamPick', e.target.value)} required>
                     <option value="">Select your team…</option>
-                    {clubTeams.map(t => <option key={t.name} value={t.name}>{t.name}{t.division ? ` · ${t.division}` : ''}</option>)}
+                    {clubTeams.map(t => <option key={t.id} value={t.id}>{t.name}{t.division ? ` · ${t.division}` : ''}</option>)}
                     <option value="__other">Other / not listed</option>
                   </select>
                 </div>
