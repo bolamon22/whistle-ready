@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, deleteSubmission, getSubmission, setSubmissionStatus, ensurePassToken } from '@/lib/formSubmissions'
-import { orgById } from '@/lib/org'
+import { orgById, orgLogoUrl } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { sendEmail, orgSender, emailEnabled } from '@/lib/email'
 import { vendorConfig, priceLabel } from '@/lib/vendorForm'
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const evName = String(cur.data?.tournamentName || '')
         const base = orgBaseUrl(org?.slug)
         const link = `${base}/vendor/${token}`
-        const logo = absUrl(base, org?.logoUrl)
+        const logo = absUrl(base, await orgLogoUrl(org?.id, org?.logoUrl))
         const feeText = amount > 0 ? priceLabel(amount) : ''
         const hasPacket = Object.values(cfgForMail.instructions).some(v => String(v || '').trim())
 

@@ -8,6 +8,7 @@ import { insertSubmission, countsByType } from '@/lib/formSubmissions'
 import { appBaseUrl, playerPassEnabled } from '@/lib/playerPass'
 import { orgSender, OFFICE_CC } from '@/lib/email'
 import { orgBaseUrl } from '@/lib/orgDomains'
+import { orgLogoUrl } from '@/lib/org'
 import { vendorConfig, priceLabel } from '@/lib/vendorForm'
 import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
         const org = orgRows?.[0] || {}
         const orgName = String(org.name || 'Sunshine Events Group')
         const base = orgBaseUrl(org.slug)
-        const logo = absUrl(base, org.logoUrl)
+        const logo = absUrl(base, await orgLogoUrl(orgId, org.logoUrl))
         let cfg = vendorConfig({})
         try {
           const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${orgId}` } })
@@ -137,7 +138,7 @@ export async function POST(req: NextRequest) {
         const org = orgRows?.[0] || {}
         const orgName = String(org.name || 'Sunshine Events Group')
         const base = orgBaseUrl(org.slug)
-        const logo = absUrl(base, org.logoUrl)
+        const logo = absUrl(base, await orgLogoUrl(orgId, org.logoUrl))
 
         let cfg = vendorConfig({})
         let wantsConfirmation = true

@@ -20,6 +20,14 @@ export function absUrl(base: string, url?: string | null): string {
   const u = String(url || '').trim()
   if (!u) return ''
   if (/^https?:\/\//i.test(u)) return u
+  // Anything carrying its own scheme is already as absolute as it gets, and a
+  // data: URI in particular must never be prefixed. Organization.logoUrl still
+  // held an inlined 271 KB PNG, so `base + u` produced a 271 KB junk src and the
+  // whole message came in at ~292 KB -- past Gmail's ~102 KB limit, which clipped
+  // it to a blank body. No client renders <img src="data:"> anyway (Gmail and
+  // Outlook both strip it), so dropping it costs nothing and keeps mail small.
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(u)?.[1]
+  if (scheme) return ''
   return `${base.replace(/\/$/, '')}/${u.replace(/^\//, '')}`
 }
 
@@ -69,10 +77,18 @@ export type EmailShell = {
   footerNote?: string
 }
 
+// Guard at the point of use too: absUrl() is the only sane way in, but a caller
+// that hand-builds a src shouldn't be able to blow the message past a client's
+// clip limit. 2 KB is far more than any real image URL needs.
+const SRC_MAX = 2000
+const safeSrc = (u?: string): string => (u && u.length <= SRC_MAX && !/^data:/i.test(u) ? u : '')
+
 export function renderEmail(a: EmailShell): string {
-  const logo = a.logoUrl
-    ? `<img src="${a.logoUrl}" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border:0;border-radius:8px;background:#ffffff">`
+  const logoSrc = safeSrc(a.logoUrl)
+  const logo = logoSrc
+    ? `<img src="${logoSrc}" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border:0;border-radius:8px;background:#ffffff">`
     : ''
+  const banner = safeSrc(a.bannerUrl)
   return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:${PAGE}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAGE};padding:26px 12px">
@@ -89,7 +105,7 @@ export function renderEmail(a: EmailShell): string {
         </tr></table>
       </td></tr>
 
-      ${a.bannerUrl ? `<tr><td style="padding:0"><img src="${a.bannerUrl}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0"></td></tr>` : ''}
+      ${banner ? `<tr><td style="padding:0"><img src="${banner}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0"></td></tr>` : ''}
 
       <tr><td style="padding:28px 26px 30px">
         <h1 style="margin:0 0 14px;font:700 23px/1.25 Arial,Helvetica,sans-serif;color:${INK}">${esc(a.title)}</h1>

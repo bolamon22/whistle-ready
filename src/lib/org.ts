@@ -63,3 +63,34 @@ export async function orgBySlug(slug: string | null | undefined): Promise<Org | 
 export async function orgForTournament(tournamentId: string): Promise<Org | null> {
   return orgById(await tournamentOrgId(tournamentId))
 }
+
+/**
+ * The org's logo as a URL a mail client can actually fetch.
+ *
+ * `Organization.logoUrl` can still hold an inlined `data:` URI — /api/upload
+ * falls back to one when its DB write fails, and the image migration was only
+ * ever run against the orgSite settings record. The public site already works
+ * around this by preferring the settings logo (see src/app/o/[slug]/page.tsx,
+ * which does `if (content.logo) org.logoUrl = content.logo`), which points at
+ * /api/img/<id>. Email has to do the same: a data: URI doesn't render in any
+ * mail client, and pasting 271 KB of base64 into an <img src> pushed the whole
+ * message past Gmail's ~102 KB clip limit so it arrived blank.
+ *
+ * Returns '' when neither source has a fetchable URL — the email shell drops
+ * the logo cleanly rather than shipping a broken one.
+ */
+export async function orgLogoUrl(orgId: string | null | undefined, dbLogoUrl?: string | null): Promise<string> {
+  const usable = (u: unknown): string => {
+    const s = String(u || '').trim()
+    return s && !/^data:/i.test(s) ? s : ''
+  }
+  let settingsLogo = ''
+  if (orgId) {
+    try {
+      const rows: any[] = await prisma.$queryRawUnsafe(
+        'SELECT value FROM "AppSetting" WHERE key = ?', `orgSite:${orgId}`)
+      settingsLogo = usable(JSON.parse(rows?.[0]?.value || '{}').logo)
+    } catch { /* fall through to the column */ }
+  }
+  return settingsLogo || usable(dbLogoUrl)
+}
