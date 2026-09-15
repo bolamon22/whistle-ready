@@ -15,6 +15,8 @@ type Info = {
   contactName: string
   alreadyClaimed: boolean
   accountExists: boolean
+  orgName?: string
+  orgLogoUrl?: string
 }
 
 export default function ClaimPage() {
@@ -114,6 +116,14 @@ export default function ClaimPage() {
   return shell(
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
       <div className="bg-slate-900 px-6 py-5">
+        {/* The organizer's mark, not ours: this link arrives from their domain in
+            their email, and Whistle Ready is a name the coach has never seen. */}
+        {(info.orgLogoUrl || info.orgName) && (
+          <div className="flex items-center gap-2 mb-3">
+            {info.orgLogoUrl && <img src={info.orgLogoUrl} alt="" className="w-6 h-6 rounded object-contain bg-white/10" />}
+            {info.orgName && <span className="text-[12px] font-semibold text-white/80">{info.orgName}</span>}
+          </div>
+        )}
         <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-300">{info.tournamentName}</p>
         <h1 className="text-lg font-bold text-white mt-1">Set up your team account</h1>
         <p className="text-xs text-slate-300 mt-1">for {info.clubName}</p>

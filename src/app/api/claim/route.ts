@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { lookupClaimToken, markClaimed } from '@/lib/claim'
+import { orgForTournament, orgLogoUrl as orgLogoUrl2 } from '@/lib/org'
 
 /**
  * Claim a team registration → get access to the Club Director portal.
@@ -35,6 +36,13 @@ export async function GET(req: NextRequest) {
     accountExists = !!u
   } catch { /* treat as no account */ }
 
+  // Who is inviting them. The coach knows the organizer's name, not ours.
+  let orgName = '', orgLogoUrl = ''
+  try {
+    const org = await orgForTournament(info.tournamentId)
+    if (org) { orgName = org.name || ''; orgLogoUrl = await orgLogoUrl2(org.id, org.logoUrl) }
+  } catch { /* the card just renders without the mark */ }
+
   return NextResponse.json({
     clubName: info.clubName,
     tournamentName: info.tournamentName,
@@ -42,6 +50,8 @@ export async function GET(req: NextRequest) {
     contactName: info.contactName,
     alreadyClaimed: info.alreadyClaimed,
     accountExists,
+    orgName,
+    orgLogoUrl,
   })
 }
 

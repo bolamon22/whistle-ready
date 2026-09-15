@@ -81,6 +81,15 @@ export async function middleware(req: NextRequest) {
     // NOTE: '/register' passthrough is EXACT match only — the org's own register
     // pages (/register/player, /register/vendor) must rewrite to /o/{slug}/register/*
     // or they 404 on the custom domain.
+    //
+    // EVERY emailed token link belongs in this list. /claim was missing, and the
+    // account-setup letter builds its link on the ORG's domain (commSend.ts ->
+    // tournamentAbs), so sunshineeventsgroup.com/claim/<token> was rewritten to
+    // /o/sunshine-events-group/claim/<token>, which does not exist: every club
+    // director who followed that button got "Page not found". Being listed as a
+    // public route further down does not help — the rewrite happens first and
+    // returns. Verified Sep 15 2026 with a live token: 404 on the org domain,
+    // renders correctly on whistleready.app.
     const passthrough =
       pathname.startsWith('/o/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.startsWith('/favicon') ||
       pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt' ||
@@ -88,7 +97,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
-      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/vendor') || pathname.startsWith('/media')
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/vendor') || pathname.startsWith('/media') || pathname.startsWith('/claim')
     if (!passthrough) {
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
