@@ -150,13 +150,6 @@ export default function VendorForm(p: Props) {
           </div>
         )}
 
-        {p.approvalNotice.trim() && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700 mb-1.5">Approval required</div>
-            <p className="text-sm text-amber-900 leading-relaxed">{p.approvalNotice}</p>
-          </div>
-        )}
-
         {events.length > 1 && (
           <section>
             <div className={eyebrow}>Events</div>
@@ -284,6 +277,10 @@ export default function VendorForm(p: Props) {
               <input type="checkbox" id="v-agree" checked={d.agree} onChange={e => set('agree', e.target.checked)} className="mt-0.5 accent-teal-500 w-4 h-4" />
               <span className="text-sm text-slate-700">I have read and agree to the vendor terms above *</span>
             </label>
+
+            {p.approvalNotice.trim() && (
+              <p className="text-xs text-slate-500 leading-relaxed mt-5 pt-4 border-t border-slate-100">{p.approvalNotice}</p>
+            )}
 
             <button type="submit" disabled={submitting || !d.agree || !chosen || open.length === 0}
               className="w-full mt-6 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors">
