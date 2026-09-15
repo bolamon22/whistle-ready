@@ -26,10 +26,10 @@ export default async function EventChrome({ tournamentId, children }: { tourname
   try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${tournamentId}`] }); if (r.rows.length) cs = JSON.parse(((r.rows[0] as any).value as string) || '{}') } catch {}
   const eyebrow = ((t.sport ? String(t.sport) + ' ' : '') + 'tournament')
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
-  let navPages: any[] = []; let hasGallery = false; let contact: any = {}; let socials: any = {}; let orgLogo = ''; let sponsors: any[] = []
+  let navPages: any[] = []; let hasGallery = false; let contact: any = {}; let socials: any = {}; let orgLogo = ''; let sponsors: any[] = []; let wantsSponsors = false
   if (t.orgId) {
     try { const o = await client.execute({ sql: 'SELECT id, name, slug, contactEmail, logoUrl FROM "Organization" WHERE id = ?', args: [t.orgId] }); if (o.rows.length) org = o.rows[0] } catch {}
-    try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${t.orgId}`] }); if (s.rows.length) { const oc = JSON.parse(((s.rows[0] as any).value as string) || '{}'); orgLogo = oc.logo || ''; navPages = Array.isArray(oc.pages) ? oc.pages : []; hasGallery = Array.isArray(oc.gallery) && oc.gallery.length > 0; contact = oc.contact || {}; socials = oc.socials || {}; if (Array.isArray(oc.sponsors)) sponsors = oc.sponsors } } catch {}
+    try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${t.orgId}`] }); if (s.rows.length) { const oc = JSON.parse(((s.rows[0] as any).value as string) || '{}'); orgLogo = oc.logo || ''; navPages = Array.isArray(oc.pages) ? oc.pages : []; hasGallery = Array.isArray(oc.gallery) && oc.gallery.length > 0; contact = oc.contact || {}; socials = oc.socials || {}; if (Array.isArray(oc.sponsors)) sponsors = oc.sponsors; wantsSponsors = oc.sponsorPitch?.show === true } } catch {}
   }
   const headerLogo = orgLogo || org.logoUrl || ''
   const heroLogo = t.logoUrl || headerLogo
@@ -46,7 +46,7 @@ export default async function EventChrome({ tournamentId, children }: { tourname
     (cs.hotelsUrl || cs.hotels) && { href: `${base}/event#hotels`, label: 'Hotels' },
     cs.rules && { href: `${base}/rules`, label: 'Rules' },
     (Array.isArray(cs.contacts) && cs.contacts.length) && { href: `${base}/event#contacts`, label: 'Contacts' },
-    sponsors.length && { href: `${base}/event#sponsors`, label: 'Sponsors & partners' },
+    (sponsors.length > 0 || wantsSponsors) && { href: `${base}/event#sponsors`, label: 'Sponsors & partners' },
     { href: `${base}/vendor-request`, label: 'Vendor Request' },
     { href: `${base}/work`, label: 'Work at our event' },
   ].filter(Boolean) as { href: string; label: string }[]

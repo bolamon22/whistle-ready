@@ -256,7 +256,7 @@ export default function VendorForm(p: Props) {
 
         {/* Sponsorship is a different sale — point at it, don't try to take the order. */}
         {p.sponsorShow && (
-          <section className="bg-[#0b4a37] text-white rounded-2xl p-7 sm:p-8 grid md:grid-cols-[1.35fr_1fr] gap-7 items-center">
+          <section id="sponsor" className="scroll-mt-24 bg-[#0b4a37] text-white rounded-2xl p-7 sm:p-8 grid md:grid-cols-[1.35fr_1fr] gap-7 items-center">
             <div>
               <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Looking to sponsor, not sell?</h2>
               <p className="text-teal-100/80 mt-2.5 leading-relaxed text-[15px]">{p.sponsorBlurb}</p>

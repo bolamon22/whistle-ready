@@ -20,6 +20,10 @@ import type { Metadata } from 'next'
 import { abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import { resolveRules } from '@/lib/rules'
+import SponsorWall from '@/components/SponsorWall'
+import SponsorPitch from '@/components/SponsorPitch'
+import { sponsorList, sponsorPitch, statNum } from '@/lib/sponsors'
+import { vendorConfig } from '@/lib/vendorForm'
 
 // Cache policy for published pages.
 //
@@ -101,12 +105,34 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     console.error('[event page] failed to read tournamentSite content:', params.id, e?.message || e)
   }
   let sponsors: any[] = []
+  let pitchRaw: any = {}
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
   let navPages: any[] = []; let hasGallery = false; let contact: any = {}; let socials: any = {}; let orgLogo = ''
   if (t.orgId) {
     try { const oRes = await client.execute({ sql: 'SELECT id, name, slug, contactEmail, logoUrl FROM "Organization" WHERE id = ?', args: [t.orgId] }); if (oRes.rows.length) org = oRes.rows[0] } catch {}
-    try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${t.orgId}`] }); if (s.rows.length) { const oc = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (Array.isArray(oc.sponsors)) sponsors = oc.sponsors; orgLogo = oc.logo || ''; navPages = Array.isArray(oc.pages) ? oc.pages : []; hasGallery = Array.isArray(oc.gallery) && oc.gallery.length > 0; contact = oc.contact || {}; socials = oc.socials || {} } } catch {}
+    try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${t.orgId}`] }); if (s.rows.length) { const oc = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (Array.isArray(oc.sponsors)) sponsors = oc.sponsors; pitchRaw = oc.sponsorPitch || {}; orgLogo = oc.logo || ''; navPages = Array.isArray(oc.pages) ? oc.pages : []; hasGallery = Array.isArray(oc.gallery) && oc.gallery.length > 0; contact = oc.contact || {}; socials = oc.socials || {} } } catch {}
   }
+  // Live reach for the sponsor pitch. Counted, not claimed: teams is the sum of
+  // numTeams on registrations that haven't been soft-deleted, clubs the distinct
+  // club names behind them. A failed read just drops the stats, never the page.
+  // The org already prices sponsorship on the vendor page (Org -> Forms). Reuse
+  // those levels here rather than inventing a second place to keep them in sync.
+  let sponsorTiers: any[] = []
+  try {
+    if (t.orgId) {
+      const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${t.orgId}`] })
+      if (fr.rows.length) sponsorTiers = vendorConfig(JSON.parse(((fr.rows[0] as any).value as string) || '{}').vendor).sponsorTiers
+    }
+  } catch { /* the panel falls back to its note */ }
+  let regTeams = 0, regClubs = 0
+  try {
+    const rc = await client.execute({
+      sql: 'SELECT COALESCE(SUM(numTeams),0) AS teams, COUNT(DISTINCT clubName) AS clubs FROM "TeamRegistration" WHERE tournamentId = ? AND deletedAt IS NULL',
+      args: [params.id],
+    })
+    regTeams = Number((rc.rows[0] as any)?.teams || 0)
+    regClubs = Number((rc.rows[0] as any)?.clubs || 0)
+  } catch { /* stats are a nicety; the section renders without them */ }
   let ruleSets: any[] = []
   try { if (t.orgId) { const rr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgRules:${t.orgId}`] }); if (rr.rows.length) { const v = JSON.parse(((rr.rows[0] as any).value as string) || '{}'); ruleSets = Array.isArray(v.sets) ? v.sets : [] } } } catch {}
   c.rules = resolveRules(c, ruleSets).body
@@ -116,6 +142,18 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const nav = org.slug ? buildNav(orgBase(org.slug), navPages, hasGallery) : []
   const registerHref = Number(t.teamRegEnabled) ? `/tournaments/${params.id}/register` : undefined
   const base = `/tournaments/${params.id}`
+
+  // Sponsors & partners: normalize once, here, so the wall, the pitch and the open
+  // slot all agree on the same list.
+  const spons = sponsorList(sponsors)
+  const pitch = sponsorPitch(pitchRaw)
+  const sponsorHref = `/tournaments/${params.id}/vendor-request#sponsor`
+  // Counted stats first (we can stand behind those), then whatever the org typed in.
+  const pitchStats = [
+    ...(regTeams > 0 ? [{ value: statNum(regTeams), label: regTeams === 1 ? 'Team' : 'Teams' }] : []),
+    ...(regClubs > 0 ? [{ value: statNum(regClubs), label: regClubs === 1 ? 'Club' : 'Clubs' }] : []),
+    ...pitch.stats,
+  ]
 
   const setupDivisions: string[] = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const divisions: string[] = setupDivisions
@@ -262,14 +300,27 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         </div>
       </EventSection>
     ) : null,
-    sponsors: sponsors.length > 0 ? (
+    // The wall names who already backs the weekend; the pitch below it asks for the
+    // next one. Order matters: the businesses that paid lead, the ask follows from
+    // seeing them. Renders when there is a wall OR a pitch, so an org with no
+    // sponsors yet can still advertise the slot.
+    sponsors: (spons.length > 0 || pitch.show) ? (
       <EventSection id="sponsors" title="Sponsors & partners">
-        <div className="flex flex-wrap items-center gap-x-10 gap-y-6">
-          {sponsors.map((s, i) => {
-            const img = s.logoUrl ? <img src={s.logoUrl} alt={s.name || ''} className="h-12 object-contain" /> : <span className="text-slate-600 font-medium">{s.name}</span>
-            return s.url ? <a key={i} href={s.url} target="_blank" rel="noreferrer">{img}</a> : <div key={i}>{img}</div>
-          })}
-        </div>
+        <SponsorWall
+          sponsors={spons}
+          subtitle={spons.length ? 'The businesses and agencies that put this weekend on.' : undefined}
+          inquireHref={sponsorHref}
+          openSlotNote={pitch.show ? 'Spots open for this event' : undefined}
+        />
+        <SponsorPitch
+          pitch={pitch}
+          stats={pitchStats}
+          inquireHref={sponsorHref}
+          contactEmail={String(contact?.email || org.contactEmail || '')}
+          eventName={t.name}
+          tiers={sponsorTiers}
+          note={pitch.note}
+        />
       </EventSection>
     ) : null,
   }

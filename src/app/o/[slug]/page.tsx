@@ -6,6 +6,8 @@ import { fetchInstagram } from './_instagram'
 import type { Metadata } from 'next'
 import { SITE_URL, abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
+import SponsorWall from '@/components/SponsorWall'
+import { sponsorList } from '@/lib/sponsors'
 
 // Cache policy for published pages.
 //
@@ -154,6 +156,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   let forms: any = {}
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
   const base = orgBase(params.slug)
+  const spons = sponsorList(sponsors)
   const workHref = (forms.staff?.enabled !== false) ? `${base}/work` : undefined
   const nav = buildNav(base, pages, gallery.length > 0, workHref)
 
@@ -270,21 +273,21 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
         </section>
       )}
 
-      {/* Sponsors: a quiet strip, not a wall of huge tiles that outweighed the events. */}
-      {sponsors.length > 0 && (
+      {/* Partners. The old version was a row of 48px logos at 70% opacity with no
+          names and no link — it read as decoration, and a business looking at it had
+          no reason to think the spot was for sale. Same compact footprint, but each
+          mark gets a card and a name, and the last cell is the ask. */}
+      {spons.length > 0 && (
         <section className="bg-white border-t border-slate-200">
-          <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center gap-6">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 shrink-0">Partners</h2>
-            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
-              {sponsors.map((s, i) => {
-                const inner = s.logoUrl
-                  ? <img src={s.logoUrl} alt={s.name || ''} title={s.name || ''} className="h-12 max-w-[140px] object-contain opacity-70 hover:opacity-100 transition-opacity" />
-                  : <span className="text-slate-500 font-semibold whitespace-nowrap">{s.name}</span>
-                return s.url
-                  ? <a key={i} href={s.url} target="_blank" rel="noreferrer">{inner}</a>
-                  : <div key={i}>{inner}</div>
-              })}
-            </div>
+          <div className="max-w-6xl mx-auto px-6 py-12">
+            <SponsorWall
+              sponsors={spons}
+              variant="compact"
+              title="Our partners"
+              subtitle="The businesses and agencies behind our events."
+              inquireHref={`${base}/register/vendor#sponsor`}
+              openSlotNote="Ask about sponsoring"
+            />
           </div>
         </section>
       )}

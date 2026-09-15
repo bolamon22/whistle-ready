@@ -10,7 +10,9 @@ import MarkdownField from '@/components/MarkdownField'
 import GalleryPicker from '@/components/GalleryPicker'
 import AiGenerateButton from '@/components/AiGenerateButton'
 
-type Sponsor = { name: string; logoUrl: string; url: string }
+type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string }
+type PitchStat = { value: string; label: string }
+type Pitch = { show: boolean; headline: string; sub: string; benefits: string[]; stats: PitchStat[]; ctaLabel: string }
 type Page = { title: string; slug: string; body: string; group: string; heroImage?: string }
 type Photo = { id?: string; url: string; caption: string; credit?: string; tournamentId?: string }
 type Insta = { username: string; token: string }
@@ -19,6 +21,7 @@ type Content = {
   hero: { headline: string; subtext: string; imageUrl: string }
   about: { heading: string; body: string }
   sponsors: Sponsor[]
+  sponsorPitch: Pitch
   contact: { email: string; phone: string; hours: string; address: string }
   socials: { facebook: string; instagram: string; website: string }
   pages: Page[]
@@ -31,6 +34,7 @@ const EMPTY: Content = {
   hero: { headline: '', subtext: '', imageUrl: '' },
   about: { heading: '', body: '' },
   sponsors: [],
+  sponsorPitch: { show: false, headline: '', sub: '', benefits: [], stats: [], ctaLabel: '' },
   contact: { email: '', phone: '', hours: '', address: '' },
   socials: { facebook: '', instagram: '', website: '' },
   pages: [],
@@ -116,9 +120,9 @@ function OrgSiteEditorInner() {
       try {
         if (qOrg) { setOrg({ name: qName, slug: qSlug }) }
         else { const o = await fetch('/api/org').then(r => r.ok ? r.json() : null); if (o) setOrg({ name: o.name, slug: o.slug }) }
-        const d = await fetch(`/api/org-site${apiQ}`).then(r => r.ok ? r.json() : {})
+        const d: any = await fetch(`/api/org-site${apiQ}`).then(r => r.ok ? r.json() : {})
         fetch(`/api/tournaments${qOrg ? `?viewOrgId=${encodeURIComponent(qOrg)}` : ''}`).then(r => r.ok ? r.json() : []).then(ts => setTournaments(Array.isArray(ts) ? ts : [])).catch(() => {})
-        setC({ ...EMPTY, ...d, logo: d.logo || '', hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], pages: Array.isArray(d.pages) ? d.pages : [], gallery: Array.isArray(d.gallery) ? d.gallery.map((g: any) => ({ caption: '', credit: '', tournamentId: '', ...g, id: g.id || uid() })) : [], galleryCovers: (d.galleryCovers && typeof d.galleryCovers === 'object') ? d.galleryCovers : {}, instagram: { ...EMPTY.instagram, ...(d.instagram || {}) } })
+        setC({ ...EMPTY, ...d, logo: d.logo || '', hero: { ...EMPTY.hero, ...(d.hero || {}) }, about: { ...EMPTY.about, ...(d.about || {}) }, contact: { ...EMPTY.contact, ...(d.contact || {}) }, socials: { ...EMPTY.socials, ...(d.socials || {}) }, sponsors: Array.isArray(d.sponsors) ? d.sponsors : [], sponsorPitch: { ...EMPTY.sponsorPitch, ...(d.sponsorPitch || {}), benefits: Array.isArray(d.sponsorPitch?.benefits) ? d.sponsorPitch.benefits : [], stats: Array.isArray(d.sponsorPitch?.stats) ? d.sponsorPitch.stats : [] }, pages: Array.isArray(d.pages) ? d.pages : [], gallery: Array.isArray(d.gallery) ? d.gallery.map((g: any) => ({ caption: '', credit: '', tournamentId: '', ...g, id: g.id || uid() })) : [], galleryCovers: (d.galleryCovers && typeof d.galleryCovers === 'object') ? d.galleryCovers : {}, instagram: { ...EMPTY.instagram, ...(d.instagram || {}) } })
       } catch {} finally { setLoading(false) }
     })()
   }, [status, session, role])
@@ -282,22 +286,76 @@ function OrgSiteEditorInner() {
       {/* Sponsors */}
       <Sec isOpen={!!openSec.sponsors} onToggle={() => setOpenSec(o => ({ ...o, sponsors: !o.sponsors }))} title="Sponsors & partners" summary={`${c.sponsors.length}`}>
         <div className="flex justify-end mb-2">
-          <button onClick={() => setC(v => ({ ...v, sponsors: [...v.sponsors, { name: '', logoUrl: '', url: '' }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add</button>
+          <button onClick={() => setC(v => ({ ...v, sponsors: [...v.sponsors, { name: '', logoUrl: '', url: '', role: '', tier: 'official', blurb: '' }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add</button>
         </div>
         {c.sponsors.length === 0 && <p className="text-sm text-slate-400">No sponsors yet.</p>}
         <div className="space-y-3">
           {c.sponsors.map((s, i) => (
-            <div key={i} className="flex items-center gap-3 border border-slate-200 rounded-xl p-3">
-              {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-12 w-12 object-contain rounded-lg border border-slate-100 flex-shrink-0" /> : <div className="h-12 w-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 flex-shrink-0"><ImagePlus size={16} /></div>}
-              <div className="flex-1 grid sm:grid-cols-2 gap-2">
-                <input className="input" value={s.name} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))} placeholder="Sponsor name" />
-                <input className="input" value={s.url} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, url: e.target.value } : x) }))} placeholder="https://…" />
+            <div key={i} className="border border-slate-200 rounded-xl p-3">
+              <div className="flex items-start gap-3">
+                {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-12 w-12 object-contain rounded-lg border border-slate-100 flex-shrink-0" /> : <div className="h-12 w-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 flex-shrink-0"><ImagePlus size={16} /></div>}
+                <div className="flex-1 grid sm:grid-cols-2 gap-2">
+                  <input className="input" value={s.name} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))} placeholder="Sponsor name" />
+                  <input className="input" value={s.url} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, url: e.target.value } : x) }))} placeholder="https://…" />
+                  {/* The role is what makes a logo legible. Several marks have their name
+                      baked into the image at a size nobody can read on a phone. */}
+                  <input className="input" value={s.role || ''} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, role: e.target.value } : x) }))} placeholder="Role — e.g. Official apparel, Host venue" />
+                  <select className="input" value={s.tier || 'official'} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, tier: e.target.value } : x) }))}>
+                    <option value="official">Official partner (in the grid)</option>
+                    <option value="presenting">Presenting sponsor (featured row)</option>
+                  </select>
+                </div>
+                <label className="text-xs border border-slate-300 rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer whitespace-nowrap">Logo<input type="file" accept="image/*" className="hidden" onChange={e => sponLogo(i, e.target.files?.[0])} /></label>
+                <GalleryPicker label="Library" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: url } : s) }))} />
+                <button onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
               </div>
-              <label className="text-xs border border-slate-300 rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer whitespace-nowrap">Logo<input type="file" accept="image/*" className="hidden" onChange={e => sponLogo(i, e.target.files?.[0])} /></label>
-              <GalleryPicker label="Library" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: url } : s) }))} />
-              <button onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+              {/* Only the presenting row has space for a sentence, so only ask for one there. */}
+              {s.tier === 'presenting' && (
+                <input className="input mt-2 w-full" value={s.blurb || ''} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, blurb: e.target.value } : x) }))} placeholder="One line about what they do for the event (shown only on the featured row)" />
+              )}
             </div>
           ))}
+        </div>
+
+        {/* The pitch that runs under the wall on every event page. Off until it's
+            filled in -- an org with nothing to say shouldn't get a half-empty sales
+            panel just because the feature shipped. */}
+        <div className="mt-6 pt-5 border-t border-slate-200">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input type="checkbox" className="mt-1" checked={!!c.sponsorPitch.show}
+              onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, show: e.target.checked } }))} />
+            <span>
+              <span className="block font-semibold text-sm text-slate-800">Ask for sponsors on event pages</span>
+              <span className="block text-xs text-slate-500 mt-0.5">Adds a short pitch under the partner wall with your reach and what a spot includes, plus a &ldquo;Become a sponsor&rdquo; button into the vendor page&rsquo;s sponsorship form.</span>
+            </span>
+          </label>
+
+          {c.sponsorPitch.show && (
+            <div className="mt-4 space-y-2.5">
+              <input className="input w-full" value={c.sponsorPitch.headline}
+                onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, headline: e.target.value } }))}
+                placeholder="Headline — leave blank for &quot;Put your brand in front of every family at [event].&quot;" />
+              <input className="input w-full" value={c.sponsorPitch.sub}
+                onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, sub: e.target.value } }))}
+                placeholder="One line under the headline" />
+              <textarea className="input w-full min-h-[92px]" value={c.sponsorPitch.benefits.join('\n')}
+                onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, benefits: e.target.value.split('\n') } }))}
+                placeholder={'What a sponsor gets — one per line\nLogo on the live schedule and results pages\nNamed in every confirmation and reminder email'} />
+              <p className="text-xs text-slate-400">Leave blank to use the default list. Teams and clubs are counted live from registrations &mdash; add anything else you can stand behind below.</p>
+              <div className="space-y-2">
+                {c.sponsorPitch.stats.map((st, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input className="input w-32" value={st.value} placeholder="2,400"
+                      onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, stats: v.sponsorPitch.stats.map((x, j) => j === i ? { ...x, value: e.target.value } : x) } }))} />
+                    <input className="input flex-1" value={st.label} placeholder="Spectators"
+                      onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, stats: v.sponsorPitch.stats.map((x, j) => j === i ? { ...x, label: e.target.value } : x) } }))} />
+                    <button onClick={() => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, stats: v.sponsorPitch.stats.filter((_, j) => j !== i) } }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+                  </div>
+                ))}
+                <button onClick={() => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, stats: [...v.sponsorPitch.stats, { value: '', label: '' }] } }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add a number</button>
+              </div>
+            </div>
+          )}
         </div>
       </Sec>
 
