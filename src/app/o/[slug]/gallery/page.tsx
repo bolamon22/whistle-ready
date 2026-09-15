@@ -4,6 +4,8 @@ import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import PublicGallery from '@/components/PublicGallery'
+import PhotographerTiles from '@/components/PhotographerTiles'
+import { photographerList } from '@/lib/photographers'
 
 // Cache policy for published pages.
 //
@@ -48,6 +50,15 @@ export default async function GalleryPage({ params }: { params: { slug: string }
   const contact = content.contact || {}
   const socials = content.socials || {}
   const pages: PageRec[] = Array.isArray(content.pages) ? content.pages : []
+  // Whoever is scrolling these photos is the exact person who might book one of
+  // the people who took them, so the tiles go under the grid rather than on a
+  // page nobody navigates to.
+  let shooters: any[] = []
+  try {
+    const pr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`photographers:${org.id}`] })
+    if (pr.rows.length) shooters = JSON.parse(((pr.rows[0] as any).value as string) || '[]')
+  } catch { /* the section just doesn't render */ }
+
   let forms: any = {}
   try { const fr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (fr.rows.length) forms = JSON.parse(((fr.rows[0] as any).value as string) || '{}') } catch {}
   const base = orgBase(params.slug)
@@ -80,6 +91,16 @@ export default async function GalleryPage({ params }: { params: { slug: string }
           </div>
         </div>
         <PublicGallery photos={photos} tournaments={tournaments} covers={covers} />
+
+        <div className="mt-16 pt-12 border-t border-slate-200">
+          <PhotographerTiles
+            photographers={photographerList(shooters)}
+            base={base}
+            limit={4}
+            title="Book a photographer"
+            subtitle={`Credentialed by ${org.name} and shooting our events. You book them directly \u2014 we take no cut.`}
+          />
+        </div>
       </main>
       <OrgFooter org={org} contact={contact} socials={socials} />
     </div>

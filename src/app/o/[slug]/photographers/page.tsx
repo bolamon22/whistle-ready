@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@libsql/client'
-import { Camera, ArrowRight } from 'lucide-react'
+import { Camera } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
-import { photographerList, packagePrice, displayName } from '@/lib/photographers'
+import { photographerList } from '@/lib/photographers'
+import PhotographerTiles from '@/components/PhotographerTiles'
 import type { Metadata } from 'next'
 import { orgAbs, clip } from '@/lib/seo'
 
@@ -62,41 +63,8 @@ export default async function Page({ params }: { params: { slug: string } }) {
             </Link>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 gap-4 mt-8">
-            {list.map(p => {
-              const priced = p.packages.filter(x => x.price > 0)
-              const from = priced.length ? Math.min(...priced.map(x => x.price)) : 0
-              return (
-                <Link key={p.slug} href={`${base}/photographers/${p.slug}`}
-                  className="group bg-white border border-slate-200 rounded-2xl p-5 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-600/5 transition-all">
-                  <div className="flex items-start gap-4">
-                    {p.avatarUrl
-                      ? <img src={p.avatarUrl} alt="" className="w-14 h-14 rounded-xl object-cover bg-slate-100 shrink-0" />
-                      : <div className="w-14 h-14 rounded-xl bg-slate-900 text-teal-300 flex items-center justify-center font-extrabold shrink-0">{displayName(p).slice(0, 2).toUpperCase()}</div>}
-                    <div className="min-w-0 flex-1">
-                      <h2 className="font-bold text-slate-900 truncate">{displayName(p)}</h2>
-                      {p.location && <p className="text-[13px] text-slate-500 mt-0.5 truncate">{p.location}</p>}
-                      {p.bio && <p className="text-[13.5px] text-slate-500 mt-2 line-clamp-2 leading-relaxed">{p.bio}</p>}
-                    </div>
-                  </div>
-                  {p.samples.length > 0 && (
-                    <div className="grid grid-cols-4 gap-1.5 mt-4">
-                      {p.samples.slice(0, 4).map((u, i) => (
-                        <div key={i} className="aspect-square rounded-lg bg-slate-200 bg-cover bg-center" style={{ backgroundImage: `url(${u})` }} />
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between mt-4 pt-3.5 border-t border-slate-100">
-                    <span className="text-[13.5px] text-slate-500">
-                      {from > 0 ? <>Packages from <strong className="text-slate-900">{packagePrice({ ...p.packages[0], price: from })}</strong></> : `${p.packages.length} packages`}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-[13.5px] font-bold text-teal-700 group-hover:gap-2.5 transition-all">
-                      Book <ArrowRight size={14} />
-                    </span>
-                  </div>
-                </Link>
-              )
-            })}
+          <div className="mt-8">
+            <PhotographerTiles photographers={list} base={base} />
           </div>
         )}
       </main>
