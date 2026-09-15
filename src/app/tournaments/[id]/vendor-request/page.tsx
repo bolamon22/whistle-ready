@@ -3,6 +3,7 @@ import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import VendorForm from '@/app/o/[slug]/register/vendor/VendorForm'
 import { vendorConfig } from '@/lib/vendorForm'
+import { upcomingOrgEvents, eventDates } from '@/lib/vendorApproval'
 
 // Cache policy for published pages.
 //
@@ -36,26 +37,18 @@ export default async function TournamentVendorRequest({ params }: { params: { id
   const cfg = vendorConfig(forms.vendor)
   const disclaimerHtml = mdToHtml(cfg.disclaimer)
   const confirmationHtml = mdToHtml(cfg.confirmationMessage)
+  const events = await upcomingOrgEvents(orgId)
+
   return (
     <VendorForm orgId={orgId} types={cfg.types} approvalNotice={cfg.approvalNotice}
       disclaimerHtml={disclaimerHtml} confirmationTitle={cfg.confirmationTitle} confirmationHtml={confirmationHtml}
       orgName={org.name || ''} orgLogo={org.logoUrl || undefined}
-      tournamentId={t.id} tournamentName={t.name} eventDates={fmtDates(t.startDate, t.endDate)}
+      tournamentId={t.id} tournamentName={t.name} eventDates={eventDates(t.startDate, t.endDate)}
       showHero={false}
         heroImage={cfg.heroImage} headline={cfg.headline} subhead={cfg.subhead}
         sponsorShow={cfg.sponsorShow} sponsorBlurb={cfg.sponsorBlurb} sponsorTiers={cfg.sponsorTiers}
-        sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''}
+        sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''} events={events}
     />
   )
 }
 
-/** "Oct 24–25, 2026" from the tournament's stored YYYY-MM-DD strings. */
-function fmtDates(start?: string, end?: string): string {
-  const d = (v?: string) => { if (!v) return null; const [y, m, day] = String(v).split('-').map(Number); const x = new Date(y, (m || 1) - 1, day || 1); return isNaN(x.getTime()) ? null : x }
-  const a = d(start), b = d(end)
-  if (!a) return ''
-  const M = (x: Date) => x.toLocaleDateString('en-US', { month: 'short' })
-  if (!b || a.getTime() === b.getTime()) return `${M(a)} ${a.getDate()}, ${a.getFullYear()}`
-  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) return `${M(a)} ${a.getDate()}\u2013${b.getDate()}, ${a.getFullYear()}`
-  return `${M(a)} ${a.getDate()} \u2013 ${M(b)} ${b.getDate()}, ${b.getFullYear()}`
-}

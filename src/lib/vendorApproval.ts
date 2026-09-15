@@ -78,3 +78,37 @@ export function filledInstructions(cfg: VendorConfig): { key: string; label: str
     .map(([k, label]) => ({ key: String(k), label, body: String(cfg.instructions[k] || '').trim() }))
     .filter(x => x.body)
 }
+
+
+export type OrgEvent = { id: string; name: string; dates: string }
+
+const fmtDay = (v: string) => { const [y, m, d] = String(v).split('-').map(Number); const x = new Date(y, (m || 1) - 1, d || 1); return isNaN(x.getTime()) ? null : x }
+
+/** "Oct 24–25, 2026" from the stored YYYY-MM-DD strings. */
+export function eventDates(start?: string, end?: string): string {
+  const a = fmtDay(String(start || '')), b = fmtDay(String(end || ''))
+  if (!a) return ''
+  const M = (x: Date) => x.toLocaleDateString('en-US', { month: 'short' })
+  if (!b || a.getTime() === b.getTime()) return `${M(a)} ${a.getDate()}, ${a.getFullYear()}`
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) return `${M(a)} ${a.getDate()}\u2013${b.getDate()}, ${a.getFullYear()}`
+  return `${M(a)} ${a.getDate()} \u2013 ${M(b)} ${b.getDate()}, ${b.getFullYear()}`
+}
+
+/** The org's events a vendor could still apply for, soonest first.
+ *
+ *  orgId lives on Tournament as a RAW SQL column -- it is not in prisma/schema, so
+ *  this has to be a raw query (see src/lib/org.ts for the full story). Never throws:
+ *  a failure just means the form offers no cross-promotion. */
+export async function upcomingOrgEvents(orgId: string): Promise<OrgEvent[]> {
+  if (!orgId) return []
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT id, name, startDate, endDate FROM "Tournament"
+       WHERE orgId = ? AND (COALESCE(NULLIF(endDate,''), startDate) >= ? OR COALESCE(startDate,'') = '')
+       ORDER BY startDate ASC`, orgId, today)
+    return (rows || []).map(r => ({ id: String(r.id), name: String(r.name || 'Tournament'), dates: eventDates(r.startDate, r.endDate) }))
+  } catch {
+    return []
+  }
+}

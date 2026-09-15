@@ -23,7 +23,39 @@ export async function POST(req: NextRequest) {
     if (!orgId) return NextResponse.json({ error: 'Missing organization' }, { status: 400 })
     const org = await prisma.$queryRawUnsafe<any[]>('SELECT id FROM "Organization" WHERE id = ?', orgId)
     if (!org || org.length === 0) return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
-    const saved = await insertSubmission({ orgId, formType, data })
+    // A vendor can take more than one weekend. A booth is sold, reviewed, approved and
+    // paid for PER EVENT -- we might have room at Monster Mash and not Fall Classic, the
+    // fee is per booth, and the packet (venue, load-in) differs -- so each pick becomes
+    // its own application. They share a groupId so they can be recognised as one
+    // submission later. Everything downstream (staff lists, approval, payment, packets)
+    // then works unchanged.
+    const eventIds: string[] = formType === 'vendor' && Array.isArray(data.tournamentIds)
+      ? ([...new Set(data.tournamentIds.map((x: any) => String(x || '')).filter(Boolean))] as string[])
+      : []
+    const siblings: { id: string; tournamentId: string; name: string }[] = []
+    let saved: Awaited<ReturnType<typeof insertSubmission>>
+    if (eventIds.length > 1) {
+      const groupId = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      let nameOf = new Map<string, string>()
+      try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+          `SELECT id, name FROM "Tournament" WHERE id IN (${eventIds.map(() => '?').join(',')})`, ...eventIds)
+        nameOf = new Map(rows.map((r: any) => [String(r.id), String(r.name || '')]))
+      } catch { /* the rows still save; the email just won't name them */ }
+      const one = (tid: string) => insertSubmission({
+        orgId, formType,
+        data: { ...data, tournamentId: tid, tournamentName: nameOf.get(tid) || '', groupId, groupSize: eventIds.length },
+      })
+      // First one separately so `saved` is definitely assigned in both branches.
+      saved = await one(eventIds[0])
+      siblings.push({ id: saved.id, tournamentId: eventIds[0], name: nameOf.get(eventIds[0]) || '' })
+      for (const tid of eventIds.slice(1)) {
+        const row = await one(tid)
+        siblings.push({ id: row.id, tournamentId: tid, name: nameOf.get(tid) || '' })
+      }
+    } else {
+      saved = await insertSubmission({ orgId, formType, data })
+    }
     // A family added their club's logo because the registration had none: keep it on the
     // registration too, so every card for that club (and the staff pages) get it. First one
     // in wins; staff can change it from the team registration afterwards.
@@ -62,12 +94,17 @@ export async function POST(req: NextRequest) {
         } catch { /* defaults are fine for the email */ }
 
         const company = String(data.companyName || 'your company')
-        const evName = String(data.tournamentName || '')
+        // Name every weekend they took, not just the first row's.
+        const evNames = siblings.length ? siblings.map(x => x.name).filter(Boolean) : [String(data.tournamentName || '')].filter(Boolean)
+        const evName = evNames.join(', ')
+        const evCount = Math.max(evNames.length, 1)
         const typeName = String(data.vendorTypeName || data.level || '')
         const fee = Number(data.boothFee) || 0
-        const feeText = fee > 0 ? priceLabel(fee) : 'Confirmed on approval'
+        const feeText = fee > 0
+          ? (evCount > 1 ? `${priceLabel(fee)} per event \u00b7 ${priceLabel(fee * evCount)} total` : priceLabel(fee))
+          : 'Confirmed on approval'
         const rows: [string, string][] = [
-          ['Event', evName], ['Booth type', typeName], ['Booth fee', feeText],
+          [evCount > 1 ? 'Events' : 'Event', evName], ['Booth type', typeName], ['Booth fee', feeText],
           [data.selling === false ? 'Showcasing' : 'Products', String(data.products || '').slice(0, 180)],
         ]
 
@@ -79,6 +116,7 @@ export async function POST(req: NextRequest) {
             detailRows(rows),
             panel('What happens next', [
               '<strong style="color:#0f172a">We read every application.</strong> We look at what you sell, how it fits a youth sports event, and whether it collides with something already under contract.',
+              evCount > 1 ? '<br><br><strong style=\"color:#0f172a\">Each weekend is reviewed on its own.</strong> You may hear yes on one and no on another, and you only pay for the ones you get.' : '',
               '<br><br>If you&rsquo;re approved you&rsquo;ll get a link to your own booth page — your setup location, load-in and load-out times, and the place to pay. If you aren&rsquo;t, we&rsquo;ll tell you that too.',
               '<br><br><strong style="color:#0f172a">Nothing has been charged.</strong> Applying doesn&rsquo;t reserve a spot and doesn&rsquo;t cost anything.',
             ].join('')),
@@ -120,7 +158,7 @@ export async function POST(req: NextRequest) {
           })
         }
       } catch { /* mail must never fail the submission */ }
-      return NextResponse.json({ ok: true, id: saved.id })
+      return NextResponse.json({ ok: true, id: saved.id, applications: siblings.length || 1 })
     }
 
     // Confirmation email (non-blocking) — uses the org's configured confirmation text.

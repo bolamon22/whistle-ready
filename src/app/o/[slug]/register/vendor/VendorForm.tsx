@@ -35,12 +35,22 @@ type Props = {
    *  the event photo, logo, name and dates. Two stacked heroes and two <h1>s is the
    *  result of rendering ours there anyway. */
   showHero?: boolean
+  /** Every event this org is still taking vendors for, soonest first. A booth is sold
+   *  per event, so picking three means three applications at three times the fee —
+   *  reviewed, approved and paid separately, because we might have room at one and
+   *  not another. */
+  events?: { id: string; name: string; dates: string }[]
 }
 
 export default function VendorForm(p: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const events = p.events || []
+  // On a tournament page its own event starts ticked; the org page starts empty.
+  const [picked, setPicked] = useState<string[]>(p.tournamentId ? [p.tournamentId] : [])
   const [d, setD] = useState<any>({ companyName: '', companyContact: '', phone: '', email: '', website: '', vendorType: '', products: '', agree: false })
+  const toggleEvent = (id: string) => setPicked(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  const chosenEvents = events.filter(e => picked.includes(e.id))
   const set = (k: string, v: any) => setD((prev: any) => ({ ...prev, [k]: v }))
 
   const open = p.types.filter(t => !t.closed)
@@ -48,10 +58,14 @@ export default function VendorForm(p: Props) {
   // A showcase vendor doesn't sell, so "list the products you plan to sell" is the wrong
   // question — and as a required field it blocked them from submitting at all.
   const selling = chosen ? chosen.selling : true
+  const perEvent = chosen?.price || 0
+  // A booth is priced per event, so two events is two booths.
+  const total = perEvent * Math.max(chosenEvents.length, 1)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!chosen) { toast.error('Please choose a booth type'); return }
+    if (events.length > 0 && chosenEvents.length === 0) { toast.error('Pick at least one event'); return }
     if (chosen.closed) { toast.error('That category is not accepting applications for this event'); return }
     if (!d.agree) { toast.error('Please agree to the vendor terms'); return }
     setSubmitting(true)
@@ -64,8 +78,11 @@ export default function VendorForm(p: Props) {
         vendorTypeName: chosen.name,
         boothFee: chosen.price || 0,
         selling: chosen.selling,
-        tournamentId: p.tournamentId || '',
-        tournamentName: p.tournamentName || '',
+        // One application per event is created server-side from these; the first is
+        // also the row's own tournamentId so existing staff lists keep working.
+        tournamentIds: chosenEvents.length ? chosenEvents.map(e => e.id) : (p.tournamentId ? [p.tournamentId] : []),
+        tournamentId: chosenEvents[0]?.id || p.tournamentId || '',
+        tournamentName: chosenEvents[0]?.name || p.tournamentName || '',
       }
       const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId: p.orgId, formType: 'vendor', data: payload }) })
       if (res.ok) { setDone(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }
@@ -84,8 +101,9 @@ export default function VendorForm(p: Props) {
           <div className="space-y-1.5">
             {([
               ['Company', d.companyName], ['Contact', d.companyContact], ['Email', d.email], ['Phone', d.phone],
+              ['Events', chosenEvents.map(e => e.name).join(', ') || p.tournamentName || ''],
               ['Booth type', chosen?.name || ''],
-              ['Booth fee', chosen ? (priceLabel(chosen.price) || 'Confirmed on approval') : ''],
+              ['Booth fee', chosen ? (perEvent > 0 ? (chosenEvents.length > 1 ? `${priceLabel(perEvent)} × ${chosenEvents.length} = ${priceLabel(total)}` : priceLabel(perEvent)) : 'Confirmed on approval') : ''],
               [selling ? 'Products' : 'Showcasing', d.products],
             ] as [string, string][]).filter(([, v]) => v && String(v).trim()).map(([k, v]) => (
               <div key={k} className="flex justify-between gap-4 text-sm border-b border-slate-50 py-1"><span className="text-slate-400">{k}</span><span className="text-slate-700 text-right">{v}</span></div>
@@ -139,6 +157,29 @@ export default function VendorForm(p: Props) {
           </div>
         )}
 
+        {events.length > 1 && (
+          <section>
+            <div className={eyebrow}>Events</div>
+            <h2 className={`${h2} mt-1.5`}>Which weekends?</h2>
+            <p className="text-slate-500 mt-2 mb-5">Pick as many as you want. Each one is its own booth, reviewed and paid for separately &mdash; so you can be approved for one weekend and still hear about the others.</p>
+            <div className="grid sm:grid-cols-2 gap-2.5">
+              {events.map(ev => {
+                const on = picked.includes(ev.id)
+                return (
+                  <label key={ev.id}
+                    className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-all ${on ? 'border-teal-500 bg-white ring-1 ring-teal-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                    <input type="checkbox" className="mt-0.5 accent-teal-500 w-4 h-4 shrink-0" checked={on} onChange={() => toggleEvent(ev.id)} />
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-slate-800 text-[15px]">{ev.name}</span>
+                      {ev.dates && <span className="block text-sm text-slate-500 mt-0.5">{ev.dates}</span>}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Booth types — the price is the headline of each card. */}
         <section>
           <div className={eyebrow}>Booths</div>
@@ -163,6 +204,12 @@ export default function VendorForm(p: Props) {
             })}
           </div>
           {open.length === 0 && <p className="text-sm text-slate-500 mt-4">We aren&rsquo;t accepting vendor applications for this event right now.</p>}
+          {chosen && perEvent > 0 && chosenEvents.length > 1 && (
+            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-3 bg-white border border-slate-200 rounded-xl px-5 py-4">
+              <span className="text-sm text-slate-600">{priceLabel(perEvent)} × {chosenEvents.length} events</span>
+              <span className="text-2xl font-extrabold text-slate-900 tabular-nums">{priceLabel(total)}<span className="text-sm font-semibold text-slate-400 ml-1.5">total</span></span>
+            </div>
+          )}
         </section>
 
         {/* How it works */}
@@ -240,7 +287,10 @@ export default function VendorForm(p: Props) {
 
             <button type="submit" disabled={submitting || !d.agree || !chosen || open.length === 0}
               className="w-full mt-6 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors">
-              {submitting ? 'Submitting…' : chosen && chosen.price > 0 ? `Apply for ${chosen.name} · ${priceLabel(chosen.price)}` : 'Submit application'}
+              {submitting ? 'Submitting…'
+                : chosen && perEvent > 0
+                  ? `Apply for ${chosenEvents.length > 1 ? `${chosenEvents.length} events` : chosen.name} · ${priceLabel(total)}`
+                  : 'Submit application'}
             </button>
             <p className="text-center text-xs text-slate-400 mt-3">No payment is taken now. Approved vendors get a link to pay.</p>
           </form>

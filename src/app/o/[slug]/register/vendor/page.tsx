@@ -3,6 +3,7 @@ import { Trophy } from 'lucide-react'
 import { mdToHtml } from '../../_md'
 import VendorForm from './VendorForm'
 import { vendorConfig } from '@/lib/vendorForm'
+import { upcomingOrgEvents } from '@/lib/vendorApproval'
 
 // Cache policy for published pages.
 //
@@ -33,13 +34,15 @@ export default async function VendorPage({ params }: { params: { slug: string } 
   const cfg = vendorConfig(forms.vendor)
   const disclaimerHtml = mdToHtml(cfg.disclaimer)
   const confirmationHtml = mdToHtml(cfg.confirmationMessage)
+  const events = await upcomingOrgEvents(org.id)
+
   return (
     <VendorForm orgId={org.id} types={cfg.types} approvalNotice={cfg.approvalNotice}
       disclaimerHtml={disclaimerHtml} confirmationTitle={cfg.confirmationTitle} confirmationHtml={confirmationHtml}
       orgName={org.name} orgLogo={org.logoUrl || undefined}
         heroImage={cfg.heroImage} headline={cfg.headline} subhead={cfg.subhead}
         sponsorShow={cfg.sponsorShow} sponsorBlurb={cfg.sponsorBlurb} sponsorTiers={cfg.sponsorTiers}
-        sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''}
+        sponsorEmail={cfg.sponsorEmail || org.contactEmail || ''} events={events}
     />
   )
 }
