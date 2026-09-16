@@ -206,7 +206,11 @@ export function commitmentLines(c: MediaCommitments): string[] {
       : `Upload at least ${c.minPhotos} photos or clips you\u2019re happy for us to use`)
   }
   if (c.socialHandle && c.tagRequired) out.push(`Tag @${c.socialHandle} in anything you post from the event`)
-  if (c.socialHandle && c.collabRequired) out.push(`Accept a Collab invite on posts we share \u2014 it runs on both our grids, under your name`)
+  // Leads with THEM inviting US, which is the direction that actually happens:
+  // a working photographer posts far more often than the org does, so waiting
+  // for our post to collab on means most of the reach never arrives (Bo,
+  // Sep 16 2026). Ours is still offered, second.
+  if (c.socialHandle && c.collabRequired) out.push(`Add @${c.socialHandle} as a collaborator on your posts from the event \u2014 and accept ours when we share yours`)
   return [...out, ...c.extra]
 }
 

@@ -217,8 +217,10 @@ export default function ShootPage(p: Props) {
             {p.cfg.commitments.socialHandle && (
               <p className="text-[13.5px] text-slate-500 mt-5 pt-4 border-t border-slate-100 leading-relaxed">
                 <Instagram size={13} className="inline -mt-0.5 mr-1.5 text-slate-400" />
-                A Collab post runs on both grids at once and shares its likes and comments, so our audience
-                lands on your name rather than a reposted screenshot. Our account is{' '}
+                A Collab post runs on both grids at once and shares its likes and comments. Inviting us on
+                your own post is the one that counts — you shoot and post far more often than we do, so
+                that is where your name reaches a new audience. We will invite you on anything of yours we
+                share. Our account is{' '}
                 <a href={`https://instagram.com/${p.cfg.commitments.socialHandle}`} target="_blank" rel="noreferrer"
                   className="font-semibold text-teal-700 hover:text-teal-900">@{p.cfg.commitments.socialHandle}</a>.
               </p>
