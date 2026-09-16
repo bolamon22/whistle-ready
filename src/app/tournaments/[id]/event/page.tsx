@@ -82,7 +82,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   // Canonical lives on the org's custom domain when it has one (SEO history
   // consolidates there); whistleready.app otherwise.
   const url = tournamentAbs(orgSlug, `/tournaments/${params.id}/event`)
-  const images = t.logoUrl ? [t.logoUrl] : []
+  // The event's own link-preview card (name, dates, town over the hero photo)
+  // rather than the tournament logo — see src/lib/ogCard.tsx.
+  const images = [{ url: abs(`/api/og/event/${params.id}`), width: 1200, height: 630, alt: title }]
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images, type: 'website' }, twitter: { title, description, images } }
 }
 

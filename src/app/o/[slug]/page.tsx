@@ -120,7 +120,11 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const title = seoTitle || `${org.name} — Tournaments, schedules & team registration`
   const description = clip(seoDescription || stripMd(about) || `${org.name}: upcoming tournaments, live schedules, standings and online team registration — all in one place.`)
   const url = orgAbs(params.slug)
-  const images = org.logoUrl ? [org.logoUrl] : []
+  // A purpose-built 1200x630 card, NOT the logo. og:image used to be the logo
+  // file, which every messaging app padded and tinted into a washed-out block —
+  // see src/lib/ogCard.tsx. Absolute on whistleready.app so it resolves the same
+  // from the org's own domain.
+  const images = [{ url: abs(`/api/og/org/${params.slug}`), width: 1200, height: 630, alt: title }]
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url, images }, twitter: { title, description, images }, appleWebApp: { title: org.name || title } }
 }
 
