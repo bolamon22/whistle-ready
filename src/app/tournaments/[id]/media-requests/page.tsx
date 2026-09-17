@@ -125,7 +125,7 @@ export default function MediaRequestEntries() {
   }
 
   const exportCsv = () => {
-    const cols = ['name', 'company', 'email', 'phone', 'portfolio', 'shoots', 'gear', 'insurance', 'levelNames', 'notes']
+    const cols = ['name', 'company', 'email', 'phone', 'portfolio', 'platforms', 'shoots', 'gear', 'insurance', 'levelNames', 'notes']
     const head = ['Submitted', ...cols, 'Status'].join(',')
     const q = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = rows.map(s => [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.status || 'needs review'].map(q).join(','))
@@ -139,6 +139,7 @@ export default function MediaRequestEntries() {
   // that no longer uses that word -- so only those get an override.
   const FIELD_LABELS: Record<string, string> = {
     shoots: 'Stills or video', gear: 'Camera and lenses', portfolio: 'Portfolio',
+    platforms: 'Posts on',
     company: 'Business', insurance: 'Liability insurance', notes: 'Anything else',
   }
   const Detail = ({ s }: { s: Sub }) => (

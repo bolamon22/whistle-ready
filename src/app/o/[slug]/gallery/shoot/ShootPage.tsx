@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Camera, Check, Info, Lock, Plus, ShieldCheck, Instagram, Handshake } from 'lucide-react'
 import type { MediaConfig } from '@/lib/mediaForm'
-import { commitmentLines, levelAsks } from '@/lib/mediaForm'
+import { commitmentLines, levelAsks, MEDIA_PLATFORMS } from '@/lib/mediaForm'
 import CredentialPreview from './CredentialPreview'
 
 type OrgEvent = { id: string; name: string; dates: string }
@@ -37,10 +37,18 @@ export default function ShootPage(p: Props) {
   // Contributing is the point of the credential, so it starts ticked; the other
   // two are opt-in and one of them may be closed.
   const [levels, setLevels] = useState<string[]>(['contribute'])
+  // Instagram pre-ticked because it is where most of them already are, and
+  // because the tier-2 asks are written for it. Unticking it is the signal that
+  // the Collab ask can't land on this person.
+  const [platforms, setPlatforms] = useState<string[]>(['instagram'])
   const [agree, setAgree] = useState(false)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const [err, setErr] = useState('')
+
+  // We only need their handle if BOTH sides are on Instagram: us to tag, them to
+  // be tagged.
+  const igRequired = !!p.cfg.commitments.socialHandle && platforms.includes('instagram')
 
   const toggle = (arr: string[], setArr: (v: string[]) => void, id: string) =>
     setArr(arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id])
@@ -59,6 +67,7 @@ export default function ShootPage(p: Props) {
           orgId: p.orgId, formType: 'media',
           data: {
             ...f, tournamentIds: eventIds, levels,
+            platforms: MEDIA_PLATFORMS.filter(x => platforms.includes(x.id)).map(x => x.name).join(', '),
             agreedCommitments: commits.join(' | '),
             levelNames: p.cfg.levels.filter(l => levels.includes(l.id)).map(l => l.name).join(', '),
           },
@@ -281,13 +290,33 @@ export default function ShootPage(p: Props) {
             </div>
             <div>
               {/* Asked for on its own, not folded into the portfolio link: we need the
-                  handle itself to tag them and send Collab invites. */}
-              <label className={label}>Instagram handle {p.cfg.commitments.socialHandle ? '*' : <span className="font-normal text-slate-400">optional</span>}</label>
+                  handle itself to tag them and send Collab invites. Required only
+                  when they say they are ON Instagram -- it used to be required
+                  whenever WE had a handle, which made a TikTok-only creator invent
+                  one to get past the form (Bo, Sep 17 2026). */}
+              <label className={label}>Instagram handle {igRequired ? '*' : <span className="font-normal text-slate-400">optional</span>}</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">@</span>
-                <input className={`${input} pl-7`} required={!!p.cfg.commitments.socialHandle} placeholder="yourhandle"
+                <input className={`${input} pl-7`} required={igRequired} placeholder="yourhandle"
                   value={f.instagram} onChange={e => set('instagram', e.target.value.replace(/^@/, ''))} />
               </div>
+            </div>
+          </div>
+
+          <div>
+            <label className={label}>Where do you post? <span className="font-normal text-slate-400">tick all that apply</span></label>
+            <div className="flex flex-wrap gap-2">
+              {MEDIA_PLATFORMS.map(pl => {
+                const on = platforms.includes(pl.id)
+                return (
+                  <label key={pl.id}
+                    className={`flex items-center gap-2 border rounded-full pl-3 pr-3.5 py-2 cursor-pointer transition-colors text-[13.5px] ${on ? 'border-teal-500 bg-teal-50/60 text-slate-900 font-semibold' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                    <input type="checkbox" className="accent-teal-600 w-4 h-4 shrink-0" checked={on}
+                      onChange={() => toggle(platforms, setPlatforms, pl.id)} />
+                    {pl.name}
+                  </label>
+                )
+              })}
             </div>
           </div>
 

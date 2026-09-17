@@ -159,6 +159,28 @@ export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
     gate: 'Two things have to happen first. Our photo release has to cover commercial use — every player here is registered under a waiver for event photography, and selling a family\u2019s photo is a different permission we do not have yet. And this rung is for shooters who have contributed and taken bookings through our site across several events, not one.' },
 ]
 
+/**
+ * Where an applicant actually posts.
+ *
+ * Not idle curiosity: every commitment we ask for at tier 2 is shaped like
+ * Instagram -- tag us, send a Collab invite -- and Collab is an Instagram
+ * feature that exists nowhere else. Without this question the form demands an
+ * Instagram handle from a TikTok-first creator who hasn't got one, and we never
+ * learn that the person about to shoot our weekend reaches an audience we don't
+ * (Bo, Sep 17 2026).
+ *
+ * Facebook earns its slot here in a way it wouldn't for most brands: lacrosse
+ * parents, who are the people booking sessions, are still on it.
+ */
+export const MEDIA_PLATFORMS = [
+  { id: 'instagram', name: 'Instagram' },
+  { id: 'facebook', name: 'Facebook' },
+  { id: 'tiktok', name: 'TikTok' },
+  { id: 'youtube', name: 'YouTube' },
+  { id: 'x', name: 'X' },
+  { id: 'other', name: 'Other' },
+] as const
+
 export const DEFAULT_MEDIA_BENEFITS = [
   'Sideline access for the whole weekend',
   'Your name and link under every photo and clip you upload',
