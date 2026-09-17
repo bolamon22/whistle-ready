@@ -106,7 +106,10 @@ export default function ShootPage(p: Props) {
     eventNames: chosen.map(e => e.name).join(', '),
     eventDates: chosen.length === 1 ? chosen[0].dates : chosen.length > 1 ? `${chosen.length} events` : '',
     location: '',
-    clearances: p.cfg.levels.filter(l => levels.includes(l.id)).map(l => l.name),
+    // The credential reads as status, so it takes `credential`, not the
+    // application's call to action: "SEG Certified Photographer", never
+    // "Become SEG Certified" (Bo, Sep 17 2026).
+    clearances: p.cfg.levels.filter(l => levels.includes(l.id)).map(l => l.credential || l.name),
     orgName: p.orgName,
     orgLogoUrl: p.orgLogo,
     orgSite: '',
@@ -174,9 +177,20 @@ export default function ShootPage(p: Props) {
           <p className="text-slate-500 text-[14.5px] mt-1.5 max-w-[60ch]">
             Every option starts with the same free credential. You are never required to sell anything.
           </p>
-          <div className="grid sm:grid-cols-3 gap-3.5 mt-6">
-            {p.cfg.levels.map(l => (
-              <div key={l.id} className={`rounded-2xl border p-5 ${l.closed ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}>
+          {/* These cards used to show a name and a note, which read as three
+              parallel choices. They are a ladder, so they carry the same status
+              pill and gate line the application does -- somebody deciding whether
+              to apply should see what each rung costs before they scroll to the
+              form, not after (Bo, Sep 17 2026). */}
+          <div className="grid sm:grid-cols-3 gap-3.5 mt-6 items-stretch">
+            {p.cfg.levels.map((l, i) => (
+              <div key={l.id} className={`flex flex-col rounded-2xl border p-5 ${l.closed ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <span className={`h-5 w-5 rounded-full grid place-items-center text-[11px] ${l.closed ? 'bg-slate-200 text-slate-500' : 'bg-teal-100 text-teal-700'}`}>{i + 1}</span>
+                  {l.status && (
+                    <span className={`${l.closed ? 'text-violet-600' : l.gate ? 'text-amber-600' : 'text-teal-600'}`}>{l.status}</span>
+                  )}
+                </div>
                 <div className="flex items-start gap-2">
                   {l.closed && <Lock size={13} className="text-slate-400 mt-1 shrink-0" />}
                   <h3 className="font-bold text-slate-900 text-[15.5px] leading-snug">{l.name}</h3>
@@ -184,7 +198,19 @@ export default function ShootPage(p: Props) {
                 <p className="text-[13.5px] text-slate-500 mt-2 leading-relaxed">
                   {l.id === 'sell' && !l.closed ? l.note.replace(/most of it/, `${p.keepPct}%`) : l.note}
                 </p>
-                {l.closed && <span className="inline-block mt-3 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">Not open yet</span>}
+                {l.badge && !l.closed && (
+                  <span className="inline-flex items-center gap-1.5 self-start mt-3 mb-3 bg-slate-900 text-white rounded-full px-2.5 py-1 text-[11.5px] font-semibold">
+                    <ShieldCheck size={12} className="shrink-0 text-teal-300" />
+                    {l.badge}
+                  </span>
+                )}
+                {/* First sentence only. The full gate is on the application; here
+                    it just needs to answer "can I have this now?". */}
+                {l.gate && (
+                  <p className="mt-auto pt-3 text-[12px] leading-relaxed text-slate-500 border-t border-slate-100">
+                    {l.gate.split('. ')[0]}.
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -309,12 +335,12 @@ export default function ShootPage(p: Props) {
                         {l.id === 'sell' && !l.closed ? l.note.replace(/most of it/, `${p.keepPct}%`) : l.note}
                       </span>
                       {/* The badge is the reward made visible. A line of text
-                          saying you become certified is abstract; the thing you
-                          would actually wear is not. */}
+                          describing the status is abstract; the thing you would
+                          actually put in your bio is not. */}
                       {l.badge && !l.closed && (
                         <span className="inline-flex items-center gap-1.5 mt-2.5 bg-slate-900 text-white rounded-full px-3 py-1.5 text-[12px] font-semibold">
                           <ShieldCheck size={13} className="shrink-0 text-teal-300" />
-                          {l.badge.replace('{org}', p.orgName || 'Certified').trim()}
+                          {l.badge}
                         </span>
                       )}
                       {/* The misreading worth heading off sits with the offer, not

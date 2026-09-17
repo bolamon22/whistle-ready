@@ -159,7 +159,7 @@ export default async function MediaCredentialPage({ params }: { params: { token:
         )}
 
         <div className="mt-8 text-[12.5px] text-slate-500 leading-relaxed bg-white border border-slate-200 rounded-2xl p-5">
-          <p><strong className="text-slate-800">Your work stays yours.</strong> {a.cfg.terms}</p>
+          <p><strong className="text-slate-800">Rights and credit.</strong> {a.cfg.terms}</p>
           <p className="mt-3"><strong className="text-slate-800">Photos of minors.</strong> {a.cfg.minorsNotice}</p>
         </div>
       </div>

@@ -24,7 +24,7 @@ export default async function TournamentShoot({ params }: { params: { id: string
   let forms: any = {}
   try { if (orgId) { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${orgId}`] }); if (r.rows.length) forms = JSON.parse(((r.rows[0] as any).value as string) || '{}') } } catch {}
   try { if (orgId) { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${orgId}`] }); if (s.rows.length) { const c = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (c.logo) org.logoUrl = c.logo } } } catch {}
-  const cfg = mediaConfig(forms.media)
+  const cfg = mediaConfig(forms.media, String(org.name || ''))
   const events = await upcomingOrgEvents(orgId)
 
   let teams = 0, clubs = 0

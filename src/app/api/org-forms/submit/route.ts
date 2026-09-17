@@ -244,10 +244,10 @@ export async function POST(req: NextRequest) {
         const base = orgBaseUrl(org.slug)
         const logo = absUrl(base, await orgLogoUrl(orgId, org.logoUrl))
 
-        let cfg = mediaConfig({})
+        let cfg = mediaConfig({}, orgName)
         try {
           const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${orgId}` } })
-          cfg = mediaConfig(JSON.parse(row?.value || '{}').media)
+          cfg = mediaConfig(JSON.parse(row?.value || '{}').media, orgName)
         } catch { /* defaults are fine for the email */ }
 
         const who = String(data.company || data.name || 'there')
@@ -269,7 +269,7 @@ export async function POST(req: NextRequest) {
             panel('What happens next', [
               '<strong style="color:#0f172a">We look at the work, not the gear.</strong> Someone opens your portfolio link and reads it properly, so give us a day or two.',
               '<br><br>If you&rsquo;re approved you&rsquo;ll get your credential, where to check in, the field rules, and the link to upload what you shoot.',
-              '<br><br><strong style="color:#0f172a">You keep the copyright in everything you shoot.</strong> Nothing you send us gets resold, and you can pull a photo down whenever you like.',
+              '<br><br><strong style="color:#0f172a">You keep the copyright in everything you shoot.</strong> We post what you upload on our own channels and in our own promotion, always with your credit on it. Nothing gets resold, and you can ask us to take a photo down whenever you like.',
             ].join('')),
             (() => {
               const commits = commitmentLines(cfg.commitments)

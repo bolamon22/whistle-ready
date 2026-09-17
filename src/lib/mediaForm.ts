@@ -29,9 +29,15 @@ export type MediaLevel = {
   /** A misreading worth heading off before it happens. */
   clarify?: string
   /** The status this rung confers, shown as a badge. `{org}` is replaced with
-   *  the organization's name at render, so the default is not hardcoded to one
-   *  tournament series. Blank means the rung grants no badge. */
+   *  the organization's SHORT name at render (see `orgShort`), so the default is
+   *  not hardcoded to one tournament series. Blank means no badge. */
   badge?: string
+  /** How this rung reads ON THE CREDENTIAL, where it is a status somebody
+   *  already holds rather than something to apply for. `name` is written for the
+   *  application -- "Become SEG Certified" is the right label beside a checkbox
+   *  and the wrong thing to print on a badge somebody is wearing (Bo, Sep 17
+   *  2026). Falls back to `name` when blank. */
+  credential?: string
 }
 
 /** Everything an approved photographer needs to turn up and shoot correctly.
@@ -102,6 +108,9 @@ export type MediaConfig = {
   /** The minors paragraph. Separate from `terms` because it is the one an org
    *  is most likely to have its own counsel rewrite. */
   minorsNotice: string
+  /** What `{org}` resolves to on badges and credentials. Blank derives it from
+   *  the org's name -- see `orgShort`. */
+  orgShort: string
   confirmationTitle: string
   confirmationMessage: string
   commitments: MediaCommitments
@@ -116,20 +125,24 @@ export type MediaConfig = {
 export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
   { id: 'contribute', name: 'Contribute to the gallery', closed: false,
     status: 'Open to all',
-    note: 'Free. Sideline access all weekend, your name and link under everything you upload, and you keep the copyright.' },
+    credential: 'Gallery contributor',
+    note: 'Free. Sideline access all weekend, and you keep the copyright. Your name and link go under everything you upload, and on anything of yours we post ourselves.' },
 
   // "Through our site" is load-bearing. Without it this reads as though the
   // tournament is granting permission to be booked at all, which is not ours to
   // grant and is exactly what a working photographer would bristle at. What is
   // on offer is the promotion, and the clarify line says so outright.
-  // Named for the status, not the mechanism. "Take bookings through our site"
-  // described the plumbing; "certified" is the thing a photographer actually
-  // wants and can put in their own bio, which turns a requirement they have to
-  // clear into something they want to earn (Bo, Sep 17 2026). What it gets them
-  // still sits in the note directly underneath, so the name costs no substance.
-  { id: 'book', name: 'Become a certified photographer', closed: false,
-    status: 'Apply after your first event',
+  // THE ORG NAME IS THE WHOLE POINT. "Certified photographer" on its own claims
+  // we vouch for somebody's ability behind a camera, which is a professional
+  // credential and not ours to issue; "{org} Certified" says we cleared them for
+  // OUR events, which is exactly what we did (Bo, Sep 17 2026). The `{org}`
+  // token resolves to the SHORT name, because "Sunshine Events Group Certified
+  // Photographer" is a mouthful nobody says and "SEG Certified Photographer" is
+  // what Bo calls it. The verb is on the application, the noun on the badge.
+  { id: 'book', name: 'Become {org} Certified', closed: false,
+    status: 'After your first event',
     badge: '{org} Certified Photographer',
+    credential: '{org} Certified Photographer',
     note: 'A profile page on our site with your packages, a listing on our photographers page, and booking requests from teams and families sent straight to you. You keep 100% — we take no cut.',
     clarify: 'This does not gate your business. Teams and families can hire you directly, any time, whether or not you have this. What you are applying for is the promotion: a profile on our site, and the booking form participants fill in coming to you.',
     gate: 'Apply after your first event. Shoot a weekend as a contributor, get your photos into the gallery, then apply. Someone booking through our form is trusting our name alongside yours, so we only put it behind a shooter we have watched work.' },
@@ -141,6 +154,7 @@ export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
   // set up a conversation a year from now that still ends in no.
   { id: 'sell', name: 'Sell your work in the gallery', closed: true,
     status: 'Not open yet',
+    credential: 'Gallery sales',
     note: 'We handle watermarking, hosting and payment; you set your prices and keep most of it.',
     gate: 'Two things have to happen first. Our photo release has to cover commercial use — every player here is registered under a waiver for event photography, and selling a family\u2019s photo is a different permission we do not have yet. And this rung is for shooters who have contributed and taken bookings through our site across several events, not one.' },
 ]
@@ -150,14 +164,20 @@ export const DEFAULT_MEDIA_BENEFITS = [
   'Your name and link under every photo and clip you upload',
   'A profile page on this site that parents and coaches can book from, if you take a booking spot',
   'Team and player requests sent straight to you',
-  'You keep the copyright in everything you shoot',
+  'You keep the copyright — when we post your work, your credit goes with it',
 ]
 
+// WHY THE LICENCE IS SPELT OUT RATHER THAN IMPLIED: "you keep the copyright" on
+// its own reads as "they get nothing", which is not the deal -- we post this work
+// on our own channels and in our own promotion, and a photographer who finds that
+// out afterwards is right to be annoyed (Bo, Sep 17 2026). Both halves belong in
+// the same sentence: they own it, we may use it, their credit rides along.
 export const DEFAULT_MEDIA_TERMS =
-  'You keep full copyright in everything you shoot. You grant us a non-exclusive licence to use the ' +
-  'photos and video you upload here to promote our events, with your credit attached — we do not resell your ' +
-  'work, and you can pull any photo down at any time. You agree to follow the field rules we send with ' +
-  'your credential, to wear it visibly, and to stay out of team areas and behind the restraining line.'
+  'You keep full copyright in everything you shoot. You grant us a non-exclusive, royalty-free license ' +
+  'to use the photos and video you upload here on our website, our social channels and in our own ' +
+  'promotion of our events, with your credit attached — we do not resell your work, and you can ask us ' +
+  'to take any photo down at any time. You agree to follow the field rules we send with your ' +
+  'credential, to wear it visibly, and to stay out of team areas and behind the restraining line.'
 
 export const DEFAULT_MEDIA_MINORS =
   'Every player at our events is registered under a waiver covering event photography. A parent may ask ' +
@@ -181,7 +201,41 @@ export const DEFAULT_MEDIA_HERO = '/api/img/0875f7bb-2de6-40ef-8a04-831025c9f6e8
 
 const str = (x: unknown): string => String(x ?? '').trim()
 
-export function mediaConfig(raw: any): MediaConfig {
+/**
+ * The org's name as it reads on something somebody wears.
+ *
+ * A credential is small and read at arm's length, so the full legal name loses:
+ * "Sunshine Events Group Certified Photographer" wraps to three lines and nobody
+ * says it out loud. Initials only kick in once the name is long enough to need
+ * them, so a genuinely short org keeps its real name rather than being reduced
+ * to two letters. An org can always override this outright.
+ */
+export function orgShort(name: string, override?: string): string {
+  const set = str(override)
+  if (set) return set
+  const n = str(name).replace(/[,.]?\s*\b(llc|inc|ltd|co)\.?$/i, '').trim()
+  if (n.length <= 14) return n
+  const initials = n
+    .split(/\s+/)
+    .filter(w => !/^(of|the|and|for|&|at|in)$/i.test(w))
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+  return initials.length >= 2 ? initials : n
+}
+
+/**
+ * `orgName` resolves the `{org}` token in level names, badges and credential
+ * labels. It is resolved HERE, in the one normalizer, rather than at each of the
+ * six places that render a level -- the public page, the application, the
+ * credential preview, the issued credential, the staff review list and the
+ * approval email. Miss one and a photographer gets a badge reading
+ * "{org} Certified Photographer", which is worse than no badge at all. With no
+ * org name the token is dropped cleanly, never left showing.
+ */
+export function mediaConfig(raw: any, orgName?: string): MediaConfig {
+  const short = orgShort(str(orgName), str(raw?.orgShort))
+  const tok = (t?: string) => (t || '').replace(/\{org\}/g, short).replace(/\s+/g, ' ').trim()
   const byId = new Map<string, any>(
     (Array.isArray(raw?.levels) ? raw.levels : []).map((l: any) => [str(l?.id), l])
   )
@@ -191,12 +245,14 @@ export function mediaConfig(raw: any): MediaConfig {
   const levels: MediaLevel[] = DEFAULT_MEDIA_LEVELS.map(d => {
     const o = byId.get(d.id)
     return o
-      ? { id: d.id, name: str(o.name) || d.name, note: str(o.note) || d.note, closed: o.closed === true,
-          // status/gate/clarify fall back to the default rung rather than to
-          // blank: a stored config written before the ladder existed would
-          // otherwise silently drop the thing that explains the gate.
-          status: str(o.status) || d.status, gate: str(o.gate) || d.gate, clarify: str(o.clarify) || d.clarify }
-      : { ...d }
+      ? { id: d.id, name: tok(str(o.name) || d.name), note: str(o.note) || d.note, closed: o.closed === true,
+          // status/gate/clarify/badge/credential fall back to the default rung
+          // rather than to blank: a stored config written before the ladder
+          // existed would otherwise silently drop the thing that explains the
+          // gate, and drop the badge off the credential entirely.
+          status: str(o.status) || d.status, gate: str(o.gate) || d.gate, clarify: str(o.clarify) || d.clarify,
+          badge: tok(str(o.badge) || d.badge), credential: tok(str(o.credential) || d.credential) }
+      : { ...d, name: tok(d.name), badge: tok(d.badge), credential: tok(d.credential) }
   })
   const benefits = Array.isArray(raw?.benefits) ? raw.benefits.map(str).filter(Boolean) : []
   const stats = Array.isArray(raw?.stats)
@@ -217,6 +273,7 @@ export function mediaConfig(raw: any): MediaConfig {
       'Every application is reviewed. We look at the work, not the gear — you will hear back either way.',
     terms: str(raw?.terms) || DEFAULT_MEDIA_TERMS,
     minorsNotice: str(raw?.minorsNotice) || DEFAULT_MEDIA_MINORS,
+    orgShort: str(raw?.orgShort),
     confirmationTitle: str(raw?.confirmationTitle) || 'Application received',
     confirmationMessage: str(raw?.confirmationMessage) ||
       'Thanks — we have your application and we will come back to you within a few days.',

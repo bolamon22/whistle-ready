@@ -36,7 +36,7 @@ export default async function Page({ params, searchParams }: { params: { slug: s
   let forms: any = {}
   try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] }); if (r.rows.length) forms = JSON.parse(((r.rows[0] as any).value as string) || '{}') } catch {}
   try { const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${org.id}`] }); if (s.rows.length) { const c = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (c.logo) org.logoUrl = c.logo } } catch {}
-  const cfg = mediaConfig(forms.media)
+  const cfg = mediaConfig(forms.media, String(org.name || ''))
   const events = await upcomingOrgEvents(org.id)
 
   // Reach, counted rather than claimed: teams is the sum of numTeams on

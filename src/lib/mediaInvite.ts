@@ -33,7 +33,7 @@ export const MEDIA_INVITE_TEMPLATES: MediaInviteTemplate[] = [
 
 I run {{orgName}}, and I'd like to credential you for {{tournamentName}} on {{dates}}.
 
-Here's the deal, plainly. The credential is free and gets you field access for the weekend. Every photo you contribute to our gallery carries your credit, and that credit links to your own booking page on our site — so a parent who likes a shot is one click from hiring you. We take nothing from what you book.
+Here's the deal, plainly. The credential is free and gets you field access for the weekend. You keep the copyright on everything you shoot. Every photo you contribute to our gallery carries your credit, and that credit links to your own booking page on our site — so a parent who likes a shot is one click from hiring you. We take nothing from what you book. What we post ourselves, on our channels and in our promotion of the event, goes up with your credit on it too.
 
 What we ask in return is a set of photos from the weekend for the event gallery, and a tag when you post.
 
@@ -77,7 +77,7 @@ Bo Lamon
     subject: `{{tournamentName}}, {{dates}} — any chance you're free?`,
     body: `Hi {{name}},
 
-Any chance you're free to shoot {{tournamentName}} on {{dates}}? Credential's free, you keep your work, you keep everything you book.
+Any chance you're free to shoot {{tournamentName}} on {{dates}}? Credential's free, you keep the copyright, you keep everything you book — we just post gallery shots on our own channels with your credit on them.
 
 Two-minute form: {{applyUrl}}
 
@@ -95,7 +95,7 @@ I run {{orgName}}, and I'm putting together the group of photographers and conte
 
 I'd rather set this up once than email you event by event, so here is the whole arrangement.
 
-The credential is free and gets you field access for any weekend you pick. Everything you shoot stays yours. Your credit goes on every photo or clip you add to the event gallery, and that credit links to your own booking page on our site \u2014 a parent who likes a shot is one click from hiring you, and we take nothing from what you book.
+The credential is free and gets you field access for any weekend you pick. You keep the copyright on everything you shoot; when we post your work on our own channels or in our promotion of the events, your credit goes up with it. Your credit also goes on every photo or clip you add to the event gallery, and it links to your own booking page on our site \u2014 a parent who likes a shot is one click from hiring you, and we take nothing from what you book.
 
 What we ask back, for each weekend you work: a couple of posts beforehand saying you'll be there, a set of photos or clips for the gallery afterwards, and a tag plus a Collab invite when you post. Instagram only lets whoever makes the post send that invite, so it has to come from you \u2014 and it puts your name in front of our whole audience.
 

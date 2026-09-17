@@ -77,7 +77,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${g.orgId}` } })
       cfgRaw = row ? JSON.parse(row.value || '{}').media : {}
     } catch { /* defaults are fine */ }
-    const cfg = mediaConfig(cfgRaw)
+    // Loaded up here rather than inside the email block because the config needs
+    // the org name to resolve `{org}` in the level labels.
+    const org = await orgById(g.orgId)
+    const cfg = mediaConfig(cfgRaw, String(org?.name || ''))
 
     const token = await ensurePassToken(g.orgId, subId)
     const updated = await setSubmissionStatus(g.orgId, subId, 'approved', String(g.gate.session?.user?.email || '') || undefined)
@@ -95,7 +98,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const to = String(cur.data?.email || '').trim()
     if (token && to && emailEnabled()) {
       try {
-        const org = await orgById(g.orgId)
         const orgName = org?.name || ''
         const who = String(cur.data?.company || cur.data?.name || 'there')
         const evName = String(cur.data?.tournamentName || '')
@@ -103,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const link = `${base}/media/${token}`
         const logo = absUrl(base, await orgLogoUrl(org?.id, org?.logoUrl))
         const want = new Set((Array.isArray(cur.data?.levels) ? cur.data.levels : []).map((x: any) => String(x || '')))
-        const levelNames = cfg.levels.filter(l => want.has(l.id)).map(l => l.name)
+        const levelNames = cfg.levels.filter(l => want.has(l.id)).map(l => l.credential || l.name)
         const hasPacket = Object.values(cfg.instructions).some(v => String(v || '').trim())
 
         const mail = [

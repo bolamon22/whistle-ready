@@ -48,11 +48,13 @@ export async function loadMediaApproval(token: string): Promise<MediaApproval | 
   let cfg: MediaConfig
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${sub.orgId}` } })
-    cfg = mediaConfig(row ? JSON.parse(row.value || '{}').media : {})
-  } catch { cfg = mediaConfig({}) }
+    cfg = mediaConfig(row ? JSON.parse(row.value || '{}').media : {}, String(org?.name || ''))
+  } catch { cfg = mediaConfig({}, String(org?.name || '')) }
 
   const want = new Set((Array.isArray(sub.data?.levels) ? sub.data.levels : []).map((x: any) => String(x || '')))
-  const levels = cfg.levels.filter(l => want.has(l.id)).map(l => ({ id: l.id, name: l.name, closed: l.closed }))
+  // `credential` not `name`: this list sits under "You're approved for" on
+  // the pass itself, so it reads as a status they hold (Bo, Sep 17 2026).
+  const levels = cfg.levels.filter(l => want.has(l.id)).map(l => ({ id: l.id, name: l.credential || l.name, closed: l.closed }))
 
   return {
     token, submission: sub, orgId: sub.orgId, tournamentId: sub.tournamentId, org,
