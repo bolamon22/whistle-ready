@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
-import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer, Archive, ArchiveRestore, Trash2 } from 'lucide-react'
+import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer, Archive, ArchiveRestore, Trash2, AlertTriangle } from 'lucide-react'
 import { USA_LACROSSE_SHORT } from '@/lib/usaLacrosse'
 
 type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[]; checkedInAt?: string | null; checkedInBy?: string | null; archivedAt?: string | null; archivedBy?: string | null }
@@ -24,6 +24,27 @@ const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'g
 const PAGE = 100
 
 const teamLabel = (t: any) => { const s = String(t || '').trim(); return !s ? '—' : s === '__other' ? 'Other / not listed' : s }
+
+// Does the stored club disagree with the club named in the team tag?
+//
+// The waiver form writes the team as "Club — Team" and the club as its own
+// field, and nothing ever checked the two agreed. One Monster Mash waiver reads
+// club "Lax Mafia" with team "LaxManiax — Middle School Select", which is why
+// that team showed 0 waivers: the counts and the club portal both filter on the
+// club field, so she is attributed to a club she is not playing for. Flagged in
+// the list because the only reason this one surfaced is that somebody noticed a
+// wrong logo on a player card.
+const normClub = (x: unknown) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+function clubMismatch(d: any): string {
+  const club = String(d?.clubName || '').trim()
+  const tag = String(d?.teamName || '').trim()
+  if (!club || !tag) return ''
+  const m = /\s+[—\u2013]\s+|\s+-\s+/.exec(tag)
+  if (!m) return ''
+  const tagClub = tag.slice(0, m.index).trim()
+  if (!tagClub || normClub(tagClub) === normClub(club)) return ''
+  return tagClub
+}
 // Player photo from the waiver (parents can add one for the pass), else initials.
 const initialsOf = (name: string) => { const w = String(name || '').trim().split(/\s+/).filter(Boolean); return ((w[0]?.[0] || '') + (w[1]?.[0] || '')).toUpperCase() || '?' }
 function Avatar({ d, size }: { d: any; size: number }) {
@@ -62,6 +83,16 @@ function WaiverEditForm({ form, setForm, teamGroups, otherTeams, onSave, onCance
   onSave: () => void; onCancel: () => void; saving: boolean
 }) {
   const teamOptions = [...teamGroups.flatMap(g => [g.club, ...g.teams.map(t => `${g.club} — ${t}`)]), ...otherTeams]
+  // Which club owns each option. Club and team are stored as separate fields and
+  // nothing kept them in step: Reagan Miller's waiver reads club "Lax Mafia" with
+  // team "LaxManiax — Middle School Select", which is why that team counted 0
+  // waivers. Picking a team now sets the club with it, so the two cannot drift
+  // apart through this form again (Bo, Sep 17 2026).
+  const clubForOption = new Map<string, string>()
+  for (const g of teamGroups) {
+    clubForOption.set(g.club, g.club)
+    for (const t of g.teams) clubForOption.set(`${g.club} — ${t}`, g.club)
+  }
   const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400'
   // Team is a real <select> (a datalist never shows as a picker on iPhone). A name that
   // isn't in the list — or "Other / type a name…" — switches to a free-text box.
@@ -83,7 +114,14 @@ function WaiverEditForm({ form, setForm, teamGroups, otherTeams, onSave, onCance
                     onChange={e => {
                       const val = e.target.value
                       if (val === '__custom__') { setCustomTeam(true); setForm({ ...form, teamName: '' }) }
-                      else { setCustomTeam(false); setForm({ ...form, teamName: val }) }
+                      else {
+                        setCustomTeam(false)
+                        const club = clubForOption.get(val)
+                        // Only set the club when the option came from a registered
+                        // club. A free-typed or legacy team leaves it alone rather
+                        // than blanking a club that may well be right.
+                        setForm(club ? { ...form, teamName: val, clubName: club } : { ...form, teamName: val })
+                      }
                     }}>
                     <option value="">— pick a team —</option>
                     {teamGroups.map(g => (
@@ -546,6 +584,16 @@ export default function PlayerWaiverEntries() {
                       {d.jerseyNumber && <span className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5 flex-shrink-0">#{d.jerseyNumber}</span>}
                     </div>
                     <div className="text-sm text-slate-600 truncate">{teamLabel(d.teamName)}{d.grade ? ` · Grade ${d.grade}` : ''}</div>
+{(() => {
+  const other = clubMismatch(d)
+  if (!other) return null
+  return (
+    <div className="mt-1 inline-flex items-start gap-1.5 text-[11.5px] leading-snug text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+      <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+      <span>Filed under club <b>{d.clubName}</b>, but this team belongs to <b>{other}</b> — so they count against {d.clubName}. Edit and re-pick the team to fix it.</span>
+    </div>
+  )
+})()}
                     <div className="text-xs text-emerald-700 font-medium mt-0.5 inline-flex items-center gap-1"><CheckCircle2 size={13} /> Waiver signed {fmtShort(scan.submittedAt)}</div>
                     {on && <div className="text-xs text-slate-500 mt-0.5">Checked in {timeOf(scan.checkedInAt)}{scan.checkedInBy && scan.checkedInBy !== 'you' ? ` · ${scan.checkedInBy}` : ''}</div>}
                   </div>
@@ -635,6 +683,16 @@ export default function PlayerWaiverEntries() {
                               {d.jerseyNumber && <span className="text-[11px] font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-1.5 py-0.5 flex-shrink-0">#{d.jerseyNumber}</span>}
                             </div>
                             <div className="text-sm text-slate-600 truncate">{teamLabel(d.teamName)}{d.grade ? ` · Grade ${d.grade}` : ''}</div>
+        {(() => {
+          const other = clubMismatch(d)
+          if (!other) return null
+          return (
+            <div className="mt-1 inline-flex items-start gap-1.5 text-[11.5px] leading-snug text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+              <span>Filed under club <b>{d.clubName}</b>, but this team belongs to <b>{other}</b> — so they count against {d.clubName}. Edit and re-pick the team to fix it.</span>
+            </div>
+          )
+        })()}
                             <div className="text-xs text-slate-400 truncate">{done ? `Checked in ${timeOf(s.checkedInAt)}${s.checkedInBy && s.checkedInBy !== 'you' ? ` · ${s.checkedInBy}` : ''}` : `${d.parentName || '—'} · ${fmtShort(s.submittedAt)}`}</div>
                           </div>
                           <ChevronDown size={16} className={`text-slate-400 flex-shrink-0 mt-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
