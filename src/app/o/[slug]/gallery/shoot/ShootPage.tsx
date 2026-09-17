@@ -230,12 +230,16 @@ export default function ShootPage(p: Props) {
       )}
 
       {/* Application */}
-      <section id="apply" className="max-w-2xl mx-auto px-6 py-14 scroll-mt-6">
+      {/* max-w-5xl to match every other section. It was max-w-2xl, and the
+          credential column took 300 of those 672px, leaving the form about 330 --
+          which is why the tier pills wrapped mid-phrase and the page ran on
+          forever (Bo, Sep 17 2026). */}
+      <section id="apply" className="max-w-5xl mx-auto px-6 py-14 scroll-mt-6">
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Media credential application</h2>
         <p className="text-slate-500 text-[14.5px] mt-1.5">{p.cfg.approvalNotice}</p>
 
-        <div className="mt-7 grid lg:grid-cols-[1fr_300px] lg:gap-10 items-start">
-        <form onSubmit={submit} className="space-y-4 order-2 lg:order-1">
+        <div className="mt-7 grid md:grid-cols-[1fr_290px] md:gap-8 lg:grid-cols-[1fr_320px] lg:gap-10 items-start">
+        <form onSubmit={submit} className="space-y-4 order-2 md:order-1">
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Your name *</label><input className={input} required value={f.name} onChange={e => set('name', e.target.value)} /></div>
             <div><label className={label}>Business name <span className="font-normal text-slate-400">if any</span></label><input className={input} value={f.company} onChange={e => set('company', e.target.value)} /></div>
@@ -290,10 +294,13 @@ export default function ShootPage(p: Props) {
                     <input type="checkbox" className="mt-1 accent-teal-600 w-4 h-4 shrink-0" disabled={l.closed}
                       checked={on} onChange={() => toggle(levels, setLevels, l.id)} />
                     <span className="min-w-0">
-                      <span className="block font-semibold text-[14.5px] text-slate-900">
-                        {l.name}
+                      {/* flex-wrap + nowrap on the pill: inline, "Apply after your
+                          first event" broke mid-phrase across two lines. Now the
+                          pill stays whole and drops below the name if it must. */}
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-semibold text-[14.5px] text-slate-900">{l.name}</span>
                         {l.status && (
-                          <span className={`ml-2 align-middle text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 ${l.closed ? 'text-violet-700 bg-violet-50 border border-violet-200' : l.gate ? 'text-amber-700 bg-amber-50 border border-amber-200' : 'text-teal-700 bg-teal-50 border border-teal-200'}`}>
+                          <span className={`whitespace-nowrap text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 ${l.closed ? 'text-violet-700 bg-violet-50 border border-violet-200' : l.gate ? 'text-amber-700 bg-amber-50 border border-amber-200' : 'text-teal-700 bg-teal-50 border border-teal-200'}`}>
                             {l.status}
                           </span>
                         )}
@@ -403,7 +410,7 @@ export default function ShootPage(p: Props) {
           </button>
         </form>
 
-        <aside className="order-1 lg:order-2 mb-8 lg:mb-0 lg:sticky lg:top-6">
+        <aside className="order-3 md:order-2 mt-8 md:mt-0 md:sticky md:top-6">
           <div className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-2.5">Your credential</div>
           <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
             <CredentialPreview p={cardData} qrText="" qr2Text={p.cfg.commitments.socialHandle ? `https://instagram.com/${p.cfg.commitments.socialHandle}` : ''} />
