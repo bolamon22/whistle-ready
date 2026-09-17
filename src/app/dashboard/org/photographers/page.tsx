@@ -160,7 +160,7 @@ export default function PhotographersAdmin() {
             </label>
             <label className="text-sm text-slate-600 inline-flex items-center gap-2 cursor-pointer">
               <input type="checkbox" className="accent-teal-600" checked={media.commitments.collabRequired}
-                onChange={e => setCom({ collabRequired: e.target.checked })} /> Instagram Collab, both ways
+                onChange={e => setCom({ collabRequired: e.target.checked })} /> Ask for a Collab invite on their posts
             </label>
           </div>
 

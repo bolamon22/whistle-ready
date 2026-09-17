@@ -97,7 +97,7 @@ I'd rather set this up once than email you event by event, so here is the whole 
 
 The credential is free and gets you field access for any weekend you pick. Everything you shoot stays yours. Your credit goes on every photo or clip you add to the event gallery, and that credit links to your own booking page on our site \u2014 a parent who likes a shot is one click from hiring you, and we take nothing from what you book.
 
-What we ask back, for each weekend you work: a set of photos or clips for the gallery, a tag when you post, and an Instagram Collab. The Collab runs both ways \u2014 you add us on your posts from the event, we add you on anything of yours we share. Yours is the one that matters, since you post far more often than we do.
+What we ask back, for each weekend you work: a set of photos or clips for the gallery, a tag when you post, and a Collab invite on your posts from the event. Instagram only lets whoever makes the post send that invite, so it has to come from you \u2014 and it puts your name in front of our whole audience.
 
 One form covers the season. Every upcoming weekend is already ticked \u2014 untick any you can't make:
 

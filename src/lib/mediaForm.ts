@@ -212,11 +212,13 @@ export function commitmentLines(c: MediaCommitments): string[] {
       : `Upload at least ${c.minPhotos} photos or clips you\u2019re happy for us to use`)
   }
   if (c.socialHandle && c.tagRequired) out.push(`Tag @${c.socialHandle} in anything you post from the event`)
-  // Leads with THEM inviting US, which is the direction that actually happens:
-  // a working photographer posts far more often than the org does, so waiting
-  // for our post to collab on means most of the reach never arrives (Bo,
-  // Sep 16 2026). Ours is still offered, second.
-  if (c.socialHandle && c.collabRequired) out.push(`Add @${c.socialHandle} as a collaborator on your posts from the event \u2014 and accept ours when we share yours`)
+  // One direction only, and it is theirs. Instagram lets ONLY the account that
+  // creates a post send the Collab invite, so on their post it has to come from
+  // them. The reciprocal half was dropped (Bo, Sep 17 2026): the org posts
+  // rarely, so promising to invite them on ours was a commitment that mostly
+  // would not happen, and the ask reads better without a promise attached that
+  // we cannot keep.
+  if (c.socialHandle && c.collabRequired) out.push(`Send @${c.socialHandle} a Collab invite when you post from the event`)
   return [...out, ...c.extra]
 }
 
