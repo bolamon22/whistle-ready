@@ -13,14 +13,14 @@ type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; b
 // Friendly labels for the detail view (anything not listed falls back to a de-camelCased key).
 const LABELS: Record<string, string> = {
   playerName: 'Player', playerEmail: 'Player email', usLacrosse: USA_LACROSSE_SHORT, dob: 'Date of birth', gender: 'Gender',
-  grade: 'Grade', clubName: 'Club', teamName: 'Team', jerseyNumber: 'Jersey #', position: 'Position', parentName: 'Parent', parentEmail: 'Parent email',
+  grade: 'Grade', clubName: 'Club', teamName: 'Team', jerseyNumber: 'Jersey #', position: 'Position', homeCity: 'Home city', homeState: 'Home state', parentName: 'Parent', parentEmail: 'Parent email',
   parentPhone: 'Parent phone', parent2Name: 'Parent 2', parent2Email: 'Parent 2 email', parent2Phone: 'Parent 2 phone',
   emergencyName: 'Emergency contact', emergencyPhone: 'Emergency phone', hotel: 'Hotel / rental', hotelName: 'Where staying',
   newsletter: 'Newsletter', signature: 'Signature', cardLink: 'Card QR link',
 }
 const DETAIL_ORDER = Object.keys(LABELS)
 const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl']
-const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber', 'position', 'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone', 'hotel', 'hotelName', 'signature']
+const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber', 'position', 'homeCity', 'homeState', 'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone', 'hotel', 'hotelName', 'signature']
 const PAGE = 100
 
 const teamLabel = (t: any) => { const s = String(t || '').trim(); return !s ? '—' : s === '__other' ? 'Other / not listed' : s }

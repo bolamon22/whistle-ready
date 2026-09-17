@@ -26,7 +26,7 @@ function db() {
 
 const DEFAULT_WAIVER = `## Player Participation Waiver & Release of Liability
 By submitting this form I confirm I have read and agree to this waiver, that I am at least 18 years of age, that I am the participant or the legal parent/guardian of the minor participant, and that my typed name is my legal electronic signature.`
-const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true }
+const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true, homeTown: true }
 
 export default async function TournamentPlayerWaiver({ params }: { params: { id: string } }) {
   const client = db()
@@ -56,7 +56,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
   let clubs: ClubOption[] = []
   try {
     const tr = await client.execute({
-      sql: 'SELECT r.clubName AS club, r.clubLogoUrl AS clubLogo, t.teamName AS team, t.division AS division, t.logoUrl AS teamLogo FROM "TeamRegistration" r LEFT JOIN "RegisteredTeam" t ON t.registrationId = r.id WHERE r.tournamentId = ? AND r.deletedAt IS NULL ORDER BY r.clubName, t.teamName',
+      sql: 'SELECT r.clubName AS club, r.clubLogoUrl AS clubLogo, r.clubBasedIn AS basedIn, t.teamName AS team, t.division AS division, t.logoUrl AS teamLogo FROM "TeamRegistration" r LEFT JOIN "RegisteredTeam" t ON t.registrationId = r.id WHERE r.tournamentId = ? AND r.deletedAt IS NULL ORDER BY r.clubName, t.teamName',
       args: [params.id],
     })
     // Keyed by name AND division, not name alone.
@@ -70,6 +70,9 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
     // was wrong, not the data.
     const byClub = new Map<string, Map<string, { name: string; division: string }>>()
     const logoByClub = new Map<string, string>() // club logo from the registration, else a team's
+    // Where the club says it is based -- prefills the family's home town on the
+    // form. Free text, so it may not resolve; see parseBasedIn.
+    const baseByClub = new Map<string, string>()
     for (const row of tr.rows as any[]) {
       const club = String(row.club || '').trim()
       if (!club) continue
@@ -79,10 +82,13 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
       if (team) byClub.get(club)!.set(`${team}||${division}`, { name: team, division })
       const logo = String(row.clubLogo || '').trim() || String(row.teamLogo || '').trim()
       if (logo && !logoByClub.has(club)) logoByClub.set(club, logo)
+      const based = String(row.basedIn || '').trim()
+      if (based && !baseByClub.has(club)) baseByClub.set(club, based)
     }
     clubs = [...byClub.entries()].map(([name, ts]) => ({
       name,
       logoUrl: logoByClub.get(name) || '',
+      basedIn: baseByClub.get(name) || '',
       // Sorted by division so a club's four teams read in a sensible order rather
       // than whatever order the rows arrived in.
       teams: [...ts.entries()]

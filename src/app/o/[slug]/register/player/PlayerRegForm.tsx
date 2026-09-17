@@ -10,7 +10,7 @@ import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
 import CardPreview from './CardPreview'
 
-type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean }
+type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean; homeTown?: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1'
 const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
@@ -19,7 +19,50 @@ export const POSITIONS = ['Attack', 'Midfield', 'Defense', 'Goalie', 'FOGO', 'LS
 // `id` distinguishes two teams a club gave the same name -- see the note in
 // tournaments/[id]/player-waiver/page.tsx. The dropdown's value is the id; the
 // name is what gets submitted and printed on the card.
-export type ClubOption = { name: string; logoUrl?: string; teams: { id: string; name: string; division: string }[] }
+export type ClubOption = { name: string; logoUrl?: string; basedIn?: string; teams: { id: string; name: string; division: string }[] }
+
+// WHY WE ASK WHERE A FAMILY IS FROM: the county sports commissions that fund these
+// events pay on out-of-area visitors, and the grant agreements require the
+// REGISTRATION FORM to capture it -- it cannot be reconstructed afterwards. See
+// the hotel question above it, which exists for the same reason.
+//
+// The cost of asking is the thing to manage, not whether to ask. Three separate
+// mitigations, in order of how much work each saves a parent:
+//   1. prefilled from the club's own home town the moment they pick their team,
+//      so most families only confirm;
+//   2. proper autoComplete, so a phone offers the saved address in one tap;
+//   3. a state dropdown rather than free text, which also keeps the grant report
+//      from having to reconcile "FL", "Fla." and "Florida".
+const US_STATES: [string, string][] = [
+  ['AL', 'Alabama'], ['AK', 'Alaska'], ['AZ', 'Arizona'], ['AR', 'Arkansas'], ['CA', 'California'],
+  ['CO', 'Colorado'], ['CT', 'Connecticut'], ['DE', 'Delaware'], ['DC', 'District of Columbia'],
+  ['FL', 'Florida'], ['GA', 'Georgia'], ['HI', 'Hawaii'], ['ID', 'Idaho'], ['IL', 'Illinois'],
+  ['IN', 'Indiana'], ['IA', 'Iowa'], ['KS', 'Kansas'], ['KY', 'Kentucky'], ['LA', 'Louisiana'],
+  ['ME', 'Maine'], ['MD', 'Maryland'], ['MA', 'Massachusetts'], ['MI', 'Michigan'], ['MN', 'Minnesota'],
+  ['MS', 'Mississippi'], ['MO', 'Missouri'], ['MT', 'Montana'], ['NE', 'Nebraska'], ['NV', 'Nevada'],
+  ['NH', 'New Hampshire'], ['NJ', 'New Jersey'], ['NM', 'New Mexico'], ['NY', 'New York'],
+  ['NC', 'North Carolina'], ['ND', 'North Dakota'], ['OH', 'Ohio'], ['OK', 'Oklahoma'], ['OR', 'Oregon'],
+  ['PA', 'Pennsylvania'], ['PR', 'Puerto Rico'], ['RI', 'Rhode Island'], ['SC', 'South Carolina'],
+  ['SD', 'South Dakota'], ['TN', 'Tennessee'], ['TX', 'Texas'], ['UT', 'Utah'], ['VT', 'Vermont'],
+  ['VA', 'Virginia'], ['WA', 'Washington'], ['WV', 'West Virginia'], ['WI', 'Wisconsin'], ['WY', 'Wyoming'],
+]
+
+/**
+ * Pull a city and state out of a club's free-text "based in".
+ *
+ * Returns null rather than guessing. "Coral Springs, FL" and "Coral Springs,
+ * Florida" both resolve; "South Florida" and "Tri-State" do not, and a family
+ * from one of those clubs simply types their own town -- which beats prefilling
+ * a made-up city into a field that ends up in a county's grant report.
+ */
+function parseBasedIn(raw: string | undefined): { city: string; state: string } | null {
+  const m = /^\s*(.+?)\s*,\s*([A-Za-z.\s]+?)\s*$/.exec(String(raw || ''))
+  if (!m) return null
+  const city = m[1].trim()
+  const t = m[2].replace(/\./g, '').trim().toLowerCase()
+  const hit = US_STATES.find(([code, name]) => code.toLowerCase() === t || name.toLowerCase() === t)
+  return city && hit ? { city, state: hit[0] } : null
+}
 export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
 /** What the live card preview needs that the form doesn't collect: event + org branding, and the event QR. */
 export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string; eventQrUrl: string; eventQrLabel: string; theme: CardTheme }
@@ -190,7 +233,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const [passToken, setPassToken] = useState('')   // set when the submission got a player pass
   const [d, setD] = useState<any>({
     playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', position: '', photoUrl: '', cardLink: '', clubLogoUrl: '',
-    parentName: '', parentEmail: '', parentPhone: '',
+    parentName: '', parentEmail: '', parentPhone: '', homeCity: '', homeState: '',
     parent2Name: '', parent2Email: '', parent2Phone: '',
     emergencyName: '', emergencyPhone: '',
     hotel: '', hotelName: '', newsletter: false,
@@ -217,6 +260,20 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   }, [])
   const selectedClub = clubMode ? clubs!.find(c => c.name === d.clubName) : undefined
   const clubTeams = selectedClub?.teams ?? []
+
+  // Prefill home town from the club's base the moment a club is picked.
+  //
+  // ONLY INTO EMPTY FIELDS. A family that has already typed their own town --
+  // and the ones who travel to play for an out-of-state club are exactly the
+  // families the grant reporting cares about -- must never have it overwritten
+  // by re-picking their team.
+  useEffect(() => {
+    const at = parseBasedIn(selectedClub?.basedIn)
+    if (!at) return
+    setD((prev: any) => (prev.homeCity || prev.homeState)
+      ? prev
+      : { ...prev, homeCity: at.city, homeState: at.state })
+  }, [selectedClub?.basedIn])
   // The club's logo: from its team registration, else the one the family uploads on this form.
   const clubLogoUrl: string = selectedClub?.logoUrl || String(d.clubLogoUrl || '')
   const clubsShown: ClubOption[] = clubMode ? clubs!.map(c => c.name === d.clubName && !c.logoUrl && d.clubLogoUrl ? { ...c, logoUrl: d.clubLogoUrl } : c) : []
@@ -315,6 +372,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     ['Player name', d.playerName], ['Player email', d.playerEmail], [USA_LACROSSE_SHORT, d.usLacrosse], ['Date of birth', d.dob],
     ['Gender', d.gender], ['Grade', d.grade], ['Team', resolvedTeam], ['Jersey #', d.jerseyNumber], ['Position', d.position],
     ['Parent', d.parentName], ['Parent email', d.parentEmail], ['Parent phone', d.parentPhone],
+    ['Home town', [d.homeCity, d.homeState].filter(Boolean).join(', ')],
     ['Parent 2', d.parent2Name], ['Parent 2 email', d.parent2Email], ['Parent 2 phone', d.parent2Phone],
     ['Emergency contact', d.emergencyName], ['Emergency phone', d.emergencyPhone],
     ['Hotel / rental', d.hotel], ['Where staying', d.hotelName], ['Signature', d.signature],
@@ -426,10 +484,32 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Parent information</h2>
         <div className="grid sm:grid-cols-2 gap-4">
-          <div><label className={labelCls}>Parent name *</label><input className={inputCls} value={d.parentName} onChange={e => set('parentName', e.target.value)} required /></div>
-          <div><label className={labelCls}>Parent email *</label><input className={inputCls} type="email" value={d.parentEmail} onChange={e => set('parentEmail', e.target.value)} required /></div>
-          <div><label className={labelCls}>Parent mobile phone *</label><input className={inputCls} type="tel" value={d.parentPhone} onChange={e => set('parentPhone', e.target.value)} required /></div>
+          <div><label className={labelCls}>Parent name *</label><input className={inputCls} value={d.parentName} onChange={e => set('parentName', e.target.value)} autoComplete="name" required /></div>
+          <div><label className={labelCls}>Parent email *</label><input className={inputCls} type="email" value={d.parentEmail} onChange={e => set('parentEmail', e.target.value)} autoComplete="email" required /></div>
+          <div><label className={labelCls}>Parent mobile phone *</label><input className={inputCls} type="tel" value={d.parentPhone} onChange={e => set('parentPhone', e.target.value)} autoComplete="tel" required /></div>
         </div>
+        {fields.homeTown !== false && (
+          <div className="grid sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
+            <div>
+              <label className={labelCls}>Home town *</label>
+              {/* address-level2/1 are what a browser matches a saved address on,
+                  so a phone offers the whole thing in one tap. */}
+              <input className={inputCls} value={d.homeCity} onChange={e => set('homeCity', e.target.value)}
+                autoComplete="address-level2" placeholder="City" required />
+            </div>
+            <div>
+              <label className={labelCls}>Home state *</label>
+              <select className={inputCls} value={d.homeState} onChange={e => set('homeState', e.target.value)}
+                autoComplete="address-level1" required>
+                <option value="">Select…</option>
+                {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+              </select>
+            </div>
+            <p className="sm:col-span-2 text-[12px] text-slate-500 -mt-1">
+              Where your family travels from. Our venues&rsquo; county tourism boards ask for this, and it is what keeps these events funded.
+            </p>
+          </div>
+        )}
         {fields.parent2 && (
           <div className="grid sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
             <div><label className={labelCls}>Parent 2 name</label><input className={inputCls} value={d.parent2Name} onChange={e => set('parent2Name', e.target.value)} /></div>

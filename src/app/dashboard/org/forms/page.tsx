@@ -58,7 +58,7 @@ By submitting this form, I verify that I have read and understood this waiver, t
 
 type PlayerForm = {
   waiverTitle: string; waiverText: string
-  fields: { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass: boolean; position: boolean }
+  fields: { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass: boolean; position: boolean; homeTown: boolean }
   /** Player card: what the second (event / organization) QR code opens. */
   cardEventQr: 'event' | 'instagram' | 'facebook' | 'website' | 'custom'; cardEventLink: string; cardEventLabel: string
   cardTheme: 'classic' | 'brushed' | 'gold' | 'frost'
@@ -86,7 +86,7 @@ type Forms = { player: PlayerForm; vendor: VendorForm; staff: StaffForm; registr
 const EMPTY: Forms = {
   player: {
     waiverTitle: 'Player Participation Waiver & Release of Liability', waiverText: DEFAULT_WAIVER,
-    fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true },
+    fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true, homeTown: true },
     cardEventQr: 'event', cardEventLink: '', cardEventLabel: '', cardTheme: 'classic',
     confirmationTitle: "You're registered!",
     confirmationMessage: "Thanks for registering. We've received your information and signed waiver. We'll be in touch with event details — see you on the field!",
@@ -123,6 +123,7 @@ const FIELD_LABELS: { key: keyof PlayerForm['fields']; label: string; hint: stri
   { key: 'position', label: 'Position', hint: 'Attack / Midfield / Defense / Goalie / FOGO / LSM' },
   { key: 'teamName', label: 'Team or club name', hint: 'Text field' },
   { key: 'parent2', label: 'Second parent', hint: 'Name, email, phone' },
+  { key: 'homeTown', label: 'Home town', hint: 'City + state the family travels from — what county sports-tourism grants are reported on. Prefills from the club.' },
   { key: 'hotelQuestion', label: 'Hotel / rental question', hint: 'Are you staying at a hotel?' },
   { key: 'newsletter', label: 'Newsletter opt-in', hint: 'Subscribe to updates' },
   { key: 'playerPass', label: 'Player pass', hint: 'Photo upload on tournament waivers + a credential card with a QR code for check-in; staff can print badges' },
