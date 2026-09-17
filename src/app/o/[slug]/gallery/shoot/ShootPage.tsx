@@ -30,7 +30,7 @@ export default function ShootPage(p: Props) {
   const [f, setF] = useState({
     name: p.prefill?.name || '', company: p.prefill?.company || '', email: p.prefill?.email || '',
     phone: '', portfolio: '', instagram: '',
-    gear: '', insurance: '', notes: '',
+    gear: '', shoots: '', insurance: '', notes: '',
   })
   const set = (k: keyof typeof f, v: string) => setF(s => ({ ...s, [k]: v }))
   const [eventIds, setEventIds] = useState<string[]>(p.defaultEventIds?.length ? p.defaultEventIds : p.events.map(e => e.id))
@@ -347,6 +347,21 @@ export default function ShootPage(p: Props) {
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
+            {/* Stills or video is a coverage question, not a nicety: the ask is
+                worded "photos or clips", the gallery has its own video album, and
+                without this Bo can credential eight stills shooters and nobody
+                filming and only find out on the day (Bo, Sep 17 2026). Asked as
+                one control so it captures what they CAN do and which they are
+                better at in a single answer. */}
+            <div>
+              <label className={label}>Stills or video? <span className="font-normal text-slate-400">what you are strongest at</span></label>
+              <select className={input} value={f.shoots} onChange={e => set('shoots', e.target.value)}>
+                <option value="">Select…</option>
+                <option>Mostly stills</option>
+                <option>Mostly video</option>
+                <option>Both, equally comfortable</option>
+              </select>
+            </div>
             {/* "Primary gear / body and longest lens" read like shorthand between
                 two people who already know each other. The question is a real
                 screen -- a kit lens does not reach from a sideline -- so it is

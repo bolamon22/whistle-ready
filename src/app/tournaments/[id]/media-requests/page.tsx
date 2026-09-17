@@ -125,7 +125,7 @@ export default function MediaRequestEntries() {
   }
 
   const exportCsv = () => {
-    const cols = ['name', 'company', 'email', 'phone', 'portfolio', 'gear', 'insurance', 'levelNames', 'notes']
+    const cols = ['name', 'company', 'email', 'phone', 'portfolio', 'shoots', 'gear', 'insurance', 'levelNames', 'notes']
     const head = ['Submitted', ...cols, 'Status'].join(',')
     const q = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = rows.map(s => [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.status || 'needs review'].map(q).join(','))
@@ -133,13 +133,21 @@ export default function MediaRequestEntries() {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'media-credentials.csv'; a.click(); URL.revokeObjectURL(url)
   }
 
+  // The detail list renders whatever the form collected, so a new field shows up
+  // without being added here. The humanised key is right most of the time and
+  // wrong in a few places -- "Shoots" for stills-or-video, "Gear" for a question
+  // that no longer uses that word -- so only those get an override.
+  const FIELD_LABELS: Record<string, string> = {
+    shoots: 'Stills or video', gear: 'Camera and lenses', portfolio: 'Portfolio',
+    company: 'Business', insurance: 'Liability insurance', notes: 'Anything else',
+  }
   const Detail = ({ s }: { s: Sub }) => (
     <div className="grid sm:grid-cols-2 gap-x-8 gap-y-1 text-sm">
       {Object.entries(s.data || {})
         .filter(([k]) => !['tournamentId', 'tournamentName', 'tournamentIds', 'groupId', 'groupSize', 'levels', 'agree'].includes(k))
         .map(([k, v]) => (
           <div key={k} className="flex justify-between gap-4 border-b border-slate-100 py-1">
-            <span className="text-slate-400 capitalize flex-shrink-0">{k.replace(/([A-Z])/g, ' $1')}</span>
+            <span className="text-slate-400 flex-shrink-0">{FIELD_LABELS[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase())}</span>
             <span className="text-slate-700 text-right break-words min-w-0">{String(v || '—')}</span>
           </div>
         ))}
