@@ -74,3 +74,73 @@ export function summarizeClub(
   const total = counts.clubTotal(clubName)
   return { perTeam, matched, unassigned: Math.max(0, total - matched), total: Math.max(total, matched) }
 }
+
+// ── Coaches ──────────────────────────────────────────────────────────────────
+// Which coaches have signed, per registered team.
+//
+// In this file rather than its own, because the matching rules have to be
+// IDENTICAL to the player waiver's — the same "Club — Team" tag, the same
+// normalization, the same club-scoped fallback. Two copies drift, and a coach
+// silently failing to appear against their team looks exactly like a coach who
+// never signed.
+//
+// ONE DIFFERENCE, AND IT MATTERS: a coach can cover several teams in a weekend,
+// which is the whole reason their form lets them tick more than one. `teamName`
+// records only the first, so counting by that column alone would show a head
+// coach against one of their three teams and leave the other two looking
+// uncovered. The teams they actually claimed live in data.teams[], so that is
+// what gets expanded here.
+
+export type CoachSignatures = {
+  /** Names of coaches who signed and claimed this team. */
+  forTeam: (clubName: string, teamName: string) => string[]
+  /** Everyone who signed for this club, however they wrote their teams. */
+  forClub: (clubName: string) => string[]
+}
+
+export async function coachSignatures(tournamentId: string): Promise<CoachSignatures> {
+  const byClubTeam = new Map<string, Set<string>>()   // `${clubKey}|${teamKey}` -> names
+  const byClub = new Map<string, Set<string>>()
+  const add = (map: Map<string, Set<string>>, key: string, name: string) => {
+    if (!key || !name) return
+    if (!map.has(key)) map.set(key, new Set())
+    map.get(key)!.add(name)
+  }
+
+  try {
+    const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+      `SELECT "clubName" AS club, "teamName" AS team, data
+       FROM "OrgFormSubmission"
+       WHERE tournamentId = ? AND formType = 'coach' AND "archivedAt" IS NULL`, tournamentId)
+
+    for (const r of rows) {
+      let d: any = {}
+      try { d = typeof r.data === 'string' ? JSON.parse(r.data as string) : (r.data || {}) } catch { d = {} }
+      const name = String(d.coachFullName || '').trim()
+      if (!name) continue
+
+      const tagged = splitTag(r.team)
+      const fallbackClub = norm(r.club) || norm(d.clubName) || norm(tagged.club)
+      add(byClub, fallbackClub, name)
+
+      const claimed: any[] = Array.isArray(d.teams) ? d.teams : []
+      if (claimed.length) {
+        for (const t of claimed) {
+          const ck = norm(t?.club) || fallbackClub
+          const tk = norm(t?.team)
+          if (tk) add(byClubTeam, `${ck}|${tk}`, name)
+          add(byClub, ck, name)
+        }
+      } else if (tagged.team) {
+        // Pre-teams[] records, and anyone who typed a club with no team list.
+        add(byClubTeam, `${fallbackClub}|${norm(tagged.team)}`, name)
+      }
+    }
+  } catch { /* no coach submissions yet — every team reads empty */ }
+
+  const sorted = (s: Set<string> | undefined) => (s ? [...s].sort((a, b) => a.localeCompare(b)) : [])
+  return {
+    forTeam: (clubName, teamName) => sorted(byClubTeam.get(`${norm(clubName)}|${norm(teamName)}`)),
+    forClub: clubName => sorted(byClub.get(norm(clubName))),
+  }
+}

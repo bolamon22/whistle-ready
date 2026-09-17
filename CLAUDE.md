@@ -65,6 +65,11 @@ pass.json + manifest.json + signature + icon/logo, all 5 manifest SHA1s matched,
 manifest, and `openssl smime -verify` returned "Verification successful". Only Apple's real cert can
 prove device trust.
 
+**Coach passes** are live too: `/coach/<token>` is the printable credential (PNG at
+`/coach/<token>/card.png`, CR80), `/api/wallet/coach/<token>` is the Wallet copy. Token-authorized,
+not session-gated — a coach signs the waiver without ever making an account. Both are hidden/503 until
+the certificate exists. The coach role themes itself crimson from the shared `ROLES` map.
+
 **Not built yet:** venue coordinates. Lock-screen relevance (the pass surfacing when someone arrives
 at the fields) needs lat/lng, and neither `Tournament` nor the locations config stores any — only a
 `location` string. Cheapest fix is optional lat/lng fields on the venue editor that Bo pastes from

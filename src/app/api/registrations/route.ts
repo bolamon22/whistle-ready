@@ -7,7 +7,7 @@ import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, organizerEmailHtml, organizerEmailSubject, type RegLetterData, type RegNotifyData } from '@/lib/regConfirmation'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
-import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
+import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { cleanName } from '@/lib/names'
 
 async function ensureRegistrationColumns() {
@@ -63,6 +63,11 @@ export async function GET(req: NextRequest) {
     // Completed player waivers per team — see src/lib/waiverCounts.ts for why the
     // stored "Club — Team" tag has to be split before anything matches.
     const counts = await waiverCounts(tournamentId)
+    // Which coaches have actually signed, matched to their teams the same way.
+    // The COACH column on this page is whoever the club TYPED at registration --
+    // useful for calling someone, silent on whether a waiver exists. These are
+    // the signatures (Bo, Sep 17 2026).
+    const coaches = await coachSignatures(tournamentId)
 
     // Does the club contact have a Whistle Ready login? Matched by email, same
     // way the claim flow and the Staff Pool's App column do it.
@@ -84,8 +89,13 @@ export async function GET(req: NextRequest) {
         ...r,
         ...((byId.get(r.id) as any) || {}),
         bookings: bookingsById.get(r.id) ?? [],
-        teams: (r.teams || []).map((t: any, i: number) => ({ ...t, waiverCount: sum.perTeam[i] ?? 0 })),
+        teams: (r.teams || []).map((t: any, i: number) => ({
+          ...t,
+          waiverCount: sum.perTeam[i] ?? 0,
+          coachesSigned: coaches.forTeam(t.clubName || r.clubName, t.teamName),
+        })),
         waiverUnassigned: sum.unassigned,
+        coachesSigned: coaches.forClub(r.clubName),
         hasAccount: accounts.has(String(r.contactEmail || '').trim().toLowerCase()),
         accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.role || '',
         accountUserId: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id || '',

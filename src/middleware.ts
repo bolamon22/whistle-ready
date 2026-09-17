@@ -97,7 +97,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
-      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/vendor') || pathname.startsWith('/media') || pathname.startsWith('/claim')
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/coach') || pathname.startsWith('/vendor') || pathname.startsWith('/media') || pathname.startsWith('/claim')
     if (!passthrough) {
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
@@ -134,6 +134,9 @@ export async function middleware(req: NextRequest) {
   // authorization. Gating it behind /login is what made the individual-registration
   // link bounce the exact people it was sent to.
   if (/^\/media(\/|$)/.test(pathname)) return NextResponse.next()
+  // Coach credential (/coach/<token>) — public for the same reason as /pass. NOTE
+  // this is not /dashboard/coach, which is the signed-in coach role's home.
+  if (/^\/coach(\/|$)/.test(pathname)) return NextResponse.next()
   // Player pass (/pass/<token>) — public: the unguessable token in the URL is the authorization.
   if (/^\/pass(\/|$)/.test(pathname)) return NextResponse.next()
 

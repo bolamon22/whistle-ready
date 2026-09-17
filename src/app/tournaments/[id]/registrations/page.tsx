@@ -19,6 +19,8 @@ interface RegisteredTeam {
   id: string; clubName: string; teamName: string; division: string
   coachName: string; coachPhone: string; coachEmail: string; logoUrl: string
   waiverCount?: number
+  /** Coaches who signed the coach waiver and claimed THIS team. */
+  coachesSigned?: string[]
 }
 interface RegistrationPayment {
   id: string; amount: number; method: string; checkNumber: string
@@ -2147,7 +2149,23 @@ export default function RegistrationsPage() {
                                     title={`See the ${t.teamName} players who completed the waiver`}
                                     className={`inline-block min-w-[26px] rounded-full px-2 py-0.5 text-xs font-bold hover:ring-2 hover:ring-teal-200 ${(t.waiverCount ?? 0) > 0 ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>{t.waiverCount ?? 0}</Link>
                                 </td>
-                                <td className="px-3 py-2">{t.coachName}</td>
+                                {/* The typed name is who to CALL; the chip under it is
+                                    whether a coach waiver actually exists for this team.
+                                    They are different facts and were being conflated. */}
+                                <td className="px-3 py-2">
+                                  <div>{t.coachName}</div>
+                                  {(t.coachesSigned?.length ?? 0) > 0 ? (
+                                    <div className="mt-1 inline-flex items-start gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                                      title={`Coach waiver signed by ${t.coachesSigned!.join(', ')}`}>
+                                      <Check size={11} className="mt-[3px] shrink-0" strokeWidth={3} />
+                                      <span>{t.coachesSigned!.join(', ')}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-1 inline-block rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                      No coach waiver
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="px-3 py-2">{t.coachPhone}</td>
                                 <td className="px-3 py-2">{t.coachEmail}</td>
                               </tr>

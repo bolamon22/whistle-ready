@@ -407,6 +407,67 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, id: saved.id, applications: siblings.length || 1 })
     }
 
+    // ── Coach ────────────────────────────────────────────────────────────────
+    // The form tells a coach "the scannable version is emailed to you" the moment
+    // they sign. Nothing sent it: the generic block below only addresses vendor,
+    // staff and player, so every coach who signed got silence (Bo, Sep 17 2026).
+    //
+    // Two jobs in one letter. The receipt, which is what they were promised, and
+    // the login invite, which is the first time we have a reason to offer a coach
+    // an account they will actually use -- they have just handed us their teams.
+    if (formType === 'coach') {
+      try {
+        const to = String(data.email || '').trim()
+        const orgRows = await prisma.$queryRawUnsafe<any[]>('SELECT name, slug, logoUrl FROM "Organization" WHERE id = ?', orgId)
+        const org = orgRows?.[0] || {}
+        const orgName = String(org.name || 'the tournament')
+        const base = orgBaseUrl(org.slug) || appBaseUrl(req)
+        const logo = absUrl(base, await orgLogoUrl(orgId, org.logoUrl))
+        const cardUrl = saved.passToken ? `${base}/coach/${saved.passToken}` : ''
+        const signupUrl = `${base}/register?role=coach&email=${encodeURIComponent(to)}`
+        const teams: any[] = Array.isArray(data.teams) ? data.teams : []
+        const evName = String(data.tournamentName || '')
+
+        if (to && emailEnabled()) {
+          const rows: [string, string][] = [
+            ['Event', evName],
+            ['Club', String(data.clubName || '')],
+            ['Role', String(data.coachingRole || '')],
+            [teams.length === 1 ? 'Team' : 'Teams',
+             teams.map((t: any) => [String(t?.team || ''), String(t?.division || '')].filter(Boolean).join(' · ')).filter(Boolean).join(', ')],
+          ]
+          const body = [
+            `<p style="margin:0 0 14px">Your waiver is signed and on file${evName ? ` for <strong style="color:#0f172a">${esc(evName)}</strong>` : ''}. Nothing else is needed to coach this weekend.</p>`,
+            detailRows(rows),
+            cardUrl
+              ? panel('Your coach credential', [
+                  '<strong style="color:#0f172a">You are not required to carry this.</strong> Your signed waiver is what gets you on the sideline \u2014 the credential just saves you a conversation at the coaches&rsquo; tent.',
+                  '<br><br>If you want it: open the link below to save it to your phone, print it at badge size for a lanyard, or add it to your Apple Wallet.',
+                  `<br><br>${button(cardUrl, 'Open my credential')}`,
+                ].join(''))
+              : '',
+            panel('Want your schedules in one place?', [
+              'Create an account with this same email and your teams, schedules and any waivers still outstanding follow you to every event we run \u2014 no re-typing what you just filled in.',
+              `<br><br>${button(signupUrl, 'Create my coach login')}`,
+            ].join('')),
+            `<p style="margin:18px 0 0">Questions before the weekend? Just reply to this email.</p>`,
+          ].join('')
+
+          await sendEmail({
+            ...orgSender(org), to,
+            subject: `Coach waiver received${evName ? ` \u2014 ${evName}` : ''}`,
+            html: renderEmail({
+              orgName, logoUrl: logo,
+              eyebrow: 'Signed and on file',
+              title: `Thanks, ${esc(String(data.coachFullName || 'Coach').split(/\s+/)[0])}`,
+              body,
+            }),
+          })
+        }
+      } catch { /* mail must never fail the submission */ }
+      return NextResponse.json({ ok: true, id: saved.id, passToken: saved.passToken || undefined })
+    }
+
     // Confirmation email (non-blocking) — uses the org's configured confirmation text.
     try {
       const to = String(((formType === 'vendor' || formType === 'staff') ? data.email : (data.playerEmail || data.parentEmail)) || '').trim()
