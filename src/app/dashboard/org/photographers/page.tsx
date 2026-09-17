@@ -144,6 +144,11 @@ export default function PhotographersAdmin() {
                 onChange={e => setCom({ withinDays: Math.max(0, Number(e.target.value) || 0) })} />
             </div>
             <div>
+              <label className={lbl}>Posts before the event</label>
+              <input className={input} type="number" min={0} value={media.commitments.prePosts}
+                onChange={e => setCom({ prePosts: Math.max(0, Number(e.target.value) || 0) })} />
+            </div>
+            <div>
               <label className={lbl}>Your Instagram</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">@</span>

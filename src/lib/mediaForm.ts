@@ -54,6 +54,10 @@ export type MediaCommitments = {
   /** How many photos, and by when. 0 disables that line. */
   minPhotos: number
   withinDays: number
+  /** Posts promoting the event BEFORE it, saying they will be there. 0 disables.
+   *  The only ask that runs before the weekend, which is the point: it helps
+   *  fill the event rather than just document it. */
+  prePosts: number
   /** The org's handle, without the @. Blank hides the social lines. */
   socialHandle: string
   tagRequired: boolean
@@ -128,6 +132,7 @@ export const DEFAULT_COMMITMENTS: MediaCommitments = {
   show: true,
   minPhotos: 20,
   withinDays: 7,
+  prePosts: 2,
   socialHandle: '',
   tagRequired: true,
   collabRequired: true,
@@ -177,6 +182,8 @@ export function mediaConfig(raw: any): MediaConfig {
       show: raw?.commitments?.show !== false,
       minPhotos: Number(raw?.commitments?.minPhotos) >= 0 && raw?.commitments?.minPhotos !== undefined
         ? Math.floor(Number(raw.commitments.minPhotos)) : DEFAULT_COMMITMENTS.minPhotos,
+      prePosts: Number(raw?.commitments?.prePosts) >= 0 && raw?.commitments?.prePosts !== undefined
+        ? Math.floor(Number(raw.commitments.prePosts)) : DEFAULT_COMMITMENTS.prePosts,
       withinDays: Number(raw?.commitments?.withinDays) >= 0 && raw?.commitments?.withinDays !== undefined
         ? Math.floor(Number(raw.commitments.withinDays)) : DEFAULT_COMMITMENTS.withinDays,
       socialHandle: str(raw?.commitments?.socialHandle).replace(/^@/, ''),
@@ -204,6 +211,14 @@ export function photographerSharePct(cfg: MediaConfig): number {
 export function commitmentLines(c: MediaCommitments): string[] {
   if (!c.show) return []
   const out: string[] = []
+  // First, because it is the only ask that lands before the weekend: chronology
+  // makes the list read as a timeline rather than a pile. Also the biggest ask,
+  // and burying it would be the kind of surprise that sours a good arrangement.
+  if (c.prePosts > 0 && c.socialHandle) {
+    const n = c.prePosts === 1 ? 'once' : `at least ${c.prePosts} times`
+    const inv = c.prePosts === 1 ? 'a Collab invite' : 'a Collab invite on each'
+    out.push(`Post ${n} before the event \u2014 promoting it and that you\u2019ll be there \u2014 tagging @${c.socialHandle}, with ${inv}`)
+  }
   if (c.minPhotos > 0) {
     // Photos OR clips: a videographer who turns in twenty ten-second clips has
     // done what was asked, and the old wording told them they had not.
