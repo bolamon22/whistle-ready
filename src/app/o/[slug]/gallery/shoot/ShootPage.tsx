@@ -286,7 +286,14 @@ export default function ShootPage(p: Props) {
                   <input type="checkbox" className="mt-1 accent-teal-600 w-4 h-4 shrink-0" disabled={l.closed}
                     checked={levels.includes(l.id)} onChange={() => toggle(levels, setLevels, l.id)} />
                   <span className="min-w-0">
-                    <span className="block font-semibold text-[14.5px] text-slate-900">{l.name}</span>
+                    <span className="block font-semibold text-[14.5px] text-slate-900">
+                      {l.name}
+                      {l.limited && !l.closed && (
+                        <span className="ml-2 align-middle text-[10.5px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                          Limited spots
+                        </span>
+                      )}
+                    </span>
                     <span className="block text-[12.5px] text-slate-500 mt-0.5 leading-relaxed">
                       {l.id === 'sell' && !l.closed ? l.note.replace(/most of it/, `${p.keepPct}%`) : l.note}
                     </span>

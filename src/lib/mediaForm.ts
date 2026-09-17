@@ -20,6 +20,9 @@ export type MediaLevel = {
   note: string
   /** Listed but not selectable -- e.g. selling before the release wording is updated. */
   closed: boolean
+  /** Selectable, but applying is not the same as getting it: a capped number of
+   *  spots. Says so on the form rather than in a rejection email afterwards. */
+  limited?: boolean
 }
 
 /** Everything an approved photographer needs to turn up and shoot correctly.
@@ -90,8 +93,11 @@ export type MediaConfig = {
 export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
   { id: 'contribute', name: 'Contribute photos and video to the gallery', closed: false,
     note: 'Free. Your name and link under everything you upload — stills or clips.' },
-  { id: 'book', name: 'Take bookings from teams and families', closed: false,
-    note: 'You get a profile page with your packages. You keep 100% of what you book — we take no cut.' },
+  // Capped on purpose: a booking spot is only worth having if families are not
+  // choosing between twenty profiles, and Bo cannot take everyone who applies
+  // (Sep 17 2026). Better said here than in a rejection.
+  { id: 'book', name: 'Take bookings from teams and families', closed: false, limited: true,
+    note: 'A few spots per event, so applying does not guarantee one. If we approve you: a profile page with your packages, and you keep 100% of what you book — we take no cut.' },
   // Closed until the media release covers commercial use. Selling images of a
   // registered minor under a promotion-only waiver is not a gap to paper over,
   // so the level ships visible-but-locked rather than quietly missing.
@@ -102,7 +108,7 @@ export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
 export const DEFAULT_MEDIA_BENEFITS = [
   'Sideline access for the whole weekend',
   'Your name and link under every photo and clip you upload',
-  'A profile page on this site that parents and coaches can book from',
+  'A profile page on this site that parents and coaches can book from, if you take a booking spot',
   'Team and player requests sent straight to you',
   'You keep the copyright in everything you shoot',
 ]
@@ -142,7 +148,7 @@ export function mediaConfig(raw: any): MediaConfig {
   const levels: MediaLevel[] = DEFAULT_MEDIA_LEVELS.map(d => {
     const o = byId.get(d.id)
     return o
-      ? { id: d.id, name: str(o.name) || d.name, note: str(o.note) || d.note, closed: o.closed === true }
+      ? { id: d.id, name: str(o.name) || d.name, note: str(o.note) || d.note, closed: o.closed === true, limited: o.limited === undefined ? d.limited : o.limited === true }
       : { ...d }
   })
   const benefits = Array.isArray(raw?.benefits) ? raw.benefits.map(str).filter(Boolean) : []
