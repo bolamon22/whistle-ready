@@ -200,7 +200,9 @@ export async function insertSubmission(args: { orgId: string; formType: FormType
   const data = args.data || {}
   const dv = derived(data)
   const formType = String(args.formType || 'player')
-  const passToken = formType === 'player' ? newPassToken() : null
+  // Players and coaches both walk up to a gate and get scanned, so both need a
+  // token. Vendors/media/staff are checked against an approval list instead.
+  const passToken = (formType === 'player' || formType === 'coach') ? newPassToken() : null
   await prisma.$executeRawUnsafe(
     `INSERT INTO "OrgFormSubmission" ("id","orgId","formType","tournamentId","submittedAt","playerName","teamName","clubName","jersey","search","data","edits","updatedAt","passToken") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     id, args.orgId, formType, String(data.tournamentId || ''), submittedAt,

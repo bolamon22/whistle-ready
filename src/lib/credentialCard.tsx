@@ -20,7 +20,7 @@ import type { CSSProperties } from 'react'
 export const CRED_W = 720
 export const CRED_H = 1140
 
-export type CredentialRole = 'media' | 'vendor' | 'staff'
+export type CredentialRole = 'media' | 'vendor' | 'staff' | 'coach'
 export type CredentialStatus = 'pending' | 'approved' | 'declined'
 export type RenderMode = 'satori' | 'dom'
 
@@ -76,6 +76,10 @@ export const ROLES: Record<CredentialRole, { label: string; band: string; ink: s
   media:  { label: 'Media',  band: '#b45309', ink: '#fbbf24', soft: '#fffbeb' },
   vendor: { label: 'Vendor', band: '#5b21b6', ink: '#c4b5fd', soft: '#f5f3ff' },
   staff:  { label: 'Staff',  band: '#0f766e', ink: '#5eead4', soft: '#f0fdfa' },
+  // Crimson for coaches: the one remaining hue that cannot be mistaken for teal
+  // at ten feet, which matters most here — a coach card read as staff is someone
+  // waved through to places only staff should be.
+  coach:  { label: 'Coach',  band: '#9f1239', ink: '#fda4af', soft: '#fff1f2' },
 }
 
 /** Pending strips the role colour: an unapproved card must not look like a pass. */
