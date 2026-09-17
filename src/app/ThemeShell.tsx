@@ -10,7 +10,7 @@ import { usePathname } from 'next/navigation'
 // True on the signed-in routes that get the Light/Dark treatment. Shared with
 // <NavBar>, whose phone menu carries the toggle (the floating button is desktop-only).
 export function isStaffThemeRoute(pathname: string) {
-  const isPublic = /\/public(\/|$)/.test(pathname) || /^\/claim(\/|$)/.test(pathname) || /^\/tournaments\/[^/]+\/(event|rules|p|today|player-waiver|vendor-request|register|player-register)(\/|$)/.test(pathname)
+  const isPublic = /\/public(\/|$)/.test(pathname) || /^\/claim(\/|$)/.test(pathname) || /^\/tournaments\/[^/]+\/(event|rules|p|today|player-waiver|coach-waiver|vendor-request|register|player-register)(\/|$)/.test(pathname)
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register')
   const isSite = pathname.startsWith('/o/')  // public org website = fixed light theme
   return !isPublic && !isAuthPage && !isSite

@@ -120,7 +120,7 @@ export async function middleware(req: NextRequest) {
   // share with players. It's a 5-line redirect to /register/individual (which IS
   // public) -- but it was never listed here, so this gate fired BEFORE the redirect
   // could run and every player who clicked the advertised link landed on /login.
-  if (/^\/tournaments\/[^/]+\/(register|individual-register|player-register|player-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/.test(pathname)) return NextResponse.next()
+  if (/^\/tournaments\/[^/]+\/(register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/.test(pathname)) return NextResponse.next()
   // "Claim your team" — MUST be public: the coach following this link has no account
   // yet (creating one is the whole point). The token in the URL is the authorization.
   if (/^\/claim(\/|$)/.test(pathname)) return NextResponse.next()

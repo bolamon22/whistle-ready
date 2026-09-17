@@ -547,6 +547,14 @@ export default async function TournamentEventPage({ params }: { params: { id: st
           )}
 
           <div className="bg-white border border-slate-200 rounded-2xl p-4">
+            <h3 className="font-bold text-slate-900 text-sm mb-2">For coaches</h3>
+            <div className="flex flex-col gap-1.5">
+              <Link href={`${base}/coach-waiver`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ScrollText size={12} /> Coach waiver &amp; credential</Link>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-2 leading-snug">Every coach, assistant and team manager on the sideline needs one.</p>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4">
             <h3 className="font-bold text-slate-900 text-sm mb-2">For players &amp; parents</h3>
             <div className="flex flex-col gap-1.5">
               <Link href={`${base}/player-waiver`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ScrollText size={12} /> Player waiver</Link>

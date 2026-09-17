@@ -55,6 +55,7 @@ export const LEGACY_REDIRECTS: Record<string, Record<string, string>> = {
     '/sunshine-state-fall-classic': `${FC}/event`,
     '/register-teams': `${MM}/register`,
     '/player-waiver': `${MM}/player-waiver`,
+    '/coach-waiver': `${MM}/coach-waiver`,
     '/schedules': `${MM}/public`,
     '/hotels': `${MM}/event`,
     '/locations': `${MM}/event`,
