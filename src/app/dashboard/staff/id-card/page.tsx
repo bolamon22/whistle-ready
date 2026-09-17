@@ -8,13 +8,14 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
-import { Printer, ArrowLeft } from 'lucide-react'
+import { Printer, ArrowLeft, Wallet } from 'lucide-react'
 import StaffIdCard from '@/components/StaffIdCard'
 
 type Portal = {
   worker: { id: string; name: string; defaultRole: string; roles: string[]; gender?: string; photoUrl?: string | null; certLevel?: string; association?: string | null } | null
   events: { id: string; name: string; startDate: string; working: boolean; logoUrl?: string }[]
   orgName?: string | null
+  walletEnabled?: boolean
 }
 
 export default function StaffIdCardPage() {
@@ -65,7 +66,20 @@ export default function StaffIdCardPage() {
 
       <div className="flex items-center justify-between mb-5 print:hidden">
         <Link href="/dashboard/staff" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700"><ArrowLeft size={16} /> My portal</Link>
-        <button onClick={() => window.print()} className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold px-4 py-2 rounded-xl"><Printer size={16} /> Print my ID</button>
+        <div className="flex items-center gap-2">
+          {/* Only when a pass can actually be signed -- see walletEnabled().
+              Apple's guidelines want their own "Add to Apple Wallet" badge
+              artwork in production; drop the asset in and swap this button for
+              it. Plain button until then, rather than a home-drawn imitation
+              of Apple's mark. */}
+          {portal?.walletEnabled && (
+            <a href="/api/wallet/staff" download
+              className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-4 py-2 rounded-xl">
+              <Wallet size={16} /> Add to Apple Wallet
+            </a>
+          )}
+          <button onClick={() => window.print()} className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold px-4 py-2 rounded-xl"><Printer size={16} /> Print my ID</button>
+        </div>
       </div>
 
       <div className="flex justify-center">

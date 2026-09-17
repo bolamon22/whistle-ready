@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
+import { walletEnabled } from '@/lib/wallet'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -72,6 +73,10 @@ export async function GET() {
 
   return NextResponse.json({
     orgName,
+    // So the ID-card page can hide the Add-to-Wallet button rather than offer a
+    // download that 503s. Read here because env is server-side, and this is a
+    // call that page already makes.
+    walletEnabled: walletEnabled(),
     worker: worker
       ? { id: String(worker.id), name: String(worker.name ?? ''), defaultRole: String(worker.defaultRole ?? 'ref'), roles: workerRoles(worker), gender: String(worker.gender ?? 'both'), photoUrl: (worker.photoUrl as string | null) ?? null, certLevel: String(worker.certLevel ?? ''), association: (worker.association as string | null) ?? null }
       : null,

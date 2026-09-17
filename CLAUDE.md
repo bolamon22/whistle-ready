@@ -36,6 +36,42 @@ provider swappable in one file and is the seam for per-org senders + future chan
   Lacrossewear/lwops.com but uses a SEPARATE key ("Whistle Ready", Mail Send only) and a separate
   authenticated domain — only the plan quota is shared.
 
+### Apple Wallet passes
+Credentials can be added to Apple Wallet. ONE wrapper — **`src/lib/wallet.ts`** (`buildApplePass()` /
+`walletEnabled()`); routes must never import `passkit-generator` directly, same rule as `email.ts`.
+- `buildApplePass()` **never throws** — it returns `{ok,error}`. A wallet pass is a convenience on top
+  of the printed card and the public verify page; neither may break when a cert expires.
+- Passes are `generic` style (identity documents outlive one weekend), themed from the shared `ROLES`
+  palette in `credentialCard.tsx`, so the pass matches the printed card.
+- Serial numbers are stable (`staff-{workerId}`) so re-downloading REPLACES the pass instead of
+  stacking duplicates in Wallet.
+- The QR points at the same public `/verify/[workerId]` page as the printed card. **A Wallet pass can
+  only show a small thumbnail, not a photo-ID portrait** — the photo check lives behind the QR.
+- Live-updating passes (webServiceURL + APNs) are NOT built. Re-download to refresh.
+
+**Setup (Bo does this — it's credentials, the agent must not handle them):**
+1. Join the Apple Developer Program ($99/yr) → Identifiers → **Pass Type IDs** → create e.g.
+   `pass.app.whistleready.credential`.
+2. Generate a CSR in Keychain Access, upload it, download the `.cer`, and export cert + key as PEM.
+3. Download the **WWDR G4** intermediate from Apple's certificate page.
+4. base64 each PEM (`base64 -w0 file.pem`) into the Vercel env vars listed in `.env.example`:
+   `APPLE_PASS_TYPE_ID`, `APPLE_TEAM_ID`, `APPLE_PASS_CERT_PEM`, `APPLE_PASS_KEY_PEM`,
+   `APPLE_WWDR_PEM` (+ `APPLE_PASS_KEY_PASSPHRASE` if the key is encrypted).
+
+Missing vars = `walletEnabled()` false = the button is hidden and the route 503s. Nothing else breaks.
+
+**Verified Sep 17 2026** with a throwaway self-signed chain in the sandbox: bundle contained
+pass.json + manifest.json + signature + icon/logo, all 5 manifest SHA1s matched, no files outside the
+manifest, and `openssl smime -verify` returned "Verification successful". Only Apple's real cert can
+prove device trust.
+
+**Not built yet:** venue coordinates. Lock-screen relevance (the pass surfacing when someone arrives
+at the fields) needs lat/lng, and neither `Tournament` nor the locations config stores any — only a
+`location` string. Cheapest fix is optional lat/lng fields on the venue editor that Bo pastes from
+Google Maps; no geocoding key needed. Media and player passes also still need public verify endpoints
+(staff already has `/verify/[workerId]` + `/api/verify-staff`), and the media application collects no
+photo at all.
+
 ## How we ship (workflow)
 - **Working clone (use this one): `C:\Users\bo\GitHub\gameday-staff5`.** There is a second, OLD
   clone at `C:\Users\bo\OneDrive\Documents\GitHub\gameday-staff5` — do NOT commit there. Both show
