@@ -129,6 +129,7 @@ export default function CoachRegForm({
           data: {
             ...d,
             photoUrl,
+            clubLogoUrl,
             tournamentId,
             tournamentName,
             // teamName in the same "Club — Team" shape the player waiver files
@@ -158,12 +159,21 @@ export default function CoachRegForm({
   const card_ = 'bg-white rounded-2xl border border-slate-200 shadow-sm mb-5 overflow-hidden'
   const hd = 'px-6 py-4 border-b border-slate-100 text-sm font-bold text-slate-900'
 
+  // The crest of the club they picked. Derived rather than held in form state --
+  // a coach never types this, so a second copy in `d` could only ever drift from
+  // the club actually selected. Falls back to matching on the typed club name for
+  // someone whose club is registered but who edited the name field.
+  const clubLogoUrl =
+    (picks.length ? clubs.find(c => c.name === picks[0].club)?.logoUrl : '') ||
+    clubs.find(c => c.name === d.clubName)?.logoUrl || ''
+
   const credential = {
     code: '',
     role: 'coach' as const,
     status: (ready ? 'approved' : 'pending') as 'approved' | 'pending',
     name: d.coachFullName || 'Your name',
     business: d.clubName || '',
+    clubLogoUrl,
     title: d.coachingRole || 'Coach',
     photoUrl,
     eventNames: card.eventNames,
@@ -224,7 +234,13 @@ export default function CoachRegForm({
                 <div className="border border-slate-300 rounded-xl max-h-60 overflow-y-auto bg-white">
                   {clubs.map(c => (
                     <div key={c.name}>
-                      <div className="sticky top-0 bg-slate-100 text-[11px] font-bold tracking-wider uppercase text-slate-500 px-3 py-1.5">{c.name}</div>
+                      {/* The crest in the group header: a parent club with four teams
+                          named after itself is normal here, so the logo is the fastest
+                          way to confirm you are in the right block before ticking. */}
+                      <div className="sticky top-0 bg-slate-100 text-[11px] font-bold tracking-wider uppercase text-slate-500 px-3 py-1.5 flex items-center gap-2">
+                        {c.logoUrl && <img src={c.logoUrl} alt="" width={16} height={16} className="w-4 h-4 object-contain rounded shrink-0" />}
+                        <span className="truncate">{c.name}</span>
+                      </div>
                       {c.teams.map(t => {
                         const pick = { club: c.name, team: t.name, division: t.division }
                         return (

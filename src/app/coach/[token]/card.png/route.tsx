@@ -19,16 +19,17 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const pass = await loadCoachPass(params.token, base)
   if (!pass) return new NextResponse('Not found', { status: 404 })
 
-  const [photoUrl, orgLogoUrl, qr, qr2, fonts] = await Promise.all([
+  const [photoUrl, orgLogoUrl, clubLogoUrl, qr, qr2, fonts] = await Promise.all([
     imageForSatori(pass.card.photoUrl, base),
     imageForSatori(pass.card.orgLogoUrl, base),
+    imageForSatori(pass.card.clubLogoUrl || '', base),
     qrDataUrl(pass.qrUrl),
     qrDataUrl(pass.qr2Url),
     loadPassFonts().catch(() => undefined),
   ])
 
   return new ImageResponse(
-    <CredentialCard mode="satori" p={{ ...pass.card, photoUrl, orgLogoUrl, qrDataUrl: qr, qr2DataUrl: qr2 }} />,
+    <CredentialCard mode="satori" p={{ ...pass.card, photoUrl, orgLogoUrl, clubLogoUrl, qrDataUrl: qr, qr2DataUrl: qr2 }} />,
     {
       width: CRED_W, height: CRED_H,
       ...(fonts ? { fonts } : {}),

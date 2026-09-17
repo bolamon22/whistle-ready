@@ -83,6 +83,7 @@ export async function loadCoachPass(token: string, base: string): Promise<CoachP
     status: 'approved',
     name: s(d.coachFullName) || 'Coach',
     business: s(d.clubName),
+    clubLogoUrl: s(d.clubLogoUrl),
     // The role they told us, with their certifications after it -- a gate wants to
     // know "head coach" first and "SafeSport" second.
     title: [s(d.coachingRole) || 'Coach', certLine].filter(Boolean).join(' · '),

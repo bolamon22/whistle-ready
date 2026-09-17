@@ -33,6 +33,8 @@ export type CredentialCardData = {
   name: string
   /** Their business, if any — shown under the name. */
   business: string
+  /** The club's crest, beside the business line. Blank = the name stands alone. */
+  clubLogoUrl?: string
   /** "Photographer", "Content creator", "Booth staff"… the line under the role band. */
   title: string
   photoUrl: string
@@ -146,7 +148,17 @@ export function CredentialCard({ p, mode = 'satori' }: { p: CredentialCardData; 
           : <div style={{ display: 'flex', boxSizing: 'border-box', width: 250, height: 250, borderRadius: 24, background: S100, border: `4px dashed ${S200}`, color: S400, alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700 }}>Photo</div>}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, justifyContent: 'center' }}>
           <div style={{ fontSize: name.length > 20 ? 40 : 50, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1, ...clamp(mode, 2) }}>{name}</div>
-          {p.business && <div style={{ fontSize: 26, color: S500, marginTop: 8, ...clamp(mode, 2) }}>{p.business}</div>}
+          {p.business && (
+            /* The crest sits WITH the club name rather than off on its own: at arm's
+               length a gate reads the logo first and the words second, and the two
+               have to be the same claim. No logo just leaves the name, which is why
+               Mark is only rendered when there is one -- a dark initials tile here
+               would outshout the person's actual name above it. */
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, minWidth: 0 }}>
+              {p.clubLogoUrl && <Mark name={p.business} url={p.clubLogoUrl} size={52} radius={12} />}
+              <div style={{ fontSize: 26, color: S500, ...clamp(mode, 2) }}>{p.business}</div>
+            </div>
+          )}
         </div>
       </div>
 
