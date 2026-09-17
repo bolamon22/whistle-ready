@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Camera, Check, Info, Lock, Plus, Instagram, Handshake } from 'lucide-react'
+import { Camera, Check, Info, Lock, Plus, ShieldCheck, Instagram, Handshake } from 'lucide-react'
 import type { MediaConfig } from '@/lib/mediaForm'
 import { commitmentLines, levelAsks } from '@/lib/mediaForm'
 import CredentialPreview from './CredentialPreview'
@@ -301,6 +301,15 @@ export default function ShootPage(p: Props) {
                       <span className="block text-[12.5px] text-slate-500 mt-0.5 leading-relaxed">
                         {l.id === 'sell' && !l.closed ? l.note.replace(/most of it/, `${p.keepPct}%`) : l.note}
                       </span>
+                      {/* The badge is the reward made visible. A line of text
+                          saying you become certified is abstract; the thing you
+                          would actually wear is not. */}
+                      {l.badge && !l.closed && (
+                        <span className="inline-flex items-center gap-1.5 mt-2.5 bg-slate-900 text-white rounded-full px-3 py-1.5 text-[12px] font-semibold">
+                          <ShieldCheck size={13} className="shrink-0 text-teal-300" />
+                          {l.badge.replace('{org}', p.orgName || 'Certified').trim()}
+                        </span>
+                      )}
                       {/* The misreading worth heading off sits with the offer, not
                           in the gate below it: someone who thinks we are gating
                           their business stops reading before the gate. */}
@@ -338,7 +347,11 @@ export default function ShootPage(p: Props) {
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
-            <div><label className={label}>Primary gear <span className="font-normal text-slate-400">body and longest lens</span></label><input className={input} value={f.gear} onChange={e => set('gear', e.target.value)} /></div>
+            {/* "Primary gear / body and longest lens" read like shorthand between
+                two people who already know each other. The question is a real
+                screen -- a kit lens does not reach from a sideline -- so it is
+                worth asking in words a professional would use. */}
+            <div><label className={label}>Camera and lenses <span className="font-normal text-slate-400">body, and your longest lens</span></label><input className={input} value={f.gear} onChange={e => set('gear', e.target.value)} placeholder="e.g. Canon R6 · 70-200mm f/2.8" /></div>
             <div>
               <label className={label}>Liability insurance?</label>
               <select className={input} value={f.insurance} onChange={e => set('insurance', e.target.value)}>

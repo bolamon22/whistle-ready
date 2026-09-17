@@ -28,6 +28,10 @@ export type MediaLevel = {
   gate?: string
   /** A misreading worth heading off before it happens. */
   clarify?: string
+  /** The status this rung confers, shown as a badge. `{org}` is replaced with
+   *  the organization's name at render, so the default is not hardcoded to one
+   *  tournament series. Blank means the rung grants no badge. */
+  badge?: string
 }
 
 /** Everything an approved photographer needs to turn up and shoot correctly.
@@ -118,8 +122,14 @@ export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
   // tournament is granting permission to be booked at all, which is not ours to
   // grant and is exactly what a working photographer would bristle at. What is
   // on offer is the promotion, and the clarify line says so outright.
-  { id: 'book', name: 'Take bookings through our site', closed: false,
+  // Named for the status, not the mechanism. "Take bookings through our site"
+  // described the plumbing; "certified" is the thing a photographer actually
+  // wants and can put in their own bio, which turns a requirement they have to
+  // clear into something they want to earn (Bo, Sep 17 2026). What it gets them
+  // still sits in the note directly underneath, so the name costs no substance.
+  { id: 'book', name: 'Become a certified photographer', closed: false,
     status: 'Apply after your first event',
+    badge: '{org} Certified Photographer',
     note: 'A profile page on our site with your packages, a listing on our photographers page, and booking requests from teams and families sent straight to you. You keep 100% — we take no cut.',
     clarify: 'This does not gate your business. Teams and families can hire you directly, any time, whether or not you have this. What you are applying for is the promotion: a profile on our site, and the booking form participants fill in coming to you.',
     gate: 'Apply after your first event. Shoot a weekend as a contributor, get your photos into the gallery, then apply. Someone booking through our form is trusting our name alongside yours, so we only put it behind a shooter we have watched work.' },
