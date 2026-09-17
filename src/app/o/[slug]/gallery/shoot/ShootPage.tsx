@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { Camera, Check, Lock, Instagram, Handshake } from 'lucide-react'
+import { Camera, Check, Info, Lock, Plus, Instagram, Handshake } from 'lucide-react'
 import type { MediaConfig } from '@/lib/mediaForm'
-import { commitmentLines } from '@/lib/mediaForm'
+import { commitmentLines, levelAsks } from '@/lib/mediaForm'
 import CredentialPreview from './CredentialPreview'
 
 type OrgEvent = { id: string; name: string; dates: string }
@@ -281,25 +281,59 @@ export default function ShootPage(p: Props) {
           <div>
             <label className={label}>What do you want to do? *</label>
             <div className="space-y-2">
-              {p.cfg.levels.map(l => (
-                <label key={l.id} className={`flex gap-3 items-start border rounded-xl px-3.5 py-3 transition-colors ${l.closed ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-70' : levels.includes(l.id) ? 'border-teal-500 bg-teal-50/60 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer'}`}>
-                  <input type="checkbox" className="mt-1 accent-teal-600 w-4 h-4 shrink-0" disabled={l.closed}
-                    checked={levels.includes(l.id)} onChange={() => toggle(levels, setLevels, l.id)} />
-                  <span className="min-w-0">
-                    <span className="block font-semibold text-[14.5px] text-slate-900">
-                      {l.name}
-                      {l.limited && !l.closed && (
-                        <span className="ml-2 align-middle text-[10.5px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                          Limited spots
+              {p.cfg.levels.map(l => {
+                const asks = levelAsks(l.id, p.cfg.commitments)
+                const on = levels.includes(l.id)
+                return (
+                <div key={l.id} className={`border rounded-xl overflow-hidden transition-colors ${l.closed ? 'border-slate-200 bg-slate-50' : on ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                  <label className={`flex gap-3 items-start px-3.5 py-3 ${l.closed ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
+                    <input type="checkbox" className="mt-1 accent-teal-600 w-4 h-4 shrink-0" disabled={l.closed}
+                      checked={on} onChange={() => toggle(levels, setLevels, l.id)} />
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-[14.5px] text-slate-900">
+                        {l.name}
+                        {l.status && (
+                          <span className={`ml-2 align-middle text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 ${l.closed ? 'text-violet-700 bg-violet-50 border border-violet-200' : l.gate ? 'text-amber-700 bg-amber-50 border border-amber-200' : 'text-teal-700 bg-teal-50 border border-teal-200'}`}>
+                            {l.status}
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-[12.5px] text-slate-500 mt-0.5 leading-relaxed">
+                        {l.id === 'sell' && !l.closed ? l.note.replace(/most of it/, `${p.keepPct}%`) : l.note}
+                      </span>
+                      {/* The misreading worth heading off sits with the offer, not
+                          in the gate below it: someone who thinks we are gating
+                          their business stops reading before the gate. */}
+                      {l.clarify && (
+                        <span className="flex gap-2 items-start mt-2.5 rounded-lg bg-teal-50 border border-teal-200 px-2.5 py-2 text-[12px] leading-relaxed text-slate-600">
+                          <Info size={13} className="shrink-0 mt-0.5 text-teal-600" />
+                          <span>{l.clarify}</span>
                         </span>
                       )}
                     </span>
-                    <span className="block text-[12.5px] text-slate-500 mt-0.5 leading-relaxed">
-                      {l.id === 'sell' && !l.closed ? l.note.replace(/most of it/, `${p.keepPct}%`) : l.note}
-                    </span>
-                  </span>
-                </label>
-              ))}
+                  </label>
+                  {l.gate && (
+                    <div className="flex gap-2 items-start border-t border-dashed border-slate-200 mx-3.5 py-2.5 text-[12px] leading-relaxed text-slate-600">
+                      <Lock size={13} className="shrink-0 mt-0.5 text-amber-600" />
+                      <span>{l.gate}</span>
+                    </div>
+                  )}
+                  {asks.length > 0 && (
+                    <div className="border-t border-slate-100 bg-slate-50/70 px-3.5 py-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">What we ask, on top</p>
+                      <ul className="space-y-1">
+                        {asks.map((a, i) => (
+                          <li key={i} className="flex gap-2 text-[12.5px] text-slate-600 leading-relaxed">
+                            <Plus size={12} className="shrink-0 mt-1 text-amber-600" />
+                            <span>{a}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                )
+              })}
             </div>
           </div>
 

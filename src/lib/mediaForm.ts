@@ -20,9 +20,14 @@ export type MediaLevel = {
   note: string
   /** Listed but not selectable -- e.g. selling before the release wording is updated. */
   closed: boolean
-  /** Selectable, but applying is not the same as getting it: a capped number of
-   *  spots. Says so on the form rather than in a rejection email afterwards. */
-  limited?: boolean
+  /** The pill beside the name: 'Open to all', 'Apply after your first event'. */
+  status?: string
+  /** Why this rung is gated and how somebody reaches it. Replaces the old
+   *  `limited` flag, which could say a spot was capped but never how to earn
+   *  one -- which is the half that stops a cap reading as favouritism. */
+  gate?: string
+  /** A misreading worth heading off before it happens. */
+  clarify?: string
 }
 
 /** Everything an approved photographer needs to turn up and shoot correctly.
@@ -55,9 +60,14 @@ export type MediaCommitments = {
   minPhotos: number
   withinDays: number
   /** Posts promoting the event BEFORE it, saying they will be there. 0 disables.
-   *  The only ask that runs before the weekend, which is the point: it helps
-   *  fill the event rather than just document it. */
+   *  A TIER 2 ask, not a general one: promotion is what the booking spot is
+   *  traded for, and leaving it off tier 1 keeps that rung a light enough ask
+   *  that the two are a real choice rather than one obvious one (Bo, Sep 17). */
   prePosts: number
+  /** What a booking profile costs: a bigger set, faster. The gallery is what
+   *  sells their profile, so it has to fill while parents are still looking. */
+  bookMinPhotos: number
+  bookWithinHours: number
   /** The org's handle, without the @. Blank hides the social lines. */
   socialHandle: string
   tagRequired: boolean
@@ -94,19 +104,35 @@ export type MediaConfig = {
   instructions: MediaInstructions
 }
 
+// A LADDER, NOT A MENU. Three independent checkboxes made booking strictly
+// better than contributing at the same price, so everyone ticked everything and
+// the answer carried no signal about who was serious. Each rung is now reached
+// through the one below it, and costs more, so people self-select instead of
+// being turned down (Bo, Sep 17 2026).
 export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
-  { id: 'contribute', name: 'Contribute photos and video to the gallery', closed: false,
-    note: 'Free. Your name and link under everything you upload — stills or clips.' },
-  // Capped on purpose: a booking spot is only worth having if families are not
-  // choosing between twenty profiles, and Bo cannot take everyone who applies
-  // (Sep 17 2026). Better said here than in a rejection.
-  { id: 'book', name: 'Take bookings from teams and families', closed: false, limited: true,
-    note: 'A few spots per event, so applying does not guarantee one. If we approve you: a profile page with your packages, and you keep 100% of what you book — we take no cut.' },
-  // Closed until the media release covers commercial use. Selling images of a
-  // registered minor under a promotion-only waiver is not a gap to paper over,
-  // so the level ships visible-but-locked rather than quietly missing.
+  { id: 'contribute', name: 'Contribute to the gallery', closed: false,
+    status: 'Open to all',
+    note: 'Free. Sideline access all weekend, your name and link under everything you upload, and you keep the copyright.' },
+
+  // "Through our site" is load-bearing. Without it this reads as though the
+  // tournament is granting permission to be booked at all, which is not ours to
+  // grant and is exactly what a working photographer would bristle at. What is
+  // on offer is the promotion, and the clarify line says so outright.
+  { id: 'book', name: 'Take bookings through our site', closed: false,
+    status: 'Apply after your first event',
+    note: 'A profile page on our site with your packages, a listing on our photographers page, and booking requests from teams and families sent straight to you. You keep 100% — we take no cut.',
+    clarify: 'This does not gate your business. Teams and families can hire you directly, any time, whether or not you have this. What you are applying for is the promotion: a profile on our site, and the booking form participants fill in coming to you.',
+    gate: 'Apply after your first event. Shoot a weekend as a contributor, get your photos into the gallery, then apply. Someone booking through our form is trusting our name alongside yours, so we only put it behind a shooter we have watched work.' },
+
+  // TWO gates, and the release is the real one. Every player is registered under
+  // a waiver covering event photography -- promotion. Selling a family's photo
+  // commercially is a different permission we do not have, and no amount of
+  // track record substitutes for it. Saying only "earned over a season" would
+  // set up a conversation a year from now that still ends in no.
   { id: 'sell', name: 'Sell your work in the gallery', closed: true,
-    note: 'Opening soon. We handle watermarking, hosting and payment; you set your prices and keep most of it.' },
+    status: 'Not open yet',
+    note: 'We handle watermarking, hosting and payment; you set your prices and keep most of it.',
+    gate: 'Two things have to happen first. Our photo release has to cover commercial use — every player here is registered under a waiver for event photography, and selling a family\u2019s photo is a different permission we do not have yet. And this rung is for shooters who have contributed and taken bookings through our site across several events, not one.' },
 ]
 
 export const DEFAULT_MEDIA_BENEFITS = [
@@ -133,6 +159,8 @@ export const DEFAULT_COMMITMENTS: MediaCommitments = {
   minPhotos: 20,
   withinDays: 7,
   prePosts: 2,
+  bookMinPhotos: 40,
+  bookWithinHours: 72,
   socialHandle: '',
   tagRequired: true,
   collabRequired: true,
@@ -153,7 +181,11 @@ export function mediaConfig(raw: any): MediaConfig {
   const levels: MediaLevel[] = DEFAULT_MEDIA_LEVELS.map(d => {
     const o = byId.get(d.id)
     return o
-      ? { id: d.id, name: str(o.name) || d.name, note: str(o.note) || d.note, closed: o.closed === true, limited: o.limited === undefined ? d.limited : o.limited === true }
+      ? { id: d.id, name: str(o.name) || d.name, note: str(o.note) || d.note, closed: o.closed === true,
+          // status/gate/clarify fall back to the default rung rather than to
+          // blank: a stored config written before the ladder existed would
+          // otherwise silently drop the thing that explains the gate.
+          status: str(o.status) || d.status, gate: str(o.gate) || d.gate, clarify: str(o.clarify) || d.clarify }
       : { ...d }
   })
   const benefits = Array.isArray(raw?.benefits) ? raw.benefits.map(str).filter(Boolean) : []
@@ -184,6 +216,10 @@ export function mediaConfig(raw: any): MediaConfig {
         ? Math.floor(Number(raw.commitments.minPhotos)) : DEFAULT_COMMITMENTS.minPhotos,
       prePosts: Number(raw?.commitments?.prePosts) >= 0 && raw?.commitments?.prePosts !== undefined
         ? Math.floor(Number(raw.commitments.prePosts)) : DEFAULT_COMMITMENTS.prePosts,
+      bookMinPhotos: Number(raw?.commitments?.bookMinPhotos) >= 0 && raw?.commitments?.bookMinPhotos !== undefined
+        ? Math.floor(Number(raw.commitments.bookMinPhotos)) : DEFAULT_COMMITMENTS.bookMinPhotos,
+      bookWithinHours: Number(raw?.commitments?.bookWithinHours) >= 0 && raw?.commitments?.bookWithinHours !== undefined
+        ? Math.floor(Number(raw.commitments.bookWithinHours)) : DEFAULT_COMMITMENTS.bookWithinHours,
       withinDays: Number(raw?.commitments?.withinDays) >= 0 && raw?.commitments?.withinDays !== undefined
         ? Math.floor(Number(raw.commitments.withinDays)) : DEFAULT_COMMITMENTS.withinDays,
       socialHandle: str(raw?.commitments?.socialHandle).replace(/^@/, ''),
@@ -211,14 +247,6 @@ export function photographerSharePct(cfg: MediaConfig): number {
 export function commitmentLines(c: MediaCommitments): string[] {
   if (!c.show) return []
   const out: string[] = []
-  // First, because it is the only ask that lands before the weekend: chronology
-  // makes the list read as a timeline rather than a pile. Also the biggest ask,
-  // and burying it would be the kind of surprise that sours a good arrangement.
-  if (c.prePosts > 0 && c.socialHandle) {
-    const n = c.prePosts === 1 ? 'once' : `at least ${c.prePosts} times`
-    const inv = c.prePosts === 1 ? 'a Collab invite' : 'a Collab invite on each'
-    out.push(`Post ${n} before the event \u2014 promoting it and that you\u2019ll be there \u2014 tagging @${c.socialHandle}, with ${inv}`)
-  }
   if (c.minPhotos > 0) {
     // Photos OR clips: a videographer who turns in twenty ten-second clips has
     // done what was asked, and the old wording told them they had not.
@@ -235,6 +263,31 @@ export function commitmentLines(c: MediaCommitments): string[] {
   // we cannot keep.
   if (c.socialHandle && c.collabRequired) out.push(`Send @${c.socialHandle} a Collab invite when you post from the event`)
   return [...out, ...c.extra]
+}
+
+/**
+ * What a rung asks ON TOP of the base commitments above.
+ *
+ * Tier 2 is the only one with extras today, and all three are the same trade in
+ * different forms: we put our name behind you, so help fill the event, feed the
+ * gallery while parents are still looking, and have something worth clicking
+ * when they land on your profile.
+ */
+export function levelAsks(levelId: MediaLevel['id'], c: MediaCommitments): string[] {
+  if (levelId !== 'book') return []
+  const out: string[] = []
+  if (c.prePosts > 0 && c.socialHandle) {
+    const n = c.prePosts === 1 ? 'One post' : `${c.prePosts} posts`
+    const inv = c.prePosts === 1 ? 'a Collab invite' : 'a Collab invite on each'
+    out.push(`${n} before the event, saying you’ll be there — tagging @${c.socialHandle}, with ${inv}`)
+  }
+  if (c.bookMinPhotos > 0) {
+    out.push(c.bookWithinHours > 0
+      ? `${c.bookMinPhotos} photos or clips instead of ${c.minPhotos}, within ${c.bookWithinHours} hours`
+      : `${c.bookMinPhotos} photos or clips instead of ${c.minPhotos}`)
+  }
+  out.push('Your portfolio and packages live before we switch the profile on')
+  return out
 }
 
 /** Level ids -> the names an email or a list can show. */

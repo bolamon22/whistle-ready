@@ -143,10 +143,25 @@ export default function PhotographersAdmin() {
               <input className={input} type="number" min={0} value={media.commitments.withinDays}
                 onChange={e => setCom({ withinDays: Math.max(0, Number(e.target.value) || 0) })} />
             </div>
+          </div>
+
+          {/* Tier 2 only -- what a booking profile costs on top of the base ask. */}
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mt-4 mb-1.5">Booking tier asks for extra</p>
+          <div className="grid sm:grid-cols-3 gap-3">
             <div>
               <label className={lbl}>Posts before the event</label>
               <input className={input} type="number" min={0} value={media.commitments.prePosts}
                 onChange={e => setCom({ prePosts: Math.max(0, Number(e.target.value) || 0) })} />
+            </div>
+            <div>
+              <label className={lbl}>Minimum photos</label>
+              <input className={input} type="number" min={0} value={media.commitments.bookMinPhotos}
+                onChange={e => setCom({ bookMinPhotos: Math.max(0, Number(e.target.value) || 0) })} />
+            </div>
+            <div>
+              <label className={lbl}>Within (hours)</label>
+              <input className={input} type="number" min={0} value={media.commitments.bookWithinHours}
+                onChange={e => setCom({ bookWithinHours: Math.max(0, Number(e.target.value) || 0) })} />
             </div>
             <div>
               <label className={lbl}>Your Instagram</label>
