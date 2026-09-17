@@ -84,6 +84,33 @@ Two-minute form: {{applyUrl}}
 Bo
 {{orgName}}`,
   },
+  {
+    key: 'season',
+    label: 'Join for the season',
+    hint: 'Sets the whole year up at once \u2014 links to the form with every weekend already ticked.',
+    subject: `Shooting lacrosse this season? {{orgName}} media list`,
+    body: `Hi {{name}},
+
+I run {{orgName}}, and I'm putting together the group of photographers and content creators who shoot our weekends this season.
+
+I'd rather set this up once than email you event by event, so here is the whole arrangement.
+
+The credential is free and gets you field access for any weekend you pick. Everything you shoot stays yours. Your credit goes on every photo or clip you add to the event gallery, and that credit links to your own booking page on our site \u2014 a parent who likes a shot is one click from hiring you, and we take nothing from what you book.
+
+What we ask back, for each weekend you work: a set of photos or clips for the gallery, a tag when you post, and an Instagram Collab. The Collab runs both ways \u2014 you add us on your posts from the event, we add you on anything of yours we share. Yours is the one that matters, since you post far more often than we do.
+
+One form covers the season. Every upcoming weekend is already ticked \u2014 untick any you can't make:
+
+{{seasonUrl}}
+
+This is what the gallery looks like now: {{galleryUrl}}
+
+Happy to talk it through first if you'd rather. Just reply.
+
+Best regards,
+Bo Lamon
+{{orgName}}`,
+  },
 ]
 
 export const MEDIA_INVITE_DEFAULT = MEDIA_INVITE_TEMPLATES[0]
@@ -97,6 +124,9 @@ export type MediaInviteVars = {
   tournamentName: string
   dates: string
   applyUrl: string
+  /** The same form with NO event preselected, which ticks every upcoming
+   *  weekend — what a season-wide invite should link to. */
+  seasonUrl: string
   galleryUrl: string
 }
 
@@ -113,6 +143,10 @@ export function mergeMediaInvite(template: string, vars: Partial<MediaInviteVars
  * Pre-filling matters more here than on most forms: the person opening it was
  * asked by name in an email, and being made to retype their own name and address
  * is exactly the friction that turns a yes into a maybe.
+ *
+ * Pass an empty tournamentId for a season invite: with no event in the query the
+ * form ticks every upcoming weekend, which is the behaviour the season letter
+ * leans on.
  */
 export function mediaApplyUrl(base: string, tournamentId: string, who?: { name?: string; business?: string; email?: string }): string {
   const q = new URLSearchParams()

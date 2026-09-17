@@ -88,6 +88,9 @@ export default function InvitePanel({ id }: { id: string }) {
     tournamentName: meta?.tournamentName || '',
     dates: meta?.dates || '',
     applyUrl: meta ? mediaApplyUrl(meta.applyBase, id, sample) : '',
+    // No event id: the form then ticks every upcoming weekend, which is what the
+    // season letter promises.
+    seasonUrl: meta ? mediaApplyUrl(meta.applyBase, '', sample) : '',
     galleryUrl: meta?.galleryUrl || '',
   }
   const previewSubject = mergeMediaInvite(subject, vars)
@@ -178,7 +181,7 @@ export default function InvitePanel({ id }: { id: string }) {
             <label className="block text-[12.5px] font-semibold text-slate-700 mt-1">Body</label>
             <textarea value={body} onChange={e => setBody(e.target.value)} rows={12} className={`${box} font-mono text-[12.5px] leading-relaxed`} />
             <p className="text-xs text-slate-400">
-              {'{{name}} {{business}} {{orgName}} {{tournamentName}} {{dates}} {{applyUrl}} {{galleryUrl}}'} fill in per person.
+              {'{{name}} {{business}} {{orgName}} {{tournamentName}} {{dates}} {{applyUrl}} {{seasonUrl}} {{galleryUrl}}'} fill in per person.
             </p>
           </div>
 
