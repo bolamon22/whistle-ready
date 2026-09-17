@@ -156,7 +156,17 @@ export const DEFAULT_MEDIA_LEVELS: MediaLevel[] = [
     status: 'Not open yet',
     credential: 'Gallery sales',
     note: 'We handle watermarking, hosting and payment; you set your prices and keep most of it.',
-    gate: 'Two things have to happen first. Our photo release has to cover commercial use — every player here is registered under a waiver for event photography, and selling a family\u2019s photo is a different permission we do not have yet. And this rung is for shooters who have contributed and taken bookings through our site across several events, not one.' },
+    // WHY THE REASON IS NOT IN THE GATE: the real blocker is that our own photo
+    // release does not cover commercial use yet -- players are registered under a
+    // waiver for event photography, and selling a family's photo is a permission
+    // we have not got. True, and none of an applicant's business. Printing it on
+    // a public recruiting form tells every photographer our paperwork is behind
+    // and invites a conversation we can't finish (Bo, Sep 17 2026). The note
+    // stays here for us; the form says what it takes and when.
+    // No "Not open yet" here: the status pill beside the name already says it,
+    // and the card shows the gate's first sentence -- which would have been the
+    // same three words twice.
+    gate: 'When we open it, it will be for shooters who have contributed and taken bookings through our site across several events, not one.' },
 ]
 
 /**

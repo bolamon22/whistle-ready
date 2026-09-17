@@ -48,6 +48,10 @@ export default function ShootPage(p: Props) {
 
   // We only need their handle if BOTH sides are on Instagram: us to tag, them to
   // be tagged.
+  // Up to and including the first full stop. `split('. ')[0] + '.'` was doubling
+  // the period on a gate that is a single sentence.
+  const firstSentence = (t: string) => (t.match(/^[^.]*\./) || [t])[0]
+
   const igRequired = !!p.cfg.commitments.socialHandle && platforms.includes('instagram')
 
   const toggle = (arr: string[], setArr: (v: string[]) => void, id: string) =>
@@ -217,7 +221,7 @@ export default function ShootPage(p: Props) {
                     it just needs to answer "can I have this now?". */}
                 {l.gate && (
                   <p className="mt-auto pt-3 text-[12px] leading-relaxed text-slate-500 border-t border-slate-100">
-                    {l.gate.split('. ')[0]}.
+                    {firstSentence(l.gate)}
                   </p>
                 )}
               </div>
@@ -252,10 +256,12 @@ export default function ShootPage(p: Props) {
             {p.cfg.commitments.socialHandle && (
               <p className="text-[13.5px] text-slate-500 mt-5 pt-4 border-t border-slate-100 leading-relaxed">
                 <Instagram size={13} className="inline -mt-0.5 mr-1.5 text-slate-400" />
-                A Collab post runs on both grids at once and shares its likes and comments. Instagram only
-                lets whoever makes the post send the invite, so on yours it has to come from you — which is
-                where it matters anyway: it puts your name in front of an audience that has not seen your
-                work. Our account is{' '}
+                {/* Was a five-sentence explainer of what a Collab post is, aimed at
+                    professional content creators who already know. All they need is
+                    the one thing that isn't obvious: the invite has to come from
+                    their end (Bo, Sep 17 2026). */}
+                Instagram only lets whoever makes the post send the Collab invite, so it has to come from
+                you. Our account is{' '}
                 <a href={`https://instagram.com/${p.cfg.commitments.socialHandle}`} target="_blank" rel="noreferrer"
                   className="font-semibold text-teal-700 hover:text-teal-900">@{p.cfg.commitments.socialHandle}</a>.
               </p>
