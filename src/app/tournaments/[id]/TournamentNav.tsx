@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp, LayoutDashboard, Settings, Users, Zap, DollarSign, type LucideIcon } from 'lucide-react'
 import HelpCenter from '@/components/HelpCenter'
 
@@ -21,7 +21,11 @@ interface TournamentMeta {
   logoUrl: string
 }
 
-type NavItem = { href: string; label: string }
+// `sect` groups a long menu under headings. The first item carrying a new
+// section name prints the heading above itself, so grouping is just ordering —
+// no nested menu, no second thing to tap. People has eleven pages heading for
+// it; a flat list of eleven is a wall, and on a phone it is a wall you scroll.
+type NavItem = { href: string; label: string; sect?: string }
 type NavGroup = { label: string; href?: string; items?: NavItem[] }
 
 // Icons for the phone tab bar (desktop tabs are text-only).
@@ -71,16 +75,21 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/documents`,  label: 'Documents' },
     ]},
     { label: 'People', items: [
-      { href: `${base}/registrations`,        label: 'Team registrations' },
-      { href: `${base}/player-registrations`, label: 'Player rosters' },
-      { href: `${base}/player-waivers`,       label: 'Player Waiver' },
-      { href: `${base}/vendor-requests`,      label: 'Vendor Requests' },
-      { href: `${base}/media-requests`,       label: 'Media credentials' },
-      { href: `${base}/photo-requests`,       label: 'Photo bookings' },
-      { href: `${base}/gallery-uploads`,      label: 'Photos & video sent in' },
-      { href: `${base}/staff-applications`,   label: 'Staff applications' },
-      { href: `${base}/roster`,               label: 'Staff roster' },
-      { href: `${base}/travel`,               label: 'Travel & hotels' },
+      // Order IS the grouping — keep same-section items adjacent or the heading
+      // prints twice. Coach waivers slots in after Player waivers once its staff
+      // list exists; the public form is live but has no list page to point at yet.
+      { href: `${base}/registrations`,        label: 'Team registrations',     sect: 'Teams & players' },
+      { href: `${base}/player-registrations`, label: 'Player rosters',         sect: 'Teams & players' },
+      { href: `${base}/player-waivers`,       label: 'Player waivers',         sect: 'Teams & players' },
+      { href: `${base}/travel`,               label: 'Travel & hotels',        sect: 'Teams & players' },
+      { href: `${base}/roster`,               label: 'Staff roster',           sect: 'Staff & officials' },
+      { href: `${base}/staff-applications`,   label: 'Staff applications',     sect: 'Staff & officials' },
+      // Vendors sit here rather than alone: a booth application is the same
+      // shape as a press pass — an outside party asking for access.
+      { href: `${base}/media-requests`,       label: 'Media credentials',      sect: 'Media & vendors' },
+      { href: `${base}/photo-requests`,       label: 'Photo bookings',         sect: 'Media & vendors' },
+      { href: `${base}/gallery-uploads`,      label: 'Photos & video sent in', sect: 'Media & vendors' },
+      { href: `${base}/vendor-requests`,      label: 'Vendor requests',        sect: 'Media & vendors' },
     ]},
     { label: 'Live', items: [
       { href: `${base}/scores`,         label: 'Post scores' },
@@ -188,11 +197,18 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
           if (!g?.items) return null
           return (
             <div className="-mx-3 px-2 pt-1.5 pb-2 bg-[#162844] border-t border-white/10 rounded-b-xl grid grid-cols-2 gap-1">
-              {g.items.map(item => (
-                <Link key={item.href} href={item.href}
-                  className={`px-3 py-2 rounded-lg text-[13px] font-medium ${hrefActive(item.href) ? 'text-teal-300 bg-white/10' : 'text-slate-300 active:bg-white/5'}`}>
-                  {item.label}
-                </Link>
+              {g.items.map((item, i) => (
+                <Fragment key={item.href}>
+                  {item.sect && item.sect !== g.items![i - 1]?.sect && (
+                    <div className="col-span-2 px-3 pt-2 pb-0.5 text-[9.5px] font-bold tracking-[0.12em] uppercase text-slate-500">
+                      {item.sect}
+                    </div>
+                  )}
+                  <Link href={item.href}
+                    className={`px-3 py-2 rounded-lg text-[13px] font-medium ${hrefActive(item.href) ? 'text-teal-300 bg-white/10' : 'text-slate-300 active:bg-white/5'}`}>
+                    {item.label}
+                  </Link>
+                </Fragment>
               ))}
             </div>
           )
@@ -275,14 +291,21 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
                   <ChevronDown size={13} className={`opacity-60 transition-transform ${openMenu === g.label ? 'rotate-180' : ''}`} />
                 </button>
                 {openMenu === g.label && (
-                  <div className="absolute top-full left-0 z-50 py-1 bg-[#162844] border border-white/10 rounded-b-lg shadow-xl min-w-[180px]">
-                    {g.items.map(item => (
-                      <Link key={item.href} href={item.href}
-                        className={`block px-4 py-2 text-xs font-medium transition-colors ${
-                          hrefActive(item.href) ? 'text-teal-300 bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
-                        }`}>
-                        {item.label}
-                      </Link>
+                  <div className="absolute top-full left-0 z-50 py-1 bg-[#162844] border border-white/10 rounded-b-lg shadow-xl min-w-[210px] max-h-[70vh] overflow-y-auto">
+                    {g.items.map((item, i) => (
+                      <Fragment key={item.href}>
+                        {item.sect && item.sect !== g.items![i - 1]?.sect && (
+                          <div className="px-4 pt-2.5 pb-1 mt-1 first:mt-0 border-t first:border-t-0 border-white/[0.07] text-[9.5px] font-bold tracking-[0.12em] uppercase text-slate-500">
+                            {item.sect}
+                          </div>
+                        )}
+                        <Link href={item.href}
+                          className={`block px-4 py-2 text-xs font-medium transition-colors ${
+                            hrefActive(item.href) ? 'text-teal-300 bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                          }`}>
+                          {item.label}
+                        </Link>
+                      </Fragment>
                     ))}
                   </div>
                 )}
