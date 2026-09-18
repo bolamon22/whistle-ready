@@ -465,7 +465,16 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       if (d.clubName === '__other') return other
       if (!d.clubName) return ''
       if (d.teamPick === '__other') return other ? `${d.clubName} — ${other}` : d.clubName
-      return pickedTeam ? `${d.clubName} — ${pickedTeam.division || pickedTeam.name}` : d.clubName
+      // THE TEAM, NOT THE DIVISION. This read `pickedTeam.division || pickedTeam.name`,
+      // so a parent who picked their team correctly off the dropdown had the waiver
+      // filed under the division instead -- "LaxManiax — Girls High School A" rather
+      // than "LaxManiax — HS Select". Every downstream join is on the team name
+      // (club-director page, per-team roster counts, pools, check-in), so those
+      // waivers matched no team and the club's registration page showed far fewer
+      // players than the waiver list did. Measured on Monster Mash Sep 18 2026:
+      // 14 of 24 waivers carried a division tag. The division is kept, on its own
+      // field in the submitted data -- see submit() below.
+      return pickedTeam ? `${d.clubName} — ${pickedTeam.name}` : d.clubName
     }
     return d.teamName === '__other' ? other : d.teamName
   })()
@@ -480,7 +489,11 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     try {
       // "Other / not listed" stores the typed name, not the sentinel, so staff rosters read properly.
       const rest: any = { ...d }; delete rest.teamPick; delete rest.teamOther
-      const data = { ...rest, teamName: resolvedTeam, clubName: clubMode && d.clubName !== '__other' ? d.clubName : '', tournamentId: tournamentId || '', tournamentName: tournamentName || '' }
+      // `division` rides along as its own field: teamName is the join key and has to be
+      // the team, but the division is what the schedule and the brackets are built on,
+      // so losing it would just move the problem. Blank when the team was typed in.
+      const division = clubMode && d.teamPick && d.teamPick !== '__other' ? String(pickedTeam?.division || '') : ''
+      const data = { ...rest, teamName: resolvedTeam, division, clubName: clubMode && d.clubName !== '__other' ? d.clubName : '', tournamentId: tournamentId || '', tournamentName: tournamentName || '' }
       const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data }) })
       if (res.ok) { const j = await res.json().catch(() => ({})); if (j.passToken) setPassToken(String(j.passToken)); setDone(true); try { window.scrollTo({ top: 0 }) } catch {} }
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Submission failed') }

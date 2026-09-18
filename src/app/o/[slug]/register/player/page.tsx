@@ -1,41 +1,56 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { orgBase } from '../../_chrome'
 import { createClient } from '@libsql/client'
-import { Trophy } from 'lucide-react'
-import { mdToHtml } from '../../_md'
-import PlayerRegForm from './PlayerRegForm'
+import { Trophy, CalendarDays, MapPin, ChevronRight } from 'lucide-react'
+import { fmtRange } from '@/lib/playerPass'
 
-// Cache policy for published pages.
+// THIS PAGE NO LONGER HOSTS A FORM. It picks the event, then hands off.
 //
-// Jul 20 2026: these pages read Turso via @libsql/client, which uses fetch() under the
-// hood, and Next caches fetch responses in its Data Cache. A `dynamic` export does NOT
-// disable that, so pages re-rendered on every request while replaying a stale DB
-// response — and since nothing expired, they stayed stale indefinitely (an org hero
-// image and gallery went missing until it was noticed).
+// Sep 2026: it used to render <PlayerRegForm> directly with no `teams`, no `clubs`
+// and no `tournamentId`, which meant two things went wrong at once. The team field
+// fell back to free text, so families typed whatever they had in front of them --
+// usually the DIVISION off the schedule ("Girls High School A") or a team name that
+// was never registered ("2033/2034 Select Team"). And with no tournament attached,
+// the waiver landed with no event to belong to.
 //
-// `revalidate` is the fix rather than turning caching off: content is served from cache
-// for this many seconds then re-fetched, so staleness is always bounded. Saving in the
-// admin also calls revalidatePath() for an immediate refresh. Don't swap this back to
-// dynamic/no-store — that made every visit re-run every query (~14s page loads).
+// Measured on Monster Mash before the fix: of 22 LaxManiax waivers, only 7 carried a
+// tag matching a registered team. The other 15 were divisions or invented names,
+// which is why the club-director page (which matches waivers to the club's actual
+// registration) showed far fewer players than the waiver list did. Nothing was
+// double-counting -- the tags simply pointed at nothing.
+//
+// Rather than duplicate the club/team loading into a second form, this page now
+// routes to /tournaments/{id}/player-waiver, which already loads the tournament's
+// registered clubs and their teams and renders the picker. One form, one code path.
+// Links already in circulation keep working; they just ask which event first, and
+// when only one event is open they don't even ask that.
 export const revalidate = 30
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 }
 
-const DEFAULT_WAIVER = `## 1. Acknowledgment of Risk
-I understand that lacrosse is a high-intensity sport involving aggressive play and physical contact, and that participation carries inherent risks including serious physical injury, permanent disability, or death. I voluntarily assume full responsibility for my/my child's participation.
-
-## 2. Release of Liability
-I release, waive, and hold harmless the tournament organizers, their staff, volunteers, and the facilities from any and all liability arising out of participation in this event.
-
-## 3. Media Release
-I grant permission to use photographs or video taken during activities for promotional purposes.
-
-## 4. Electronic Signature
-By submitting this form I confirm I have read and agree to this waiver and that my typed name is my legal electronic signature.`
-
-const DEFAULT_FIELDS = { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true, homeTown: true }
+function Shell({ slug, org, children }: { slug: string; org: any; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-[#0b1220] text-white">
+        <div className="max-w-2xl mx-auto px-6 py-6 flex items-center gap-3">
+          <Link href={orgBase(slug) || '/'} aria-label={`${org.name} home`}>
+            {org.logoUrl
+              ? <img src={org.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />
+              : <span className="font-extrabold text-lg">{org.name}</span>}
+          </Link>
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-teal-300">Player Waiver</div>
+            <h1 className="text-xl font-extrabold leading-tight">{org.name}</h1>
+          </div>
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-6 py-8">{children}</main>
+    </div>
+  )
+}
 
 export default async function PlayerRegistrationPage({ params }: { params: { slug: string } }) {
   const client = db()
@@ -49,41 +64,75 @@ export default async function PlayerRegistrationPage({ params }: { params: { slu
   }
   const org = orgRes.rows[0] as any
 
-  let forms: any = {}
-  try {
-    const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgForms:${org.id}`] })
-    if (r.rows.length) forms = JSON.parse(((r.rows[0] as any).value as string) || '{}')
-  } catch { /* none */ }
   // org-site logo override for brand consistency
   try {
     const s = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`orgSite:${org.id}`] })
     if (s.rows.length) { const c = JSON.parse(((s.rows[0] as any).value as string) || '{}'); if (c.logo) org.logoUrl = c.logo }
   } catch { /* none */ }
 
-  const pf = forms.player || {}
-  const waiverTitle = pf.waiverTitle || 'Player Participation Waiver & Release of Liability'
-  const waiverHtml = mdToHtml(pf.waiverText || DEFAULT_WAIVER)
-  const fields = { ...DEFAULT_FIELDS, ...(pf.fields || {}) }
-  const confirmationTitle = pf.confirmationTitle || "You're registered!"
-  const confirmationHtml = mdToHtml(pf.confirmationMessage || "Thanks for registering. We've received your information and signed waiver. We'll be in touch with event details \u2014 see you on the field!")
+  // Events still ahead of us, soonest first. An event with no end date is judged on its
+  // start date, and one with no dates at all sorts last rather than disappearing.
+  let events: any[] = []
+  try {
+    const r = await client.execute({
+      sql: `SELECT id, name, startDate, endDate, location, logoUrl FROM "Tournament"
+            WHERE orgId = ? AND COALESCE(NULLIF(endDate, ''), startDate, '') >= ?
+            ORDER BY CASE WHEN COALESCE(startDate, '') = '' THEN 1 ELSE 0 END, startDate`,
+      args: [String(org.id), new Date().toISOString().slice(0, 10)],
+    })
+    events = r.rows as any[]
+  } catch { /* fall through to the empty state */ }
+
+  // One event open: don't make a parent choose from a list of one. Must stay outside a
+  // try/catch -- Next implements redirect() by throwing.
+  if (events.length === 1) redirect(`/tournaments/${events[0].id}/player-waiver`)
+
+  if (events.length === 0) {
+    return (
+      <Shell slug={params.slug} org={org}>
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+          <Trophy size={36} className="mx-auto text-slate-300" />
+          <h2 className="mt-3 text-lg font-bold text-slate-800">No events open right now</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Player waivers open once an event is scheduled. Check back soon, or take a look at what&rsquo;s coming up.
+          </p>
+          <Link href={orgBase(params.slug) || '/'} className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2">
+            See our events <ChevronRight size={14} />
+          </Link>
+        </div>
+      </Shell>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-[#0b1220] text-white">
-        <div className="max-w-2xl mx-auto px-6 py-6 flex items-center gap-3">
-          <Link href={orgBase(params.slug) || '/'} aria-label={`${org.name} home`}>
-            {org.logoUrl
-              ? <img src={org.logoUrl} alt="" className="w-12 h-12 rounded-lg object-contain bg-white/95 p-1" />
-              : <span className="font-extrabold text-lg">{org.name}</span>}
-          </Link>
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-teal-300">Player Waiver</div>
-            <h1 className="text-xl font-extrabold leading-tight">{org.name}</h1>
-          </div>
-        </div>
-      </header>
-      <p className="max-w-2xl mx-auto px-6 pt-6 text-sm text-slate-500">All players must complete this waiver to compete. Required fields are marked *.</p>
-      <PlayerRegForm orgId={org.id} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} />
-    </div>
+    <Shell slug={params.slug} org={org}>
+      <h2 className="text-lg font-bold text-slate-800">Which event is your player attending?</h2>
+      <p className="mt-1 text-sm text-slate-500">Pick the event and we&rsquo;ll bring up the waiver with your club&rsquo;s teams ready to choose from.</p>
+      <ul className="mt-5 space-y-3">
+        {events.map((t: any) => {
+          const dates = fmtRange(String(t.startDate || ''), String(t.endDate || ''))
+          return (
+            <li key={String(t.id)}>
+              <Link
+                href={`/tournaments/${t.id}/player-waiver`}
+                className="group flex items-center gap-4 bg-white border border-slate-200 hover:border-teal-400 hover:shadow-sm rounded-xl p-4 transition-colors"
+              >
+                {t.logoUrl || org.logoUrl
+                  ? <img src={String(t.logoUrl || org.logoUrl)} alt="" className="w-12 h-12 rounded-lg object-contain bg-slate-50 flex-shrink-0" />
+                  : <span className="w-12 h-12 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center flex-shrink-0"><Trophy size={20} /></span>}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-800 truncate group-hover:text-teal-700">{String(t.name || 'Event')}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                    {dates ? <span className="inline-flex items-center gap-1"><CalendarDays size={12} /> {dates}</span> : null}
+                    {t.location ? <span className="inline-flex items-center gap-1"><MapPin size={12} /> {String(t.location)}</span> : null}
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-slate-300 group-hover:text-teal-600 flex-shrink-0" />
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </Shell>
   )
 }

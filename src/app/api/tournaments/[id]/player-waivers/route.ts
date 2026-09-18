@@ -22,7 +22,7 @@ import { playerPassEnabled } from '@/lib/playerPass'
 //   DELETE { id }  permanently deletes one submission — directors/admins only, no undo.
 
 const EDITABLE = [
-  'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'clubName', 'teamName', 'jerseyNumber', 'position',
+  'playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'clubName', 'teamName', 'division', 'jerseyNumber', 'position',
   'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone',
   'emergencyName', 'emergencyPhone', 'hotel', 'hotelName',
 ] as const
