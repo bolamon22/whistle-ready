@@ -7,6 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer, Archive, ArchiveRestore, Trash2, AlertTriangle } from 'lucide-react'
 import { USA_LACROSSE_SHORT } from '@/lib/usaLacrosse'
+import { unmatchedTags, splitTag, type Unmatched, type RegisteredClub } from '@/lib/waiverMatch'
 
 type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[]; checkedInAt?: string | null; checkedInBy?: string | null; archivedAt?: string | null; archivedBy?: string | null }
 
@@ -75,7 +76,79 @@ const EDIT_FIELDS: { key: string; label: string; type?: string; options?: string
   { key: 'hotel', label: 'Hotel / rental' }, { key: 'hotelName', label: 'Where staying' },
 ]
 
-type TeamGroup = { club: string; teams: string[] }
+type TeamGroup = { club: string; teams: string[]; divisions?: Record<string, string> }
+
+/**
+ * WAIVERS THAT AREN'T ON A REGISTERED TEAM YET, AND WHAT TO DO WITH THEM.
+ *
+ * Families file waivers before their club director files the team registration -- Space
+ * Coast committed to the Fall Classic verbally, and eight of their families signed while
+ * the club list still had no Space Coast in it. The waiver is perfectly good; there is
+ * just nothing to attach it to yet. Same story when a club adds a team late, or a parent
+ * types the name the team calls itself.
+ *
+ * Grouped BY TAG, not by player, because that's how the work actually goes: one decision
+ * moves everyone who typed the same thing. The suggestion is prefilled and the reason is
+ * spelled out, but nothing moves until it's applied -- a wrong roster is worse than an
+ * unmatched one, so the two cases that are genuine coin flips (a division holding two
+ * teams; a club that still hasn't registered) deliberately have no default.
+ */
+function UnmatchedPanel({ rows, onApply, applying }: {
+  rows: Unmatched[]; onApply: (tag: string, to: string) => void; applying: string
+}) {
+  const [open, setOpen] = useState(true)
+  const [picks, setPicks] = useState<Record<string, string>>({})
+  if (!rows.length) return null
+  const players = rows.reduce((n, r) => n + r.count, 0)
+  const ready = rows.filter(r => r.match.sure).length
+  return (
+    <div className="border border-amber-300 bg-amber-50 rounded-xl mb-4 overflow-hidden">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2.5 px-4 py-3 text-left">
+        <AlertTriangle size={16} className="text-amber-600 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-amber-900">
+            {players} waiver{players === 1 ? '' : 's'} not on a registered team
+          </div>
+          <div className="text-xs text-amber-800 mt-0.5">
+            {rows.length} team name{rows.length === 1 ? '' : 's'} to sort out{ready ? ` \u00b7 ${ready} ready to apply` : ''}. These players are missing from roster counts and check-in.
+          </div>
+        </div>
+        {open ? <ChevronDown size={18} className="text-amber-600 flex-shrink-0" /> : <ChevronRight size={18} className="text-amber-600 flex-shrink-0" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-2.5">
+          {rows.map(r => {
+            const val = picks[r.tag] ?? r.match.value
+            const busy = applying === r.tag
+            return (
+              <div key={r.tag} className="bg-white border border-amber-200 rounded-lg p-3">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="font-semibold text-sm text-slate-800 break-words">{r.tag}</span>
+                  <span className="text-xs text-slate-500">{r.count} player{r.count === 1 ? '' : 's'}</span>
+                  {r.match.sure && <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Ready</span>}
+                </div>
+                <p className="mt-1 text-xs text-slate-600 leading-relaxed">{r.match.why}</p>
+                {r.match.options.length > 0 && (
+                  <div className="mt-2.5 flex flex-col sm:flex-row gap-2">
+                    <select value={val} onChange={e => setPicks(p => ({ ...p, [r.tag]: e.target.value }))}
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400">
+                      <option value="">&mdash; move these players to &mdash;</option>
+                      {r.match.options.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    <button onClick={() => onApply(r.tag, val)} disabled={!val || busy}
+                      className="sm:w-36 text-sm font-semibold rounded-lg px-4 py-2 inline-flex items-center justify-center gap-1.5 bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                      {busy ? <><RefreshCw size={14} className="animate-spin" /> Moving&hellip;</> : <>Move {r.count}</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function WaiverEditForm({ form, setForm, teamGroups, otherTeams, onSave, onCancel, saving }: {
   form: Record<string, string>; setForm: (f: Record<string, string>) => void
@@ -207,6 +280,7 @@ export default function PlayerWaiverEntries() {
   const [helpOpen, setHelpOpen] = useState(false)               // "player not on the list?" panel
   const [confirmClear, setConfirmClear] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
+  const [applyingTag, setApplyingTag] = useState('')   // the tag currently being moved
   useEffect(() => { try { setCheckMode(localStorage.getItem('wr-waiver-checkin') === '1') } catch {} }, [])
   // A scanned player pass lands here as ?player=<submission id>: show that one player with a
   // big check-in button, above the list.
@@ -300,22 +374,72 @@ export default function PlayerWaiverEntries() {
     // Registered clubs and their teams for this tournament → the Team picker when staff edit a waiver
     fetch(`/api/registrations?tournamentId=${id}`).then(r => r.ok ? r.json() : []).then((regs: any[]) => {
       const byClub = new Map<string, Set<string>>()
+      // Each team's division too: it's what lets the matcher below recognise a waiver
+      // filed under "Girls Middle School A" as the one team the club has in it.
+      const divOf = new Map<string, Record<string, string>>()
       ;(Array.isArray(regs) ? regs : []).forEach(reg => {
         const club = String(reg?.clubName || reg?.clubContact || '').trim()
         if (!club) return
-        if (!byClub.has(club)) byClub.set(club, new Set())
-        ;(reg?.teams || []).forEach((t: any) => { const n = String(t?.teamName || '').trim(); if (n) byClub.get(club)!.add(n) })
+        if (!byClub.has(club)) { byClub.set(club, new Set()); divOf.set(club, {}) }
+        ;(reg?.teams || []).forEach((t: any) => {
+          const n = String(t?.teamName || '').trim()
+          if (!n) return
+          byClub.get(club)!.add(n)
+          const dv = String(t?.division || '').trim()
+          if (dv) divOf.get(club)![n] = dv
+        })
       })
       setTeamGroups([...byClub.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([club, teams]) => ({ club, teams: [...teams].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) })))
+        .map(([club, teams]) => ({ club, divisions: divOf.get(club) || {}, teams: [...teams].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) })))
     }).catch(() => {})
   }, [id])
+
+  // Waiver tags that name no registered team, with a suggested home for each. Recomputed
+  // from the counts and the registrations, so it resolves itself the moment a club
+  // director files the registration everyone was waiting on.
+  const unmatched = useMemo<Unmatched[]>(() => unmatchedTags(teams, teamGroups as RegisteredClub[]), [teams, teamGroups])
 
   // Team names already used on other waivers that aren't a registered club/team — offered too, for consistency.
   const otherTeams = useMemo(() => {
     const known = new Set(teamGroups.flatMap(g => [g.club, ...g.teams.map(t => `${g.club} — ${t}`)]))
     return teams.map(t => t.name.trim()).filter(t => t && t !== '__other' && !known.has(t)).sort((a, b) => a.localeCompare(b))
   }, [teams, teamGroups])
+
+  /**
+   * Move every waiver carrying one tag onto a registered team.
+   *
+   * Fetches the whole group rather than acting on the page in view -- the list is paged
+   * at 100 and a mis-tagged team can easily be larger than that. Club is written with the
+   * team: they're separate fields and nothing else keeps them in step (see clubMismatch).
+   */
+  async function applyTag(tag: string, to: string) {
+    const target = String(to || '').trim()
+    if (!target || target === tag) return
+    setApplyingTag(tag)
+    try {
+      const url = `/api/tournaments/${id}/player-waivers?team=${encodeURIComponent(tag)}&limit=5000`
+      const list: Sub[] = await fetch(url).then(r => r.ok ? r.json() : null).then(j => Array.isArray(j?.submissions) ? j.submissions : [])
+      if (!list.length) { toast.error('Those waivers are already gone \u2014 refreshing'); setReloadTick(t => t + 1); return }
+      const { club, team } = splitTag(target)
+      const division = teamGroups.find(g => g.club === club)?.divisions?.[team] || ''
+      const data: Record<string, string> = { teamName: target, clubName: club }
+      if (division) data.division = division
+      let moved = 0
+      for (const sub of list) {
+        const r = await fetch(`/api/tournaments/${id}/player-waivers`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: sub.id, data }),
+        })
+        if (r.ok) moved++
+      }
+      if (moved === list.length) toast.success(`Moved ${moved} player${moved === 1 ? '' : 's'} to ${target}`)
+      else toast.error(`Moved ${moved} of ${list.length} \u2014 try the rest again`)
+      setReloadTick(t => t + 1)
+      refreshCounts()
+    } catch {
+      toast.error('Could not move those waivers')
+    } finally { setApplyingTag('') }
+  }
 
   function startEdit(s: Sub) {
     const d = s.data || {}
@@ -613,6 +737,8 @@ export default function PlayerWaiverEntries() {
             <div>Showing <span className="font-semibold">archived players</span> — not attending, duplicates, test entries. They're left out of counts, check-in and badges. Open one to restore it or delete it for good.</div>
           </div>
         )}
+
+        {!showArchived && <UnmatchedPanel rows={unmatched} onApply={applyTag} applying={applyingTag} />}
 
         {/* Search + roster picker */}
         {(grandTotal > 0 || filtering || showArchived) && (
