@@ -8,6 +8,7 @@ import TournamentNav from '../TournamentNav'
 import { Inbox, ChevronRight, ChevronDown, ExternalLink, Download, Search, X, Phone, Mail, Pencil, ClipboardCheck, CheckCircle2, Circle, Share2, QrCode, RefreshCw, ScanLine, Printer, Archive, ArchiveRestore, Trash2, AlertTriangle } from 'lucide-react'
 import { USA_LACROSSE_SHORT } from '@/lib/usaLacrosse'
 import { unmatchedTags, splitTag, type Unmatched, type RegisteredClub } from '@/lib/waiverMatch'
+import UnmatchedPanel, { type PlayerLite } from '@/components/UnmatchedWaivers'
 
 type Sub = { id: string; submittedAt: string; data: any; edits?: { at: string; by?: string; fields: string[] }[]; checkedInAt?: string | null; checkedInBy?: string | null; archivedAt?: string | null; archivedBy?: string | null }
 
@@ -93,62 +94,6 @@ type TeamGroup = { club: string; teams: string[]; divisions?: Record<string, str
  * unmatched one, so the two cases that are genuine coin flips (a division holding two
  * teams; a club that still hasn't registered) deliberately have no default.
  */
-function UnmatchedPanel({ rows, onApply, applying }: {
-  rows: Unmatched[]; onApply: (tag: string, to: string) => void; applying: string
-}) {
-  const [open, setOpen] = useState(true)
-  const [picks, setPicks] = useState<Record<string, string>>({})
-  if (!rows.length) return null
-  const players = rows.reduce((n, r) => n + r.count, 0)
-  const ready = rows.filter(r => r.match.sure).length
-  return (
-    <div className="border border-amber-300 bg-amber-50 rounded-xl mb-4 overflow-hidden">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2.5 px-4 py-3 text-left">
-        <AlertTriangle size={16} className="text-amber-600 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-amber-900">
-            {players} waiver{players === 1 ? '' : 's'} not on a registered team
-          </div>
-          <div className="text-xs text-amber-800 mt-0.5">
-            {rows.length} team name{rows.length === 1 ? '' : 's'} to sort out{ready ? ` \u00b7 ${ready} ready to apply` : ''}. These players are missing from roster counts and check-in.
-          </div>
-        </div>
-        {open ? <ChevronDown size={18} className="text-amber-600 flex-shrink-0" /> : <ChevronRight size={18} className="text-amber-600 flex-shrink-0" />}
-      </button>
-      {open && (
-        <div className="px-4 pb-4 space-y-2.5">
-          {rows.map(r => {
-            const val = picks[r.tag] ?? r.match.value
-            const busy = applying === r.tag
-            return (
-              <div key={r.tag} className="bg-white border border-amber-200 rounded-lg p-3">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="font-semibold text-sm text-slate-800 break-words">{r.tag}</span>
-                  <span className="text-xs text-slate-500">{r.count} player{r.count === 1 ? '' : 's'}</span>
-                  {r.match.sure && <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Ready</span>}
-                </div>
-                <p className="mt-1 text-xs text-slate-600 leading-relaxed">{r.match.why}</p>
-                {r.match.options.length > 0 && (
-                  <div className="mt-2.5 flex flex-col sm:flex-row gap-2">
-                    <select value={val} onChange={e => setPicks(p => ({ ...p, [r.tag]: e.target.value }))}
-                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400">
-                      <option value="">&mdash; move these players to &mdash;</option>
-                      {r.match.options.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    <button onClick={() => onApply(r.tag, val)} disabled={!val || busy}
-                      className="sm:w-36 text-sm font-semibold rounded-lg px-4 py-2 inline-flex items-center justify-center gap-1.5 bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                      {busy ? <><RefreshCw size={14} className="animate-spin" /> Moving&hellip;</> : <>Move {r.count}</>}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function WaiverEditForm({ form, setForm, teamGroups, otherTeams, onSave, onCancel, saving }: {
   form: Record<string, string>; setForm: (f: Record<string, string>) => void
@@ -412,26 +357,40 @@ export default function PlayerWaiverEntries() {
    * at 100 and a mis-tagged team can easily be larger than that. Club is written with the
    * team: they're separate fields and nothing else keeps them in step (see clubMismatch).
    */
+  /** Every waiver carrying one tag, whatever page of the list they are on. */
+  async function fetchByTag(tag: string): Promise<Sub[]> {
+    const url = `/api/tournaments/${id}/player-waivers?team=${encodeURIComponent(tag)}&limit=5000`
+    return await fetch(url).then(r => r.ok ? r.json() : null).then(j => Array.isArray(j?.submissions) ? j.submissions : [])
+  }
+
+  /**
+   * Put ONE waiver on a team.
+   *
+   * Club and division are written alongside the team because they are separate fields and
+   * nothing else keeps them in step (see clubMismatch). Shared by the group move and the
+   * per-player one so the two can never drift apart.
+   */
+  async function moveOne(subId: string, target: string): Promise<boolean> {
+    const { club, team } = splitTag(target)
+    const division = teamGroups.find(g => g.club === club)?.divisions?.[team] || ''
+    const data: Record<string, string> = { teamName: target, clubName: club }
+    if (division) data.division = division
+    const r = await fetch(`/api/tournaments/${id}/player-waivers`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: subId, data }),
+    })
+    return r.ok
+  }
+
   async function applyTag(tag: string, to: string) {
     const target = String(to || '').trim()
     if (!target || target === tag) return
     setApplyingTag(tag)
     try {
-      const url = `/api/tournaments/${id}/player-waivers?team=${encodeURIComponent(tag)}&limit=5000`
-      const list: Sub[] = await fetch(url).then(r => r.ok ? r.json() : null).then(j => Array.isArray(j?.submissions) ? j.submissions : [])
+      const list = await fetchByTag(tag)
       if (!list.length) { toast.error('Those waivers are already gone \u2014 refreshing'); setReloadTick(t => t + 1); return }
-      const { club, team } = splitTag(target)
-      const division = teamGroups.find(g => g.club === club)?.divisions?.[team] || ''
-      const data: Record<string, string> = { teamName: target, clubName: club }
-      if (division) data.division = division
       let moved = 0
-      for (const sub of list) {
-        const r = await fetch(`/api/tournaments/${id}/player-waivers`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: sub.id, data }),
-        })
-        if (r.ok) moved++
-      }
+      for (const sub of list) if (await moveOne(sub.id, target)) moved++
       if (moved === list.length) toast.success(`Moved ${moved} player${moved === 1 ? '' : 's'} to ${target}`)
       else toast.error(`Moved ${moved} of ${list.length} \u2014 try the rest again`)
       setReloadTick(t => t + 1)
@@ -439,6 +398,31 @@ export default function PlayerWaiverEntries() {
     } catch {
       toast.error('Could not move those waivers')
     } finally { setApplyingTag('') }
+  }
+
+  /** The names behind one unmatched tag, with what distinguishes them. */
+  async function loadTagPlayers(tag: string): Promise<PlayerLite[]> {
+    const list = await fetchByTag(tag)
+    return list.map(s2 => ({
+      id: s2.id,
+      name: String(s2.data?.playerName || '').trim() || 'Player',
+      grade: String(s2.data?.grade || '').trim(),
+      dob: String(s2.data?.dob || '').trim(),
+      parent: String(s2.data?.parentName || '').trim(),
+      jersey: String(s2.data?.jerseyNumber || '').trim(),
+    }))
+  }
+
+  /** Send each picked player to the team chosen for them. Returns how many landed. */
+  async function assignPlayers(picks: { id: string; to: string }[]): Promise<number> {
+    let moved = 0
+    try {
+      for (const pk of picks) if (await moveOne(pk.id, pk.to)) moved++
+      if (moved) toast.success(`Moved ${moved} player${moved === 1 ? '' : 's'}`)
+      setReloadTick(t => t + 1)
+      refreshCounts()
+    } catch { toast.error('Could not move those waivers') }
+    return moved
   }
 
   function startEdit(s: Sub) {
@@ -738,7 +722,7 @@ export default function PlayerWaiverEntries() {
           </div>
         )}
 
-        {!showArchived && <UnmatchedPanel rows={unmatched} onApply={applyTag} applying={applyingTag} />}
+        {!showArchived && <UnmatchedPanel rows={unmatched} onApply={applyTag} applying={applyingTag} loadPlayers={loadTagPlayers} onAssign={assignPlayers} />}
 
         {/* Search + roster picker */}
         {(grandTotal > 0 || filtering || showArchived) && (
