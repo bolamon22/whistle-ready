@@ -29,8 +29,10 @@ export async function runReturningInvite(a: {
   clubs: InviteClub[]
   subjectTemplate?: string
   bodyTemplate?: string
-  /** Receipt address — the scheduler passes the office inbox. */
+  /** Receipt address. BOTH paths pass this now — see the note by the receipt below. */
   notifyTo?: string
+  /** True only for a run the scheduler fired, so the receipt can say which it was. */
+  scheduled?: boolean
 }): Promise<{ ok: true; sent: number; errors: string[]; skippedDupes: number } | { ok: false; error: string; status: number }> {
   if (!a.clubs?.length) return { ok: false, error: 'clubs required', status: 400 }
 
@@ -150,7 +152,13 @@ export async function runReturningInvite(a: {
   }
 
   if (a.notifyTo) {
-    // Receipt for a scheduled run — Bo isn't watching a toast when this fires.
+    // A RECEIPT FOR EVERY RUN, not just a scheduled one.
+    //
+    // This used to fire only for the cron, on the reasoning that a Send-now shows a
+    // toast. A toast lasts five seconds, vanishes on a tab change, and leaves nothing
+    // behind: Bo sent two invites, wasn't sure either had gone, and there was no way
+    // to find out — the send writes no record either, so the receipt is the ONLY
+    // durable evidence a send happened (Sep 18 2026).
     try {
       await sendEmail({
         ...sender,
@@ -158,7 +166,7 @@ export async function runReturningInvite(a: {
         to: a.notifyTo,
         subject: `Sent: returning-team invites — ${sent} club${sent === 1 ? '' : 's'} (${tournament.name})`,
         html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1e293b">
-  <p style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#0d9488;margin:0 0 4px">SCHEDULED SEND · ${esc(tournament.name)}</p>
+  <p style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#0d9488;margin:0 0 4px">${a.scheduled ? 'SCHEDULED SEND' : 'SENT NOW'} · ${esc(tournament.name)}</p>
   <h2 style="font-size:19px;margin:0 0 6px">Returning-team invites just went out</h2>
   <p style="color:#475569;font-size:14px;margin:0 0 12px"><strong>${sent}</strong> club${sent === 1 ? '' : 's'} emailed${skippedDupes ? `, ${skippedDupes} duplicate address${skippedDupes === 1 ? '' : 'es'} skipped` : ''}${errors.length ? `, ${errors.length} failed` : ''}.</p>
   <ul style="font-size:13px;color:#334155;padding-left:18px;margin:0 0 8px">${recipients.map(c => `<li style="margin:2px 0">${esc(c.clubName)} <span style="color:#94a3b8">— ${esc(c.contactEmail)}</span></li>`).join('')}</ul>

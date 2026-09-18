@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
 import { runReturningInvite, type InviteClub } from '@/lib/returningInvite'
+import { OFFICE_CC } from '@/lib/email'
 import { createScheduled } from '@/lib/commSchedule'
 
 // Invite past-event clubs back — now, or queued for later (Bo). The send itself
@@ -41,9 +42,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ ok: true, scheduled })
   }
 
+  // Send now gets the same receipt the scheduled path gets. The toast that used to be
+  // the only signal is gone the moment the tab changes, and nothing here is written to
+  // the database, so without this a completed send leaves no trace at all.
   const res = await runReturningInvite({
     tournamentId: params.id, clubs,
     subjectTemplate: body.subjectTemplate, bodyTemplate: body.bodyTemplate,
+    notifyTo: OFFICE_CC,
   })
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
   return NextResponse.json({ sent: res.sent, errors: res.errors, skippedDupes: res.skippedDupes })

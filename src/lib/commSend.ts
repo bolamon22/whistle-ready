@@ -34,9 +34,12 @@ export async function runCommSend(args: {
   /** Blank = whatever the org has saved for this letter at send time. */
   subject?: string
   body?: string
-  /** Email a receipt here when the run finishes — the scheduler passes the office
-   *  inbox so Bo can see a queued send actually went out. */
+  /** Email a receipt here when the run finishes. BOTH the Send-now route and the
+   *  scheduler pass the office inbox: a toast is not evidence, and this send writes
+   *  no record of itself, so the receipt is the only durable proof it happened. */
   notifyTo?: string
+  /** True only for a run the scheduler fired, so the receipt can say which it was. */
+  scheduled?: boolean
 }): Promise<{ ok: true; sentAt: string; results: SendResult[] } | { ok: false; error: string; status: number }> {
   const { tournamentId, kind } = args
   const regIds = args.regIds.map(x => String(x)).filter(Boolean)
@@ -179,7 +182,7 @@ export async function runCommSend(args: {
       results.push({ regId: reg.id, club: reg.clubName, status: 'failed' })
     }
   }
-  if (args.notifyTo) await sendReceipt(args.notifyTo, org, t.name || 'the tournament', kind, results, sample)
+  if (args.notifyTo) await sendReceipt(args.notifyTo, org, t.name || 'the tournament', kind, results, sample, !!args.scheduled)
   return { ok: true, sentAt: now, results }
 }
 
@@ -194,6 +197,7 @@ const esc = (x: string) => x.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 async function sendReceipt(
   to: string, org: { name?: string | null } | null, tName: string,
   kind: SendKind, results: SendResult[], sample: { subject: string; html: string; to: string } | null,
+  scheduled: boolean,
 ) {
   try {
     const sent = results.filter(r => r.status === 'sent')
@@ -205,7 +209,7 @@ async function sendReceipt(
       to,
       subject: `Sent: ${label} — ${sent.length} club${sent.length === 1 ? '' : 's'} (${tName})`,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1e293b">
-  <p style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#0d9488;margin:0 0 4px">SCHEDULED SEND · ${esc(tName)}</p>
+  <p style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#0d9488;margin:0 0 4px">${scheduled ? 'SCHEDULED SEND' : 'SENT NOW'} · ${esc(tName)}</p>
   <h2 style="font-size:19px;margin:0 0 6px">${esc(label)} just went out</h2>
   <p style="color:#475569;font-size:14px;margin:0 0 12px"><strong>${sent.length}</strong> club${sent.length === 1 ? '' : 's'} emailed${others.length ? `, ${others.length} skipped` : ''}.</p>
   <ul style="font-size:13px;color:#334155;padding-left:18px;margin:0 0 8px">${sent.map(line).join('')}</ul>

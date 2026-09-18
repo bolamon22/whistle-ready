@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
 import { runCommSend, isSendKind, type SendKind } from '@/lib/commSend'
+import { OFFICE_CC } from '@/lib/email'
 import { createScheduled } from '@/lib/commSchedule'
 
 // Send a club letter now, or queue it for later (Bo). The letter/preview/tracking
@@ -39,7 +40,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, scheduled })
   }
 
-  const res = await runCommSend({ tournamentId, kind: kind as SendKind, regIds, subject, body: letterBody })
+  // Same reasoning as the returning-team invites: a receipt is the only durable
+  // record that an immediate send happened.
+  const res = await runCommSend({ tournamentId, kind: kind as SendKind, regIds, subject, body: letterBody, notifyTo: OFFICE_CC })
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
   return NextResponse.json({ ok: true, sentAt: res.sentAt, results: res.results })
 }
