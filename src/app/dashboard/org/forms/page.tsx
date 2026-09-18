@@ -201,8 +201,36 @@ function FormsInner() {
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Save failed') }
     } catch { toast.error('Save failed') } finally { setSaving('') }
   }
-  const startEdit = (key: string) => { setSnap(f); setEditing(e => ({ ...e, [key]: true })); setOpen(o => ({ ...o, [key]: true })) }
-  const cancelEdit = (key: string) => { setF(snap); setEditing(e => ({ ...e, [key]: false })) }
+  // SNAPSHOT AND REVERT PER SECTION.
+  //
+  // Both of these used to work on the WHOLE forms object: startEdit did
+  // setSnap(f) and cancelEdit did setF(snap). Open Player Waiver, spend five
+  // minutes building the example card, then hit Cancel on any OTHER section and
+  // every unsaved word of it was thrown away — Cancel on the vendor form
+  // reverted the player form too. Worse, a later startEdit overwrote the
+  // snapshot with unsaved edits, so Cancel on the section you were actually
+  // editing could quietly cancel nothing (Bo, Sep 18 2026).
+  //
+  // Each section now snapshots and restores only its own slice.
+  const startEdit = (key: string) => {
+    setSnap(sn => ({ ...sn, [key]: (f as any)[key] }))
+    setEditing(e => ({ ...e, [key]: true }))
+    setOpen(o => ({ ...o, [key]: true }))
+  }
+  const cancelEdit = (key: string) => {
+    setF(v => ({ ...v, [key]: (snap as any)[key] }))
+    setEditing(e => ({ ...e, [key]: false }))
+  }
+
+  // Unsaved work on this page is a long form and an image upload or two, so
+  // losing it to a stray click is expensive. Warn on the way out.
+  const dirty = JSON.stringify(f) !== JSON.stringify(snap)
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
   const toggle = (key: string) => setOpen(o => ({ ...o, [key]: !o[key] }))
   const vendorHero = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setF(v => ({ ...v, vendor: { ...v.vendor, heroImage: u } })); else toast.error('Upload failed') }
   const staffHero = async (f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setF(v => ({ ...v, staff: { ...v.staff, heroImage: u } })); else toast.error('Upload failed') }
@@ -329,7 +357,16 @@ function FormsInner() {
                       to their own the moment they type a name. Fill it from a finished card, then edit anything.
                       Leave the name blank for a drawn stand-in.
                     </p>
-                    <SampleCardEditor value={pf.cardSample} onChange={v => setF(x => ({ ...x, player: { ...x.player, cardSample: v } }))} />
+                    {/* Its own Save. Building this card is a dozen fields and two
+                        uploads — long enough that making it ride on the section's
+                        Save at the bottom of a much longer form is how work gets
+                        lost (Bo, Sep 18 2026). */}
+                    <SampleCardEditor
+                      value={pf.cardSample}
+                      onChange={v => setF(x => ({ ...x, player: { ...x.player, cardSample: v } }))}
+                      onSave={() => saveCard('player')}
+                      saving={saving === 'player'}
+                    />
 
                     <div className="text-xs font-semibold uppercase tracking-wide text-teal-700 mt-4">Player card · second QR code</div>
                     <p className="text-xs text-slate-500 mt-1">The card has two QR codes: the family's own link, and this one for you. Pick what it opens.</p>

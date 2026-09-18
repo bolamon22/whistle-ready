@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Camera, Wand2, Loader2, X } from 'lucide-react'
+import { Camera, Wand2, Loader2, X, Save } from 'lucide-react'
 import { uploadPlayerPhoto, uploadClubLogo } from '@/lib/photoClient'
 
 // The example player card an org shows on its registration form.
@@ -31,7 +31,14 @@ const EMPTY: CardSample = {
 const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
 const label = 'block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1'
 
-export default function SampleCardEditor({ value, onChange }: { value?: Partial<CardSample>; onChange: (v: CardSample) => void }) {
+export default function SampleCardEditor({ value, onChange, onSave, saving }: {
+  value?: Partial<CardSample>
+  onChange: (v: CardSample) => void
+  /** Saves the whole form. Present so this block can be saved without scrolling
+   *  to the section's own Save — see the note at the call site. */
+  onSave?: () => void
+  saving?: boolean
+}) {
   const v: CardSample = { ...EMPTY, ...(value || {}) }
   const set = (k: keyof CardSample, val: string) => onChange({ ...v, [k]: val })
 
@@ -53,7 +60,7 @@ export default function SampleCardEditor({ value, onChange }: { value?: Partial<
       if (!res.ok) { toast.error(j?.error || 'Could not read that card'); return }
       onChange({ ...EMPTY, ...(j.sample || {}) })
       setSeedLink('')
-      toast.success('Filled from that card — edit anything below')
+      toast.success('Filled from that card — edit anything, then Save the example')
     } catch {
       toast.error('Could not read that card')
     } finally { setSeeding(false) }
@@ -138,12 +145,20 @@ export default function SampleCardEditor({ value, onChange }: { value?: Partial<
         </div>
       </div>
 
-      {v.playerName && (
-        <button type="button" onClick={() => onChange({ ...EMPTY })}
-          className="inline-flex items-center gap-1.5 mt-4 text-xs font-semibold text-slate-500 hover:text-slate-700">
-          <X size={13} /> Clear the example (back to the drawn stand-in)
-        </button>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-100">
+        {v.playerName ? (
+          <button type="button" onClick={() => onChange({ ...EMPTY })}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700">
+            <X size={13} /> Clear the example (back to the drawn stand-in)
+          </button>
+        ) : <span />}
+        {onSave && (
+          <button type="button" onClick={onSave} disabled={!!saving}
+            className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-2">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {saving ? 'Saving…' : 'Save the example'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
