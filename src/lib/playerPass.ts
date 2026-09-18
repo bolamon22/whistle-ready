@@ -80,14 +80,60 @@ export type PlayerPassConfig = {
   eventQr: EventQrChoice
   eventLink: string
   eventLabel: string
-  /** Pass token of a REAL card to show as the example on the registration form.
-   *  Blank falls back to the drawn stand-in in samplePlayerCard.ts. Storing the
-   *  token rather than a copy of the data means the example is the live card --
-   *  change that player's photo and the example changes with it. */
-  sampleToken: string
+  /** The example card shown on the registration form. Blank/absent falls back to
+   *  the drawn stand-in in samplePlayerCard.ts. */
+  sample: PlayerCardSample | null
+}
+
+/**
+ * The example card an org shows on its own registration form.
+ *
+ * STORED, NOT POINTED AT. The first version of this held a pass token and loaded
+ * that player's live card, which was exact but tied the form's permanent example
+ * to one waiver record: archive it, delete it or roll the season over and the
+ * example silently reverts to the stand-in with no error anywhere. It also meant
+ * a second org using Whistle Ready would have to create a fake registration to
+ * get an example of their own (Bo, Sep 18 2026).
+ *
+ * So the settings page SEEDS these fields from a real card in one click and then
+ * they are just fields. Exact when it is filled, editable afterwards, frozen, and
+ * every org gets its own.
+ */
+export type PlayerCardSample = {
+  playerName: string
+  clubName: string
+  teamName: string
+  division: string
+  jersey: string
+  position: string
+  /** An /api/img/<id> upload, same as a real card's. */
+  photoUrl: string
+  clubLogoUrl: string
+  /** BOTH codes are the org's to set. Bo will drop live links in later, and an
+   *  example whose codes open nothing teaches people the codes are decoration
+   *  (Bo, Sep 18 2026). Blank falls back to the org's own event QR rather than
+   *  to a dead link. */
+  qrLink: string
+  qrLabel: string
+  qr2Link: string
+  qr2Label: string
+  /** The player ID printed on the card. Cosmetic on an example. */
+  code: string
+}
+
+const SAMPLE_KEYS: (keyof PlayerCardSample)[] =
+  ['playerName', 'clubName', 'teamName', 'division', 'jersey', 'position', 'photoUrl', 'clubLogoUrl', 'qrLink', 'qrLabel', 'qr2Link', 'qr2Label', 'code']
+
+/** null when nothing has been filled in -- the caller then shows the stand-in. */
+export function normalizeCardSample(raw: any): PlayerCardSample | null {
+  if (!raw || typeof raw !== 'object') return null
+  const out = {} as PlayerCardSample
+  for (const k of SAMPLE_KEYS) out[k] = String(raw[k] ?? '').trim()
+  // A name is the minimum that makes it read as a card rather than a template.
+  return out.playerName ? out : null
 }
 export async function playerPassConfig(orgId: string): Promise<PlayerPassConfig> {
-  const off: PlayerPassConfig = { enabled: false, theme: 'classic', eventQr: 'event', eventLink: '', eventLabel: '', sampleToken: '' }
+  const off: PlayerPassConfig = { enabled: false, theme: 'classic', eventQr: 'event', eventLink: '', eventLabel: '', sample: null }
   if (!orgId) return off
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgForms:${orgId}`)
@@ -101,9 +147,7 @@ export async function playerPassConfig(orgId: string): Promise<PlayerPassConfig>
       eventQr: (['event', 'instagram', 'facebook', 'website', 'custom'] as string[]).includes(choice) ? choice : 'event',
       eventLink: String(p.cardEventLink || '').trim(),
       eventLabel: String(p.cardEventLabel || '').trim(),
-      // Accepts a full /pass/<token> URL or a bare token -- whichever Bo has in
-      // his clipboard when he is setting it.
-      sampleToken: (String(p.cardSampleToken || '').trim().match(/[a-f0-9]{32}/i) || [''])[0],
+      sample: normalizeCardSample(p.cardSample),
     }
   } catch { return off }
 }

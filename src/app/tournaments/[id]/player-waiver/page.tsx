@@ -2,7 +2,7 @@ import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import PlayerRegForm, { type ClubOption, type CardContext, type SampleCard } from '@/app/o/[slug]/register/player/PlayerRegForm'
-import { fmtRange, playerPassConfig, orgSiteConfig, eventQrFor, appBaseUrl, loadPlayerPass } from '@/lib/playerPass'
+import { fmtRange, playerPassConfig, orgSiteConfig, eventQrFor, appBaseUrl } from '@/lib/playerPass'
 import { headers } from 'next/headers'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 
@@ -113,20 +113,38 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
       eventQrUrl: eventQr.url, eventQrLabel: eventQr.label, theme: cfg.theme,
     }
 
-    // THE EXAMPLE IS A REAL CARD. Bo picks one already in the system and the
-    // form shows it whole -- that player's photo, club crest, number, position
-    // and both of their actual QR codes (Bo, Sep 18 2026). Loaded by token at
-    // render, so it is never a stale copy: change that card and the example on
-    // the form changes with it.
-    //
-    // A missing or deleted token is not an error worth a 500 on a registration
-    // page -- the form falls back to the drawn stand-in and nobody notices.
-    if (cfg.sampleToken) {
-      try {
-        const base = appBaseUrl(headers())
-        const s = await loadPlayerPass(cfg.sampleToken, base)
-        if (s) sampleCard = { card: s.card, qrUrl: s.qrUrl, qr2Url: s.qr2Url }
-      } catch { /* fall back to the stand-in */ }
+    // THE EXAMPLE. Stored on the org rather than pointed at a live record -- see
+    // PlayerCardSample. Event branding still comes from THIS tournament, so the
+    // example looks like a card from the weekend they are registering for.
+    if (cfg.sample) {
+      const sm = cfg.sample
+      sampleCard = {
+        card: {
+          code: sm.code || '\u00b7\u00b7\u00b7-\u00b7\u00b7\u00b7',
+          playerName: sm.playerName,
+          clubName: sm.clubName,
+          teamName: sm.teamName,
+          division: sm.division,
+          jersey: sm.jersey,
+          position: sm.position,
+          photoUrl: sm.photoUrl,
+          clubLogoUrl: sm.clubLogoUrl,
+          tournamentName: String(t.name || ''),
+          tournamentLogoUrl: String(t.logoUrl || org.logoUrl || ''),
+          tournamentDates: fmtRange(String(t.startDate || ''), String(t.endDate || '')),
+          location: String(t.location || ''),
+          orgName: String(org.name || ''),
+          orgLogoUrl: String(org.logoUrl || ''),
+          orgSite,
+          signedOn: fmtRange(String(t.startDate || ''), '') || '',
+          qrLabel: sm.qrLabel || 'My player card',
+          qr2Label: sm.qr2Label || eventQr.label,
+        },
+        // Both codes fall back to the org's own event QR rather than a dead
+        // link, so the example never shows a code that opens nothing.
+        qrUrl: sm.qrLink || eventQr.url,
+        qr2Url: sm.qr2Link || eventQr.url,
+      }
     }
   }
 
