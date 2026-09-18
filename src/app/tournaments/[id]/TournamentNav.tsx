@@ -78,7 +78,6 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       // Order IS the grouping — keep same-section items adjacent or the heading
       // prints twice.
       { href: `${base}/registrations`,        label: 'Team registrations',     sect: 'Teams & players' },
-      { href: `${base}/player-registrations`, label: 'Player rosters',         sect: 'Teams & players' },
       { href: `${base}/player-waivers`,       label: 'Player waivers',         sect: 'Teams & players' },
       { href: `${base}/coach-waivers`,        label: 'Coach waivers',          sect: 'Teams & players' },
       { href: `${base}/travel`,               label: 'Travel & hotels',        sect: 'Teams & players' },

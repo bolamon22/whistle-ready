@@ -10,7 +10,7 @@ import GalleryPicker from '@/components/GalleryPicker'
 interface Tournament {
   id:string; name:string; sport:string; startDate:string; endDate:string
   location:string; scheduleIncrement:number; dates:string; createdAt:string; logoUrl:string
-  _count:{ games:number; teamRegistrations:number; registeredTeams:number; playerRegistrations:number }
+  _count:{ games:number; teamRegistrations:number; registeredTeams:number }
 }
 
 const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
@@ -328,9 +328,6 @@ export default function TournamentsDashboard() {
                         <span className="badge bg-purple-100 text-purple-700">{t._count.teamRegistrations} clubs</span>
                         <span className="badge bg-green-100 text-green-700">{t._count.registeredTeams} teams</span>
                       </>}
-                      {t._count.playerRegistrations > 0 && (
-                        <span className="badge bg-teal-100 text-teal-700">{t._count.playerRegistrations} players</span>
-                      )}
                     </div>
                   </div>
                 </Link>
@@ -338,7 +335,6 @@ export default function TournamentsDashboard() {
                   <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm justify-center whitespace-nowrap">Schedule</Link>
                   <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>
                   <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-purple-600 border-purple-200 hover:bg-purple-50"><span className="hidden sm:inline">📋 </span>Registrations</Link>
-                  <Link href={`/tournaments/${t.id}/player-registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-teal-600 border-teal-200 hover:bg-teal-50"><span className="hidden sm:inline">🏃 </span>Players</Link>
                   <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Pay Report</Link>
                   <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-blue-600 border-blue-200 hover:bg-blue-50"><span className="hidden sm:inline">🏗 </span>Builder</Link>
                 </div>
