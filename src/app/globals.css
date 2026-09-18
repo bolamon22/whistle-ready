@@ -50,3 +50,14 @@ body.gd-dark .border-slate-200, body.gd-dark .border-gray-200, body.gd-dark .bor
 body.gd-dark .input, body.gd-dark .select, body.gd-dark input, body.gd-dark select, body.gd-dark textarea { background:#1f2937 !important; color:#f1f5f9 !important; border-color:#374151 !important; }
 body.gd-dark .btn-secondary { background:#1f2937 !important; color:#e5e7eb !important; border-color:#374151 !important; }
 body.gd-dark .shadow-sm, body.gd-dark .shadow-md, body.gd-dark .shadow-lg, body.gd-dark .shadow-xl { box-shadow:0 1px 0 rgba(255,255,255,0.05) !important; }
+
+/* Autofill detection.
+   Chrome marks an autofilled field with :-webkit-autofill but does not always fire an
+   input event React can hear -- notably when it fills an SSR'd page before hydration.
+   Hanging a 1ms keyframe off the pseudo-class makes the browser emit `animationstart`,
+   which is the only reliable signal that a fill happened. PlayerRegForm listens for it
+   and reconciles the DOM values back into React state; nothing here is visual. */
+@keyframes wr-autofill { from { } to { } }
+input:-webkit-autofill,
+select:-webkit-autofill,
+textarea:-webkit-autofill { animation-name: wr-autofill; animation-duration: 1ms; }

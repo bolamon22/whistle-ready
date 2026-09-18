@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { CheckCircle2, Shield, ChevronDown, Check, Camera, Download, ExternalLink, Link2, Printer } from 'lucide-react'
 import { cardPrintCss, CARD_PRINT_NOTE } from '@/lib/cardPrint'
@@ -275,6 +275,54 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     agree: false, signature: '',
   })
   const set = (k: string, v: any) => setD((p: any) => ({ ...p, [k]: v }))
+
+  // BROWSERS FILL FORMS IN WAYS REACT CANNOT SEE.
+  //
+  // Chrome fills an SSR'd page the moment the HTML lands, which is before React has
+  // hydrated and attached a single onChange; password managers and some mobile keyboards
+  // write `.value` straight onto the node. Either way the field in front of the parent is
+  // full and `d` is still empty, so everything derived from `d` is wrong: the card stayed
+  // on the example next to a visibly filled-in form (Bo, Sep 18 2026) -- and, far worse,
+  // the submit would have posted a blank player name.
+  //
+  // So reconcile the other way round: read what is actually in the inputs and push it into
+  // state. Reproduced in Chromium by setting `.value` through the native setter with no
+  // event; without this the state stays empty, with it the state and the card catch up.
+  const formRef = useRef<HTMLFormElement>(null)
+  const syncFromDom = useCallback(() => {
+    const root = formRef.current
+    if (!root) return
+    const found: Record<string, string> = {}
+    root.querySelectorAll<HTMLInputElement>('input[name], select[name], textarea[name]').forEach(el => {
+      const type = (el as HTMLInputElement).type
+      if (type === 'checkbox' || type === 'radio' || type === 'file') return
+      if (el.value) found[el.name] = el.value
+    })
+    if (!Object.keys(found).length) return
+    // ONLY EVER FILLS A BLANK. A late autofill must not stamp on something the parent
+    // has already typed -- verified against exactly that sequence.
+    setD((prev: any) => {
+      let next = prev, changed = false
+      for (const [k, v] of Object.entries(found)) {
+        if (k in prev && typeof prev[k] === 'string' && prev[k] === '' && v !== '') {
+          if (!changed) { next = { ...prev }; changed = true }
+          next[k] = v
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [])
+  useEffect(() => {
+    syncFromDom()
+    // The browser decides over the first second or so; check a few times rather than
+    // guessing one moment, then stop.
+    const timers = [60, 250, 700, 1500].map(ms => setTimeout(syncFromDom, ms))
+    // Chrome flags an autofilled field with :-webkit-autofill; globals.css hangs a 1ms
+    // keyframe off it purely so this event fires when no input event does.
+    const onAnim = (e: AnimationEvent) => { if (e.animationName === 'wr-autofill') syncFromDom() }
+    document.addEventListener('animationstart', onAnim, true)
+    return () => { timers.forEach(clearTimeout); document.removeEventListener('animationstart', onAnim, true) }
+  }, [syncFromDom])
   // Staff can hand a parent a link / QR with ?club=&team= (game-day check-in): preselect
   // them when they match a registered club/team, otherwise leave the pickers untouched.
   useEffect(() => {
@@ -501,7 +549,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     <>
     {headerEl}
     <div className={`${cardOn ? 'max-w-2xl lg:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-8 lg:items-start' : 'max-w-2xl'} mx-auto px-6 py-10`}>
-    <form onSubmit={submit} className="space-y-6 min-w-0">
+    <form ref={formRef} onSubmit={submit} className="space-y-6 min-w-0">
       <Toaster position="top-right" />
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
@@ -509,19 +557,19 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         {shownCard && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={shownCard} qrText={cardView === 'example' ? sampleQr : previewQr} qr2Text={cardView === 'example' ? sampleQr2 : cardContext!.eventQrUrl} theme={cardContext!.theme} view={cardView} onPickView={pickView}
           clubLogo={d.clubName && !selectedClub?.logoUrl ? { clubName: selectedClub ? selectedClub.name : '', url: d.clubLogoUrl, onChange: u => set('clubLogoUrl', u) } : undefined} />}
         <div className="grid sm:grid-cols-2 gap-4">
-          <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
-          <div><label className={labelCls}>Player email</label><input className={inputCls} type="email" value={d.playerEmail} onChange={e => set('playerEmail', e.target.value)} /></div>
+          <div><label className={labelCls}>Player full name *</label><input className={inputCls} name="playerName" value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
+          <div><label className={labelCls}>Player email</label><input className={inputCls} type="email" name="playerEmail" value={d.playerEmail} onChange={e => set('playerEmail', e.target.value)} /></div>
           <div>
             <label className={labelCls}>{USA_LACROSSE_LABEL} *</label>
-            <input className={inputCls} value={d.usLacrosse} onChange={e => set('usLacrosse', e.target.value)} required />
+            <input className={inputCls} name="usLacrosse" value={d.usLacrosse} onChange={e => set('usLacrosse', e.target.value)} required />
             {/* Required field, and the number lives on a card in a drawer somewhere.
                 Without this the parent abandons the form to go hunting. */}
             <a href={USA_LACROSSE_LOOKUP} target="_blank" rel="noopener noreferrer"
               className="text-xs text-teal-600 hover:text-teal-800 hover:underline mt-1 inline-block">{USA_LACROSSE_LOOKUP_TEXT} &rarr;</a>
           </div>
-          <div><label className={labelCls}>Date of birth *</label><input className={inputCls} type="date" value={d.dob} onChange={e => set('dob', e.target.value)} required /></div>
-          {fields.gender && <div><label className={labelCls}>Gender *</label><select className={inputCls} value={d.gender} onChange={e => set('gender', e.target.value)} required><option value="">Select…</option><option>Female</option><option>Male</option></select></div>}
-          {fields.grade && <div><label className={labelCls}>Player grade *</label><select className={inputCls} value={d.grade} onChange={e => set('grade', e.target.value)} required><option value="">Select…</option>{GRADES.map(g => <option key={g}>{g}</option>)}</select></div>}
+          <div><label className={labelCls}>Date of birth *</label><input className={inputCls} type="date" name="dob" value={d.dob} onChange={e => set('dob', e.target.value)} required /></div>
+          {fields.gender && <div><label className={labelCls}>Gender *</label><select className={inputCls} name="gender" value={d.gender} onChange={e => set('gender', e.target.value)} required><option value="">Select…</option><option>Female</option><option>Male</option></select></div>}
+          {fields.grade && <div><label className={labelCls}>Player grade *</label><select className={inputCls} name="grade" value={d.grade} onChange={e => set('grade', e.target.value)} required><option value="">Select…</option>{GRADES.map(g => <option key={g}>{g}</option>)}</select></div>}
           {fields.teamName && clubMode && (
             <>
               <div><label className={labelCls}>Club *</label>
@@ -529,7 +577,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
               </div>
               {d.clubName && d.clubName !== '__other' && clubTeams.length > 0 && (
                 <div><label className={labelCls}>Team *</label>
-                  <select className={inputCls} value={d.teamPick} onChange={e => set('teamPick', e.target.value)} required>
+                  <select className={inputCls} name="teamPick" value={d.teamPick} onChange={e => set('teamPick', e.target.value)} required>
                     <option value="">Select your team…</option>
                     {clubTeams.map(t => <option key={t.id} value={t.id}>{t.name}{t.division ? ` · ${t.division}` : ''}</option>)}
                     <option value="__other">Other / not listed</option>
@@ -538,26 +586,26 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
               )}
               {(d.clubName === '__other' || d.teamPick === '__other') && (
                 <div><label className={labelCls}>{d.clubName === '__other' ? 'Enter your club and team name *' : 'Enter your team name *'}</label>
-                  <input className={inputCls} value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder={d.clubName === '__other' ? 'e.g. Tampa Elite 2031' : 'e.g. 2031 Blue'} required />
+                  <input className={inputCls} name="teamOther" value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder={d.clubName === '__other' ? 'e.g. Tampa Elite 2031' : 'e.g. 2031 Blue'} required />
                 </div>
               )}
             </>
           )}
           {fields.teamName && !clubMode && <div><label className={labelCls}>Team or club name *</label>{teams && teams.length > 0
-            ? <select className={inputCls} value={d.teamName} onChange={e => set('teamName', e.target.value)} required><option value="">Select your team…</option>{teams.map(tm => <option key={tm} value={tm}>{tm}</option>)}<option value="__other">Other / not listed</option></select>
-            : <input className={inputCls} value={d.teamName} onChange={e => set('teamName', e.target.value)} required />}</div>}
-          {fields.teamName && !clubMode && d.teamName === '__other' && <div><label className={labelCls}>Enter your team or club name *</label><input className={inputCls} value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required /></div>}
-          <div><label className={labelCls}>Jersey number</label><input className={inputCls} value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value)} /></div>
-          {fields.position !== false && <div><label className={labelCls}>Position</label><select className={inputCls} value={d.position} onChange={e => set('position', e.target.value)}><option value="">Select…</option>{POSITIONS.map(p => <option key={p}>{p}</option>)}</select></div>}
+            ? <select className={inputCls} name="teamName" value={d.teamName} onChange={e => set('teamName', e.target.value)} required><option value="">Select your team…</option>{teams.map(tm => <option key={tm} value={tm}>{tm}</option>)}<option value="__other">Other / not listed</option></select>
+            : <input className={inputCls} name="teamName" value={d.teamName} onChange={e => set('teamName', e.target.value)} required />}</div>}
+          {fields.teamName && !clubMode && d.teamName === '__other' && <div><label className={labelCls}>Enter your team or club name *</label><input className={inputCls} name="teamOther" value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required /></div>}
+          <div><label className={labelCls}>Jersey number</label><input className={inputCls} name="jerseyNumber" value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value)} /></div>
+          {fields.position !== false && <div><label className={labelCls}>Position</label><select className={inputCls} name="position" value={d.position} onChange={e => set('position', e.target.value)}><option value="">Select…</option>{POSITIONS.map(p => <option key={p}>{p}</option>)}</select></div>}
         </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Parent information</h2>
         <div className="grid sm:grid-cols-2 gap-4">
-          <div><label className={labelCls}>Parent name *</label><input className={inputCls} value={d.parentName} onChange={e => set('parentName', e.target.value)} autoComplete="name" required /></div>
-          <div><label className={labelCls}>Parent email *</label><input className={inputCls} type="email" value={d.parentEmail} onChange={e => set('parentEmail', e.target.value)} autoComplete="email" required /></div>
-          <div><label className={labelCls}>Parent mobile phone *</label><input className={inputCls} type="tel" value={d.parentPhone} onChange={e => set('parentPhone', e.target.value)} autoComplete="tel" required /></div>
+          <div><label className={labelCls}>Parent name *</label><input className={inputCls} name="parentName" value={d.parentName} onChange={e => set('parentName', e.target.value)} autoComplete="name" required /></div>
+          <div><label className={labelCls}>Parent email *</label><input className={inputCls} type="email" name="parentEmail" value={d.parentEmail} onChange={e => set('parentEmail', e.target.value)} autoComplete="email" required /></div>
+          <div><label className={labelCls}>Parent mobile phone *</label><input className={inputCls} type="tel" name="parentPhone" value={d.parentPhone} onChange={e => set('parentPhone', e.target.value)} autoComplete="tel" required /></div>
         </div>
         {fields.homeTown !== false && (
           <div className="grid sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
@@ -565,12 +613,12 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
               <label className={labelCls}>Home town *</label>
               {/* address-level2/1 are what a browser matches a saved address on,
                   so a phone offers the whole thing in one tap. */}
-              <input className={inputCls} value={d.homeCity} onChange={e => set('homeCity', e.target.value)}
+              <input className={inputCls} name="homeCity" value={d.homeCity} onChange={e => set('homeCity', e.target.value)}
                 autoComplete="address-level2" placeholder="City" required />
             </div>
             <div>
               <label className={labelCls}>Home state *</label>
-              <select className={inputCls} value={d.homeState} onChange={e => set('homeState', e.target.value)}
+              <select className={inputCls} name="homeState" value={d.homeState} onChange={e => set('homeState', e.target.value)}
                 autoComplete="address-level1" required>
                 <option value="">Select…</option>
                 {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
@@ -583,9 +631,9 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         )}
         {fields.parent2 && (
           <div className="grid sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
-            <div><label className={labelCls}>Parent 2 name</label><input className={inputCls} value={d.parent2Name} onChange={e => set('parent2Name', e.target.value)} /></div>
-            <div><label className={labelCls}>Parent 2 email</label><input className={inputCls} type="email" value={d.parent2Email} onChange={e => set('parent2Email', e.target.value)} /></div>
-            <div><label className={labelCls}>Parent 2 mobile phone</label><input className={inputCls} type="tel" value={d.parent2Phone} onChange={e => set('parent2Phone', e.target.value)} /></div>
+            <div><label className={labelCls}>Parent 2 name</label><input className={inputCls} name="parent2Name" value={d.parent2Name} onChange={e => set('parent2Name', e.target.value)} /></div>
+            <div><label className={labelCls}>Parent 2 email</label><input className={inputCls} type="email" name="parent2Email" value={d.parent2Email} onChange={e => set('parent2Email', e.target.value)} /></div>
+            <div><label className={labelCls}>Parent 2 mobile phone</label><input className={inputCls} type="tel" name="parent2Phone" value={d.parent2Phone} onChange={e => set('parent2Phone', e.target.value)} /></div>
           </div>
         )}
       </div>
@@ -593,16 +641,16 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Emergency contact</h2>
         <div className="grid sm:grid-cols-2 gap-4">
-          <div><label className={labelCls}>Name *</label><input className={inputCls} value={d.emergencyName} onChange={e => set('emergencyName', e.target.value)} required /></div>
-          <div><label className={labelCls}>Phone *</label><input className={inputCls} type="tel" value={d.emergencyPhone} onChange={e => set('emergencyPhone', e.target.value)} required /></div>
+          <div><label className={labelCls}>Name *</label><input className={inputCls} name="emergencyName" value={d.emergencyName} onChange={e => set('emergencyName', e.target.value)} required /></div>
+          <div><label className={labelCls}>Phone *</label><input className={inputCls} type="tel" name="emergencyPhone" value={d.emergencyPhone} onChange={e => set('emergencyPhone', e.target.value)} required /></div>
         </div>
       </div>
 
       {fields.hotelQuestion && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6">
           <label className={labelCls}>Is your family staying at a hotel or vacation rental during the tournament? *</label>
-          <select className={inputCls} value={d.hotel} onChange={e => set('hotel', e.target.value)} required><option value="">Select…</option><option>Yes</option><option>No</option><option>Maybe</option></select>
-          {d.hotel === 'Yes' && <div className="mt-3"><label className={labelCls}>Which hotel / where are you staying? *</label><input className={inputCls} value={d.hotelName} onChange={e => set('hotelName', e.target.value)} placeholder="Hotel or rental name" required /></div>}
+          <select className={inputCls} name="hotel" value={d.hotel} onChange={e => set('hotel', e.target.value)} required><option value="">Select…</option><option>Yes</option><option>No</option><option>Maybe</option></select>
+          {d.hotel === 'Yes' && <div className="mt-3"><label className={labelCls}>Which hotel / where are you staying? *</label><input className={inputCls} name="hotelName" value={d.hotelName} onChange={e => set('hotelName', e.target.value)} placeholder="Hotel or rental name" required /></div>}
         </div>
       )}
 
@@ -614,7 +662,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           <span className="text-sm text-slate-700">I have read and agree to the waiver and release of liability above *</span>
         </label>
         <label className={labelCls}>Type your full name as signature *</label>
-        <input className={inputCls} value={d.signature} onChange={e => set('signature', e.target.value)} placeholder="Full legal name" required />
+        <input className={inputCls} name="signature" value={d.signature} onChange={e => set('signature', e.target.value)} placeholder="Full legal name" required />
       </div>
 
       {fields.newsletter && (
