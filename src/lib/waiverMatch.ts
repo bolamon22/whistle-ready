@@ -6,11 +6,11 @@
 // nobody, and the player silently vanishes from their team's roster.
 //
 // The tags drift for reasons that are nobody's fault. Families register before their
-// club director has filed the team registration (Space Coast committed verbally for the
-// Fall Classic and eight families filed waivers while the club list still had no Space
-// Coast in it). A club adds a team late. A parent uses the name the team calls itself
-// rather than the one on the registration. All of it is normal, and all of it is only
-// resolvable later, once the registration exists.
+// club director has filed the team registration (Space Coast committed to the Fall
+// Classic verbally, and a family signed while the club list still had no Space Coast in
+// it). A club adds a team late. A parent uses the name the team calls itself rather than
+// the one on the registration. All of it is normal, and all of it is only resolvable
+// later, once the registration exists.
 //
 // So this is deliberately a SUGGESTION engine, not an auto-corrector. It says what it
 // thinks and why, marks whether it is certain, and leaves the decision to staff --

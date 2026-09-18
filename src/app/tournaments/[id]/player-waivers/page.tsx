@@ -82,10 +82,10 @@ type TeamGroup = { club: string; teams: string[]; divisions?: Record<string, str
  * WAIVERS THAT AREN'T ON A REGISTERED TEAM YET, AND WHAT TO DO WITH THEM.
  *
  * Families file waivers before their club director files the team registration -- Space
- * Coast committed to the Fall Classic verbally, and eight of their families signed while
- * the club list still had no Space Coast in it. The waiver is perfectly good; there is
- * just nothing to attach it to yet. Same story when a club adds a team late, or a parent
- * types the name the team calls itself.
+ * Coast committed to the Fall Classic verbally and a family signed while the club list
+ * still had no Space Coast in it. The waiver is perfectly good; there is just nothing to
+ * attach it to yet. Same story when a club adds a team late, or a parent types the name
+ * the team calls itself.
  *
  * Grouped BY TAG, not by player, because that's how the work actually goes: one decision
  * moves everyone who typed the same thing. The suggestion is prefilled and the reason is
