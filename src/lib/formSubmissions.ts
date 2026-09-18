@@ -37,7 +37,7 @@ export type FormSubmission = {
   updatedAt?: string
 }
 
-export type FormType = 'player' | 'vendor' | 'staff' | string
+export type FormType = 'player' | 'coach' | 'vendor' | 'staff' | 'media' | 'sponsor' | string
 
 const BLOB_KEY = (orgId: string) => `orgFormSubmissions:${orgId}`
 const MIGRATED_KEY = (orgId: string) => `orgFormSubmissionsMigrated:${orgId}`
@@ -82,7 +82,12 @@ export function ensureSubmissionsTable(): Promise<void> {
 const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature', 'photoUrl', 'cardLink'])
 function derived(data: any) {
   const d = data || {}
-  const playerName = String(d.playerName || d.name || d.companyName || '').trim()
+  // coachFullName belongs here too: without it every coach submission stored a
+  // BLANK playerName, which is the column the lists, the name sort and the CSV
+  // all read — the search blob still matched because it sweeps every string
+  // value, so a coach was findable but nameless. Rows written before this get
+  // fixed on any edit (updateSubmissionData recomputes these).
+  const playerName = String(d.playerName || d.coachFullName || d.name || d.companyName || '').trim()
   const teamName = String(d.teamName || '').trim()
   const clubName = String(d.clubName || '').trim()
   const jn = parseInt(String(d.jerseyNumber ?? '').replace(/\D/g, ''), 10)

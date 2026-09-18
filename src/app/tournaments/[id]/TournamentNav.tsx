@@ -76,11 +76,11 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     ]},
     { label: 'People', items: [
       // Order IS the grouping — keep same-section items adjacent or the heading
-      // prints twice. Coach waivers slots in after Player waivers once its staff
-      // list exists; the public form is live but has no list page to point at yet.
+      // prints twice.
       { href: `${base}/registrations`,        label: 'Team registrations',     sect: 'Teams & players' },
       { href: `${base}/player-registrations`, label: 'Player rosters',         sect: 'Teams & players' },
       { href: `${base}/player-waivers`,       label: 'Player waivers',         sect: 'Teams & players' },
+      { href: `${base}/coach-waivers`,        label: 'Coach waivers',          sect: 'Teams & players' },
       { href: `${base}/travel`,               label: 'Travel & hotels',        sect: 'Teams & players' },
       { href: `${base}/roster`,               label: 'Staff roster',           sect: 'Staff & officials' },
       { href: `${base}/staff-applications`,   label: 'Staff applications',     sect: 'Staff & officials' },
