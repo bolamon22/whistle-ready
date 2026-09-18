@@ -17,6 +17,7 @@ export type OrgShellData = {
   org: any
   base: string
   nav: ReturnType<typeof buildNav>
+  pages: PageRec[]
   contact: any
   socials: any
   registerHref?: string
@@ -64,7 +65,7 @@ export async function orgShell(opts: { slug?: string; orgId?: string }): Promise
     if (t.rows.length) registerHref = `/tournaments/${(t.rows[0] as any).id}/register`
   } catch { /* the button just won't show */ }
 
-  return { org, base, nav, contact: content.contact || {}, socials: content.socials || {}, registerHref }
+  return { org, base, nav, pages, contact: content.contact || {}, socials: content.socials || {}, registerHref }
 }
 
 /** Wraps a page's content in the org's own header and footer. */
@@ -73,7 +74,7 @@ export function OrgShell({ data, children }: { data: OrgShellData; children: Rea
     <div className="min-h-screen flex flex-col bg-slate-50">
       <OrgHeader org={data.org} homeHref={data.base || '/'} nav={data.nav} registerHref={data.registerHref} />
       <div className="flex-1">{children}</div>
-      <OrgFooter org={data.org} contact={data.contact} socials={data.socials} />
+      <OrgFooter org={data.org} contact={data.contact} socials={data.socials} base={data.base} pages={data.pages} />
     </div>
   )
 }

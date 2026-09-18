@@ -68,7 +68,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
           </div>
         )}
       </main>
-      <OrgFooter org={org} contact={content.contact || {}} socials={content.socials || {}} />
+      <OrgFooter org={org} contact={content.contact || {}} socials={content.socials || {}} base={base} pages={pages} />
     </div>
   )
 }

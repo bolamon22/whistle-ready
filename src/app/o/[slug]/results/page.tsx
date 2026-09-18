@@ -102,7 +102,7 @@ export default async function ResultsPage({ params }: { params: { slug: string }
               })}
             </div>}
       </main>
-      <OrgFooter org={org} contact={contact} socials={socials} />
+      <OrgFooter org={org} contact={contact} socials={socials} base={base} pages={pages} />
     </div>
   )
 }

@@ -117,7 +117,7 @@ export default async function GalleryPage({ params }: { params: { slug: string }
           />
         </div>
       </main>
-      <OrgFooter org={org} contact={contact} socials={socials} />
+      <OrgFooter org={org} contact={contact} socials={socials} base={base} pages={pages} />
     </div>
   )
 }

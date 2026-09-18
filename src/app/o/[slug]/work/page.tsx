@@ -85,7 +85,7 @@ export default async function OrgWorkPage({ params }: { params: { slug: string }
       <main className="w-full flex-1">
         <WorkForm orgId={org.id} introHtml={introHtml} positions={positions} refLevels={refLevels} ageLabel={ageLabel} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} events={events} />
       </main>
-      <OrgFooter org={org} contact={contact} socials={socials} />
+      <OrgFooter org={org} contact={contact} socials={socials} base={base} pages={pages} />
     </div>
   )
 }

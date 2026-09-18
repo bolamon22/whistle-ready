@@ -13,7 +13,7 @@ import AiGenerateButton from '@/components/AiGenerateButton'
 type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string; eventIds?: string[] }
 type PitchStat = { value: string; label: string }
 type Pitch = { show: boolean; headline: string; sub: string; benefits: string[]; stats: PitchStat[]; ctaLabel: string; wallCtaLabel: string; wallCtaLine: string }
-type Page = { title: string; slug: string; body: string; group: string; heroImage?: string }
+type Page = { title: string; slug: string; body: string; group: string; heroImage?: string; placement?: 'nav' | 'footer' }
 type Photo = { id?: string; url: string; caption: string; credit?: string; tournamentId?: string }
 type Insta = { username: string; token: string }
 type Content = {
@@ -457,8 +457,8 @@ function OrgSiteEditorInner() {
       {/* Info pages */}
       <Sec isOpen={!!openSec.pages} onToggle={() => setOpenSec(o => ({ ...o, pages: !o.pages }))} title="Info pages" summary={`${c.pages.length} page${c.pages.length === 1 ? '' : 's'}`}>
         <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-slate-400">Pages like Directions, Refund policy, Hotels or FAQ. Same Menu group nests them under a dropdown. Arrows reorder. Body supports Markdown.</p>
-          <button onClick={() => setC(v => { const idx = v.pages.length; setOpenPages(o => ({ ...o, [idx]: true })); return { ...v, pages: [...v.pages, { title: '', slug: '', body: '', group: '', heroImage: '' }] } })} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 flex-shrink-0 ml-3"><Plus size={14} /> Add page</button>
+          <p className="text-xs text-slate-400">Pages like Directions, Refund policy, Hotels or FAQ. Same Menu group nests them under a dropdown. Put a page in the footer when it is written to be found on Google rather than used by people already on the site. Arrows reorder. Body supports Markdown.</p>
+          <button onClick={() => setC(v => { const idx = v.pages.length; setOpenPages(o => ({ ...o, [idx]: true })); return { ...v, pages: [...v.pages, { title: '', slug: '', body: '', group: '', heroImage: '', placement: 'nav' }] } })} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 flex-shrink-0 ml-3"><Plus size={14} /> Add page</button>
         </div>
         {c.pages.length === 0 && <p className="text-sm text-slate-400 mt-2">No pages yet.</p>}
         <div className="space-y-3 mt-2">
@@ -471,6 +471,7 @@ function OrgSiteEditorInner() {
                 </div>
                 <input className="input flex-1" value={pg.title} onChange={e => { const title = e.target.value; setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, title, slug: x.slug || slugify(title) } : x) })) }} placeholder="Page title (e.g. Directions & parking)" />
                 {pg.group ? <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 hidden sm:inline">{pg.group}</span> : null}
+                {pg.placement === 'footer' ? <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 hidden sm:inline">Footer</span> : null}
                 <button onClick={() => setOpenPages(o => ({ ...o, [i]: !o[i] }))} className="text-slate-400 hover:text-slate-600 p-1" title={openPages[i] ? 'Collapse' : 'Expand'}><ChevronDown size={16} className={`transition-transform ${openPages[i] ? 'rotate-180' : ''}`} /></button>
                 <button onClick={() => setC(v => ({ ...v, pages: v.pages.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
               </div>
@@ -481,7 +482,11 @@ function OrgSiteEditorInner() {
                       <span className="whitespace-nowrap">/o/{org?.slug || 'your-org'}/</span>
                       <input className="input py-1 text-xs flex-1" value={pg.slug} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, slug: slugify(e.target.value) } : x) }))} placeholder="directions" />
                     </div>
-                    <input className="input py-1 text-xs sm:w-48" value={pg.group || ''} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, group: e.target.value } : x) }))} placeholder="Menu group (optional)" />
+                    <input className="input py-1 text-xs sm:w-48" value={pg.group || ''} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, group: e.target.value } : x) }))} placeholder={pg.placement === 'footer' ? 'Footer heading (e.g. Guides)' : 'Menu group (optional)'} />
+                    <select className="input py-1 text-xs sm:w-36" value={pg.placement || 'nav'} onChange={e => setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, placement: e.target.value as 'nav' | 'footer' } : x) }))}>
+                      <option value="nav">In the menu</option>
+                      <option value="footer">In the footer</option>
+                    </select>
                   </div>
                   <div className="mt-2 flex items-center gap-3">
                     {pg.heroImage ? <img src={pg.heroImage} alt="" className="h-12 w-20 object-cover rounded-lg border border-slate-200" /> : <div className="h-12 w-20 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"><ImagePlus size={16} /></div>}

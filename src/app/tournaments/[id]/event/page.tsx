@@ -579,7 +579,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
           </div>
         </div>
       )}
-      {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
+      {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} base={orgBase(org.slug)} pages={navPages} />}
       <PublicChirp tournamentId={params.id} tournamentName={t.name} />
     </div>
   )

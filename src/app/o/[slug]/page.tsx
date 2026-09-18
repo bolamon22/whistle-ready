@@ -337,7 +337,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
           </div>
         </div>
       )}
-      <OrgFooter org={org} contact={contact} socials={socials} />
+      <OrgFooter org={org} contact={contact} socials={socials} base={base} pages={pages} />
     </div>
   )
 }

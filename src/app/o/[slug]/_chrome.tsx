@@ -4,7 +4,7 @@ import { isCustomOrgHost } from '@/lib/orgDomains'
 import { Facebook, Instagram, Globe } from 'lucide-react'
 import OrgNav from './OrgNav'
 
-export type PageRec = { title: string; slug: string; group?: string; body?: string; heroImage?: string }
+export type PageRec = { title: string; slug: string; group?: string; body?: string; heroImage?: string; placement?: 'nav' | 'footer' }
 export type NavLink = { title: string; href: string }
 export type NavItem = { type: 'link'; title: string; href: string } | { type: 'group'; label: string; children: NavLink[] }
 
@@ -25,6 +25,7 @@ export function buildNav(base: string, pages: PageRec[], hasGallery: boolean, wo
   const groupAt: Record<string, number> = {}
   for (const p of pages) {
     if (!p.title || !p.slug) continue
+    if (p.placement === 'footer') continue
     const href = `${base}/${p.slug}`
     const g = (p.group || '').trim()
     if (g) {
@@ -43,6 +44,28 @@ export function buildNav(base: string, pages: PageRec[], hasGallery: boolean, wo
   return items
 }
 
+// Link sections for the footer, from the pages placed there.
+//
+// WHY info pages get a second home: the header dropdown serves someone who has
+// already picked this org and wants a policy — rules, refunds, weather. A page
+// written to be FOUND, like "Florida Youth Lacrosse Tournaments: A Guide for
+// Teams & Families", is for a stranger who hasn't, and it stretched that menu to
+// three lines for an audience that never opens it. Either placement gives the
+// page the same site-wide internal link; the footer is where that link stops
+// costing the menu. The section heading is the page's own group, so an org names
+// it whatever it likes and can grow the section later.
+export function buildFooterLinks(base: string, pages: PageRec[]): { label: string; links: NavLink[] }[] {
+  const out: { label: string; links: NavLink[] }[] = []
+  const at: Record<string, number> = {}
+  for (const p of pages) {
+    if (!p.title || !p.slug || p.placement !== 'footer') continue
+    const label = (p.group || '').trim() || 'Guides'
+    if (at[label] === undefined) { at[label] = out.length; out.push({ label, links: [] }) }
+    out[at[label]].links.push({ title: p.title, href: `${base}/${p.slug}` })
+  }
+  return out
+}
+
 export function OrgHeader({ org, homeHref, nav, registerHref }: { org: any; homeHref: string; nav: NavItem[]; registerHref?: string }) {
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/70 relative">
@@ -57,7 +80,10 @@ export function OrgHeader({ org, homeHref, nav, registerHref }: { org: any; home
   )
 }
 
-export function OrgFooter({ org, contact, socials }: { org: any; contact: any; socials: any }) {
+export function OrgFooter({ org, contact, socials, base = '', pages = [] }: { org: any; contact: any; socials: any; base?: string; pages?: PageRec[] }) {
+  // Renders nothing extra when no page is placed here, so an org that has not used
+  // this keeps exactly the footer it had.
+  const sections = buildFooterLinks(base, pages)
   return (
     <footer className="bg-[#0b1220] text-slate-300">
       <div className="max-w-6xl mx-auto px-6 py-14 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -80,6 +106,20 @@ export function OrgFooter({ org, contact, socials }: { org: any; contact: any; s
             </div>
           )}
         </div>
+        {sections.length > 0 && (
+          <div className="flex flex-wrap gap-x-12 gap-y-7">
+            {sections.map(sec => (
+              <div key={sec.label}>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{sec.label}</p>
+                <ul className="mt-3 space-y-2">
+                  {sec.links.map(l => (
+                    <li key={l.href}><Link href={l.href} className="text-sm text-slate-400 hover:text-teal-300 transition-colors">{l.title}</Link></li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
         <span className="text-xs text-slate-500">Powered by Whistle Ready</span>
       </div>
     </footer>

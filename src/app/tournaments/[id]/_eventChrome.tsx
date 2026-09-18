@@ -86,7 +86,7 @@ export default async function EventChrome({ tournamentId, children }: { tourname
         </section>
       )}
       {children}
-      {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} />}
+      {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} base={orgBase(org.slug)} pages={navPages} />}
     </>
   )
 }

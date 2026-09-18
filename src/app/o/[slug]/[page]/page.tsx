@@ -111,7 +111,7 @@ export default async function OrgInfoPage({ params }: { params: { slug: string; 
           ? <article className="text-[15px]" dangerouslySetInnerHTML={{ __html: mdToHtml(page.body) }} />
           : <p className="text-slate-400">This page has no content yet.</p>}
       </main>
-      <OrgFooter org={org} contact={contact} socials={socials} />
+      <OrgFooter org={org} contact={contact} socials={socials} base={base} pages={pages} />
     </div>
   )
 }
