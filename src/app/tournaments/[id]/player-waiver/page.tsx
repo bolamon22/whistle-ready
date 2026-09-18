@@ -1,8 +1,8 @@
 import { createClient } from '@libsql/client'
 import { Trophy } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
-import PlayerRegForm, { type ClubOption, type CardContext } from '@/app/o/[slug]/register/player/PlayerRegForm'
-import { fmtRange, playerPassConfig, orgSiteConfig, eventQrFor, appBaseUrl } from '@/lib/playerPass'
+import PlayerRegForm, { type ClubOption, type CardContext, type SampleCard } from '@/app/o/[slug]/register/player/PlayerRegForm'
+import { fmtRange, playerPassConfig, orgSiteConfig, eventQrFor, appBaseUrl, loadPlayerPass } from '@/lib/playerPass'
 import { headers } from 'next/headers'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 
@@ -101,6 +101,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
   // Everything the live card preview shows that the form doesn't collect (only when the org's
   // Player pass switch is on).
   let cardContext: CardContext | undefined
+  let sampleCard: SampleCard | undefined
   if ((forms.player?.fields || {}).playerPass === true && orgId) {
     const [cfg, site] = await Promise.all([playerPassConfig(orgId), orgSiteConfig(orgId)])
     const orgSite = (org.slug && DOMAIN_BY_SLUG[String(org.slug)]) || ''
@@ -110,6 +111,22 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
       tournamentDates: fmtRange(String(t.startDate || ''), String(t.endDate || '')), location: String(t.location || ''),
       orgName: String(org.name || ''), orgLogoUrl: String(org.logoUrl || ''), orgSite,
       eventQrUrl: eventQr.url, eventQrLabel: eventQr.label, theme: cfg.theme,
+    }
+
+    // THE EXAMPLE IS A REAL CARD. Bo picks one already in the system and the
+    // form shows it whole -- that player's photo, club crest, number, position
+    // and both of their actual QR codes (Bo, Sep 18 2026). Loaded by token at
+    // render, so it is never a stale copy: change that card and the example on
+    // the form changes with it.
+    //
+    // A missing or deleted token is not an error worth a 500 on a registration
+    // page -- the form falls back to the drawn stand-in and nobody notices.
+    if (cfg.sampleToken) {
+      try {
+        const base = appBaseUrl(headers())
+        const s = await loadPlayerPass(cfg.sampleToken, base)
+        if (s) sampleCard = { card: s.card, qrUrl: s.qrUrl, qr2Url: s.qr2Url }
+      } catch { /* fall back to the stand-in */ }
     }
   }
 
@@ -122,7 +139,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name}
+      <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name} sampleCard={sampleCard}
         header={{ logoUrl: String(t.logoUrl || org.logoUrl || ''), title: String(t.name || '') }}
         cardContext={cardContext} />
     </div>

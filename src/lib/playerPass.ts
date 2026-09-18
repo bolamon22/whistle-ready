@@ -80,9 +80,14 @@ export type PlayerPassConfig = {
   eventQr: EventQrChoice
   eventLink: string
   eventLabel: string
+  /** Pass token of a REAL card to show as the example on the registration form.
+   *  Blank falls back to the drawn stand-in in samplePlayerCard.ts. Storing the
+   *  token rather than a copy of the data means the example is the live card --
+   *  change that player's photo and the example changes with it. */
+  sampleToken: string
 }
 export async function playerPassConfig(orgId: string): Promise<PlayerPassConfig> {
-  const off: PlayerPassConfig = { enabled: false, theme: 'classic', eventQr: 'event', eventLink: '', eventLabel: '' }
+  const off: PlayerPassConfig = { enabled: false, theme: 'classic', eventQr: 'event', eventLink: '', eventLabel: '', sampleToken: '' }
   if (!orgId) return off
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>('SELECT value FROM "AppSetting" WHERE key = ?', `orgForms:${orgId}`)
@@ -96,6 +101,9 @@ export async function playerPassConfig(orgId: string): Promise<PlayerPassConfig>
       eventQr: (['event', 'instagram', 'facebook', 'website', 'custom'] as string[]).includes(choice) ? choice : 'event',
       eventLink: String(p.cardEventLink || '').trim(),
       eventLabel: String(p.cardEventLabel || '').trim(),
+      // Accepts a full /pass/<token> URL or a bare token -- whichever Bo has in
+      // his clipboard when he is setting it.
+      sampleToken: (String(p.cardSampleToken || '').trim().match(/[a-f0-9]{32}/i) || [''])[0],
     }
   } catch { return off }
 }

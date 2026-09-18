@@ -62,6 +62,7 @@ type PlayerForm = {
   /** Player card: what the second (event / organization) QR code opens. */
   cardEventQr: 'event' | 'instagram' | 'facebook' | 'website' | 'custom'; cardEventLink: string; cardEventLabel: string
   cardTheme: 'classic' | 'brushed' | 'gold' | 'frost'
+  cardSampleToken: string
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
 }
 type VendorForm = {
@@ -87,7 +88,7 @@ const EMPTY: Forms = {
   player: {
     waiverTitle: 'Player Participation Waiver & Release of Liability', waiverText: DEFAULT_WAIVER,
     fields: { gender: true, grade: true, teamName: true, parent2: true, hotelQuestion: false, newsletter: false, playerPass: false, position: true, homeTown: true },
-    cardEventQr: 'event', cardEventLink: '', cardEventLabel: '', cardTheme: 'classic',
+    cardEventQr: 'event', cardEventLink: '', cardEventLabel: '', cardTheme: 'classic', cardSampleToken: '',
     confirmationTitle: "You're registered!",
     confirmationMessage: "Thanks for registering. We've received your information and signed waiver. We'll be in touch with event details — see you on the field!",
     emailConfirmation: true,
@@ -315,6 +316,16 @@ function FormsInner() {
                         </label>
                       ))}
                     </div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-700 mt-4">Player card · example shown on the form</div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Paste the link to a finished card and the registration form shows it as the example, with that
+                      player&rsquo;s photo, club, number and both QR codes. It switches to the family&rsquo;s own card as soon as
+                      they type a name. Leave blank for a drawn stand-in.
+                    </p>
+                    <input className={`${inputCls} mt-2`} value={pf.cardSampleToken || ''}
+                      onChange={e => setF(v => ({ ...v, player: { ...v.player, cardSampleToken: e.target.value } }))}
+                      placeholder="https://sunshineeventsgroup.com/pass/…" />
+
                     <div className="text-xs font-semibold uppercase tracking-wide text-teal-700 mt-4">Player card · second QR code</div>
                     <p className="text-xs text-slate-500 mt-1">The card has two QR codes: the family's own link, and this one for you. Pick what it opens.</p>
                     <div className="grid sm:grid-cols-2 gap-2 mt-2">

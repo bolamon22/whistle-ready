@@ -65,6 +65,15 @@ function parseBasedIn(raw: string | undefined): { city: string; state: string } 
   return city && hit ? { city, state: hit[0] } : null
 }
 export type FormHeader = { logoUrl: string; title: string; eyebrow?: string }
+/**
+ * A REAL card, loaded by token, shown as the example.
+ *
+ * Carries its own two QR urls rather than reusing the form's, because the whole
+ * point is that the example is that player's actual card -- their link and the
+ * org's, not a placeholder pointing back at this page.
+ */
+export type SampleCard = { card: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>; qrUrl: string; qr2Url: string }
+
 /** What the live card preview needs that the form doesn't collect: event + org branding, and the event QR. */
 export type CardContext = { tournamentName: string; tournamentLogoUrl: string; tournamentDates: string; location: string; orgName: string; orgLogoUrl: string; orgSite: string; eventQrUrl: string; eventQrLabel: string; theme: CardTheme }
 
@@ -250,7 +259,7 @@ function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2T
   )
 }
 
-export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header, cardContext }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader; cardContext?: CardContext }) {
+export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header, cardContext, sampleCard }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader; cardContext?: CardContext; sampleCard?: SampleCard }) {
   // Tournament forms pass the registered clubs with their teams: the parent picks the club,
   // then the team on it, and we store "Club — Team" so staff rosters line up exactly.
   const clubMode = !!clubs && clubs.length > 0
@@ -346,7 +355,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   // something to aim at (Bo, Sep 18 2026). It borrows the REAL event's logo,
   // dates and org, so it looks like a card from the weekend they are actually
   // registering for rather than a generic mock.
-  const sample: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'> | null = cardOn ? {
+  const sample: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'> | null = !cardOn ? null : sampleCard ? sampleCard.card : {
     ...SAMPLE_PLAYER,
     tournamentName: cardContext!.tournamentName || tournamentName || '',
     tournamentLogoUrl: cardContext!.tournamentLogoUrl,
@@ -357,7 +366,11 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     orgSite: cardContext!.orgSite,
     signedOn: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     qr2Label: cardContext!.eventQrLabel,
-  } : null
+  }
+  // The example's own codes when it is a real card, so both QRs go where that
+  // player's actually go.
+  const sampleQr = sampleCard?.qrUrl || 'https://whistleready.app'
+  const sampleQr2 = sampleCard?.qr2Url || (cardContext?.eventQrUrl || '')
 
   // Starts on the example and flips to theirs the moment they put something on
   // it -- which is the moment it becomes more interesting than the example.
@@ -493,7 +506,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Player information</h2>
-        {shownCard && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={shownCard} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme} view={cardView} onPickView={pickView}
+        {shownCard && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={shownCard} qrText={cardView === 'example' ? sampleQr : previewQr} qr2Text={cardView === 'example' ? sampleQr2 : cardContext!.eventQrUrl} theme={cardContext!.theme} view={cardView} onPickView={pickView}
           clubLogo={d.clubName && !selectedClub?.logoUrl ? { clubName: selectedClub ? selectedClub.name : '', url: d.clubLogoUrl, onChange: u => set('clubLogoUrl', u) } : undefined} />}
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
@@ -623,10 +636,10 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           </div>
           <CardViewSwitch view={cardView} onPick={pickView} />
         </div>
-        <CardPreview p={shownCard} qrText={cardView === 'example' ? 'https://whistleready.app' : previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
+        <CardPreview p={shownCard} qrText={cardView === 'example' ? sampleQr : previewQr} qr2Text={cardView === 'example' ? sampleQr2 : cardContext!.eventQrUrl} theme={cardContext!.theme} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
         <p className="text-xs text-slate-400 mt-2 leading-relaxed">
           {cardView === 'example'
-            ? 'Someone else\u2019s finished card, so you can see where this is going. Switch to Yours and it builds itself as you type.'
+            ? 'A finished card, so you can see where this is going. Switch to Yours and it builds itself as you type \u2014 or just start typing your name.'
             : 'Builds itself as you type. The player ID and QR code are set when you submit; you can change the photo or the link any time after.'}
         </p>
       </aside>
