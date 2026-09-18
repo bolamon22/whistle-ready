@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
+import { rosterLock } from '@/lib/rosterLock'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -127,5 +128,9 @@ export async function GET(req: NextRequest) {
       .filter(w => mine.has(norm(w.club)))
   } catch { /* no waivers table yet -- the tab shows none rather than failing */ }
 
-  return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers })
+  // Whether this director can still move players between their own teams, and why not.
+  // Sent with the data so the portal can say so up front rather than only on a refusal.
+  const lock = await rosterLock(tournamentId)
+
+  return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers, lock })
 }

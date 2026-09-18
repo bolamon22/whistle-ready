@@ -190,7 +190,7 @@ export default function ClubDirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selTournament, setSelTournament] = useState('')
-  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[] } | null>(null)
+  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; lock?: { locked: boolean; at: string; why: string } } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
   const [playerView, setPlayerView] = useState<'cards' | 'list'>('cards')
   const [openPlayer, setOpenPlayer] = useState<string | null>(null)
@@ -300,6 +300,52 @@ export default function ClubDirectorDashboard() {
   )
   const claimed = new Set(teamRows.flatMap(r => r.players.map(p => p.id)))
   const unassignedWaivers = waivers.filter(w => !claimed.has(w.id))
+
+  // MOVING A PLAYER ONTO ONE OF MY OWN TEAMS.
+  //
+  // The panel used to end at "ask the organizer to re-tag them", which put a ten-second
+  // fix on the organizer's desk on the week of an event. A director knows which team the
+  // kid plays for; they just had no way to say so (Bo, Sep 18 2026).
+  //
+  // The server decides what is allowed -- see api/club-director/roster. This only asks.
+  // A player not on any of my teams can be placed at any time, including mid-event,
+  // because late registrations are normal and somebody mistyping a team on Saturday
+  // morning should not need staff. A player already on one of my teams can only be moved
+  // until the event's first game; after that the server says no and so does this.
+  const lock = data?.lock
+  const myTeamNames: string[] = (data?.registrations || []).flatMap(r => r.teams.map(t => t.teamName)).filter(Boolean)
+  const [moving, setMoving] = useState('')
+  async function moveWaiver(waiverId: string, teamName: string, wasPlaced: boolean) {
+    if (!teamName || !selTournament) return
+    if (wasPlaced && lock?.locked) { alert(lock.why); return }
+    setMoving(waiverId)
+    try {
+      const res = await fetch(`/api/club-director/roster${viewUserId ? `?userId=${encodeURIComponent(viewUserId)}` : ''}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: selTournament, waiverId, teamName }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { alert(j?.error || 'Could not move that player'); return }
+      await loadData(selTournament)
+    } catch { alert('Could not move that player') } finally { setMoving('') }
+  }
+
+  /** The dropdown itself. `placed` is false for a waiver on none of my teams. */
+  function TeamPicker({ w, placed }: { w: Waiver; placed: boolean }) {
+    const frozen = placed && !!lock?.locked
+    return (
+      <select
+        value=""
+        disabled={frozen || moving === w.id}
+        title={frozen ? lock?.why : undefined}
+        onChange={e => { const v = e.target.value; e.currentTarget.value = ''; moveWaiver(w.id, v, placed) }}
+        className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
+      >
+        <option value="">{moving === w.id ? 'Moving…' : frozen ? 'Rosters locked' : placed ? 'Move to…' : 'Put on a team…'}</option>
+        {myTeamNames.filter(t => t !== w.team).map(t => <option key={t} value={t}>{t}</option>)}
+      </select>
+    )
+  }
   const totalPlayers = waivers.length || (data?.playerRegs.length ?? 0)
   const totalTeams = data?.registrations.reduce((s, r) => s + r.teams.length, 0) ?? 0
   const totalInvoiced = data?.registrations.reduce((s, r) => s + r.invoiceAmount - r.discountAmount, 0) ?? 0
@@ -792,7 +838,7 @@ export default function ClubDirectorDashboard() {
                             <table className="w-full text-sm">
                               <thead className="bg-gray-50">
                                 <tr>
-                                  {['Player', 'DOB', 'Grade', 'Jersey', 'Parent', 'Filed'].map(h => (
+                                  {['Player', 'DOB', 'Grade', 'Jersey', 'Parent', 'Filed', ''].map(h => (
                                     <th key={h} className="text-left px-4 py-2 text-gray-500 font-semibold text-xs">{h}</th>
                                   ))}
                                 </tr>
@@ -806,6 +852,7 @@ export default function ClubDirectorDashboard() {
                                     <td className="px-4 py-2 text-gray-500">{w.jersey ? `#${w.jersey}` : '—'}</td>
                                     <td className="px-4 py-2 text-gray-500">{w.parentName || '—'}</td>
                                     <td className="px-4 py-2 text-gray-400 text-xs">{fileDate(w.submittedAt)}</td>
+                                    <td className="px-4 py-2 text-right"><TeamPicker w={w} placed /></td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -823,10 +870,29 @@ export default function ClubDirectorDashboard() {
                       {unassignedWaivers.length} waiver{unassignedWaivers.length === 1 ? '' : 's'} not matched to a team
                     </p>
                     <p className="text-xs text-amber-800 mt-1">
-                      {unassignedWaivers.map(w => w.playerName).filter(Boolean).join(', ')}
-                      {' '}\u2014 filed under a team name that doesn\u2019t match your registration. They still count; ask the organizer to re-tag them.
+                      Filed under a team name that doesn&rsquo;t match your registration, so they are missing from the rosters
+                      below. They still count toward your club total. Put each one on a team here &mdash; this stays open all
+                      weekend, so a late registration can be fixed on the morning of.
                     </p>
+                    <div className="mt-2.5 divide-y divide-amber-200/70 border-t border-amber-200/70">
+                      {unassignedWaivers.map(w => (
+                        <div key={w.id} className="flex flex-wrap items-center gap-2 py-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-amber-900 truncate">{w.playerName || 'Player'}</div>
+                            <div className="text-[11px] text-amber-700 truncate">
+                              {[w.team ? `filed as \u201c${w.team}\u201d` : '', w.grade ? `Grade ${w.grade}` : '', dobDate(w.dob), w.parentName]
+                                .filter(Boolean).join('  \u00b7  ')}
+                            </div>
+                          </div>
+                          <TeamPicker w={w} placed={false} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+
+                {lock?.why && (
+                  <p className={`text-xs px-1 ${lock.locked ? 'text-amber-700' : 'text-gray-400'}`}>{lock.why}</p>
                 )}
 
                 {teamRows.length === 0 && (
