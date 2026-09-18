@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
+import { AlertTriangle } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import { useOrg } from '@/lib/org-context'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { INVITE_TEMPLATES, RETURNING_TEMPLATE, eventsList, upcomingEvents, type StoredTemplate } from '@/lib/inviteTemplates'
+import { sendBlockedReason } from '@/lib/inviteSend'
 
 interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string }
 interface Club {
@@ -20,6 +22,7 @@ const DEFAULT_BODY = RETURNING_TEMPLATE.body
 function applyVars(template: string, vars: Record<string, string>) {
   return Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), template)
 }
+
 
 export default function ReturningTeamsPage({ params }: { params: { id: string } }) {
   const org = useOrg()   // signs the letter and picks the domain the register link uses
@@ -198,6 +201,12 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   const unregisteredCount = clubs.filter(c => !c.registered).length
   const registeredCount = clubs.filter(c => c.registered).length
   const selectedUnregistered = clubs.filter(c => selected.has(c.id) && !c.registered)
+  // Clubs that are ticked but already registered. They are silently dropped from the
+  // send -- correctly, invites only go to clubs that have not registered -- but the
+  // count never said so, so ticking six registered clubs looked like six recipients.
+  const selectedRegistered = selected.size - selectedUnregistered.length
+
+  const blockedWhy = sendBlockedReason({ selected: selected.size, sendable: selectedUnregistered.length, unregistered: unregisteredCount, sending })
   const previewVars = getVars(previewClub ?? clubs.find(c => !c.registered))
 
   return (
@@ -412,7 +421,12 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                 <button onClick={selectAllUnregistered} className="text-xs font-semibold text-teal-700 hover:text-teal-900 underline underline-offset-2">
                   Select all {unregisteredCount} unregistered
                 </button>
-                {selected.size > 0 && <span className="text-xs text-slate-500">{selected.size} selected ({selectedUnregistered.length} unregistered)</span>}
+                {selected.size > 0 && (
+                  <span className="text-xs text-slate-600">
+                    <span className="font-semibold">{selectedUnregistered.length}</span> will be emailed
+                    {selectedRegistered > 0 && <span className="text-slate-400"> &middot; {selectedRegistered} already registered, skipped</span>}
+                  </span>
+                )}
                 <div className="flex-1" />
                 <div className="inline-flex rounded-lg border border-teal-300 overflow-hidden">
                   {(['now', 'later'] as const).map(w => (
@@ -427,7 +441,8 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                     className="border border-teal-300 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400" />
                 )}
                 <button onClick={sendInvites} disabled={selectedUnregistered.length === 0 || sending}
-                  className="bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+                  title={blockedWhy || undefined}
+                  className="bg-teal-600 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
                   {sending ? (when === 'later' ? 'Scheduling…' : 'Sending…') : when === 'later' ? `Schedule (${selectedUnregistered.length})` : `✉ Send Invite${selectedUnregistered.length !== 1 ? 's' : ''} (${selectedUnregistered.length})`}
                 </button>
               </div>
