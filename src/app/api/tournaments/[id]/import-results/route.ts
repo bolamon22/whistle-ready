@@ -40,6 +40,7 @@ type BracketGameIn = {
 }
 type BracketIn = {
   division?: unknown; format?: unknown; teamCount?: unknown
+  flight?: unknown; numberOffset?: unknown
   seeds?: unknown; games?: BracketGameIn[]
 }
 
@@ -160,6 +161,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           id: bracketId, tournamentId: params.id, division,
           format: str(b.format, 'single'),
           teamCount: Number(b.teamCount) || 0,
+          // A division can run two brackets side by side. Without carrying the flight
+          // through, both land on the schema default 'A' and the page shows two
+          // brackets claiming to be the same one.
+          flight: str(b.flight, 'A'),
+          numberOffset: Number(b.numberOffset) || 0,
           seeds: JSON.stringify(b.seeds && typeof b.seeds === 'object' ? b.seeds : {}),
         } })
         const bgs = (Array.isArray(b.games) ? b.games : []).map(g => ({
