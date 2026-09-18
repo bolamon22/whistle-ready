@@ -8,6 +8,7 @@ import { USA_LACROSSE_LABEL, USA_LACROSSE_SHORT, USA_LACROSSE_LOOKUP, USA_LACROS
 import { uploadPlayerPhoto, uploadClubLogo } from '@/lib/photoClient'
 import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
+import { SAMPLE_PLAYER } from '@/lib/samplePlayerCard'
 import CardPreview from './CardPreview'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean; homeTown?: boolean }
@@ -151,11 +152,28 @@ function ClubPicker({ clubs, value, otherName, onChange }: { clubs: ClubOption[]
 // The player card extras (tournament forms with the org's "Player pass" switch on): an
 // optional photo, and the link the card's QR code should open. Both can be changed later
 // from the card page. Photo prep + upload live in src/lib/photoClient.ts.
-function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2Text, theme, clubLogo }: {
+/** Yours / Example switch above the live card. Two render sites, one control. */
+function CardViewSwitch({ view, onPick, className = '' }: { view: 'example' | 'yours'; onPick: (v: 'example' | 'yours') => void; className?: string }) {
+  const btn = (v: 'example' | 'yours', label: string) => (
+    <button type="button" onClick={() => onPick(v)} aria-pressed={view === v}
+      className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold transition-colors ${view === v ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+      {label}
+    </button>
+  )
+  return (
+    <div className={`inline-flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5 ${className}`}>
+      {btn('yours', 'Yours')}
+      {btn('example', 'Example')}
+    </div>
+  )
+}
+
+function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2Text, theme, clubLogo, view, onPickView }: {
   photoUrl: string; cardLink: string; onPhoto: (url: string) => void; onLink: (url: string) => void
   preview: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'>; qrText: string; qr2Text: string; theme: CardTheme
   /** Offer a club-logo upload when the chosen club has none (or was typed in). */
   clubLogo?: { clubName: string; url: string; onChange: (url: string) => void }
+  view: 'example' | 'yours'; onPickView: (v: 'example' | 'yours') => void
 }) {
   const [busy, setBusy] = useState(false)
   const [logoBusy, setLogoBusy] = useState(false)
@@ -178,8 +196,11 @@ function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2T
     <div className="mb-4 pb-4 border-b border-slate-100">
       {/* On phones and tablets the live card sits right here; on wide screens it rides along in the side column. */}
       <div className="lg:hidden mb-4">
+        <div className="flex justify-center mb-2"><CardViewSwitch view={view} onPick={onPickView} /></div>
         <CardPreview p={preview} qrText={qrText} qr2Text={qr2Text} theme={theme} className="w-56 mx-auto rounded-xl shadow-lg ring-1 ring-slate-200" />
-        <p className="text-center text-xs text-slate-400 mt-2">Your card builds itself as you type.</p>
+        <p className="text-center text-xs text-slate-400 mt-2">
+          {view === 'example' ? 'An example of a finished card. Yours builds itself as you type.' : 'Your card builds itself as you type.'}
+        </p>
       </div>
       {clubLogo && (
         <div className="flex items-center gap-4 mb-4">
@@ -319,6 +340,38 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     qrLabel: previewLink ? qrLabelFor(previewLink) : 'My player card',
     qr2Label: cardContext!.eventQrLabel,
   } : null
+
+  // THE EXAMPLE. A blank preview at the top of the form reads as an empty
+  // template rather than a thing worth filling in; a finished one gives them
+  // something to aim at (Bo, Sep 18 2026). It borrows the REAL event's logo,
+  // dates and org, so it looks like a card from the weekend they are actually
+  // registering for rather than a generic mock.
+  const sample: Omit<PassCardData, 'qrDataUrl' | 'qr2DataUrl'> | null = cardOn ? {
+    ...SAMPLE_PLAYER,
+    tournamentName: cardContext!.tournamentName || tournamentName || '',
+    tournamentLogoUrl: cardContext!.tournamentLogoUrl,
+    tournamentDates: cardContext!.tournamentDates,
+    location: cardContext!.location,
+    orgName: cardContext!.orgName,
+    orgLogoUrl: cardContext!.orgLogoUrl,
+    orgSite: cardContext!.orgSite,
+    signedOn: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    qr2Label: cardContext!.eventQrLabel,
+  } : null
+
+  // Starts on the example and flips to theirs the moment they put something on
+  // it -- which is the moment it becomes more interesting than the example.
+  // `viewPinned` means they used the toggle themselves, and then we stop
+  // deciding for them.
+  const [cardView, setCardView] = useState<'example' | 'yours'>('example')
+  const [viewPinned, setViewPinned] = useState(false)
+  const hasOwnCard = !!String(d.playerName || '').trim() || !!d.photoUrl || !!String(d.jerseyNumber || '').trim()
+  useEffect(() => {
+    if (!viewPinned && hasOwnCard) setCardView('yours')
+  }, [hasOwnCard, viewPinned])
+  const pickView = (v: 'example' | 'yours') => { setViewPinned(true); setCardView(v) }
+  const shownCard = cardView === 'example' && sample ? sample : preview
+
   const previewQr = previewLink || (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '')
   // Tournament forms render their own header (logo + title) so the club chip can live in it.
   const headerEl = header ? (
@@ -440,7 +493,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <h2 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Player information</h2>
-        {preview && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme}
+        {shownCard && <CardFields photoUrl={d.photoUrl} cardLink={d.cardLink} onPhoto={u => set('photoUrl', u)} onLink={u => set('cardLink', u)} preview={shownCard} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme} view={cardView} onPickView={pickView}
           clubLogo={d.clubName && !selectedClub?.logoUrl ? { clubName: selectedClub ? selectedClub.name : '', url: d.clubLogoUrl, onChange: u => set('clubLogoUrl', u) } : undefined} />}
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Player full name *</label><input className={inputCls} value={d.playerName} onChange={e => set('playerName', e.target.value)} required /></div>
@@ -562,11 +615,20 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         {submitting ? 'Submitting…' : 'Submit registration'}
       </button>
     </form>
-    {preview && (
+    {shownCard && (
       <aside className="hidden lg:block sticky top-6">
-        <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-2">Your player card</div>
-        <CardPreview p={preview} qrText={previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
-        <p className="text-xs text-slate-400 mt-2 leading-relaxed">Builds itself as you type. The player ID and QR code are set when you submit; you can change the photo or the link any time after.</p>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+            {cardView === 'example' ? 'Example card' : 'Your player card'}
+          </div>
+          <CardViewSwitch view={cardView} onPick={pickView} />
+        </div>
+        <CardPreview p={shownCard} qrText={cardView === 'example' ? 'https://whistleready.app' : previewQr} qr2Text={cardContext!.eventQrUrl} theme={cardContext!.theme} className="w-full rounded-2xl shadow-xl ring-1 ring-slate-200" />
+        <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+          {cardView === 'example'
+            ? 'Someone else\u2019s finished card, so you can see where this is going. Switch to Yours and it builds itself as you type.'
+            : 'Builds itself as you type. The player ID and QR code are set when you submit; you can change the photo or the link any time after.'}
+        </p>
       </aside>
     )}
     </div>
