@@ -267,7 +267,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const [done, setDone] = useState(false)
   const [passToken, setPassToken] = useState('')   // set when the submission got a player pass
   const [d, setD] = useState<any>({
-    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', jerseyNumber: '', position: '', photoUrl: '', cardLink: '', clubLogoUrl: '',
+    playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', notListed: false, jerseyNumber: '', position: '', photoUrl: '', cardLink: '', clubLogoUrl: '',
     parentName: '', parentEmail: '', parentPhone: '', homeCity: '', homeState: '',
     parent2Name: '', parent2Email: '', parent2Phone: '',
     emergencyName: '', emergencyPhone: '',
@@ -484,11 +484,17 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     if (!d.agree || !d.signature.trim()) { toast.error('Please agree to the waiver and sign'); return }
     if (fields.teamName && clubMode && !d.clubName) { toast.error('Please select your club'); return }
     if (fields.teamName && clubMode && d.clubName !== '__other' && clubTeams.length > 0 && !d.teamPick) { toast.error('Please select your team'); return }
+    // Picking a registered team is the requirement; typing one is the exception, and it
+    // has to be a deliberate one. Without this the "Other" option was the path of least
+    // resistance and rosters fragmented across spellings of the same team.
+    if ((d.clubName === '__other' || d.teamPick === '__other' || (d.teamName === '__other' && !!teams?.length)) && !d.notListed) {
+      toast.error(d.clubName === '__other' ? 'Please check the club list first' : 'Please check your club\u2019s team list first'); return
+    }
     if ((d.teamName === '__other' || d.clubName === '__other' || d.teamPick === '__other') && !String(d.teamOther || '').trim()) { toast.error('Please enter your team or club name'); return }
     setSubmitting(true)
     try {
       // "Other / not listed" stores the typed name, not the sentinel, so staff rosters read properly.
-      const rest: any = { ...d }; delete rest.teamPick; delete rest.teamOther
+      const rest: any = { ...d }; delete rest.teamPick; delete rest.teamOther; delete rest.notListed
       // `division` rides along as its own field: teamName is the join key and has to be
       // the team, but the division is what the schedule and the brackets are built on,
       // so losing it would just move the problem. Blank when the team was typed in.
@@ -586,28 +592,83 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           {fields.teamName && clubMode && (
             <>
               <div><label className={labelCls}>Club *</label>
-                <ClubPicker clubs={clubsShown} value={d.clubName} otherName={typedOther} onChange={c => setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '', clubLogoUrl: '' }))} />
+                <ClubPicker clubs={clubsShown} value={d.clubName} otherName={typedOther} onChange={c => setD((p: any) => ({ ...p, clubName: c, teamPick: '', teamOther: '', notListed: false, clubLogoUrl: '' }))} />
               </div>
               {d.clubName && d.clubName !== '__other' && clubTeams.length > 0 && (
                 <div><label className={labelCls}>Team *</label>
-                  <select className={inputCls} name="teamPick" value={d.teamPick} onChange={e => set('teamPick', e.target.value)} required>
+                  <select className={inputCls} name="teamPick" value={d.teamPick} onChange={e => setD((p: any) => ({ ...p, teamPick: e.target.value, teamOther: '', notListed: false }))} required>
                     <option value="">Select your team…</option>
                     {clubTeams.map(t => <option key={t.id} value={t.id}>{t.name}{t.division ? ` · ${t.division}` : ''}</option>)}
                     <option value="__other">Other / not listed</option>
                   </select>
                 </div>
               )}
+              {/* THE ESCAPE HATCH, WITH A SPEED BUMP.
+                  A typed-in team matches no registration, so the player never lands on
+                  their team's roster, schedule or check-in list. Three LaxManiax families
+                  typed three different spellings of one team that was never registered
+                  ("2033/2034 Select", "2033/2034 Select Team", "33/34 Lax Maniax") -- each
+                  looked like a separate team to every count in the app. So before the free
+                  text appears: show what the club actually registered, make each one a
+                  one-tap correction, and require them to say the list has been checked. */}
               {(d.clubName === '__other' || d.teamPick === '__other') && (
-                <div><label className={labelCls}>{d.clubName === '__other' ? 'Enter your club and team name *' : 'Enter your team name *'}</label>
-                  <input className={inputCls} name="teamOther" value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder={d.clubName === '__other' ? 'e.g. Tampa Elite 2031' : 'e.g. 2031 Blue'} required />
+                <div className="sm:col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <p className="text-sm font-semibold text-amber-900">One more look before you type it in</p>
+                  {d.clubName === '__other'
+                    ? <p className="mt-1 text-xs text-amber-800 leading-relaxed">Every club registered for this event is in the list above{clubs && clubs.length ? ` \u2014 ${clubs.length} of them` : ''}. A club typed in by hand isn&rsquo;t connected to its registration, so the player won&rsquo;t show up on their team&rsquo;s roster.</p>
+                    : <>
+                        <p className="mt-1 text-xs text-amber-800 leading-relaxed">{selectedClub ? selectedClub.name : 'This club'} registered {clubTeams.length === 1 ? 'one team' : `these ${clubTeams.length} teams`} for this event &mdash; tap yours if it&rsquo;s here:</p>
+                        <ul className="mt-2 flex flex-wrap gap-1.5">
+                          {clubTeams.map(t => (
+                            <li key={t.id}>
+                              <button type="button" onClick={() => setD((p: any) => ({ ...p, teamPick: t.id, teamOther: '', notListed: false }))}
+                                className="rounded-full bg-white border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-900 hover:border-amber-500 hover:bg-amber-100">
+                                {t.name}{t.division ? ` \u00b7 ${t.division}` : ''}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-2 text-xs text-amber-800 leading-relaxed">A team typed in by hand isn&rsquo;t connected to the roster, the schedule or game-day check-in.</p>
+                      </>}
+                  <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-amber-900 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5 accent-amber-600" checked={!!d.notListed} onChange={e => set('notListed', e.target.checked)} />
+                    <span>I&rsquo;ve checked the list &mdash; {d.clubName === '__other' ? 'my club isn\u2019t' : 'my team isn\u2019t'} there.</span>
+                  </label>
+                  {d.notListed && (
+                    <div className="mt-3"><label className={labelCls}>{d.clubName === '__other' ? 'Enter your club and team name *' : 'Enter your team name *'}</label>
+                      <input className={inputCls} name="teamOther" value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder={d.clubName === '__other' ? 'e.g. Tampa Elite 2031' : 'e.g. 2031 Blue'} required />
+                    </div>
+                  )}
                 </div>
               )}
             </>
           )}
           {fields.teamName && !clubMode && <div><label className={labelCls}>Team or club name *</label>{teams && teams.length > 0
-            ? <select className={inputCls} name="teamName" value={d.teamName} onChange={e => set('teamName', e.target.value)} required><option value="">Select your team…</option>{teams.map(tm => <option key={tm} value={tm}>{tm}</option>)}<option value="__other">Other / not listed</option></select>
+            ? <select className={inputCls} name="teamName" value={d.teamName} onChange={e => setD((p: any) => ({ ...p, teamName: e.target.value, teamOther: '', notListed: false }))} required><option value="">Select your team…</option>{teams.map(tm => <option key={tm} value={tm}>{tm}</option>)}<option value="__other">Other / not listed</option></select>
             : <input className={inputCls} name="teamName" value={d.teamName} onChange={e => set('teamName', e.target.value)} required />}</div>}
-          {fields.teamName && !clubMode && d.teamName === '__other' && <div><label className={labelCls}>Enter your team or club name *</label><input className={inputCls} name="teamOther" value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required /></div>}
+          {fields.teamName && !clubMode && d.teamName === '__other' && teams && teams.length > 0 && (
+            <div className="sm:col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-sm font-semibold text-amber-900">One more look before you type it in</p>
+              <p className="mt-1 text-xs text-amber-800 leading-relaxed">All {teams.length} teams registered for this event are in the list above &mdash; tap yours if it&rsquo;s here:</p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {teams.map(tm => (
+                  <li key={tm}>
+                    <button type="button" onClick={() => setD((p: any) => ({ ...p, teamName: tm, teamOther: '', notListed: false }))}
+                      className="rounded-full bg-white border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-900 hover:border-amber-500 hover:bg-amber-100">{tm}</button>
+                  </li>
+                ))}
+              </ul>
+              <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-amber-900 cursor-pointer">
+                <input type="checkbox" className="mt-0.5 accent-amber-600" checked={!!d.notListed} onChange={e => set('notListed', e.target.checked)} />
+                <span>I&rsquo;ve checked the list &mdash; my team isn&rsquo;t there.</span>
+              </label>
+              {d.notListed && (
+                <div className="mt-3"><label className={labelCls}>Enter your team or club name *</label>
+                  <input className={inputCls} name="teamOther" value={d.teamOther} onChange={e => set('teamOther', e.target.value)} placeholder="e.g. Tampa Elite 2031" required />
+                </div>
+              )}
+            </div>
+          )}
           <div><label className={labelCls}>Jersey number</label><input className={inputCls} name="jerseyNumber" value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value)} /></div>
           {fields.position !== false && <div><label className={labelCls}>Position</label><select className={inputCls} name="position" value={d.position} onChange={e => set('position', e.target.value)}><option value="">Select…</option>{POSITIONS.map(p => <option key={p}>{p}</option>)}</select></div>}
         </div>
