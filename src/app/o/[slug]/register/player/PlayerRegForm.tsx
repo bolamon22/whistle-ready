@@ -233,11 +233,7 @@ function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2T
               shots and celebrations gives permission for the picture a kid
               actually wants on their card (Bo, Sep 18 2026), and "swap it any
               time" removes the pressure to get it right at a red light. */}
-<<<<<<< HEAD
           <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">Goes on the player card. A headshot, an action shot, a goal celebration — whatever they&rsquo;d want on it. Swap it any time.</p>
-=======
-          <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">Goes on the player card. A headshot, a shot mid-game, a goal celebration — whatever they&rsquo;d want on it. Swap it any time.</p>
->>>>>>> b15825ad613d55447e0e8addbedb6d6705807085
           <div className="mt-1.5 flex gap-3 text-xs font-semibold">
             <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className="text-teal-700 hover:underline">{photoUrl ? 'Change photo' : 'Add photo'}</button>
             {photoUrl && <button type="button" onClick={() => onPhoto('')} className="text-slate-500 hover:underline">Remove</button>}
