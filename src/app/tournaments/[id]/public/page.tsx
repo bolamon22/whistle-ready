@@ -7,7 +7,7 @@ import LiveTicker from '@/components/LiveTicker'
 
 const LogosContext = createContext<Record<string, string>>({})
 import Link from 'next/link'
-import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Sun, Moon, MapPin, ClipboardList, Bell, Share2, X, Info, ScrollText, Utensils, Megaphone, LogIn } from 'lucide-react'
+import { ArrowLeft, Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Sun, Moon, MapPin, ClipboardList, Bell, Share2, X, Info, ScrollText, Utensils, Megaphone, LogIn } from 'lucide-react'
 
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
@@ -915,6 +915,13 @@ export default function PublicTournamentPage() {
             <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center text-3xl flex-shrink-0">{sportIcon}</div>
           )}
           <div className="flex-1 min-w-0">
+            {/* A tournament page is a dead end without this: every route in reaches one
+                event and nothing leads back out to the rest of them. A finished event
+                belongs to the results archive, an upcoming one to the tournament list. */}
+            <Link href={eventOver ? '/results' : '/#tournaments'}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-teal-700 transition-colors mb-1">
+              <ArrowLeft size={13}/> {eventOver ? 'All results' : 'All tournaments'}
+            </Link>
             <h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight flex flex-wrap items-center gap-x-2 gap-y-1">
               {tournament?.name}
               {eventOver && (
