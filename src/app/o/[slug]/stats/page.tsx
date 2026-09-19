@@ -33,11 +33,34 @@ function seriesOf(name: string) { for (const [re, l] of SERIES) if (re.test(name
 // until 2015. Owner's recollection, not a record: it is rendered as a sentence
 // under the tiles and never added into them, because every number in a tile on
 // this page can be opened and checked against a published result.
-const ORIGINS: Record<string, { from: number; teams: number }> = {
-  'Jingle Brawl':    { from: 2007, teams: 60 },
+const ORIGINS: Record<string, { from: number; teams: number; known?: Record<number, number> }> = {
+  // `known` is a year counted off the paper records in the Drive archive but not
+  // imported here, because that year's scoresheets were never filled in. The team
+  // count is a fact; the result is not, so the year stays out of the game table and
+  // its teams are named in the sentence instead.
+  'Jingle Brawl':    { from: 2007, teams: 60, known: { 2010: 28, 2012: 53, 2013: 68, 2014: 57 } },
   'Summer Kick Off': { from: 2009, teams: 90 },
   'Monster Mash':    { from: 2009, teams: 60 },
   'Fall Classic':    { from: 2010, teams: 60 },
+}
+
+// Which editions are missing from the counted years, and roughly how many teams
+// they brought. Derived from the years actually in the game table rather than from
+// a start year, because the archive fills in from both ends: Jingle Brawl 2011 is
+// imported while 2012-2014 are not, so "everything before the first counted year"
+// would quietly drop three events. Import another year and this shrinks by itself.
+function priorTo(o: { from: number; teams: number; known?: Record<number, number> } | undefined,
+                 counted: Set<string>, last: string) {
+  if (!o) return { events: 0, teams: 0 }
+  const end = Number(last) || new Date().getFullYear()
+  const missing: number[] = []
+  for (let y = o.from; y <= end; y++) if (!counted.has(String(y))) missing.push(y)
+  // An unrecorded year is sized by the smallest year we do have a count for, not by
+  // the typical field: these events grew, so the earliest ones were the smallest.
+  const knownVals = Object.values(o.known || {})
+  const floor = knownVals.length ? Math.min(...knownVals) : o.teams
+  const teams = missing.reduce((sum, y) => sum + (o.known?.[y] ?? floor), 0)
+  return { events: missing.length, teams }
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
@@ -111,7 +134,7 @@ export default async function StatsPage({ params }: { params: { slug: string } }
 
   const tot = blank()
   const byYear = new Map<string, { teams: number; games: number }>()
-  const bySeries = new Map<string, { events: number; games: number; teams: number; champs: number; first: string; last: string }>()
+  const bySeries = new Map<string, { events: number; games: number; teams: number; champs: number; first: string; last: string; years: Set<string> }>()
   const venues = new Set<string>()
   for (const t of past) {
     const a = per[String(t.id)] || blank()
@@ -119,8 +142,9 @@ export default async function StatsPage({ params }: { params: { slug: string } }
     const y = String(t.startDate || '').slice(0, 4)
     if (y) { const e = byYear.get(y) || { teams: 0, games: 0 }; e.teams += a.teams; e.games += a.games; byYear.set(y, e) }
     const s = seriesOf(String(t.name))
-    const e = bySeries.get(s) || { events: 0, games: 0, teams: 0, champs: 0, first: '9999', last: '0' }
+    const e = bySeries.get(s) || { events: 0, games: 0, teams: 0, champs: 0, first: '9999', last: '0', years: new Set<string>() }
     e.events++; e.games += a.games; e.teams += a.teams; e.champs += a.champs
+    if (y) e.years.add(y)
     if (y && y < e.first) e.first = y
     if (y && y > e.last) e.last = y
     bySeries.set(s, e)
@@ -138,14 +162,21 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   // Events run before online scorekeeping. Only the tournament count moves: the
   // owner knows how many they ran, but nobody has the scoresheets, so games, teams
   // and champions stay at what can be checked against a published result.
-  const priorEvents = Math.max(0, Number(String(content.priorEvents || '').replace(/[^0-9]/g, '')) || 0)
+  // Summed from the same per-series gap the cards show, so the headline and the four
+  // cards can never disagree -- they did, once, because one was typed into the
+  // dashboard and the other was computed. The typed fields remain the fallback for an
+  // org with no ORIGINS entry.
+  const gaps = seriesRows.map(([n, v]) => priorTo(ORIGINS[n], v.years, v.last))
+  const gapEvents = gaps.reduce((a, g) => a + g.events, 0)
+  const gapTeams = gaps.reduce((a, g) => a + g.teams, 0)
+  const priorEvents = gapEvents || Math.max(0, Number(String(content.priorEvents || '').replace(/[^0-9]/g, '')) || 0)
   const totalEvents = past.length + priorEvents
   const seasons = predates ? (Number(String(new Date().getFullYear())) - Number(founded) + 1) : years.length
   const historyNote = String(content.historyNote || '').trim()
   // Deliberately prose, never a tile. Every headline figure on this page can be
   // checked against a published result; one that cannot would put the others in
   // doubt, and it costs more credibility than the bigger number buys.
-  const priorTeams = Math.max(0, Number(String(content.priorTeams || '').replace(/[^0-9]/g, '')) || 0)
+  const priorTeams = gapTeams || Math.max(0, Number(String(content.priorTeams || '').replace(/[^0-9]/g, '')) || 0)
   const goalsPerGame = tot.scored ? (tot.goals / tot.scored).toFixed(1) : '0'
 
   const HEADLINE = [
@@ -235,7 +266,8 @@ export default async function StatsPage({ params }: { params: { slug: string } }
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             {seriesRows.map(([name, s]) => {
               const o = ORIGINS[name]
-              const before = o && Number(s.first) > o.from ? Number(s.first) - o.from : 0
+              const gap = priorTo(o, s.years, s.last)
+              const before = gap.events
               return (
               <div key={name} className="bg-white border border-slate-200 rounded-2xl p-6">
                 <div className="flex items-baseline justify-between gap-3">
@@ -254,9 +286,9 @@ export default async function StatsPage({ params }: { params: { slug: string } }
                   <p className="mt-5 pt-4 border-t border-slate-100 flex items-start gap-2 text-[12px] leading-relaxed text-slate-500">
                     <History size={13} className="text-slate-400 shrink-0 mt-0.5" />
                     <span>
-                      First run in {o.from}. That is roughly {before} more {before === 1 ? 'edition' : 'editions'} and
-                      {' '}{fmt(before * o.teams)} more teams before {s.first} — counted off the field sizes of the
-                      day rather than a scoresheet, so they stay out of the numbers above.
+                      First run in {o.from}. {before === 1 ? 'One more edition' : `${before} more editions`} and
+                      {' '}about {fmt(gap.teams)} more teams are not counted above — those years were scored on
+                      paper and the sheets were never filled in, so the teams are known but the results are not.
                     </span>
                   </p>
                 )}
