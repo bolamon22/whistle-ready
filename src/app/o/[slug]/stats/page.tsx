@@ -121,6 +121,11 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   const peakYear = years.reduce((best, y) => (byYear.get(y)!.teams > (byYear.get(best)?.teams ?? -1) ? y : best), years[0] || '')
   const maxTeams = Math.max(1, ...years.map(y => byYear.get(y)!.teams))
   const avgTeams = past.length ? Math.round(tot.teams / past.length) : 0
+  // The archive starts where the records start, not where the organization does.
+  // Saying so turns the gap into the point: the counted years are a floor.
+  const founded = String(content.foundedYear || '').trim()
+  const firstCounted = years[0] || ''
+  const predates = /^\d{4}$/.test(founded) && firstCounted && founded < firstCounted
   const scoredPct = tot.games ? Math.round((tot.scored / tot.games) * 100) : 0
   const goalsPerGame = tot.scored ? (tot.goals / tot.scored).toFixed(1) : '0'
 
@@ -140,7 +145,9 @@ export default async function StatsPage({ params }: { params: { slug: string } }
         <div className="relative max-w-6xl mx-auto px-6 py-16">
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">By the numbers</h1>
           <p className="text-teal-100 mt-2 max-w-2xl">
-            {years[0] ? `Every ${org.name} tournament since ${years[0]}, counted from the scoresheet.` : 'Counted from the scoresheet.'}
+            {predates
+              ? `Running lacrosse tournaments since ${founded}. Publishing every score since ${firstCounted} — that is what is counted here.`
+              : firstCounted ? `Every ${org.name} tournament since ${firstCounted}, counted from the scoresheet.` : 'Counted from the scoresheet.'}
           </p>
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {HEADLINE.map(h => (
@@ -155,6 +162,17 @@ export default async function StatsPage({ params }: { params: { slug: string } }
       </section>
 
       <main className="max-w-6xl mx-auto px-6 py-14 w-full flex-1 space-y-14">
+
+        {predates && (
+          <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
+            <p className="text-slate-600 leading-relaxed max-w-3xl">
+              <span className="font-bold text-slate-900">These are the counted years, not all of them.</span>{' '}
+              {org.name} has been running lacrosse tournaments since {founded}. Online scorekeeping arrived in{' '}
+              {firstCounted}, so every game from then on is on this site and every number below can be checked
+              against it. The {Number(firstCounted) - Number(founded)} seasons before that were played on paper.
+            </p>
+          </section>
+        )}
 
         <section>
           <h2 className="text-2xl font-extrabold text-slate-900">Why teams keep coming back</h2>

@@ -263,6 +263,11 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
       {hist.games > 0 && (
         <section className="bg-gradient-to-br from-[#0b1f3a] to-[#0e7490] text-white">
           <div className="max-w-6xl mx-auto px-6 py-12">
+            {/^\d{4}$/.test(String(content.foundedYear || '')) && (
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-200 mb-4">
+                Running lacrosse tournaments since {String(content.foundedYear).trim()}
+              </p>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
               <div className="grid grid-cols-3 gap-8 sm:gap-12">
                 <div>

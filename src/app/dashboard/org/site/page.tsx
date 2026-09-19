@@ -19,6 +19,7 @@ type Insta = { username: string; token: string }
 type Content = {
   logo: string
   hero: { headline: string; subtext: string; imageUrl: string }
+  foundedYear?: string
   about: { heading: string; body: string }
   sponsors: Sponsor[]
   sponsorPitch: Pitch
@@ -32,6 +33,7 @@ type Content = {
 const EMPTY: Content = {
   logo: '',
   hero: { headline: '', subtext: '', imageUrl: '' },
+  foundedYear: '',
   about: { heading: '', body: '' },
   sponsors: [],
   sponsorPitch: { show: false, headline: '', sub: '', benefits: [], stats: [], ctaLabel: '', wallCtaLabel: '', wallCtaLine: '' },
@@ -297,6 +299,11 @@ function OrgSiteEditorInner() {
         <input className="input" value={c.about.heading} onChange={e => setC(v => ({ ...v, about: { ...v.about, heading: e.target.value } }))} placeholder="About us" />
         <label className="label mt-3">Body</label>
         <textarea className="input min-h-[120px]" value={c.about.body} onChange={e => setC(v => ({ ...v, about: { ...v.about, body: e.target.value } }))} placeholder="Tell visitors about your organization…" />
+        <label className="label mt-4">Running events since</label>
+        <input className="input" inputMode="numeric" maxLength={4} value={c.foundedYear || ''}
+          onChange={e => setC(v => ({ ...v, foundedYear: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) }))}
+          placeholder="e.g. 1999" />
+        <p className="text-xs text-slate-400 mt-2">The year you ran your first event. Shown on the By the Numbers page, which otherwise can only count back to your oldest published results.</p>
       </Sec>
 
       {/* Sponsors */}
