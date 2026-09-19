@@ -16,7 +16,10 @@ export async function GET() {
   try {
     const rows = await prisma.tournament.findMany({
       orderBy: { startDate: 'desc' },
-      take: 60,
+      // Was 60. Importing the 2015-2024 archive took Sunshine Events Group alone to 51
+      // rows, and the cap drops the oldest silently -- one more season would have
+      // started deleting tournaments from the look-up with nothing to show for it.
+      take: 500,
       select: {
         id: true, name: true, sport: true,
         startDate: true, endDate: true, location: true, logoUrl: true,
