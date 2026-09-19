@@ -39,6 +39,7 @@ export function buildNav(base: string, pages: PageRec[], hasGallery: boolean, wo
     let moreIdx = items.findIndex(it => it.type === 'group' && (((it as any).label || '').trim().toLowerCase() === 'more'))
     if (moreIdx === -1) { moreIdx = items.length; items.push({ type: 'group', label: 'More', children: [] }) }
     ;(items[moreIdx] as any).children.push({ title: 'Results', href: `${base}/results` })
+    ;(items[moreIdx] as any).children.push({ title: 'By the Numbers', href: `${base}/stats` })
   }
   if (workHref) items.push({ type: 'link', title: 'Work With Us', href: workHref })
   return items

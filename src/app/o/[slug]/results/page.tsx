@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@libsql/client'
-import { Trophy } from 'lucide-react'
+import { Trophy, BarChart3 } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import type { Metadata } from 'next'
 import { orgAbs, clip } from '@/lib/seo'
@@ -69,6 +69,10 @@ export default async function ResultsPage({ params }: { params: { slug: string }
         <div className="relative max-w-6xl mx-auto px-6 py-14">
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">Results</h1>
           <p className="text-teal-100 mt-2">Scores, final standings and brackets from past tournaments.</p>
+          <Link href={`${base}/stats`}
+            className="inline-flex items-center gap-1.5 mt-5 bg-white/10 border border-white/25 hover:bg-white/20 transition-colors rounded-full px-4 py-2 text-sm font-semibold">
+            <BarChart3 size={15} /> See the whole history by the numbers
+          </Link>
         </div>
       </section>
       <main className="max-w-6xl mx-auto px-6 py-14 w-full flex-1">
