@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createClient } from '@libsql/client'
+import { requireStaff } from '@/lib/apiAuth'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -68,7 +69,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions)
+  // This route read the session only to decide which org to file the new tournament
+  // under -- it never required one, so an unauthenticated POST still created the
+  // tournament, just with no orgId. That left it out of every org-scoped list but
+  // still visible in the public directory at /api/public/tournaments, i.e. anyone
+  // could put a tournament on the site. The rest of the write routes were gated in
+  // 188bc8e; this collection route was missed.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const session = gate.session
   const role = (session?.user as any)?.role
   const sessionOrgId = (session?.user as any)?.orgId ?? null
 
