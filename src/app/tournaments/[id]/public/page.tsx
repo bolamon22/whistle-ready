@@ -714,6 +714,17 @@ const GD_DARK_CSS = `
 export default function PublicTournamentPage() {
   const {id}=useParams()
   const [tournament,setTournament]=useState<Tournament|null>(null)
+  // An event is "over" the day AFTER its last day, so the live header survives the
+  // final evening -- parents check scores on the drive home. Dates are plain
+  // YYYY-MM-DD, so build them from parts: new Date('2025-12-14') parses as UTC and
+  // flips the answer for anyone west of Greenwich.
+  const eventOver=useMemo(()=>{
+    const end=tournament?.endDate||tournament?.startDate||''
+    const m=end.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return false
+    const last=new Date(Number(m[1]),Number(m[2])-1,Number(m[3])); last.setHours(0,0,0,0)
+    const today=new Date(); today.setHours(0,0,0,0)
+    return today.getTime()>last.getTime()
+  },[tournament?.startDate,tournament?.endDate])
   const [logos,setLogos]=useState<Record<string,string>>({})
   const [tiebreakers,setTiebreakers]=useState<string[]>(DEFAULT_TBS)
   const [games,setGames]=useState<Game[]>([])
@@ -902,7 +913,14 @@ export default function PublicTournamentPage() {
             <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center text-3xl flex-shrink-0">{sportIcon}</div>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">{tournament?.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight flex flex-wrap items-center gap-x-2 gap-y-1">
+              {tournament?.name}
+              {eventOver && (
+                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                  <Trophy size={12}/> Final results
+                </span>
+              )}
+            </h1>
             <p className="text-sm font-semibold text-teal-600 mt-0.5">
               {tournament?.startDate&&fmtDate(tournament.startDate)}{tournament?.endDate&&tournament.endDate!==tournament.startDate&&` - ${fmtDate(tournament.endDate)}`}
             </p>
@@ -915,29 +933,44 @@ export default function PublicTournamentPage() {
               ) : null}
             </p>
             <div className="flex flex-wrap gap-2 mt-3">
-              <Link href={`/tournaments/${id}/player-register`} target="_blank"
-                className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                <ClipboardList size={14}/> Register
-              </Link>
+              {/* Registration, both waivers, the vendor form and Get Notified are all
+                  dead once an event has been played -- they led to forms nobody can
+                  act on. A finished event keeps what still works and points at the
+                  next one, because a visitor arriving from a search result for last
+                  year's results is exactly who should see the upcoming schedule. */}
+              {!eventOver && (
+                <Link href={`/tournaments/${id}/player-register`} target="_blank"
+                  className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
+                  <ClipboardList size={14}/> Register
+                </Link>
+              )}
+              {eventOver && (
+                <Link href="/#tournaments"
+                  className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
+                  <Calendar size={14}/> See upcoming events
+                </Link>
+              )}
               <Link href={`/tournaments/${id}/event`} target="_blank"
                 className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
                 <Info size={14}/> Event Info
               </Link>
-              <Link href={`/tournaments/${id}/player-waiver`} target="_blank"
-                className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                <ScrollText size={14}/> Player Waiver
-              </Link>
-              <Link href={`/tournaments/${id}/coach-waiver`} target="_blank"
-                className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                <ScrollText size={14}/> Coach Waiver
-              </Link>
-              <Link href={`/tournaments/${id}/vendor-request`} target="_blank"
-                className="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                <Utensils size={14}/> Vendor Request
-              </Link>
-              <button className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold px-3 py-2 rounded hover:bg-green-200 transition-colors">
-                <Bell size={14}/> Get Notified
-              </button>
+              {!eventOver && (<>
+                <Link href={`/tournaments/${id}/player-waiver`} target="_blank"
+                  className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
+                  <ScrollText size={14}/> Player Waiver
+                </Link>
+                <Link href={`/tournaments/${id}/coach-waiver`} target="_blank"
+                  className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
+                  <ScrollText size={14}/> Coach Waiver
+                </Link>
+                <Link href={`/tournaments/${id}/vendor-request`} target="_blank"
+                  className="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
+                  <Utensils size={14}/> Vendor Request
+                </Link>
+                <button className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold px-3 py-2 rounded hover:bg-green-200 transition-colors">
+                  <Bell size={14}/> Get Notified
+                </button>
+              </>)}
               <button className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs font-bold px-3 py-2 rounded hover:bg-gray-200 transition-colors">
                 <Share2 size={14}/> Share
               </button>
