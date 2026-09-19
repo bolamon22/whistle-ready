@@ -134,7 +134,6 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   // checked against a published result; one that cannot would put the others in
   // doubt, and it costs more credibility than the bigger number buys.
   const priorTeams = Math.max(0, Number(String(content.priorTeams || '').replace(/[^0-9]/g, '')) || 0)
-  const scoredPct = tot.games ? Math.round((tot.scored / tot.games) * 100) : 0
   const goalsPerGame = tot.scored ? (tot.goals / tot.scored).toFixed(1) : '0'
 
   const HEADLINE = [
@@ -197,10 +196,14 @@ export default async function StatsPage({ params }: { params: { slug: string } }
         <section>
           <h2 className="text-2xl font-extrabold text-slate-900">Why teams keep coming back</h2>
           <div className="mt-5 grid gap-5 sm:grid-cols-3">
+            {/* This was "98% of games scored and published". A percentage short of 100
+                sends the reader hunting for the missing 2% instead of reading the point,
+                and invites a question the page cannot answer on its own. The same fact
+                as a count says it without the implied shortfall. */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6">
-              <p className="text-3xl font-black text-teal-700 tabular-nums">{scoredPct}%</p>
-              <p className="font-bold text-slate-900 mt-1">of games scored and published</p>
-              <p className="text-sm text-slate-500 mt-1">{fmt(tot.scored)} of {fmt(tot.games)} results are on this site — standings and brackets, not just a schedule.</p>
+              <p className="text-3xl font-black text-teal-700 tabular-nums">{fmt(tot.scored)}</p>
+              <p className="font-bold text-slate-900 mt-1">results published</p>
+              <p className="text-sm text-slate-500 mt-1">Final scores, standings and brackets for every division — not just a schedule, and not taken down after the weekend.</p>
             </div>
             <div className="bg-white border border-slate-200 rounded-2xl p-6">
               <p className="text-3xl font-black text-teal-700 tabular-nums">{avgTeams}</p>
