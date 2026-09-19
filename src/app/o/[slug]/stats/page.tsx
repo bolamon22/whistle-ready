@@ -130,6 +130,10 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   const totalEvents = past.length + priorEvents
   const seasons = predates ? (Number(String(new Date().getFullYear())) - Number(founded) + 1) : years.length
   const historyNote = String(content.historyNote || '').trim()
+  // Deliberately prose, never a tile. Every headline figure on this page can be
+  // checked against a published result; one that cannot would put the others in
+  // doubt, and it costs more credibility than the bigger number buys.
+  const priorTeams = Math.max(0, Number(String(content.priorTeams || '').replace(/[^0-9]/g, '')) || 0)
   const scoredPct = tot.games ? Math.round((tot.scored / tot.games) * 100) : 0
   const goalsPerGame = tot.scored ? (tot.goals / tot.scored).toFixed(1) : '0'
 
@@ -181,6 +185,11 @@ export default async function StatsPage({ params }: { params: { slug: string } }
               Those earlier events are in the tournament count and nowhere else: their scoresheets were paper, so
               the games, teams and champions here are counted only from {firstCounted} on, where every one of them
               can be checked against a published result.
+              {priorTeams > 0 && (
+                <> Roughly {fmt(priorTeams)} more teams played those earlier events — near enough from what the
+                fields held at the time, but an estimate, which is why it is written here rather than added to
+                the figures above.</>
+              )}
             </p>
           </section>
         )}

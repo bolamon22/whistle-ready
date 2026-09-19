@@ -22,6 +22,7 @@ type Content = {
   foundedYear?: string
   priorEvents?: string
   historyNote?: string
+  priorTeams?: string
   about: { heading: string; body: string }
   sponsors: Sponsor[]
   sponsorPitch: Pitch
@@ -38,6 +39,7 @@ const EMPTY: Content = {
   foundedYear: '',
   priorEvents: '',
   historyNote: '',
+  priorTeams: '',
   about: { heading: '', body: '' },
   sponsors: [],
   sponsorPitch: { show: false, headline: '', sub: '', benefits: [], stats: [], ctaLabel: '', wallCtaLabel: '', wallCtaLine: '' },
@@ -313,6 +315,11 @@ function OrgSiteEditorInner() {
           onChange={e => setC(v => ({ ...v, priorEvents: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) }))}
           placeholder="e.g. 18" />
         <p className="text-xs text-slate-400 mt-2">Added to the tournament count only. Games, teams and champions stay counted from your published results, so every other figure on the page can still be checked against a real scoresheet.</p>
+        <label className="label mt-4">Roughly how many teams came to those earlier events</label>
+        <input className="input" inputMode="numeric" maxLength={6} value={c.priorTeams || ''}
+          onChange={e => setC(v => ({ ...v, priorTeams: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) }))}
+          placeholder="e.g. 1700" />
+        <p className="text-xs text-slate-400 mt-2">An approximation, and shown as one — it appears in a sentence, never in the headline figures, which stay countable against published results.</p>
         <label className="label mt-4">A note in your own words</label>
         <textarea className="input min-h-[90px]" value={c.historyNote || ''}
           onChange={e => setC(v => ({ ...v, historyNote: e.target.value }))}
