@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@libsql/client'
-import { Trophy, CalendarDays, Users, Flag, MapPin, ArrowRight } from 'lucide-react'
+import { Trophy, CalendarDays, Users, Flag, MapPin, ArrowRight, History } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import type { Metadata } from 'next'
 import { orgAbs, clip } from '@/lib/seo'
@@ -27,6 +27,18 @@ const SERIES: [RegExp, string][] = [
   [/summer kick ?off|sunshine state games/i, 'Summer Kick Off'],
 ]
 function seriesOf(name: string) { for (const [re, l] of SERIES) if (re.test(name)) return l; return 'Other' }
+
+// When each series actually started, and the field it drew in the years before
+// there was anything online to import. One edition a year, which is how these ran
+// until 2015. Owner's recollection, not a record: it is rendered as a sentence
+// under the tiles and never added into them, because every number in a tile on
+// this page can be opened and checked against a published result.
+const ORIGINS: Record<string, { from: number; teams: number }> = {
+  'Jingle Brawl':    { from: 2007, teams: 60 },
+  'Summer Kick Off': { from: 2009, teams: 90 },
+  'Monster Mash':    { from: 2009, teams: 60 },
+  'Fall Classic':    { from: 2010, teams: 60 },
+}
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const client = db(); let name = params.slug
@@ -221,7 +233,10 @@ export default async function StatsPage({ params }: { params: { slug: string } }
         <section>
           <h2 className="text-2xl font-extrabold text-slate-900">The four events</h2>
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
-            {seriesRows.map(([name, s]) => (
+            {seriesRows.map(([name, s]) => {
+              const o = ORIGINS[name]
+              const before = o && Number(s.first) > o.from ? Number(s.first) - o.from : 0
+              return (
               <div key={name} className="bg-white border border-slate-200 rounded-2xl p-6">
                 <div className="flex items-baseline justify-between gap-3">
                   <h3 className="font-bold text-slate-900">{name}</h3>
@@ -235,8 +250,18 @@ export default async function StatsPage({ params }: { params: { slug: string } }
                     </div>
                   ))}
                 </div>
+                {before > 0 && (
+                  <p className="mt-5 pt-4 border-t border-slate-100 flex items-start gap-2 text-[12px] leading-relaxed text-slate-500">
+                    <History size={13} className="text-slate-400 shrink-0 mt-0.5" />
+                    <span>
+                      First run in {o.from}. That is roughly {before} more {before === 1 ? 'edition' : 'editions'} and
+                      {' '}{fmt(before * o.teams)} more teams before {s.first} — counted off the field sizes of the
+                      day rather than a scoresheet, so they stay out of the numbers above.
+                    </span>
+                  </p>
+                )}
               </div>
-            ))}
+            )})}
           </div>
         </section>
 
