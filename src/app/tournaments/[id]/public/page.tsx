@@ -784,7 +784,9 @@ export default function PublicTournamentPage() {
       const total=divGames.length
       const completed=divGames.filter(g=>g.score1!==null&&g.score2!==null).length
       const champ=divGames.find(g=>g.isChampionship&&g.score1!==null&&g.score2!==null)
-      const champion=champ?(champ.score1!>champ.score2!?champ.team1:champ.team2):null
+      // A level final decides nothing. Without this the ternary falls through to team2
+      // and the tile crowns whoever happens to be listed second.
+      const champion=(champ&&champ.score1!==champ.score2)?(champ.score1!>champ.score2!?champ.team1:champ.team2):null
       const hasBracket=divGames.some(g=>g.isChampionship)
       const standings=calcStandings(games,div,undefined,tiebreakers)
       const leader=(!champion&&completed>0&&standings.length>0)?standings[0].team:null
