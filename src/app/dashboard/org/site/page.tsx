@@ -21,6 +21,7 @@ type Content = {
   hero: { headline: string; subtext: string; imageUrl: string }
   foundedYear?: string
   priorEvents?: string
+  historyNote?: string
   about: { heading: string; body: string }
   sponsors: Sponsor[]
   sponsorPitch: Pitch
@@ -36,6 +37,7 @@ const EMPTY: Content = {
   hero: { headline: '', subtext: '', imageUrl: '' },
   foundedYear: '',
   priorEvents: '',
+  historyNote: '',
   about: { heading: '', body: '' },
   sponsors: [],
   sponsorPitch: { show: false, headline: '', sub: '', benefits: [], stats: [], ctaLabel: '', wallCtaLabel: '', wallCtaLine: '' },
@@ -311,6 +313,11 @@ function OrgSiteEditorInner() {
           onChange={e => setC(v => ({ ...v, priorEvents: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) }))}
           placeholder="e.g. 18" />
         <p className="text-xs text-slate-400 mt-2">Added to the tournament count only. Games, teams and champions stay counted from your published results, so every other figure on the page can still be checked against a real scoresheet.</p>
+        <label className="label mt-4">A note in your own words</label>
+        <textarea className="input min-h-[90px]" value={c.historyNote || ''}
+          onChange={e => setC(v => ({ ...v, historyNote: e.target.value }))}
+          placeholder="Something to close the By the Numbers page with — a sentence or two in your voice." />
+        <p className="text-xs text-slate-400 mt-2">Shown at the foot of the By the Numbers page, under the figures. Leave it blank and the page simply ends with the numbers.</p>
       </Sec>
 
       {/* Sponsors */}

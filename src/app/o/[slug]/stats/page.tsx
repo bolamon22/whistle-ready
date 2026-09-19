@@ -117,8 +117,6 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   }
   const years = [...byYear.keys()].sort()
   const seriesRows = [...bySeries.entries()].sort((a, b) => b[1].games - a[1].games)
-  const peakYear = years.reduce((best, y) => (byYear.get(y)!.teams > (byYear.get(best)?.teams ?? -1) ? y : best), years[0] || '')
-  const maxTeams = Math.max(1, ...years.map(y => byYear.get(y)!.teams))
   const avgTeams = past.length ? Math.round(tot.teams / past.length) : 0
   // The archive starts where the records start, not where the organization does.
   // Saying so turns the gap into the point: the counted years are a floor.
@@ -131,6 +129,7 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   const priorEvents = Math.max(0, Number(String(content.priorEvents || '').replace(/[^0-9]/g, '')) || 0)
   const totalEvents = past.length + priorEvents
   const seasons = predates ? (Number(String(new Date().getFullYear())) - Number(founded) + 1) : years.length
+  const historyNote = String(content.historyNote || '').trim()
   const scoredPct = tot.games ? Math.round((tot.scored / tot.games) * 100) : 0
   const goalsPerGame = tot.scored ? (tot.goals / tot.scored).toFixed(1) : '0'
 
@@ -229,34 +228,6 @@ export default async function StatsPage({ params }: { params: { slug: string } }
           </div>
         </section>
 
-        {years.length > 1 && (
-          <section>
-            <h2 className="text-2xl font-extrabold text-slate-900">Team entries by year</h2>
-            <p className="text-sm text-slate-500 mt-1">Every team at every event, counted once per division.</p>
-            <div className="mt-6 bg-white border border-slate-200 rounded-2xl p-6">
-              <div className="flex items-end gap-2 sm:gap-3" style={{ height: 200 }}>
-                {years.map(y => {
-                  const v = byYear.get(y)!.teams
-                  const isPeak = y === peakYear
-                  const isLast = y === years[years.length - 1]
-                  return (
-                    <div key={y} className="flex-1 flex flex-col items-center justify-end h-full gap-1.5" title={`${y}: ${fmt(v)} team entries`}>
-                      {(isPeak || isLast) && <span className="text-[11px] font-bold text-slate-700 tabular-nums">{fmt(v)}</span>}
-                      <div
-                        className={`w-full rounded-t ${isPeak ? 'bg-teal-600' : 'bg-teal-500/45'}`}
-                        style={{ height: `${Math.max(3, (v / maxTeams) * 100)}%` }}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="flex gap-2 sm:gap-3 mt-2 border-t border-slate-100 pt-2">
-                {years.map(y => <div key={y} className="flex-1 text-center text-[11px] text-slate-400 tabular-nums">{y.slice(2)}</div>)}
-              </div>
-            </div>
-          </section>
-        )}
-
         {venues.size > 0 && (
           <section>
             <h2 className="text-2xl font-extrabold text-slate-900">Where we have played</h2>
@@ -267,6 +238,12 @@ export default async function StatsPage({ params }: { params: { slug: string } }
                 </span>
               ))}
             </div>
+          </section>
+        )}
+
+        {historyNote && (
+          <section className="border-l-2 border-teal-500 pl-6 sm:pl-8 max-w-3xl">
+            <p className="text-lg sm:text-xl text-slate-700 leading-relaxed whitespace-pre-line">{historyNote}</p>
           </section>
         )}
 
