@@ -55,7 +55,10 @@ export async function POST(req: NextRequest) {
       // behind a stale cache instead of showing up right away.
       const orgRow = await orgById(orgId)
       if (orgRow?.slug) {
-        for (const p of [`/o/${orgRow.slug}`, `/o/${orgRow.slug}/gallery`, `/o/${orgRow.slug}/results`]) {
+        // Every published page that reads this content. A page left off this list
+        // keeps serving the old copy until its own revalidate window expires, which
+        // reads as "saving did nothing" -- /stats sat on an hour of cache.
+        for (const p of [`/o/${orgRow.slug}`, `/o/${orgRow.slug}/gallery`, `/o/${orgRow.slug}/results`, `/o/${orgRow.slug}/stats`]) {
           try { revalidatePath(p) } catch { /* best-effort */ }
         }
       }
