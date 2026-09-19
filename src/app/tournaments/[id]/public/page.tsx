@@ -546,8 +546,14 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   const handleTeamClick=(team:string)=>{setSelectedTeam(team);setDivTab('schedule')}
   const divGames=games.filter(g=>g.division===division&&!g.isCanceled)
   const pools=Array.from(new Set(divGames.map(g=>g.pool).filter(Boolean))).sort() as string[]
-  const scheduleGames=divGames.filter(g=>!g.isChampionship).sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)
-  const bracketGames=divGames.filter(g=>g.isChampionship).sort((a,b)=>a.startTime<b.startTime?-1:1)
+  // isChampionship means THE FINAL -- the division tile names its winner as champion.
+  // The bracket tree therefore cannot use it to decide which games to look at: it
+  // resolves each bracket game by looking up the schedule game numbered B<n>, so it
+  // needs the whole division, not just the one game that happens to be the final.
+  // Filtering here is what made a fully played bracket render as W-B1 placeholders
+  // with "Not scheduled" captions.
+  const scheduleGames=divGames.sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)
+  const bracketGames=divGames
 
   const tabs:DivTab[]=['standings','schedule','bracket']
   const tabLabels:{[k in DivTab]:string}={standings:'Standings',schedule:'Schedule',bracket:'Bracket'}
