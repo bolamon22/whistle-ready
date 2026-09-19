@@ -116,7 +116,6 @@ export default async function StatsPage({ params }: { params: { slug: string } }
     if (loc) venues.add(loc)
   }
   const years = [...byYear.keys()].sort()
-  const seasons = years.length
   const seriesRows = [...bySeries.entries()].sort((a, b) => b[1].games - a[1].games)
   const peakYear = years.reduce((best, y) => (byYear.get(y)!.teams > (byYear.get(best)?.teams ?? -1) ? y : best), years[0] || '')
   const maxTeams = Math.max(1, ...years.map(y => byYear.get(y)!.teams))
@@ -126,11 +125,17 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   const founded = String(content.foundedYear || '').trim()
   const firstCounted = years[0] || ''
   const predates = /^\d{4}$/.test(founded) && firstCounted && founded < firstCounted
+  // Events run before online scorekeeping. Only the tournament count moves: the
+  // owner knows how many they ran, but nobody has the scoresheets, so games, teams
+  // and champions stay at what can be checked against a published result.
+  const priorEvents = Math.max(0, Number(String(content.priorEvents || '').replace(/[^0-9]/g, '')) || 0)
+  const totalEvents = past.length + priorEvents
+  const seasons = predates ? (Number(String(new Date().getFullYear())) - Number(founded) + 1) : years.length
   const scoredPct = tot.games ? Math.round((tot.scored / tot.games) * 100) : 0
   const goalsPerGame = tot.scored ? (tot.goals / tot.scored).toFixed(1) : '0'
 
   const HEADLINE = [
-    { icon: <Trophy size={18} />, value: fmt(past.length), label: 'tournaments run' },
+    { icon: <Trophy size={18} />, value: fmt(totalEvents), label: 'tournaments run' },
     { icon: <Flag size={18} />, value: fmt(tot.games), label: 'games played' },
     { icon: <Users size={18} />, value: fmt(tot.teams), label: 'team entries' },
     { icon: <Trophy size={18} />, value: fmt(tot.champs), label: 'champions crowned' },
@@ -158,6 +163,11 @@ export default async function StatsPage({ params }: { params: { slug: string } }
               </div>
             ))}
           </div>
+          {priorEvents > 0 && (
+            <p className="text-[13px] text-teal-200/90 mt-5 max-w-3xl">
+              {fmt(past.length)} of those tournaments have every game published on this site, from {firstCounted} onward — and those are the ones the games, teams and champions above are counted from.
+            </p>
+          )}
         </div>
       </section>
 
@@ -167,9 +177,11 @@ export default async function StatsPage({ params }: { params: { slug: string } }
           <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
             <p className="text-slate-600 leading-relaxed max-w-3xl">
               <span className="font-bold text-slate-900">These are the counted years, not all of them.</span>{' '}
-              {org.name} has been running lacrosse tournaments since {founded}. Online scorekeeping arrived in{' '}
-              {firstCounted}, so every game from then on is on this site and every number below can be checked
-              against it. The {Number(firstCounted) - Number(founded)} seasons before that were played on paper.
+              {org.name} has been running lacrosse tournaments since {founded}
+              {priorEvents > 0 ? ` — ${fmt(priorEvents)} of them before online scorekeeping arrived in ${firstCounted}` : ''}.
+              Those earlier events are in the tournament count and nowhere else: their scoresheets were paper, so
+              the games, teams and champions here are counted only from {firstCounted} on, where every one of them
+              can be checked against a published result.
             </p>
           </section>
         )}

@@ -271,7 +271,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
               <div className="grid grid-cols-3 gap-8 sm:gap-12">
                 <div>
-                  <div className="text-4xl sm:text-5xl font-black tracking-tight tabular-nums">{past.length}</div>
+                  <div className="text-4xl sm:text-5xl font-black tracking-tight tabular-nums">{past.length + Math.max(0, Number(String(content.priorEvents || '').replace(/[^0-9]/g, '')) || 0)}</div>
                   <div className="text-[13px] text-teal-100 mt-1">tournaments run</div>
                 </div>
                 <div>
