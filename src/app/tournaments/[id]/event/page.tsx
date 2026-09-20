@@ -440,7 +440,20 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const eventUrl = tournamentAbs(org.slug, `${base}/event`)
   const faqItems = resolveBlocks(c).filter((b: any) => b.type === 'faq').flatMap((b: any) => Array.isArray(b.props?.items) ? b.props.items : []).filter((it: any) => it && it.q && it.a)
   const sportName = t.sport || 'Lacrosse'
-  const sportsEventLd: any = { '@context': 'https://schema.org', '@type': 'SportsEvent', name: t.name, sport: sportName, eventStatus: 'https://schema.org/EventScheduled', eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode', url: eventUrl, ...(t.startDate ? { startDate: t.startDate } : {}), ...(t.endDate ? { endDate: t.endDate } : {}), ...(t.logoUrl ? { image: abs(t.logoUrl) } : {}), ...(t.location ? { location: { '@type': 'Place', name: shortLocation(t.location) || t.location, address: t.location } } : {}), ...(org.name ? { organizer: { '@type': 'Organization', name: org.name, ...(org.slug ? { url: orgAbs(org.slug) } : {}) } } : {}), ...(Number(t.teamRegEnabled) ? { offers: { '@type': 'Offer', url: tournamentAbs(org.slug, `${base}/register`), availability: 'https://schema.org/InStock', category: 'Team registration' } } : {}) }
+  // Schema location: prefer the real venues (name + street address) over the
+  // free-text t.location, which is usually just a city — "Wellington, FL" told
+  // Google and the answer engines nothing about Village Park Athletics Complex.
+  // The venues column already backs the map cards on this page; this puts the
+  // same facts in the structured data. Falls back to t.location when a
+  // tournament has no venue records yet.
+  const ldPlaces = locations
+    .map((l: any) => ({ '@type': 'Place', ...(l.name ? { name: l.name } : {}), ...(l.address ? { address: l.address } : {}) }))
+    .filter((p: any) => p.name || p.address)
+  const ldLocation = ldPlaces.length
+    ? { location: ldPlaces.length === 1 ? ldPlaces[0] : ldPlaces }
+    : (t.location ? { location: { '@type': 'Place', name: shortLocation(t.location) || t.location, address: t.location } } : {})
+
+  const sportsEventLd: any = { '@context': 'https://schema.org', '@type': 'SportsEvent', name: t.name, sport: sportName, eventStatus: 'https://schema.org/EventScheduled', eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode', url: eventUrl, ...(t.startDate ? { startDate: t.startDate } : {}), ...(t.endDate ? { endDate: t.endDate } : {}), ...(t.logoUrl ? { image: abs(t.logoUrl) } : {}), ...ldLocation, ...(org.name ? { organizer: { '@type': 'Organization', name: org.name, ...(org.slug ? { url: orgAbs(org.slug) } : {}) } } : {}), ...(Number(t.teamRegEnabled) ? { offers: { '@type': 'Offer', url: tournamentAbs(org.slug, `${base}/register`), availability: 'https://schema.org/InStock', category: 'Team registration' } } : {}) }
   const breadcrumbLd = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [...(org.slug ? [{ '@type': 'ListItem', position: 1, name: org.name, item: orgAbs(org.slug) }] : []), { '@type': 'ListItem', position: org.slug ? 2 : 1, name: t.name, item: eventUrl }] }
   const faqLd = faqItems.length ? { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqItems.slice(0, 20).map((it: any) => ({ '@type': 'Question', name: String(it.q), acceptedAnswer: { '@type': 'Answer', text: stripMd(String(it.a)) } })) } : null
   return (

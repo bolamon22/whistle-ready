@@ -62,7 +62,7 @@ export const LEGACY_REDIRECTS: Record<string, Record<string, string>> = {
     // Sep 2026) and 301'ing them to an event page answered a different question than
     // the one being asked — 0.6% and 0% CTR. They are real pages again; adding them
     // back here would silently swallow both pages and the traffic with them.
-    '/fields': `${MM}/event`,
+    '/fields': '/locations',   // a venues page exists now; send field lookups there, not to one event
     '/rules': `${MM}/rules`,
     '/tie-breakers': `${MM}/rules`,
     '/refund-policy': '/',
