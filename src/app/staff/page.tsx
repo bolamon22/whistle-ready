@@ -245,6 +245,7 @@ export default function StaffPage() {
   const [letterOpen,setLetterOpen]=useState(false)
   const [dupePairs,setDupePairs]=useState<DupePair[]>([])
   const [showDupes,setShowDupes]=useState(false)
+  const [manualMerge,setManualMerge]=useState<Worker[]|null>(null)   // two rows the organizer picked themselves
   const [search,setSearch]=useState('')
 
   const [selected,setSelected]=useState<Set<string>>(new Set())
@@ -397,12 +398,18 @@ export default function StaffPage() {
     }catch{setDupePairs([])}
   }
 
-  async function mergePair(pair:DupePair,keepSide:'a'|'b'){
-    const k=keepSide==='a'?pair.a:pair.b, r=keepSide==='a'?pair.b:pair.a
-    if(!confirm(`Merge "${r.name}" into "${k.name}"?\n\nAll of ${r.name}'s roster spots, availability, assignments, and pay history move to ${k.name}, and the duplicate record is deleted. This can't be undone.`))return
+  // Both merge paths end here: the suggested pairs above, and the two rows an organizer
+  // ticked themselves. No detector catches everything -- someone imported as "Kathryn"
+  // signs up as "Katie" and nothing links them -- so being able to point at any two rows
+  // and say "these are one person" is the part that has to always work.
+  async function mergeWorkers(k:{id:string;name:string},r:{id:string;name:string}){
+    if(!confirm(`Merge "${r.name}" into "${k.name}"?\n\nAll of ${r.name}'s roster spots, availability, assignments, and pay history move to ${k.name}, and anything ${k.name} is missing (email, phone, pay details, cert level) is filled in from ${r.name}. The duplicate record is deleted. This can't be undone.`))return
     const res=await fetch('/api/workers/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keepId:k.id,removeId:r.id})})
-    if(res.ok){toast.success(`Merged into ${k.name}`);load();loadDupes()}
+    if(res.ok){toast.success(`Merged into ${k.name}`);setManualMerge(null);setSelected(new Set());load();loadDupes()}
     else{const d=await res.json().catch(()=>({}));toast.error(d.error||'Merge failed')}
+  }
+  function mergePair(pair:DupePair,keepSide:'a'|'b'){
+    return mergeWorkers(keepSide==='a'?pair.a:pair.b, keepSide==='a'?pair.b:pair.a)
   }
 
   async function dismissPair(pair:DupePair){
@@ -661,6 +668,12 @@ export default function StaffPage() {
             <div className="flex items-center gap-3 mb-3 p-3 bg-sky-50 border border-sky-200 rounded-lg flex-wrap">
               <span className="text-sm font-medium text-sky-700">{selected.size} selected</span>
               <button onClick={()=>sendAppInvites(Array.from(selected),true)} className="btn-primary btn-sm" disabled={inviting}>{inviting?'Sending…':'Send app invites'}</button>
+              {selected.size===2&&(
+                <button onClick={()=>setManualMerge(workers.filter(w=>selected.has(w.id)).slice(0,2))}
+                  className="btn-sm border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg px-3">
+                  Merge these two
+                </button>
+              )}
               <span className="text-slate-300 text-sm">|</span>
               <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}><option value="">— choose field to edit —</option>{BULK_FIELDS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}</select>
               {bulkField&&<>
@@ -673,6 +686,26 @@ export default function StaffPage() {
                 <button onClick={applyBulk} className="btn-primary btn-sm" disabled={bulkSaving||!bulkValue}>{bulkSaving?'Saving…':'Apply to Selected'}</button>
               </>}
               <button onClick={()=>setSelected(new Set())} className="btn-secondary btn-sm ml-auto">Clear</button>
+            </div>
+          )}
+
+          {manualMerge&&manualMerge.length===2&&(
+            <div className="card p-4 mb-3 border border-amber-300 bg-amber-50">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-slate-800 text-sm">Merge these two into one person</h3>
+                <button className="text-xs text-slate-500 hover:text-slate-700" onClick={()=>setManualMerge(null)}>Cancel</button>
+              </div>
+              <p className="text-xs text-slate-600 mb-3">Pick the record to keep. The other one&rsquo;s roster spots, availability, assignments and pay history move onto it, and any detail it&rsquo;s missing gets filled in from the other.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {manualMerge.map((w,i)=>{const other=manualMerge[i===0?1:0];return(
+                  <div key={w.id} className="bg-white border border-slate-200 rounded-lg p-3">
+                    <p className="font-semibold text-sm text-slate-800">{w.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{w.email||'no email'} &middot; {w.phone||'no phone'}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{rLabel(w.defaultRole)}{w.association?` \u00b7 ${w.association}`:''} &middot; added {fmtInviteDate(w.createdAt)||'\u2014'}</p>
+                    <button onClick={()=>mergeWorkers(w,other)} className="mt-2 text-xs font-semibold text-teal-700 hover:text-teal-900">Keep this one &rarr;</button>
+                  </div>
+                )})}
+              </div>
             </div>
           )}
 

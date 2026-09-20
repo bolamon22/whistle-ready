@@ -51,6 +51,18 @@ export async function POST(req: Request) {
 
   // Fill keep's empty fields from remove; union roles; keep the stronger flags.
   const pick = (a: unknown, b: unknown) => (a !== null && a !== undefined && String(a).trim() !== '') ? a : ((b as string | null) ?? null)
+
+  // Columns that are NOT NULL with a default read as "set" even when nobody chose them,
+  // so a plain empty-check would keep the default and throw away the real answer the
+  // other record has. certLevel/payMethod/gender all ship a default, and the imported
+  // half of a pair is usually the one carrying the real cert while the fresh signup
+  // carries the real pay details -- treat the untouched default as a gap to fill.
+  const pickNonDefault = (a: unknown, b: unknown, dflt: string) => {
+    const av = String(a ?? '').trim(), bv = String(b ?? '').trim()
+    if (av && av !== dflt) return av
+    if (bv && bv !== dflt) return bv
+    return av || bv || dflt
+  }
   let roles: string[] = []
   try {
     const ka = JSON.parse(String(keep.roles ?? '[]')), rb = JSON.parse(String(rem.roles ?? '[]'))
@@ -59,16 +71,38 @@ export async function POST(req: Request) {
   if (!roles.length) roles = [String(keep.defaultRole ?? 'ref')]
 
   await client.execute({
-    sql: `UPDATE "Worker" SET email = ?, phone = ?, association = ?, payHandle = ?, notes = ?, photoUrl = ?, payRateOverride = ?, hourlyRate = ?, roles = ?, isAssigner = ?, updatedAt = datetime('now') WHERE id = ?`,
+    sql: `UPDATE "Worker" SET email = ?, phone = ?, association = ?, payHandle = ?, payMethod = ?, certLevel = ?, gender = ?, notes = ?, photoUrl = ?, payRateOverride = ?, hourlyRate = ?, roles = ?, isAssigner = ?, updatedAt = datetime('now') WHERE id = ?`,
     args: [
       pick(keep.email, rem.email), pick(keep.phone, rem.phone), pick(keep.association, rem.association),
-      pick(keep.payHandle, rem.payHandle), pick(keep.notes, rem.notes), pick(keep.photoUrl, rem.photoUrl),
+      pick(keep.payHandle, rem.payHandle),
+      pickNonDefault(keep.payMethod, rem.payMethod, 'check'),
+      pickNonDefault(keep.certLevel, rem.certLevel, 'youth'),
+      pickNonDefault(keep.gender, rem.gender, 'both'),
+      pick(keep.notes, rem.notes), pick(keep.photoUrl, rem.photoUrl),
       (keep.payRateOverride as number | null) ?? (rem.payRateOverride as number | null) ?? null,
       (keep.hourlyRate as number | null) ?? (rem.hourlyRate as number | null) ?? null,
       JSON.stringify(roles), (keep.isAssigner || rem.isAssigner) ? 1 : 0, keepId,
     ],
   })
 
+  // THE PAY DETAILS. venmoHandle / zelleHandle / mailingAddress / w9OnFile are raw
+  // columns added by guarded ALTER after this route was written (Sep 4-5 2026), and
+  // nothing came back to include them -- so a merge quietly dropped exactly the fields
+  // an organizer merges FOR. Someone who signs up fresh has the pay details and no
+  // history; the imported record has the history and no pay details. Each column is
+  // written on its own because any of them may not exist on an older database yet.
+  const filled: string[] = []
+  for (const col of ['venmoHandle', 'zelleHandle', 'mailingAddress', 'w9OnFile']) {
+    const kv = (keep as Record<string, unknown>)[col]
+    const rv = (rem as Record<string, unknown>)[col]
+    const value = (kv !== null && kv !== undefined && String(kv).trim() !== '') ? kv : rv
+    if (value === null || value === undefined || String(value).trim() === '') continue
+    try {
+      await client.execute({ sql: `UPDATE "Worker" SET "${col}" = ? WHERE id = ?`, args: [value as string, keepId] })
+      filled.push(col)
+    } catch { /* column not on this database yet */ }
+  }
+
   await client.execute({ sql: `DELETE FROM "Worker" WHERE id = ?`, args: [removeId] })
-  return NextResponse.json({ ok: true, keepId })
+  return NextResponse.json({ ok: true, keepId, filled })
 }

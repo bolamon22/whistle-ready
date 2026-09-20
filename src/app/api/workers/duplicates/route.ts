@@ -12,6 +12,38 @@ function normPhone(s: unknown): string {
   const d = String(s ?? '').replace(/\D/g, '')
   return d.length >= 7 ? d.slice(-10) : ''
 }
+
+/**
+ * Edit distance, stopped as soon as it exceeds `cap`.
+ *
+ * WHY THIS IS HERE: exact matching missed the case this panel exists for. Bo imported a
+ * pool of staff as sample data, real people are now signing themselves up through the
+ * recruiting link, and the two spellings rarely agree to the letter -- "Haley Nolan"
+ * signs up fresh while "Hayley Nolan" sits in the import. One letter apart, and because
+ * the imported half was seeded with no email and no phone there is nothing else to match
+ * on, so the pair was invisible: two records for one person, and her assignments and pay
+ * history split across both.
+ */
+function editDistance(a: string, b: string, cap: number): number {
+  if (Math.abs(a.length - b.length) > cap) return cap + 1
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i]
+    let best = i
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + cost)
+      if (row[j] < best) best = row[j]
+    }
+    if (best > cap) return cap + 1   // every path through this row is already too far
+    prev = row
+  }
+  return prev[b.length]
+}
+
+/** No email and no phone: almost always a seeded/imported row rather than a real signup. */
+const noContact = (w: Record<string, unknown>) =>
+  !String(w.email ?? '').trim() && !normPhone(w.phone)
 function slim(w: Record<string, unknown>) {
   return {
     id: String(w.id), name: String(w.name ?? ''), email: (w.email as string | null) ?? null,
@@ -60,6 +92,15 @@ export async function GET(req: Request) {
       if (phoneA && phoneA === phoneB) reasons.push('same phone')
       const nameA = normName(A.name), nameB = normName(B.name)
       if (nameA.length >= 5 && nameA === nameB) reasons.push('same name')
+      else if (nameA.length >= 8 && nameB.length >= 8) {
+        // One letter apart is a spelling of the same name far more often than it is two
+        // people. Two letters apart is weaker -- siblings on staff can sit that close
+        // ("Emma Johnson" / "Ella Johnson") -- so it only counts when one side has no
+        // contact details at all, which is the signature of a seeded import.
+        const d = editDistance(nameA, nameB, 2)
+        if (d === 1) reasons.push('nearly the same name')
+        else if (d === 2 && (noContact(A) || noContact(B))) reasons.push('nearly the same name, and one has no contact details')
+      }
       if (!reasons.length) continue
       const key = [String(A.id), String(B.id)].sort().join(':')
       if (dismissedSet.has(key)) continue
