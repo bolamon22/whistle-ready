@@ -372,7 +372,25 @@ export default function StaffPage() {
     }catch{toast.error('Could not copy the link')}
   }
 
-  const fmtInviteDate=(d:string)=>{const t=new Date(d.includes('T')?d:d.replace(' ','T')+'Z');return isNaN(t.getTime())?'':t.toLocaleDateString()}
+  // Takes whatever the caller actually has, because the callers don't agree on a type.
+  //
+  // This was typed `string` and went straight to d.includes(), which is fine for the
+  // invite dates (built by hand as strings) and fine for the duplicate-pair rows (the
+  // duplicates API stringifies every field on the way out). The Staff Pool's own rows
+  // come from SELECT * and carry Worker.createdAt exactly as the database holds it --
+  // Prisma writes DateTime into SQLite as a millisecond number -- so the first thing to
+  // hand this function a raw pool row crashed the page on `number.includes is not a
+  // function`. Coercing here rather than at the call site, because the next caller will
+  // make the same assumption; a bare number of milliseconds is also read as an epoch
+  // now, which is why duplicate pairs used to show "added --" instead of a date.
+  const fmtInviteDate=(d:unknown)=>{
+    if(d===null||d===undefined||d==='')return ''
+    if(d instanceof Date)return isNaN(d.getTime())?'':d.toLocaleDateString()
+    const s=String(d).trim()
+    if(!s)return ''
+    const t=/^\d+$/.test(s)?new Date(Number(s)):new Date(s.includes('T')?s:s.replace(' ','T')+'Z')
+    return isNaN(t.getTime())?'':t.toLocaleDateString()
+  }
 
   // ── Recruiting link: shareable code-gated /join URL for this org (see /api/workers/recruit-link) ──
   async function copyRecruitLink(){
