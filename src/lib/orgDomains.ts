@@ -57,8 +57,11 @@ export const LEGACY_REDIRECTS: Record<string, Record<string, string>> = {
     '/player-waiver': `${MM}/player-waiver`,
     '/coach-waiver': `${MM}/coach-waiver`,
     '/schedules': `${MM}/public`,
-    '/hotels': `${MM}/event`,
-    '/locations': `${MM}/event`,
+    // '/hotels' and '/locations' deliberately NOT redirected. They are the #2 and
+    // #3 impression sources on the whole site (176 and 45 impressions over 28 days,
+    // Sep 2026) and 301'ing them to an event page answered a different question than
+    // the one being asked — 0.6% and 0% CTR. They are real pages again; adding them
+    // back here would silently swallow both pages and the traffic with them.
     '/fields': `${MM}/event`,
     '/rules': `${MM}/rules`,
     '/tie-breakers': `${MM}/rules`,
