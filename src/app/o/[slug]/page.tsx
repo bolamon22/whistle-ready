@@ -8,6 +8,7 @@ import { SITE_URL, abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import SponsorWall from '@/components/SponsorWall'
 import { sponsorList, sponsorPitch } from '@/lib/sponsors'
+import { computeOrgHistory, type OrgHistory } from '@/lib/orgHistory'
 
 // Cache policy for published pages.
 //
@@ -178,21 +179,20 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   try { const tg = await client.execute({ sql: 'SELECT id, tagline FROM "Tournament" WHERE orgId = ?', args: [org.id as string] }); const tm: Record<string, string> = {}; (tg.rows as any[]).forEach(r => { if (r.tagline) tm[String(r.id)] = String(r.tagline) }); all.forEach(t => { (t as any).tagline = tm[String(t.id)] || '' }) } catch {}
   const today = new Date().toISOString().slice(0, 10)
   const upcoming = all.filter(t => (t.endDate || t.startDate || '') >= today).sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
-  const past = all.filter(t => (t.endDate || t.startDate || '') < today).sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
+  // The name check matches /stats exactly. Without it an unnamed draft event would be
+  // counted here and not there -- one of the two ways these pages could report a
+  // different number of tournaments run; the other was the event count itself, typed
+  // into site settings here and computed from the series origins there.
+  const past = all.filter(t => (t.endDate || t.startDate || '') < today && String(t.name || '')).sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
 
-  // Teaser for /stats. Two cheap aggregates only -- the team-entry count needs a
-  // DISTINCT over every game row and belongs on the stats page, not the front door.
-  let hist = { games: 0, champs: 0 }
+  // Teaser for /stats, from the SAME computation /stats renders. It used to run its own
+  // cheaper pair of aggregates, which is how the front door came to claim 7,608 games
+  // while /stats claimed 10,791 on the same afternoon: this counted only what is in the
+  // game table, and /stats folds in an estimate for the editions that predate online
+  // scorekeeping. Whichever way that call goes, both pages now go the same way.
+  let hist: OrgHistory | null = null
   if (past.length) {
-    try {
-      const pids = past.map(t => String(t.id))
-      const hr = await client.execute({
-        sql: `SELECT COUNT(*) AS games,
-                SUM(CASE WHEN isChampionship = 1 AND score1 IS NOT NULL AND score2 IS NOT NULL AND score1 <> score2 THEN 1 ELSE 0 END) AS champs
-              FROM "Game" WHERE tournamentId IN (${pids.map(() => '?').join(',')}) AND (isCanceled IS NULL OR isCanceled = 0)`,
-        args: pids })
-      if (hr.rows.length) { const r = hr.rows[0] as any; hist = { games: Number(r.games || 0), champs: Number(r.champs || 0) } }
-    } catch { /* the band just doesn't render */ }
+    try { hist = await computeOrgHistory(client, past, content) } catch { /* the band just doesn't render */ }
   }
   const registerHref = upcoming[0] ? `/tournaments/${upcoming[0].id}/register` : undefined
 
@@ -260,7 +260,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
       {/* The track record, on the front door. A club deciding where to spend its
           season is choosing between organizers, and the strongest thing this one can
           say is how much it has actually run. */}
-      {hist.games > 0 && (
+      {hist && hist.totalGames > 0 && (
         <section className="bg-gradient-to-br from-[#0b1f3a] to-[#0e7490] text-white">
           <div className="max-w-6xl mx-auto px-6 py-12">
             {/^\d{4}$/.test(String(content.foundedYear || '')) && (
@@ -271,11 +271,11 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
               <div className="grid grid-cols-3 gap-8 sm:gap-12">
                 <div>
-                  <div className="text-4xl sm:text-5xl font-black tracking-tight tabular-nums">{past.length + Math.max(0, Number(String(content.priorEvents || '').replace(/[^0-9]/g, '')) || 0)}</div>
+                  <div className="text-4xl sm:text-5xl font-black tracking-tight tabular-nums">{hist.totalEvents}</div>
                   <div className="text-[13px] text-teal-100 mt-1">tournaments run</div>
                 </div>
                 <div>
-                  <div className="text-4xl sm:text-5xl font-black tracking-tight tabular-nums">{hist.games.toLocaleString('en-US')}</div>
+                  <div className="text-4xl sm:text-5xl font-black tracking-tight tabular-nums">{hist.totalGames.toLocaleString('en-US')}</div>
                   <div className="text-[13px] text-teal-100 mt-1">games played</div>
                 </div>
                 <div>
