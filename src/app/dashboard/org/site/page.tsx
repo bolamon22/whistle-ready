@@ -324,7 +324,7 @@ function OrgSiteEditorInner() {
         <textarea className="input min-h-[90px]" value={c.historyNote || ''}
           onChange={e => setC(v => ({ ...v, historyNote: e.target.value }))}
           placeholder="Something to close the By the Numbers page with — a sentence or two in your voice." />
-        <p className="text-xs text-slate-400 mt-2">Shown at the foot of the By the Numbers page, under the figures. Leave it blank and the page simply ends with the numbers.</p>
+        <p className="text-xs text-slate-400 mt-2">Shown at the foot of the By the Numbers page, under the figures. End it with a dash and a name (\u2014 Sunshine Events Group) and it renders as an attributed quote. Leave it blank and the page simply ends with the numbers.</p>
       </Sec>
 
       {/* Sponsors */}

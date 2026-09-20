@@ -172,17 +172,34 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   const priorEvents = gapEvents || Math.max(0, Number(String(content.priorEvents || '').replace(/[^0-9]/g, '')) || 0)
   const totalEvents = past.length + priorEvents
   const seasons = predates ? (Number(String(new Date().getFullYear())) - Number(founded) + 1) : years.length
-  const historyNote = String(content.historyNote || '').trim()
+  const historyNoteRaw = String(content.historyNote || '').trim()
+  // A note that ends with a dash and a name ("… — Sunshine Events Group") renders as an
+  // attributed pull-quote; anything else renders as a plain closing line. The dash must have
+  // whitespace before it so hyphenated words at the end of a line aren't mistaken for it.
+  const _histMatch = historyNoteRaw.match(/^([\s\S]*\S)\s+[\u2014\u2013-]\s*([^\n\u2014\u2013]{1,80})\s*$/)
+  const historyAttrib = _histMatch ? _histMatch[2].trim() : ''
+  const historyNote = (_histMatch ? _histMatch[1].trim() : historyNoteRaw)
+    .replace(/^[\u201C\u201D"']\s*/, '').replace(/\s*[\u201C\u201D"']$/, '').trim()
   // Deliberately prose, never a tile. Every headline figure on this page can be
   // checked against a published result; one that cannot would put the others in
   // doubt, and it costs more credibility than the bigger number buys.
   const priorTeams = gapTeams || Math.max(0, Number(String(content.priorTeams || '').replace(/[^0-9]/g, '')) || 0)
   const goalsPerGame = tot.scored ? (tot.goals / tot.scored).toFixed(1) : '0'
+  // Fold the pre-firstCounted estimate into the events / games / teams headline (Bo, Sep 2026).
+  // Champions stay counted-only -- a winner can't be estimated. Prior games are derived from the
+  // counted games-per-team ratio, so the estimate scales with the prior-teams figure it's shown beside.
+  const gapGames = seriesRows.reduce((sum, [nm, v]) => {
+    const g = priorTo(ORIGINS[nm], v.years, v.last)
+    return sum + (v.teams > 0 ? Math.round((v.games / v.teams) * g.teams) : 0)
+  }, 0)
+  const totalGames = tot.games + gapGames
+  const totalTeams = tot.teams + priorTeams
+  const estimated = priorEvents > 0 || priorTeams > 0
 
   const HEADLINE = [
     { icon: <Trophy size={18} />, value: fmt(totalEvents), label: 'tournaments run' },
-    { icon: <Flag size={18} />, value: fmt(tot.games), label: 'games played' },
-    { icon: <Users size={18} />, value: fmt(tot.teams), label: 'team entries' },
+    { icon: <Flag size={18} />, value: fmt(totalGames), label: 'games played' },
+    { icon: <Users size={18} />, value: fmt(totalTeams), label: 'team entries' },
     { icon: <Trophy size={18} />, value: fmt(tot.champs), label: 'champions crowned' },
     { icon: <CalendarDays size={18} />, value: fmt(seasons), label: 'seasons' },
   ]
@@ -196,7 +213,7 @@ export default async function StatsPage({ params }: { params: { slug: string } }
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">By the numbers</h1>
           <p className="text-teal-100 mt-2 max-w-2xl">
             {predates
-              ? `Running lacrosse tournaments since ${founded}. Publishing every score since ${firstCounted} — that is what is counted here.`
+              ? `Running lacrosse tournaments since ${founded}. The numbers below go all the way back — estimated for the years before ${firstCounted}, and counted from published scores since.`
               : firstCounted ? `Every ${org.name} tournament since ${firstCounted}, counted from the scoresheet.` : 'Counted from the scoresheet.'}
           </p>
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -208,9 +225,9 @@ export default async function StatsPage({ params }: { params: { slug: string } }
               </div>
             ))}
           </div>
-          {priorEvents > 0 && (
+          {estimated && (
             <p className="text-[13px] text-teal-200/90 mt-5 max-w-3xl">
-              {fmt(past.length)} of those tournaments have every game published on this site, from {firstCounted} onward — and those are the ones the games, teams and champions above are counted from.
+              Figures for years prior to {firstCounted} are estimated from our own event records. From {firstCounted} on, every game, team and result is counted from a published scoresheet.
             </p>
           )}
         </div>
@@ -221,17 +238,12 @@ export default async function StatsPage({ params }: { params: { slug: string } }
         {predates && (
           <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
             <p className="text-slate-600 leading-relaxed max-w-3xl">
-              <span className="font-bold text-slate-900">These are the counted years, not all of them.</span>{' '}
-              {org.name} has been running lacrosse tournaments since {founded}
-              {priorEvents > 0 ? ` — ${fmt(priorEvents)} of them before online scorekeeping arrived in ${firstCounted}` : ''}.
-              Those earlier events are in the tournament count and nowhere else: their scoresheets were paper, so
-              the games, teams and champions here are counted only from {firstCounted} on, where every one of them
-              can be checked against a published result.
-              {priorTeams > 0 && (
-                <> Roughly {fmt(priorTeams)} more teams played those earlier events — near enough from what the
-                fields held at the time, but an estimate, which is why it is written here rather than added to
-                the figures above.</>
-              )}
+              <span className="font-bold text-slate-900">Some of these years are estimated.</span>{' '}
+              {org.name} has run lacrosse tournaments since {founded}, but online scorekeeping only arrived in {firstCounted}.
+              The tournaments, games and teams above include an estimate for the years prior to {firstCounted}, drawn from our
+              own event records rather than scoresheets{priorTeams > 0 ? ` — roughly ${fmt(priorEvents)} earlier events and about ${fmt(priorTeams)} more team entries` : ''}.
+              Everything from {firstCounted} on is counted from a published result you can open and check; champions are
+              counted from {firstCounted} only, since that is as far back as every winner can be named.
             </p>
           </section>
         )}
@@ -268,14 +280,21 @@ export default async function StatsPage({ params }: { params: { slug: string } }
               const o = ORIGINS[name]
               const gap = priorTo(o, s.years, s.last)
               const before = gap.events
+              // Fold the paper-era estimate into this series' events/games/teams too, so the cards
+              // agree with the headline. Prior games scale off the series' own games-per-team ratio.
+              const sGapGames = s.teams > 0 ? Math.round((s.games / s.teams) * gap.teams) : 0
+              const dEvents = s.events + gap.events
+              const dGames = s.games + sGapGames
+              const dTeams = s.teams + gap.teams
+              const dFirst = o && o.from < Number(s.first || '9999') ? String(o.from) : s.first
               return (
               <div key={name} className="bg-white border border-slate-200 rounded-2xl p-6">
                 <div className="flex items-baseline justify-between gap-3">
                   <h3 className="font-bold text-slate-900">{name}</h3>
-                  <span className="text-xs font-semibold text-slate-400">{s.first === s.last ? s.first : `${s.first}–${s.last}`}</span>
+                  <span className="text-xs font-semibold text-slate-400">{dFirst === s.last ? dFirst : `${dFirst}–${s.last}`}</span>
                 </div>
                 <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-                  {[[s.events, 'events'], [s.games, 'games'], [s.teams, 'teams'], [s.champs, 'champions']].map(([v, l]) => (
+                  {[[dEvents, 'events'], [dGames, 'games'], [dTeams, 'teams'], [s.champs, 'champions']].map(([v, l]) => (
                     <div key={l as string}>
                       <div className="text-xl font-black text-slate-900 tabular-nums">{fmt(v as number)}</div>
                       <div className="text-[11px] text-slate-400 uppercase tracking-wide">{l as string}</div>
@@ -286,9 +305,9 @@ export default async function StatsPage({ params }: { params: { slug: string } }
                   <p className="mt-5 pt-4 border-t border-slate-100 flex items-start gap-2 text-[12px] leading-relaxed text-slate-500">
                     <History size={13} className="text-slate-400 shrink-0 mt-0.5" />
                     <span>
-                      First run in {o.from}. {before === 1 ? 'One more edition' : `${before} more editions`} and
-                      {' '}about {fmt(gap.teams)} more teams are not counted above — those years were scored on
-                      paper and the sheets were never filled in, so the teams are known but the results are not.
+                      First run in {o.from}. The counts above fold in an estimate for
+                      {' '}{before === 1 ? 'one earlier edition' : `${before} earlier editions`} and about {fmt(gap.teams)} teams
+                      from years that were scored on paper. Champions are counted from published results only.
                     </span>
                   </p>
                 )}
@@ -312,7 +331,10 @@ export default async function StatsPage({ params }: { params: { slug: string } }
 
         {historyNote && (
           <section className="border-l-2 border-teal-500 pl-6 sm:pl-8 max-w-3xl">
-            <p className="text-lg sm:text-xl text-slate-700 leading-relaxed whitespace-pre-line">{historyNote}</p>
+            <blockquote className="text-lg sm:text-2xl text-slate-700 leading-relaxed whitespace-pre-line">
+              {historyAttrib ? `\u201C${historyNote}\u201D` : historyNote}
+            </blockquote>
+            {historyAttrib && <p className="mt-3 text-sm font-semibold uppercase tracking-[0.12em] text-teal-700">{`\u2014 ${historyAttrib}`}</p>}
           </section>
         )}
 
