@@ -1,4 +1,5 @@
 import type { Client } from '@libsql/client'
+import { seriesOf as seriesOfName } from './eventSeries'
 
 // THE ORG'S TRACK RECORD, COMPUTED ONCE.
 //
@@ -26,13 +27,10 @@ export const NOT_A_TEAM = `team <> '' AND team NOT LIKE 'TBD%' AND team NOT LIKE
   AND team NOT LIKE 'Seed %' AND team NOT LIKE 'W-B%' AND team NOT LIKE 'L-B%'
   AND team NOT LIKE 'Winner%' AND team NOT LIKE 'Loser%'`
 
-const SERIES: [RegExp, string][] = [
-  [/monster mash/i, 'Monster Mash'],
-  [/fall classic/i, 'Fall Classic'],
-  [/jingle brawl/i, 'Jingle Brawl'],
-  [/summer kick ?off|sunshine state games/i, 'Summer Kick Off'],
-]
-export function seriesOf(name: string) { for (const [re, l] of SERIES) if (re.test(name)) return l; return 'Other' }
+// Moved to lib/eventSeries so the Website admin can group by event without pulling this
+// file's database code into the browser bundle. Re-exported because callers import it from
+// here, and because one definition of "which series is this" is the whole point.
+export { seriesOf, ONE_OFF } from './eventSeries'
 
 // When each series actually started, and the field it drew in the years before there was
 // anything online to import. One edition a year, which is how these ran until 2015.
@@ -139,7 +137,7 @@ export async function computeOrgHistory(client: Client, past: PastEvent[], conte
     counted.champs += a.champs; counted.teams += a.teams; counted.divisions += a.divisions
     const y = String(t.startDate || '').slice(0, 4)
     if (y) { const e = byYear.get(y) || { teams: 0, games: 0 }; e.teams += a.teams; e.games += a.games; byYear.set(y, e) }
-    const s = seriesOf(String(t.name || ''))
+    const s = seriesOfName(String(t.name || ''))
     const e = bySeries.get(s) || { events: 0, games: 0, teams: 0, champs: 0, first: '9999', last: '0', years: new Set<string>() }
     e.events++; e.games += a.games; e.teams += a.teams; e.champs += a.champs
     if (y) e.years.add(y)

@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImageP
 import MarkdownField from '@/components/MarkdownField'
 import GalleryPicker from '@/components/GalleryPicker'
 import AiGenerateButton from '@/components/AiGenerateButton'
+import { seriesOf, ONE_OFF } from '@/lib/eventSeries'
 
 type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string; eventIds?: string[] }
 type PitchStat = { value: string; label: string }
@@ -165,7 +166,8 @@ function OrgSiteEditorInner() {
   // Event-pages panel: four events you actually promote, forty-eight you don't.
   const [evTab, setEvTab] = useState<'upcoming' | 'past'>('upcoming')
   const [evQ, setEvQ] = useState('')
-  const [evOpenYears, setEvOpenYears] = useState<Record<string, boolean>>({})
+  const [evGroup, setEvGroup] = useState<'year' | 'event'>('year')
+  const [evOpenGroups, setEvOpenGroups] = useState<Record<string, boolean>>({})
   const [galSel, setGalSel] = useState<Set<string>>(new Set())
   const [bulkCaption, setBulkCaption] = useState('')
   const [bulkCredit, setBulkCredit] = useState('')
@@ -326,12 +328,25 @@ function OrgSiteEditorInner() {
         const upAll = tournaments.filter(isAhead)
         const up = upAll.filter(hit).sort(byStart(1))
         const past = tournaments.filter((t: any) => !isAhead(t)).filter(hit).sort(byStart(-1))
-        // Grouped in the order they already sort in, so seasons stay newest-first.
-        const years: [string, any[]][] = []
+        // Grouped by season or by event. `past` is already newest-first, and first
+        // appearance sets each group's position, so seasons come out newest-first and
+        // events come out with the most recently run series at the top. The one-off
+        // heading is a catch-all rather than a series, so it sorts last wherever its
+        // newest member happens to fall.
+        const groupOf = (t: any) => evGroup === 'event'
+          ? seriesOf(t.name)
+          : (String(t.startDate || '').slice(0, 4) || 'Undated')
+        const groups: [string, any[]][] = []
+        const bucket = new Map<string, any[]>()
         for (const t of past) {
-          const y = String(t.startDate || '').slice(0, 4) || 'Undated'
-          const last = years[years.length - 1]
-          if (last && last[0] === y) last[1].push(t); else years.push([y, [t]])
+          const k = groupOf(t)
+          let arr = bucket.get(k)
+          if (!arr) { arr = []; bucket.set(k, arr); groups.push([k, arr]) }
+          arr.push(t)
+        }
+        if (evGroup === 'event') {
+          const i = groups.findIndex(g => g[0] === ONE_OFF)
+          if (i > -1) groups.push(groups.splice(i, 1)[0])
         }
         const nextId = up.length && !q ? String(up[0].id) : ''
 
@@ -353,7 +368,7 @@ function OrgSiteEditorInner() {
                 {tournaments.length > 8 && (
                   <div className="relative mb-3">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input value={evQ} onChange={e => setEvQ(e.target.value)} placeholder="Search events\u2026" aria-label="Search events"
+                    <input value={evQ} onChange={e => setEvQ(e.target.value)} placeholder="Search events&hellip;" aria-label="Search events"
                       className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
                   </div>
                 )}
@@ -365,25 +380,36 @@ function OrgSiteEditorInner() {
                 )}
 
                 {evTab === 'past' && (
-                  years.length === 0
-                    ? <p className="text-sm text-slate-400 py-2">No past events match that search.</p>
-                    : <div className="space-y-1.5">
-                        {years.map(([year, list], i) => {
-                          // Newest season open to start; a search opens everything it matched.
-                          const open = evOpenYears[year] ?? (!!q || i === 0)
-                          return (
-                            <div key={year} className="border border-slate-200 rounded-lg overflow-hidden">
-                              <button type="button" onClick={() => setEvOpenYears(o => ({ ...o, [year]: !open }))} aria-expanded={open}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50">
-                                <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? '' : '-rotate-90'}`} />
-                                <span className="text-sm font-semibold text-slate-600">{year}</span>
-                                <span className="ml-auto text-xs text-slate-400 tabular-nums">{list.length}</span>
-                              </button>
-                              {open && <div className="px-2.5 pb-2.5 space-y-2">{list.map((t: any) => <EventRow key={t.id} t={t} />)}</div>}
-                            </div>
-                          )
-                        })}
-                      </div>
+                  <>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-xs text-slate-400">Group by</span>
+                      {([['year', 'Year'], ['event', 'Event']] as const).map(([key, label]) => (
+                        <button key={key} type="button" onClick={() => setEvGroup(key)} aria-pressed={evGroup === key}
+                          className={`text-xs font-semibold rounded-full px-2.5 py-1 border transition-colors ${evGroup === key ? 'bg-teal-50 text-teal-700 border-teal-200' : 'text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {groups.length === 0
+                      ? <p className="text-sm text-slate-400 py-2">No past events match that search.</p>
+                      : <div className="space-y-1.5">
+                          {groups.map(([label, list], i) => {
+                            // Newest group open to start; a search opens everything it matched.
+                            const open = evOpenGroups[label] ?? (!!q || i === 0)
+                            return (
+                              <div key={label} className="border border-slate-200 rounded-lg overflow-hidden">
+                                <button type="button" onClick={() => setEvOpenGroups(o => ({ ...o, [label]: !open }))} aria-expanded={open}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50">
+                                  <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+                                  <span className="text-sm font-semibold text-slate-600">{label}</span>
+                                  <span className="ml-auto text-xs text-slate-400 tabular-nums">{list.length}</span>
+                                </button>
+                                {open && <div className="px-2.5 pb-2.5 space-y-2">{list.map((t: any) => <EventRow key={t.id} t={t} />)}</div>}
+                              </div>
+                            )
+                          })}
+                        </div>}
+                  </>
                 )}
               </>
             )}
@@ -442,7 +468,7 @@ function OrgSiteEditorInner() {
         <textarea className="input min-h-[90px]" value={c.historyNote || ''}
           onChange={e => setC(v => ({ ...v, historyNote: e.target.value }))}
           placeholder="Something to close the By the Numbers page with — a sentence or two in your voice." />
-        <p className="text-xs text-slate-400 mt-2">Shown at the foot of the By the Numbers page, under the figures. End it with a dash and a name (\u2014 Sunshine Events Group) and it renders as an attributed quote. Leave it blank and the page simply ends with the numbers.</p>
+        <p className="text-xs text-slate-400 mt-2">Shown at the foot of the By the Numbers page, under the figures. End it with a dash and a name (&mdash; Sunshine Events Group) and it renders as an attributed quote. Leave it blank and the page simply ends with the numbers.</p>
       </Sec>
 
       {/* Sponsors */}
