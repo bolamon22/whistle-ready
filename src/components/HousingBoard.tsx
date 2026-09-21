@@ -165,26 +165,46 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
             <span className="text-xs text-slate-500">{fmtEventDates(ev.startDate, ev.endDate)}{ev.location ? ` · ${ev.location}` : ''}</span>
           </div>
           <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
-            <div className="min-w-[900px]">
-              <div className="grid grid-cols-[210px_150px_150px_1fr_170px] gap-3 px-4 py-2 border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold tracking-wider text-slate-400">
+            <div className="min-w-[950px]">
+              <div className="grid grid-cols-[210px_200px_150px_1fr_170px] gap-3 px-4 py-2 border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold tracking-wider text-slate-400">
                 <div>CLUB</div><div>CONTACT</div><div>STATUS</div><div>HOTELS — a club can split across several</div><div>NOTES</div>
               </div>
               {shown(ev).map(c => {
                 const meta = HOUSING_STATUS_META[c.status] ?? HOUSING_STATUS_META.needs
                 const muted = c.status === 'local'
                 return (
-                  <div key={c.regId} className={`grid grid-cols-[210px_150px_150px_1fr_170px] gap-3 px-4 py-2.5 border-b border-slate-100 last:border-b-0 items-start ${muted ? 'bg-slate-50/60' : ''}`}>
+                  <div key={c.regId} className={`grid grid-cols-[210px_200px_150px_1fr_170px] gap-3 px-4 py-2.5 border-b border-slate-100 last:border-b-0 items-start ${muted ? 'bg-slate-50/60' : ''}`}>
                     <div className="min-w-0 pt-1">
                       <div className={`text-[13px] font-bold truncate ${muted ? 'text-slate-400' : 'text-slate-900'}`}>{c.clubName}</div>
                       <div className="text-[10.5px] text-slate-400 truncate">{c.numTeams} team{c.numTeams === 1 ? '' : 's'}{c.clubBasedIn ? ` · ${c.clubBasedIn}` : ''}</div>
                       {c.roomNights > 0 && <div className="text-[10px] font-bold text-teal-700 mt-0.5">{c.roomNights} room nights</div>}
                     </div>
                     <div className="min-w-0 pt-1">
+                      {/* THE POINT OF THIS COLUMN IS TO BE USED, so nothing here truncates.
+                          Phone and email shared one line and were cut off mid-address on
+                          every row -- "david@flamingola..." tells you a club has an email
+                          and not what it is, which is the opposite of useful to the person
+                          chasing room blocks. Each on its own line now, the email wrapping
+                          rather than clipping, and both tappable: on a phone that is a call
+                          or a compose window instead of something to copy by hand. A local
+                          club arrives here with its contact stripped by the API, so the
+                          dash case stays. */}
                       {(c.clubContact || c.contactPhone || c.contactEmail) ? (
-                        <>
-                          <div className="text-[11.5px] font-semibold text-slate-600 truncate">{c.clubContact || '—'}</div>
-                          <div className="text-[10px] text-slate-400 truncate">{[c.contactPhone, c.contactEmail].filter(Boolean).join(' · ')}</div>
-                        </>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="text-[11.5px] font-semibold text-slate-600">{c.clubContact || '—'}</div>
+                          {c.contactPhone && (
+                            <a href={`tel:${String(c.contactPhone).replace(/[^\d+]/g, '')}`}
+                              className="text-[10px] text-slate-400 hover:text-teal-700 tabular-nums w-fit">
+                              {c.contactPhone}
+                            </a>
+                          )}
+                          {c.contactEmail && (
+                            <a href={`mailto:${c.contactEmail}`} title={c.contactEmail}
+                              className="text-[10px] text-slate-400 hover:text-teal-700 leading-snug [overflow-wrap:anywhere]">
+                              {c.contactEmail}
+                            </a>
+                          )}
+                        </div>
                       ) : <span className="text-[10.5px] text-slate-300">—</span>}
                     </div>
                     <select
