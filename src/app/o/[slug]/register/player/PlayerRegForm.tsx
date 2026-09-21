@@ -699,7 +699,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
               </select>
             </div>
             <p className="sm:col-span-2 text-[12px] text-slate-500 -mt-1">
-              Where your family travels from. Our venues&rsquo; county tourism boards ask for this, and it is what keeps these events funded.
+              Where your family travels from. Our venues&rsquo; county tourism boards ask for this.
             </p>
           </div>
         )}
