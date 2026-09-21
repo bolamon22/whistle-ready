@@ -24,6 +24,14 @@ export const HOUSING_STATUS_META: Record<string, { label: string; text: string; 
   local: { label: 'Local — not needed', text: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' },
 }
 
+// The order the board is worked in. A club that still needs hotels is the reason
+// anyone opens this page; a local club needs nothing at all and only takes up room.
+// Rows sort by this even with no filter applied, so the ten clubs waiting on rooms sit
+// at the top of every event rather than scattered among the ones already settled.
+const STATUS_ORDER = ['needs', 'progress', 'booked', 'local']
+/** A club's status, falling back the same way the row render does so counts match rows. */
+const statusOf = (c: { status: string }) => (HOUSING_STATUS_META[c.status] ? c.status : 'needs')
+
 export function fmtEventDates(a: string, b: string) {
   const f = (d: string) => { const x = new Date(d); return isNaN(x.getTime()) ? '' : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
   const s = f(a), e = f(b)
@@ -59,6 +67,7 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
   onData?: (events: Ev[]) => void
 }) {
   const [events, setEvents] = useState<Ev[] | null>(null)
+  const [filter, setFilter] = useState<string>('all')
   const [error, setError] = useState('')
   const [flash, setFlash] = useState<string | null>(null)
 
@@ -110,9 +119,46 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
 
   const inputCls = 'border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500'
 
+  const everyClub = events.flatMap(e => e.clubs)
+  const countOf = (s: string) => everyClub.filter(c => statusOf(c) === s).length
+  const chips: { key: string; label: string; n: number }[] = [
+    { key: 'all', label: 'All clubs', n: everyClub.length },
+    ...STATUS_ORDER.map(k => ({ key: k, label: HOUSING_STATUS_META[k].label, n: countOf(k) })),
+  ]
+  // Sorted whether or not anything is filtered; filtering only removes rows.
+  const shown = (ev: Ev) => ev.clubs
+    .filter(c => filter === 'all' || statusOf(c) === filter)
+    .slice()
+    .sort((a, b) => STATUS_ORDER.indexOf(statusOf(a)) - STATUS_ORDER.indexOf(statusOf(b))
+      || String(a.clubName || '').localeCompare(String(b.clubName || '')))
+  const anyShown = events.some(e => shown(e).length)
+
   return (
     <div className="flex flex-col gap-7">
-      {events.filter(e => e.clubs.length).map(ev => (
+      <div className="flex flex-wrap items-center gap-1.5 px-1">
+        {chips.map(ch => {
+          const on = filter === ch.key
+          const meta = HOUSING_STATUS_META[ch.key]
+          return (
+            <button key={ch.key} type="button" onClick={() => setFilter(ch.key)} aria-pressed={on}
+              disabled={ch.n === 0 && ch.key !== 'all'}
+              className="text-xs font-semibold rounded-full border px-3 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              style={on
+                ? { background: meta ? meta.bg : '#0f172a', color: meta ? meta.text : '#ffffff', borderColor: meta ? meta.border : '#0f172a' }
+                : { background: '#ffffff', color: '#64748b', borderColor: '#e2e8f0' }}>
+              {ch.label} <span className="tabular-nums opacity-70">{ch.n}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {!anyShown && (
+        <div className="text-center py-12 text-slate-400 text-sm">
+          No clubs are {(HOUSING_STATUS_META[filter]?.label || '').toLowerCase() || 'in this state'} right now.
+        </div>
+      )}
+
+      {events.filter(e => shown(e).length).map(ev => (
         <div key={ev.id}>
           <div className="flex items-baseline gap-2.5 mb-2.5 px-1">
             <h2 className="text-base font-extrabold text-slate-900">{ev.name}</h2>
@@ -123,7 +169,7 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
               <div className="grid grid-cols-[210px_150px_150px_1fr_170px] gap-3 px-4 py-2 border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold tracking-wider text-slate-400">
                 <div>CLUB</div><div>CONTACT</div><div>STATUS</div><div>HOTELS — a club can split across several</div><div>NOTES</div>
               </div>
-              {ev.clubs.map(c => {
+              {shown(ev).map(c => {
                 const meta = HOUSING_STATUS_META[c.status] ?? HOUSING_STATUS_META.needs
                 const muted = c.status === 'local'
                 return (
