@@ -84,6 +84,55 @@ async function uploadImage(file: File): Promise<string | null> {
 
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36) }
 
+const EV_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * "Oct 24-25, 2026" from a tournament's start and end.
+ *
+ * Takes unknown rather than string on purpose. These dates arrive from /api/tournaments
+ * as whatever the row holds, and a helper that assumed a string is exactly how the Staff
+ * Pool's merge panel took the whole page down. Anything unparseable returns '' and the
+ * row simply shows no date.
+ */
+function eventDates(start: unknown, end: unknown): string {
+  const re = /^(\d{4})-(\d{2})-(\d{2})/
+  const a = re.exec(String(start ?? '').trim())
+  if (!a) return ''
+  const b = re.exec(String(end ?? '').trim()) || a
+  const am = EV_MON[Number(a[2]) - 1], bm = EV_MON[Number(b[2]) - 1]
+  if (!am || !bm) return ''
+  if (a[1] === b[1] && a[2] === b[2]) {
+    return a[3] === b[3] ? `${am} ${Number(a[3])}, ${a[1]}` : `${am} ${Number(a[3])}\u2013${Number(b[3])}, ${a[1]}`
+  }
+  return `${am} ${Number(a[3])} \u2013 ${bm} ${Number(b[3])}, ${b[1]}`
+}
+/** Just the city, so a long venue address doesn't push the row's buttons off screen. */
+const eventCity = (loc: unknown) => String(loc ?? '').split(/[,\/]/)[0].trim()
+
+/** One tournament in the event-pages panel. Module level, not nested in the render:
+ *  declared inside it, React reads a new component type on every keystroke in the search
+ *  box and remounts all fifty-two rows. */
+function EventRow({ t, next }: { t: any; next?: boolean }) {
+  const when = eventDates(t.startDate, t.endDate), where = eventCity(t.location)
+  return (
+    <div className={`flex items-center gap-2 flex-wrap border rounded-lg p-3 ${next ? 'border-teal-200 bg-teal-50/60' : 'border-slate-200'}`}>
+      <div className="flex-1 min-w-[180px]">
+        <div className="text-sm font-medium text-slate-700 truncate">
+          {t.name}
+          {next && <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wider text-teal-700 bg-white border border-teal-200 rounded-full px-2 py-0.5">Next up</span>}
+        </div>
+        {(when || where) && (
+          <div className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+            {when}{when && where ? ' \u00b7 ' : ''}{where}
+          </div>
+        )}
+      </div>
+      <a href={`/tournaments/${t.id}/event`} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"><ExternalLink size={12} /> View</a>
+      <Link href={`/tournaments/${t.id}/builder?section=pagebuilder`} className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-lg px-3 py-1.5 hover:bg-teal-100">Edit page</Link>
+    </div>
+  )
+}
+
 function Sec({ title, summary, isOpen, onToggle, children }: { title: string; summary?: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
     <section className="card mb-4 overflow-hidden">
@@ -113,6 +162,10 @@ function OrgSiteEditorInner() {
   const [openPages, setOpenPages] = useState<Record<number, boolean>>({})
   const [openSec, setOpenSec] = useState<Record<string, boolean>>({ events: true })
   const [tournaments, setTournaments] = useState<any[]>([])
+  // Event-pages panel: four events you actually promote, forty-eight you don't.
+  const [evTab, setEvTab] = useState<'upcoming' | 'past'>('upcoming')
+  const [evQ, setEvQ] = useState('')
+  const [evOpenYears, setEvOpenYears] = useState<Record<string, boolean>>({})
   const [galSel, setGalSel] = useState<Set<string>>(new Set())
   const [bulkCaption, setBulkCaption] = useState('')
   const [bulkCredit, setBulkCredit] = useState('')
@@ -258,20 +311,85 @@ function OrgSiteEditorInner() {
         </div>
       </div>
 
-      {/* Tournament event pages */}
-      <Sec isOpen={!!openSec.events} onToggle={() => setOpenSec(o => ({ ...o, events: !o.events }))} title="Tournament event pages" summary={`${tournaments.length}`}>
-        <p className="text-xs text-slate-400 mb-3">Each tournament has its own public event page. Edit its content here.</p>
-        {tournaments.length === 0 && <p className="text-sm text-slate-400">No tournaments yet.</p>}
-        <div className="space-y-2">
-          {tournaments.map((t: any) => (
-            <div key={t.id} className="flex items-center gap-2 border border-slate-200 rounded-lg p-3">
-              <span className="flex-1 text-sm font-medium text-slate-700 truncate">{t.name}</span>
-              <a href={`/tournaments/${t.id}/event`} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"><ExternalLink size={12} /> View</a>
-              <Link href={`/tournaments/${t.id}/builder?section=pagebuilder`} className="text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-lg px-3 py-1.5 hover:bg-teal-100">Edit event page</Link>
-            </div>
-          ))}
-        </div>
-      </Sec>
+      {/* TOURNAMENT EVENT PAGES.
+          Was a single flat list of every tournament ever run, newest first and with no
+          dates on it -- so "Jingle Brawl" and "Jingle Brawl 25" read as peers, and the
+          four events actually being promoted sat among forty-eight finished ones. It only
+          gets worse: four more land every year. Upcoming now opens by default and the
+          archive lives behind a tab, grouped by season. */}
+      {(() => {
+        const evToday = new Date().toISOString().slice(0, 10)
+        const isAhead = (t: any) => String(t.endDate || t.startDate || '') >= evToday
+        const q = evQ.trim().toLowerCase()
+        const hit = (t: any) => !q || `${t.name || ''} ${t.location || ''} ${t.startDate || ''}`.toLowerCase().includes(q)
+        const byStart = (dir: number) => (a: any, b: any) => dir * String(a.startDate || '').localeCompare(String(b.startDate || ''))
+        const upAll = tournaments.filter(isAhead)
+        const up = upAll.filter(hit).sort(byStart(1))
+        const past = tournaments.filter((t: any) => !isAhead(t)).filter(hit).sort(byStart(-1))
+        // Grouped in the order they already sort in, so seasons stay newest-first.
+        const years: [string, any[]][] = []
+        for (const t of past) {
+          const y = String(t.startDate || '').slice(0, 4) || 'Undated'
+          const last = years[years.length - 1]
+          if (last && last[0] === y) last[1].push(t); else years.push([y, [t]])
+        }
+        const nextId = up.length && !q ? String(up[0].id) : ''
+
+        return (
+          <Sec isOpen={!!openSec.events} onToggle={() => setOpenSec(o => ({ ...o, events: !o.events }))} title="Tournament event pages"
+            summary={upAll.length ? `${upAll.length} upcoming` : `${tournaments.length}`}>
+            <p className="text-xs text-slate-400 mb-3">Each tournament has its own public event page. Edit its content here.</p>
+            {tournaments.length === 0 ? <p className="text-sm text-slate-400">No tournaments yet.</p> : (
+              <>
+                <div className="flex gap-0.5 border-b border-slate-200 mb-3">
+                  {([['upcoming', 'Upcoming', up.length], ['past', 'Past', past.length]] as const).map(([key, label, n]) => (
+                    <button key={key} type="button" onClick={() => setEvTab(key)} aria-pressed={evTab === key}
+                      className={`text-sm font-semibold px-3 py-2 -mb-px border-b-2 transition-colors ${evTab === key ? 'text-teal-700 border-teal-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}>
+                      {label} <span className="text-xs font-semibold opacity-60 tabular-nums">{n}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {tournaments.length > 8 && (
+                  <div className="relative mb-3">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input value={evQ} onChange={e => setEvQ(e.target.value)} placeholder="Search events\u2026" aria-label="Search events"
+                      className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                  </div>
+                )}
+
+                {evTab === 'upcoming' && (
+                  up.length === 0
+                    ? <p className="text-sm text-slate-400 py-2">{q ? 'No upcoming events match that search.' : 'Nothing coming up. Past events are on the other tab.'}</p>
+                    : <div className="space-y-2">{up.map((t: any) => <EventRow key={t.id} t={t} next={String(t.id) === nextId} />)}</div>
+                )}
+
+                {evTab === 'past' && (
+                  years.length === 0
+                    ? <p className="text-sm text-slate-400 py-2">No past events match that search.</p>
+                    : <div className="space-y-1.5">
+                        {years.map(([year, list], i) => {
+                          // Newest season open to start; a search opens everything it matched.
+                          const open = evOpenYears[year] ?? (!!q || i === 0)
+                          return (
+                            <div key={year} className="border border-slate-200 rounded-lg overflow-hidden">
+                              <button type="button" onClick={() => setEvOpenYears(o => ({ ...o, [year]: !open }))} aria-expanded={open}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50">
+                                <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+                                <span className="text-sm font-semibold text-slate-600">{year}</span>
+                                <span className="ml-auto text-xs text-slate-400 tabular-nums">{list.length}</span>
+                              </button>
+                              {open && <div className="px-2.5 pb-2.5 space-y-2">{list.map((t: any) => <EventRow key={t.id} t={t} />)}</div>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                )}
+              </>
+            )}
+          </Sec>
+        )
+      })()}
 
       {/* Logo */}
       <Sec isOpen={!!openSec.logo} onToggle={() => setOpenSec(o => ({ ...o, logo: !o.logo }))} title="Logo" summary={c.logo ? 'Set' : 'None'}>
