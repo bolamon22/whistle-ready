@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
     const division = decodeURIComponent(params.division)
 
     const teams = await prisma.registeredTeam.findMany({
-      where: { registration: { tournamentId: params.id }, division },
+      where: { registration: { tournamentId: params.id, deletedAt: null }, division },
       include: { registration: { select: { invoiceAmount: true, payments: { select: { amount: true } } } } },
       orderBy: { teamName: 'asc' },
     })

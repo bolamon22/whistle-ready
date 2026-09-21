@@ -5,8 +5,13 @@ import { requireStaff } from '@/lib/apiAuth'
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const [teams, tournament, games] = await Promise.all([
+      // deletedAt: null, or the counts here disagree with the dashboard, which has
+      // always filtered. A club that was removed kept its RegisteredTeam rows (they
+      // only cascade on a hard purge 30 days later), so the division list carried
+      // deleted test entries and duplicates for weeks and the organizer had no way
+      // to clear them.
       prisma.registeredTeam.findMany({
-        where: { registration: { tournamentId: params.id } },
+        where: { registration: { tournamentId: params.id, deletedAt: null } },
         select: { division: true },
       }),
       prisma.tournament.findUnique({ where: { id: params.id }, select: { registrationDivisions: true } }),
@@ -115,7 +120,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const { oldName, newName } = await req.json()
     if (!oldName || !newName?.trim()) return NextResponse.json({ error: 'oldName and newName required' }, { status: 400 })
 
-    // Find all teams in this division via registrations
+    // Find all teams in this division via registrations.
+    // Deliberately NOT filtered by deletedAt: a removed registration can be restored,
+    // and if its teams kept the old division name they would come back into a division
+    // that no longer exists -- which is how the stray legacy divisions got there.
     const teams = await prisma.registeredTeam.findMany({
       where: { registration: { tournamentId: params.id }, division: oldName },
       select: { id: true },
@@ -167,8 +175,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const { name, force } = await req.json()
     if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
+    // Live teams only: a division holding nothing but removed registrations reads as
+    // empty on screen, so blocking its deletion over them is an error the organizer
+    // cannot act on or even see.
     const teamCount = await prisma.registeredTeam.count({
-      where: { registration: { tournamentId: params.id }, division: name },
+      where: { registration: { tournamentId: params.id, deletedAt: null }, division: name },
     })
 
     if (teamCount > 0 && !force) {
