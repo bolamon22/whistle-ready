@@ -92,7 +92,7 @@ export default function StaffProfilePage({ params }: { params:{id:string} }) {
             <div>
               <h1 className="text-2xl font-bold text-slate-900">{worker.name}</h1>
               <p className="text-slate-500">{rLabel(worker.defaultRole)}{worker.defaultRole==='ref'?` · ${certLabel(worker.certLevel)}`:''}</p>
-              {worker.isAssigner&&<span className="badge bg-amber-100 text-amber-700 mt-1">Assigner</span>}
+              {!!worker.isAssigner&&<span className="badge bg-amber-100 text-amber-700 mt-1">Assigner</span>}
               <div className="flex items-center gap-2 mt-1">
                 <button onClick={()=>fileInputRef.current?.click()} disabled={photoUploading}
                   className="text-xs text-sky-600 hover:text-sky-800 font-medium">
@@ -113,8 +113,8 @@ export default function StaffProfilePage({ params }: { params:{id:string} }) {
           {worker.email&&<div><p className="label">Email</p><p className="text-slate-800">{worker.email}</p></div>}
           {worker.defaultRole==='ref'&&<div><p className="label">Can Ref</p><p className="text-slate-800">{gLabel(worker.gender)}</p></div>}
           <div><p className="label">Pay Method</p><p className="text-slate-800">{pmLabel(worker.payMethod)}{worker.payHandle?` · ${worker.payHandle}`:''}</p></div>
-          {worker.payRateOverride&&<div><p className="label">Pay Rate</p><p className="text-slate-800">${worker.payRateOverride}/game</p></div>}
-          {worker.hourlyRate&&<div><p className="label">Hourly Rate</p><p className="text-slate-800">${worker.hourlyRate}/hr</p></div>}
+          {!!worker.payRateOverride&&<div><p className="label">Pay Rate</p><p className="text-slate-800">${worker.payRateOverride}/game</p></div>}
+          {!!worker.hourlyRate&&<div><p className="label">Hourly Rate</p><p className="text-slate-800">${worker.hourlyRate}/hr</p></div>}
         </div>
 
         <div className="mt-5 pt-5 border-t border-slate-100">

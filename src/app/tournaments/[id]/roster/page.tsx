@@ -201,7 +201,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                 {wRoles.map(r=>(
                   <span key={r} className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${r==='ref'?'bg-teal-500/30 text-teal-200':r==='scorekeeper'?'bg-emerald-500/30 text-emerald-200':'bg-slate-500/40 text-slate-300'}`}>{rLabel(r)}</span>
                 ))}
-                {w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
+                {!!w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
               </div>
             </div>
             <button onClick={()=>expand(w,'edit')} className="text-xs text-teal-300 hover:text-white border border-teal-400/40 hover:border-teal-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
@@ -214,8 +214,8 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p>{gLabel(w.gender)}</p></div>
             </>}
             <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p>{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
-            {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p>${w.payRateOverride}/game</p></div>}
-            {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p>${w.hourlyRate}/hr</p></div>}
+            {!!w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p>${w.payRateOverride}/game</p></div>}
+            {!!w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p>${w.hourlyRate}/hr</p></div>}
           </div>
           {w.notes&&(
             <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
@@ -407,7 +407,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <button onClick={()=>expand(w,'profile')} className="font-semibold text-slate-900 text-left leading-tight">{w.name}</button>
-                        {w.isAssigner&&<span className="badge bg-amber-100 text-amber-700">Assigner</span>}
+                        {!!w.isAssigner&&<span className="badge bg-amber-100 text-amber-700">Assigner</span>}
                       </div>
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
@@ -462,7 +462,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     <tr key={w.id} className={`border-b border-slate-100 ${selected.has(w.id)?'bg-teal-50':isExpanded?'bg-slate-50 border-b-0':'hover:bg-slate-50'}`}>
                       <td className="px-4 py-3"><input type="checkbox" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/></td>
                       <td className="px-4 py-3 font-semibold text-slate-900 cursor-pointer hover:text-teal-600 transition-colors" onClick={()=>expand(w,'profile')}>
-                        {w.name}{w.isAssigner&&<span className="ml-2 badge bg-amber-100 text-amber-700">Assigner</span>}
+                        {w.name}{!!w.isAssigner&&<span className="ml-2 badge bg-amber-100 text-amber-700">Assigner</span>}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">

@@ -538,8 +538,8 @@ export default function StaffPage() {
                                   <div><p className="text-slate-400 text-xs mb-0.5">Venmo</p><p className="text-white">{w.venmoHandle||'—'}</p></div>
                                   <div><p className="text-slate-400 text-xs mb-0.5">Mailing address</p><p className="text-white">{w.mailingAddress||'—'}</p></div>
                                   <div><p className="text-slate-400 text-xs mb-0.5">W-9</p>{w.w9OnFile?<a href={`/api/workers/${w.id}/w9`} target="_blank" rel="noreferrer" className="text-teal-300 hover:text-teal-200 font-medium">View W-9 →</a>:<p className="text-white">Not on file</p>}</div>
-            {w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p className="text-white">${w.payRateOverride}/game</p></div>}
-            {w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p className="text-white">${w.hourlyRate}/hr</p></div>}
+            {!!w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p className="text-white">${w.payRateOverride}/game</p></div>}
+            {!!w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p className="text-white">${w.hourlyRate}/hr</p></div>}
           </div>
           {w.notes&&(
             <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
