@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   Target, ClipboardList, Radio, TriangleAlert, ClipboardCheck, Contact,
-  Megaphone, Wallet, ArrowRight, Trophy, ChevronDown, type LucideIcon,
+  Megaphone, Wallet, ArrowRight, Trophy, ChevronDown, GripVertical, type LucideIcon,
 } from 'lucide-react'
 import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
@@ -15,6 +15,7 @@ interface DashData {
   tournament: {
     id: string; name: string; sport: string; startDate: string; endDate: string
     location: string; logoUrl: string; dates: string
+    registrationDivisions?: string
   }
   games: { total: number; active: number; canceled: number; assigned: number; divisions: number }
   staff: { onRoster: number; refPayTotal: number; hourlyPayTotal: number; totalStaffExpense: number; totalStaffPaid: number; refCount: number; skCount: number }
@@ -68,6 +69,12 @@ export default function DashboardPage() {
   // Whether the public can register right now. Defaults to true so the badge doesn't
   // flash "closed" while loading; the API returns the real value.
   const [regOpen, setRegOpen] = useState(true)
+  // Division tile order. null = follow the saved order; an array = the order being
+  // dragged right now (applied optimistically so the tiles move under the finger).
+  const [divOrder, setDivOrder] = useState<string[] | null>(null)
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [orderErr, setOrderErr] = useState('')
+  const dragFrom = useRef<number | null>(null)
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}/dashboard`)
@@ -108,11 +115,89 @@ export default function DashboardPage() {
   const { tournament: t, games, staff, registrations: reg, financials: fin } = data
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
   const collectPct = reg.invoiced > 0 ? Math.round((reg.received / reg.invoiced) * 100) : 0
-  // Every division, biggest first (name breaks ties so the order is stable between loads).
+  // Tile order follows registrationDivisions -- the same curated list the divisions page
+  // and the registration form already use, so all three agree. A division that is not on
+  // that list yet (added by an import, say) falls to the end, biggest first, with the name
+  // breaking ties so the order is stable between loads.
   // NOT a top-N slice: these counts have to add up to the Teams KPI above, or the dashboard
   // looks like it has lost teams — 21 registered, 19 shown was exactly that bug.
-  const divisionRows = Object.entries(reg.byDivision).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  const curated: string[] = (() => {
+    try { const a = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(a) ? a.map(String) : [] }
+    catch { return [] }
+  })()
+  const rank = new Map(curated.map((n, i) => [n, i]))
+  const savedOrder = Object.entries(reg.byDivision)
+    .sort((a, b) => {
+      const ra = rank.has(a[0]) ? rank.get(a[0])! : Number.MAX_SAFE_INTEGER
+      const rb = rank.has(b[0]) ? rank.get(b[0])! : Number.MAX_SAFE_INTEGER
+      return ra - rb || b[1] - a[1] || a[0].localeCompare(b[0])
+    })
+    .map(([d]) => d)
+  // Guard against a stale drag order after a refetch: keep only names that still have
+  // teams, then append anything new that arrived while dragging.
+  const shown = divOrder
+    ? [...divOrder.filter(d => d in reg.byDivision), ...savedOrder.filter(d => !divOrder.includes(d))]
+    : savedOrder
+  const divisionRows = shown.map(d => [d, reg.byDivision[d]] as [string, number])
   const divisionTeams = divisionRows.reduce((s, [, n]) => s + n, 0)
+
+  // Reordering the visible tiles must not drop the divisions that have no teams yet and so
+  // are not on screen. Walk the saved list and swap in the new order only where a visible
+  // name sits, leaving the empty ones on their original rungs.
+  function mergedOrder(next: string[]) {
+    const visible = new Set(next)
+    const queue = [...next]
+    const merged = curated.map(n => (visible.has(n) ? queue.shift()! : n))
+    return [...merged, ...queue, ...next.filter(n => !curated.includes(n) && !merged.includes(n))]
+  }
+
+  async function persistOrder(next: string[]) {
+    setOrderErr('')
+    try {
+      const res = await fetch(`/api/tournaments/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationDivisions: JSON.stringify(mergedOrder(next)) }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+    } catch {
+      setDivOrder(null)   // snap back to what is actually saved
+      setOrderErr('Order not saved')
+    }
+  }
+
+  // Pointer events rather than HTML5 drag-and-drop: the latter does nothing on an iPad,
+  // and the roster gets rearranged on a tablet as often as on a desktop. Only the grip
+  // carries touch-action:none, so the rest of the tile still taps through and the page
+  // still scrolls under a finger.
+  function dragStart(e: React.PointerEvent, idx: number) {
+    e.preventDefault()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    dragFrom.current = idx
+    setDragIdx(idx)
+    setDivOrder(shown)
+  }
+  function dragMove(e: React.PointerEvent) {
+    if (dragFrom.current === null) return
+    const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest('[data-div-idx]') as HTMLElement | null
+    if (!el) return
+    const over = Number(el.dataset.divIdx)
+    const from = dragFrom.current
+    if (Number.isNaN(over) || over === from) return
+    setDivOrder(prev => {
+      const list = [...(prev ?? shown)]
+      const [moved] = list.splice(from, 1)
+      list.splice(over, 0, moved)
+      return list
+    })
+    dragFrom.current = over
+    setDragIdx(over)
+  }
+  function dragEnd() {
+    if (dragFrom.current === null) return
+    dragFrom.current = null
+    setDragIdx(null)
+    if (divOrder) persistOrder(divOrder)
+  }
 
   // Is the event happening today (for emphasising the Game Day console)?
   const isLive = (() => {
@@ -179,19 +264,30 @@ export default function DashboardPage() {
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Registered teams</h2>
             <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400">· {divisionTeams} team{divisionTeams === 1 ? '' : 's'} in {divisionRows.length} division{divisionRows.length === 1 ? '' : 's'}</span><span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap one to see teams</span></h3>
+              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400">· {divisionTeams} team{divisionTeams === 1 ? '' : 's'} in {divisionRows.length} division{divisionRows.length === 1 ? '' : 's'}</span><span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap one to see teams, drag the grip to reorder</span>{orderErr && <span className="text-xs font-normal text-rose-600">· {orderErr}</span>}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {divisionRows.map(([div, count]) => {
+                {divisionRows.map(([div, count], idx) => {
                   const open = openDiv === div
+                  const dragging = dragIdx === idx
                   return (
-                    <button key={div} type="button" onClick={() => setOpenDiv(o => o === div ? null : div)}
-                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-left transition-colors ${open ? 'bg-teal-50 border border-teal-200' : 'bg-slate-50 border border-transparent hover:border-slate-200'}`}>
-                      <span className="flex items-center gap-1 min-w-0">
-                        <ChevronDown size={13} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-                        <span className="text-xs text-slate-600 truncate">{div}</span>
+                    <div key={div} data-div-idx={idx}
+                      className={`flex items-center rounded-lg pl-1 pr-3 py-2 transition-colors ${dragging ? 'bg-teal-100 border border-teal-300 opacity-90' : open ? 'bg-teal-50 border border-teal-200' : 'bg-slate-50 border border-transparent hover:border-slate-200'}`}>
+                      <span role="button" tabIndex={-1} aria-label={`Reorder ${div}`} title="Drag to reorder"
+                        onPointerDown={e => dragStart(e, idx)} onPointerMove={dragMove}
+                        onPointerUp={dragEnd} onPointerCancel={dragEnd}
+                        style={{ touchAction: 'none' }}
+                        className="flex-shrink-0 px-1 py-1 -my-1 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500">
+                        <GripVertical size={13} />
                       </span>
-                      <span className="text-sm font-semibold text-slate-800 flex-shrink-0">{count}</span>
-                    </button>
+                      <button type="button" onClick={() => setOpenDiv(o => o === div ? null : div)}
+                        className="flex items-center justify-between gap-1 flex-1 min-w-0 text-left">
+                        <span className="flex items-center gap-1 min-w-0">
+                          <ChevronDown size={13} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                          <span className="text-xs text-slate-600 truncate">{div}</span>
+                        </span>
+                        <span className="text-sm font-semibold text-slate-800 flex-shrink-0">{count}</span>
+                      </button>
+                    </div>
                   )
                 })}
               </div>
