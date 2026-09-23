@@ -167,6 +167,14 @@
         "/tournaments/*/checklist",
         "/tournaments/*/directory"
       ]
+    },
+    {
+      "key": "social_scheduler",
+      "label": "Social Scheduler",
+      "group": "Admin",
+      "routes": [
+        "/dashboard/org/social"
+      ]
     }
   ],
   "roles": {
@@ -190,7 +198,8 @@
       "cd_schedule": false,
       "cd_billing": false,
       "tournament_scores": true,
-      "game_scorekeeper": true
+      "game_scorekeeper": true,
+      "social_scheduler": true
     },
     "assigner": {
       "tournaments_list": true,
@@ -212,7 +221,8 @@
       "cd_schedule": false,
       "cd_billing": false,
       "tournament_scores": true,
-      "game_scorekeeper": true
+      "game_scorekeeper": true,
+      "social_scheduler": false
     },
     "scheduler": {
       "tournaments_list": true,
@@ -234,7 +244,8 @@
       "cd_schedule": false,
       "cd_billing": false,
       "tournament_scores": true,
-      "game_scorekeeper": true
+      "game_scorekeeper": true,
+      "social_scheduler": false
     },
     "coach": {
       "tournaments_list": false,
@@ -256,7 +267,8 @@
       "cd_schedule": false,
       "cd_billing": false,
       "tournament_scores": false,
-      "game_scorekeeper": false
+      "game_scorekeeper": false,
+      "social_scheduler": false
     },
     "parent": {
       "tournaments_list": false,
@@ -278,7 +290,8 @@
       "cd_schedule": false,
       "cd_billing": false,
       "tournament_scores": false,
-      "game_scorekeeper": false
+      "game_scorekeeper": false,
+      "social_scheduler": false
     },
     "club_director": {
       "tournaments_list": false,
@@ -300,7 +313,8 @@
       "cd_schedule": true,
       "cd_billing": true,
       "tournament_scores": false,
-      "game_scorekeeper": false
+      "game_scorekeeper": false,
+      "social_scheduler": false
     },
     "staff": {
       "tournaments_list": false,
@@ -323,7 +337,8 @@
       "cd_billing": false,
       "tournament_scores": true,
       "game_scorekeeper": true,
-      "staff_gameday": true
+      "staff_gameday": true,
+      "social_scheduler": false
     }
   }
 }
