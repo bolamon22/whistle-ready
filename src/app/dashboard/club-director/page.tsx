@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, Globe, LayoutGrid, List, RefreshCw, Trophy, Users } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, Globe, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
@@ -12,6 +12,10 @@ interface Waiver {
   jersey: string | number | null; grade: string; parentName: string
   position: string; photoUrl: string; dob: string; parentPhone: string; parentEmail: string
   signed: boolean; submittedAt: string
+}
+interface CoachWaiver {
+  id: string; name: string; club: string; team: string; role: string; division: string
+  email: string; phone: string; signed: boolean; submittedAt: string
 }
 interface Registration {
   id: string; clubName: string; clubContact: string; contactEmail: string; contactPhone: string
@@ -190,14 +194,14 @@ export default function ClubDirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selTournament, setSelTournament] = useState('')
-  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; lock?: { locked: boolean; at: string; why: string } } | null>(null)
+  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string } } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
   const [playerView, setPlayerView] = useState<'cards' | 'list'>('cards')
   const [openPlayer, setOpenPlayer] = useState<string | null>(null)
   const [linkClubs, setLinkClubs] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
-  const [tab, setTab] = useState<'overview' | 'players' | 'schedule' | 'history'>('overview')
+  const [tab, setTab] = useState<'overview' | 'players' | 'coaches' | 'schedule' | 'history'>('overview')
   const [noLinks, setNoLinks] = useState(false)
   const [perms, setPerms] = useState<Record<string, boolean>>({ cd_overview: true, cd_players: true, cd_schedule: true, cd_billing: true })
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -308,6 +312,26 @@ export default function ClubDirectorDashboard() {
   const claimed = new Set(teamRows.flatMap(r => r.players.map(p => p.id)))
   const unassignedWaivers = waivers.filter(w => !claimed.has(w.id))
 
+  // COACH WAIVERS, answered the way the question is actually asked: not "who signed"
+  // but "which of my coaches still hasn't". So the list is driven by the coaches named
+  // on the club's own registrations, with a signed waiver matched onto each one, rather
+  // than by the pile of submissions.
+  //
+  // Email first -- it is the one identifier a coach types the same way twice. Name is
+  // the fallback, because plenty of registrations carry a coach with no email at all.
+  const coachWaivers: CoachWaiver[] = data?.coachWaivers ?? []
+  const normEmail = (x: unknown) => String(x ?? '').trim().toLowerCase()
+  const coachRows = teamRows.map(t => {
+    const byEmail = t.coachEmail ? coachWaivers.find(c => normEmail(c.email) === normEmail(t.coachEmail)) : undefined
+    const match = byEmail || (t.coachName ? coachWaivers.find(c => normName(c.name) === normName(t.coachName)) : undefined)
+    return { key: t.key, teamName: t.teamName, division: t.division, coachName: t.coachName, coachEmail: t.coachEmail, coachPhone: t.coachPhone, waiver: match }
+  })
+  const matchedCoachIds = new Set(coachRows.map(r => r.waiver?.id).filter(Boolean) as string[])
+  // Signed, but not matching any coach named on a registration -- an assistant, or a
+  // head coach who changed since the club registered. Shown rather than hidden.
+  const extraCoachWaivers = coachWaivers.filter(c => !matchedCoachIds.has(c.id))
+  const coachesSigned = coachRows.filter(r => r.waiver).length
+
   // MOVING A PLAYER ONTO ONE OF MY OWN TEAMS.
   //
   // The panel used to end at "ask the organizer to re-tag them", which put a ten-second
@@ -369,6 +393,7 @@ export default function ClubDirectorDashboard() {
   const TABS: { key: typeof tab; label: string; Icon: typeof Users; perm?: string; when?: boolean }[] = [
     { key: 'overview',  label: 'Overview',           Icon: ClipboardList, perm: 'cd_overview' },
     { key: 'players',   label: 'Player waivers',     Icon: Users,         perm: 'cd_players'  },
+    { key: 'coaches',   label: 'Coach waivers',      Icon: ShieldCheck,   perm: 'cd_players'  },
     { key: 'schedule',  label: 'Schedule',           Icon: CalendarDays,  perm: 'cd_schedule', when: hasSchedule },
     { key: 'history',   label: 'History',            Icon: Trophy                             },
   ]
@@ -703,6 +728,56 @@ export default function ClubDirectorDashboard() {
                       {' '}({unassignedWaivers.slice(0, 3).map(w => w.playerName).filter(Boolean).join(', ')}
                       {unassignedWaivers.length > 3 ? ', …' : ''}). They still count toward your club total — ask the tournament staff to correct the team on them.
                     </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab === 'coaches' && (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-500">
+                  {coachesSigned} of {coachRows.length} team coach{coachRows.length === 1 ? '' : 'es'} {coachesSigned === 1 ? 'has' : 'have'} filed a waiver.
+                  {coachesSigned < coachRows.length && ' The ones still outstanding are marked below.'}
+                </p>
+
+                <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+                  {coachRows.length === 0 && (
+                    <p className="p-5 text-sm text-gray-400">No teams registered for this event yet.</p>
+                  )}
+                  {coachRows.map(r => (
+                    <div key={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+                      <span className={`shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${r.waiver ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                        {r.waiver ? <Check size={15} /> : <X size={15} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-gray-800 truncate">{r.coachName || <span className="font-normal text-gray-400">No coach named on the registration</span>}</span>
+                        <span className="block text-xs text-gray-500 truncate">{r.teamName}{r.division ? ` · ${r.division}` : ''}{r.waiver?.role ? ` · ${r.waiver.role}` : ''}</span>
+                      </span>
+                      <span className="flex items-center gap-3 text-xs text-gray-500 shrink-0">
+                        {r.coachEmail && <a href={`mailto:${r.coachEmail}`} className="flex items-center gap-1 hover:text-violet-600"><Mail size={12} /> {r.coachEmail}</a>}
+                        {r.coachPhone && <a href={`tel:${r.coachPhone}`} className="flex items-center gap-1 hover:text-violet-600"><Phone size={12} /> {r.coachPhone}</a>}
+                      </span>
+                      <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${r.waiver ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {r.waiver ? 'Waiver on file' : 'Not filed'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {extraCoachWaivers.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Also filed</p>
+                    <p className="text-xs text-gray-500 mb-3">Signed for your club, but not matching a coach named on a registration — an assistant, or a coach who changed since you registered.</p>
+                    <div className="space-y-1.5">
+                      {extraCoachWaivers.map(c => (
+                        <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
+                          <Check size={14} className="text-emerald-600 shrink-0" />
+                          <span className="font-medium text-gray-800">{c.name || 'Unnamed'}</span>
+                          <span className="text-xs text-gray-500">{[c.team, c.division, c.role].filter(Boolean).join(' · ')}</span>
+                          {c.email && <a href={`mailto:${c.email}`} className="text-xs text-gray-400 hover:text-violet-600">{c.email}</a>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

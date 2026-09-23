@@ -128,9 +128,47 @@ export async function GET(req: NextRequest) {
       .filter(w => mine.has(norm(w.club)))
   } catch { /* no waivers table yet -- the tab shows none rather than failing */ }
 
+  // The club's COACH waivers, same store and same club-only scoping as the players
+  // above (formType 'coach' instead of 'player'). Joe Frederick asked for this
+  // directly, Sep 22 2026: "I'm also looking to see which of our coaches have
+  // completed the waivers" -- until now that list existed only on the staff page.
+  //
+  // Contact details ARE included here, unlike on the player rows. These are the
+  // club's own adult staff and the reason a director opens the list at all is to
+  // chase the ones who have not signed.
+  let coachWaivers: any[] = []
+  try {
+    const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+      `SELECT "id", "playerName", "teamName", "clubName", "submittedAt", "data"
+         FROM "OrgFormSubmission"
+        WHERE "tournamentId" = ? AND "formType" = 'coach' AND "archivedAt" IS NULL
+        ORDER BY "submittedAt" DESC`, tournamentId)
+    const norm = (x: unknown) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+    const SEP = /\s+[\u2014\u2013]\s+|\s+-\s+/
+    const mine = new Set(clubNames.map(norm))
+    coachWaivers = (rows || []).map(r => {
+      let d: any = {}
+      try { d = JSON.parse(String(r.data || '{}')) } catch { /* keep the row */ }
+      const tag = String(r.teamName ?? '').trim()
+      const m = SEP.exec(tag)
+      return {
+        id: String(r.id),
+        name: String(d.coachFullName || r.playerName || ''),
+        club: String(r.clubName || d.clubName || (m ? tag.slice(0, m.index) : '')),
+        team: m ? tag.slice(m.index + m[0].length) : tag,
+        role: String(d.coachingRole || ''),
+        division: String(d.division || ''),
+        email: String(d.email || ''),
+        phone: String(d.mobilePhone || ''),
+        signed: !!(d.signature || d.coachFullName),
+        submittedAt: String(r.submittedAt || ''),
+      }
+    }).filter(c => mine.has(norm(c.club)))
+  } catch { /* no submissions table yet -- the tab shows none rather than failing */ }
+
   // Whether this director can still move players between their own teams, and why not.
   // Sent with the data so the portal can say so up front rather than only on a refusal.
   const lock = await rosterLock(tournamentId)
 
-  return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers, lock })
+  return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers, coachWaivers, lock })
 }
