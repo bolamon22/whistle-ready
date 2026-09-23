@@ -58,6 +58,8 @@ Rules:
 - Three options with different angles (e.g. urgency/countdown, hype/energy, informational). "label" is 2–4 words naming the angle.
 - Captions: 1–4 short lines, line breaks allowed (use \\n). Lead with the hook. Under 300 characters unless the brief asks for long.
 - ${placement === 'story' ? 'This is for a Story — captions are NOT shown on Stories, so write text that could be overlaid as a sticker: one punchy line each.' : both ? 'Post goes to Instagram AND Facebook: end with "Link in bio" AND the site URL on its own last line so it works on both.' : platforms.includes('instagram') ? 'Instagram: registration CTA is "Link in bio" (URLs aren\'t clickable in IG captions).' : `Facebook: put the URL ${site} on its own last line.`}
+- Only state facts that appear in the events list, the brief, the current caption, or the cover frame. Never invent divisions, age groups, prices, deadlines, caps, or claims like "spots filling up" unless the brief says so. If a detail isn't known, leave it out.
+- Spell-check hashtags — a misspelled hashtag reaches nobody.
 - No hashtags inside captions. Put 8–15 relevant hashtags in "hashtags" (space-separated, lowercase, mix of lacrosse-wide and Florida/local and event-specific).
 - Emoji: at most one, only if it earns its place. American spelling.
 - If a current caption is provided, improve it — keep every fact, sharpen the wording.
