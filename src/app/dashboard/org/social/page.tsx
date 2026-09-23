@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
+import InsightsView from './InsightsView'
 import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
@@ -84,7 +85,7 @@ function SocialInner() {
   const [queue, setQueue] = useState<QueueInfo>({ slots: [], tzOffsetMin: new Date().getTimezoneOffset(), next: [] })
   const [insights, setInsights] = useState<Insights>({ latest: {}, window: null })
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'week' | 'queue'>('week')
+  const [view, setView] = useState<'week' | 'queue' | 'insights'>('week')
   const [rangeStart, setRangeStart] = useState(() => startOfWeek(new Date()))
   const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date } | { kind: 'accounts' } | null>(null)
   const dragId = useRef<string | null>(null)
@@ -183,30 +184,32 @@ function SocialInner() {
           <div className="flex gap-3 sm:col-span-2 lg:col-span-1">
             {(() => { const w = insights.window; const cur = w?.current; const prev = w?.previous; const has = !!cur && cur.withData > 0
               return <>
-                <div className="flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white border border-slate-200 shadow-sm" title={has ? `${cur!.withData} of ${cur!.posts} posts have insights so far` : 'Shows once the insights snapshot has run (every 4 hours) or after importing history'}>
-                  <div className="flex items-baseline gap-2"><span className="text-2xl font-extrabold tabular-nums">{has ? fmtNum(cur!.reach) : '—'}</span>{has && prev && prev.withData > 0 && <span className="text-xs font-bold text-emerald-600">{delta(cur!.reach, prev.reach)}</span>}</div>
+                <button onClick={() => setView('insights')} className="text-left flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white border border-slate-200 shadow-sm hover:border-teal-400" title={has ? `${cur!.withData} of ${cur!.posts} posts have insights so far` : 'Shows once the insights snapshot has run (every 4 hours) or after importing history'}>
+                  <div className="flex items-baseline gap-2"><span className="text-2xl font-extrabold tabular-nums">{has ? fmtNum(cur!.reach) : '—'}</span>{has && prev && prev.withData > 0 && <span className={`text-xs font-bold ${cur!.reach >= prev.reach ? 'text-emerald-600' : 'text-rose-600'}`}>{delta(cur!.reach, prev.reach)}</span>}</div>
                   <div className="text-xs text-slate-500">People reached · {w?.days || 28} days</div>
-                </div>
-                <div className="flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white border border-slate-200 shadow-sm" title={`${scheduledCount} scheduled · ${published28} published in 28 days`}>
-                  <div className="flex items-baseline gap-2"><span className="text-2xl font-extrabold tabular-nums">{has ? fmtNum(cur!.interactions) : '—'}</span>{has && prev && prev.withData > 0 && <span className="text-xs font-bold text-emerald-600">{delta(cur!.interactions, prev.interactions)}</span>}</div>
+                  <div className="text-[11px] font-bold text-teal-700 mt-1">See insights ›</div>
+                </button>
+                <button onClick={() => setView('insights')} className="text-left flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white border border-slate-200 shadow-sm hover:border-teal-400" title={`${scheduledCount} scheduled · ${published28} published in 28 days`}>
+                  <div className="flex items-baseline gap-2"><span className="text-2xl font-extrabold tabular-nums">{has ? fmtNum(cur!.interactions) : '—'}</span>{has && prev && prev.withData > 0 && <span className={`text-xs font-bold ${cur!.interactions >= prev.interactions ? 'text-emerald-600' : 'text-rose-600'}`}>{delta(cur!.interactions, prev.interactions)}</span>}</div>
                   <div className="text-xs text-slate-500">Interactions · {w?.days || 28} days</div>
-                </div>
+                  <div className="text-[11px] font-bold text-teal-700 mt-1">Top posts ›</div>
+                </button>
               </> })()}
           </div>
         </div>
 
         {/* toolbar */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${view === 'insights' ? 'invisible' : ''}`}>
             <button onClick={() => setRangeStart(addDays(rangeStart, -14))} className="w-8 h-8 rounded-lg border border-slate-300 bg-white grid place-items-center text-slate-500 hover:text-slate-900" aria-label="Previous two weeks"><ChevronLeft size={15} /></button>
             <h2 className="text-lg sm:text-xl font-extrabold">{rangeLabel}</h2>
             <button onClick={() => setRangeStart(addDays(rangeStart, 14))} className="w-8 h-8 rounded-lg border border-slate-300 bg-white grid place-items-center text-slate-500 hover:text-slate-900" aria-label="Next two weeks"><ChevronRight size={15} /></button>
             <button onClick={() => setRangeStart(startOfWeek(new Date()))} className="text-sm font-bold text-slate-600 hover:text-slate-900 px-2">Today</button>
           </div>
           <div className="inline-flex p-1 gap-0.5 rounded-xl bg-slate-100 border border-slate-200">
-            {(['week', 'queue'] as const).map(v => <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 rounded-lg text-sm font-bold ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{v === 'week' ? 'Calendar' : 'Approvals'}</button>)}
+            {(['week', 'queue', 'insights'] as const).map(v => <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 rounded-lg text-sm font-bold ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{v === 'week' ? 'Calendar' : v === 'queue' ? 'Approvals' : 'Insights'}</button>)}
           </div>
-          <div className="hidden md:flex gap-3 text-xs text-slate-500 items-center"><span><i className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />Needs approval</span><span><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5" />Scheduled</span><span><i className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5" />Published</span><span><i className="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1.5" />Failed</span><span>· Drag a post to another day</span></div>
+          <div className={`${view === 'insights' ? 'hidden' : 'hidden md:flex'} gap-3 text-xs text-slate-500 items-center`}><span><i className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />Needs approval</span><span><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5" />Scheduled</span><span><i className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5" />Published</span><span><i className="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1.5" />Failed</span><span>· Drag a post to another day</span></div>
         </div>
 
         {/* calendar */}
@@ -245,6 +248,8 @@ function SocialInner() {
         )}
 
         {/* approvals board */}
+        {view === 'insights' && <InsightsView canRefresh={canApprove} onOpenPost={id => setDrawer({ kind: 'post', id, mode: 'preview' })} />}
+
         {view === 'queue' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[{ t: 'Needs approval', f: (p: Post) => p.status === 'draft' }, { t: 'Scheduled', f: (p: Post) => p.status === 'scheduled' || p.status === 'failed' || p.status === 'publishing' }, { t: 'Published', f: (p: Post) => p.status === 'published' }].map(col => {

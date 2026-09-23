@@ -171,6 +171,16 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   image so it reads "31 DAYS TO GO" etc. off the graphic). Same Anthropic wiring
   and model as `/api/ai/generate`. Compose also gained an Edit/Preview toggle that
   renders the Reel and Story the way Instagram shows them, video playable.
+- **Built (Sep 23, insights)** — **Insights tab** (`InsightsView.tsx`, third tab next to
+  Calendar/Approvals; the hero tiles link to it). One read, `GET /api/social/insights/report`
+  (period 7/28/90/365 days, optional platform, viewer's tz), returns per-post rows with the
+  latest snapshot, current vs previous-period totals, and breakdowns by week/month,
+  account, format, weekday and time of day. The page shows KPI tiles with deltas, a
+  "What's working" list (each finding names its n; nothing claimed from <2 posts), a
+  reach-by-week column chart, the three breakdown cards, and a sortable ranked table.
+  `POST /api/social/insights/refresh` (director) re-snapshots every post in the window —
+  the cron only re-reads the last 30 days. Reach is a SUM of per-post reach, not unique
+  people; the page says so.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
