@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
-import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
 interface Account { id: string; platform: 'instagram' | 'facebook'; label: string; status: string; lastError: string; tokenExpiresAt: string | null }
@@ -379,7 +379,7 @@ function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => 
     <div onClick={() => !busy && ref.current?.click()} className={`rounded-2xl border-[1.5px] border-dashed border-slate-300 bg-slate-50 cursor-pointer text-center text-xs text-slate-500 relative ${media?.url ? 'overflow-hidden' : 'p-4'}`}>
       {busy ? <div className="p-4 font-bold text-teal-700">{busy}</div>
         : media?.url ? (media.mediaType === 'video'
-          ? <><video src={media.url} poster={media.thumbnailUrl || undefined} muted playsInline className="w-full max-h-64 object-contain bg-black block" /><span className="absolute top-2 left-2 rounded-md bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 inline-flex items-center gap-1"><Film size={10} /> {dur}{media.width && media.height ? ` · ${media.width}×${media.height}` : ''}</span></>
+          ? <><video src={media.url} poster={media.thumbnailUrl || undefined} controls playsInline onClick={e => e.stopPropagation()} className="w-full max-h-72 object-contain bg-black block" /><span className="absolute top-2 left-2 rounded-md bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 inline-flex items-center gap-1"><Film size={10} /> {dur}{media.width && media.height ? ` · ${media.width}×${media.height}` : ''}</span></>
           : <img src={media.url} alt="" className="w-full max-h-56 object-cover block" />)
         : <>Click to add the photo or video (Canva export)<div className="text-[11px] text-slate-400 mt-1">JPG/PNG for a post · MP4 for a Reel or Story</div></>}
       <input ref={ref} type="file" accept="image/*,video/mp4,video/quicktime" hidden onChange={e => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = '' }} />
@@ -387,9 +387,18 @@ function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => 
   )
 }
 
-interface EditProps { caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
-function EditFields({ caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
+interface EditProps { platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
+function EditFields({ platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
   const past = when < new Date()
+  const [ai, setAi] = useState<{ open: boolean; brief: string; busy: boolean; options: { label: string; caption: string }[]; hashtags: string }>({ open: false, brief: '', busy: false, options: [], hashtags: '' })
+  const plats = platforms || (accounts ? Array.from(new Set(accounts.filter(a => acctIds?.includes(a.id)).map(a => a.platform))) : ['instagram'])
+  async function writeWithAI() {
+    setAi(a => ({ ...a, busy: true }))
+    try {
+      const d = await api('/api/social/caption-assist', { method: 'POST', body: JSON.stringify({ brief: ai.brief, current: caption, platforms: plats, mediaType: media?.mediaType || 'image', placement: placements?.includes('feed') === false ? 'story' : 'feed', imageUrl: media?.mediaType === 'video' ? media.thumbnailUrl : media?.url }) })
+      setAi(a => ({ ...a, busy: false, options: d.options || [], hashtags: d.hashtags || '' }))
+    } catch (e: any) { toast.error(e.message); setAi(a => ({ ...a, busy: false })) }
+  }
   const isVideo = media?.mediaType === 'video'
   const hasIg = !accounts || accounts.some(a => acctIds?.includes(a.id) && a.platform === 'instagram')
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
@@ -414,7 +423,23 @@ function EditFields({ caption, setCaption, firstComment, setFirstComment, when, 
           <div className="text-[11px] text-slate-500 mt-1.5">{isVideo && (media.durationSec || 0) > 60 ? 'Over 60 s, so it can go out as a Reel but not a Story.' : 'Pick both to publish the same file as a Reel and a Story.'}{isVideo && media.width && media.height && Math.abs(media.width / media.height - 9 / 16) > 0.05 ? ` This is ${media.width}×${media.height} — Reels and Stories are 9:16, so it'll show with bars.` : ''}</div>
         </div>
       )}
-      {!storyOnly && <div><label className={labelCls}>Caption</label><textarea value={caption} onChange={e => setCaption(e.target.value)} maxLength={2200} rows={5} className={inputCls + ' resize-y leading-snug'} placeholder="Write the caption…" /><div className="text-right text-[11px] text-slate-500 mt-1 tabular-nums">{caption.length}/2200</div></div>}
+      {!storyOnly && <div>
+        <div className="flex items-center justify-between mb-1.5"><label className={labelCls + ' !mb-0'}>Caption</label><button type="button" onClick={() => setAi(a => ({ ...a, open: !a.open }))} className={`inline-flex items-center gap-1 text-xs font-bold rounded-lg px-2 py-1 ${ai.open ? 'bg-violet-100 text-violet-800' : 'text-violet-700 hover:bg-violet-50'}`}><Sparkles size={13} /> Write with AI</button></div>
+        <textarea value={caption} onChange={e => setCaption(e.target.value)} maxLength={2200} rows={5} className={inputCls + ' resize-y leading-snug'} placeholder="Write the caption…" /><div className="text-right text-[11px] text-slate-500 mt-1 tabular-nums">{caption.length}/2200</div>
+        {ai.open && (
+          <div className="mt-2 rounded-2xl border border-violet-200 bg-violet-50/60 p-3 flex flex-col gap-2">
+            <div className="text-xs text-violet-900 font-bold flex items-center gap-1.5"><Sparkles size={13} /> {caption.trim() ? 'Improve this caption' : 'Draft a caption'}<span className="font-normal text-violet-700"> · reads the cover frame and your upcoming events</span></div>
+            <div className="flex gap-2"><input value={ai.brief} onChange={e => setAi(a => ({ ...a, brief: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !ai.busy) writeWithAI() }} placeholder="Optional: what's the angle? e.g. 31 days out, push early registration" className={inputCls + ' !bg-white'} /><button type="button" onClick={writeWithAI} disabled={ai.busy} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-3 py-2 flex-none disabled:opacity-50">{ai.busy ? 'Writing…' : ai.options.length ? 'Again' : 'Write'}</button></div>
+            {ai.options.map((o, i) => (
+              <button key={i} type="button" onClick={() => { setCaption(o.caption); toast.success(`Using "${o.label}"`) }} className="text-left rounded-xl bg-white border border-slate-200 hover:border-violet-400 px-3 py-2.5">
+                <div className="text-[10px] font-extrabold uppercase tracking-wide text-violet-700 mb-1">{o.label}</div>
+                <div className="text-sm whitespace-pre-wrap leading-snug text-slate-800">{o.caption}</div>
+              </button>
+            ))}
+            {ai.hashtags && showFirstComment && <button type="button" onClick={() => { setFirstComment(ai.hashtags); toast.success('Hashtags added as the first comment') }} className="text-left rounded-xl bg-white border border-slate-200 hover:border-violet-400 px-3 py-2.5"><div className="text-[10px] font-extrabold uppercase tracking-wide text-violet-700 mb-1">Hashtags → first comment</div><div className="text-xs text-slate-600 leading-snug">{ai.hashtags}</div></button>}
+          </div>
+        )}
+      </div>}
       <div>
         <label className={labelCls}>Publish date</label>
         <input type="datetime-local" value={toLocalInput(when)} onChange={e => e.target.value && setWhen(new Date(e.target.value))} className={inputCls + (past ? ' !border-rose-400 !bg-rose-50' : '')} />
@@ -455,7 +480,7 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
         {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} />
-          : <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} queue={queue} showFirstComment storyOnly={isStory} />}
+          : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
         {post.status === 'published' && (metrics
           ? <div className="grid grid-cols-4 gap-2">{[['Reached', metrics.reach], ['Likes', metrics.likes], ['Comments', metrics.comments], [a.platform === 'instagram' ? 'Saves' : 'Shares', a.platform === 'instagram' ? metrics.saves : metrics.shares]].map(([l, v]) => <div key={String(l)} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2"><div className="text-lg font-extrabold tabular-nums">{fmtNum(Number(v))}</div><div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{l}</div></div>)}<div className="col-span-4 text-[11px] text-slate-500">Insights as of {fmtDate(new Date(metrics.fetchedAt))} {fmtTime(new Date(metrics.fetchedAt))} · refreshes every 4 hours</div></div>
           : <div className="text-xs text-slate-500">No insights yet — the next snapshot runs within 4 hours.</div>)}
@@ -483,6 +508,8 @@ function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSav
   const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [med, setMed] = useState<Media | undefined>(); const [placements, setPlacements] = useState<Placement[]>(['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
   const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
+  const [cMode, setCMode] = useState<'edit' | 'preview'>('edit')
+  const previewAcct = accounts.find(a => acctIds.includes(a.id) && a.platform === 'instagram') || accounts.find(a => acctIds.includes(a.id)) || accounts[0]
   async function create(approve: boolean, at: Date = when) {
     if (!acctIds.length) { toast.error('Pick at least one account'); return }
     if (!placements.length) { toast.error('Pick Feed, Story, or both'); return }
@@ -500,9 +527,15 @@ function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSav
   }
   return (
     <>
-      <DrawerHead title="New post" onClose={onClose} />
+      <DrawerHead title="New post" onClose={onClose}>
+        {img && <div className="inline-flex p-1 gap-0.5 rounded-xl bg-slate-100 border border-slate-200">{(['edit', 'preview'] as const).map(m => <button key={m} onClick={() => setCMode(m)} className={`px-3 py-1 rounded-lg text-xs font-bold capitalize ${cMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{m}</button>)}</div>}
+      </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
-        <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} />
+        {cMode === 'preview' && img && previewAcct ? <>
+          {placements.includes('feed') && <div><div className={labelCls}>{med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} /></div>}
+          {placements.includes('story') && <div><div className={labelCls}>Story · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption="" imgSrc={img} when={when} mediaType={med?.mediaType} placement="story" poster={med?.thumbnailUrl} /></div>}
+          {firstComment && placements.includes('feed') && <div className="text-xs text-slate-500"><span className="font-bold uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{firstComment}</div>}
+        </> : <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} />}
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">

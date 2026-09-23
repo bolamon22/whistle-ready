@@ -164,6 +164,13 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   `/photo_stories`, `/video_stories` (3-phase). Compose can target Feed, Story or both
   → one row per account × placement. Audio must already be in the MP4 — the API
   can't attach a track or use Instagram's music library.
+- **Built (Sep 23, evening)** — **Write with AI** under the caption field:
+  `POST /api/social/caption-assist` (staff) returns three caption angles + a hashtag
+  set for the first comment, grounded in the org's upcoming tournaments (raw-SQL
+  `Tournament` query by orgId) and the post's cover frame (sent to Claude as an
+  image so it reads "31 DAYS TO GO" etc. off the graphic). Same Anthropic wiring
+  and model as `/api/ai/generate`. Compose also gained an Edit/Preview toggle that
+  renders the Reel and Story the way Instagram shows them, video playable.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
