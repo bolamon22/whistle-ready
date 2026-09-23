@@ -128,6 +128,17 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   and the `unapprove` / `retry` actions on `PATCH /api/social/posts/[id]` were
   added for it. The page runs dark on purpose (matches the mockup Bo approved);
   the rest of the dashboard stays light.
+- **Built (Sep 23)** — the "cheap four" from the PromoRepublic comparison: multi-account
+  compose (one post per selected account, tied by `groupId`; approving one approves
+  the set), **Publish now** (`action:'publish-now'`, director-only, goes through the
+  same `src/lib/socialPublish.ts` path the cron uses), **Add to queue** (standing
+  slots per org in AppSetting `socialQueue:<orgId>`, `GET/PUT /api/social/queue`,
+  editor in the Accounts & queue times drawer), and **First comment** (`firstComment`
+  column; posted via `/{post-id}/comments` right after publish — hashtags live there).
+  Re-run `POST /api/admin/migrate-social` once after deploying: it adds the two new
+  columns (`firstComment`, `groupId`) idempotently.
+- **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
+  already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
   still gets connected automatically), and surfacing insight numbers (reach /
   interactions) on the page — the cron already stores them.

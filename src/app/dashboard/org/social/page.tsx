@@ -10,19 +10,22 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
 interface Account { id: string; platform: 'instagram' | 'facebook'; label: string; status: string; lastError: string; tokenExpiresAt: string | null }
 interface Post {
   id: string; socialAccountId: string; caption: string; mediaUrls: string; scheduledFor: string; status: Status
-  approvedByUserId: string; lastError: string; publishedAt: string | null
+  approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string
   socialAccount?: { id: string; platform: string; label: string; status: string }
 }
 
 const STATUS_LABEL: Record<string, string> = { draft: 'Needs approval', scheduled: 'Scheduled', publishing: 'Publishing…', published: 'Published', failed: 'Failed', canceled: 'Canceled' }
 const STATUS_TEXT: Record<string, string> = { draft: 'text-amber-300', scheduled: 'text-emerald-300', publishing: 'text-emerald-300', published: 'text-slate-400', failed: 'text-rose-300', canceled: 'text-slate-500' }
 const QUICK_TIMES: [number, number][] = [[9, 0], [11, 0], [12, 30], [18, 30]]
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+interface QueueSlot { dow: number; h: number; m: number }
+interface QueueInfo { slots: QueueSlot[]; tzOffsetMin: number; next: string[] }
 
 const startOfWeek = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); return x }
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
@@ -67,6 +70,7 @@ function SocialInner() {
   const [posts, setPosts] = useState<Post[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [configured, setConfigured] = useState(true)
+  const [queue, setQueue] = useState<QueueInfo>({ slots: [], tzOffsetMin: new Date().getTimezoneOffset(), next: [] })
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'queue'>('week')
   const [rangeStart, setRangeStart] = useState(() => startOfWeek(new Date()))
@@ -88,8 +92,9 @@ function SocialInner() {
 
   async function load() {
     try {
-      const [p, a] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts')])
+      const [p, a, q] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null)])
       setPosts(p.posts || []); setAccounts(a.accounts || []); setConfigured(a.configured !== false)
+      if (q) setQueue(q)
     } catch (e: any) { toast.error(e.message) } finally { setLoading(false) }
   }
 
@@ -108,7 +113,8 @@ function SocialInner() {
   async function approve(p: Post) {
     if (new Date(p.scheduledFor) < new Date()) { toast.error('That time has passed — pick a new date first'); setDrawer({ kind: 'post', id: p.id, mode: 'edit' }); return }
     const when = new Date(p.scheduledFor)
-    if (await patch(p.id, { action: 'approve' }, `Approved — publishes ${fmtDate(when)} at ${fmtTime(when)}`)) setDrawer(null)
+    const siblings = p.groupId ? posts.filter(x => x.groupId === p.groupId && x.id !== p.id && x.status === 'draft').length : 0
+    if (await patch(p.id, { action: 'approve' }, `Approved${siblings ? ` (+${siblings} more account${siblings === 1 ? '' : 's'})` : ''} — publishes ${fmtDate(when)} at ${fmtTime(when)}`)) setDrawer(null)
   }
   async function moveTo(id: string, day: Date) {
     const p = byId(id); if (!p) return
@@ -116,6 +122,12 @@ function SocialInner() {
     const old = new Date(p.scheduledFor); const nw = new Date(day); nw.setHours(old.getHours(), old.getMinutes(), 0, 0)
     if (nw < new Date()) { toast.error('That day has already passed'); return }
     await patch(id, { scheduledFor: nw.toISOString() }, `Moved to ${fmtDate(nw)} · keeps ${fmtTime(nw)}`)
+  }
+  async function publishNow(p: Post) {
+    try {
+      const d = await api(`/api/social/posts/${p.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'publish-now' }) })
+      toast.success(d.warning ? `Published — ${d.warning}` : 'Published — it’s live'); setDrawer(null); await load()
+    } catch (e: any) { toast.error(e.message); await load() }
   }
   function newPostOn(day: Date) { const d = new Date(day); d.setHours(11, 0, 0, 0); setDrawer({ kind: 'new', when: d }) }
 
@@ -151,7 +163,7 @@ function SocialInner() {
             <div className="flex items-center justify-between"><ThumbsUp size={20} /><span className="w-7 h-7 rounded-full bg-black/15 grid place-items-center"><ChevronRight size={14} /></span></div>
             <div><div className="text-3xl font-extrabold leading-none tabular-nums">{needsReview}</div><div className="font-extrabold">posts to review</div><div className="text-xs opacity-70 mt-0.5">Approve in one tap — nothing publishes without you</div></div>
           </button>
-          <button onClick={() => setDrawer({ kind: 'accounts' })} className="text-left rounded-2xl p-4 min-h-[120px] flex flex-col justify-between gap-4 bg-white/5 border border-white/10 hover:border-white/20 backdrop-blur">
+          <button onClick={() => setDrawer({ kind: 'accounts' })} title="Accounts & queue times" className="text-left rounded-2xl p-4 min-h-[120px] flex flex-col justify-between gap-4 bg-white/5 border border-white/10 hover:border-white/20 backdrop-blur">
             <div className="flex items-center justify-between text-slate-300"><Link2 size={20} /><span className="w-7 h-7 rounded-full bg-white/10 grid place-items-center"><ChevronRight size={14} /></span></div>
             <div><div className="font-extrabold">{accounts.length ? `${accounts.length} account${accounts.length === 1 ? '' : 's'} connected` : 'No accounts connected yet'}</div><div className="text-xs text-slate-500 mt-0.5 truncate">{accounts.length ? accounts.map(a => a.label).join(' · ') : 'Connect your Instagram + Facebook to start scheduling'}</div></div>
           </button>
@@ -244,9 +256,9 @@ function SocialInner() {
       {/* drawer */}
       {drawer && <div className="fixed inset-0 z-40 bg-black/55" onClick={() => setDrawer(null)} />}
       <div className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[460px] bg-[#151a24] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-200 ${drawer ? 'translate-x-0' : 'translate-x-full'}`}>
-        {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer post={byId(drawer.id)!} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPatch={patch} onDelete={remove} />}
-        {drawer?.kind === 'new' && <ComposeDrawer when={drawer.when} accounts={accounts} canApprove={canApprove} onClose={() => setDrawer(null)} onSaved={async () => { setDrawer(null); await load() }} />}
-        {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
+        {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer post={byId(drawer.id)!} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
+        {drawer?.kind === 'new' && <ComposeDrawer when={drawer.when} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(null)} onSaved={async () => { setDrawer(null); await load() }} />}
+        {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} queue={queue} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
       </div>
     </div>
   )
@@ -295,34 +307,47 @@ function UploadBox({ src, onUploaded }: { src?: string; onUploaded: (url: string
   )
 }
 
-interface EditProps { caption: string; setCaption: (s: string) => void; when: Date; setWhen: (d: Date) => void; imgSrc?: string; setImg: (u: string) => void; accounts?: Account[]; acctId?: string; setAcct?: (id: string) => void }
-function EditFields({ caption, setCaption, when, setWhen, imgSrc, setImg, accounts, acctId, setAcct }: EditProps) {
+interface EditProps { caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; imgSrc?: string; setImg: (u: string) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean }
+function EditFields({ caption, setCaption, firstComment, setFirstComment, when, setWhen, imgSrc, setImg, queue, accounts, acctIds, setAcctIds, showFirstComment }: EditProps) {
   const past = when < new Date()
+  const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   return (
     <>
+      {accounts && setAcctIds && (
+        <div><label className={labelCls}>Post to</label>
+          <div className="flex flex-wrap gap-1.5">{accounts.map(a => { const on = acctIds?.includes(a.id); return (
+            <button key={a.id} type="button" onClick={() => setAcctIds(on ? (acctIds || []).filter(x => x !== a.id) : [...(acctIds || []), a.id])} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-bold transition ${on ? 'border-teal-400 bg-teal-400/15 text-teal-200' : 'border-white/15 text-slate-400 hover:text-white'}`}>
+              <span className={`w-4 h-4 rounded-full grid place-items-center ${a.platform === 'instagram' ? 'bg-pink-600' : 'bg-blue-500'}`}>{a.platform === 'instagram' ? <Instagram size={10} className="text-white" /> : <Facebook size={10} className="text-white" />}</span>{a.label}{on && <Check size={12} />}
+            </button>) })}</div>
+          {(acctIds?.length || 0) > 1 && <div className="text-[11px] text-slate-500 mt-1.5">One post per account — approving one approves the set.</div>}
+        </div>
+      )}
       <div><label className={labelCls}>Photo</label><UploadBox src={imgSrc} onUploaded={setImg} /></div>
       <div><label className={labelCls}>Caption</label><textarea value={caption} onChange={e => setCaption(e.target.value)} maxLength={2200} rows={5} className={inputCls + ' resize-y leading-snug'} placeholder="Write the caption…" /><div className="text-right text-[11px] text-slate-500 mt-1 tabular-nums">{caption.length}/2200</div></div>
       <div>
         <label className={labelCls}>Publish date</label>
         <input type="datetime-local" value={toLocalInput(when)} onChange={e => e.target.value && setWhen(new Date(e.target.value))} className={inputCls + (past ? ' !border-rose-400 !bg-rose-400/10' : '')} />
         {past && <div className="text-xs font-bold text-rose-300 mt-1.5">This date has passed. Pick a new one.</div>}
-        <div className="flex flex-wrap gap-1.5 mt-2">{QUICK_TIMES.map(([h, m]) => { const d = new Date(when); d.setHours(h, m, 0, 0); const on = when.getHours() === h && when.getMinutes() === m; return <button key={`${h}:${m}`} type="button" onClick={() => setWhen(d)} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${on ? 'border-teal-400 text-teal-300' : 'border-white/15 text-slate-400 hover:text-white'}`}>{fmtTime(d)}</button> })}</div>
+        <div className="flex flex-wrap gap-1.5 mt-2">{nextQueue && <button type="button" onClick={() => setWhen(nextQueue)} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${+when === +nextQueue ? 'border-teal-400 text-teal-300 bg-teal-400/10' : 'border-teal-400/50 text-teal-300 hover:bg-teal-400/10'}`}><ListPlus size={12} /> Next queue slot · {fmtDate(nextQueue)} {fmtTime(nextQueue)}</button>}{QUICK_TIMES.map(([h, m]) => { const d = new Date(when); d.setHours(h, m, 0, 0); const on = when.getHours() === h && when.getMinutes() === m; return <button key={`${h}:${m}`} type="button" onClick={() => setWhen(d)} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${on ? 'border-teal-400 text-teal-300' : 'border-white/15 text-slate-400 hover:text-white'}`}>{fmtTime(d)}</button> })}</div>
       </div>
-      {accounts && setAcct && <div><label className={labelCls}>Account</label><select value={acctId} onChange={e => setAcct(e.target.value)} className={inputCls}>{accounts.map(a => <option key={a.id} value={a.id}>{a.platform === 'instagram' ? 'Instagram · ' : 'Facebook · '}{a.label}</option>)}</select></div>}
+      {showFirstComment && <div><label className={labelCls}>First comment <span className="normal-case tracking-normal font-semibold text-slate-600">· hashtags go here, posted right after publish</span></label><textarea value={firstComment} onChange={e => setFirstComment(e.target.value)} maxLength={2200} rows={2} className={inputCls + ' resize-y leading-snug'} placeholder="#lacrosse #floridalacrosse #monstermash" /></div>}
     </>
   )
 }
 
-function PostDrawer({ post, mode, setMode, canApprove, onClose, onApprove, onPatch, onDelete }: { post: Post; mode: 'preview' | 'edit'; setMode: (m: 'preview' | 'edit') => void; canApprove: boolean; onClose: () => void; onApprove: (p: Post) => void; onPatch: (id: string, body: any, msg?: string) => Promise<boolean>; onDelete: (id: string, msg: string) => void }) {
+function PostDrawer({ post, siblings, queue, mode, setMode, canApprove, onClose, onApprove, onPublishNow, onPatch, onDelete }: { post: Post; siblings: Post[]; queue: QueueInfo; mode: 'preview' | 'edit'; setMode: (m: 'preview' | 'edit') => void; canApprove: boolean; onClose: () => void; onApprove: (p: Post) => void; onPublishNow: (p: Post) => Promise<void>; onPatch: (id: string, body: any, msg?: string) => Promise<boolean>; onDelete: (id: string, msg: string) => void }) {
   const [caption, setCaption] = useState(post.caption)
+  const [firstComment, setFirstComment] = useState(post.firstComment || '')
+  const [confirmNow, setConfirmNow] = useState(false); const [publishing, setPublishing] = useState(false)
   const [when, setWhen] = useState(new Date(post.scheduledFor))
   const [img, setImg] = useState<string | undefined>(media(post)[0])
   const [confirmDel, setConfirmDel] = useState(false)
-  useEffect(() => { setCaption(post.caption); setWhen(new Date(post.scheduledFor)); setImg(media(post)[0]); setConfirmDel(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls])
+  useEffect(() => { setCaption(post.caption); setFirstComment(post.firstComment || ''); setWhen(new Date(post.scheduledFor)); setImg(media(post)[0]); setConfirmDel(false); setConfirmNow(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls, post.firstComment])
   const a = post.socialAccount || { platform: 'instagram', label: '' }
   const editable = post.status === 'draft' || post.status === 'scheduled' || post.status === 'failed'
-  const dirty = caption !== post.caption || +when !== +new Date(post.scheduledFor) || img !== media(post)[0]
-  const save = () => onPatch(post.id, { caption, scheduledFor: when.toISOString(), mediaUrls: img ? [img] : [] }, 'Saved')
+  const dirty = caption !== post.caption || firstComment !== (post.firstComment || '') || +when !== +new Date(post.scheduledFor) || img !== media(post)[0]
+  const save = () => onPatch(post.id, { caption, firstComment, scheduledFor: when.toISOString(), mediaUrls: img ? [img] : [] }, 'Saved')
+  const draftSiblings = siblings.filter(s => s.status === 'draft').length
   const statusLine = post.status === 'draft' ? <div className="rounded-xl bg-amber-400/15 text-amber-200 text-xs font-bold px-3 py-2.5">Needs approval · scheduled for {fmtLong(when)}</div>
     : post.status === 'scheduled' ? <div className="rounded-xl bg-emerald-400/15 text-emerald-200 text-xs font-bold px-3 py-2.5 flex gap-2"><Check size={14} className="flex-none mt-px" />Approved · publishes automatically {fmtLong(when)}</div>
     : post.status === 'failed' ? <div className="rounded-xl bg-rose-400/15 text-rose-200 text-xs font-bold px-3 py-2.5">{post.lastError || 'Publish failed'}</div>
@@ -336,11 +361,15 @@ function PostDrawer({ post, mode, setMode, canApprove, onClose, onApprove, onPat
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
         {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} />
-          : <EditFields caption={caption} setCaption={setCaption} when={when} setWhen={setWhen} imgSrc={img} setImg={setImg} />}
+          : <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} imgSrc={img} setImg={setImg} queue={queue} showFirstComment />}
+        {mode === 'preview' && post.firstComment && <div className="text-xs text-slate-400"><span className="font-bold text-slate-500 uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{post.firstComment}</div>}
+        {siblings.length > 0 && <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-xs text-slate-400 flex flex-wrap items-center gap-2"><span className="font-bold text-slate-300">Also going to</span>{siblings.map(s => <span key={s.id} className="inline-flex items-center gap-1"><PlatformBadge platform={s.socialAccount?.platform || ''} size={12} />{s.socialAccount?.label} <span className={STATUS_TEXT[s.status]}>· {STATUS_LABEL[s.status]}</span></span>)}</div>}
         {!img && editable && <div className="text-xs text-slate-500">A photo is required — Instagram won’t accept a text-only post, and the automation will mark this failed without one.</div>}
       </div>
       <div className="px-4 py-3 border-t border-white/10 flex flex-wrap gap-2">
-        {post.status === 'draft' && canApprove && <button onClick={async () => { if (dirty && !(await save())) return; onApprove({ ...post, scheduledFor: when.toISOString() }) }} disabled={!img || when < new Date()} className="rounded-xl bg-emerald-400 text-[#05261b] font-bold text-sm px-4 py-2.5 disabled:opacity-40">Approve &amp; schedule</button>}
+        {post.status === 'draft' && canApprove && <button onClick={async () => { if (dirty && !(await save())) return; onApprove({ ...post, scheduledFor: when.toISOString() }) }} disabled={!img || when < new Date()} className="rounded-xl bg-emerald-400 text-[#05261b] font-bold text-sm px-4 py-2.5 disabled:opacity-40">Approve &amp; schedule{draftSiblings ? ` · ${draftSiblings + 1} accounts` : ''}</button>}
+        {editable && canApprove && img && !confirmNow && <button onClick={() => setConfirmNow(true)} className="rounded-xl bg-white/10 border border-white/15 font-bold text-sm px-3 py-2.5 inline-flex items-center gap-1.5" title="Publish this instant instead of waiting for the scheduled time"><Zap size={14} /> Publish now</button>}
+        {editable && canApprove && confirmNow && <span className="inline-flex items-center gap-2 text-xs"><span className="text-slate-300 font-bold">Post to {a.label} right now?</span><button disabled={publishing} onClick={async () => { setPublishing(true); if (dirty && !(await save())) { setPublishing(false); return } await onPublishNow(post); setPublishing(false) }} className="rounded-lg bg-teal-400 text-[#062a27] font-bold px-3 py-1.5 disabled:opacity-50">{publishing ? 'Publishing…' : 'Yes, publish'}</button><button onClick={() => setConfirmNow(false)} className="text-slate-400 font-bold px-2">Not yet</button></span>}
         {post.status === 'failed' && canApprove && <button onClick={async () => { if (dirty && !(await save())) return; const at = when < new Date() ? new Date(Date.now() + 5 * 60000) : when; if (await onPatch(post.id, { action: 'retry', scheduledFor: at.toISOString() }, `Re-queued for ${fmtDate(at)} ${fmtTime(at)}`)) onClose() }} className="rounded-xl bg-teal-400 text-[#062a27] font-bold text-sm px-4 py-2.5 inline-flex items-center gap-1.5"><RotateCcw size={14} /> Retry</button>}
         {editable && dirty && <button onClick={async () => { if (await save()) setMode('preview') }} className="rounded-xl bg-white/10 border border-white/15 font-bold text-sm px-4 py-2.5">Save changes</button>}
         {post.status === 'scheduled' && canApprove && <button onClick={() => onPatch(post.id, { action: 'unapprove' }, 'Moved back to needs approval').then(ok => ok && onClose())} className="rounded-xl bg-white/10 border border-white/15 font-bold text-sm px-4 py-2.5">Unapprove</button>}
@@ -352,17 +381,20 @@ function PostDrawer({ post, mode, setMode, canApprove, onClose, onApprove, onPat
   )
 }
 
-function ComposeDrawer({ when: init, accounts, canApprove, onClose, onSaved }: { when: Date; accounts: Account[]; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [caption, setCaption] = useState(''); const [when, setWhen] = useState(init); const [img, setImg] = useState<string | undefined>(); const [acct, setAcct] = useState(accounts[0]?.id || ''); const [busy, setBusy] = useState(false)
-  async function create(approve: boolean) {
+function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSaved }: { when: Date; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [img, setImg] = useState<string | undefined>(); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
+  const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
+  async function create(approve: boolean, at: Date = when) {
+    if (!acctIds.length) { toast.error('Pick at least one account'); return }
     if (!caption.trim()) { toast.error('Add a caption first'); return }
     if (!img) { toast.error('Add a photo — Instagram and Facebook both need one'); return }
-    if (when < new Date()) { toast.error('Pick a future date'); return }
+    if (at < new Date()) { toast.error('Pick a future date'); return }
     setBusy(true)
     try {
-      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountId: acct, caption, mediaUrls: [img], scheduledFor: when.toISOString() }) })
-      if (approve) { await api(`/api/social/posts/${d.post.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'approve' }) }); toast.success(`Scheduled — publishes ${fmtDate(when)} at ${fmtTime(when)}`) }
-      else toast.success('Saved — waiting on approval')
+      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, mediaUrls: [img], scheduledFor: at.toISOString() }) })
+      const n = acctIds.length; const acctNote = n > 1 ? ` on ${n} accounts` : ''
+      if (approve) { await api(`/api/social/posts/${d.post.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'approve' }) }); toast.success(`Scheduled${acctNote} — publishes ${fmtDate(at)} at ${fmtTime(at)}`) }
+      else toast.success(`Saved${acctNote} — waiting on approval`)
       await onSaved()
     } catch (e: any) { toast.error(e.message) } finally { setBusy(false) }
   }
@@ -370,27 +402,37 @@ function ComposeDrawer({ when: init, accounts, canApprove, onClose, onSaved }: {
     <>
       <DrawerHead title="New post" onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
-        <EditFields caption={caption} setCaption={setCaption} when={when} setWhen={setWhen} imgSrc={img} setImg={setImg} accounts={accounts} acctId={acct} setAcct={setAcct} />
+        <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} imgSrc={img} setImg={setImg} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} />
         <div className="rounded-xl bg-teal-400/10 border border-teal-400/25 text-teal-200 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-white/10 flex flex-wrap gap-2">
         <button onClick={() => create(false)} disabled={busy} className="rounded-xl bg-teal-400 text-[#062a27] font-bold text-sm px-4 py-2.5 disabled:opacity-50">Save as draft</button>
         {canApprove && <button onClick={() => create(true)} disabled={busy} className="rounded-xl bg-emerald-400 text-[#05261b] font-bold text-sm px-4 py-2.5 disabled:opacity-50">Save &amp; approve</button>}
+        {nextQueue && <button onClick={() => create(canApprove, nextQueue)} disabled={busy} title={`Next open queue slot: ${fmtDate(nextQueue)} ${fmtTime(nextQueue)}`} className="rounded-xl bg-white/10 border border-white/15 font-bold text-sm px-3 py-2.5 inline-flex items-center gap-1.5 disabled:opacity-50"><ListPlus size={14} /> Add to queue</button>}
         <button onClick={onClose} className="rounded-xl text-slate-300 hover:bg-white/10 font-bold text-sm px-4 py-2.5 ml-auto">Cancel</button>
       </div>
     </>
   )
 }
 
-function AccountsDrawer({ accounts, configured, canManage, onClose, onChanged }: { accounts: Account[]; configured: boolean; canManage: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
+function AccountsDrawer({ accounts, configured, queue, canManage, onClose, onChanged }: { accounts: Account[]; configured: boolean; queue: QueueInfo; canManage: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [slots, setSlots] = useState<QueueSlot[]>(queue.slots)
+  const [savingSlots, setSavingSlots] = useState(false)
+  useEffect(() => { setSlots(queue.slots) }, [queue.slots])
+  const slotsDirty = JSON.stringify(slots) !== JSON.stringify(queue.slots)
+  async function saveSlots() {
+    setSavingSlots(true)
+    try { await api('/api/social/queue', { method: 'PUT', body: JSON.stringify({ slots, tzOffsetMin: new Date().getTimezoneOffset() }) }); toast.success('Queue times saved'); await onChanged() } catch (e: any) { toast.error(e.message) } finally { setSavingSlots(false) }
+  }
   async function disconnect(id: string) {
     try { await api(`/api/social/accounts?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); toast.success('Disconnected — its scheduled posts moved back to needs approval'); setConfirmId(null); await onChanged() } catch (e: any) { toast.error(e.message) }
   }
   return (
     <>
-      <DrawerHead title="Connected accounts" onClose={onClose} />
+      <DrawerHead title="Accounts & queue times" onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+        <div className={labelCls}>Connected accounts</div>
         {!accounts.length && <div className="text-sm text-slate-400">Nothing connected yet.</div>}
         {accounts.map(a => {
           const days = a.tokenExpiresAt ? Math.round((new Date(a.tokenExpiresAt).getTime() - Date.now()) / 864e5) : null
@@ -414,6 +456,19 @@ function AccountsDrawer({ accounts, configured, canManage, onClose, onChanged }:
               : <div className="text-xs text-amber-200">Add META_APP_ID and META_APP_SECRET in Vercel first — see SOCIAL-SCHEDULER.md.</div>}
           </div>
         )}
+        <div className={labelCls + ' mt-3'}>Queue times</div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 flex flex-col gap-2">
+          <div className="text-xs text-slate-500 flex gap-2"><Clock size={14} className="flex-none mt-px" /><span>"Add to queue" drops a post into the next one of these that's still open. Times are in your local time zone.</span></div>
+          {slots.map((s, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select value={s.dow} disabled={!canManage} onChange={e => setSlots(slots.map((x, j) => j === i ? { ...x, dow: +e.target.value } : x))} className={inputCls + ' !w-auto !py-1.5'}>{DOW.map((d, di) => <option key={di} value={di}>{d}</option>)}</select>
+              <input type="time" disabled={!canManage} value={`${String(s.h).padStart(2, '0')}:${String(s.m).padStart(2, '0')}`} onChange={e => { const [h, m] = e.target.value.split(':').map(Number); if (!isNaN(h)) setSlots(slots.map((x, j) => j === i ? { ...x, h, m: m || 0 } : x)) }} className={inputCls + ' !w-auto !py-1.5'} />
+              {canManage && <button onClick={() => setSlots(slots.filter((_, j) => j !== i))} className="text-slate-500 hover:text-rose-300 ml-auto" title="Remove"><X size={15} /></button>}
+            </div>
+          ))}
+          {canManage && <div className="flex gap-2 pt-1"><button onClick={() => setSlots([...slots, { dow: 2, h: 11, m: 0 }])} className="rounded-lg bg-white/10 border border-white/15 text-xs font-bold px-3 py-1.5 inline-flex items-center gap-1"><Plus size={12} /> Add time</button>{slotsDirty && <button onClick={saveSlots} disabled={savingSlots || !slots.length} className="rounded-lg bg-teal-400 text-[#062a27] text-xs font-bold px-3 py-1.5 disabled:opacity-50">{savingSlots ? 'Saving…' : 'Save queue times'}</button>}</div>}
+          {queue.next.length > 0 && <div className="text-[11px] text-slate-500 pt-1">Next open: {queue.next.slice(0, 3).map(s => `${fmtDate(new Date(s))} ${fmtTime(new Date(s))}`).join(' · ')}</div>}
+        </div>
       </div>
       <div className="px-4 py-3 border-t border-white/10 flex"><button onClick={onClose} className="rounded-xl text-slate-300 hover:bg-white/10 font-bold text-sm px-4 py-2.5 ml-auto">Close</button></div>
     </>
