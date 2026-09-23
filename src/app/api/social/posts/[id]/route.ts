@@ -95,6 +95,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const data: any = {}
   if (typeof body.caption === 'string') data.caption = body.caption
   if (typeof body.firstComment === 'string') data.firstComment = body.firstComment
+  if (body.mediaType === 'image' || body.mediaType === 'video') data.mediaType = body.mediaType
+  if (body.placement === 'feed' || body.placement === 'story') data.placement = body.placement
+  if (typeof body.thumbnailUrl === 'string') data.thumbnailUrl = body.thumbnailUrl
   if (Array.isArray(body.mediaUrls)) data.mediaUrls = JSON.stringify(body.mediaUrls)
   if (body.scheduledFor) data.scheduledFor = new Date(body.scheduledFor)
   if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

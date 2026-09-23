@@ -186,44 +186,93 @@ function absoluteUrl(u: string): string {
   return `${base}${u.startsWith('/') ? '' : '/'}${u}`
 }
 
-/** Publishes one image to an Instagram Business account. Two Graph API calls:
- *  create a media container, then publish it — Instagram has no single-step post. */
-export async function publishInstagramPost(account: { externalId: string; accessToken: string }, opts: { imageUrl: string; caption: string }): Promise<Result<{ externalPostId: string }>> {
+/** What a post is, independent of platform: a photo or a video, going to the feed
+ *  or to Stories. On Instagram a feed video is a Reel (the API has no other kind of
+ *  feed video any more); on Facebook it's a Page video post. */
+export type PublishSpec = {
+  mediaType: 'image' | 'video'
+  placement: 'feed' | 'story'
+  mediaUrl: string
+  caption: string
+  /** Optional poster frame for a video (Reel cover). */
+  coverUrl?: string
+}
+
+export type ContainerStatus = 'FINISHED' | 'IN_PROGRESS' | 'ERROR' | 'EXPIRED' | 'PUBLISHED' | 'UNKNOWN'
+
+/** Step 1 of an Instagram publish: create the media container. Images are usually
+ *  ready at once; videos (Reels, video Stories) transcode on Meta's side first, so the
+ *  caller polls getInstagramContainerStatus until FINISHED before publishing. */
+export async function createInstagramContainer(account: { externalId: string; accessToken: string }, spec: PublishSpec): Promise<Result<{ containerId: string }>> {
   const token = decrypt(account.accessToken)
-  const created = await graphPost<{ id: string }>(`/${account.externalId}/media`, {
-    image_url: absoluteUrl(opts.imageUrl), caption: opts.caption, access_token: token,
-  })
-  if (!created.ok) return created
-  const published = await graphPost<{ id: string }>(`/${account.externalId}/media_publish`, {
-    creation_id: created.data.id, access_token: token,
-  })
-  if (!published.ok) return published
-  return { ok: true, data: { externalPostId: published.data.id } }
-}
-
-/** Publishes one image to a Facebook Page's feed — a single call (Facebook, unlike
- *  Instagram, allows posting the photo directly). */
-export async function publishFacebookPost(account: { externalId: string; accessToken: string }, opts: { imageUrl: string; caption: string }): Promise<Result<{ externalPostId: string }>> {
-  const token = decrypt(account.accessToken)
-  const posted = await graphPost<{ id: string; post_id?: string }>(`/${account.externalId}/photos`, {
-    url: absoluteUrl(opts.imageUrl), caption: opts.caption, access_token: token,
-  })
-  if (!posted.ok) return posted
-  return { ok: true, data: { externalPostId: posted.data.post_id || posted.data.id } }
-}
-
-export async function publishPost(account: { platform: string; externalId: string; accessToken: string }, opts: { imageUrl: string; caption: string }): Promise<Result<{ externalPostId: string }>> {
-  if (account.platform === 'instagram') return publishInstagramPost(account, opts)
-  if (account.platform === 'facebook') return publishFacebookPost(account, opts)
-  return { ok: false, error: `Unsupported platform: ${account.platform}` }
-}
-
-/** Posts a comment under a just-published post — how hashtags stay out of the
- *  caption on Instagram. Same endpoint shape for IG media and FB Page posts. */
-export async function postFirstComment(account: { accessToken: string }, externalPostId: string, message: string): Promise<Result<{ commentId: string }>> {
-  const r = await graphPost<{ id: string }>(`/${externalPostId}/comments`, { message, access_token: decrypt(account.accessToken) })
+  const body: Record<string, string> = { access_token: token }
+  if (spec.placement === 'story') {
+    body.media_type = 'STORIES'
+    if (spec.mediaType === 'video') body.video_url = absoluteUrl(spec.mediaUrl); else body.image_url = absoluteUrl(spec.mediaUrl)
+    // Stories carry no caption on Instagram — anything passed is ignored, so don't.
+  } else if (spec.mediaType === 'video') {
+    body.media_type = 'REELS'
+    body.video_url = absoluteUrl(spec.mediaUrl)
+    body.share_to_feed = 'true'
+    if (spec.caption) body.caption = spec.caption
+    if (spec.coverUrl) body.cover_url = absoluteUrl(spec.coverUrl)
+  } else {
+    body.image_url = absoluteUrl(spec.mediaUrl)
+    if (spec.caption) body.caption = spec.caption
+  }
+  const r = await graphPost<{ id: string }>(`/${account.externalId}/media`, body)
   if (!r.ok) return r
-  return { ok: true, data: { commentId: r.data.id } }
+  return { ok: true, data: { containerId: r.data.id } }
+}
+
+export async function getInstagramContainerStatus(account: { accessToken: string }, containerId: string): Promise<Result<{ status: ContainerStatus; detail: string }>> {
+  const r = await graphGet<{ status_code?: string; status?: string }>(`/${containerId}`, { fields: 'status_code,status', access_token: decrypt(account.accessToken) })
+  if (!r.ok) return r
+  const s = (r.data.status_code || 'UNKNOWN') as ContainerStatus
+  return { ok: true, data: { status: s, detail: r.data.status || '' } }
+}
+
+/** Step 2: publish a FINISHED container. Returns the live media id. */
+export async function publishInstagramContainer(account: { externalId: string; accessToken: string }, containerId: string): Promise<Result<{ externalPostId: string }>> {
+  const r = await graphPost<{ id: string }>(`/${account.externalId}/media_publish`, { creation_id: containerId, access_token: decrypt(account.accessToken) })
+  if (!r.ok) return r
+  return { ok: true, data: { externalPostId: r.data.id } }
+}
+
+/** Facebook Page publish — all four shapes are synchronous from our side (a video
+ *  post returns its id immediately and finishes processing on Meta's end). */
+export async function publishFacebook(account: { externalId: string; accessToken: string }, spec: PublishSpec): Promise<Result<{ externalPostId: string }>> {
+  const token = decrypt(account.accessToken)
+  const page = account.externalId
+  if (spec.placement === 'feed' && spec.mediaType === 'image') {
+    const r = await graphPost<{ id: string; post_id?: string }>(`/${page}/photos`, { url: absoluteUrl(spec.mediaUrl), caption: spec.caption, access_token: token })
+    if (!r.ok) return r
+    return { ok: true, data: { externalPostId: r.data.post_id || r.data.id } }
+  }
+  if (spec.placement === 'feed' && spec.mediaType === 'video') {
+    const r = await graphPost<{ id: string }>(`/${page}/videos`, { file_url: absoluteUrl(spec.mediaUrl), description: spec.caption, access_token: token })
+    if (!r.ok) return r
+    return { ok: true, data: { externalPostId: r.data.id } }
+  }
+  if (spec.placement === 'story' && spec.mediaType === 'image') {
+    // Photo Stories: upload the photo unpublished, then attach it to a Story.
+    const up = await graphPost<{ id: string }>(`/${page}/photos`, { url: absoluteUrl(spec.mediaUrl), published: 'false', access_token: token })
+    if (!up.ok) return up
+    const st = await graphPost<{ post_id?: string; id?: string }>(`/${page}/photo_stories`, { photo_id: up.data.id, access_token: token })
+    if (!st.ok) return st
+    return { ok: true, data: { externalPostId: st.data.post_id || st.data.id || up.data.id } }
+  }
+  // Video Stories: three-phase upload (start → hand Meta the file URL → finish).
+  const start = await graphPost<{ video_id: string; upload_url: string }>(`/${page}/video_stories`, { upload_phase: 'start', access_token: token })
+  if (!start.ok) return start
+  try {
+    const res = await fetch(start.data.upload_url, { method: 'POST', headers: { Authorization: `OAuth ${token}`, file_url: absoluteUrl(spec.mediaUrl) } })
+    const json: any = await res.json().catch(() => ({}))
+    if (!res.ok || json?.error || json?.success === false) return { ok: false, error: json?.error?.message || json?.debug_info?.message || `Story upload failed (${res.status})` }
+  } catch (e: any) { return { ok: false, error: e?.message || 'Network error uploading the story video' } }
+  const fin = await graphPost<{ post_id?: string; success?: boolean }>(`/${page}/video_stories`, { upload_phase: 'finish', video_id: start.data.video_id, access_token: token })
+  if (!fin.ok) return fin
+  return { ok: true, data: { externalPostId: fin.data.post_id || start.data.video_id } }
 }
 
 type InsightMetrics = { reach: number; impressions: number; likes: number; comments: number; saves: number; shares: number; raw: any }

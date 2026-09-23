@@ -152,6 +152,18 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   (`impressions` → `views` on IG; `post_engaged_users` gone on FB) and falls back to the
   post's own like/comment counts when `/insights` refuses. Scope `read_insights` added
   (FB post reach) — takes effect the next time the accounts are reconnected.
+- **Built (Sep 23, video)** — Reels, video posts and Stories. `ScheduledPost` gained
+  `mediaType` (image|video), `placement` (feed|story), `thumbnailUrl` (poster frame
+  captured in the browser) and `externalContainerId`. Video bytes go browser → Vercel
+  Blob via `/api/social/upload-video` (needs `BLOB_READ_WRITE_TOKEN` — a Blob store
+  connected to the project); photos stay on `/api/upload`. Instagram: feed video =
+  Reel (`media_type=REELS`, `share_to_feed`), story = `media_type=STORIES`; the
+  container is polled until FINISHED, and if transcoding outlasts the request the row
+  stays `publishing` with the container id and `finishPendingContainers()` completes
+  it on the next cron run (2 h give-up). Facebook: `/videos` (feed video),
+  `/photo_stories`, `/video_stories` (3-phase). Compose can target Feed, Story or both
+  → one row per account × placement. Audio must already be in the MP4 — the API
+  can't attach a track or use Instagram's music library.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages

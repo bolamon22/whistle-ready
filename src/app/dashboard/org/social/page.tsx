@@ -10,13 +10,14 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download } from 'lucide-react'
+import { upload as blobUpload } from '@vercel/blob/client'
+import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
 interface Account { id: string; platform: 'instagram' | 'facebook'; label: string; status: string; lastError: string; tokenExpiresAt: string | null }
 interface Post {
   id: string; socialAccountId: string; caption: string; mediaUrls: string; scheduledFor: string; status: Status
-  approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string; permalink: string; importedAt: string | null
+  approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string; permalink: string; importedAt: string | null; mediaType: 'image' | 'video'; placement: 'feed' | 'story'; thumbnailUrl: string
   socialAccount?: { id: string; platform: string; label: string; status: string }
 }
 
@@ -29,6 +30,9 @@ interface QueueInfo { slots: QueueSlot[]; tzOffsetMin: number; next: string[] }
 interface PostMetrics { reach: number; impressions: number; likes: number; comments: number; saves: number; shares: number; interactions: number; fetchedAt: string }
 interface Rollup { reach: number; interactions: number; withData: number; posts: number }
 interface Insights { latest: Record<string, PostMetrics>; window: { days: number; current: Rollup; previous: Rollup } | null }
+type Media = { url: string; mediaType: 'image' | 'video'; thumbnailUrl?: string; durationSec?: number; width?: number; height?: number }
+type Placement = 'feed' | 'story'
+const kindLabel = (p: { mediaType?: string; placement?: string; socialAccount?: { platform: string } }) => p.placement === 'story' ? 'Story' : p.mediaType === 'video' ? (p.socialAccount?.platform === 'instagram' ? 'Reel' : 'Video') : ''
 const fmtNum = (n: number) => n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}K` : n.toLocaleString()
 const delta = (cur: number, prev: number) => prev > 0 ? `${cur >= prev ? '+' : ''}${Math.round(((cur - prev) / prev) * 100)}%` : ''
 
@@ -55,10 +59,12 @@ function PlatformBadge({ platform, size = 16 }: { platform: string; size?: numbe
 }
 
 function Thumb({ post }: { post: Post }) {
-  const src = media(post)[0]
+  const src = post.mediaType === 'video' ? (post.thumbnailUrl || '') : media(post)[0]
+  const isVideo = post.mediaType === 'video'
   return (
-    <div className={`relative flex-none w-11 h-11 rounded-xl overflow-hidden grid place-items-center ${src ? 'bg-slate-200' : 'bg-slate-100 border border-dashed border-slate-300 text-slate-400'}`}>
-      {src ? <img src={src} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={15} />}
+    <div className={`relative flex-none w-11 h-11 rounded-xl overflow-hidden grid place-items-center ${src ? 'bg-slate-200' : isVideo ? 'bg-slate-800 text-white' : 'bg-slate-100 border border-dashed border-slate-300 text-slate-400'}`}>
+      {src ? <img src={src} alt="" className="w-full h-full object-cover" /> : isVideo ? <Film size={15} /> : <ImageIcon size={15} />}
+      {isVideo && src && <span className="absolute inset-0 grid place-items-center text-white drop-shadow"><Play size={14} fill="currentColor" /></span>}
       <span className="absolute -right-1 -bottom-1"><PlatformBadge platform={post.socialAccount?.platform || ''} /></span>
     </div>
   )
@@ -225,7 +231,7 @@ function SocialInner() {
                         <div key={p.id} draggable={p.status !== 'published' && p.status !== 'publishing'} onDragStart={() => { dragId.current = p.id }} onDragEnd={() => { dragId.current = null }} onClick={() => setDrawer({ kind: 'post', id: p.id, mode: 'preview' })}
                           className="rounded-xl bg-slate-50 border border-slate-200 p-2 flex gap-2 items-center cursor-pointer hover:-translate-y-px hover:border-slate-300 hover:shadow-md transition">
                           <Thumb post={p} />
-                          <div className="min-w-0 flex-1"><div className="text-xs font-bold leading-tight line-clamp-2">{firstLine(p.caption)}</div><div className={`text-[11px] font-bold mt-0.5 flex flex-wrap gap-x-1.5 ${STATUS_TEXT[p.status]}`}>{STATUS_LABEL[p.status]}<span className="text-slate-500">{fmtTime(new Date(p.scheduledFor))}</span></div></div>
+                          <div className="min-w-0 flex-1"><div className="text-xs font-bold leading-tight line-clamp-2">{kindLabel(p) && <span className="text-slate-500">{kindLabel(p)} · </span>}{firstLine(p.caption || (p.placement === 'story' ? 'Story' : ''))}</div><div className={`text-[11px] font-bold mt-0.5 flex flex-wrap gap-x-1.5 ${STATUS_TEXT[p.status]}`}>{STATUS_LABEL[p.status]}<span className="text-slate-500">{fmtTime(new Date(p.scheduledFor))}</span></div></div>
                         </div>
                       ))}
                       {!dayPosts.length && !isPast && <div className="mt-auto text-[11px] text-slate-400 text-center py-3 border border-dashed border-slate-200 rounded-xl">Nothing scheduled</div>}
@@ -287,45 +293,105 @@ function DrawerHead({ title, onClose, children }: { title: string; onClose: () =
 const inputCls = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500'
 const labelCls = 'block text-[11px] font-extrabold uppercase tracking-wide text-slate-500 mb-1.5'
 
-function NativePreview({ platform, label, caption, imgSrc, when }: { platform: string; label: string; caption: string; imgSrc?: string; when: Date }) {
+function NativePreview({ platform, label, caption, imgSrc, when, mediaType = 'image', placement = 'feed', poster }: { platform: string; label: string; caption: string; imgSrc?: string; when: Date; mediaType?: 'image' | 'video'; placement?: Placement; poster?: string }) {
   const ig = platform === 'instagram'
   const handle = label.replace(/^@/, '')
+  const isVideo = mediaType === 'video'; const isStory = placement === 'story'
+  const frame = isStory || (ig && isVideo) ? 'aspect-[9/16] max-h-[420px] mx-auto' : ig ? 'aspect-square' : isVideo ? 'aspect-square' : 'aspect-[1.91/1]'
+  const mediaEl = !imgSrc ? <span>{isVideo ? 'NO VIDEO YET' : 'NO PHOTO YET'}</span>
+    : isVideo ? <video src={imgSrc} poster={poster || undefined} controls playsInline className="w-full h-full object-contain bg-black" />
+    : <img src={imgSrc} alt="" className="w-full h-full object-cover" />
+  if (isStory) {
+    return (
+      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 text-white">
+        <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full ring-2 ring-pink-500 bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-300">Story · {ig ? 'Instagram' : 'Facebook'} · gone after 24 h</div></div></div>
+        <div className={`${frame} bg-black grid place-items-center text-slate-400 text-xs tracking-widest w-full`}>{mediaEl}</div>
+        <div className="px-3 py-2 text-[11px] text-slate-400">Stories don't carry a caption — the video is the whole post.</div>
+      </div>
+    )
+  }
   return (
     <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
-      <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-500">{ig ? 'Instagram post' : `${fmtDate(when)} · Public`}</div></div></div>
+      <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-500">{ig ? (isVideo ? 'Instagram Reel · also shows in the feed' : 'Instagram post') : `${fmtDate(when)} · Public`}</div></div></div>
       {!ig && <div className="px-3 pb-2.5 text-sm whitespace-pre-wrap leading-snug">{caption || <span className="text-slate-500">No caption yet</span>}</div>}
-      <div className={`${ig ? 'aspect-square' : 'aspect-[1.91/1]'} bg-slate-200 grid place-items-center text-slate-500 text-xs tracking-widest`}>{imgSrc ? <img src={imgSrc} alt="" className="w-full h-full object-cover" /> : 'NO PHOTO YET'}</div>
+      <div className={`${frame} bg-slate-200 grid place-items-center text-slate-500 text-xs tracking-widest`}>{mediaEl}</div>
       {ig ? <><div className="flex gap-3.5 px-3 pt-2.5 text-slate-700"><Heart size={20} /><MessageCircle size={20} /><Send size={20} /></div><div className="px-3 pt-1.5 pb-3 text-sm whitespace-pre-wrap leading-snug"><b>{handle}</b> {caption}</div></>
         : <div className="flex justify-around px-3 py-2 border-t border-slate-200 text-xs font-bold text-slate-500"><span>Like</span><span>Comment</span><span>Share</span></div>}
     </div>
   )
 }
 
-function UploadBox({ src, onUploaded }: { src?: string; onUploaded: (url: string) => void }) {
-  const [busy, setBusy] = useState(false)
+async function probeVideo(file: File): Promise<{ durationSec: number; width: number; height: number; poster: Blob | null }> {
+  const url = URL.createObjectURL(file)
+  try {
+    const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true; v.playsInline = true; v.src = url
+    await new Promise<void>((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('That video can\'t be read by the browser — export it as MP4 (H.264) and try again')) })
+    const durationSec = v.duration || 0
+    // Poster frame ~1 s in (or the midpoint of a very short clip) for the calendar
+    // thumbnail and the Reel cover.
+    await new Promise<void>(res => { v.onseeked = () => res(); v.currentTime = Math.min(1, durationSec / 2) })
+    const canvas = document.createElement('canvas'); const k = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight))
+    canvas.width = Math.round(v.videoWidth * k); canvas.height = Math.round(v.videoHeight * k)
+    canvas.getContext('2d')?.drawImage(v, 0, 0, canvas.width, canvas.height)
+    const poster = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', 0.85))
+    return { durationSec, width: v.videoWidth, height: v.videoHeight, poster }
+  } finally { URL.revokeObjectURL(url) }
+}
+
+async function uploadImage(f: Blob, name: string): Promise<string> {
+  const fd = new FormData(); fd.append('file', new File([f], name, { type: f.type || 'image/jpeg' }))
+  const res = await fetch('/api/upload', { method: 'POST', body: fd }); const d = await res.json().catch(() => ({}))
+  if (!res.ok || !d.url) throw new Error(d.error || 'Upload failed')
+  // Meta fetches the image by URL, so a data: URL fallback would never publish.
+  if (d.inlineFallback || String(d.url).startsWith('data:')) throw new Error('Image storage is unavailable right now — try again in a minute')
+  return d.url
+}
+
+function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => void }) {
+  const [busy, setBusy] = useState<string>('')
   const ref = useRef<HTMLInputElement>(null)
   async function pick(f: File) {
-    setBusy(true)
     try {
-      const fd = new FormData(); fd.append('file', f)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd }); const d = await res.json().catch(() => ({}))
-      if (!res.ok || !d.url) throw new Error(d.error || 'Upload failed')
-      // Meta fetches the image by URL, so a data: URL fallback would never publish.
-      if (d.inlineFallback || String(d.url).startsWith('data:')) throw new Error('Image storage is unavailable right now — try again in a minute')
-      onUploaded(d.url); toast.success('Photo added')
-    } catch (e: any) { toast.error(e.message) } finally { setBusy(false) }
+      if (f.type.startsWith('video/')) {
+        if (!/mp4|quicktime/.test(f.type)) throw new Error('Use an MP4 (or .mov) — that\'s what Instagram and Facebook accept')
+        setBusy('Reading video…')
+        const info = await probeVideo(f)
+        if (info.durationSec < 3) throw new Error('Videos need to be at least 3 seconds')
+        if (info.durationSec > 15 * 60) throw new Error('Reels max out at 15 minutes')
+        let thumbnailUrl = ''
+        if (info.poster) { setBusy('Saving cover frame…'); thumbnailUrl = await uploadImage(info.poster, 'cover.jpg') }
+        setBusy('Uploading video… 0%')
+        const blob = await blobUpload(f.name.replace(/[^\w.\-]+/g, '_'), f, {
+          access: 'public', handleUploadUrl: '/api/social/upload-video',
+          onUploadProgress: (p: { percentage: number }) => setBusy(`Uploading video… ${Math.round(p.percentage)}%`),
+        })
+        onChange({ url: blob.url, mediaType: 'video', thumbnailUrl, durationSec: info.durationSec, width: info.width, height: info.height })
+        toast.success(`Video added · ${Math.round(info.durationSec)}s`)
+      } else {
+        setBusy('Uploading photo…')
+        const url = await uploadImage(f, f.name)
+        onChange({ url, mediaType: 'image' }); toast.success('Photo added')
+      }
+    } catch (e: any) { toast.error(String(e?.message || 'Upload failed').replace(/^Error:\s*/, '')) } finally { setBusy('') }
   }
+  const dur = media?.durationSec ? `${Math.floor(media.durationSec / 60)}:${String(Math.round(media.durationSec % 60)).padStart(2, '0')}` : ''
   return (
-    <div onClick={() => ref.current?.click()} className={`rounded-2xl border-[1.5px] border-dashed border-slate-300 bg-slate-50 cursor-pointer text-center text-xs text-slate-500 ${src ? 'overflow-hidden' : 'p-4'}`}>
-      {src ? <img src={src} alt="" className="w-full max-h-56 object-cover block" /> : busy ? 'Uploading…' : 'Click to add the photo (the Canva export)'}
-      <input ref={ref} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = '' }} />
+    <div onClick={() => !busy && ref.current?.click()} className={`rounded-2xl border-[1.5px] border-dashed border-slate-300 bg-slate-50 cursor-pointer text-center text-xs text-slate-500 relative ${media?.url ? 'overflow-hidden' : 'p-4'}`}>
+      {busy ? <div className="p-4 font-bold text-teal-700">{busy}</div>
+        : media?.url ? (media.mediaType === 'video'
+          ? <><video src={media.url} poster={media.thumbnailUrl || undefined} muted playsInline className="w-full max-h-64 object-contain bg-black block" /><span className="absolute top-2 left-2 rounded-md bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 inline-flex items-center gap-1"><Film size={10} /> {dur}{media.width && media.height ? ` · ${media.width}×${media.height}` : ''}</span></>
+          : <img src={media.url} alt="" className="w-full max-h-56 object-cover block" />)
+        : <>Click to add the photo or video (Canva export)<div className="text-[11px] text-slate-400 mt-1">JPG/PNG for a post · MP4 for a Reel or Story</div></>}
+      <input ref={ref} type="file" accept="image/*,video/mp4,video/quicktime" hidden onChange={e => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = '' }} />
     </div>
   )
 }
 
-interface EditProps { caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; imgSrc?: string; setImg: (u: string) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean }
-function EditFields({ caption, setCaption, firstComment, setFirstComment, when, setWhen, imgSrc, setImg, queue, accounts, acctIds, setAcctIds, showFirstComment }: EditProps) {
+interface EditProps { caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
+function EditFields({ caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
   const past = when < new Date()
+  const isVideo = media?.mediaType === 'video'
+  const hasIg = !accounts || accounts.some(a => acctIds?.includes(a.id) && a.platform === 'instagram')
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   return (
     <>
@@ -338,15 +404,24 @@ function EditFields({ caption, setCaption, firstComment, setFirstComment, when, 
           {(acctIds?.length || 0) > 1 && <div className="text-[11px] text-slate-500 mt-1.5">One post per account — approving one approves the set.</div>}
         </div>
       )}
-      <div><label className={labelCls}>Photo</label><UploadBox src={imgSrc} onUploaded={setImg} /></div>
-      <div><label className={labelCls}>Caption</label><textarea value={caption} onChange={e => setCaption(e.target.value)} maxLength={2200} rows={5} className={inputCls + ' resize-y leading-snug'} placeholder="Write the caption…" /><div className="text-right text-[11px] text-slate-500 mt-1 tabular-nums">{caption.length}/2200</div></div>
+      <div><label className={labelCls}>{isVideo ? 'Video' : 'Photo or video'}</label><MediaBox media={media} onChange={setMedia} /></div>
+      {placements && setPlacements && media?.url && (
+        <div><label className={labelCls}>Post as</label>
+          <div className="flex flex-wrap gap-1.5">
+            {([['feed', isVideo ? (hasIg ? 'Reel · feed' : 'Video post') : 'Feed post'], ['story', 'Story']] as [Placement, string][]).map(([pl, lab]) => { const on = placements.includes(pl); const tooLong = pl === 'story' && isVideo && (media.durationSec || 0) > 60
+              return <button key={pl} type="button" disabled={tooLong} title={tooLong ? 'Stories max out at 60 seconds' : ''} onClick={() => setPlacements(on ? placements.filter(x => x !== pl) : [...placements, pl])} className={`rounded-full border px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${on ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-500 hover:text-slate-900'}`}>{lab}{on && <Check size={12} className="inline ml-1" />}</button> })}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1.5">{isVideo && (media.durationSec || 0) > 60 ? 'Over 60 s, so it can go out as a Reel but not a Story.' : 'Pick both to publish the same file as a Reel and a Story.'}{isVideo && media.width && media.height && Math.abs(media.width / media.height - 9 / 16) > 0.05 ? ` This is ${media.width}×${media.height} — Reels and Stories are 9:16, so it'll show with bars.` : ''}</div>
+        </div>
+      )}
+      {!storyOnly && <div><label className={labelCls}>Caption</label><textarea value={caption} onChange={e => setCaption(e.target.value)} maxLength={2200} rows={5} className={inputCls + ' resize-y leading-snug'} placeholder="Write the caption…" /><div className="text-right text-[11px] text-slate-500 mt-1 tabular-nums">{caption.length}/2200</div></div>}
       <div>
         <label className={labelCls}>Publish date</label>
         <input type="datetime-local" value={toLocalInput(when)} onChange={e => e.target.value && setWhen(new Date(e.target.value))} className={inputCls + (past ? ' !border-rose-400 !bg-rose-50' : '')} />
         {past && <div className="text-xs font-bold text-rose-600 mt-1.5">This date has passed. Pick a new one.</div>}
         <div className="flex flex-wrap gap-1.5 mt-2">{nextQueue && <button type="button" onClick={() => setWhen(nextQueue)} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${+when === +nextQueue ? 'border-teal-500 text-teal-700 bg-teal-50' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}><ListPlus size={12} /> Next queue slot · {fmtDate(nextQueue)} {fmtTime(nextQueue)}</button>}{QUICK_TIMES.map(([h, m]) => { const d = new Date(when); d.setHours(h, m, 0, 0); const on = when.getHours() === h && when.getMinutes() === m; return <button key={`${h}:${m}`} type="button" onClick={() => setWhen(d)} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${on ? 'border-teal-500 text-teal-700 bg-teal-50' : 'border-slate-300 text-slate-500 hover:text-slate-900'}`}>{fmtTime(d)}</button> })}</div>
       </div>
-      {showFirstComment && <div><label className={labelCls}>First comment <span className="normal-case tracking-normal font-semibold text-slate-400">· hashtags go here, posted right after publish</span></label><textarea value={firstComment} onChange={e => setFirstComment(e.target.value)} maxLength={2200} rows={2} className={inputCls + ' resize-y leading-snug'} placeholder="#lacrosse #floridalacrosse #monstermash" /></div>}
+      {showFirstComment && !storyOnly && <div><label className={labelCls}>First comment <span className="normal-case tracking-normal font-semibold text-slate-400">· hashtags go here, posted right after publish</span></label><textarea value={firstComment} onChange={e => setFirstComment(e.target.value)} maxLength={2200} rows={2} className={inputCls + ' resize-y leading-snug'} placeholder="#lacrosse #floridalacrosse #monstermash" /></div>}
     </>
   )
 }
@@ -356,34 +431,38 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
   const [firstComment, setFirstComment] = useState(post.firstComment || '')
   const [confirmNow, setConfirmNow] = useState(false); const [publishing, setPublishing] = useState(false)
   const [when, setWhen] = useState(new Date(post.scheduledFor))
-  const [img, setImg] = useState<string | undefined>(media(post)[0])
+  const toMedia = (p: Post): Media | undefined => media(p)[0] ? { url: media(p)[0], mediaType: p.mediaType === 'video' ? 'video' : 'image', thumbnailUrl: p.thumbnailUrl } : undefined
+  const [med, setMed] = useState<Media | undefined>(toMedia(post))
+  const img = med?.url
   const [confirmDel, setConfirmDel] = useState(false)
-  useEffect(() => { setCaption(post.caption); setFirstComment(post.firstComment || ''); setWhen(new Date(post.scheduledFor)); setImg(media(post)[0]); setConfirmDel(false); setConfirmNow(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls, post.firstComment])
+  useEffect(() => { setCaption(post.caption); setFirstComment(post.firstComment || ''); setWhen(new Date(post.scheduledFor)); setMed(toMedia(post)); setConfirmDel(false); setConfirmNow(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls, post.firstComment, post.thumbnailUrl, post.mediaType])
   const a = post.socialAccount || { platform: 'instagram', label: '' }
   const editable = post.status === 'draft' || post.status === 'scheduled' || post.status === 'failed'
-  const dirty = caption !== post.caption || firstComment !== (post.firstComment || '') || +when !== +new Date(post.scheduledFor) || img !== media(post)[0]
-  const save = () => onPatch(post.id, { caption, firstComment, scheduledFor: when.toISOString(), mediaUrls: img ? [img] : [] }, 'Saved')
+  const dirty = caption !== post.caption || firstComment !== (post.firstComment || '') || +when !== +new Date(post.scheduledFor) || img !== media(post)[0] || (med?.thumbnailUrl || '') !== (post.thumbnailUrl || '')
+  const save = () => onPatch(post.id, { caption, firstComment, scheduledFor: when.toISOString(), mediaUrls: img ? [img] : [], mediaType: med?.mediaType || 'image', thumbnailUrl: med?.thumbnailUrl || '' }, 'Saved')
+  const isStory = post.placement === 'story'
   const draftSiblings = siblings.filter(s => s.status === 'draft').length
   const statusLine = post.status === 'draft' ? <div className="rounded-xl bg-amber-50 text-amber-800 text-xs font-bold px-3 py-2.5">Needs approval · scheduled for {fmtLong(when)}</div>
     : post.status === 'scheduled' ? <div className="rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold px-3 py-2.5 flex gap-2"><Check size={14} className="flex-none mt-px" />Approved · publishes automatically {fmtLong(when)}</div>
     : post.status === 'failed' ? <div className="rounded-xl bg-rose-50 text-rose-700 text-xs font-bold px-3 py-2.5">{post.lastError || 'Publish failed'}</div>
     : post.status === 'published' ? <div className="rounded-xl bg-slate-100 text-slate-600 text-xs font-bold px-3 py-2.5 flex items-center gap-2 flex-wrap"><span>Published {post.publishedAt ? fmtLong(new Date(post.publishedAt)) : ''}{post.importedAt ? ' · imported' : ''}</span>{post.permalink && <a href={post.permalink} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-teal-700 hover:underline">Open on {a.platform === 'instagram' ? 'Instagram' : 'Facebook'} <ExternalLink size={12} /></a>}</div>
-    : <div className="rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold px-3 py-2.5">Publishing right now…</div>
+    : <div className="rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold px-3 py-2.5">{post.mediaType === 'video' ? 'Publishing — Instagram is processing the video…' : 'Publishing right now…'}</div>
   return (
     <>
-      <DrawerHead title={`${STATUS_LABEL[post.status]} · ${a.platform === 'instagram' ? 'Instagram' : 'Facebook'}`} onClose={onClose}>
+      <DrawerHead title={`${STATUS_LABEL[post.status]} · ${a.platform === 'instagram' ? 'Instagram' : 'Facebook'}${kindLabel(post) ? ` ${kindLabel(post)}` : ''}`} onClose={onClose}>
         {editable && <div className="inline-flex p-1 gap-0.5 rounded-xl bg-slate-100 border border-slate-200">{(['preview', 'edit'] as const).map(m => <button key={m} onClick={() => setMode(m)} className={`px-3 py-1 rounded-lg text-xs font-bold capitalize ${mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{m}</button>)}</div>}
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
-        {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} />
-          : <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} imgSrc={img} setImg={setImg} queue={queue} showFirstComment />}
+        {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} />
+          : <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} queue={queue} showFirstComment storyOnly={isStory} />}
         {post.status === 'published' && (metrics
           ? <div className="grid grid-cols-4 gap-2">{[['Reached', metrics.reach], ['Likes', metrics.likes], ['Comments', metrics.comments], [a.platform === 'instagram' ? 'Saves' : 'Shares', a.platform === 'instagram' ? metrics.saves : metrics.shares]].map(([l, v]) => <div key={String(l)} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2"><div className="text-lg font-extrabold tabular-nums">{fmtNum(Number(v))}</div><div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{l}</div></div>)}<div className="col-span-4 text-[11px] text-slate-500">Insights as of {fmtDate(new Date(metrics.fetchedAt))} {fmtTime(new Date(metrics.fetchedAt))} · refreshes every 4 hours</div></div>
           : <div className="text-xs text-slate-500">No insights yet — the next snapshot runs within 4 hours.</div>)}
         {mode === 'preview' && post.firstComment && <div className="text-xs text-slate-400"><span className="font-bold text-slate-500 uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{post.firstComment}</div>}
         {siblings.length > 0 && <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs text-slate-600 flex flex-wrap items-center gap-2"><span className="font-bold text-slate-700">Also going to</span>{siblings.map(s => <span key={s.id} className="inline-flex items-center gap-1"><PlatformBadge platform={s.socialAccount?.platform || ''} size={12} />{s.socialAccount?.label} <span className={STATUS_TEXT[s.status]}>· {STATUS_LABEL[s.status]}</span></span>)}</div>}
-        {!img && editable && <div className="text-xs text-slate-500">A photo is required — Instagram won’t accept a text-only post, and the automation will mark this failed without one.</div>}
+        {!img && editable && <div className="text-xs text-slate-500">A photo or video is required — Instagram won’t accept a text-only post, and the automation will mark this failed without one.</div>}
+        {post.status === 'publishing' && post.mediaType === 'video' && <div className="text-xs text-slate-500">Instagram is still processing the video. This finishes on its own within a few minutes — no action needed.</div>}
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">
         {post.status === 'draft' && canApprove && <button onClick={async () => { if (dirty && !(await save())) return; onApprove({ ...post, scheduledFor: when.toISOString() }) }} disabled={!img || when < new Date()} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-2.5 disabled:opacity-40">Approve &amp; schedule{draftSiblings ? ` · ${draftSiblings + 1} accounts` : ''}</button>}
@@ -401,17 +480,19 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
 }
 
 function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSaved }: { when: Date; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [img, setImg] = useState<string | undefined>(); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
+  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [med, setMed] = useState<Media | undefined>(); const [placements, setPlacements] = useState<Placement[]>(['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
+  const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   async function create(approve: boolean, at: Date = when) {
     if (!acctIds.length) { toast.error('Pick at least one account'); return }
-    if (!caption.trim()) { toast.error('Add a caption first'); return }
-    if (!img) { toast.error('Add a photo — Instagram and Facebook both need one'); return }
+    if (!placements.length) { toast.error('Pick Feed, Story, or both'); return }
+    if (!storyOnly && !caption.trim()) { toast.error('Add a caption first'); return }
+    if (!img) { toast.error('Add a photo or video first'); return }
     if (at < new Date()) { toast.error('Pick a future date'); return }
     setBusy(true)
     try {
-      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, mediaUrls: [img], scheduledFor: at.toISOString() }) })
-      const n = acctIds.length; const acctNote = n > 1 ? ` on ${n} accounts` : ''
+      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, mediaUrls: [img], mediaType: med?.mediaType || 'image', thumbnailUrl: med?.thumbnailUrl || '', placements, scheduledFor: at.toISOString() }) })
+      const n = acctIds.length * placements.length; const acctNote = n > 1 ? ` (${n} posts)` : ''
       if (approve) { await api(`/api/social/posts/${d.post.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'approve' }) }); toast.success(`Scheduled${acctNote} — publishes ${fmtDate(at)} at ${fmtTime(at)}`) }
       else toast.success(`Saved${acctNote} — waiting on approval`)
       await onSaved()
@@ -421,7 +502,7 @@ function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSav
     <>
       <DrawerHead title="New post" onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
-        <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} imgSrc={img} setImg={setImg} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} />
+        <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} />
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">

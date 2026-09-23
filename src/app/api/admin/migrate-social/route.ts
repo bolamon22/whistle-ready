@@ -53,7 +53,7 @@ export async function POST() {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ScheduledPost_status_scheduledFor_idx" ON "ScheduledPost"("status","scheduledFor")`)
     // Columns added after the first rollout — SQLite has no ADD COLUMN IF NOT EXISTS,
     // so each is attempted and a "duplicate column" error is treated as already done.
-    for (const [col, ddl] of [['firstComment', `TEXT NOT NULL DEFAULT ''`], ['groupId', `TEXT NOT NULL DEFAULT ''`], ['permalink', `TEXT NOT NULL DEFAULT ''`], ['importedAt', `DATETIME`]] as const) {
+    for (const [col, ddl] of [['firstComment', `TEXT NOT NULL DEFAULT ''`], ['groupId', `TEXT NOT NULL DEFAULT ''`], ['permalink', `TEXT NOT NULL DEFAULT ''`], ['importedAt', `DATETIME`], ['mediaType', `TEXT NOT NULL DEFAULT 'image'`], ['placement', `TEXT NOT NULL DEFAULT 'feed'`], ['thumbnailUrl', `TEXT NOT NULL DEFAULT ''`], ['externalContainerId', `TEXT NOT NULL DEFAULT ''`]] as const) {
       try { await prisma.$executeRawUnsafe(`ALTER TABLE "ScheduledPost" ADD COLUMN "${col}" ${ddl}`); log.push(`ScheduledPost.${col} added`) }
       catch (e: any) { if (!/duplicate column/i.test(String(e?.message))) throw e; log.push(`ScheduledPost.${col} already present`) }
     }

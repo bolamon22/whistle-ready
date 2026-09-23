@@ -35,6 +35,12 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({})) as any
   const { caption, mediaUrls, scheduledFor, firstComment } = body
+  const mediaType: 'image' | 'video' = body.mediaType === 'video' ? 'video' : 'image'
+  const thumbnailUrl: string = typeof body.thumbnailUrl === 'string' ? body.thumbnailUrl : ''
+  // Where it goes: feed, story, or both (both = one row per placement, same group).
+  const placements: ('feed' | 'story')[] = Array.isArray(body.placements) && body.placements.length
+    ? Array.from(new Set(body.placements.filter((x: any) => x === 'feed' || x === 'story'))) as ('feed' | 'story')[]
+    : [body.placement === 'story' ? 'story' : 'feed']
   // One compose can target several accounts (IG + FB is the normal case). Each
   // becomes its own ScheduledPost — separate publish, separate insights — tied
   // together by a shared groupId so approving one can approve its siblings.
@@ -46,17 +52,21 @@ export async function POST(req: NextRequest) {
   const accounts = await prisma.socialAccount.findMany({ where: { id: { in: ids }, orgId: gate.orgId, status: { not: 'disconnected' } } })
   if (accounts.length !== ids.length) return NextResponse.json({ error: 'One of those accounts isn\'t connected to your organization' }, { status: 404 })
 
-  const groupId = accounts.length > 1 ? randomUUID() : ''
+  const groupId = accounts.length * placements.length > 1 ? randomUUID() : ''
   const posts = []
   for (const account of accounts) {
-    posts.push(await prisma.scheduledPost.create({
-      data: {
-        orgId: gate.orgId, socialAccountId: account.id, caption: caption || '',
-        firstComment: typeof firstComment === 'string' ? firstComment : '',
-        mediaUrls: JSON.stringify(Array.isArray(mediaUrls) ? mediaUrls : []),
-        scheduledFor: new Date(scheduledFor), status: 'draft', createdByUserId: gate.userId, groupId,
-      },
-    }))
+    for (const placement of placements) {
+      posts.push(await prisma.scheduledPost.create({
+        data: {
+          orgId: gate.orgId, socialAccountId: account.id, caption: caption || '',
+          // Stories have no caption/first comment on either platform.
+          firstComment: placement === 'feed' && typeof firstComment === 'string' ? firstComment : '',
+          mediaUrls: JSON.stringify(Array.isArray(mediaUrls) ? mediaUrls : []),
+          mediaType, placement, thumbnailUrl,
+          scheduledFor: new Date(scheduledFor), status: 'draft', createdByUserId: gate.userId, groupId,
+        },
+      }))
+    }
   }
   return NextResponse.json({ ok: true, post: posts[0], posts })
 }

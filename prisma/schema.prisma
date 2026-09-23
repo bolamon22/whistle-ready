@@ -514,6 +514,10 @@ model ScheduledPost {
   firstComment     String    @default("") // posted as the first comment right after publish (IG: hashtags live here)
   groupId          String    @default("") // same value across the sibling posts created by one multi-account compose
   permalink        String    @default("") // public URL of the live post (imported or captured after publish)
+  mediaType        String    @default("image") // image | video
+  placement        String    @default("feed") // feed | story  (feed video on Instagram = Reel)
+  thumbnailUrl     String    @default("") // poster frame for a video, captured in the browser at upload
+  externalContainerId String @default("") // Instagram media container still transcoding — the cron finishes it
   importedAt       DateTime? // set when the row came from "Import post history" rather than being scheduled here
   createdByUserId  String    @default("")
   createdAt        DateTime  @default(now())
