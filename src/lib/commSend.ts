@@ -89,7 +89,9 @@ export async function runCommSend(args: {
   // never a data: URI, which no mail client renders and which once pushed a
   // message past Gmail's clip limit (see orgLogoUrl).
   const orgHome = tournamentAbs(org?.slug, '')
-  const eventHome = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
+  // /event, not /public: the hub with Register, waivers, info and schedule on it.
+  // /public is the schedule alone, which is not where a logo click should land.
+  const eventHome = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/event`)
   const eventLogo = absUrl(orgHome, t.logoUrl as unknown as string)
   const segLogo = absUrl(orgHome, await orgLogoUrl(org?.id, org?.logoUrl)) || absUrl(orgHome, '/icon-192.png')
   // Measured once for the whole batch, so a 453x180 wordmark keeps its shape

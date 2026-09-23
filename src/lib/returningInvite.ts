@@ -75,7 +75,8 @@ export async function runReturningInvite(a: {
   // Same two marks as the club letters (see commSend): the event's in the header
   // linking to its page, the organizer's in the footer linking to their site.
   const orgHome = orgBaseUrl(org?.slug, APP_URL)
-  const eventHome = `${orgHome}/tournaments/${a.tournamentId}/public`
+  // /event is the hub (register, waivers, info); /public is just the schedule.
+  const eventHome = `${orgHome}/tournaments/${a.tournamentId}/event`
   const eventLogo = absUrl(orgHome, tournament.logoUrl)
   const segLogo = absUrl(orgHome, await orgLogoUrl(org?.id, org?.logoUrl)) || absUrl(orgHome, '/icon-192.png')
   const logoBox = fitBox(await imageSize(eventLogo), 150, 46)
