@@ -5,6 +5,13 @@ import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_I
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm']  // /housing/[code] = housing board; /confirm/[regId] = club team-confirmation (the id IS the key, like /pay)  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
+// Tournament pages that need no login. The pretty-URL block below tests against
+// this same list: a public page keeps its short URL via a rewrite, and anything
+// else is sent to the canonical /tournaments/<id>/... URL so the auth checks at
+// the bottom of this file actually run. A rewrite returns immediately and would
+// skip them, which is how /tournaments/<slug>/dashboard served the staff grid
+// to anyone who guessed the slug.
+const PUBLIC_TOURNAMENT_PATH = /^\/tournaments\/[^/]+\/(public|register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/
 
 const FEATURE_ROUTE_MAP: Record<string, string[]> = {}
 for (const feature of permissionsConfig.features) {
@@ -106,18 +113,27 @@ export async function middleware(req: NextRequest) {
   }
 
   // --- Pretty event URLs: /tournaments/<slug>/... renders the real event ---
-  // A REWRITE, not a redirect, and only when the segment is not already a cuid --
-  // so every existing /tournaments/<id>/... link is untouched and costs nothing.
-  // A miss falls through to the normal route, which 404s exactly as it would have.
+  // Only when the segment is not already a cuid, so every existing
+  // /tournaments/<id>/... link is untouched and costs nothing. A miss falls
+  // through to the normal route, which 404s exactly as it would have.
   const pretty = /^\/tournaments\/([^/]+)(\/.*)?$/.exec(pathname)
   if (pretty && !/^c[a-z0-9]{16,}$/i.test(pretty[1])) {
     try {
       const r = await fetch(new URL(`/api/event-slug?s=${encodeURIComponent(pretty[1].toLowerCase())}`, req.url))
       const id = r.ok ? (await r.json())?.id : null
       if (id) {
-        const url = req.nextUrl.clone()
-        url.pathname = `/tournaments/${id}${pretty[2] || ''}`
-        return NextResponse.rewrite(url)
+        // A bare /tournaments/<slug> means the event page -- that is the link
+        // that goes on print and in emails, and it must not land on the staff
+        // scheduling grid at /tournaments/<id>.
+        const target = `/tournaments/${id}${pretty[2] || '/event'}`
+        if (PUBLIC_TOURNAMENT_PATH.test(target)) {
+          const url = req.nextUrl.clone()
+          url.pathname = target
+          return NextResponse.rewrite(url)   // URL stays pretty
+        }
+        // Staff-only page: redirect to the canonical URL rather than rewriting,
+        // so the auth checks below get to run on the way back in.
+        return NextResponse.redirect(new URL(target + req.nextUrl.search, req.url))
       }
     } catch { /* resolver down -- fall through rather than blocking the request */ }
   }
@@ -130,14 +146,14 @@ export async function middleware(req: NextRequest) {
   if (pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt') return NextResponse.next()
   // Static assets in /public (logos, images, fonts, etc.) — never require auth
   if (/\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|map)$/i.test(pathname)) return NextResponse.next()
-  // Public tournament pages (divisions, schedule, standings, bracket, rules) — no login required
-  if (/^\/tournaments\/[^/]+\/public(\/|$)/.test(pathname)) return NextResponse.next()
-  // Public registration (teams/players can register without an account)
+  // Public tournament pages (divisions, schedule, standings, bracket, rules) and
+  // public registration — no login required, since teams and players register
+  // without an account. The list lives in PUBLIC_TOURNAMENT_PATH at the top.
   // 'individual-register' is the URL RegistrationTypesEditor tells organizers to
   // share with players. It's a 5-line redirect to /register/individual (which IS
   // public) -- but it was never listed here, so this gate fired BEFORE the redirect
   // could run and every player who clicked the advertised link landed on /login.
-  if (/^\/tournaments\/[^/]+\/(register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/.test(pathname)) return NextResponse.next()
+  if (PUBLIC_TOURNAMENT_PATH.test(pathname)) return NextResponse.next()
   // "Claim your team" — MUST be public: the coach following this link has no account
   // yet (creating one is the whole point). The token in the URL is the authorization.
   if (/^\/claim(\/|$)/.test(pathname)) return NextResponse.next()
