@@ -9,6 +9,7 @@ import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { cleanName } from '@/lib/names'
+import { carryDirectorLinks } from '@/lib/clubDirectorLinks'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -307,6 +308,11 @@ export async function POST(req: NextRequest) {
     },
     include: { teams: true, payments: true },
   })
+
+  // A director who already holds this club for one of this org's events gets the new
+  // one too -- see lib/clubDirectorLinks. Without it their portal's event picker keeps
+  // showing only the event whose letter they claimed.
+  await carryDirectorLinks(tournamentId, club)
 
   // instagramHandle is a raw column (not in the Prisma schema) — write it separately.
   const ig = normalizeInstagram(instagram)
