@@ -87,6 +87,11 @@ a 10-minute freshness window on the way back.
 
 ## Setup (Bo does this — it's credentials, the agent must not handle them)
 
+> Done Sep 23, 2026: Meta app **Whistle Ready Social** (App ID 2682384555510574) exists
+> in Development mode with the Instagram + Pages use cases, all scopes below marked
+> "Ready for testing", redirect URI + app domain set, and `META_APP_ID` /
+> `NEXT_PUBLIC_APP_URL` in Vercel. Only `META_APP_SECRET` was left for Bo to paste.
+
 1. developers.facebook.com → **Create App** → type "Business" → name it (e.g.
    "Whistle Ready Social").
 2. Add the **Instagram** and **Facebook Login for Business** products.

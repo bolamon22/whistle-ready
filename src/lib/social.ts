@@ -29,9 +29,11 @@ const SCOPES = [
   'instagram_basic',
   'instagram_content_publish',
   'instagram_manage_insights',
+  'instagram_manage_comments', // first comment under an IG post
   'pages_show_list',
   'pages_read_engagement',
   'pages_manage_posts',
+  'pages_manage_engagement', // first comment under a Page post
   'business_management',
 ].join(',')
 
