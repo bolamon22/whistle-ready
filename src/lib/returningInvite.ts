@@ -143,10 +143,9 @@ export async function runReturningInvite(a: {
 
     const html = renderEmail({
       orgName: fromName,
-      eyebrow: fromName,
+      eyebrow: tournament.name || fromName,
       logoUrl: eventLogo, logoHref: eventHome, logoAlt: tournament.name, logoBox,
       footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
-      title: tournament.name,
       body: `${htmlBody}
             <div style="margin:28px 0;">
               <a href="${regUrl}"

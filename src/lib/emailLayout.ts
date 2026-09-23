@@ -123,8 +123,14 @@ export type EmailShell = {
   /** Rendered box for the footer mark. Defaults to 40x40. */
   footerLogoBox?: { w: number; h: number }
   bannerUrl?: string
+  /** Small caps line above the org name in the header band. A category for a
+   *  one-off letter ('Sponsorship', 'Approved'); the EVENT name for the letters
+   *  that go out on an event's behalf, so the reader sees which tournament this
+   *  is before reading a word of it. */
   eyebrow?: string
-  title: string
+  /** Body headline. Omit it when the header band already names the event --
+   *  repeating it here just pushes the greeting down the message. */
+  title?: string
   /** Pre-escaped HTML. */
   body: string
   footerNote?: string
@@ -181,7 +187,7 @@ export function renderEmail(a: EmailShell): string {
       ${banner ? `<tr><td style="padding:0"><img src="${banner}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0"></td></tr>` : ''}
 
       <tr><td style="padding:28px 26px 30px">
-        <h1 style="margin:0 0 14px;font:700 23px/1.25 Arial,Helvetica,sans-serif;color:${INK}">${esc(a.title)}</h1>
+        ${a.title ? `<h1 style="margin:0 0 14px;font:700 23px/1.25 Arial,Helvetica,sans-serif;color:${INK}">${esc(a.title)}</h1>` : ''}
         <div style="font:400 15px/1.7 Arial,Helvetica,sans-serif;color:${BODY}">${a.body}</div>
       </td></tr>
 

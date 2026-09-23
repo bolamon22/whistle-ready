@@ -70,10 +70,9 @@ export function buildPayReminderEmail(args: {
   <p style="font-size:13px;color:#64748b">If the button does not work, copy this link into your browser:<br>${args.link}</p>`
   const html = renderEmail({
     orgName: args.orgName,
-    eyebrow: args.orgName,
+    eyebrow: args.tName || args.orgName,
     logoUrl: args.eventLogo, logoHref: args.eventHref, logoAlt: args.tName, logoBox: args.logoBox,
     footerLogoUrl: args.orgLogo, footerHref: args.orgHref, footerLogoBox: args.footerLogoBox,
-    title: args.tName,
     body,
     footerNote: 'Prefer to pay by check? Just reply to this email.',
   })

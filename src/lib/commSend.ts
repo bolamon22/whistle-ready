@@ -182,10 +182,9 @@ export async function runCommSend(args: {
     const bodyText = mergeCommLetter(bodyTpl, vals)
     const html = renderEmail({
       orgName: org?.name || 'Sunshine Events Group',
-      eyebrow: org?.name || '',
+      eyebrow: t.name || org?.name || '',
       logoUrl: eventLogo, logoHref: eventHome, logoAlt: t.name || 'Tournament', logoBox,
       footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
-      title: t.name || 'Tournament update',
       body: `${letterBodyHtml(bodyText)}
   ${ctaUrl ? `<p style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">${kindMeta?.ctaLabel ?? ''}</a></p>
   <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${ctaUrl}</p>` : ''}`,
