@@ -471,3 +471,75 @@ model StaffInvite {
 
   @@index([email])
 }
+
+// Social scheduler — native Instagram/Facebook post scheduling + auto-publish for an
+// org's own accounts (Sunshine Events Group first; the same pattern is meant to be
+// copied into other apps for other brands, not shared across them). See SOCIAL-SCHEDULER.md.
+// New tables — created via src/app/api/admin/migrate-social (CREATE TABLE IF NOT EXISTS),
+// same as IndividualRegistration/OrgPaymentProvider. `orgId` is a plain column (not a
+// relation) — Organization itself is raw SQL, never in this schema (see src/lib/org.ts).
+model SocialAccount {
+  id                String    @id @default(cuid())
+  orgId             String
+  platform          String    // "instagram" | "facebook"
+  label             String    @default("") // e.g. "@seglacrosse"
+  externalId        String    // IG business account id, or FB Page id
+  pageId            String    @default("") // FB Page backing the IG account (IG publish routes through it)
+  accessToken       String    // long-lived token, encrypted at rest — see src/lib/encrypt.ts
+  tokenExpiresAt    DateTime?
+  connectedByUserId String    @default("")
+  status            String    @default("active") // active | expired | error | disconnected
+  lastError         String    @default("")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  posts ScheduledPost[]
+
+  @@index([orgId])
+}
+
+model ScheduledPost {
+  id               String    @id @default(cuid())
+  orgId            String
+  socialAccountId  String
+  caption          String    @default("")
+  mediaUrls        String    @default("[]") // JSON array of public https image/video URLs
+  scheduledFor     DateTime
+  status           String    @default("draft") // draft | scheduled | publishing | published | failed | canceled
+  approvedByUserId String    @default("")
+  approvedAt       DateTime?
+  externalPostId   String    @default("")
+  publishedAt      DateTime?
+  lastError        String    @default("")
+  createdByUserId  String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  socialAccount SocialAccount         @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  insights      PostInsightSnapshot[]
+
+  @@index([orgId])
+  @@index([socialAccountId])
+  @@index([status, scheduledFor])
+}
+
+// The Graph API doesn't retain full history indefinitely and Meta has deprecated
+// specific metrics before (Jan 2025) — this table is the durable record. The
+// insights cron appends one row per published post per run rather than relying
+// on Meta as the system of record for anything older than "current".
+model PostInsightSnapshot {
+  id              String   @id @default(cuid())
+  scheduledPostId String
+  fetchedAt       DateTime @default(now())
+  reach           Int      @default(0)
+  impressions     Int      @default(0)
+  likes           Int      @default(0)
+  comments        Int      @default(0)
+  saves           Int      @default(0)
+  shares          Int      @default(0)
+  raw             String   @default("{}") // full metric payload, for anything not modeled above
+
+  post ScheduledPost @relation(fields: [scheduledPostId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledPostId])
+}
