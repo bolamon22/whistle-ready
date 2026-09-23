@@ -69,12 +69,22 @@ export type EmailShell = {
   orgName: string
   /** Absolute URL, or '' — absUrl() it before passing. */
   logoUrl?: string
+  /** Where the header mark points. The event's own page, usually. */
+  logoHref?: string
+  /** Alt text for the header mark. Falls back to orgName. Images are off by
+   *  default in Gmail for a sender nobody has replied to yet, so this is what
+   *  most first-time recipients actually see. */
+  logoAlt?: string
   bannerUrl?: string
   eyebrow?: string
   title: string
   /** Pre-escaped HTML. */
   body: string
   footerNote?: string
+  /** A second, smaller mark in the footer — the organizer's, when the header is
+   *  carrying the event's. Absolute, same as logoUrl. */
+  footerLogoUrl?: string
+  footerHref?: string
 }
 
 // Guard at the point of use too: absUrl() is the only sane way in, but a caller
@@ -85,9 +95,21 @@ const safeSrc = (u?: string): string => (u && u.length <= SRC_MAX && !/^data:/i.
 
 export function renderEmail(a: EmailShell): string {
   const logoSrc = safeSrc(a.logoUrl)
-  const logo = logoSrc
-    ? `<img src="${logoSrc}" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border:0;border-radius:8px;background:#ffffff">`
+  // width/height are attributes as well as CSS: a client with images off still
+  // reserves the box, so the header does not collapse and reflow on load.
+  const logoImg = logoSrc
+    ? `<img src="${logoSrc}" width="44" height="44" alt="${esc(a.logoAlt || a.orgName)}" style="display:block;width:44px;height:44px;border:0;border-radius:8px;background:#ffffff">`
     : ''
+  const logo = logoImg && a.logoHref
+    ? `<a href="${a.logoHref}" style="text-decoration:none;border:0">${logoImg}</a>`
+    : logoImg
+  const footLogoSrc = safeSrc(a.footerLogoUrl)
+  const footLogoImg = footLogoSrc
+    ? `<img src="${footLogoSrc}" width="28" height="28" alt="${esc(a.orgName)}" style="display:block;width:28px;height:28px;border:0;border-radius:6px">`
+    : ''
+  const footLogo = footLogoImg && a.footerHref
+    ? `<a href="${a.footerHref}" style="text-decoration:none;border:0">${footLogoImg}</a>`
+    : footLogoImg
   const banner = safeSrc(a.bannerUrl)
   return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:${PAGE}">
@@ -113,8 +135,13 @@ export function renderEmail(a: EmailShell): string {
       </td></tr>
 
       <tr><td style="padding:16px 26px 22px;border-top:1px solid ${LINE};background:#fbfcfd">
-        <div style="font:700 13px/1.4 Arial,Helvetica,sans-serif;color:${INK}">${esc(a.orgName)}</div>
-        ${a.footerNote ? `<div style="font:400 12px/1.6 Arial,Helvetica,sans-serif;color:${MUTED};margin-top:4px">${a.footerNote}</div>` : ''}
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          ${footLogo ? `<td style="padding-right:10px;vertical-align:top">${footLogo}</td>` : ''}
+          <td style="vertical-align:top">
+            <div style="font:700 13px/1.4 Arial,Helvetica,sans-serif;color:${INK}">${a.footerHref ? `<a href="${a.footerHref}" style="color:${INK};text-decoration:none">${esc(a.orgName)}</a>` : esc(a.orgName)}</div>
+            ${a.footerNote ? `<div style="font:400 12px/1.6 Arial,Helvetica,sans-serif;color:${MUTED};margin-top:4px">${a.footerNote}</div>` : ''}
+          </td>
+        </tr></table>
       </td></tr>
 
     </table>

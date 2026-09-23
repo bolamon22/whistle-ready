@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { renderEmail } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 
 // Org-editable payment-reminder letter (Bo, Sep 9: "the current letter isn't great
@@ -44,6 +45,8 @@ export function buildPayReminderEmail(args: {
   clubName: string; clubContact: string; teamsCount: number
   tName: string; link: string; due: number; paid: number; balance: number
   orgName: string; subjectTpl: string; bodyTpl: string
+  /** Branding. Absolute URLs; omit and the shell simply renders without them. */
+  eventLogo?: string; eventHref?: string; orgLogo?: string; orgHref?: string
 }): { subject: string; html: string; text: string } {
   const totalWithFee = Math.round(args.balance * 1.03 * 100) / 100
   const teamsLabel = `${args.teamsCount} team${args.teamsCount !== 1 ? 's' : ''}`
@@ -53,9 +56,7 @@ export function buildPayReminderEmail(args: {
   }
   const subject = mergePayLetter(args.subjectTpl, vals)
   const letterText = mergePayLetter(args.bodyTpl, vals)
-  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
-  <h2 style="color:#0f766e;margin-bottom:4px">${args.tName}</h2>
-  ${letterBodyHtml(letterText)}
+  const body = `${letterBodyHtml(letterText)}
   <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
     <tr><td style="padding:6px 0;color:#64748b">Invoiced</td><td style="padding:6px 0;text-align:right">${fmt(args.due)}</td></tr>
     <tr><td style="padding:6px 0;color:#64748b">Paid</td><td style="padding:6px 0;text-align:right">${fmt(args.paid)}</td></tr>
@@ -65,8 +66,16 @@ export function buildPayReminderEmail(args: {
     <a href="${args.link}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">Pay ${fmt(args.balance)} online</a>
   </p>
   <p style="font-size:13px;color:#64748b">Pay by <strong>bank transfer (ACH) with no fee</strong>, or by card (3% processing fee &mdash; ${fmt(totalWithFee)} total). Prefer to pay by check? Just reply to this email.</p>
-  <p style="font-size:13px;color:#64748b">If the button does not work, copy this link into your browser:<br>${args.link}</p>
-</div>`
+  <p style="font-size:13px;color:#64748b">If the button does not work, copy this link into your browser:<br>${args.link}</p>`
+  const html = renderEmail({
+    orgName: args.orgName,
+    eyebrow: args.orgName,
+    logoUrl: args.eventLogo, logoHref: args.eventHref, logoAlt: args.tName,
+    footerLogoUrl: args.orgLogo, footerHref: args.orgHref,
+    title: args.tName,
+    body,
+    footerNote: 'Prefer to pay by check? Just reply to this email.',
+  })
   const text = `${letterText}\n\nInvoiced: ${fmt(args.due)}\nPaid: ${fmt(args.paid)}\nBalance due: ${fmt(args.balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee, ${fmt(totalWithFee)} total):\n${args.link}`
   return { subject, html, text }
 }

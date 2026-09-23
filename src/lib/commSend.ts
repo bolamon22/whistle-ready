@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
-import { orgForTournament } from '@/lib/org'
+import { orgForTournament, orgLogoUrl } from '@/lib/org'
 import { tournamentAbs } from '@/lib/seo'
+import { renderEmail, absUrl } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
@@ -48,7 +49,7 @@ export async function runCommSend(args: {
   if (!regIds.length) return { ok: false, error: 'Pick at least one club', status: 400 }
   if (regIds.length > 100) return { ok: false, error: 'Max 100 clubs per send', status: 400 }
 
-  const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, startDate: true, endDate: true } })
+  const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, startDate: true, endDate: true, logoUrl: true } })
   if (!t) return { ok: false, error: 'Tournament not found', status: 404 }
   const org = await orgForTournament(tournamentId)
 
@@ -81,6 +82,16 @@ export async function runCommSend(args: {
   const logs: Record<string, unknown>[] = regs.length ? await prisma.$queryRawUnsafe(
     `SELECT id, "commEmailLog" FROM "TeamRegistration" WHERE id IN (${regs.map(() => '?').join(',')})`, ...regs.map(r => r.id)) : []
   const logById = new Map(logs.map(l => [String(l.id), String(l.commEmailLog ?? '')]))
+
+  // BRANDING. Two marks, each pointing where a reader would expect: the event's
+  // logo in the header goes to the event page, the organizer's in the footer to
+  // their site. Both are ordinary https URLs on the same domain the links use --
+  // never a data: URI, which no mail client renders and which once pushed a
+  // message past Gmail's clip limit (see orgLogoUrl).
+  const orgHome = tournamentAbs(org?.slug, '')
+  const eventHome = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
+  const eventLogo = absUrl(orgHome, t.logoUrl as unknown as string)
+  const segLogo = absUrl(orgHome, await orgLogoUrl(org?.id, org?.logoUrl)) || absUrl(orgHome, '/icon-192.png')
 
   const waiverLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/player-waiver`)
   const scheduleLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
@@ -120,6 +131,7 @@ export async function runCommSend(args: {
         clubName: reg.clubName, clubContact: reg.clubContact, teamsCount: reg.teams.length,
         tName: t.name || 'the tournament', link: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         due, paid, balance, orgName: org?.name || 'the tournament team',
+        eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome,
         subjectTpl, bodyTpl,
       })
       const rr = await sendEmail({ to: reg.contactEmail, subject, html, text, ...orgSender(org) })
@@ -162,13 +174,17 @@ export async function runCommSend(args: {
     }
     const subject = mergeCommLetter(subjectTpl, vals)
     const bodyText = mergeCommLetter(bodyTpl, vals)
-    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
-  <h2 style="color:#0f766e;margin-bottom:12px">${t.name || 'Tournament update'}</h2>
-  ${letterBodyHtml(bodyText)}
+    const html = renderEmail({
+      orgName: org?.name || 'Sunshine Events Group',
+      eyebrow: org?.name || '',
+      logoUrl: eventLogo, logoHref: eventHome, logoAlt: t.name || 'Tournament',
+      footerLogoUrl: segLogo, footerHref: orgHome,
+      title: t.name || 'Tournament update',
+      body: `${letterBodyHtml(bodyText)}
   ${ctaUrl ? `<p style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">${kindMeta?.ctaLabel ?? ''}</a></p>
-  <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${ctaUrl}</p>` : ''}
-  <p style="font-size:13px;color:#64748b">Questions? Just reply to this email.</p>
-</div>`
+  <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${ctaUrl}</p>` : ''}`,
+      footerNote: 'Questions? Just reply to this email.',
+    })
     const text = `${bodyText}${ctaUrl ? `\n\n${kindMeta?.ctaLabel ?? ''}: ${ctaUrl}` : ''}`
     const r = await sendEmail({ to: reg.contactEmail, subject, html, text, ...orgSender(org) })
     if (r.ok) {

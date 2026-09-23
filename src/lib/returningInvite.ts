@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
-import { orgForTournament } from '@/lib/org'
+import { orgForTournament, orgLogoUrl } from '@/lib/org'
+import { renderEmail, absUrl } from '@/lib/emailLayout'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { RETURNING_TEMPLATE, eventsList, upcomingEvents } from '@/lib/inviteTemplates'
 import { listInviteTemplates } from '@/lib/inviteTemplateStore'
@@ -51,7 +52,7 @@ export async function runReturningInvite(a: {
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: a.tournamentId },
-    select: { name: true, startDate: true, endDate: true },
+    select: { name: true, startDate: true, endDate: true, logoUrl: true },
   })
   if (!tournament) return { ok: false, error: 'Not found', status: 404 }
 
@@ -71,6 +72,12 @@ export async function runReturningInvite(a: {
   // ...and the link has to look like theirs too: sunshineeventsgroup.com/tournaments/...
   // rather than whistleready.app, which the director has no reason to trust.
   const regUrl = `${orgBaseUrl(org?.slug, APP_URL)}/tournaments/${a.tournamentId}/register`
+  // Same two marks as the club letters (see commSend): the event's in the header
+  // linking to its page, the organizer's in the footer linking to their site.
+  const orgHome = orgBaseUrl(org?.slug, APP_URL)
+  const eventHome = `${orgHome}/tournaments/${a.tournamentId}/public`
+  const eventLogo = absUrl(orgHome, tournament.logoUrl)
+  const segLogo = absUrl(orgHome, await orgLogoUrl(org?.id, org?.logoUrl)) || absUrl(orgHome, '/icon-192.png')
 
   // Whatever the caller sent wins. With nothing to go on, fall back to the org's
   // SAVED default letter before the shipped one — otherwise "save my template"
@@ -131,21 +138,22 @@ export async function runReturningInvite(a: {
       .map(para => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">${para.replace(/\n/g, '<br/>')}</p>`)
       .join('')
 
-    const html = `
-          <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;padding:40px 28px;background:#ffffff;">
-            <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 24px;border-bottom:2px solid #e5e7eb;padding-bottom:16px;">
-              ${tournament.name}
-            </h2>
-            ${htmlBody}
+    const html = renderEmail({
+      orgName: fromName,
+      eyebrow: fromName,
+      logoUrl: eventLogo, logoHref: eventHome, logoAlt: tournament.name,
+      footerLogoUrl: segLogo, footerHref: orgHome,
+      title: tournament.name,
+      body: `${htmlBody}
             <div style="margin:28px 0;">
               <a href="${regUrl}"
-                style="display:inline-block;background:#0f172a;color:white;font-weight:600;
+                style="display:inline-block;background:#0f172a;color:#ffffff;font-weight:600;
                        font-size:15px;padding:13px 32px;border-radius:8px;text-decoration:none;letter-spacing:0.3px;">
                 Register Now →
               </a>
             </div>
-          </div>
-        `
+            <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${regUrl}</p>`,
+    })
     const res = await sendEmail({ ...sender, fromName, to: club.contactEmail, subject, html })
     if (res.ok) { sent++; if (!sample) sample = { subject, html, to: club.contactEmail } }
     else errors.push(`${club.clubName}: ${res.error}`)
