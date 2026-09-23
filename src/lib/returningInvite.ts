@@ -1,7 +1,7 @@
 import prisma from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament, orgLogoUrl } from '@/lib/org'
-import { renderEmail, absUrl } from '@/lib/emailLayout'
+import { renderEmail, absUrl, imageSize, fitBox } from '@/lib/emailLayout'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { RETURNING_TEMPLATE, eventsList, upcomingEvents } from '@/lib/inviteTemplates'
 import { listInviteTemplates } from '@/lib/inviteTemplateStore'
@@ -78,6 +78,8 @@ export async function runReturningInvite(a: {
   const eventHome = `${orgHome}/tournaments/${a.tournamentId}/public`
   const eventLogo = absUrl(orgHome, tournament.logoUrl)
   const segLogo = absUrl(orgHome, await orgLogoUrl(org?.id, org?.logoUrl)) || absUrl(orgHome, '/icon-192.png')
+  const logoBox = fitBox(await imageSize(eventLogo), 150, 46)
+  const footerLogoBox = fitBox(await imageSize(segLogo), 120, 40)
 
   // Whatever the caller sent wins. With nothing to go on, fall back to the org's
   // SAVED default letter before the shipped one — otherwise "save my template"
@@ -141,8 +143,8 @@ export async function runReturningInvite(a: {
     const html = renderEmail({
       orgName: fromName,
       eyebrow: fromName,
-      logoUrl: eventLogo, logoHref: eventHome, logoAlt: tournament.name,
-      footerLogoUrl: segLogo, footerHref: orgHome,
+      logoUrl: eventLogo, logoHref: eventHome, logoAlt: tournament.name, logoBox,
+      footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
       title: tournament.name,
       body: `${htmlBody}
             <div style="margin:28px 0;">

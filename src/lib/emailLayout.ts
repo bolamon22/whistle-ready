@@ -31,6 +31,48 @@ export function absUrl(base: string, url?: string | null): string {
   return `${base.replace(/\/$/, '')}/${u.replace(/^\//, '')}`
 }
 
+/**
+ * Pixel size of a remote image, or null when it can't be read.
+ *
+ * WHY THIS EXISTS: a logo has to be given explicit width AND height in email --
+ * Outlook's Word engine ignores `width:auto`, so a single fixed box is the only
+ * thing that renders predictably. Hard-coding a square box is what squashed the
+ * Monster Mash wordmark: it is 453x180, and 44x44 crushed it to unreadable.
+ *
+ * So measure once and scale to fit. PNG carries its dimensions in the IHDR at a
+ * fixed offset and GIF in its header; JPEG needs a segment walk, which is more
+ * than this is worth -- an unmeasurable image falls back to a square box, the
+ * same as before. Cached per URL for the life of the process, so a send to forty
+ * clubs fetches the logo once, not forty times.
+ */
+const sizeCache = new Map<string, { w: number; h: number } | null>()
+export async function imageSize(url: string): Promise<{ w: number; h: number } | null> {
+  if (!url) return null
+  if (sizeCache.has(url)) return sizeCache.get(url)!
+  let out: { w: number; h: number } | null = null
+  try {
+    const res = await fetch(url)
+    if (res.ok) {
+      const b = Buffer.from(await res.arrayBuffer())
+      if (b.length > 24 && b.toString('ascii', 1, 4) === 'PNG') {
+        out = { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }
+      } else if (b.length > 10 && b.toString('ascii', 0, 3) === 'GIF') {
+        out = { w: b.readUInt16LE(6), h: b.readUInt16LE(8) }
+      }
+      if (out && (!out.w || !out.h)) out = null
+    }
+  } catch { /* unreachable image -- fall back to the square box */ }
+  sizeCache.set(url, out)
+  return out
+}
+
+/** Scale to fit inside a box without distorting. Rounds to whole pixels. */
+export function fitBox(nat: { w: number; h: number } | null, maxW: number, maxH: number): { w: number; h: number } {
+  if (!nat || !nat.w || !nat.h) return { w: maxH, h: maxH }
+  const k = Math.min(maxW / nat.w, maxH / nat.h)
+  return { w: Math.max(1, Math.round(nat.w * k)), h: Math.max(1, Math.round(nat.h * k)) }
+}
+
 export function esc(x: unknown): string {
   return String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
 }
@@ -75,6 +117,11 @@ export type EmailShell = {
    *  default in Gmail for a sender nobody has replied to yet, so this is what
    *  most first-time recipients actually see. */
   logoAlt?: string
+  /** Rendered box for the header mark. fitBox() it from imageSize() so a wide
+   *  wordmark is not squashed into a square. Defaults to 44x44. */
+  logoBox?: { w: number; h: number }
+  /** Rendered box for the footer mark. Defaults to 40x40. */
+  footerLogoBox?: { w: number; h: number }
   bannerUrl?: string
   eyebrow?: string
   title: string
@@ -97,15 +144,19 @@ export function renderEmail(a: EmailShell): string {
   const logoSrc = safeSrc(a.logoUrl)
   // width/height are attributes as well as CSS: a client with images off still
   // reserves the box, so the header does not collapse and reflow on load.
+  // A wordmark gets a white chip behind it so it reads on the dark band; the chip
+  // is sized to the logo rather than the logo to the chip.
+  const lb = a.logoBox && a.logoBox.w && a.logoBox.h ? a.logoBox : { w: 44, h: 44 }
   const logoImg = logoSrc
-    ? `<img src="${logoSrc}" width="44" height="44" alt="${esc(a.logoAlt || a.orgName)}" style="display:block;width:44px;height:44px;border:0;border-radius:8px;background:#ffffff">`
+    ? `<img src="${logoSrc}" width="${lb.w}" height="${lb.h}" alt="${esc(a.logoAlt || a.orgName)}" style="display:block;width:${lb.w}px;height:${lb.h}px;border:0">`
     : ''
   const logo = logoImg && a.logoHref
     ? `<a href="${a.logoHref}" style="text-decoration:none;border:0">${logoImg}</a>`
     : logoImg
   const footLogoSrc = safeSrc(a.footerLogoUrl)
+  const fb = a.footerLogoBox && a.footerLogoBox.w && a.footerLogoBox.h ? a.footerLogoBox : { w: 40, h: 40 }
   const footLogoImg = footLogoSrc
-    ? `<img src="${footLogoSrc}" width="28" height="28" alt="${esc(a.orgName)}" style="display:block;width:28px;height:28px;border:0;border-radius:6px">`
+    ? `<img src="${footLogoSrc}" width="${fb.w}" height="${fb.h}" alt="${esc(a.orgName)}" style="display:block;width:${fb.w}px;height:${fb.h}px;border:0">`
     : ''
   const footLogo = footLogoImg && a.footerHref
     ? `<a href="${a.footerHref}" style="text-decoration:none;border:0">${footLogoImg}</a>`
@@ -119,7 +170,7 @@ export function renderEmail(a: EmailShell): string {
 
       <tr><td style="background:${BAND};padding:20px 26px">
         <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          ${logo ? `<td style="padding-right:12px">${logo}</td>` : ''}
+          ${logo ? `<td style="padding-right:12px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#ffffff;border-radius:8px;padding:6px">${logo}</td></tr></table></td>` : ''}
           <td>
             ${a.eyebrow ? `<div style="font:700 10.5px/1 Arial,Helvetica,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#5eead4;margin-bottom:5px">${esc(a.eyebrow)}</div>` : ''}
             <div style="font:700 17px/1.2 Arial,Helvetica,sans-serif;color:#ffffff">${esc(a.orgName)}</div>

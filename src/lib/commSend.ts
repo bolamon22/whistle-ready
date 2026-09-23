@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament, orgLogoUrl } from '@/lib/org'
 import { tournamentAbs } from '@/lib/seo'
-import { renderEmail, absUrl } from '@/lib/emailLayout'
+import { renderEmail, absUrl, imageSize, fitBox } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
@@ -92,6 +92,10 @@ export async function runCommSend(args: {
   const eventHome = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
   const eventLogo = absUrl(orgHome, t.logoUrl as unknown as string)
   const segLogo = absUrl(orgHome, await orgLogoUrl(org?.id, org?.logoUrl)) || absUrl(orgHome, '/icon-192.png')
+  // Measured once for the whole batch, so a 453x180 wordmark keeps its shape
+  // instead of being crushed into the old 44x44 square.
+  const logoBox = fitBox(await imageSize(eventLogo), 150, 46)
+  const footerLogoBox = fitBox(await imageSize(segLogo), 120, 40)
 
   const waiverLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/player-waiver`)
   const scheduleLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
@@ -131,7 +135,7 @@ export async function runCommSend(args: {
         clubName: reg.clubName, clubContact: reg.clubContact, teamsCount: reg.teams.length,
         tName: t.name || 'the tournament', link: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         due, paid, balance, orgName: org?.name || 'the tournament team',
-        eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome,
+        eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome, logoBox, footerLogoBox,
         subjectTpl, bodyTpl,
       })
       const rr = await sendEmail({ to: reg.contactEmail, subject, html, text, ...orgSender(org) })
@@ -177,8 +181,8 @@ export async function runCommSend(args: {
     const html = renderEmail({
       orgName: org?.name || 'Sunshine Events Group',
       eyebrow: org?.name || '',
-      logoUrl: eventLogo, logoHref: eventHome, logoAlt: t.name || 'Tournament',
-      footerLogoUrl: segLogo, footerHref: orgHome,
+      logoUrl: eventLogo, logoHref: eventHome, logoAlt: t.name || 'Tournament', logoBox,
+      footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
       title: t.name || 'Tournament update',
       body: `${letterBodyHtml(bodyText)}
   ${ctaUrl ? `<p style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">${kindMeta?.ctaLabel ?? ''}</a></p>

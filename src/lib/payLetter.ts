@@ -47,6 +47,7 @@ export function buildPayReminderEmail(args: {
   orgName: string; subjectTpl: string; bodyTpl: string
   /** Branding. Absolute URLs; omit and the shell simply renders without them. */
   eventLogo?: string; eventHref?: string; orgLogo?: string; orgHref?: string
+  logoBox?: { w: number; h: number }; footerLogoBox?: { w: number; h: number }
 }): { subject: string; html: string; text: string } {
   const totalWithFee = Math.round(args.balance * 1.03 * 100) / 100
   const teamsLabel = `${args.teamsCount} team${args.teamsCount !== 1 ? 's' : ''}`
@@ -70,8 +71,8 @@ export function buildPayReminderEmail(args: {
   const html = renderEmail({
     orgName: args.orgName,
     eyebrow: args.orgName,
-    logoUrl: args.eventLogo, logoHref: args.eventHref, logoAlt: args.tName,
-    footerLogoUrl: args.orgLogo, footerHref: args.orgHref,
+    logoUrl: args.eventLogo, logoHref: args.eventHref, logoAlt: args.tName, logoBox: args.logoBox,
+    footerLogoUrl: args.orgLogo, footerHref: args.orgHref, footerLogoBox: args.footerLogoBox,
     title: args.tName,
     body,
     footerNote: 'Prefer to pay by check? Just reply to this email.',
