@@ -215,6 +215,14 @@ export async function publishPost(account: { platform: string; externalId: strin
   return { ok: false, error: `Unsupported platform: ${account.platform}` }
 }
 
+/** Posts a comment under a just-published post — how hashtags stay out of the
+ *  caption on Instagram. Same endpoint shape for IG media and FB Page posts. */
+export async function postFirstComment(account: { accessToken: string }, externalPostId: string, message: string): Promise<Result<{ commentId: string }>> {
+  const r = await graphPost<{ id: string }>(`/${externalPostId}/comments`, { message, access_token: decrypt(account.accessToken) })
+  if (!r.ok) return r
+  return { ok: true, data: { commentId: r.data.id } }
+}
+
 type InsightMetrics = { reach: number; impressions: number; likes: number; comments: number; saves: number; shares: number; raw: any }
 
 function emptyMetrics(raw: any = {}): InsightMetrics {

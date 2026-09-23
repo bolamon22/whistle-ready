@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
+import { randomUUID } from 'crypto'
 
 // Queue + calendar data for the social scheduler. A post always starts as a
 // 'draft' here — only PATCH .../posts/[id] with action:'approve' (director/
@@ -33,19 +34,29 @@ export async function POST(req: NextRequest) {
   if (!gate.orgId) return NextResponse.json({ error: 'No organization selected' }, { status: 403 })
 
   const body = await req.json().catch(() => ({})) as any
-  const { socialAccountId, caption, mediaUrls, scheduledFor } = body
-  if (!socialAccountId || !scheduledFor) {
-    return NextResponse.json({ error: 'socialAccountId and scheduledFor are required' }, { status: 400 })
+  const { caption, mediaUrls, scheduledFor, firstComment } = body
+  // One compose can target several accounts (IG + FB is the normal case). Each
+  // becomes its own ScheduledPost — separate publish, separate insights — tied
+  // together by a shared groupId so approving one can approve its siblings.
+  const ids: string[] = Array.isArray(body.socialAccountIds) ? body.socialAccountIds.filter(Boolean)
+    : body.socialAccountId ? [body.socialAccountId] : []
+  if (!ids.length || !scheduledFor) {
+    return NextResponse.json({ error: 'At least one account and a scheduledFor are required' }, { status: 400 })
   }
-  const account = await prisma.socialAccount.findFirst({ where: { id: socialAccountId, orgId: gate.orgId } })
-  if (!account) return NextResponse.json({ error: 'Unknown social account' }, { status: 404 })
+  const accounts = await prisma.socialAccount.findMany({ where: { id: { in: ids }, orgId: gate.orgId, status: { not: 'disconnected' } } })
+  if (accounts.length !== ids.length) return NextResponse.json({ error: 'One of those accounts isn\'t connected to your organization' }, { status: 404 })
 
-  const post = await prisma.scheduledPost.create({
-    data: {
-      orgId: gate.orgId, socialAccountId, caption: caption || '',
-      mediaUrls: JSON.stringify(Array.isArray(mediaUrls) ? mediaUrls : []),
-      scheduledFor: new Date(scheduledFor), status: 'draft', createdByUserId: gate.userId,
-    },
-  })
-  return NextResponse.json({ ok: true, post })
+  const groupId = accounts.length > 1 ? randomUUID() : ''
+  const posts = []
+  for (const account of accounts) {
+    posts.push(await prisma.scheduledPost.create({
+      data: {
+        orgId: gate.orgId, socialAccountId: account.id, caption: caption || '',
+        firstComment: typeof firstComment === 'string' ? firstComment : '',
+        mediaUrls: JSON.stringify(Array.isArray(mediaUrls) ? mediaUrls : []),
+        scheduledFor: new Date(scheduledFor), status: 'draft', createdByUserId: gate.userId, groupId,
+      },
+    }))
+  }
+  return NextResponse.json({ ok: true, post: posts[0], posts })
 }

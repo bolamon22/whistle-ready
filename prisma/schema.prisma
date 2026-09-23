@@ -511,6 +511,8 @@ model ScheduledPost {
   externalPostId   String    @default("")
   publishedAt      DateTime?
   lastError        String    @default("")
+  firstComment     String    @default("") // posted as the first comment right after publish (IG: hashtags live here)
+  groupId          String    @default("") // same value across the sibling posts created by one multi-account compose
   createdByUserId  String    @default("")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

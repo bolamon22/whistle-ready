@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff, requireDirector } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
+import { publishScheduledPost } from '@/lib/socialPublish'
 
 const TERMINAL = ['published', 'publishing']
 
@@ -22,11 +23,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const dGate = await requireDirector()
     if (!dGate.ok) return dGate.res
     if (post.status !== 'draft') return NextResponse.json({ error: `Cannot approve a post that is already ${post.status}` }, { status: 400 })
-    const updated = await prisma.scheduledPost.update({
-      where: { id: post.id },
-      data: { status: 'scheduled', approvedByUserId: dGate.userId, approvedAt: new Date() },
-    })
-    return NextResponse.json({ ok: true, post: updated })
+    const data = { status: 'scheduled', approvedByUserId: dGate.userId, approvedAt: new Date() }
+    const updated = await prisma.scheduledPost.update({ where: { id: post.id }, data })
+    // A multi-account compose is one decision for Bo, not N — approving one draft
+    // approves its still-draft siblings too (default on; pass applyToGroup:false to opt out).
+    let alsoApproved = 0
+    if (post.groupId && body.applyToGroup !== false) {
+      const r = await prisma.scheduledPost.updateMany({ where: { groupId: post.groupId, orgId: gate.orgId, status: 'draft', id: { not: post.id } }, data })
+      alsoApproved = r.count
+    }
+    return NextResponse.json({ ok: true, post: updated, alsoApproved })
+  }
+
+  if (action === 'publish-now') {
+    // Skips the wait for the cron and publishes this instant. Director only — it's
+    // an approval and a publish in one. Goes through the same publishScheduledPost
+    // path the cron uses, so the claim/refresh/first-comment behavior is identical.
+    const dGate = await requireDirector()
+    if (!dGate.ok) return dGate.res
+    if (!['draft', 'scheduled', 'failed'].includes(post.status)) return NextResponse.json({ error: `Cannot publish a post that is ${post.status}` }, { status: 400 })
+    await prisma.scheduledPost.update({ where: { id: post.id }, data: { approvedByUserId: dGate.userId, approvedAt: new Date(), scheduledFor: new Date(), lastError: '' } })
+    const outcome = await publishScheduledPost(post.id, ['draft', 'scheduled', 'failed'])
+    const fresh = await prisma.scheduledPost.findUnique({ where: { id: post.id } })
+    if (outcome.status === 'failed') return NextResponse.json({ ok: false, error: outcome.error || 'Publish failed', post: fresh }, { status: 502 })
+    return NextResponse.json({ ok: true, post: fresh, warning: outcome.error })
   }
 
   if (action === 'unapprove') {
@@ -74,6 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   const data: any = {}
   if (typeof body.caption === 'string') data.caption = body.caption
+  if (typeof body.firstComment === 'string') data.firstComment = body.firstComment
   if (Array.isArray(body.mediaUrls)) data.mediaUrls = JSON.stringify(body.mediaUrls)
   if (body.scheduledFor) data.scheduledFor = new Date(body.scheduledFor)
   if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
