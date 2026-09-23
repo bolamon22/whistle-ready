@@ -174,6 +174,9 @@ export default function NavBar() {
         {(role === 'admin' || role === 'director' || role === 'assigner' || role === 'scheduler') && (
           <a href="/staff" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Staff</a>
         )}
+        {(role === 'admin' || role === 'director') && (
+          <Link href="/dashboard/org/social" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Social</Link>
+        )}
 
         {/* Admin-only links */}
         {isAdmin && (
@@ -291,6 +294,9 @@ export default function NavBar() {
                 ))}
                 {(role === 'admin' || role === 'director' || role === 'assigner' || role === 'scheduler') && (
                   <a href="/staff" className={MOBILE_LINK}>Staff</a>
+                )}
+                {(role === 'admin' || role === 'director') && (
+                  <Link href="/dashboard/org/social" className={MOBILE_LINK}>Social</Link>
                 )}
                 {isAdmin && (
                   <>
