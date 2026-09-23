@@ -1,7 +1,24 @@
 {
   "crons": [
-    { "path": "/api/housing/report", "schedule": "0 12 * * 1,4" },
-    { "path": "/api/registrations/comm-cron", "schedule": "*/15 * * * *" },
-    { "path": "/api/payments/reconcile-cron", "schedule": "0 13 * * *" }
+    {
+      "path": "/api/housing/report",
+      "schedule": "0 12 * * 1,4"
+    },
+    {
+      "path": "/api/registrations/comm-cron",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/payments/reconcile-cron",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/social/publish-cron",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/social/insights-cron",
+      "schedule": "0 */4 * * *"
+    }
   ]
 }
