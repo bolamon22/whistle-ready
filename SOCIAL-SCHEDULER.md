@@ -121,9 +121,13 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   (`api/social/posts`, `api/social/posts/[id]`) with the draft→approve gate,
   publish-cron, insights-cron, `vercel.json` cron entries, `social_scheduler`
   permission key (director-only for now).
-- **Not built yet**: the actual calendar/queue UI page
-  (`/dashboard/org/social` — already reserved in `role-permissions.json`). That's
-  next — worth a live preview pass with Bo before wiring it up, per the usual
-  "preview UI changes before deploying" rule. A connect-account picker (right now
-  every Page the OAuth user manages gets connected automatically) and a disconnect
-  action are the other near-term pieces.
+- **Built (Sep 22)**: the `/dashboard/org/social` page — two-week calendar with
+  drag-to-reschedule, an Approvals board, a slide-over with a native-style
+  Instagram/Facebook preview + edit mode, compose (uploads via `/api/upload`),
+  and a Connected-accounts panel with disconnect. `GET/DELETE /api/social/accounts`
+  and the `unapprove` / `retry` actions on `PATCH /api/social/posts/[id]` were
+  added for it. The page runs dark on purpose (matches the mockup Bo approved);
+  the rest of the dashboard stays light.
+- **Still to do**: a connect-account *picker* (every Page the OAuth user manages
+  still gets connected automatically), and surfacing insight numbers (reach /
+  interactions) on the page — the cron already stores them.
