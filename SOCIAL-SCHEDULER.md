@@ -142,6 +142,16 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   column; posted via `/{post-id}/comments` right after publish — hashtags live there).
   Re-run `POST /api/admin/migrate-social` once after deploying: it adds the two new
   columns (`firstComment`, `groupId`) idempotently.
+- **Built (Sep 23, later)** — **Import post history** (`POST /api/social/import-history`,
+  director; button in the Accounts drawer): pulls each account's existing posts in as
+  `published` rows (`importedAt`, `permalink` set) and takes a first insights snapshot,
+  so the calendar + numbers cover everything, not just posts made here. The hero tiles
+  now show real **People reached / Interactions (28 days, with delta)** from
+  `GET /api/social/insights/summary`, and a published post's drawer shows its latest
+  snapshot. `fetchPostInsights` was fixed for Meta's 2025 metric changes
+  (`impressions` → `views` on IG; `post_engaged_users` gone on FB) and falls back to the
+  post's own like/comment counts when `/insights` refuses. Scope `read_insights` added
+  (FB post reach) — takes effect the next time the accounts are reconnected.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages

@@ -34,6 +34,7 @@ const SCOPES = [
   'pages_read_engagement',
   'pages_manage_posts',
   'pages_manage_engagement', // first comment under a Page post
+  'read_insights', // Page post reach/impressions
   'business_management',
 ].join(',')
 
@@ -232,40 +233,96 @@ function emptyMetrics(raw: any = {}): InsightMetrics {
 }
 
 /** Current metrics for one published post. Meta doesn't retain full history
- *  indefinitely and has deprecated specific metrics before (Jan 2025) — this is a
- *  point-in-time read; the insights cron is what turns it into a durable trend by
- *  snapshotting it on a schedule (see PostInsightSnapshot). */
+ *  indefinitely and has deprecated specific metrics before (impressions → views in
+ *  2025) — this is a point-in-time read; the insights cron is what turns it into a
+ *  durable trend by snapshotting it on a schedule (see PostInsightSnapshot).
+ *  Never throws and never fails the whole read over one metric: the like/comment
+ *  counts on the post object itself are the fallback when /insights refuses. */
 export async function fetchPostInsights(account: { platform: string; accessToken: string }, externalPostId: string): Promise<Result<InsightMetrics>> {
   const token = decrypt(account.accessToken)
   if (account.platform === 'instagram') {
+    const m = emptyMetrics({})
+    const basic = await graphGet<{ like_count?: number; comments_count?: number }>(`/${externalPostId}`, { fields: 'like_count,comments_count', access_token: token })
+    if (basic.ok) { m.likes = basic.data.like_count || 0; m.comments = basic.data.comments_count || 0 }
     const r = await graphGet<{ data: { name: string; values: { value: number }[] }[] }>(`/${externalPostId}/insights`, {
-      metric: 'reach,impressions,likes,comments,saved,shares', access_token: token,
+      metric: 'reach,views,saved,shares', access_token: token,
     })
-    if (!r.ok) return r
-    const m = emptyMetrics(r.data)
-    for (const row of r.data.data || []) {
-      const v = row.values?.[0]?.value || 0
-      if (row.name === 'reach') m.reach = v
-      else if (row.name === 'impressions') m.impressions = v
-      else if (row.name === 'likes') m.likes = v
-      else if (row.name === 'comments') m.comments = v
-      else if (row.name === 'saved') m.saves = v
-      else if (row.name === 'shares') m.shares = v
+    if (r.ok) {
+      for (const row of r.data.data || []) {
+        const v = row.values?.[0]?.value || 0
+        if (row.name === 'reach') m.reach = v
+        else if (row.name === 'views') m.impressions = v
+        else if (row.name === 'saved') m.saves = v
+        else if (row.name === 'shares') m.shares = v
+      }
+      m.raw = r.data
+    } else {
+      m.raw = { insightsError: r.error }
+      if (!basic.ok) return r
     }
     return { ok: true, data: m }
   }
   if (account.platform === 'facebook') {
+    const m = emptyMetrics({})
+    const basic = await graphGet<any>(`/${externalPostId}`, { fields: 'reactions.summary(true).limit(0),comments.summary(true).limit(0),shares', access_token: token })
+    if (basic.ok) {
+      m.likes = basic.data?.reactions?.summary?.total_count || 0
+      m.comments = basic.data?.comments?.summary?.total_count || 0
+      m.shares = basic.data?.shares?.count || 0
+    }
     const r = await graphGet<{ data: { name: string; values: { value: number }[] }[] }>(`/${externalPostId}/insights`, {
-      metric: 'post_impressions,post_engaged_users', access_token: token,
+      metric: 'post_impressions,post_impressions_unique', access_token: token,
     })
-    if (!r.ok) return r
-    const m = emptyMetrics(r.data)
-    for (const row of r.data.data || []) {
-      const v = row.values?.[0]?.value || 0
-      if (row.name === 'post_impressions') m.impressions = v
-      else if (row.name === 'post_engaged_users') m.reach = v
+    if (r.ok) {
+      for (const row of r.data.data || []) {
+        const v = row.values?.[0]?.value || 0
+        if (row.name === 'post_impressions') m.impressions = v
+        else if (row.name === 'post_impressions_unique') m.reach = v
+      }
+      m.raw = r.data
+    } else {
+      m.raw = { insightsError: r.error }
+      if (!basic.ok) return r
     }
     return { ok: true, data: m }
+  }
+  return { ok: false, error: `Unsupported platform: ${account.platform}` }
+}
+
+export type PublishedMedia = { externalPostId: string; caption: string; publishedAt: Date; mediaUrl: string; permalink: string }
+
+/** The account's existing posts (newest first) — what "Import post history" pulls in
+ *  so the calendar and insights cover everything, not just posts made from here. */
+export async function listPublishedMedia(account: { platform: string; externalId: string; accessToken: string }, limit = 60): Promise<Result<PublishedMedia[]>> {
+  const token = decrypt(account.accessToken)
+  const out: PublishedMedia[] = []
+  if (account.platform === 'instagram') {
+    let url: string | null = `/${account.externalId}/media`
+    let params: Record<string, string> = { fields: 'id,caption,timestamp,permalink,media_type,media_url,thumbnail_url', limit: String(Math.min(limit, 50)), access_token: token }
+    while (url && out.length < limit) {
+      const r: Result<{ data: any[]; paging?: { cursors?: { after?: string } ; next?: string } }> = await graphGet(url, params)
+      if (!r.ok) return out.length ? { ok: true, data: out } : r
+      for (const mrow of r.data.data || []) {
+        out.push({ externalPostId: mrow.id, caption: mrow.caption || '', publishedAt: new Date(mrow.timestamp), mediaUrl: mrow.media_type === 'VIDEO' ? (mrow.thumbnail_url || mrow.media_url || '') : (mrow.media_url || ''), permalink: mrow.permalink || '' })
+      }
+      const after = r.data.paging?.cursors?.after
+      if (after && r.data.paging?.next) params = { ...params, after }; else url = null
+    }
+    return { ok: true, data: out.slice(0, limit) }
+  }
+  if (account.platform === 'facebook') {
+    let url: string | null = `/${account.externalId}/published_posts`
+    let params: Record<string, string> = { fields: 'id,message,created_time,permalink_url,full_picture', limit: String(Math.min(limit, 50)), access_token: token }
+    while (url && out.length < limit) {
+      const r: Result<{ data: any[]; paging?: { cursors?: { after?: string }; next?: string } }> = await graphGet(url, params)
+      if (!r.ok) return out.length ? { ok: true, data: out } : r
+      for (const prow of r.data.data || []) {
+        out.push({ externalPostId: prow.id, caption: prow.message || '', publishedAt: new Date(prow.created_time), mediaUrl: prow.full_picture || '', permalink: prow.permalink_url || '' })
+      }
+      const after = r.data.paging?.cursors?.after
+      if (after && r.data.paging?.next) params = { ...params, after }; else url = null
+    }
+    return { ok: true, data: out.slice(0, limit) }
   }
   return { ok: false, error: `Unsupported platform: ${account.platform}` }
 }

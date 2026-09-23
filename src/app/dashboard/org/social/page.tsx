@@ -10,13 +10,13 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
 interface Account { id: string; platform: 'instagram' | 'facebook'; label: string; status: string; lastError: string; tokenExpiresAt: string | null }
 interface Post {
   id: string; socialAccountId: string; caption: string; mediaUrls: string; scheduledFor: string; status: Status
-  approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string
+  approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string; permalink: string; importedAt: string | null
   socialAccount?: { id: string; platform: string; label: string; status: string }
 }
 
@@ -26,6 +26,11 @@ const QUICK_TIMES: [number, number][] = [[9, 0], [11, 0], [12, 30], [18, 30]]
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 interface QueueSlot { dow: number; h: number; m: number }
 interface QueueInfo { slots: QueueSlot[]; tzOffsetMin: number; next: string[] }
+interface PostMetrics { reach: number; impressions: number; likes: number; comments: number; saves: number; shares: number; interactions: number; fetchedAt: string }
+interface Rollup { reach: number; interactions: number; withData: number; posts: number }
+interface Insights { latest: Record<string, PostMetrics>; window: { days: number; current: Rollup; previous: Rollup } | null }
+const fmtNum = (n: number) => n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}K` : n.toLocaleString()
+const delta = (cur: number, prev: number) => prev > 0 ? `${cur >= prev ? '+' : ''}${Math.round(((cur - prev) / prev) * 100)}%` : ''
 
 const startOfWeek = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); return x }
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
@@ -71,6 +76,7 @@ function SocialInner() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [configured, setConfigured] = useState(true)
   const [queue, setQueue] = useState<QueueInfo>({ slots: [], tzOffsetMin: new Date().getTimezoneOffset(), next: [] })
+  const [insights, setInsights] = useState<Insights>({ latest: {}, window: null })
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'queue'>('week')
   const [rangeStart, setRangeStart] = useState(() => startOfWeek(new Date()))
@@ -92,9 +98,10 @@ function SocialInner() {
 
   async function load() {
     try {
-      const [p, a, q] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null)])
+      const [p, a, q, ins] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null)])
       setPosts(p.posts || []); setAccounts(a.accounts || []); setConfigured(a.configured !== false)
       if (q) setQueue(q)
+      if (ins) setInsights(ins)
     } catch (e: any) { toast.error(e.message) } finally { setLoading(false) }
   }
 
@@ -168,8 +175,17 @@ function SocialInner() {
             <div><div className="font-extrabold">{accounts.length ? `${accounts.length} account${accounts.length === 1 ? '' : 's'} connected` : 'No accounts connected yet'}</div><div className="text-xs text-slate-500 mt-0.5 truncate">{accounts.length ? accounts.map(a => a.label).join(' · ') : 'Connect your Instagram + Facebook to start scheduling'}</div></div>
           </button>
           <div className="flex gap-3 sm:col-span-2 lg:col-span-1">
-            <div className="flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white/5 border border-white/10"><div className="text-2xl font-extrabold tabular-nums">{scheduledCount}</div><div className="text-xs text-slate-500">Scheduled &amp; waiting</div></div>
-            <div className="flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white/5 border border-white/10"><div className="text-2xl font-extrabold tabular-nums">{published28}</div><div className="text-xs text-slate-500">Published · 28 days</div></div>
+            {(() => { const w = insights.window; const cur = w?.current; const prev = w?.previous; const has = !!cur && cur.withData > 0
+              return <>
+                <div className="flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white/5 border border-white/10" title={has ? `${cur!.withData} of ${cur!.posts} posts have insights so far` : 'Shows once the insights snapshot has run (every 4 hours) or after importing history'}>
+                  <div className="flex items-baseline gap-2"><span className="text-2xl font-extrabold tabular-nums">{has ? fmtNum(cur!.reach) : '—'}</span>{has && prev && prev.withData > 0 && <span className="text-xs font-bold text-emerald-300">{delta(cur!.reach, prev.reach)}</span>}</div>
+                  <div className="text-xs text-slate-500">People reached · {w?.days || 28} days</div>
+                </div>
+                <div className="flex-1 lg:min-w-[150px] rounded-2xl p-4 bg-white/5 border border-white/10" title={`${scheduledCount} scheduled · ${published28} published in 28 days`}>
+                  <div className="flex items-baseline gap-2"><span className="text-2xl font-extrabold tabular-nums">{has ? fmtNum(cur!.interactions) : '—'}</span>{has && prev && prev.withData > 0 && <span className="text-xs font-bold text-emerald-300">{delta(cur!.interactions, prev.interactions)}</span>}</div>
+                  <div className="text-xs text-slate-500">Interactions · {w?.days || 28} days</div>
+                </div>
+              </> })()}
           </div>
         </div>
 
@@ -256,7 +272,7 @@ function SocialInner() {
       {/* drawer */}
       {drawer && <div className="fixed inset-0 z-40 bg-black/55" onClick={() => setDrawer(null)} />}
       <div className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[460px] bg-[#151a24] border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-200 ${drawer ? 'translate-x-0' : 'translate-x-full'}`}>
-        {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer post={byId(drawer.id)!} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
+        {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer post={byId(drawer.id)!} metrics={insights.latest[drawer.id]} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
         {drawer?.kind === 'new' && <ComposeDrawer when={drawer.when} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(null)} onSaved={async () => { setDrawer(null); await load() }} />}
         {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} queue={queue} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
       </div>
@@ -335,7 +351,7 @@ function EditFields({ caption, setCaption, firstComment, setFirstComment, when, 
   )
 }
 
-function PostDrawer({ post, siblings, queue, mode, setMode, canApprove, onClose, onApprove, onPublishNow, onPatch, onDelete }: { post: Post; siblings: Post[]; queue: QueueInfo; mode: 'preview' | 'edit'; setMode: (m: 'preview' | 'edit') => void; canApprove: boolean; onClose: () => void; onApprove: (p: Post) => void; onPublishNow: (p: Post) => Promise<void>; onPatch: (id: string, body: any, msg?: string) => Promise<boolean>; onDelete: (id: string, msg: string) => void }) {
+function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove, onClose, onApprove, onPublishNow, onPatch, onDelete }: { post: Post; metrics?: PostMetrics; siblings: Post[]; queue: QueueInfo; mode: 'preview' | 'edit'; setMode: (m: 'preview' | 'edit') => void; canApprove: boolean; onClose: () => void; onApprove: (p: Post) => void; onPublishNow: (p: Post) => Promise<void>; onPatch: (id: string, body: any, msg?: string) => Promise<boolean>; onDelete: (id: string, msg: string) => void }) {
   const [caption, setCaption] = useState(post.caption)
   const [firstComment, setFirstComment] = useState(post.firstComment || '')
   const [confirmNow, setConfirmNow] = useState(false); const [publishing, setPublishing] = useState(false)
@@ -351,7 +367,7 @@ function PostDrawer({ post, siblings, queue, mode, setMode, canApprove, onClose,
   const statusLine = post.status === 'draft' ? <div className="rounded-xl bg-amber-400/15 text-amber-200 text-xs font-bold px-3 py-2.5">Needs approval · scheduled for {fmtLong(when)}</div>
     : post.status === 'scheduled' ? <div className="rounded-xl bg-emerald-400/15 text-emerald-200 text-xs font-bold px-3 py-2.5 flex gap-2"><Check size={14} className="flex-none mt-px" />Approved · publishes automatically {fmtLong(when)}</div>
     : post.status === 'failed' ? <div className="rounded-xl bg-rose-400/15 text-rose-200 text-xs font-bold px-3 py-2.5">{post.lastError || 'Publish failed'}</div>
-    : post.status === 'published' ? <div className="rounded-xl bg-white/10 text-slate-300 text-xs font-bold px-3 py-2.5">Published {post.publishedAt ? fmtLong(new Date(post.publishedAt)) : ''}</div>
+    : post.status === 'published' ? <div className="rounded-xl bg-white/10 text-slate-300 text-xs font-bold px-3 py-2.5 flex items-center gap-2 flex-wrap"><span>Published {post.publishedAt ? fmtLong(new Date(post.publishedAt)) : ''}{post.importedAt ? ' · imported' : ''}</span>{post.permalink && <a href={post.permalink} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-teal-300 hover:underline">Open on {a.platform === 'instagram' ? 'Instagram' : 'Facebook'} <ExternalLink size={12} /></a>}</div>
     : <div className="rounded-xl bg-emerald-400/15 text-emerald-200 text-xs font-bold px-3 py-2.5">Publishing right now…</div>
   return (
     <>
@@ -362,6 +378,9 @@ function PostDrawer({ post, siblings, queue, mode, setMode, canApprove, onClose,
         {statusLine}
         {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} />
           : <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} imgSrc={img} setImg={setImg} queue={queue} showFirstComment />}
+        {post.status === 'published' && (metrics
+          ? <div className="grid grid-cols-4 gap-2">{[['Reached', metrics.reach], ['Likes', metrics.likes], ['Comments', metrics.comments], [a.platform === 'instagram' ? 'Saves' : 'Shares', a.platform === 'instagram' ? metrics.saves : metrics.shares]].map(([l, v]) => <div key={String(l)} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"><div className="text-lg font-extrabold tabular-nums">{fmtNum(Number(v))}</div><div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{l}</div></div>)}<div className="col-span-4 text-[11px] text-slate-500">Insights as of {fmtDate(new Date(metrics.fetchedAt))} {fmtTime(new Date(metrics.fetchedAt))} · refreshes every 4 hours</div></div>
+          : <div className="text-xs text-slate-500">No insights yet — the next snapshot runs within 4 hours.</div>)}
         {mode === 'preview' && post.firstComment && <div className="text-xs text-slate-400"><span className="font-bold text-slate-500 uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{post.firstComment}</div>}
         {siblings.length > 0 && <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-xs text-slate-400 flex flex-wrap items-center gap-2"><span className="font-bold text-slate-300">Also going to</span>{siblings.map(s => <span key={s.id} className="inline-flex items-center gap-1"><PlatformBadge platform={s.socialAccount?.platform || ''} size={12} />{s.socialAccount?.label} <span className={STATUS_TEXT[s.status]}>· {STATUS_LABEL[s.status]}</span></span>)}</div>}
         {!img && editable && <div className="text-xs text-slate-500">A photo is required — Instagram won’t accept a text-only post, and the automation will mark this failed without one.</div>}
@@ -417,6 +436,17 @@ function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSav
 
 function AccountsDrawer({ accounts, configured, queue, canManage, onClose, onChanged }: { accounts: Account[]; configured: boolean; queue: QueueInfo; canManage: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  async function importHistory() {
+    setImporting(true)
+    try {
+      const d = await api('/api/social/import-history', { method: 'POST', body: JSON.stringify({ limit: 60 }) })
+      const errs = (d.accounts || []).filter((a: any) => a.error)
+      toast.success(d.imported ? `Imported ${d.imported} post${d.imported === 1 ? '' : 's'} · ${d.snapshotted} with insights` : 'Nothing new to import — already up to date')
+      errs.forEach((a: any) => toast.error(`${a.account}: ${a.error}`))
+      await onChanged()
+    } catch (e: any) { toast.error(e.message) } finally { setImporting(false) }
+  }
   const [slots, setSlots] = useState<QueueSlot[]>(queue.slots)
   const [savingSlots, setSavingSlots] = useState(false)
   useEffect(() => { setSlots(queue.slots) }, [queue.slots])
@@ -454,6 +484,12 @@ function AccountsDrawer({ accounts, configured, queue, canManage, onClose, onCha
             <div className="text-xs text-slate-500 mb-3">You’ll be sent to Meta to sign in as the Page admin. Every Page you manage (and the Instagram account linked to it) gets connected. Because these are your own accounts there’s no app-review wait.</div>
             {configured ? <a href="/api/social/connect" className="inline-flex rounded-xl bg-teal-400 text-[#062a27] font-bold text-sm px-4 py-2.5">Continue with Meta</a>
               : <div className="text-xs text-amber-200">Add META_APP_ID and META_APP_SECRET in Vercel first — see SOCIAL-SCHEDULER.md.</div>}
+          </div>
+        )}
+        {canManage && accounts.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex items-center gap-3">
+            <div className="min-w-0 flex-1"><div className="text-sm font-extrabold">Import post history</div><div className="text-xs text-slate-500">Pulls the last 60 posts from each account into the calendar, with reach and likes, so insights cover everything — not just posts made here. Safe to run again; it only adds what's new.</div></div>
+            <button onClick={importHistory} disabled={importing} className="rounded-xl bg-white/10 border border-white/15 font-bold text-xs px-3 py-2 inline-flex items-center gap-1.5 flex-none disabled:opacity-50"><Download size={13} /> {importing ? 'Importing…' : 'Import'}</button>
           </div>
         )}
         <div className={labelCls + ' mt-3'}>Queue times</div>
