@@ -209,6 +209,13 @@ export default function ClubDirectorDashboard() {
   // needs no Suspense boundary. Empty for a director viewing their own portal.
   const [viewUserId, setViewUserId] = useState('')
   const [viewingUser, setViewingUser] = useState<{ name: string; email: string } | null>(null)
+  // Which player row is mid-move. Declared up here with the other hooks and NOT beside
+  // moveWaiver further down: everything below this block sits after two early returns
+  // (loading, and the not-linked-to-a-club screen), so a hook there runs on some renders
+  // and not others. That is React error #310 -- "rendered more hooks than during the
+  // previous render" -- and it took the whole club-director portal to a blank error page
+  // the moment the page finished loading.
+  const [moving, setMoving] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -314,7 +321,6 @@ export default function ClubDirectorDashboard() {
   // until the event's first game; after that the server says no and so does this.
   const lock = data?.lock
   const myTeamNames: string[] = (data?.registrations || []).flatMap(r => r.teams.map(t => t.teamName)).filter(Boolean)
-  const [moving, setMoving] = useState('')
   async function moveWaiver(waiverId: string, teamName: string, wasPlaced: boolean) {
     if (!teamName || !selTournament) return
     if (wasPlaced && lock?.locked) { alert(lock.why); return }
