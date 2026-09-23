@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
+import { assignEventSlug } from '@/lib/eventSlug'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -100,6 +101,9 @@ export async function POST(req: Request) {
       ...(registrationDivisions ? { registrationDivisions } : {}),
     },
   })
+  // A pretty URL from the start; the organizer can edit the base later.
+  await assignEventSlug(tournament.id, { name: tournament.name, startDate: tournament.startDate })
+
   // Set orgId via raw SQL (column exists but not in Prisma schema)
   if (orgId) {
     try {

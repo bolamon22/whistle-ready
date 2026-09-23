@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, requireDirector } from '@/lib/apiAuth'
+import { assignEventSlug, slugOf, slugBase } from '@/lib/eventSlug'
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tiebreakers" TEXT NOT NULL DEFAULT '{}'`) } catch {}
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tagline" TEXT DEFAULT ''`) } catch {}
@@ -106,7 +107,18 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const out = Object.keys(data).length
     ? await prisma.tournament.update({ where:{id:params.id}, data })
     : await prisma.tournament.findUnique({ where:{id:params.id} })
-  return NextResponse.json(out)
+
+  // The URL slug. Only the BASE is ever settable -- the year is always computed
+  // from the event's own start date, so it cannot drift out of step with it and
+  // nobody has to remember to change it. Moving an event's dates re-stamps the
+  // slug for the same reason.
+  if (b.slugBase !== undefined || b.startDate !== undefined) {
+    const base = b.slugBase !== undefined ? String(b.slugBase) : slugBase(await slugOf(params.id))
+    if (base || out?.name) {
+      await assignEventSlug(params.id, { name: base || out!.name, startDate: out?.startDate })
+    }
+  }
+  return NextResponse.json({ ...out, slug: await slugOf(params.id) })
 }
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   // Deleting a whole tournament — director only. Was two lines with no auth.

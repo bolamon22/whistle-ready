@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { createClient } from '@libsql/client'
+import { assignEventSlug, slugOf } from '@/lib/eventSlug'
 
 function getClient() {
   return createClient({
@@ -54,6 +55,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       dates: dates ? JSON.stringify(dates) : '[]',
     }
   })
+
+  // The copy's slug: same base, this event's year. Duplicating Monster Mash 2026
+  // into 2027 turns monstermash26 into monstermash27 with nothing typed.
+  await assignEventSlug(newT.id, { name: newT.name, startDate: newT.startDate, from: await slugOf(params.id) })
 
   // Stamp orgId — inherit from source, or from admin preview cookie
   const client2 = getClient()

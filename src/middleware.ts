@@ -105,6 +105,23 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // --- Pretty event URLs: /tournaments/<slug>/... renders the real event ---
+  // A REWRITE, not a redirect, and only when the segment is not already a cuid --
+  // so every existing /tournaments/<id>/... link is untouched and costs nothing.
+  // A miss falls through to the normal route, which 404s exactly as it would have.
+  const pretty = /^\/tournaments\/([^/]+)(\/.*)?$/.exec(pathname)
+  if (pretty && !/^c[a-z0-9]{16,}$/i.test(pretty[1])) {
+    try {
+      const r = await fetch(new URL(`/api/event-slug?s=${encodeURIComponent(pretty[1].toLowerCase())}`, req.url))
+      const id = r.ok ? (await r.json())?.id : null
+      if (id) {
+        const url = req.nextUrl.clone()
+        url.pathname = `/tournaments/${id}${pretty[2] || ''}`
+        return NextResponse.rewrite(url)
+      }
+    } catch { /* resolver down -- fall through rather than blocking the request */ }
+  }
+
   // Always allow public routes, auth API, and all other API routes (they handle own auth)
   if (PUBLIC_ROUTES.some(r => pathname.startsWith(r))) return NextResponse.next()
   if (pathname.startsWith('/api/')) return NextResponse.next()
