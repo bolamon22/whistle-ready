@@ -29,6 +29,34 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ ok: true, post: updated })
   }
 
+  if (action === 'unapprove') {
+    // Pull an approved post back to draft (director only — same trust level as
+    // approving). Only makes sense while the cron hasn't picked it up yet.
+    const dGate = await requireDirector()
+    if (!dGate.ok) return dGate.res
+    if (post.status !== 'scheduled') return NextResponse.json({ error: `Only a scheduled post can be moved back to draft (this one is ${post.status})` }, { status: 400 })
+    const updated = await prisma.scheduledPost.update({
+      where: { id: post.id },
+      data: { status: 'draft', approvedByUserId: '', approvedAt: null },
+    })
+    return NextResponse.json({ ok: true, post: updated })
+  }
+
+  if (action === 'retry') {
+    // Re-queue a failed post. It was already approved once, so it goes straight
+    // back to 'scheduled' — but still director-only, since it re-arms a publish.
+    // An optional new scheduledFor lets the UI push it forward if the old time passed.
+    const dGate = await requireDirector()
+    if (!dGate.ok) return dGate.res
+    if (post.status !== 'failed') return NextResponse.json({ error: `Only a failed post can be retried (this one is ${post.status})` }, { status: 400 })
+    const when = body.scheduledFor ? new Date(body.scheduledFor) : (post.scheduledFor.getTime() < Date.now() ? new Date(Date.now() + 5 * 60 * 1000) : post.scheduledFor)
+    const updated = await prisma.scheduledPost.update({
+      where: { id: post.id },
+      data: { status: 'scheduled', lastError: '', scheduledFor: when, approvedByUserId: dGate.userId, approvedAt: new Date() },
+    })
+    return NextResponse.json({ ok: true, post: updated })
+  }
+
   if (action === 'cancel') {
     if (TERMINAL.includes(post.status) || post.status === 'published') {
       return NextResponse.json({ error: 'Cannot cancel a post that already published' }, { status: 400 })
