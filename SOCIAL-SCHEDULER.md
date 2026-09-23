@@ -131,8 +131,8 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   Instagram/Facebook preview + edit mode, compose (uploads via `/api/upload`),
   and a Connected-accounts panel with disconnect. `GET/DELETE /api/social/accounts`
   and the `unapprove` / `retry` actions on `PATCH /api/social/posts/[id]` were
-  added for it. The page runs dark on purpose (matches the mockup Bo approved);
-  the rest of the dashboard stays light.
+  added for it. The page was dark at first (per the mockup) — Bo asked for the
+  standard light slate/teal look on Sep 23, so it now matches the rest of the dashboard.
 - **Built (Sep 23)** — the "cheap four" from the PromoRepublic comparison: multi-account
   compose (one post per selected account, tied by `groupId`; approving one approves
   the set), **Publish now** (`action:'publish-now'`, director-only, goes through the
