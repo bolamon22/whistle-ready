@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const tournamentId = searchParams.get('tournamentId')
   if (!tournamentId) return NextResponse.json({ error: 'tournamentId required' }, { status: 400 })
 
+  await ensurePaymentGuard()
   const registrations = await prisma.teamRegistration.findMany({
     where: { tournamentId, deletedAt: null },
     include: {

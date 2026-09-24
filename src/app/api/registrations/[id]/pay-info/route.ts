@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { orgForTournament } from '@/lib/org'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 // Public by design: the registration id in the URL is the capability (same model
 // as /claim links). Returns ONLY what the public pay page needs — no contact info.
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    await ensurePaymentGuard()
     const reg = await prisma.teamRegistration.findUnique({
       where: { id: params.id },
       include: { teams: true, payments: true },

@@ -9,6 +9,7 @@ import { tournamentOrgId, orgById } from '@/lib/org'
 import { resolveRegConfirmation } from '@/lib/regConfirmation'
 import { SITE_URL } from '@/lib/seo'
 import { sendPushToOrg } from '@/lib/push'
+import { ensurePaymentGuard } from './paymentGuard'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -31,6 +32,7 @@ export async function notifyPaymentReceived(args: {
 }) {
   try {
     if (!emailEnabled()) return
+    await ensurePaymentGuard()
     const reg = await prisma.teamRegistration.findUnique({
       where: { id: args.registrationId },
       include: { payments: true, teams: true },

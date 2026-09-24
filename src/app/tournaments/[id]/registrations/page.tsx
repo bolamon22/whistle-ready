@@ -280,6 +280,12 @@ export default function RegistrationsPage() {
   const [showDeleted, setShowDeleted] = useState(false)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  // A FAILED LOAD IS NOT AN EMPTY LIST. On 24 Sep 2026 /api/registrations
+  // threw a 500 with an empty body, r.json() rejected, the catch below swallowed
+  // it, and the page sat there reading "No registrations yet" with 0 clubs and
+  // $0.00 across the tiles -- for an event that had 23 clubs and 64 teams in the
+  // database the whole time. Never let a broken request look like no data again.
+  const [loadError, setLoadError] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [tournamentName, setTournamentName] = useState('')
   const [tournamentLogo, setTournamentLogo] = useState('')
@@ -463,12 +469,18 @@ export default function RegistrationsPage() {
   const [indivPaymentStatus, setIndivPaymentStatus] = useState('pending')
 
   const load = () => {
+    setLoadError('')
+    const must = async (url: string, what: string) => {
+      const r = await fetch(url)
+      if (!r.ok) throw new Error(`${what} failed to load (HTTP ${r.status})`)
+      return r.json()
+    }
     Promise.all([
-      fetch(`/api/registrations?tournamentId=${tournamentId}`).then(r => r.json()),
-      fetch(`/api/tournaments/${tournamentId}`).then(r => r.json()),
+      must(`/api/registrations?tournamentId=${tournamentId}`, 'Registrations'),
+      must(`/api/tournaments/${tournamentId}`, 'Event details'),
       fetch(`/api/tournaments/${tournamentId}/individual-reg`).then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([regs, t, indivRegs]) => {
-      setRegistrations(regs)
+      setRegistrations(Array.isArray(regs) ? regs : [])
       setIndividualRegs(Array.isArray(indivRegs) ? indivRegs : [])
       setTournamentName(t.name || '')
       if (t.logoUrl) setTournamentLogo(t.logoUrl)
@@ -485,7 +497,10 @@ export default function RegistrationsPage() {
         if (d.length > 0) { setDivisions(d); setDivisionsDraft(d) }
       } catch {}
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch((e: any) => {
+      setLoadError(e?.message || 'Could not reach the server.')
+      setLoading(false)
+    })
   }
 
   useEffect(() => { load() }, [tournamentId])
@@ -1963,6 +1978,19 @@ export default function RegistrationsPage() {
         {/* Team list */}
         {activeTab === 'team' && (loading ? (
           <div className="text-center py-20 text-slate-400">Loading...</div>
+        ) : loadError ? (
+          <div className="text-center py-16">
+            <div className="inline-block border border-red-200 bg-red-50 rounded-xl px-6 py-5 max-w-md">
+              <div className="font-semibold text-red-800">Couldn&apos;t load your registrations</div>
+              <div className="text-sm text-red-700 mt-1">{loadError}</div>
+              <div className="text-sm text-red-700/80 mt-2">
+                This is a loading problem, not missing data &mdash; nothing has been deleted.
+              </div>
+              <button onClick={load} className="mt-4 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700">
+                Try again
+              </button>
+            </div>
+          </div>
         ) : registrations.length === 0 ? (
           <div className="text-center py-20 text-slate-400">No registrations yet.</div>
         ) : filteredRegistrations.length === 0 ? (

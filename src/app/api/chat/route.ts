@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/db'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 export const runtime = 'nodejs'
 
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
 
     if (tournamentId) {
       try {
+        await ensurePaymentGuard()
         const [tournament, games, workers, roster, regs, indivRegs] = await Promise.all([
           prisma.tournament.findUnique({ where: { id: tournamentId } }),
           prisma.game.findMany({ where: { tournamentId }, include: { assignments: true } }),

@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -11,6 +12,7 @@ const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigi
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
+    await ensurePaymentGuard()
     const reg = await prisma.teamRegistration.findUnique({
       where: { id: params.id },
       include: { teams: true, payments: true },

@@ -10,6 +10,7 @@ import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { cleanName } from '@/lib/names'
 import { carryDirectorLinks } from '@/lib/clubDirectorLinks'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
   if (!tournamentId) return NextResponse.json({ error: 'tournamentId required' }, { status: 400 })
 
   await ensureRegistrationColumns()
+  await ensurePaymentGuard()
   const registrations = await prisma.teamRegistration.findMany({
     where: { tournamentId, deletedAt: null },
     include: { teams: true, payments: { orderBy: { receivedAt: 'asc' } } },
@@ -242,6 +244,7 @@ async function buildAndSendConfirmation(reg: any) {
 }
 
 export async function POST(req: NextRequest) {
+  await ensurePaymentGuard()
   const body = await req.json()
   const {
     tournamentId, clubName, clubContact, contactEmail, contactPhone,

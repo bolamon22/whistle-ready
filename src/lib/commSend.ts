@@ -8,6 +8,7 @@ import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
+import { ensurePaymentGuard } from './paymentGuard'
 
 // The club-letter send itself, lifted out of the route so the scheduler can run
 // exactly the same code later (Bo, Sep 10: "schedule when we send the email").
@@ -58,6 +59,7 @@ export async function runCommSend(args: {
   const subjectTpl = String(args.subject ?? '').trim().slice(0, 200) || letter.subject
   const bodyTpl = String(args.body ?? '').trim().slice(0, 4000) || letter.body
 
+  await ensurePaymentGuard()
   const regs = await prisma.teamRegistration.findMany({
     where: { id: { in: regIds }, tournamentId, deletedAt: null },
     include: { teams: true, payments: true },

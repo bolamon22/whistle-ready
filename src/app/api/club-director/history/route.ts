@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,6 +31,7 @@ export async function GET(req: NextRequest) {
     orderBy: { startDate: 'desc' },
   })
 
+  await ensurePaymentGuard()
   const history = await Promise.all(tournaments.map(async (t) => {
     const clubNames = clubsByTournament[t.id] ?? []
 

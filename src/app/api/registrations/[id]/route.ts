@@ -5,6 +5,7 @@ import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { requireStaff } from '@/lib/apiAuth'
 import { cleanName } from '@/lib/names'
 import { renameTeamRefs, renameClubRefs } from '@/lib/teamRename'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -15,6 +16,7 @@ async function ensureRegistrationColumns() {
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+  await ensurePaymentGuard()
   const body = await req.json()
 
   // Stripe paid-marking from the public register page: anonymous but VERIFIED --

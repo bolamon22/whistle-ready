@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { cleanName, nameKey } from '@/lib/names'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 // Merge a duplicate registration INTO this one (the same club registering twice
 // for the same tournament, e.g. two teams in August and two more in September).
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (sourceId === params.id) return NextResponse.json({ error: 'Pick a different registration to merge in' }, { status: 400 })
 
   await ensureMergeColumns()
+  await ensurePaymentGuard()
   const include = { teams: true, payments: { orderBy: { receivedAt: 'asc' as const } } }
   const [target, source] = await Promise.all([
     prisma.teamRegistration.findUnique({ where: { id: params.id }, include }),

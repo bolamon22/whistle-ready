@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { paypalConfigured, paypalAccessToken, PAYPAL_BASE } from '@/lib/paypal'
+import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
 // Captures an approved PayPal/Venmo order and records the payment. Public by
 // design (the payer finishes their own payment); every recorded number comes
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
     } catch { /* no metadata — payment stands, nothing to record against */ }
 
     if (regId && charged > 0) {
+      await ensurePaymentGuard()
       const reg = await prisma.teamRegistration.findUnique({
         where: { id: regId },
         include: { payments: true },
