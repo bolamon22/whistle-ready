@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
 import { randomUUID } from 'crypto'
+import { isVideoUrl } from '@/lib/social'
 
 // Queue + calendar data for the social scheduler. A post always starts as a
 // 'draft' here — only PATCH .../posts/[id] with action:'approve' (director/
@@ -35,8 +36,15 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({})) as any
   const { caption, mediaUrls, scheduledFor, firstComment } = body
-  const mediaType: 'image' | 'video' = body.mediaType === 'video' ? 'video' : 'image'
+  const urls: string[] = Array.isArray(mediaUrls) ? mediaUrls.filter((u: any) => typeof u === 'string' && u) : []
+  // More than one file = an Instagram carousel (a multi-photo post on Facebook).
+  const mediaType: 'image' | 'video' | 'carousel' = urls.length > 1 || body.mediaType === 'carousel' ? 'carousel' : body.mediaType === 'video' ? 'video' : 'image'
+  if (mediaType === 'carousel' && (urls.length < 2 || urls.length > 10)) return NextResponse.json({ error: 'A carousel takes 2–10 photos or videos' }, { status: 400 })
   const thumbnailUrl: string = typeof body.thumbnailUrl === 'string' ? body.thumbnailUrl : ''
+  // The Story copy can go out at its own time (e.g. a couple of hours after the
+  // feed post, for a second look). Defaults to the same time.
+  const storyAt = body.storyScheduledFor ? new Date(body.storyScheduledFor) : null
+  if (storyAt && isNaN(storyAt.getTime())) return NextResponse.json({ error: 'Story time is not a valid date' }, { status: 400 })
   // Where it goes: feed, story, or both (both = one row per placement, same group).
   const placements: ('feed' | 'story')[] = Array.isArray(body.placements) && body.placements.length
     ? Array.from(new Set(body.placements.filter((x: any) => x === 'feed' || x === 'story'))) as ('feed' | 'story')[]
@@ -61,9 +69,12 @@ export async function POST(req: NextRequest) {
           orgId: gate.orgId, socialAccountId: account.id, caption: caption || '',
           // Stories have no caption/first comment on either platform.
           firstComment: placement === 'feed' && typeof firstComment === 'string' ? firstComment : '',
-          mediaUrls: JSON.stringify(Array.isArray(mediaUrls) ? mediaUrls : []),
-          mediaType, placement, thumbnailUrl,
-          scheduledFor: new Date(scheduledFor), status: 'draft', createdByUserId: gate.userId, groupId,
+          // A Story carries one file: a carousel's Story copy is its first slide.
+          ...(placement === 'story' && mediaType === 'carousel'
+            ? { mediaUrls: JSON.stringify(urls.slice(0, 1)), mediaType: isVideoUrl(urls[0]) ? 'video' : 'image', thumbnailUrl: isVideoUrl(urls[0]) ? thumbnailUrl : '' }
+            : { mediaUrls: JSON.stringify(urls), mediaType, thumbnailUrl }),
+          placement,
+          scheduledFor: placement === 'story' && storyAt ? storyAt : new Date(scheduledFor), status: 'draft', createdByUserId: gate.userId, groupId,
         },
       }))
     }

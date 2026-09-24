@@ -190,12 +190,47 @@ function absoluteUrl(u: string): string {
  *  or to Stories. On Instagram a feed video is a Reel (the API has no other kind of
  *  feed video any more); on Facebook it's a Page video post. */
 export type PublishSpec = {
-  mediaType: 'image' | 'video'
+  mediaType: 'image' | 'video' | 'carousel'
   placement: 'feed' | 'story'
   mediaUrl: string
   caption: string
   /** Optional poster frame for a video (Reel cover). */
   coverUrl?: string
+  /** Carousel slides, in order (2–10). Only for mediaType 'carousel', feed only. */
+  items?: CarouselItem[]
+}
+export type CarouselItem = { url: string; type: 'image' | 'video' }
+
+/** Slides are stored as a plain URL list (ScheduledPost.mediaUrls), so a slide's
+ *  kind comes from its file extension — video uploads keep their .mp4/.mov name. */
+export function isVideoUrl(u: string): boolean { return /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(u || '') }
+export function carouselItems(urls: string[]): CarouselItem[] { return urls.filter(Boolean).map(url => ({ url, type: isVideoUrl(url) ? 'video' : 'image' })) }
+
+/** Instagram carousel, step 1: one child container per slide. Photos are ready at
+ *  once; video slides transcode first, so the caller waits for every child to be
+ *  FINISHED before creating the parent (createInstagramCarouselParent). */
+export async function createInstagramCarouselChildren(account: { externalId: string; accessToken: string }, items: CarouselItem[]): Promise<Result<{ childIds: string[] }>> {
+  if (items.length < 2 || items.length > 10) return { ok: false, error: `Instagram carousels take 2–10 photos or videos (this one has ${items.length})` }
+  const token = decrypt(account.accessToken)
+  const childIds: string[] = []
+  for (const it of items) {
+    const body: Record<string, string> = { access_token: token, is_carousel_item: 'true' }
+    if (it.type === 'video') { body.media_type = 'VIDEO'; body.video_url = absoluteUrl(it.url) } else body.image_url = absoluteUrl(it.url)
+    const r = await graphPost<{ id: string }>(`/${account.externalId}/media`, body)
+    if (!r.ok) return { ok: false, error: `Slide ${childIds.length + 1}: ${r.error}` }
+    childIds.push(r.data.id)
+  }
+  return { ok: true, data: { childIds } }
+}
+
+/** Instagram carousel, step 2: the album container that points at the children.
+ *  Poll it with getInstagramContainerStatus and publish it like any container. */
+export async function createInstagramCarouselParent(account: { externalId: string; accessToken: string }, childIds: string[], caption: string): Promise<Result<{ containerId: string }>> {
+  const body: Record<string, string> = { access_token: decrypt(account.accessToken), media_type: 'CAROUSEL', children: childIds.join(',') }
+  if (caption) body.caption = caption
+  const r = await graphPost<{ id: string }>(`/${account.externalId}/media`, body)
+  if (!r.ok) return r
+  return { ok: true, data: { containerId: r.data.id } }
 }
 
 export type ContainerStatus = 'FINISHED' | 'IN_PROGRESS' | 'ERROR' | 'EXPIRED' | 'PUBLISHED' | 'UNKNOWN'
@@ -244,6 +279,30 @@ export async function publishInstagramContainer(account: { externalId: string; a
 export async function publishFacebook(account: { externalId: string; accessToken: string }, spec: PublishSpec): Promise<Result<{ externalPostId: string }>> {
   const token = decrypt(account.accessToken)
   const page = account.externalId
+  if (spec.placement === 'feed' && spec.mediaType === 'carousel') {
+    // Facebook's version of a carousel is a multi-photo post: upload each photo
+    // unpublished, then attach them all to one feed post. Page posts can't mix
+    // video into that, so video slides are left out here (the compose screen
+    // says so); a slide set with no photos goes out as its first video.
+    const items = spec.items || []
+    const photos = items.filter(i => i.type === 'image')
+    if (!photos.length) {
+      const v = items.find(i => i.type === 'video'); if (!v) return { ok: false, error: 'No photos or videos attached' }
+      return publishFacebook(account, { ...spec, mediaType: 'video', mediaUrl: v.url, items: undefined })
+    }
+    if (photos.length === 1) return publishFacebook(account, { ...spec, mediaType: 'image', mediaUrl: photos[0].url, items: undefined })
+    const ids: string[] = []
+    for (const ph of photos) {
+      const up = await graphPost<{ id: string }>(`/${page}/photos`, { url: absoluteUrl(ph.url), published: 'false', access_token: token })
+      if (!up.ok) return { ok: false, error: `Photo ${ids.length + 1}: ${up.error}` }
+      ids.push(up.data.id)
+    }
+    const body: Record<string, string> = { message: spec.caption, access_token: token }
+    ids.forEach((id, i) => { body[`attached_media[${i}]`] = JSON.stringify({ media_fbid: id }) })
+    const r = await graphPost<{ id: string }>(`/${page}/feed`, body)
+    if (!r.ok) return r
+    return { ok: true, data: { externalPostId: r.data.id } }
+  }
   if (spec.placement === 'feed' && spec.mediaType === 'image') {
     const r = await graphPost<{ id: string; post_id?: string }>(`/${page}/photos`, { url: absoluteUrl(spec.mediaUrl), caption: spec.caption, access_token: token })
     if (!r.ok) return r

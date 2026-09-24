@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db'
-import { createInstagramContainer, getInstagramContainerStatus, publishInstagramContainer, publishFacebook, postFirstComment, findLivePost, refreshLongLivedToken, type PublishSpec } from '@/lib/social'
+import { createInstagramContainer, createInstagramCarouselChildren, createInstagramCarouselParent, carouselItems, getInstagramContainerStatus, publishInstagramContainer, publishFacebook, postFirstComment, findLivePost, refreshLongLivedToken, type PublishSpec } from '@/lib/social'
 import { sendPushToOrg } from '@/lib/push'
 import { encrypt, decrypt } from '@/lib/encrypt'
 
@@ -12,11 +12,13 @@ function specOf(post: PostWithAccount): PublishSpec | null {
   let mediaUrls: string[] = []
   try { mediaUrls = JSON.parse(post.mediaUrls || '[]') } catch { mediaUrls = [] }
   if (!mediaUrls.length) return null
-  return {
-    mediaType: post.mediaType === 'video' ? 'video' : 'image',
-    placement: post.placement === 'story' ? 'story' : 'feed',
-    mediaUrl: mediaUrls[0], caption: post.caption, coverUrl: post.thumbnailUrl || undefined,
+  const placement = post.placement === 'story' ? 'story' : 'feed'
+  // A carousel only exists in the feed; a Story row always carries one file.
+  if (post.mediaType === 'carousel' && placement === 'feed' && mediaUrls.length > 1) {
+    return { mediaType: 'carousel', placement, mediaUrl: mediaUrls[0], caption: post.caption, items: carouselItems(mediaUrls).slice(0, 10) }
   }
+  const single = post.mediaType === 'carousel' ? (carouselItems(mediaUrls)[0].type) : post.mediaType === 'video' ? 'video' : 'image'
+  return { mediaType: single, placement, mediaUrl: mediaUrls[0], caption: post.caption, coverUrl: post.thumbnailUrl || undefined }
 }
 
 async function fail(post: PostWithAccount, msg: string, notify = true): Promise<PublishOutcome> {
@@ -55,9 +57,31 @@ async function alreadyLive(post: PostWithAccount): Promise<{ externalPostId: str
  *  and leaves the post in 'publishing' with the container id saved — the cron's
  *  finishPendingContainers() picks it up on its next run). Videos typically take
  *  20–90 s to transcode on Meta's side; images are usually instant. */
+export const CHILDREN_PREFIX = 'children:'
 async function finishInstagram(post: PostWithAccount, containerId: string, budgetMs: number): Promise<PublishOutcome> {
   const account = post.socialAccount!
   const deadline = Date.now() + budgetMs
+  // Carousel, stage 1: wait for every slide's container (video slides transcode),
+  // then create the album container and carry on as a normal single container.
+  // Until then the row keeps "children:<id,id,…>" so the cron can pick it up.
+  if (containerId.startsWith(CHILDREN_PREFIX)) {
+    const childIds = containerId.slice(CHILDREN_PREFIX.length).split(',').filter(Boolean)
+    for (;;) {
+      const sts = await Promise.all(childIds.map(id => getInstagramContainerStatus(account, id)))
+      const bad = sts.findIndex(st => !st.ok || st.data.status === 'ERROR' || st.data.status === 'EXPIRED')
+      if (bad >= 0) { const st = sts[bad]; return fail(post, `Instagram couldn't process slide ${bad + 1}${st.ok && st.data.detail ? `: ${st.data.detail}` : !st.ok ? `: ${st.error}` : ''} — check the file, then Retry.`) }
+      if (sts.every(st => st.ok && st.data.status === 'FINISHED')) break
+      if (Date.now() > deadline) {
+        await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: containerId, lastError: 'Instagram is still processing the carousel videos' } })
+        return { id: post.id, status: 'pending' }
+      }
+      await new Promise(r => setTimeout(r, 4000))
+    }
+    const parent = await createInstagramCarouselParent(account, childIds, post.caption)
+    if (!parent.ok) return fail(post, parent.error)
+    containerId = parent.data.containerId
+    await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: containerId } }).catch(() => {})
+  }
   for (;;) {
     const st = await getInstagramContainerStatus(account, containerId)
     if (!st.ok) return fail(post, st.error)
@@ -79,7 +103,7 @@ async function finishInstagram(post: PostWithAccount, containerId: string, budge
       return fail(post, 'Instagram says this was published, but it could not be found on the account — check @' + account.label.replace(/^@/, '') + ' before retrying.', false)
     }
     if (st.data.status === 'ERROR' || st.data.status === 'EXPIRED') {
-      return fail(post, `Instagram couldn't process the ${post.mediaType === 'video' ? 'video' : 'image'}${st.data.detail ? `: ${st.data.detail}` : ''} — check the file meets Reels/Stories specs (MP4, ≤15 min for Reels, ≤60 s for Stories).`)
+      return fail(post, `Instagram couldn't process the ${post.mediaType === 'video' ? 'video' : post.mediaType === 'carousel' ? 'carousel' : 'image'}${st.data.detail ? `: ${st.data.detail}` : ''} — check the file meets Reels/Stories specs (MP4, ≤15 min for Reels, ≤60 s for Stories).`)
     }
     if (Date.now() > deadline) {
       await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: containerId, lastError: `Instagram is still processing the video (status ${st.data.status})` } })
@@ -129,6 +153,14 @@ export async function publishScheduledPost(postId: string, fromStatus: string | 
       return await markPublished(post, r.data.externalPostId)
     }
     if (account.platform === 'instagram') {
+      if (spec.mediaType === 'carousel') {
+        const ch = await createInstagramCarouselChildren(account, spec.items || [])
+        if (!ch.ok) return await fail(post, ch.error)
+        const pending = CHILDREN_PREFIX + ch.data.childIds.join(',')
+        // Save the slide containers first, so an interrupted run can resume them.
+        await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: pending } })
+        return await finishInstagram(post, pending, waitMs)
+      }
       const c = await createInstagramContainer(account, spec)
       if (!c.ok) return await fail(post, c.error)
       return await finishInstagram(post, c.data.containerId, waitMs)
@@ -166,10 +198,11 @@ export async function finishPendingContainers(budgetMs = 10_000): Promise<Publis
  *  first comment it never got); if an Instagram container is still usable, finish
  *  it; otherwise mark it failed with a message saying it's safe to retry.
  *  "Stuck" = no container and untouched for 10 min, or a container > 2 h old. */
-export async function recoverStuckPosts(): Promise<PublishOutcome[]> {
+export async function recoverStuckPosts(onlyIds?: string[]): Promise<PublishOutcome[]> {
   const tenMin = new Date(Date.now() - 10 * 60 * 1000), twoHours = new Date(Date.now() - 2 * 60 * 60 * 1000)
   const stuck = await prisma.scheduledPost.findMany({
-    where: { status: 'publishing', OR: [{ externalContainerId: '', updatedAt: { lt: tenMin } }, { externalContainerId: { not: '' }, scheduledFor: { lt: twoHours } }] },
+    // onlyIds = "Check now" from the page: settle this post immediately, whatever its age.
+    where: onlyIds ? { status: 'publishing', id: { in: onlyIds } } : { status: 'publishing', OR: [{ externalContainerId: '', updatedAt: { lt: tenMin } }, { externalContainerId: { not: '' }, scheduledFor: { lt: twoHours } }] },
     orderBy: { scheduledFor: 'asc' }, take: 5, include: { socialAccount: true },
   })
   const out: PublishOutcome[] = []
@@ -178,9 +211,19 @@ export async function recoverStuckPosts(): Promise<PublishOutcome[]> {
       if (!post.socialAccount) { out.push(await fail(post, 'Social account no longer exists')); continue }
       const live = await alreadyLive(post)
       if (live) { out.push(await markPublished(post, live.externalPostId, live.permalink)); continue }
+      if (post.externalContainerId.startsWith(CHILDREN_PREFIX) && post.socialAccount.platform === 'instagram') {
+        // Carousel still waiting on its slides: give it one more try while it's young.
+        if (post.scheduledFor >= twoHours || onlyIds) { out.push(await finishInstagram(post, post.externalContainerId, 5_000)); continue }
+        out.push(await fail(post, 'Instagram never finished processing this carousel\'s videos. It isn\'t on the account, so it\'s safe to Retry.'))
+        continue
+      }
       if (post.externalContainerId && post.socialAccount.platform === 'instagram') {
         const st = await getInstagramContainerStatus(post.socialAccount, post.externalContainerId)
         if (st.ok && st.data.status === 'FINISHED') { out.push(await finishInstagram(post, post.externalContainerId, 5_000)); continue }
+        if (st.ok && st.data.status === 'IN_PROGRESS' && post.scheduledFor >= twoHours) {
+          await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: 'Instagram is still processing the video (status IN_PROGRESS)' } })
+          out.push({ id: post.id, status: 'pending' }); continue
+        }
         out.push(await fail(post, `Instagram never finished processing this video${st.ok ? ` (last status: ${st.data.status}${st.data.detail ? ` — ${st.data.detail}` : ''})` : ''}. It isn't on the account, so it's safe to Retry.`))
         continue
       }

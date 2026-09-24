@@ -11,13 +11,13 @@ import { Instagram, Facebook, RefreshCw, TrendingUp, Film, Image as ImageIcon, C
 
 type Totals = { posts: number; measured: number; reach: number; interactions: number; likes: number; comments: number; saves: number; shares: number; engagementRate: number | null; avgReach: number | null }
 type Group = Totals & { key: string }
-type Row = { id: string; platform: string; account: string; publishedAt: string; format: 'reel' | 'video' | 'photo' | 'story'; caption: string; thumb: string; permalink: string; reach: number; views: number; likes: number; comments: number; saves: number; shares: number; interactions: number; engagementRate: number | null; fetchedAt: string | null }
+type Row = { id: string; platform: string; account: string; publishedAt: string; format: 'reel' | 'video' | 'photo' | 'story' | 'carousel'; caption: string; thumb: string; permalink: string; reach: number; views: number; likes: number; comments: number; saves: number; shares: number; interactions: number; engagementRate: number | null; fetchedAt: string | null }
 type Report = { days: number; monthly: boolean; current: Totals; previous: Totals; trend: { key: string; reach: number; interactions: number; posts: number }[]; byPlatform: Group[]; byFormat: Group[]; byWeekday: Group[]; bySlot: Group[]; posts: Row[]; lastSnapshot: string | null }
 
 const TEAL = '#0d9488', TEAL_HOVER = '#0f766e'
 const PLATFORM_COLOR: Record<string, string> = { instagram: '#db2777', facebook: '#2563eb' } // validated pair (dataviz validator, light)
-const FORMAT_LABEL: Record<string, string> = { reel: 'Reels', photo: 'Photos', video: 'Videos', story: 'Stories' }
-const FORMAT_ONE: Record<string, string> = { reel: 'Reel', photo: 'Photo', video: 'Video', story: 'Story' }
+const FORMAT_LABEL: Record<string, string> = { reel: 'Reels', photo: 'Photos', carousel: 'Carousels', video: 'Videos', story: 'Stories' }
+const FORMAT_ONE: Record<string, string> = { reel: 'Reel', photo: 'Photo', carousel: 'Carousel', video: 'Video', story: 'Story' }
 const SLOT_LABEL: Record<string, string> = { morning: 'Morning · before 11', midday: 'Midday · 11–2', afternoon: 'Afternoon · 2–6', evening: 'Evening · after 6' }
 const PERIODS: [number, string][] = [[7, '7 days'], [28, '28 days'], [90, '90 days'], [365, '12 months']]
 
@@ -284,7 +284,7 @@ export default function InsightsView({ canRefresh, onOpenPost }: { canRefresh: b
                         <td className="px-2 py-2">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-slate-100 flex-none grid place-items-center text-slate-400">
-                              {p.thumb ? <img src={p.thumb} alt="" className="w-full h-full object-cover" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} /> : p.format === 'photo' ? <ImageIcon size={14} /> : <Film size={14} />}
+                              {p.thumb ? <img src={p.thumb} alt="" className="w-full h-full object-cover" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} /> : p.format === 'photo' || p.format === 'carousel' ? <ImageIcon size={14} /> : <Film size={14} />}
                               <span className="absolute -right-0.5 -bottom-0.5 w-3.5 h-3.5 rounded-full border-2 border-white" style={{ background: PLATFORM_COLOR[p.platform] || '#94a3b8' }} />
                             </div>
                             <div className="min-w-0">

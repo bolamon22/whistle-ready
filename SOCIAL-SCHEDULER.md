@@ -227,6 +227,21 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   (`CHIRP_SOCIAL_MODEL`); if a model rejects the search tool it retries on
   `CHIRP_SEARCH_MODEL` (default `claude-sonnet-4-5`). `pause_turn` is resumed up
   to twice. The conversation is kept in page state only (not saved).
+- **Carousels + separate Story time (Sep 24)** — `mediaType: 'carousel'` = 2–10
+  files in `mediaUrls` (a slide's kind comes from its extension, `isVideoUrl()` in
+  social.ts; `thumbnailUrl` is slide 1's cover when slide 1 is a video). Instagram:
+  one child container per slide (`is_carousel_item`, video slides `media_type=VIDEO`)
+  → wait for all FINISHED → `media_type=CAROUSEL` parent → publish. While slides
+  transcode the row holds `externalContainerId = "children:id,id,…"` and the cron's
+  `finishPendingContainers` resumes it. Facebook: photos uploaded unpublished, then
+  one `/feed` post with `attached_media[]`; video slides are skipped there (Pages
+  can't mix them in), and a video-only set posts its first video. A Story copy of a
+  carousel carries slide 1 only. Compose: "Make carousel / Add slide" strip with
+  reorder/remove; preview swipes. When Feed + Story are both picked, "Story goes
+  out" offers same time / +2 h / +4 h / next morning 9:00 / pick a time
+  (`storyScheduledFor` on POST /api/social/posts); each row keeps its own time
+  through approval. Also restored `recoverStuckPosts(onlyIds)` — the committed copy
+  had lost it, so "Check now" on a young stuck post did nothing.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages

@@ -108,7 +108,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const data: any = {}
   if (typeof body.caption === 'string') data.caption = body.caption
   if (typeof body.firstComment === 'string') data.firstComment = body.firstComment
-  if (body.mediaType === 'image' || body.mediaType === 'video') data.mediaType = body.mediaType
+  if (body.mediaType === 'image' || body.mediaType === 'video' || body.mediaType === 'carousel') data.mediaType = body.mediaType
+  if (Array.isArray(body.mediaUrls) && post.placement === 'story' && body.mediaUrls.length > 1) return NextResponse.json({ error: 'A Story takes one photo or video' }, { status: 400 })
+  if (Array.isArray(body.mediaUrls) && (body.mediaUrls.length > 10 || (body.mediaType === 'carousel' && body.mediaUrls.length < 2))) return NextResponse.json({ error: 'A carousel takes 2–10 photos or videos' }, { status: 400 })
   if (body.placement === 'feed' || body.placement === 'story') data.placement = body.placement
   if (typeof body.thumbnailUrl === 'string') data.thumbnailUrl = body.thumbnailUrl
   if (Array.isArray(body.mediaUrls)) data.mediaUrls = JSON.stringify(body.mediaUrls)

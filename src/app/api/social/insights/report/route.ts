@@ -15,7 +15,7 @@ import { prisma } from '@/lib/db'
 
 type Row = {
   id: string; platform: string; account: string; publishedAt: string
-  format: 'reel' | 'video' | 'photo' | 'story'
+  format: 'reel' | 'video' | 'photo' | 'story' | 'carousel'
   caption: string; thumb: string; permalink: string
   reach: number; views: number; likes: number; comments: number; saves: number; shares: number
   interactions: number; engagementRate: number | null; fetchedAt: string | null
@@ -61,11 +61,11 @@ export async function GET(req: NextRequest) {
     const s = p.insights[0]
     const plat = p.socialAccount?.platform || ''
     let media: string[] = []; try { media = JSON.parse(p.mediaUrls || '[]') } catch { media = [] }
-    const format: Row['format'] = p.placement === 'story' ? 'story' : p.mediaType === 'video' ? (plat === 'instagram' ? 'reel' : 'video') : 'photo'
+    const format: Row['format'] = p.placement === 'story' ? 'story' : p.mediaType === 'carousel' ? 'carousel' : p.mediaType === 'video' ? (plat === 'instagram' ? 'reel' : 'video') : 'photo'
     const interactions = s ? s.likes + s.comments + s.saves + s.shares : 0
     return {
       id: p.id, platform: plat, account: p.socialAccount?.label || '', publishedAt: (p.publishedAt || p.scheduledFor).toISOString(),
-      format, caption: p.caption.slice(0, 280), thumb: p.mediaType === 'video' ? (p.thumbnailUrl || '') : (media[0] || ''), permalink: p.permalink,
+      format, caption: p.caption.slice(0, 280), thumb: p.mediaType === 'video' || (p.mediaType === 'carousel' && /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(media[0] || '')) ? (p.thumbnailUrl || '') : (media[0] || ''), permalink: p.permalink,
       reach: s?.reach || 0, views: s?.impressions || 0, likes: s?.likes || 0, comments: s?.comments || 0, saves: s?.saves || 0, shares: s?.shares || 0,
       interactions, engagementRate: s && s.reach > 0 ? interactions / s.reach : null, fetchedAt: s ? s.fetchedAt.toISOString() : null,
     }
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
     current: totals(cur), previous: totals(prev),
     trend: Array.from(buckets.values()),
     byPlatform: group(r => r.platform as any, ['instagram', 'facebook']),
-    byFormat: group(r => r.format, ['reel', 'photo', 'video', 'story']),
+    byFormat: group(r => r.format, ['reel', 'photo', 'carousel', 'video', 'story']),
     byWeekday: [1, 2, 3, 4, 5, 6, 0].map(d => { const rs = cur.filter(r => local(r.publishedAt).dow === d); return { key: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d], ...totals(rs) } }),
     bySlot: (['morning', 'midday', 'afternoon', 'evening'] as const).map(k => { const rs = cur.filter(r => slotOf(local(r.publishedAt).hour) === k); return { key: k, ...totals(rs) } }),
     posts: cur,

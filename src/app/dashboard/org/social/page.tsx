@@ -15,13 +15,13 @@ import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
-import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb, Layers, ArrowLeft, ArrowRight } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
 interface Account { id: string; platform: 'instagram' | 'facebook'; label: string; status: string; lastError: string; tokenExpiresAt: string | null }
 interface Post {
   id: string; socialAccountId: string; caption: string; mediaUrls: string; scheduledFor: string; status: Status
-  approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string; permalink: string; importedAt: string | null; mediaType: 'image' | 'video'; placement: 'feed' | 'story'; thumbnailUrl: string
+  approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string; permalink: string; importedAt: string | null; mediaType: 'image' | 'video' | 'carousel'; placement: 'feed' | 'story'; thumbnailUrl: string
   socialAccount?: { id: string; platform: string; label: string; status: string }
 }
 
@@ -47,7 +47,7 @@ const AUD_CLS: Record<string, { bar: string; text: string; chip: string }> = {
   all: { bar: 'bg-slate-500', text: 'text-slate-600', chip: 'bg-slate-100 text-slate-700' },
 }
 const hhmm = (t: { h: number; m: number }) => { const d = new Date(); d.setHours(t.h, t.m, 0, 0); return fmtTime(d) }
-const kindLabel = (p: { mediaType?: string; placement?: string; socialAccount?: { platform: string } }) => p.placement === 'story' ? 'Story' : p.mediaType === 'video' ? (p.socialAccount?.platform === 'instagram' ? 'Reel' : 'Video') : ''
+const kindLabel = (p: { mediaType?: string; placement?: string; socialAccount?: { platform: string } }) => p.placement === 'story' ? 'Story' : p.mediaType === 'carousel' ? 'Carousel' : p.mediaType === 'video' ? (p.socialAccount?.platform === 'instagram' ? 'Reel' : 'Video') : ''
 const fmtNum = (n: number) => n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}K` : n.toLocaleString()
 const delta = (cur: number, prev: number) => prev > 0 ? `${cur >= prev ? '+' : ''}${Math.round(((cur - prev) / prev) * 100)}%` : ''
 
@@ -59,6 +59,11 @@ const fmtDate = (d: Date) => d.toLocaleDateString(undefined, { weekday: 'short',
 const fmtLong = (d: Date) => d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) + ' at ' + fmtTime(d)
 const toLocalInput = (d: Date) => { const p = (n: number) => (n < 10 ? '0' : '') + n; return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}` }
 const media = (p: { mediaUrls: string }): string[] => { try { const a = JSON.parse(p.mediaUrls || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
+// Carousel slides are stored as a URL list; a slide's kind comes from its file
+// extension (video uploads keep their .mp4/.mov name). Same rule as src/lib/social.ts.
+const isVid = (u: string) => /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(u || '')
+const toSlides = (p: Post): Media[] => media(p).map((url, i) => ({ url, mediaType: p.mediaType === 'carousel' ? (isVid(url) ? 'video' : 'image') : p.mediaType === 'video' ? 'video' : 'image', thumbnailUrl: i === 0 ? p.thumbnailUrl || undefined : undefined }))
+const slidesBody = (sl: Media[]) => ({ mediaUrls: sl.map(x => x.url), mediaType: sl.length > 1 ? 'carousel' : sl[0]?.mediaType || 'image', thumbnailUrl: sl[0]?.mediaType === 'video' ? sl[0].thumbnailUrl || '' : '' })
 const firstLine = (s: string) => (s.split('\n').find(l => l.trim()) || 'Untitled').slice(0, 60)
 
 async function api(url: string, init?: RequestInit) {
@@ -74,12 +79,15 @@ function PlatformBadge({ platform, size = 16 }: { platform: string; size?: numbe
 }
 
 function Thumb({ post }: { post: Post }) {
-  const src = post.mediaType === 'video' ? (post.thumbnailUrl || '') : media(post)[0]
-  const isVideo = post.mediaType === 'video'
+  const first = media(post)[0] || ''
+  const isVideo = post.mediaType === 'video' || (post.mediaType === 'carousel' && isVid(first))
+  const src = isVideo ? (post.thumbnailUrl || '') : first
+  const n = post.mediaType === 'carousel' ? media(post).length : 0
   return (
     <div className={`relative flex-none w-11 h-11 rounded-xl overflow-hidden grid place-items-center ${src ? 'bg-slate-200' : isVideo ? 'bg-slate-800 text-white' : 'bg-slate-100 border border-dashed border-slate-300 text-slate-400'}`}>
       {src ? <img src={src} alt="" className="w-full h-full object-cover" /> : isVideo ? <Film size={15} /> : <ImageIcon size={15} />}
-      {isVideo && src && <span className="absolute inset-0 grid place-items-center text-white drop-shadow"><Play size={14} fill="currentColor" /></span>}
+      {isVideo && src && !n && <span className="absolute inset-0 grid place-items-center text-white drop-shadow"><Play size={14} fill="currentColor" /></span>}
+      {n > 1 && <span className="absolute top-0.5 left-0.5 rounded bg-black/65 text-white text-[9px] font-bold px-1 inline-flex items-center gap-0.5"><Layers size={9} />{n}</span>}
       <span className="absolute -right-1 -bottom-1"><PlatformBadge platform={post.socialAccount?.platform || ''} /></span>
     </div>
   )
@@ -374,10 +382,19 @@ function DrawerHead({ title, onClose, children }: { title: string; onClose: () =
 const inputCls = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500'
 const labelCls = 'block text-[11px] font-extrabold uppercase tracking-wide text-slate-500 mb-1.5'
 
-function NativePreview({ platform, label, caption, imgSrc, when, mediaType = 'image', placement = 'feed', poster }: { platform: string; label: string; caption: string; imgSrc?: string; when: Date; mediaType?: 'image' | 'video'; placement?: Placement; poster?: string }) {
+function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, mediaType: firstType = 'image', placement = 'feed', poster: firstPoster, slides }: { platform: string; label: string; caption: string; imgSrc?: string; when: Date; mediaType?: 'image' | 'video' | 'carousel'; placement?: Placement; poster?: string; slides?: Media[] }) {
   const ig = platform === 'instagram'
   const handle = label.replace(/^@/, '')
-  const isVideo = mediaType === 'video'; const isStory = placement === 'story'
+  const isStory = placement === 'story'
+  // Carousel: swipe through the slides here. Facebook shows only the photos (it
+  // can't mix video into a multi-photo post), and a Story shows slide 1.
+  const deck = !isStory && slides && slides.length > 1 ? (ig ? slides : slides.filter(x => x.mediaType === 'image').length ? slides.filter(x => x.mediaType === 'image') : slides.slice(0, 1)) : null
+  const [at, setAt] = useState(0)
+  const cur = deck ? deck[Math.min(at, deck.length - 1)] : null
+  const imgSrc = cur ? cur.url : firstSrc
+  const mediaType = cur ? cur.mediaType : firstType === 'carousel' ? (slides?.[0]?.mediaType || 'image') : firstType
+  const poster = cur ? cur.thumbnailUrl : firstPoster
+  const isVideo = mediaType === 'video'
   const frame = isStory || (ig && isVideo) ? 'aspect-[9/16] max-h-[420px] mx-auto' : ig ? 'aspect-square' : isVideo ? 'aspect-square' : 'aspect-[1.91/1]'
   const mediaEl = !imgSrc ? <span>{isVideo ? 'NO VIDEO YET' : 'NO PHOTO YET'}</span>
     : isVideo ? <video src={imgSrc} poster={poster || undefined} controls playsInline className="w-full h-full object-contain bg-black" />
@@ -393,9 +410,16 @@ function NativePreview({ platform, label, caption, imgSrc, when, mediaType = 'im
   }
   return (
     <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
-      <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-500">{ig ? (isVideo ? 'Instagram Reel · also shows in the feed' : 'Instagram post') : `${fmtDate(when)} · Public`}</div></div></div>
+      <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-500">{ig ? (deck ? `Instagram carousel · ${deck.length} slides` : isVideo ? 'Instagram Reel · also shows in the feed' : 'Instagram post') : `${fmtDate(when)} · Public${deck ? ` · ${deck.length} photos` : ''}`}</div></div></div>
       {!ig && <div className="px-3 pb-2.5 text-sm whitespace-pre-wrap leading-snug">{caption || <span className="text-slate-500">No caption yet</span>}</div>}
-      <div className={`${frame} bg-slate-200 grid place-items-center text-slate-500 text-xs tracking-widest`}>{mediaEl}</div>
+      <div className={`${frame} relative bg-slate-200 grid place-items-center text-slate-500 text-xs tracking-widest`}>{mediaEl}
+        {deck && deck.length > 1 && <>
+          <span className="absolute top-2 right-2 rounded-full bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 tracking-normal">{Math.min(at, deck.length - 1) + 1}/{deck.length}</span>
+          {at > 0 && <button type="button" onClick={() => setAt(at - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/90 shadow grid place-items-center text-slate-700" aria-label="Previous slide"><ChevronLeft size={15} /></button>}
+          {at < deck.length - 1 && <button type="button" onClick={() => setAt(at + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/90 shadow grid place-items-center text-slate-700" aria-label="Next slide"><ChevronRight size={15} /></button>}
+        </>}
+      </div>
+      {deck && deck.length > 1 && ig && <div className="flex justify-center gap-1 pt-2">{deck.map((_, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === Math.min(at, deck.length - 1) ? 'bg-sky-500' : 'bg-slate-300'}`} />)}</div>}
       {ig ? <><div className="flex gap-3.5 px-3 pt-2.5 text-slate-700"><Heart size={20} /><MessageCircle size={20} /><Send size={20} /></div><div className="px-3 pt-1.5 pb-3 text-sm whitespace-pre-wrap leading-snug"><b>{handle}</b> {caption}</div></>
         : <div className="flex justify-around px-3 py-2 border-t border-slate-200 text-xs font-bold text-slate-500"><span>Like</span><span>Comment</span><span>Share</span></div>}
     </div>
@@ -428,31 +452,76 @@ async function uploadImage(f: Blob, name: string): Promise<string> {
   return d.url
 }
 
+/** Uploads one photo or video (video: probe → poster frame → Blob upload) and
+ *  returns it as a Media. Throws with a readable message. Shared by the main
+ *  media box and the carousel "add slide" button. */
+async function uploadOne(f: File, setBusy: (s: string) => void): Promise<Media> {
+  if (f.type.startsWith('video/')) {
+    if (!/mp4|quicktime/.test(f.type)) throw new Error('Use an MP4 (or .mov) — that\'s what Instagram and Facebook accept')
+    setBusy('Reading video…')
+    const info = await probeVideo(f)
+    if (info.durationSec < 3) throw new Error('Videos need to be at least 3 seconds')
+    if (info.durationSec > 15 * 60) throw new Error('Reels max out at 15 minutes')
+    let thumbnailUrl = ''
+    if (info.poster) { setBusy('Saving cover frame…'); thumbnailUrl = await uploadImage(info.poster, 'cover.jpg') }
+    setBusy('Uploading video… 0%')
+    const blob = await blobUpload(f.name.replace(/[^\w.\-]+/g, '_'), f, {
+      access: 'public', handleUploadUrl: '/api/social/upload-video',
+      onUploadProgress: (p: { percentage: number }) => setBusy(`Uploading video… ${Math.round(p.percentage)}%`),
+    })
+    return { url: blob.url, mediaType: 'video', thumbnailUrl, durationSec: info.durationSec, width: info.width, height: info.height }
+  }
+  setBusy('Uploading photo…')
+  const url = await uploadImage(f, f.name)
+  return { url, mediaType: 'image' }
+}
+
+/** Carousel slides under the main media box: reorder, remove, add (up to 10). */
+function SlidesStrip({ slides, setSlides }: { slides: Media[]; setSlides: (s: Media[]) => void }) {
+  const [busy, setBusy] = useState('')
+  const ref = useRef<HTMLInputElement>(null)
+  const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= slides.length) return; const n = [...slides]; [n[i], n[j]] = [n[j], n[i]]; setSlides(n) }
+  async function add(files: File[]) {
+    let cur = [...slides]
+    for (const f of files) {
+      if (cur.length >= 10) { toast.error('Carousels max out at 10 slides'); break }
+      try { cur = [...cur, await uploadOne(f, setBusy)]; setSlides(cur) }
+      catch (e: any) { toast.error(String(e?.message || 'Upload failed').replace(/^Error:\s*/, '')) }
+    }
+    setBusy('')
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {slides.map((m, i) => (
+          <div key={m.url + i} className="relative flex-none w-16">
+            <div className="w-16 h-16 rounded-lg overflow-hidden bg-slate-200 grid place-items-center">
+              {m.mediaType === 'video' ? (m.thumbnailUrl ? <img src={m.thumbnailUrl} alt="" className="w-full h-full object-cover" /> : <Film size={16} className="text-slate-500" />) : <img src={m.url} alt="" className="w-full h-full object-cover" />}
+            </div>
+            <span className="absolute top-0.5 left-0.5 rounded bg-black/65 text-white text-[9px] font-bold px-1">{i + 1}{m.mediaType === 'video' ? ' ▶' : ''}</span>
+            {slides.length > 1 && <button type="button" onClick={() => setSlides(slides.filter((_, k) => k !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-300 grid place-items-center text-slate-500 hover:text-rose-600" aria-label={`Remove slide ${i + 1}`}><X size={11} /></button>}
+            <div className="flex justify-between mt-0.5">
+              <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="w-6 h-5 rounded border border-slate-200 grid place-items-center text-slate-500 disabled:opacity-30" aria-label="Move left"><ArrowLeft size={11} /></button>
+              <button type="button" disabled={i === slides.length - 1} onClick={() => move(i, 1)} className="w-6 h-5 rounded border border-slate-200 grid place-items-center text-slate-500 disabled:opacity-30" aria-label="Move right"><ArrowRight size={11} /></button>
+            </div>
+          </div>
+        ))}
+        {slides.length < 10 && <button type="button" disabled={!!busy} onClick={() => ref.current?.click()} className="flex-none w-16 h-16 rounded-lg border-[1.5px] border-dashed border-slate-300 text-slate-500 hover:text-teal-700 hover:border-teal-400 grid place-items-center text-[10px] font-bold leading-tight text-center px-1">{busy ? '…' : <span className="flex flex-col items-center gap-0.5"><Plus size={14} />{slides.length === 1 ? 'Make carousel' : 'Add slide'}</span>}</button>}
+      </div>
+      {busy && <div className="text-[11px] font-bold text-teal-700">{busy}</div>}
+      <input ref={ref} type="file" accept="image/*,video/mp4,video/quicktime" multiple hidden onChange={e => { const fs = Array.from(e.target.files || []); if (fs.length) add(fs); e.target.value = '' }} />
+    </div>
+  )
+}
+
 function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => void }) {
   const [busy, setBusy] = useState<string>('')
   const ref = useRef<HTMLInputElement>(null)
   async function pick(f: File) {
     try {
-      if (f.type.startsWith('video/')) {
-        if (!/mp4|quicktime/.test(f.type)) throw new Error('Use an MP4 (or .mov) — that\'s what Instagram and Facebook accept')
-        setBusy('Reading video…')
-        const info = await probeVideo(f)
-        if (info.durationSec < 3) throw new Error('Videos need to be at least 3 seconds')
-        if (info.durationSec > 15 * 60) throw new Error('Reels max out at 15 minutes')
-        let thumbnailUrl = ''
-        if (info.poster) { setBusy('Saving cover frame…'); thumbnailUrl = await uploadImage(info.poster, 'cover.jpg') }
-        setBusy('Uploading video… 0%')
-        const blob = await blobUpload(f.name.replace(/[^\w.\-]+/g, '_'), f, {
-          access: 'public', handleUploadUrl: '/api/social/upload-video',
-          onUploadProgress: (p: { percentage: number }) => setBusy(`Uploading video… ${Math.round(p.percentage)}%`),
-        })
-        onChange({ url: blob.url, mediaType: 'video', thumbnailUrl, durationSec: info.durationSec, width: info.width, height: info.height })
-        toast.success(`Video added · ${Math.round(info.durationSec)}s`)
-      } else {
-        setBusy('Uploading photo…')
-        const url = await uploadImage(f, f.name)
-        onChange({ url, mediaType: 'image' }); toast.success('Photo added')
-      }
+      const m = await uploadOne(f, setBusy)
+      onChange(m)
+      toast.success(m.mediaType === 'video' ? `Video added · ${Math.round(m.durationSec || 0)}s` : 'Photo added')
     } catch (e: any) { toast.error(String(e?.message || 'Upload failed').replace(/^Error:\s*/, '')) } finally { setBusy('') }
   }
   const dur = media?.durationSec ? `${Math.floor(media.durationSec / 60)}:${String(Math.round(media.durationSec % 60)).padStart(2, '0')}` : ''
@@ -468,8 +537,15 @@ function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => 
   )
 }
 
-interface EditProps { aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
-function EditFields({ aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
+type StoryTiming = { mode: 'same' } | { mode: 'offset'; minutes: number } | { mode: 'morning' } | { mode: 'custom'; at: Date }
+function storyTimeFor(t: StoryTiming, feed: Date): Date {
+  if (t.mode === 'offset') return new Date(feed.getTime() + t.minutes * 60000)
+  if (t.mode === 'morning') { const d = new Date(feed); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d }
+  if (t.mode === 'custom') return t.at
+  return feed
+}
+interface EditProps { slides?: Media[]; setSlides?: (s: Media[]) => void; storyTiming?: StoryTiming; setStoryTiming?: (t: StoryTiming) => void; aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
+function EditFields({ slides, setSlides, storyTiming, setStoryTiming, aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
   const past = when < new Date()
   const [ai, setAi] = useState<{ open: boolean; brief: string; busy: boolean; options: { label: string; caption: string }[]; hashtags: string }>({ open: !!aiInit, brief: aiInit || '', busy: false, options: [], hashtags: '' })
   const plats = platforms || (accounts ? Array.from(new Set(accounts.filter(a => acctIds?.includes(a.id)).map(a => a.platform))) : ['instagram'])
@@ -483,7 +559,10 @@ function EditFields({ aiInit, platforms, caption, setCaption, firstComment, setF
   // Opened from an idea: draft straight away so the three options are waiting.
   useEffect(() => { if (aiInit && !storyOnly) writeWithAI() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const isVideo = media?.mediaType === 'video'
+  const carousel = (slides?.length || 0) > 1
   const hasIg = !accounts || accounts.some(a => acctIds?.includes(a.id) && a.platform === 'instagram')
+  const hasFb = plats.includes('facebook')
+  const both = !!placements && placements.includes('feed') && placements.includes('story')
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   return (
     <>
@@ -496,14 +575,20 @@ function EditFields({ aiInit, platforms, caption, setCaption, firstComment, setF
           {(acctIds?.length || 0) > 1 && <div className="text-[11px] text-slate-500 mt-1.5">One post per account — approving one approves the set.</div>}
         </div>
       )}
-      <div><label className={labelCls}>{isVideo ? 'Video' : 'Photo or video'}</label><MediaBox media={media} onChange={setMedia} /></div>
+      <div><label className={labelCls}>{carousel ? `Carousel · ${slides!.length} slides` : isVideo ? 'Video' : 'Photo or video'}</label><MediaBox media={media} onChange={setMedia} />
+        {slides && setSlides && media?.url && !storyOnly && <div className="mt-2"><SlidesStrip slides={slides} setSlides={setSlides} /></div>}
+        {carousel && <div className="text-[11px] text-slate-500 mt-1.5 flex flex-col gap-0.5">
+          <span>Instagram crops every slide to slide 1's shape — keep them the same size (e.g. all 1080×1350).</span>
+          {hasFb && slides!.some(x => x.mediaType === 'video') && <span className="text-amber-700">Facebook posts the photos as one multi-photo post — video slides are left out there.</span>}
+        </div>}
+      </div>
       {placements && setPlacements && media?.url && (
         <div><label className={labelCls}>Post as</label>
           <div className="flex flex-wrap gap-1.5">
-            {([['feed', isVideo ? (hasIg ? 'Reel · feed' : 'Video post') : 'Feed post'], ['story', 'Story']] as [Placement, string][]).map(([pl, lab]) => { const on = placements.includes(pl); const tooLong = pl === 'story' && isVideo && (media.durationSec || 0) > 60
+            {([['feed', carousel ? 'Carousel · feed' : isVideo ? (hasIg ? 'Reel · feed' : 'Video post') : 'Feed post'], ['story', carousel ? 'Story (slide 1)' : 'Story']] as [Placement, string][]).map(([pl, lab]) => { const on = placements.includes(pl); const tooLong = pl === 'story' && isVideo && (media.durationSec || 0) > 60
               return <button key={pl} type="button" disabled={tooLong} title={tooLong ? 'Stories max out at 60 seconds' : ''} onClick={() => setPlacements(on ? placements.filter(x => x !== pl) : [...placements, pl])} className={`rounded-full border px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${on ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-500 hover:text-slate-900'}`}>{lab}{on && <Check size={12} className="inline ml-1" />}</button> })}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1.5">{isVideo && (media.durationSec || 0) > 60 ? 'Over 60 s, so it can go out as a Reel but not a Story.' : 'Pick both to publish the same file as a Reel and a Story.'}{isVideo && media.width && media.height && Math.abs(media.width / media.height - 9 / 16) > 0.05 ? ` This is ${media.width}×${media.height} — Reels and Stories are 9:16, so it'll show with bars.` : ''}</div>
+          <div className="text-[11px] text-slate-500 mt-1.5">{isVideo && (media.durationSec || 0) > 60 ? 'Over 60 s, so it can go out as a Reel but not a Story.' : carousel ? 'Pick both and the Story gets slide 1 (a Story takes one photo or video).' : 'Pick both to publish it to the feed and your Story.'}{isVideo && media.width && media.height && Math.abs(media.width / media.height - 9 / 16) > 0.05 ? ` This is ${media.width}×${media.height} — Reels and Stories are 9:16, so it'll show with bars.` : ''}</div>
         </div>
       )}
       {!storyOnly && <div>
@@ -527,8 +612,21 @@ function EditFields({ aiInit, platforms, caption, setCaption, firstComment, setF
         <label className={labelCls}>Publish date</label>
         <input type="datetime-local" value={toLocalInput(when)} onChange={e => e.target.value && setWhen(new Date(e.target.value))} className={inputCls + (past ? ' !border-rose-400 !bg-rose-50' : '')} />
         {past && <div className="text-xs font-bold text-rose-600 mt-1.5">This date has passed. Pick a new one.</div>}
+        {both && <div className="text-[11px] text-slate-500 mt-1">{storyTiming && setStoryTiming ? 'This is the feed post’s time — the Story’s is below.' : ''}</div>}
         <div className="flex flex-wrap gap-1.5 mt-2">{nextQueue && <button type="button" onClick={() => setWhen(nextQueue)} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${+when === +nextQueue ? 'border-teal-500 text-teal-700 bg-teal-50' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}><ListPlus size={12} /> Next queue slot · {fmtDate(nextQueue)} {fmtTime(nextQueue)}</button>}{QUICK_TIMES.map(([h, m]) => { const d = new Date(when); d.setHours(h, m, 0, 0); const on = when.getHours() === h && when.getMinutes() === m; return <button key={`${h}:${m}`} type="button" onClick={() => setWhen(d)} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${on ? 'border-teal-500 text-teal-700 bg-teal-50' : 'border-slate-300 text-slate-500 hover:text-slate-900'}`}>{fmtTime(d)}</button> })}</div>
       </div>
+      {both && storyTiming && setStoryTiming && (() => { const st = storyTimeFor(storyTiming, when); const stPast = st < new Date()
+        const opts: [string, StoryTiming][] = [['Same time', { mode: 'same' }], ['+2 hours', { mode: 'offset', minutes: 120 }], ['+4 hours', { mode: 'offset', minutes: 240 }], ['Next morning 9:00', { mode: 'morning' }]]
+        const isOn = (t: StoryTiming) => t.mode === storyTiming.mode && (t.mode !== 'offset' || (storyTiming.mode === 'offset' && storyTiming.minutes === t.minutes))
+        return (
+          <div><label className={labelCls}>Story goes out</label>
+            <div className="flex flex-wrap gap-1.5">
+              {opts.map(([lab, t]) => <button key={lab} type="button" onClick={() => setStoryTiming(t)} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${isOn(t) ? 'border-teal-500 text-teal-700 bg-teal-50' : 'border-slate-300 text-slate-500 hover:text-slate-900'}`}>{lab}</button>)}
+              <button type="button" onClick={() => setStoryTiming({ mode: 'custom', at: st })} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${storyTiming.mode === 'custom' ? 'border-teal-500 text-teal-700 bg-teal-50' : 'border-slate-300 text-slate-500 hover:text-slate-900'}`}>Pick a time</button>
+            </div>
+            {storyTiming.mode === 'custom' && <input type="datetime-local" value={toLocalInput(storyTiming.at)} onChange={e => e.target.value && setStoryTiming({ mode: 'custom', at: new Date(e.target.value) })} className={inputCls + ' mt-2' + (stPast ? ' !border-rose-400 !bg-rose-50' : '')} />}
+            <div className={`text-[11px] mt-1.5 ${stPast ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>Story: {fmtDate(st)} at {fmtTime(st)}{stPast ? ' — that time has passed' : storyTiming.mode !== 'same' ? ' · a later Story gives the post a second look' : ''}</div>
+          </div>) })()}
       {showFirstComment && !storyOnly && <div><label className={labelCls}>First comment <span className="normal-case tracking-normal font-semibold text-slate-400">· hashtags go here, posted right after publish</span></label><textarea value={firstComment} onChange={e => setFirstComment(e.target.value)} maxLength={2200} rows={2} className={inputCls + ' resize-y leading-snug'} placeholder="#lacrosse #floridalacrosse #monstermash" /></div>}
     </>
   )
@@ -539,15 +637,16 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
   const [firstComment, setFirstComment] = useState(post.firstComment || '')
   const [confirmNow, setConfirmNow] = useState(false); const [publishing, setPublishing] = useState(false)
   const [when, setWhen] = useState(new Date(post.scheduledFor))
-  const toMedia = (p: Post): Media | undefined => media(p)[0] ? { url: media(p)[0], mediaType: p.mediaType === 'video' ? 'video' : 'image', thumbnailUrl: p.thumbnailUrl } : undefined
-  const [med, setMed] = useState<Media | undefined>(toMedia(post))
+  const [slides, setSlides] = useState<Media[]>(toSlides(post))
+  const med: Media | undefined = slides[0]
+  const setMed = (m: Media) => setSlides([m, ...slides.slice(1)])
   const img = med?.url
   const [confirmDel, setConfirmDel] = useState(false)
-  useEffect(() => { setCaption(post.caption); setFirstComment(post.firstComment || ''); setWhen(new Date(post.scheduledFor)); setMed(toMedia(post)); setConfirmDel(false); setConfirmNow(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls, post.firstComment, post.thumbnailUrl, post.mediaType])
+  useEffect(() => { setCaption(post.caption); setFirstComment(post.firstComment || ''); setWhen(new Date(post.scheduledFor)); setSlides(toSlides(post)); setConfirmDel(false); setConfirmNow(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls, post.firstComment, post.thumbnailUrl, post.mediaType])
   const a = post.socialAccount || { platform: 'instagram', label: '' }
   const editable = post.status === 'draft' || post.status === 'scheduled' || post.status === 'failed'
-  const dirty = caption !== post.caption || firstComment !== (post.firstComment || '') || +when !== +new Date(post.scheduledFor) || img !== media(post)[0] || (med?.thumbnailUrl || '') !== (post.thumbnailUrl || '')
-  const save = () => onPatch(post.id, { caption, firstComment, scheduledFor: when.toISOString(), mediaUrls: img ? [img] : [], mediaType: med?.mediaType || 'image', thumbnailUrl: med?.thumbnailUrl || '' }, 'Saved')
+  const dirty = caption !== post.caption || firstComment !== (post.firstComment || '') || +when !== +new Date(post.scheduledFor) || slides.map(x => x.url).join('|') !== media(post).join('|') || (med?.thumbnailUrl || '') !== (post.thumbnailUrl || '')
+  const save = () => onPatch(post.id, { caption, firstComment, scheduledFor: when.toISOString(), ...slidesBody(slides) }, 'Saved')
   const isStory = post.placement === 'story'
   const draftSiblings = siblings.filter(s => s.status === 'draft').length
   const statusLine = post.status === 'draft' ? <div className="rounded-xl bg-amber-50 text-amber-800 text-xs font-bold px-3 py-2.5">Needs approval · scheduled for {fmtLong(when)}</div>
@@ -562,8 +661,8 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
-        {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} />
-          : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
+        {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} slides={slides} />
+          : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
         {post.status === 'published' && (metrics
           ? <div className="grid grid-cols-4 gap-2">{[['Reached', metrics.reach], ['Likes', metrics.likes], ['Comments', metrics.comments], [a.platform === 'instagram' ? 'Saves' : 'Shares', a.platform === 'instagram' ? metrics.saves : metrics.shares]].map(([l, v]) => <div key={String(l)} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2"><div className="text-lg font-extrabold tabular-nums">{fmtNum(Number(v))}</div><div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{l}</div></div>)}<div className="col-span-4 text-[11px] text-slate-500">Insights as of {fmtDate(new Date(metrics.fetchedAt))} {fmtTime(new Date(metrics.fetchedAt))} · refreshes every 4 hours</div></div>
           : <div className="text-xs text-slate-500">No insights yet — the next snapshot runs within 4 hours.</div>)}
@@ -589,7 +688,7 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
 }
 
 function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose, onSaved }: { when: Date; idea?: Idea; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [med, setMed] = useState<Media | undefined>(); const [placements, setPlacements] = useState<Placement[]>(idea?.weight === 'story' ? ['story'] : ['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
+  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [slides, setSlides] = useState<Media[]>([]); const med: Media | undefined = slides[0]; const setMed = (m: Media) => setSlides([m, ...slides.slice(1)]); const [storyTiming, setStoryTiming] = useState<StoryTiming>({ mode: 'same' }); const [placements, setPlacements] = useState<Placement[]>(idea?.weight === 'story' ? ['story'] : ['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
   const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   const [cMode, setCMode] = useState<'edit' | 'preview'>('edit')
@@ -600,10 +699,13 @@ function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose,
     if (!storyOnly && !caption.trim()) { toast.error('Add a caption first'); return }
     if (!img) { toast.error('Add a photo or video first'); return }
     if (at < new Date()) { toast.error('Pick a future date'); return }
+    const both = placements.includes('feed') && placements.includes('story')
+    const storyAt = both ? storyTimeFor(storyTiming, at) : at
+    if (storyAt < new Date()) { toast.error('The Story time has passed — pick a later one'); return }
     setBusy(true)
     try {
-      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, mediaUrls: [img], mediaType: med?.mediaType || 'image', thumbnailUrl: med?.thumbnailUrl || '', placements, scheduledFor: at.toISOString() }) })
-      const n = acctIds.length * placements.length; const acctNote = n > 1 ? ` (${n} posts)` : ''
+      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, ...slidesBody(slides), placements, scheduledFor: at.toISOString(), ...(both && +storyAt !== +at ? { storyScheduledFor: storyAt.toISOString() } : {}) }) })
+      const n = acctIds.length * placements.length; const acctNote = (n > 1 ? ` (${n} posts)` : '') + (both && +storyAt !== +at ? ` · Story ${fmtDate(storyAt)} ${fmtTime(storyAt)}` : '')
       if (approve) { await api(`/api/social/posts/${d.post.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'approve' }) }); toast.success(`Scheduled${acctNote} — publishes ${fmtDate(at)} at ${fmtTime(at)}`) }
       else toast.success(`Saved${acctNote} — waiting on approval`)
       await onSaved()
@@ -616,10 +718,10 @@ function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose,
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {cMode === 'preview' && img && previewAcct ? <>
-          {placements.includes('feed') && <div><div className={labelCls}>{med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} /></div>}
+          {placements.includes('feed') && <div><div className={labelCls}>{slides.length > 1 ? 'Carousel' : med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} slides={slides} /></div>}
           {placements.includes('story') && <div><div className={labelCls}>Story · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption="" imgSrc={img} when={when} mediaType={med?.mediaType} placement="story" poster={med?.thumbnailUrl} /></div>}
           {firstComment && placements.includes('feed') && <div className="text-xs text-slate-500"><span className="font-bold uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{firstComment}</div>}
-        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
+        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">
