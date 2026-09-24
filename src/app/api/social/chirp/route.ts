@@ -93,7 +93,7 @@ ${top.map(p => `- ${p.publishedAt ? localDay(p.publishedAt) : ''} ${p.socialAcco
 
 HOUSE RULES:
 - Audiences: clubs (club directors & coaches — they register teams), players, parents (they book hotels and plan the weekend), all.
-- Formats the scheduler can publish: Photo, Reel (video), Story. It can't publish multi-slide carousels yet — suggest one combined graphic or a short Reel instead.
+- Formats the scheduler can publish: Photo, Reel (video), Carousel (2–10 photos/videos on Instagram; Facebook gets the photos as a multi-photo post), Story (one photo or video).
 - Never use deadline, discount, "spots filling up" or early-bird urgency. Use field-composition wording ("the bracket is taking shape") instead.
 - Registration CTA points to ${site}.
 - Only state facts you were given or found and cited. Never invent game times, scores, divisions, prices or team counts. Say when you're unsure.
@@ -104,7 +104,7 @@ REPLY FORMAT:
 1. A short conversational answer (under 120 words). No headings.
 2. If you're suggesting posts, end with a fenced block exactly like:
 \`\`\`ideas
-[{"title":"…","date":"YYYY-MM-DD","event":"event name or empty","aud":"clubs|players|parents|all","fmt":"Photo|Reel|Story","why":"one or two sentences","hook":"the first line / sticker text","shots":["what to shoot or pull"],"cap":"starter caption, or empty for a Story"}]
+[{"title":"…","date":"YYYY-MM-DD","event":"event name or empty","aud":"clubs|players|parents|all","fmt":"Photo|Reel|Carousel|Story","why":"one or two sentences","hook":"the first line / sticker text","shots":["what to shoot or pull"],"cap":"starter caption, or empty for a Story"}]
 \`\`\`
 Give 1–5 ideas. Put each on a sensible day — prefer the open days above, never a past date. If the director only asked a question, you can skip the block.`
 

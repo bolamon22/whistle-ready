@@ -755,7 +755,6 @@ function IdeaDrawer({ idea, canDraft, onClose, onDraft, onDismiss }: { idea: Ide
         {!idea.quiet && <div className="grid grid-cols-2 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden text-sm">
           {[['Audience', AUDIENCE_LABEL[idea.aud]], ['Format', idea.fmt], ['Post as', idea.weight === 'story' ? 'Story' : idea.fmt === 'Reel' ? 'Feed (Reel)' : 'Feed'], ['Suggested time', hhmm(idea.time)]].map(([k, v]) => <div key={k} className="bg-white px-3 py-2"><div className="text-[11px] text-slate-500">{k}</div><div className="font-bold">{v}</div></div>)}
         </div>}
-        {idea.fmt === 'Carousel' && <div className="rounded-xl bg-amber-50 text-amber-900 text-xs px-3 py-2">The scheduler publishes one photo or video per post, not multi-slide carousels yet. Combine the slides into one graphic (or a short Reel), or post the carousel from the Instagram app.</div>}
         <div><div className={labelCls}>Hook</div><div className="text-base font-bold border-l-[3px] border-teal-600 pl-2.5">{idea.hook}</div></div>
         {idea.shots.length > 0 && <div><div className={labelCls}>What to shoot or pull</div><ul className="list-disc pl-5 text-sm text-slate-700 flex flex-col gap-1">{idea.shots.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
         {idea.cap && <div><div className={labelCls}>Caption starter</div><div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-sm text-slate-700 whitespace-pre-wrap">{idea.cap}</div></div>}
@@ -776,7 +775,7 @@ function IdeaNote({ idea, onUseStarter }: { idea: Idea; onUseStarter?: () => voi
       <div className="font-bold text-teal-900 flex items-center gap-1.5"><Lightbulb size={13} /> {idea.title} <span className="font-normal text-teal-800">· {AUDIENCE_LABEL[idea.aud]} · {idea.fmt}</span></div>
       {idea.shots.length > 0 && <div><span className="font-bold text-slate-600">Add: </span>{idea.shots.join(' · ')}</div>}
       {idea.weight === 'story' && idea.hook && <div><span className="font-bold text-slate-600">Sticker text: </span>{idea.hook}</div>}
-      {idea.fmt === 'Carousel' && <div className="text-amber-800">Carousels aren't supported here yet — use one combined graphic or a short Reel.</div>}
+      {idea.fmt === 'Carousel' && <div className="text-slate-600">Add the first slide, then “Make carousel” to add the rest (up to 10).</div>}
       {onUseStarter && <button type="button" onClick={onUseStarter} className="self-start text-teal-800 font-bold hover:underline">Use the starter caption instead</button>}
     </div>
   )

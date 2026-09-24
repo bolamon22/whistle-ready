@@ -211,7 +211,6 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   weekends (≤21 days apart) alternate with a "two weekends" pairing post; the
   first Monday of each month gets an "every date, one post" card. "Draft with
   AI" opens Compose with the idea's brief and runs Write with AI straight away.
-  Carousel ideas note that the publisher is single-media for now.
 - **Ask Chirp (Sep 24)** — brainstorm chat on the Social page (top-bar button;
   `ChirpPanel.tsx` → `POST /api/social/chirp`, staff only). Chirp gets the org's
   upcoming events (`src/lib/socialIdeasServer.ts`, shared with the ideas route),
