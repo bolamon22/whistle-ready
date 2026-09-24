@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db'
-import { createInstagramContainer, getInstagramContainerStatus, publishInstagramContainer, publishFacebook, postFirstComment, refreshLongLivedToken, type PublishSpec } from '@/lib/social'
+import { createInstagramContainer, getInstagramContainerStatus, publishInstagramContainer, publishFacebook, postFirstComment, findLivePost, refreshLongLivedToken, type PublishSpec } from '@/lib/social'
 import { sendPushToOrg } from '@/lib/push'
 import { encrypt, decrypt } from '@/lib/encrypt'
 
@@ -21,23 +21,34 @@ function specOf(post: PostWithAccount): PublishSpec | null {
 
 async function fail(post: PostWithAccount, msg: string, notify = true): Promise<PublishOutcome> {
   await prisma.scheduledPost.update({ where: { id: post.id }, data: { status: 'failed', lastError: msg, externalContainerId: '' } })
-  if (notify) await sendPushToOrg(post.orgId, { title: 'Social post failed to publish', body: `${post.socialAccount?.label || 'Account'}: ${msg}`, url: '/dashboard/org/social', tag: 'social-publish-failed' })
+  if (notify) await sendPushToOrg(post.orgId, { title: 'Social post failed to publish', body: `${post.socialAccount?.label || 'Account'}: ${msg}`, url: '/dashboard/org/social', tag: 'social-publish-failed' }).catch(() => {})
   return { id: post.id, status: 'failed', error: msg }
 }
 
-async function markPublished(post: PostWithAccount, externalPostId: string): Promise<PublishOutcome> {
-  // The post is live from here on — a first-comment failure is recorded, never
-  // allowed to flip a published post back to 'failed'.
-  let lastError = ''
-  if (post.firstComment.trim() && post.placement !== 'story' && post.socialAccount) {
-    const c = await postFirstComment(post.socialAccount, externalPostId, post.firstComment.trim())
-    if (!c.ok) lastError = `Published, but the first comment didn't post: ${c.error}`
-  }
+/** Records a post as live. The database write comes FIRST — once Meta has the post,
+ *  nothing after this point (the first comment, a push, a slow network) is allowed
+ *  to leave the row stuck in 'publishing'. That ordering is the fix for Sep 23, when
+ *  a crash in the first-comment step stranded two posts that were already live. */
+async function markPublished(post: PostWithAccount, externalPostId: string, permalink = ''): Promise<PublishOutcome> {
   await prisma.scheduledPost.update({
     where: { id: post.id },
-    data: { status: 'published', externalPostId, publishedAt: new Date(), lastError, externalContainerId: '' },
+    data: { status: 'published', externalPostId, publishedAt: new Date(), lastError: '', externalContainerId: '', ...(permalink ? { permalink } : {}) },
   })
-  return { id: post.id, status: 'published', error: lastError || undefined }
+  if (!post.firstComment.trim() || post.placement === 'story' || !post.socialAccount) return { id: post.id, status: 'published' }
+  let warn = ''
+  try {
+    const c = await postFirstComment(post.socialAccount, externalPostId, post.firstComment.trim())
+    if (!c.ok) warn = `Published, but the first comment didn't post: ${c.error}`
+  } catch (e: any) { warn = `Published, but the first comment didn't post: ${e?.message || 'unexpected error'}` }
+  if (warn) await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: warn } }).catch(() => {})
+  return { id: post.id, status: 'published', error: warn || undefined }
+}
+
+/** Is this post already on the account (sent, but never recorded)? */
+async function alreadyLive(post: PostWithAccount): Promise<{ externalPostId: string; permalink: string } | null> {
+  if (!post.socialAccount) return null
+  const r = await findLivePost(post.socialAccount, { since: post.scheduledFor, caption: post.caption, mediaType: post.mediaType, placement: post.placement })
+  return r.ok ? r.data : null
 }
 
 /** Waits on an Instagram container until it's FINISHED (or gives up after `budgetMs`
@@ -52,14 +63,26 @@ async function finishInstagram(post: PostWithAccount, containerId: string, budge
     if (!st.ok) return fail(post, st.error)
     if (st.data.status === 'FINISHED') {
       const pub = await publishInstagramContainer(account, containerId)
-      if (!pub.ok) return fail(post, pub.error)
+      if (!pub.ok) {
+        // A publish that errored can still have gone through; check before failing.
+        const live = await alreadyLive(post)
+        if (live) return markPublished(post, live.externalPostId, live.permalink)
+        return fail(post, pub.error)
+      }
       return markPublished(post, pub.data.externalPostId)
+    }
+    if (st.data.status === 'PUBLISHED') {
+      // Meta already published this container — an earlier run got that far and
+      // then died. Find the live post and record it rather than waiting forever.
+      const live = await alreadyLive(post)
+      if (live) return markPublished(post, live.externalPostId, live.permalink)
+      return fail(post, 'Instagram says this was published, but it could not be found on the account — check @' + account.label.replace(/^@/, '') + ' before retrying.', false)
     }
     if (st.data.status === 'ERROR' || st.data.status === 'EXPIRED') {
       return fail(post, `Instagram couldn't process the ${post.mediaType === 'video' ? 'video' : 'image'}${st.data.detail ? `: ${st.data.detail}` : ''} — check the file meets Reels/Stories specs (MP4, ≤15 min for Reels, ≤60 s for Stories).`)
     }
     if (Date.now() > deadline) {
-      await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: containerId, lastError: '' } })
+      await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: containerId, lastError: `Instagram is still processing the video (status ${st.data.status})` } })
       return { id: post.id, status: 'pending' }
     }
     await new Promise(r => setTimeout(r, 4000))
@@ -71,65 +94,98 @@ async function finishInstagram(post: PostWithAccount, containerId: string, budge
  * simultaneous "Publish now" can't double-post), refresh the account token if it's
  * about to expire, push the media to Meta, then drop the first comment.
  * Used by the publish cron and by the Publish-now action — one code path.
- *
- * `fromStatus` is the status the row must currently have for the claim to succeed
- * ('scheduled' for the cron; Publish-now passes whatever the post is in).
- * `waitMs` is how long to wait for Instagram video processing before handing off
- * to the cron (Publish-now can afford more than the cron's per-post share).
+ * Never throws: any unexpected error becomes a recorded outcome.
  */
 export async function publishScheduledPost(postId: string, fromStatus: string | string[] = 'scheduled', waitMs = 25_000): Promise<PublishOutcome> {
   const claim = await prisma.scheduledPost.updateMany({
     where: { id: postId, status: Array.isArray(fromStatus) ? { in: fromStatus } : fromStatus },
-    data: { status: 'publishing' },
+    data: { status: 'publishing', lastError: '' },
   })
   if (claim.count === 0) return { id: postId, status: 'skipped' } // someone else already has it
 
   const post = await loadPost(postId)
   if (!post) return { id: postId, status: 'skipped' }
+  try {
+    const account = post.socialAccount
+    if (!account || account.status !== 'active') return await fail(post, !account ? 'Social account no longer exists' : `Social account is ${account.status}`)
 
-  const account = post.socialAccount
-  if (!account || account.status !== 'active') return fail(post, !account ? 'Social account no longer exists' : `Social account is ${account.status}`)
-
-  // Opportunistic token refresh — a long-lived token is good for ~60 days; renew it
-  // once it's within 5 days of expiring so accounts don't silently drop.
-  if (account.tokenExpiresAt && account.tokenExpiresAt.getTime() - Date.now() < 5 * 24 * 60 * 60 * 1000) {
-    const refreshed = await refreshLongLivedToken(decrypt(account.accessToken))
-    if (refreshed.ok) {
-      const accessToken = encrypt(refreshed.data.token)
-      await prisma.socialAccount.update({ where: { id: account.id }, data: { accessToken, tokenExpiresAt: new Date(Date.now() + refreshed.data.expiresInSeconds * 1000) } })
-      account.accessToken = accessToken
+    // Opportunistic token refresh — a long-lived token is good for ~60 days; renew it
+    // once it's within 5 days of expiring so accounts don't silently drop.
+    if (account.tokenExpiresAt && account.tokenExpiresAt.getTime() - Date.now() < 5 * 24 * 60 * 60 * 1000) {
+      const refreshed = await refreshLongLivedToken(decrypt(account.accessToken))
+      if (refreshed.ok) {
+        const accessToken = encrypt(refreshed.data.token)
+        await prisma.socialAccount.update({ where: { id: account.id }, data: { accessToken, tokenExpiresAt: new Date(Date.now() + refreshed.data.expiresInSeconds * 1000) } })
+        account.accessToken = accessToken
+      }
     }
-  }
 
-  const spec = specOf(post)
-  if (!spec) return fail(post, `No ${post.mediaType === 'video' ? 'video' : 'photo'} attached to this post`, false)
+    const spec = specOf(post)
+    if (!spec) return await fail(post, `No ${post.mediaType === 'video' ? 'video' : 'photo'} attached to this post`, false)
 
-  if (account.platform === 'facebook') {
-    const r = await publishFacebook(account, spec)
-    if (!r.ok) return fail(post, r.error)
-    return markPublished(post, r.data.externalPostId)
+    if (account.platform === 'facebook') {
+      const r = await publishFacebook(account, spec)
+      if (!r.ok) return await fail(post, r.error)
+      return await markPublished(post, r.data.externalPostId)
+    }
+    if (account.platform === 'instagram') {
+      const c = await createInstagramContainer(account, spec)
+      if (!c.ok) return await fail(post, c.error)
+      return await finishInstagram(post, c.data.containerId, waitMs)
+    }
+    return await fail(post, `Unsupported platform: ${account.platform}`)
+  } catch (e: any) {
+    // Leave it in 'publishing': it may already be on Meta. recoverStuckPosts()
+    // checks the account and settles it either way on the next cron run.
+    await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: `Interrupted: ${e?.message || 'unexpected error'} — checking whether it went out` } }).catch(() => {})
+    return { id: post.id, status: 'pending', error: e?.message }
   }
-  if (account.platform === 'instagram') {
-    const c = await createInstagramContainer(account, spec)
-    if (!c.ok) return fail(post, c.error)
-    return finishInstagram(post, c.data.containerId, waitMs)
-  }
-  return fail(post, `Unsupported platform: ${account.platform}`)
 }
 
 /** Second half of any Instagram publish that ran out of time waiting on transcoding:
- *  rows still in 'publishing' with a container id. Called by the cron each run. */
-export async function finishPendingContainers(budgetMs = 20_000): Promise<PublishOutcome[]> {
+ *  rows still in 'publishing' with a container id, less than 2 hours past their
+ *  scheduled time (older ones go to recoverStuckPosts). Called by the cron each run. */
+export async function finishPendingContainers(budgetMs = 10_000): Promise<PublishOutcome[]> {
   const pending = await prisma.scheduledPost.findMany({
-    where: { status: 'publishing', externalContainerId: { not: '' } },
+    where: { status: 'publishing', externalContainerId: { not: '' }, scheduledFor: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) } },
     orderBy: { scheduledFor: 'asc' }, take: 5, include: { socialAccount: true },
   })
   const out: PublishOutcome[] = []
   for (const post of pending) {
-    if (!post.socialAccount) { out.push(await fail(post, 'Social account no longer exists')); continue }
-    // A container that's been stuck > 2 hours isn't coming back — Meta expires them.
-    if (Date.now() - post.updatedAt.getTime() > 2 * 60 * 60 * 1000) { out.push(await fail(post, 'Instagram never finished processing this video (timed out after 2 hours)')); continue }
-    out.push(await finishInstagram(post, post.externalContainerId, budgetMs / pending.length))
+    try {
+      if (!post.socialAccount) { out.push(await fail(post, 'Social account no longer exists')); continue }
+      out.push(await finishInstagram(post, post.externalContainerId, budgetMs / pending.length))
+    } catch (e: any) { out.push({ id: post.id, status: 'pending', error: e?.message }) }
+  }
+  return out
+}
+
+/** Safety net for rows stuck in 'publishing' — the function was killed or crashed
+ *  somewhere between Meta accepting the post and the database write. For each one,
+ *  look on the account: if the post is there, record it as published (and post the
+ *  first comment it never got); if an Instagram container is still usable, finish
+ *  it; otherwise mark it failed with a message saying it's safe to retry.
+ *  "Stuck" = no container and untouched for 10 min, or a container > 2 h old. */
+export async function recoverStuckPosts(): Promise<PublishOutcome[]> {
+  const tenMin = new Date(Date.now() - 10 * 60 * 1000), twoHours = new Date(Date.now() - 2 * 60 * 60 * 1000)
+  const stuck = await prisma.scheduledPost.findMany({
+    where: { status: 'publishing', OR: [{ externalContainerId: '', updatedAt: { lt: tenMin } }, { externalContainerId: { not: '' }, scheduledFor: { lt: twoHours } }] },
+    orderBy: { scheduledFor: 'asc' }, take: 5, include: { socialAccount: true },
+  })
+  const out: PublishOutcome[] = []
+  for (const post of stuck) {
+    try {
+      if (!post.socialAccount) { out.push(await fail(post, 'Social account no longer exists')); continue }
+      const live = await alreadyLive(post)
+      if (live) { out.push(await markPublished(post, live.externalPostId, live.permalink)); continue }
+      if (post.externalContainerId && post.socialAccount.platform === 'instagram') {
+        const st = await getInstagramContainerStatus(post.socialAccount, post.externalContainerId)
+        if (st.ok && st.data.status === 'FINISHED') { out.push(await finishInstagram(post, post.externalContainerId, 5_000)); continue }
+        out.push(await fail(post, `Instagram never finished processing this video${st.ok ? ` (last status: ${st.data.status}${st.data.detail ? ` — ${st.data.detail}` : ''})` : ''}. It isn't on the account, so it's safe to Retry.`))
+        continue
+      }
+      out.push(await fail(post, 'Publishing was interrupted before Meta confirmed it, and it isn\'t on the account — safe to Retry.'))
+    } catch (e: any) { out.push({ id: post.id, status: 'pending', error: e?.message }) }
   }
   return out
 }

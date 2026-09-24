@@ -181,6 +181,17 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   `POST /api/social/insights/refresh` (director) re-snapshots every post in the window —
   the cron only re-reads the last 30 days. Reach is a SUM of per-post reach, not unique
   people; the page says so.
+- **Fixed (Sep 24)** — posts stuck in "Publishing". The video commit (88f4abb) had
+  accidentally deleted `postFirstComment` from `src/lib/social.ts`; the Sep 23 9:00
+  Reel + Facebook video went live on Meta, then the first-comment step threw and the
+  rows were never marked published. Fixes: function restored; `markPublished` writes
+  the DB row *before* the first comment and never throws; `recoverStuckPosts()` runs
+  first in every cron pass (and on demand via "Check now" / `action:'check'`), finds
+  a stranded post on the account with `findLivePost()` and records it, or fails it as
+  safe-to-retry; Instagram's `PUBLISHED` container status is handled; the cron only
+  starts a post with ≥35 s left so a slow Facebook video can't be killed mid-call.
+  **Verify step for this module:** `esbuild <entries> --bundle --alias:@=./src
+  --packages=external` — per-file parsing does not catch a missing export; bundling does.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages

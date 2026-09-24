@@ -275,6 +275,62 @@ export async function publishFacebook(account: { externalId: string; accessToken
   return { ok: true, data: { externalPostId: fin.data.post_id || start.data.video_id } }
 }
 
+/** Posts a comment under a just-published post — how hashtags stay out of the
+ *  caption on Instagram. Same endpoint shape for IG media and FB Page posts/videos. */
+export async function postFirstComment(account: { accessToken: string }, externalPostId: string, message: string): Promise<Result<{ commentId: string }>> {
+  const r = await graphPost<{ id: string }>(`/${externalPostId}/comments`, { message, access_token: decrypt(account.accessToken) })
+  if (!r.ok) return r
+  return { ok: true, data: { commentId: r.data.id } }
+}
+
+const norm = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/** Looks on the account itself for a post we sent but never got to record — the
+ *  function died between Meta accepting the post and our database write. Matches on
+ *  publish time (from `since`, minus a little clock slack) and, for anything with a
+ *  caption, on the caption's opening. Stories carry no caption, so those match on
+ *  time alone. Returns null when nothing matches — i.e. it genuinely didn't go out. */
+export async function findLivePost(
+  account: { platform: string; externalId: string; accessToken: string },
+  opts: { since: Date; caption: string; mediaType: string; placement: string },
+): Promise<Result<{ externalPostId: string; permalink: string } | null>> {
+  const token = decrypt(account.accessToken)
+  const after = opts.since.getTime() - 10 * 60 * 1000
+  const want = norm(opts.caption).slice(0, 60)
+  const hit = (t: string, text: string | undefined) => new Date(t).getTime() >= after && (!want || norm(text || '').startsWith(want))
+  if (account.platform === 'instagram') {
+    if (opts.placement === 'story') {
+      const r = await graphGet<{ data: any[] }>(`/${account.externalId}/stories`, { fields: 'id,timestamp,permalink', access_token: token })
+      if (!r.ok) return r
+      const m = (r.data.data || []).find(x => new Date(x.timestamp).getTime() >= after)
+      return { ok: true, data: m ? { externalPostId: m.id, permalink: m.permalink || '' } : null }
+    }
+    const r = await graphGet<{ data: any[] }>(`/${account.externalId}/media`, { fields: 'id,caption,timestamp,permalink', limit: '20', access_token: token })
+    if (!r.ok) return r
+    const m = (r.data.data || []).find(x => hit(x.timestamp, x.caption))
+    return { ok: true, data: m ? { externalPostId: m.id, permalink: m.permalink || '' } : null }
+  }
+  if (account.platform === 'facebook') {
+    if (opts.placement === 'story') {
+      const r = await graphGet<{ data: any[] }>(`/${account.externalId}/stories`, { access_token: token })
+      if (!r.ok) return r
+      const m = (r.data.data || []).find(x => new Date(Number(x.creation_time) * 1000 || x.creation_time).getTime() >= after)
+      return { ok: true, data: m ? { externalPostId: m.post_id || m.id, permalink: m.url || '' } : null }
+    }
+    if (opts.mediaType === 'video') {
+      const r = await graphGet<{ data: any[] }>(`/${account.externalId}/videos`, { fields: 'id,description,created_time,permalink_url', limit: '15', access_token: token })
+      if (!r.ok) return r
+      const m = (r.data.data || []).find(x => hit(x.created_time, x.description))
+      return { ok: true, data: m ? { externalPostId: m.id, permalink: m.permalink_url ? (m.permalink_url.startsWith('http') ? m.permalink_url : `https://www.facebook.com${m.permalink_url}`) : '' } : null }
+    }
+    const r = await graphGet<{ data: any[] }>(`/${account.externalId}/published_posts`, { fields: 'id,message,created_time,permalink_url', limit: '15', access_token: token })
+    if (!r.ok) return r
+    const m = (r.data.data || []).find(x => hit(x.created_time, x.message))
+    return { ok: true, data: m ? { externalPostId: m.id, permalink: m.permalink_url || '' } : null }
+  }
+  return { ok: false, error: `Unsupported platform: ${account.platform}` }
+}
+
 type InsightMetrics = { reach: number; impressions: number; likes: number; comments: number; saves: number; shares: number; raw: any }
 
 function emptyMetrics(raw: any = {}): InsightMetrics {

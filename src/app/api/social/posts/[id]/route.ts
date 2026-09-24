@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff, requireDirector } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
-import { publishScheduledPost } from '@/lib/socialPublish'
+import { publishScheduledPost, recoverStuckPosts } from '@/lib/socialPublish'
+
+// Publish-now waits on Instagram video processing, so it needs the longer limit.
+export const maxDuration = 60
 
 const TERMINAL = ['published', 'publishing']
 
@@ -33,6 +36,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       alsoApproved = r.count
     }
     return NextResponse.json({ ok: true, post: updated, alsoApproved })
+  }
+
+  if (action === 'check') {
+    // "Check now" on a post stuck in Publishing: look on the account and settle it —
+    // published if it's there, keep waiting if Instagram is still processing,
+    // failed (safe to retry) if it never went out. Same logic the cron runs.
+    if (post.status !== 'publishing') return NextResponse.json({ ok: true, post })
+    const [outcome] = await recoverStuckPosts([post.id])
+    const fresh = await prisma.scheduledPost.findUnique({ where: { id: post.id } })
+    return NextResponse.json({ ok: true, outcome: outcome?.status || 'pending', post: fresh })
   }
 
   if (action === 'publish-now') {
