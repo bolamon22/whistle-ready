@@ -220,6 +220,11 @@ export default function ClubDirectorDashboard() {
   // previous render" -- and it took the whole club-director portal to a blank error page
   // the moment the page finished loading.
   const [moving, setMoving] = useState('')
+  // Which team's coach is being reassigned, and the form behind it. Same reason as
+  // `moving` for living up here: below the early returns these would be conditional hooks.
+  const [coachEdit, setCoachEdit] = useState('')
+  const [coachSaving, setCoachSaving] = useState(false)
+  const [coachForm, setCoachForm] = useState({ coachName: '', coachEmail: '', coachPhone: '' })
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -324,13 +329,43 @@ export default function ClubDirectorDashboard() {
   const coachRows = teamRows.map(t => {
     const byEmail = t.coachEmail ? coachWaivers.find(c => normEmail(c.email) === normEmail(t.coachEmail)) : undefined
     const match = byEmail || (t.coachName ? coachWaivers.find(c => normName(c.name) === normName(t.coachName)) : undefined)
-    return { key: t.key, teamName: t.teamName, division: t.division, coachName: t.coachName, coachEmail: t.coachEmail, coachPhone: t.coachPhone, waiver: match }
+    return { key: t.key, teamId: t.key, teamName: t.teamName, division: t.division, coachName: t.coachName, coachEmail: t.coachEmail, coachPhone: t.coachPhone, waiver: match }
   })
   const matchedCoachIds = new Set(coachRows.map(r => r.waiver?.id).filter(Boolean) as string[])
   // Signed, but not matching any coach named on a registration -- an assistant, or a
   // head coach who changed since the club registered. Shown rather than hidden.
   const extraCoachWaivers = coachWaivers.filter(c => !matchedCoachIds.has(c.id))
   const coachesSigned = coachRows.filter(r => r.waiver).length
+
+  // NAMING THE REAL COACH OF A TEAM.
+  //
+  // Directors register five teams in one sitting and put themselves on all five to
+  // get through it, then the actual coaches file waivers that match nothing (Bo,
+  // Sep 24 2026). Fixing it was an email to the organizer. Now it is a dropdown:
+  // pick one of the coaches who already signed, or type someone who hasn't yet.
+  // The match above is by email then name, so the row re-matches on the next load.
+  const coachChoices = [...extraCoachWaivers, ...coachWaivers.filter(c => matchedCoachIds.has(c.id))]
+
+  async function saveCoach(teamId: string, next: { coachName: string; coachEmail: string; coachPhone: string }) {
+    if (!teamId || !selTournament || !next.coachName.trim()) return
+    setCoachSaving(true)
+    try {
+      const res = await fetch(`/api/club-director/coach${viewUserId ? `?userId=${encodeURIComponent(viewUserId)}` : ''}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: selTournament, teamId, ...next }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(j?.error || 'Could not update that coach'); return }
+      setCoachEdit('')
+      await loadData(selTournament)
+      toast.success(`${next.coachName} is now the coach of ${j?.teamName || 'that team'}`)
+    } catch { toast.error('Could not update that coach') } finally { setCoachSaving(false) }
+  }
+
+  function openCoachEdit(r: { teamId: string; coachName: string; coachEmail: string; coachPhone: string }) {
+    setCoachForm({ coachName: r.coachName || '', coachEmail: r.coachEmail || '', coachPhone: r.coachPhone || '' })
+    setCoachEdit(r.teamId)
+  }
 
   // MOVING A PLAYER ONTO ONE OF MY OWN TEAMS.
   //
@@ -745,21 +780,94 @@ export default function ClubDirectorDashboard() {
                     <p className="p-5 text-sm text-gray-400">No teams registered for this event yet.</p>
                   )}
                   {coachRows.map(r => (
-                    <div key={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-                      <span className={`shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${r.waiver ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                        {r.waiver ? <Check size={15} /> : <X size={15} />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-gray-800 truncate">{r.coachName || <span className="font-normal text-gray-400">No coach named on the registration</span>}</span>
-                        <span className="block text-xs text-gray-500 truncate">{r.teamName}{r.division ? ` · ${r.division}` : ''}{r.waiver?.role ? ` · ${r.waiver.role}` : ''}</span>
-                      </span>
-                      <span className="flex items-center gap-3 text-xs text-gray-500 shrink-0">
-                        {r.coachEmail && <a href={`mailto:${r.coachEmail}`} className="flex items-center gap-1 hover:text-violet-600"><Mail size={12} /> {r.coachEmail}</a>}
-                        {r.coachPhone && <a href={`tel:${r.coachPhone}`} className="flex items-center gap-1 hover:text-violet-600"><Phone size={12} /> {r.coachPhone}</a>}
-                      </span>
-                      <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${r.waiver ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                        {r.waiver ? 'Waiver on file' : 'Not filed'}
-                      </span>
+                    <div key={r.key}>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+                        <span className={`shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${r.waiver ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                          {r.waiver ? <Check size={15} /> : <X size={15} />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-gray-800 truncate">{r.coachName || <span className="font-normal text-gray-400">No coach named on the registration</span>}</span>
+                          <span className="block text-xs text-gray-500 truncate">{r.teamName}{r.division ? ` · ${r.division}` : ''}{r.waiver?.role ? ` · ${r.waiver.role}` : ''}</span>
+                        </span>
+                        <span className="flex items-center gap-3 text-xs text-gray-500 shrink-0">
+                          {r.coachEmail && <a href={`mailto:${r.coachEmail}`} className="flex items-center gap-1 hover:text-violet-600"><Mail size={12} /> {r.coachEmail}</a>}
+                          {r.coachPhone && <a href={`tel:${r.coachPhone}`} className="flex items-center gap-1 hover:text-violet-600"><Phone size={12} /> {r.coachPhone}</a>}
+                        </span>
+                        <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${r.waiver ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {r.waiver ? 'Waiver on file' : 'Not filed'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => (coachEdit === r.teamId ? setCoachEdit('') : openCoachEdit(r))}
+                          className="shrink-0 text-xs font-semibold text-violet-600 hover:text-violet-700 px-2 py-1 rounded-lg hover:bg-violet-50"
+                        >
+                          {coachEdit === r.teamId ? 'Cancel' : 'Change coach'}
+                        </button>
+                      </div>
+
+                      {coachEdit === r.teamId && (
+                        <div className="px-4 pb-4 pt-1 bg-gray-50 border-t border-gray-100">
+                          <p className="text-xs font-semibold text-gray-700 mb-2">Who coaches {r.teamName}?</p>
+
+                          {coachChoices.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {coachChoices.map(c => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  disabled={coachSaving}
+                                  onClick={() => saveCoach(r.teamId, { coachName: c.name, coachEmail: c.email, coachPhone: c.phone })}
+                                  className="flex items-center gap-1.5 text-xs bg-white border border-gray-200 rounded-full pl-2 pr-3 py-1 hover:border-violet-300 hover:bg-violet-50 disabled:opacity-50"
+                                >
+                                  <Check size={12} className="text-emerald-600 shrink-0" />
+                                  <span className="font-medium text-gray-800">{c.name || 'Unnamed'}</span>
+                                  {c.role && <span className="text-gray-400">{c.role}</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap items-end gap-2">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[11px] font-medium text-gray-500">Name</span>
+                              <input
+                                value={coachForm.coachName}
+                                onChange={e => setCoachForm(f => ({ ...f, coachName: e.target.value }))}
+                                className="border border-gray-300 rounded-lg px-2 py-1 text-xs w-44 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[11px] font-medium text-gray-500">Email</span>
+                              <input
+                                type="email"
+                                value={coachForm.coachEmail}
+                                onChange={e => setCoachForm(f => ({ ...f, coachEmail: e.target.value }))}
+                                className="border border-gray-300 rounded-lg px-2 py-1 text-xs w-56 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[11px] font-medium text-gray-500">Phone</span>
+                              <input
+                                value={coachForm.coachPhone}
+                                onChange={e => setCoachForm(f => ({ ...f, coachPhone: e.target.value }))}
+                                className="border border-gray-300 rounded-lg px-2 py-1 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              disabled={coachSaving || !coachForm.coachName.trim()}
+                              onClick={() => saveCoach(r.teamId, coachForm)}
+                              className="bg-violet-600 text-white text-xs font-semibold rounded-lg px-3 py-1.5 hover:bg-violet-700 disabled:bg-gray-300"
+                            >
+                              {coachSaving ? 'Saving…' : 'Save'}
+                            </button>
+                          </div>
+
+                          <p className="text-[11px] text-gray-400 mt-2">
+                            Coaches who already signed are listed above — picking one matches their waiver to this team. Anyone you type in instead will match as soon as they sign.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -767,7 +875,7 @@ export default function ClubDirectorDashboard() {
                 {extraCoachWaivers.length > 0 && (
                   <div className="bg-white border border-gray-200 rounded-xl p-4">
                     <p className="text-sm font-semibold text-gray-700 mb-1">Also filed</p>
-                    <p className="text-xs text-gray-500 mb-3">Signed for your club, but not matching a coach named on a registration — an assistant, or a coach who changed since you registered.</p>
+                    <p className="text-xs text-gray-500 mb-3">Signed for your club, but not matching a coach named on a registration — an assistant, or a coach who changed since you registered. Use <span className="font-medium text-violet-600">Change coach</span> on a team above to put one of them on it.</p>
                     <div className="space-y-1.5">
                       {extraCoachWaivers.map(c => (
                         <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
