@@ -5,14 +5,15 @@
 // in /api/social/posts/[id]). Approved posts publish automatically via the
 // publish cron. Layout follows the approved mockup (Sintra-style tiles, two-week
 // calendar, slide-over); colors follow the dashboard's light slate/teal standard.
-import { useEffect, useRef, useState, Suspense, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
 import InsightsView from './InsightsView'
-import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles } from 'lucide-react'
+import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
+import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
 interface Account { id: string; platform: 'instagram' | 'facebook'; label: string; status: string; lastError: string; tokenExpiresAt: string | null }
@@ -33,6 +34,17 @@ interface Rollup { reach: number; interactions: number; withData: number; posts:
 interface Insights { latest: Record<string, PostMetrics>; window: { days: number; current: Rollup; previous: Rollup } | null }
 type Media = { url: string; mediaType: 'image' | 'video'; thumbnailUrl?: string; durationSec?: number; width?: number; height?: number }
 type Placement = 'feed' | 'story'
+interface IdeaSettings { leagues: string[]; show: boolean; dismissed: string[] }
+interface IdeaSource { events: IdeaEvent[]; settings: IdeaSettings; site: string }
+// Audience colors for idea cards (a left bar + label). Text labels always ride
+// along, so color is never the only signal.
+const AUD_CLS: Record<string, { bar: string; text: string; chip: string }> = {
+  clubs: { bar: 'bg-violet-600', text: 'text-violet-700', chip: 'bg-violet-50 text-violet-700' },
+  players: { bar: 'bg-orange-600', text: 'text-orange-700', chip: 'bg-orange-50 text-orange-700' },
+  parents: { bar: 'bg-sky-700', text: 'text-sky-800', chip: 'bg-sky-50 text-sky-800' },
+  all: { bar: 'bg-slate-500', text: 'text-slate-600', chip: 'bg-slate-100 text-slate-700' },
+}
+const hhmm = (t: { h: number; m: number }) => { const d = new Date(); d.setHours(t.h, t.m, 0, 0); return fmtTime(d) }
 const kindLabel = (p: { mediaType?: string; placement?: string; socialAccount?: { platform: string } }) => p.placement === 'story' ? 'Story' : p.mediaType === 'video' ? (p.socialAccount?.platform === 'instagram' ? 'Reel' : 'Video') : ''
 const fmtNum = (n: number) => n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}K` : n.toLocaleString()
 const delta = (cur: number, prev: number) => prev > 0 ? `${cur >= prev ? '+' : ''}${Math.round(((cur - prev) / prev) * 100)}%` : ''
@@ -87,7 +99,9 @@ function SocialInner() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'queue' | 'insights'>('week')
   const [rangeStart, setRangeStart] = useState(() => startOfWeek(new Date()))
-  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date } | { kind: 'accounts' } | null>(null)
+  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date; idea?: Idea } | { kind: 'idea'; idea: Idea } | { kind: 'accounts' } | null>(null)
+  const [ideaSrc, setIdeaSrc] = useState<IdeaSource | null>(null)
+  const [fitFor, setFitFor] = useState<string>('')
   const dragId = useRef<string | null>(null)
   const today = new Date()
 
@@ -105,10 +119,11 @@ function SocialInner() {
 
   async function load() {
     try {
-      const [p, a, q, ins] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null)])
+      const [p, a, q, ins, ide] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null), api('/api/social/ideas').catch(() => null)])
       setPosts(p.posts || []); setAccounts(a.accounts || []); setConfigured(a.configured !== false)
       if (q) setQueue(q)
       if (ins) setInsights(ins)
+      if (ide) setIdeaSrc(ide)
     } catch (e: any) { toast.error(e.message) } finally { setLoading(false) }
   }
 
@@ -116,6 +131,33 @@ function SocialInner() {
   const needsReview = posts.filter(p => p.status === 'draft').length
   const scheduledCount = posts.filter(p => p.status === 'scheduled').length
   const published28 = posts.filter(p => p.status === 'published' && p.publishedAt && Date.now() - new Date(p.publishedAt).getTime() < 28 * 864e5).length
+
+  // Content ideas for the two weeks on screen. Days that already have a post get
+  // none; feed ideas land on the org's queue days at the queue time.
+  const ideasByDay = useMemo<Record<string, DayIdeas>>(() => {
+    if (!ideaSrc || !ideaSrc.settings.show) return {}
+    const slotTime: Record<number, { h: number; m: number }> = {}
+    for (const s of [...queue.slots].sort((a, b) => a.h * 60 + a.m - (b.h * 60 + b.m))) if (!slotTime[s.dow]) slotTime[s.dow] = { h: s.h, m: s.m }
+    return buildIdeas({
+      events: ideaSrc.events, from: localDayKey(rangeStart), to: localDayKey(addDays(rangeStart, 13)), today: localDayKey(new Date()),
+      leagues: ideaSrc.settings.leagues, dismissed: new Set(ideaSrc.settings.dismissed), site: ideaSrc.site,
+      takenDays: new Set(posts.filter(p => p.status !== 'canceled').map(p => localDayKey(new Date(p.scheduledFor)))),
+      feedDows: queue.slots.map(s => s.dow), slotTime,
+    })
+  }, [ideaSrc, rangeStart, posts, queue.slots])
+  async function saveIdeaSettings(patch: Partial<IdeaSettings> & { dismiss?: string }) {
+    if (!ideaSrc) return
+    const { dismiss, ...rest } = patch
+    const next = { ...ideaSrc.settings, ...rest, dismissed: dismiss ? [...ideaSrc.settings.dismissed, dismiss] : ideaSrc.settings.dismissed }
+    setIdeaSrc({ ...ideaSrc, settings: next })
+    try { await api('/api/social/ideas', { method: 'PUT', body: JSON.stringify(patch) }) } catch (e: any) { toast.error(e.message) }
+  }
+  function draftFromIdea(idea: Idea) {
+    const [y, m, d] = idea.date.split('-').map(Number)
+    let when = new Date(y, m - 1, d, idea.time.h, idea.time.m)
+    if (when < new Date()) { when = new Date(Date.now() + 60 * 60000); when.setMinutes(Math.ceil(when.getMinutes() / 5) * 5, 0, 0) }
+    setDrawer({ kind: 'new', when, idea })
+  }
 
   async function patch(id: string, body: any, okMsg?: string) {
     try { await api(`/api/social/posts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }); if (okMsg) toast.success(okMsg); await load(); return true }
@@ -209,8 +251,24 @@ function SocialInner() {
           <div className="inline-flex p-1 gap-0.5 rounded-xl bg-slate-100 border border-slate-200">
             {(['week', 'queue', 'insights'] as const).map(v => <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 rounded-lg text-sm font-bold ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{v === 'week' ? 'Calendar' : v === 'queue' ? 'Approvals' : 'Insights'}</button>)}
           </div>
-          <div className={`${view === 'insights' ? 'hidden' : 'hidden md:flex'} gap-3 text-xs text-slate-500 items-center`}><span><i className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />Needs approval</span><span><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5" />Scheduled</span><span><i className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5" />Published</span><span><i className="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1.5" />Failed</span><span>· Drag a post to another day</span></div>
+          <div className={`${view === 'insights' ? 'hidden' : 'hidden md:flex'} gap-3 text-xs text-slate-500 items-center`}><span><i className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />Needs approval</span><span><i className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5" />Scheduled</span><span><i className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5" />Published</span><span><i className="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1.5" />Failed</span><span><Lightbulb size={11} className="inline text-teal-600 mr-1" />Dashed = idea</span><span>· Drag a post to another day</span></div>
         </div>
+
+        {/* ideas bar */}
+        {view === 'week' && ideaSrc && (
+          <div className="flex items-center gap-1.5 flex-wrap -mt-1">
+            <button onClick={() => saveIdeaSettings({ show: !ideaSrc.settings.show })} aria-pressed={ideaSrc.settings.show} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${ideaSrc.settings.show ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-500 hover:text-slate-900'}`}><Lightbulb size={13} /> {ideaSrc.settings.show ? 'Ideas on' : 'Show ideas'}</button>
+            {ideaSrc.settings.show && (['lacrosse', 'other'] as const).map(g => (
+              <span key={g} className="contents">
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400 ml-2">{g === 'lacrosse' ? 'Lacrosse' : 'Other sports'}</span>
+                {LEAGUES.filter(l => l.group === g).map(l => { const on = ideaSrc.settings.leagues.includes(l.k); return (
+                  <button key={l.k} title={l.fit} aria-pressed={on} onClick={() => { setFitFor(l.k); saveIdeaSettings({ leagues: on ? ideaSrc.settings.leagues.filter(x => x !== l.k) : [...ideaSrc.settings.leagues, l.k] }) }}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${on ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-500 hover:text-slate-900'}`}>{on && <Check size={11} />}{l.n}</button>) })}
+              </span>
+            ))}
+            {ideaSrc.settings.show && fitFor && <div className="basis-full text-xs text-slate-500 mt-0.5"><b className="text-slate-700">{leagueName(fitFor)}:</b> {LEAGUES.find(l => l.k === fitFor)?.fit}</div>}
+          </div>
+        )}
 
         {/* calendar */}
         {view === 'week' && (
@@ -220,16 +278,19 @@ function SocialInner() {
                 {Array.from({ length: 7 }, (_, i) => addDays(rangeStart, w * 7 + i)).map(day => {
                   const dayPosts = posts.filter(p => p.status !== 'canceled' && sameDay(new Date(p.scheduledFor), day)).sort((a, b) => +new Date(a.scheduledFor) - +new Date(b.scheduledFor))
                   const isToday = sameDay(day, today); const isPast = day < dayStart
+                  const di = ideasByDay[localDayKey(day)]; const dayIdeas = di?.ideas || []; const markers = di?.markers || []
                   return (
                     <div key={+day}
                       onDragOver={e => { if (dragId.current) { e.preventDefault(); e.currentTarget.classList.add('!border-teal-400', '!bg-teal-400/10') } }}
                       onDragLeave={e => e.currentTarget.classList.remove('!border-teal-400', '!bg-teal-400/10')}
                       onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('!border-teal-400', '!bg-teal-400/10'); if (dragId.current) moveTo(dragId.current, day); dragId.current = null }}
-                      className={`group rounded-2xl p-2.5 flex-col gap-2 md:min-h-[200px] bg-white border transition ${isToday ? 'border-teal-500 shadow-[inset_0_0_0_1px_rgb(20,184,166)]' : 'border-slate-200'} ${isPast ? 'opacity-70' : ''} ${dayPosts.length ? 'flex' : 'hidden md:flex'}`}>
+                      className={`group rounded-2xl p-2.5 flex-col gap-2 md:min-h-[200px] bg-white border transition ${isToday ? 'border-teal-500 shadow-[inset_0_0_0_1px_rgb(20,184,166)]' : 'border-slate-200'} ${isPast ? 'opacity-70' : ''} ${dayPosts.length || dayIdeas.length || markers.length ? 'flex' : 'hidden md:flex'}`}>
                       <div className="flex items-center justify-between text-xs font-bold text-slate-500">
                         <span>{day.toLocaleDateString(undefined, { weekday: 'short' })} <span className="text-slate-900">{day.getDate()}</span>{isToday && <span className="text-teal-600"> · Today</span>}</span>
-                        {!isPast && accounts.length > 0 && <button onClick={() => newPostOn(day)} className="w-5 h-5 rounded-md border border-dashed border-slate-300 grid place-items-center text-slate-400 md:opacity-0 group-hover:opacity-100 hover:text-slate-900" title="New post this day"><Plus size={11} /></button>}
+                        {!isPast && accounts.length > 0 && <button onClick={() => newPostOn(day)} className="flex-none w-5 h-5 rounded-md border border-dashed border-slate-300 grid place-items-center text-slate-400 md:opacity-0 group-hover:opacity-100 hover:text-slate-900" title="New post this day"><Plus size={11} /></button>}
                       </div>
+                      {di?.badge && <div className="-mt-1.5 min-w-0">{di.badge.live ? <span className="inline-block rounded bg-slate-800 text-white px-1.5 py-px text-[10px] font-extrabold uppercase tracking-wide">{di.badge.text}</span> : <div className="truncate text-[10px] font-semibold text-slate-400" title={di.badge.text}>{di.badge.text}</div>}</div>}
+                      {markers.map((mk, i) => <div key={i} className={`text-[10.5px] leading-tight rounded-md px-1.5 py-1 ${mk.clash ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600'} ${mk.kind === 'quiet' ? 'text-slate-400' : ''}`}>{mk.lg && <b className={`mr-1 text-[9.5px] tracking-wide ${mk.clash ? 'text-amber-700' : 'text-teal-700'}`}>{leagueName(mk.lg)}</b>}{mk.label}{mk.kind === 'quiet' ? ' · stay quiet' : ''}</div>)}
                       {dayPosts.map(p => (
                         <div key={p.id} draggable={p.status !== 'published' && p.status !== 'publishing'} onDragStart={() => { dragId.current = p.id }} onDragEnd={() => { dragId.current = null }} onClick={() => setDrawer({ kind: 'post', id: p.id, mode: 'preview' })}
                           className="rounded-xl bg-slate-50 border border-slate-200 p-2 flex gap-2 items-center cursor-pointer hover:-translate-y-px hover:border-slate-300 hover:shadow-md transition">
@@ -237,7 +298,14 @@ function SocialInner() {
                           <div className="min-w-0 flex-1"><div className="text-xs font-bold leading-tight line-clamp-2">{kindLabel(p) && <span className="text-slate-500">{kindLabel(p)} · </span>}{firstLine(p.caption || (p.placement === 'story' ? 'Story' : ''))}</div><div className={`text-[11px] font-bold mt-0.5 flex flex-wrap gap-x-1.5 ${STATUS_TEXT[p.status]}`}>{STATUS_LABEL[p.status]}<span className="text-slate-500">{fmtTime(new Date(p.scheduledFor))}</span></div></div>
                         </div>
                       ))}
-                      {!dayPosts.length && !isPast && <div className="mt-auto text-[11px] text-slate-400 text-center py-3 border border-dashed border-slate-200 rounded-xl">Nothing scheduled</div>}
+                      {dayIdeas.map(idea => { const c = AUD_CLS[idea.aud] || AUD_CLS.all; return (
+                        <button key={idea.key} onClick={() => setDrawer({ kind: 'idea', idea })} className={`relative text-left rounded-xl border border-dashed pl-3 pr-2 py-1.5 flex flex-col gap-0.5 hover:border-slate-400 hover:shadow-sm transition ${idea.weight === 'story' || idea.quiet ? 'bg-slate-50 border-slate-300' : 'bg-white border-slate-300'}`}>
+                          <span className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full ${idea.quiet ? 'bg-slate-300' : c.bar}`} />
+                          <span className="flex items-center gap-1 text-[10px] text-slate-500"><Lightbulb size={11} className="text-teal-600 flex-none" />{idea.quiet ? 'Suggestion' : idea.fmt}{idea.lg ? ` · ${leagueName(idea.lg)}` : idea.src === 'moment' && !idea.quiet ? ' · Moment' : ''}</span>
+                          <span className={`text-xs font-bold leading-tight ${idea.quiet ? 'text-slate-500 font-semibold' : 'text-slate-800'}`}>{idea.title}</span>
+                          {!idea.quiet && <span className={`text-[10.5px] font-bold ${c.text}`}>{AUDIENCE_LABEL[idea.aud]}</span>}
+                        </button>) })}
+                      {!dayPosts.length && !dayIdeas.length && !isPast && <div className="mt-auto text-[11px] text-slate-400 text-center py-3 border border-dashed border-slate-200 rounded-xl">Nothing scheduled</div>}
                     </div>
                   )
                 })}
@@ -284,7 +352,8 @@ function SocialInner() {
       {drawer && <div className="fixed inset-0 z-40 bg-slate-900/40" onClick={() => setDrawer(null)} />}
       <div className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[460px] bg-white border-l border-slate-200 shadow-2xl flex flex-col transition-transform duration-200 ${drawer ? 'translate-x-0' : 'translate-x-full'}`}>
         {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer post={byId(drawer.id)!} metrics={insights.latest[drawer.id]} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
-        {drawer?.kind === 'new' && <ComposeDrawer when={drawer.when} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(null)} onSaved={async () => { setDrawer(null); await load() }} />}
+        {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || 'blank'} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(null)} onSaved={async () => { setDrawer(null); await load() }} />}
+        {drawer?.kind === 'idea' && <IdeaDrawer idea={drawer.idea} canDraft={accounts.length > 0} onClose={() => setDrawer(null)} onDraft={() => draftFromIdea(drawer.idea)} onDismiss={() => { saveIdeaSettings({ dismiss: drawer.idea.key }); setDrawer(null); toast('Idea hidden') }} />}
         {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} queue={queue} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
       </div>
     </div>
@@ -392,10 +461,10 @@ function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => 
   )
 }
 
-interface EditProps { platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
-function EditFields({ platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
+interface EditProps { aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
+function EditFields({ aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
   const past = when < new Date()
-  const [ai, setAi] = useState<{ open: boolean; brief: string; busy: boolean; options: { label: string; caption: string }[]; hashtags: string }>({ open: false, brief: '', busy: false, options: [], hashtags: '' })
+  const [ai, setAi] = useState<{ open: boolean; brief: string; busy: boolean; options: { label: string; caption: string }[]; hashtags: string }>({ open: !!aiInit, brief: aiInit || '', busy: false, options: [], hashtags: '' })
   const plats = platforms || (accounts ? Array.from(new Set(accounts.filter(a => acctIds?.includes(a.id)).map(a => a.platform))) : ['instagram'])
   async function writeWithAI() {
     setAi(a => ({ ...a, busy: true }))
@@ -404,6 +473,8 @@ function EditFields({ platforms, caption, setCaption, firstComment, setFirstComm
       setAi(a => ({ ...a, busy: false, options: d.options || [], hashtags: d.hashtags || '' }))
     } catch (e: any) { toast.error(e.message); setAi(a => ({ ...a, busy: false })) }
   }
+  // Opened from an idea: draft straight away so the three options are waiting.
+  useEffect(() => { if (aiInit && !storyOnly) writeWithAI() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const isVideo = media?.mediaType === 'video'
   const hasIg = !accounts || accounts.some(a => acctIds?.includes(a.id) && a.platform === 'instagram')
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
@@ -434,7 +505,7 @@ function EditFields({ platforms, caption, setCaption, firstComment, setFirstComm
         {ai.open && (
           <div className="mt-2 rounded-2xl border border-violet-200 bg-violet-50/60 p-3 flex flex-col gap-2">
             <div className="text-xs text-violet-900 font-bold flex items-center gap-1.5"><Sparkles size={13} /> {caption.trim() ? 'Improve this caption' : 'Draft a caption'}<span className="font-normal text-violet-700"> · reads the cover frame and your upcoming events</span></div>
-            <div className="flex gap-2"><input value={ai.brief} onChange={e => setAi(a => ({ ...a, brief: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !ai.busy) writeWithAI() }} placeholder="Optional: what's the angle? e.g. 31 days out, push early registration" className={inputCls + ' !bg-white'} /><button type="button" onClick={writeWithAI} disabled={ai.busy} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-3 py-2 flex-none disabled:opacity-50">{ai.busy ? 'Writing…' : ai.options.length ? 'Again' : 'Write'}</button></div>
+            <div className="flex gap-2 items-start"><textarea value={ai.brief} rows={ai.brief.includes('\n') ? 5 : 1} onChange={e => setAi(a => ({ ...a, brief: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !ai.brief.includes('\n') && !ai.busy) { e.preventDefault(); writeWithAI() } }} placeholder="Optional: what's the angle? e.g. 31 days out, the bracket is taking shape" className={inputCls + ' !bg-white resize-y text-xs leading-snug'} /><button type="button" onClick={writeWithAI} disabled={ai.busy} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-3 py-2 flex-none disabled:opacity-50">{ai.busy ? 'Writing…' : ai.options.length ? 'Again' : 'Write'}</button></div>
             {ai.options.map((o, i) => (
               <button key={i} type="button" onClick={() => { setCaption(o.caption); toast.success(`Using "${o.label}"`) }} className="text-left rounded-xl bg-white border border-slate-200 hover:border-violet-400 px-3 py-2.5">
                 <div className="text-[10px] font-extrabold uppercase tracking-wide text-violet-700 mb-1">{o.label}</div>
@@ -510,8 +581,8 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
   )
 }
 
-function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSaved }: { when: Date; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [med, setMed] = useState<Media | undefined>(); const [placements, setPlacements] = useState<Placement[]>(['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
+function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose, onSaved }: { when: Date; idea?: Idea; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [med, setMed] = useState<Media | undefined>(); const [placements, setPlacements] = useState<Placement[]>(idea?.weight === 'story' ? ['story'] : ['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
   const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   const [cMode, setCMode] = useState<'edit' | 'preview'>('edit')
@@ -533,7 +604,7 @@ function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSav
   }
   return (
     <>
-      <DrawerHead title="New post" onClose={onClose}>
+      <DrawerHead title={idea ? 'New post · from an idea' : 'New post'} onClose={onClose}>
         {img && <div className="inline-flex p-1 gap-0.5 rounded-xl bg-slate-100 border border-slate-200">{(['edit', 'preview'] as const).map(m => <button key={m} onClick={() => setCMode(m)} className={`px-3 py-1 rounded-lg text-xs font-bold capitalize ${cMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{m}</button>)}</div>}
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
@@ -541,7 +612,7 @@ function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSav
           {placements.includes('feed') && <div><div className={labelCls}>{med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} /></div>}
           {placements.includes('story') && <div><div className={labelCls}>Story · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption="" imgSrc={img} when={when} mediaType={med?.mediaType} placement="story" poster={med?.thumbnailUrl} /></div>}
           {firstComment && placements.includes('feed') && <div className="text-xs text-slate-500"><span className="font-bold uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{firstComment}</div>}
-        </> : <EditFields caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} />}
+        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">
@@ -551,6 +622,54 @@ function ComposeDrawer({ when: init, accounts, queue, canApprove, onClose, onSav
         <button onClick={onClose} className="rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-sm px-4 py-2.5 ml-auto">Cancel</button>
       </div>
     </>
+  )
+}
+
+function IdeaDrawer({ idea, canDraft, onClose, onDraft, onDismiss }: { idea: Idea; canDraft: boolean; onClose: () => void; onDraft: () => void; onDismiss: () => void }) {
+  const c = AUD_CLS[idea.aud] || AUD_CLS.all
+  const [y, m, d] = idea.date.split('-').map(Number)
+  const day = new Date(y, m - 1, d)
+  return (
+    <>
+      <DrawerHead title={`Idea · ${day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`} onClose={onClose} />
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        <div>
+          <h3 className="text-lg font-extrabold leading-snug">{idea.title}</h3>
+          <div className="flex flex-wrap gap-1.5 mt-2 text-[11px] font-bold">
+            {!idea.quiet && <span className={`rounded-full px-2 py-0.5 ${c.chip}`}>{AUDIENCE_LABEL[idea.aud]}</span>}
+            {idea.eventShort && idea.phase !== 'off' && <span className="rounded-full px-2 py-0.5 bg-slate-800 text-white">{idea.phase === 'live' ? `${idea.eventShort} · game day` : idea.phase === 'recap' ? `${idea.eventShort} recap` : `${idea.days}d · ${idea.eventShort}`}</span>}
+            <span className="rounded-full px-2 py-0.5 bg-slate-100 text-slate-600">{PHASE_LABEL[idea.phase]}</span>
+            {idea.lg && <span className="rounded-full px-2 py-0.5 bg-teal-50 text-teal-800">{leagueName(idea.lg)} tie-in</span>}
+          </div>
+        </div>
+        <div><div className={labelCls}>Why this day</div><p className="text-sm text-slate-700 leading-relaxed">{idea.why}</p></div>
+        {!idea.quiet && <div className="grid grid-cols-2 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden text-sm">
+          {[['Audience', AUDIENCE_LABEL[idea.aud]], ['Format', idea.fmt], ['Post as', idea.weight === 'story' ? 'Story' : idea.fmt === 'Reel' ? 'Feed (Reel)' : 'Feed'], ['Suggested time', hhmm(idea.time)]].map(([k, v]) => <div key={k} className="bg-white px-3 py-2"><div className="text-[11px] text-slate-500">{k}</div><div className="font-bold">{v}</div></div>)}
+        </div>}
+        {idea.fmt === 'Carousel' && <div className="rounded-xl bg-amber-50 text-amber-900 text-xs px-3 py-2">The scheduler publishes one photo or video per post, not multi-slide carousels yet. Combine the slides into one graphic (or a short Reel), or post the carousel from the Instagram app.</div>}
+        <div><div className={labelCls}>Hook</div><div className="text-base font-bold border-l-[3px] border-teal-600 pl-2.5">{idea.hook}</div></div>
+        {idea.shots.length > 0 && <div><div className={labelCls}>What to shoot or pull</div><ul className="list-disc pl-5 text-sm text-slate-700 flex flex-col gap-1">{idea.shots.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
+        {idea.cap && <div><div className={labelCls}>Caption starter</div><div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-sm text-slate-700 whitespace-pre-wrap">{idea.cap}</div></div>}
+        <p className="text-[11px] text-slate-400">Ideas are suggestions. Nothing is scheduled until you draft it, add the photo or video, and approve it.</p>
+      </div>
+      <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">
+        {idea.quiet ? <button onClick={onClose} className="rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-sm px-4 py-2.5">Got it</button>
+          : <button onClick={onDraft} disabled={!canDraft} title={canDraft ? '' : 'Connect an account first'} className="rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm px-4 py-2.5 inline-flex items-center gap-1.5 disabled:opacity-40"><Sparkles size={14} /> Draft with AI</button>}
+        <button onClick={onDismiss} className="rounded-xl text-slate-500 hover:bg-slate-100 font-bold text-sm px-3 py-2.5 ml-auto">Not for us</button>
+      </div>
+    </>
+  )
+}
+
+function IdeaNote({ idea, onUseStarter }: { idea: Idea; onUseStarter?: () => void }) {
+  return (
+    <div className="rounded-2xl border border-teal-200 bg-teal-50/60 px-3 py-2.5 text-xs text-slate-700 flex flex-col gap-1.5">
+      <div className="font-bold text-teal-900 flex items-center gap-1.5"><Lightbulb size={13} /> {idea.title} <span className="font-normal text-teal-800">· {AUDIENCE_LABEL[idea.aud]} · {idea.fmt}</span></div>
+      {idea.shots.length > 0 && <div><span className="font-bold text-slate-600">Add: </span>{idea.shots.join(' · ')}</div>}
+      {idea.weight === 'story' && idea.hook && <div><span className="font-bold text-slate-600">Sticker text: </span>{idea.hook}</div>}
+      {idea.fmt === 'Carousel' && <div className="text-amber-800">Carousels aren't supported here yet — use one combined graphic or a short Reel.</div>}
+      {onUseStarter && <button type="button" onClick={onUseStarter} className="self-start text-teal-800 font-bold hover:underline">Use the starter caption instead</button>}
+    </div>
   )
 }
 

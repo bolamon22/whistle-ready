@@ -192,6 +192,22 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   starts a post with ≥35 s left so a slow Facebook video can't be killed mid-call.
   **Verify step for this module:** `esbuild <entries> --bundle --alias:@=./src
   --packages=external` — per-file parsing does not catch a missing export; bundling does.
+- **Content ideas (Sep 24)** — dashed idea cards on empty calendar days. Engine:
+  `src/lib/socialIdeas.ts` (pure; runs in the browser on day keys so there is no
+  time-zone drift). Inputs from `GET /api/social/ideas`: the org's upcoming
+  tournaments (divisions, plus last year's team count when a same-named event ran
+  10–14 months earlier) and settings in AppSetting `socialIdeas:{orgId}`
+  (`leagues`, `show`, `dismissed` keys; `PUT` saves). Three sources: (1) countdown
+  phases per tournament — runway 90–31 d (clubs), forming 30–15 (clubs/players),
+  plan 14–8 (parents), hype 7–1 (players, daily), game days, recap +1..+4 — with
+  feed ideas on the org's queue days at the queue time and stories between; (2)
+  holidays/quiet days computed per year; (3) sports tie-ins with per-league toggles
+  (PLL, NCAA lacrosse, NFL, NHL, CFB, MLB, NBA, MLS). **The dated sports entries
+  are the 2026–27 season — refresh `SPORTS` each year**; rule-based ones (power
+  rankings, three stars, mic'd up, RedZone) repeat per event. Back-to-back events
+  (≤21 days apart) get a weekly "two weekends" post for the second one. "Draft with
+  AI" opens Compose with the idea's brief and runs Write with AI straight away.
+  Carousel ideas note that the publisher is single-media for now.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
