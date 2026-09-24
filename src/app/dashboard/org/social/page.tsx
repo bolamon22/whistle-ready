@@ -12,6 +12,8 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
 import InsightsView from './InsightsView'
+import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
+import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
 import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb } from 'lucide-react'
 
@@ -99,9 +101,10 @@ function SocialInner() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'queue' | 'insights'>('week')
   const [rangeStart, setRangeStart] = useState(() => startOfWeek(new Date()))
-  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date; idea?: Idea } | { kind: 'idea'; idea: Idea } | { kind: 'accounts' } | null>(null)
+  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date; idea?: Idea } | { kind: 'idea'; idea: Idea } | { kind: 'chirp' } | { kind: 'accounts' } | null>(null)
   const [ideaSrc, setIdeaSrc] = useState<IdeaSource | null>(null)
   const [fitFor, setFitFor] = useState<string>('')
+  const [chirpMsgs, setChirpMsgs] = useState<ChirpMsg[]>([])
   const dragId = useRef<string | null>(null)
   const today = new Date()
 
@@ -204,7 +207,10 @@ function SocialInner() {
             <Link href="/" className="text-slate-500 hover:text-teal-700" title="Home"><ChevronLeft size={18} /></Link>
             <div className="min-w-0"><div className="font-extrabold text-sm leading-tight">Social scheduler</div><div className="text-xs text-slate-500 truncate hidden sm:block">Instagram &amp; Facebook · approve once, it publishes itself</div></div>
           </div>
-          <button onClick={() => newPostOn(addDays(today, 1))} disabled={!accounts.length} className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm px-4 py-2.5 disabled:opacity-40"><Plus size={15} strokeWidth={2.8} /> Create post</button>
+          <div className="flex items-center gap-2">
+          <button onClick={() => setDrawer({ kind: 'chirp' })} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 text-slate-800 font-bold text-sm pl-1.5 pr-3 py-1.5" title="Brainstorm post ideas with Chirp"><ChirpAvatar size={26} /> <span className="hidden sm:inline">Ask Chirp</span><span className="sm:hidden">Chirp</span></button>
+          <button onClick={() => newPostOn(addDays(today, 1))} disabled={!accounts.length} className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm px-4 py-2.5 disabled:opacity-40"><Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">Create post</span><span className="sm:hidden">Post</span></button>
+          </div>
         </div>
       </div>
 
@@ -352,7 +358,8 @@ function SocialInner() {
       {drawer && <div className="fixed inset-0 z-40 bg-slate-900/40" onClick={() => setDrawer(null)} />}
       <div className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[460px] bg-white border-l border-slate-200 shadow-2xl flex flex-col transition-transform duration-200 ${drawer ? 'translate-x-0' : 'translate-x-full'}`}>
         {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer post={byId(drawer.id)!} metrics={insights.latest[drawer.id]} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
-        {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || 'blank'} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(null)} onSaved={async () => { setDrawer(null); await load() }} />}
+        {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || 'blank'} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(drawer.idea?.src === 'chirp' ? { kind: 'chirp' } : null)} onSaved={async () => { setDrawer(null); await load() }} />}
+        {drawer?.kind === 'chirp' && <ChirpPanel msgs={chirpMsgs} setMsgs={setChirpMsgs} site={ideaSrc?.site} onClose={() => setDrawer(null)} onDraft={idea => { if (!accounts.length) { toast.error('Connect an account first'); return } draftFromIdea(idea) }} />}
         {drawer?.kind === 'idea' && <IdeaDrawer idea={drawer.idea} canDraft={accounts.length > 0} onClose={() => setDrawer(null)} onDraft={() => draftFromIdea(drawer.idea)} onDismiss={() => { saveIdeaSettings({ dismiss: drawer.idea.key }); setDrawer(null); toast('Idea hidden') }} />}
         {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} queue={queue} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
       </div>

@@ -212,6 +212,21 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   first Monday of each month gets an "every date, one post" card. "Draft with
   AI" opens Compose with the idea's brief and runs Write with AI straight away.
   Carousel ideas note that the publisher is single-media for now.
+- **Ask Chirp (Sep 24)** — brainstorm chat on the Social page (top-bar button;
+  `ChirpPanel.tsx` → `POST /api/social/chirp`, staff only). Chirp gets the org's
+  upcoming events (`src/lib/socialIdeasServer.ts`, shared with the ideas route),
+  what's scheduled in the next 45 days, open days in the next 3 weeks, and the top
+  posts by reach from the last 120 days (sample size stated). It replies briefly
+  plus a fenced `ideas` JSON block; each idea becomes a card with "Draft with AI"
+  (`chirpIdea()` in socialIdeas.ts → the same Compose flow as calendar ideas;
+  Cancel returns to the chat). **Web search** uses Anthropic's server tool
+  (`web_search_20250305`, max 3 searches/question, located West Palm Beach;
+  $10 per 1,000 searches + tokens) and shows the pages it cited. It must be
+  enabled once for the org in the Claude Console (Settings → Privacy); if it's
+  off, the route answers without searching and says so. Model: Haiku 4.5
+  (`CHIRP_SOCIAL_MODEL`); if a model rejects the search tool it retries on
+  `CHIRP_SEARCH_MODEL` (default `claude-sonnet-4-5`). `pause_turn` is resumed up
+  to twice. The conversation is kept in page state only (not saved).
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages

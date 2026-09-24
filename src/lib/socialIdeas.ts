@@ -28,7 +28,7 @@
 export type Audience = 'clubs' | 'players' | 'parents' | 'all'
 export type IdeaFormat = 'Reel' | 'Photo' | 'Carousel' | 'Story'
 export type Phase = 'runway' | 'forming' | 'plan' | 'hype' | 'live' | 'recap' | 'off'
-export type IdeaSource = 'countdown' | 'moment' | 'series' | 'sport'
+export type IdeaSource = 'countdown' | 'moment' | 'series' | 'sport' | 'chirp'
 
 export interface IdeaEvent {
   id: string; name: string; start: string; end: string; location: string
@@ -433,3 +433,26 @@ function briefFor(i: Idea, evs: Ev[], cta: string): string {
 }
 
 export const leagueName = (k?: string) => (k ? LG_NAME[k] || k : '')
+
+// An idea that came out of an Ask Chirp conversation → the same Idea shape the
+// calendar cards use, so "Draft with AI" works the same way for both.
+export interface ChirpIdeaRaw { title?: string; date?: string; aud?: string; fmt?: string; why?: string; hook?: string; shots?: unknown; cap?: string; event?: string }
+export function chirpIdea(r: ChirpIdeaRaw, today: string, site?: string): Idea | null {
+  const title = String(r.title || '').trim().slice(0, 120)
+  if (!title) return null
+  const aud: Audience = (['clubs', 'players', 'parents', 'all'] as const).includes(r.aud as Audience) ? r.aud as Audience : 'all'
+  const fmt: IdeaFormat = (['Reel', 'Photo', 'Carousel', 'Story'] as const).includes(r.fmt as IdeaFormat) ? r.fmt as IdeaFormat : 'Photo'
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(r.date || '')) && String(r.date) >= today ? String(r.date) : addDaysKey(today, 1)
+  const shots = Array.isArray(r.shots) ? r.shots.map(String).filter(Boolean).slice(0, 6) : []
+  const why = String(r.why || '').slice(0, 600), hook = String(r.hook || '').slice(0, 200), cap = String(r.cap || '').slice(0, 800)
+  const weight = fmt === 'Story' ? 'story' : 'feed'
+  const cta = `Register at ${(site || 'sunshineeventsgroup.com').replace(/^https?:\/\//, '').replace(/\/$/, '')}`
+  const brief = [
+    `Idea: ${title} (${fmt}${weight === 'story' ? ', Story' : ''}) for ${AUDIENCE_LABEL[aud].toLowerCase()}.`,
+    r.event ? `Event: ${String(r.event).slice(0, 120)}.` : '',
+    why ? `Angle: ${why}` : '', hook ? `Hook: ${hook}` : '',
+    cap ? `Starter caption (improve it, keep the facts): ${cap}` : '',
+    aud !== 'all' ? `CTA: ${cta}.` : '',
+  ].filter(Boolean).join('\n').slice(0, 1500)
+  return { title, aud, fmt, why, hook, shots, cap, key: `chirp:${date}:${slug(title)}`, date, weight, src: 'chirp', phase: 'off', eventShort: r.event ? String(r.event).slice(0, 60) : undefined, time: AUD_TIME[aud], brief }
+}
