@@ -29,6 +29,19 @@ export type GuardState = {
    *  until they are cleaned up, and a silent failure here would mean the guard
    *  quietly is not guarding. Surfaced by /api/payments/audit. */
   duplicatesBlocking: number
+  /** WHICH rows are blocking it. A count on its own is not actionable -- the
+   *  same complaint this file makes about the old reconcile check. The blocking
+   *  pair can sit on a soft-deleted registration, where no page will ever show
+   *  it, so the only way to find it is to name it here. Read-only; cleaning it
+   *  up stays a deliberate act. */
+  duplicateRows: {
+    registrationId: string
+    clubName: string
+    tournamentId: string
+    deleted: boolean
+    stripeIntentId: string
+    rows: { id: string; amount: number; method: string; receivedAt: string; notes: string }[]
+  }[]
 }
 
 let building: Promise<GuardState> | null = null
@@ -40,7 +53,7 @@ export function ensurePaymentGuard(): Promise<GuardState> {
 }
 
 async function build(): Promise<GuardState> {
-  const state: GuardState = { column: false, index: false, backfilled: 0, duplicatesBlocking: 0 }
+  const state: GuardState = { column: false, index: false, backfilled: 0, duplicatesBlocking: 0, duplicateRows: [] }
 
   // Raw ALTER rather than a migration, the same way every other late column on
   // this schema was added (see ensureRegistrationColumns in api/registrations).
@@ -84,6 +97,43 @@ async function build(): Promise<GuardState> {
             WHERE "stripeIntentId" <> '' GROUP BY 1, 2 HAVING COUNT(*) > 1)`)
       state.duplicatesBlocking = Number(d?.[0]?.n || 0)
     } catch { /* leave it at 0; the index flag already says it is not active */ }
+
+    // And WHICH ones. The registration is joined in without a deletedAt filter
+    // on purpose: a blocking pair on a deleted registration is invisible to
+    // every page in the app, so a count alone leaves nowhere to look.
+    try {
+      const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+        `SELECT p.id, p."registrationId", p."stripeIntentId", p.amount, p.method,
+                p."receivedAt", p.notes, r."clubName", r."tournamentId", r."deletedAt"
+           FROM "RegistrationPayment" p
+           JOIN "TeamRegistration" r ON r.id = p."registrationId"
+          WHERE p."stripeIntentId" <> ''
+            AND (p."registrationId", p."stripeIntentId") IN (
+                  SELECT "registrationId", "stripeIntentId" FROM "RegistrationPayment"
+                   WHERE "stripeIntentId" <> '' GROUP BY 1, 2 HAVING COUNT(*) > 1)
+          ORDER BY p."registrationId", p."stripeIntentId", p."receivedAt"
+          LIMIT 200`)
+      const groups = new Map<string, GuardState['duplicateRows'][number]>()
+      for (const r of rows || []) {
+        const key = `${String(r.registrationId)}|${String(r.stripeIntentId)}`
+        if (!groups.has(key)) groups.set(key, {
+          registrationId: String(r.registrationId),
+          clubName: String(r.clubName || ''),
+          tournamentId: String(r.tournamentId || ''),
+          deleted: r.deletedAt != null,
+          stripeIntentId: String(r.stripeIntentId),
+          rows: [],
+        })
+        groups.get(key)!.rows.push({
+          id: String(r.id),
+          amount: Number(r.amount) || 0,
+          method: String(r.method || ''),
+          receivedAt: String(r.receivedAt || ''),
+          notes: String(r.notes || '').slice(0, 200),
+        })
+      }
+      state.duplicateRows = [...groups.values()]
+    } catch { /* detail is a nicety; the count and the index flag still stand */ }
   }
 
   return state
