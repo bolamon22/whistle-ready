@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { eventStatus } from '@/lib/eventDays'
 import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp, LayoutDashboard, Settings, Users, Zap, DollarSign, type LucideIcon } from 'lucide-react'
 import HelpCenter from '@/components/HelpCenter'
 
@@ -102,19 +103,20 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const hrefActive = (href: string) => href === base ? pathname === base : pathname.startsWith(href)
   const groupActive = (g: NavGroup) => g.href ? hrefActive(g.href) : !!g.items?.some(i => hrefActive(i.href))
 
-  // Countdown
+  // Countdown. The math lives in eventDays so this bar and the dashboard card
+  // can't drift apart again -- this one used to read a day short because
+  // new Date('2026-10-24') is UTC midnight, i.e. the 23rd in Eastern.
   const countdown = (() => {
     if (!meta?.startDate) return null
-    const today = new Date(); today.setHours(0,0,0,0)
-    const start = new Date(meta.startDate); start.setHours(0,0,0,0)
-    const end   = meta.endDate ? new Date(meta.endDate) : start; end.setHours(0,0,0,0)
-    const diff  = Math.round((start.getTime() - today.getTime()) / 86400000)
-    if (today >= start && today <= end) return { label: 'In Progress', color: 'bg-emerald-500/20 text-emerald-300' }
-    if (diff === 0)  return { label: 'Today!',         color: 'bg-emerald-500/20 text-emerald-300' }
-    if (diff === 1)  return { label: 'Tomorrow',       color: 'bg-amber-500/20 text-amber-300' }
-    if (diff > 1)    return { label: `${diff} days away`, color: 'bg-sky-500/20 text-sky-300' }
-    if (diff === -1) return { label: 'Yesterday',      color: 'bg-slate-500/20 text-slate-400' }
-    return { label: `${Math.abs(diff)} days ago`,      color: 'bg-slate-500/20 text-slate-400' }
+    const st = eventStatus(meta.startDate, meta.endDate)
+    if (!st) return null
+    const color =
+      st.phase === 'in-progress' || st.phase === 'today' ? 'bg-emerald-500/20 text-emerald-300'
+      : st.phase === 'tomorrow' ? 'bg-amber-500/20 text-amber-300'
+      : st.phase === 'upcoming' ? 'bg-sky-500/20 text-sky-300'
+      : 'bg-slate-500/20 text-slate-400'
+    const label = st.phase !== 'in-progress' ? st.label : st.days === 0 ? 'Today!' : 'In Progress'
+    return { label, color }
   })()
 
   const logo    = meta?.logoUrl || logoUrl

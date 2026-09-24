@@ -1,10 +1,14 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { localMidnight } from '@/lib/eventDays'
 
 // Live countdown to the event start date. Renders nothing time-sensitive until
 // mounted (avoids hydration mismatch).
 export default function CountdownBlock({ title, target }: { title?: string; target: string }) {
-  const targetMs = (() => { const d = new Date(target); return isNaN(d.getTime()) ? 0 : d.getTime() })()
+  // localMidnight, not new Date(target): a 'YYYY-MM-DD' string parses as UTC
+  // midnight, which in Eastern is 8pm the night BEFORE -- the clock hit zero a
+  // day early.
+  const targetMs = localMidnight(target) ?? 0
   const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
     setNow(Date.now())

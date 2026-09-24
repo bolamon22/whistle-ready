@@ -9,6 +9,7 @@ import JsonLd from '@/components/JsonLd'
 import SponsorWall from '@/components/SponsorWall'
 import { sponsorList, sponsorPitch } from '@/lib/sponsors'
 import { computeOrgHistory, type OrgHistory } from '@/lib/orgHistory'
+import DaysAway from '@/components/DaysAway'
 
 // Cache policy for published pages.
 //
@@ -44,20 +45,11 @@ function initials(name: string) {
 const ACCENTS = ['#0e7490', '#b45309', '#9f1239', '#1d4ed8', '#6d28d9', '#047857']
 function accentFor(str: string) { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return ACCENTS[h % ACCENTS.length] }
 
-function daysAway(startDate: string): number | null {
-  if (!startDate) return null
-  const [y, m, d] = startDate.split('-').map(Number)
-  if (!y || !m || !d) return null
-  const diff = Math.ceil((new Date(y, m - 1, d).getTime() - Date.now()) / 86400000)
-  return diff > 0 ? diff : null
-}
-
 // The soonest event gets a wide featured card — it's the best conversion target, and
 // identical small cards gave a 3-months-away event the same weight as a 5-months-away
 // one. Whatever is next automatically takes this slot as dates pass.
 function FeaturedCard({ t }: { t: Tourn }) {
   const accent = accentFor(t.name)
-  const days = daysAway(t.startDate)
   return (
     <div className="relative border-2 border-teal-500 rounded-2xl bg-white overflow-hidden flex flex-col sm:flex-row">
       <span className="absolute top-3 right-4 bg-teal-50 text-teal-700 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border border-teal-200 z-20">Next up</span>
@@ -77,7 +69,7 @@ function FeaturedCard({ t }: { t: Tourn }) {
             <Link href={`/tournaments/${t.id}/register`} className="relative z-20 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 px-5 py-2 rounded-lg transition-colors">Register</Link>
           ) : null}
           <span className="text-sm font-semibold text-teal-700 inline-flex items-center gap-1">Event details <ArrowRight size={14} /></span>
-          {days !== null && <span className="text-xs text-slate-400 ml-auto">{days} day{days === 1 ? '' : 's'} away</span>}
+          <DaysAway startDate={t.startDate} className="text-xs text-slate-400 ml-auto" />
         </div>
       </div>
     </div>

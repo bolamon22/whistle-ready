@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatDate } from '@/lib/utils'
+import { daysUntil } from '@/lib/eventDays'
 import { useSession } from 'next-auth/react'
 import GalleryPicker from '@/components/GalleryPicker'
 
@@ -276,7 +277,8 @@ export default function TournamentsDashboard() {
     if (!s0) return null
     if (s0 <= todayKey && todayKey <= e0) return { label: 'In progress', cls: 'bg-emerald-100 text-emerald-700' }
     if (e0 < todayKey) return { label: 'Completed', cls: 'bg-slate-100 text-slate-500' }
-    const days = Math.round((new Date(s0 + 'T12:00:00').getTime() - new Date(todayKey + 'T12:00:00').getTime()) / 86400000)
+    const days = daysUntil(s0)
+    if (days === null) return null
     return { label: days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days} days away`, cls: 'bg-sky-100 text-sky-700' }
   }
 
