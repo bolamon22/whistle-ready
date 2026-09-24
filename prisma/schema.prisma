@@ -198,6 +198,12 @@ model RegistrationPayment {
   checkNumber    String   @default("")
   receivedAt     String
   notes          String   @default("")
+  // The Stripe PaymentIntent behind this row, '' for check/cash. A UNIQUE index
+  // across (registrationId, stripeIntentId) is what stops two writers recording
+  // one payment twice -- created in raw SQL, partial, so the '' rows don't
+  // collide. See src/lib/paymentGuard.ts; do NOT add @@unique here, the schema
+  // cannot express the WHERE.
+  stripeIntentId String   @default("")
   createdAt      DateTime @default(now())
 
   registration TeamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)

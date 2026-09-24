@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { markVendorPaid } from '@/lib/formSubmissions'
+import { recordTeamPayment } from './paymentGuard'
 
 // Catching money Stripe took that the app never heard about.
 //
@@ -109,6 +110,141 @@ async function vendorAlreadyPaid(token: string): Promise<boolean> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// THE OTHER DIRECTION: rows in OUR books that Stripe does not back.
+//
+// findUnrecordedPayments() below answers "did we miss money Stripe took". It
+// cannot see the opposite failure, and that is the one that actually happened:
+// on Sep 18 2026 the webhook and the checkout-return path both checked "is this
+// intent recorded yet", both got a clean answer, and both wrote. LaxManiax's
+// Fall Classic then read $5,980 paid against a $4,485 invoice, and the club
+// director opened a portal showing a $1,495 credit he had not earned. Nothing
+// in the app could have told you that; it took opening Stripe by hand.
+//
+// So this compares every payment row we hold against what Stripe actually
+// charged, and reports four things:
+//   duplicate      -- two or more rows citing ONE payment intent. Real money
+//                     counted twice. This is the Sep 18 failure.
+//   notInStripe    -- a card row citing an intent Stripe has no succeeded
+//                     record of. Either a typo'd note or a payment that was
+//                     reversed after we wrote it.
+//   amountMismatch -- we recorded a different figure than Stripe settled.
+//   unverified     -- cited an intent older than the scan window, so this run
+//                     simply did not look. Reported rather than passed over in
+//                     silence, because "no problems found" has to mean it.
+// Manual rows (check, cash, an offline card) carry no intent and are listed
+// separately -- they are not errors, they are just not Stripe's to confirm.
+export type AuditProblem = {
+  kind: 'duplicate' | 'notInStripe' | 'amountMismatch' | 'unverified'
+  club: string
+  piId: string
+  detail: string
+  /** Dollars the books are overstated by because of this row. 0 when unknown. */
+  overstatedBy: number
+}
+
+export type EventAudit = {
+  tournamentId: string
+  name: string
+  invoiced: number       // net of discounts
+  recorded: number       // what our payment rows add up to
+  balance: number        // invoiced - recorded
+  verifiedByStripe: number
+  manual: number
+  problems: AuditProblem[]
+}
+
+export type PaymentAuditResult = {
+  ok: boolean
+  error?: string
+  since: string
+  stripeScanned: number
+  events: EventAudit[]
+}
+
+const PI_IN_NOTES = /pi_[A-Za-z0-9]+/
+
+export async function auditPayments(tournamentIds: string[], days = 180): Promise<PaymentAuditResult> {
+  const since = new Date(Date.now() - days * 86400_000).toISOString().split('T')[0]
+  const { intents, error } = await fetchIntents(days)
+  if (error) return { ok: false, error, since, stripeScanned: 0, events: [] }
+
+  // What Stripe says succeeded, keyed by intent.
+  const stripeByPi = new Map<string, { amount: number; charged: number }>()
+  for (const pi of intents) {
+    if (pi?.status !== 'succeeded') continue
+    stripeByPi.set(pi.id, amountsOf(pi))
+  }
+
+  const events: EventAudit[] = []
+  for (const tournamentId of tournamentIds) {
+    const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true } })
+    const regs = await prisma.teamRegistration.findMany({
+      where: { tournamentId, deletedAt: null },
+      select: {
+        clubName: true, invoiceAmount: true, discountAmount: true,
+        payments: { select: { id: true, amount: true, method: true, receivedAt: true, notes: true } },
+      },
+    })
+
+    const problems: AuditProblem[] = []
+    let invoiced = 0, recorded = 0, verified = 0, manual = 0
+
+    for (const reg of regs) {
+      invoiced += (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
+      // Rows are grouped per registration, not globally: the same intent CANNOT
+      // legitimately appear twice on one club, but two clubs never share one.
+      const seen = new Map<string, number>()
+      for (const p of reg.payments) {
+        recorded += p.amount || 0
+        const piId = PI_IN_NOTES.exec(p.notes || '')?.[0] || ''
+        if (!piId) { manual += p.amount || 0; continue }
+
+        const n = (seen.get(piId) || 0) + 1
+        seen.set(piId, n)
+        if (n > 1) {
+          problems.push({
+            kind: 'duplicate', club: reg.clubName, piId,
+            detail: `row ${n} citing the same payment intent ($${(p.amount || 0).toFixed(2)} on ${p.receivedAt})`,
+            overstatedBy: p.amount || 0,
+          })
+          continue                    // counted once under whichever row was first
+        }
+
+        const st = stripeByPi.get(piId)
+        if (!st) {
+          // Older than the window is "not looked at", not "not there".
+          const outsideWindow = String(p.receivedAt || '') < since
+          problems.push({
+            kind: outsideWindow ? 'unverified' : 'notInStripe',
+            club: reg.clubName, piId,
+            detail: outsideWindow
+              ? `paid ${p.receivedAt}, before this ${days}-day scan window`
+              : `no succeeded payment for this intent in Stripe ($${(p.amount || 0).toFixed(2)} on ${p.receivedAt})`,
+            overstatedBy: outsideWindow ? 0 : (p.amount || 0),
+          })
+          continue
+        }
+        verified += p.amount || 0
+        if (Math.abs((p.amount || 0) - st.amount) > 0.005) {
+          problems.push({
+            kind: 'amountMismatch', club: reg.clubName, piId,
+            detail: `we recorded $${(p.amount || 0).toFixed(2)}, Stripe settled $${st.amount.toFixed(2)} (charged $${st.charged.toFixed(2)})`,
+            overstatedBy: Math.max(0, (p.amount || 0) - st.amount),
+          })
+        }
+      }
+    }
+
+    events.push({
+      tournamentId, name: t?.name || '', invoiced, recorded,
+      balance: invoiced - recorded, verifiedByStripe: verified, manual, problems,
+    })
+  }
+
+  return { ok: true, since, stripeScanned: intents.length, events }
+}
+
 /** Everything Stripe charged in the window that the app has no record of. */
 export async function findUnrecordedPayments(days = 30): Promise<ReconcileResult> {
   const since = new Date(Date.now() - days * 86400_000).toISOString().split('T')[0]
@@ -193,18 +329,17 @@ export async function recordStripePayment(piId: string): Promise<{ ok: boolean; 
       where: { id: meta.registrationId }, select: { clubName: true, deletedAt: true },
     })
     if (!reg || reg.deletedAt) return { ok: false, error: 'That registration no longer exists' }
-    await prisma.registrationPayment.create({
-      data: {
-        registrationId: meta.registrationId,
-        amount,
-        method,
-        checkNumber: '',
-        // The day Stripe took the money, NOT today — otherwise a September
-        // payment recovered in October lands in the wrong month.
-        receivedAt: createdAt,
-        notes: `Stripe · ${pi.id}${amount < charged ? ` · incl. $${(charged - amount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''} · via reconcile`,
-      },
+    const wrote = await recordTeamPayment({
+      registrationId: meta.registrationId,
+      amount,
+      method,
+      // The day Stripe took the money, NOT today — otherwise a September
+      // payment recovered in October lands in the wrong month.
+      receivedAt: createdAt,
+      notes: `Stripe · ${pi.id}${amount < charged ? ` · incl. $${(charged - amount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''} · via reconcile`,
+      piId: pi.id,
     })
+    if (!wrote) return { ok: false, error: 'Already recorded' }
     await notifyPaymentReceived({ registrationId: meta.registrationId, amount, method, charged, via: 'Stripe reconcile' })
     return { ok: true, recorded: { piId: pi.id, createdAt, charged, amount, method, kind: 'team', targetId: meta.registrationId, label: reg.clubName, context: '' } }
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { prisma } from '@/lib/db'
+import { recordTeamPayment } from '@/lib/paymentGuard'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { markVendorPaid } from '@/lib/formSubmissions'
 
@@ -68,18 +69,20 @@ export async function POST(req: NextRequest) {
         })
         if (reg) {
           const amount = (session.amount_total ?? 0) / 100
-          await prisma.registrationPayment.create({
-            data: {
-              registrationId: reg.id,
-              amount,
-              method: 'credit_card',
-              checkNumber: '',
-              receivedAt: new Date().toISOString().split('T')[0],
-              notes: `Stripe${paymentIntent ? ` · ${paymentIntent}` : ''} · session ${session.id}`,
-            },
+          // Shares the intent id with payment_intent.succeeded below, so whichever
+          // of the two lands first is the one that gets written.
+          const wrote = await recordTeamPayment({
+            registrationId: reg.id,
+            amount,
+            method: 'credit_card',
+            receivedAt: new Date().toISOString().split('T')[0],
+            notes: `Stripe${paymentIntent ? ` · ${paymentIntent}` : ''} · session ${session.id}`,
+            piId: String(paymentIntent || ''),
           })
-          console.log(`Team registration payment recorded: ${reg.id}, $${amount}`)
-          await notifyPaymentReceived({ registrationId: reg.id, amount, method: 'credit_card', via: 'Stripe webhook' })
+          if (wrote) {
+            console.log(`Team registration payment recorded: ${reg.id}, $${amount}`)
+            await notifyPaymentReceived({ registrationId: reg.id, amount, method: 'credit_card', via: 'Stripe webhook' })
+          }
         }
       } catch (e) {
         console.error('Failed to create team payment record:', e)
@@ -96,10 +99,7 @@ export async function POST(req: NextRequest) {
     const registrationId = pi.metadata?.registrationId
     if (pi.metadata?.type === 'team_registration' && registrationId) {
       try {
-        const existing = await prisma.registrationPayment.findFirst({
-          where: { registrationId, notes: { contains: pi.id } },
-        })
-        if (!existing) {
+        {
           const charged = (pi.amount_received ?? pi.amount ?? 0) / 100
           const base = parseFloat(pi.metadata?.baseAmount || '')
           const amount = base > 0 && base <= charged ? base : charged
@@ -107,18 +107,18 @@ export async function POST(req: NextRequest) {
           // Card intents may LIST us_bank_account among the account defaults, so
           // includes() would mislabel card payments as ACH (bug found Aug 27).
           const isAch = (pi.payment_method_types || []).join(',') === 'us_bank_account'
-          await prisma.registrationPayment.create({
-            data: {
-              registrationId,
-              amount,
-              method: isAch ? 'ach' : 'credit_card',
-              checkNumber: '',
-              receivedAt: new Date().toISOString().split('T')[0],
-              notes: `Stripe · ${pi.id}${amount < charged ? ` · incl. $${(charged - amount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''} · via webhook`,
-            },
+          const wrote = await recordTeamPayment({
+            registrationId,
+            amount,
+            method: isAch ? 'ach' : 'credit_card',
+            receivedAt: new Date().toISOString().split('T')[0],
+            notes: `Stripe · ${pi.id}${amount < charged ? ` · incl. $${(charged - amount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''} · via webhook`,
+            piId: pi.id,
           })
-          console.log(`Team registration payment recorded via webhook: ${registrationId}, $${amount}`)
-          await notifyPaymentReceived({ registrationId, amount, method: isAch ? 'ach' : 'credit_card', charged, via: 'Stripe webhook' })
+          if (wrote) {
+            console.log(`Team registration payment recorded via webhook: ${registrationId}, $${amount}`)
+            await notifyPaymentReceived({ registrationId, amount, method: isAch ? 'ach' : 'credit_card', charged, via: 'Stripe webhook' })
+          }
         }
       } catch (e) {
         console.error('Failed to record webhook payment:', e)

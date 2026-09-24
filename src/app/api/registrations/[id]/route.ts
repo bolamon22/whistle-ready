@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { recordTeamPayment } from '@/lib/paymentGuard'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { requireStaff } from '@/lib/apiAuth'
 import { cleanName } from '@/lib/names'
@@ -34,10 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (pi.status !== 'succeeded' || pi.metadata?.registrationId !== params.id) {
       return NextResponse.json({ error: 'Payment not verified' }, { status: 400 })
     }
-    const existing = await prisma.registrationPayment.findFirst({
-      where: { registrationId: params.id, notes: { contains: piId } },
-    })
-    if (!existing) {
+    {
       // Record the BASE amount (what they owed) when the intent carries it; the
       // 3% card fee goes in the note so invoiced-vs-paid balances stay clean.
       // Method comes from the CHARGE actually made, not payment_method_types —
@@ -51,17 +49,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const charged = (pi.amount_received ?? pi.amount ?? 0) / 100
       const base = parseFloat(pi.metadata?.baseAmount || '')
       const recordAmount = base > 0 && base <= charged ? base : charged
-      await prisma.registrationPayment.create({
-        data: {
-          registrationId: params.id,
-          amount: recordAmount,
-          method: isAchPayment ? 'ach' : 'credit_card',
-          checkNumber: '',
-          receivedAt: new Date().toISOString().split('T')[0],
-          notes: `Stripe · ${piId}${recordAmount < charged ? ` · incl. $${(charged - recordAmount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''}`,
-        },
+      // recordTeamPayment owns the "already recorded?" question now -- it asks
+      // it AND lets the unique index settle the race the old check could not.
+      const wrote = await recordTeamPayment({
+        registrationId: params.id,
+        amount: recordAmount,
+        method: isAchPayment ? 'ach' : 'credit_card',
+        receivedAt: new Date().toISOString().split('T')[0],
+        notes: `Stripe · ${piId}${recordAmount < charged ? ` · incl. $${(charged - recordAmount).toFixed(2)} card fee (charged $${charged.toFixed(2)})` : ''}`,
+        piId,
       })
-      await notifyPaymentReceived({
+      // Only on a row we actually wrote, or a webhook arriving a second later
+      // pings Bo twice for one payment.
+      if (wrote) await notifyPaymentReceived({
         registrationId: params.id,
         amount: recordAmount,
         method: isAchPayment ? 'ach' : 'credit_card',
