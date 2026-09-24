@@ -326,14 +326,14 @@ export function buildIdeas(o: BuildOpts): Record<string, DayIdeas> {
     const open = date >= o.today && !o.takenDays.has(date)
     if (open) {
       const quiet = moms.find(m => m.quiet)
-      const add = (b: IdeaBody | null, src: IdeaSource, lg?: string, forceWeight?: 'feed' | 'story') => {
+      const add = (b: IdeaBody | null, src: IdeaSource, lg?: string, forceWeight?: 'feed' | 'story', about?: { ev: Ev; days: number; phase: Phase }) => {
         if (!b) return
         const weight = forceWeight || (b.fmt === 'Story' ? 'story' : 'feed')
         const time = weight === 'feed' && o.slotTime?.[c.dow] ? o.slotTime[c.dow] : AUD_TIME[b.aud]
-        const key = `${date}:${src}:${lg || ''}:${slug(b.title)}`
+        const ev = about?.ev || c.ev || c.next
+        const key = `${date}:${src}:${lg || ''}:${about ? ev?.id : ''}:${slug(b.title)}`
         if (o.dismissed.has(key)) return
-        const ev = c.ev || c.next
-        day.ideas.push({ ...b, key, date, weight, src, lg, phase: c.phase, eventId: ev?.id, eventName: ev?.name, eventShort: ev?.short, days: c.days, time, brief: '' })
+        day.ideas.push({ ...b, key, date, weight, src, lg, phase: about?.phase || c.phase, eventId: ev?.id, eventName: ev?.name, eventShort: ev?.short, days: about ? about.days : c.days, time, brief: '' })
       }
       if (quiet) {
         add({ title: 'Quiet day: no promo', aud: 'all', fmt: 'Story', quiet: true, why: /black friday/i.test(quiet.label) ? 'Everyone else is running sales today, and you don’t do discounts. Skip the feed post and let the week’s posts keep working.' : 'Feeds are busy and people are distracted. Skip the promo and reshare a club post if you want to stay active.', hook: 'Skip the feed, or reshare one club story', shots: [], cap: '' }, 'moment')
@@ -372,12 +372,41 @@ export function buildIdeas(o: BuildOpts): Record<string, DayIdeas> {
           }
         }
       }
-      // Back-to-back events: the second one's runway sits under the first one's
-      // spotlight, so give it one Wednesday post a week while that lasts.
-      if (!quiet && c.dow === 3 && c.ev && (c.phase === 'runway' || c.phase === 'forming' || c.phase === 'plan' || c.phase === 'hype')) {
-        const cur = c.ev; const second = evs.find(x => x.start > cur.end)
-        if (second && diff(second.start, cur.end) <= 21) {
-          add({ title: `Two weekends: ${cur.short} + ${second.short}`, aud: 'clubs', fmt: 'Photo', why: `${cur.short} takes every post until it's over, which leaves ${second.short} out of sight during its own registration window. One Wednesday post a week presents them as a pair.`, hook: `Weekend one: ${cur.short}, ${cur.dates}. Weekend two: ${second.short}, ${second.dates}.`, shots: ['Two-date graphic, both venues'], cap: `Two weekends: ${cur.short}${cur.town ? ` in ${cur.town}` : ''} (${cur.dates}), then ${second.short}${second.town ? ` in ${second.town}` : ''} (${second.dates}). ${cta}.` }, 'series')
+      // Every upcoming event gets promoted, not just the next one. The countdown
+      // above only talks about the nearest event, which leaves the later ones out
+      // of sight for weeks — Fall Classic and Jingle Brawl had nothing to say
+      // until Monster Mash was over. So the second event in line gets a
+      // Wednesday post and the third a Friday post, from 90 days out until 15
+      // days out (after that it's the nearest event and the countdown has it).
+      if (!quiet && c.phase !== 'live') {
+        const focus = c.ev
+        const later = evs.filter(x => x.start > date && x.id !== focus?.id)
+        const slot = [3, 5].indexOf(c.dow)
+        const e2 = slot >= 0 ? later[slot] : undefined
+        const d2 = e2 ? diff(e2.start, date) : 0
+        // During a recap the next event has no other voice yet, so its slot also
+        // covers the plan-the-weekend window (8–14 days) — otherwise its hotel and
+        // weekend-guide posts fall on the first event's game days and never appear.
+        const minDays = c.phase === 'recap' ? 8 : 15
+        if (e2 && d2 >= minDays && d2 <= 90) {
+          const phase2: Phase = d2 >= 31 ? 'runway' : d2 >= 15 ? 'forming' : 'plan'
+          const week = countDows(addDaysKey(e2.start, -90), date, new Set([c.dow]))
+          const about = { ev: e2, days: d2, phase: phase2 }
+          // Back-to-back weekends read best as a pair, so alternate the pairing
+          // post with the event's own runway/forming posts.
+          if (focus && slot === 0 && diff(e2.start, focus.end) <= 21 && week % 2 === 0) {
+            add({ title: `Two weekends: ${focus.short} + ${e2.short}`, aud: 'clubs', fmt: 'Photo', why: `${focus.short} takes most posts until it's over, which leaves ${e2.short} out of sight during its own registration window. Presenting them as a pair keeps both in front of directors.`, hook: `Weekend one: ${focus.short}, ${focus.dates}. Weekend two: ${e2.short}, ${e2.dates}.`, shots: ['Two-date graphic, both venues'], cap: `Two weekends: ${focus.short}${focus.town ? ` in ${focus.town}` : ''} (${focus.dates}), then ${e2.short}${e2.town ? ` in ${e2.town}` : ''} (${e2.dates}). ${cta}.` }, 'series', undefined, 'feed', about)
+          } else {
+            const list: T[] = phase2 === 'plan' ? [e => ({ ...FIXED[14](e), title: 'The weekend guide', why: 'Families are planning travel now. Put everything in one guide: parking, check-in, shade, food, hotel link.' }), ...T_.plan.feed] : T_[phase2].feed
+            const pick = phase2 === 'plan' ? (d2 >= 10 ? 0 : 1) : week % list.length // plan: weekend guide first, then where to stay
+            const b = list[pick](e2, week, { ...c, phase: phase2, ev: e2, days: d2, next: e2 }, cta)
+            add({ ...b, title: `${e2.short}: ${b.title}`, why: `${b.why} This one is for ${e2.short} (${d2} days out), so it isn't lost behind ${focus?.short || 'the nearest event'}.` }, 'series', undefined, 'feed', about)
+          }
+        }
+        // Once a month, one post with every date so directors can plan the season.
+        const ahead = evs.filter(x => x.start > date && diff(x.start, date) <= 120)
+        if (c.dow === 1 && Number(date.slice(8, 10)) <= 7 && ahead.length >= 2) {
+          add({ title: 'Every date, one post', aud: 'clubs', fmt: 'Photo', why: `Directors plan several weekends at once. One graphic with every upcoming date (${ahead.map(x => x.short).join(', ')}) is the post they screenshot and send to their coaches.`, hook: 'Circle these weekends.', shots: ['Date card: each event, dates, town'], cap: `Circle these weekends:\n${ahead.map(x => `${x.short} · ${x.dates}${x.town ? ` · ${x.town}` : ''}`).join('\n')}\n${cta}.` }, 'series', undefined, 'feed', { ev: ahead[0], days: diff(ahead[0].start, date), phase: c.phase })
         }
       }
       if (!quiet) {

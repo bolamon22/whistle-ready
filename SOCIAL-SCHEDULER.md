@@ -204,8 +204,12 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   holidays/quiet days computed per year; (3) sports tie-ins with per-league toggles
   (PLL, NCAA lacrosse, NFL, NHL, CFB, MLB, NBA, MLS). **The dated sports entries
   are the 2026–27 season — refresh `SPORTS` each year**; rule-based ones (power
-  rankings, three stars, mic'd up, RedZone) repeat per event. Back-to-back events
-  (≤21 days apart) get a weekly "two weekends" post for the second one. "Draft with
+  rankings, three stars, mic'd up, RedZone) repeat per event. Every upcoming event
+  is promoted, not just the nearest: the 2nd event in line gets a Wednesday post
+  and the 3rd a Friday post from 90 to 15 days out (8 days during a recap, so its
+  weekend guide isn't lost under the first event's game days); back-to-back
+  weekends (≤21 days apart) alternate with a "two weekends" pairing post; the
+  first Monday of each month gets an "every date, one post" card. "Draft with
   AI" opens Compose with the idea's brief and runs Write with AI straight away.
   Carousel ideas note that the publisher is single-media for now.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
