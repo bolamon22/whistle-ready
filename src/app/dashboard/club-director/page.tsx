@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, Globe, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
+interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
 interface Waiver {
   id: string; playerName: string; team: string; club: string
   jersey: string | number | null; grade: string; parentName: string
@@ -52,8 +52,46 @@ interface HistoryEntry {
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const shortDate = (d: string) =>
-  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+/** The viewer's own date as YYYY-MM-DD, comparable against the stored strings. */
+const todayLocal = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// WHICH EVENT THE PORTAL OPENS ON.
+//
+// The links route returns tournaments startDate DESC, and the picker took the first
+// one -- so a director linked to Monster Mash (Oct 24) and the Fall Classic (Nov 7)
+// landed on the Fall Classic in September and saw the wrong teams, waivers and
+// balance. One of them emailed about it (Bo, Sep 24 2026).
+//
+// The event someone opens this portal for is the one they are about to play. So:
+// the soonest event that has not finished yet, counting an event as current through
+// its END date -- otherwise the portal would jump to the next one on the Sunday
+// morning of a two-day weekend, which is the worst possible moment for it. If every
+// linked event is over, the most recent one.
+function nextUpTournament(list: Tournament[]): Tournament | undefined {
+  if (!list.length) return undefined
+  const today = todayLocal()
+  const upcoming = list
+    .filter(t => (t.endDate || t.startDate || '') >= today)
+    .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
+  if (upcoming.length) return upcoming[0]
+  return [...list].sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))[0]
+}
+
+// Two shapes reach this. A payment's receivedAt is a real timestamp and new Date()
+// is right for it. A tournament's startDate is a naive string an organizer typed --
+// "2026-10-24", no zone -- and new Date() reads THAT as UTC midnight, which prints
+// as Oct 23 everywhere in the US. So a bare date is split and rebuilt in local time
+// and stays the day that was typed; anything with a time on it is left alone.
+const shortDate = (d: string) => {
+  if (!d) return '—'
+  const bare = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d))
+  const dt = bare ? new Date(+bare[1], +bare[2] - 1, +bare[3]) : new Date(d)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 // The stored value is a slug ('check', 'card'); clubs read the label.
 const PAY_LABEL: Record<string, string> = {
@@ -249,7 +287,8 @@ export default function ClubDirectorDashboard() {
       const list: Tournament[] = linked.length ? linked : (Array.isArray(t) ? t : [])
       setTournaments(list)
       const linkedIds = [...new Set((links as { tournamentId: string }[]).map(l => l.tournamentId))]
-      const first = list.find(x => linkedIds.includes(x.id)) || list[0]
+      const mine = list.filter(x => linkedIds.includes(x.id))
+      const first = nextUpTournament(mine.length ? mine : list)
       if (!Array.isArray(linkRes) && linkRes?.viewing) setViewingUser(linkRes.viewing)
       if (first) { setSelTournament(first.id); loadData(first.id, vu) }
       setLoading(false)
@@ -293,7 +332,8 @@ export default function ClubDirectorDashboard() {
     </div>
   )
 
-  const selTournamentName = tournaments.find(t => t.id === selTournament)?.name || ''
+  const selTournamentRow = tournaments.find(t => t.id === selTournament)
+  const selTournamentName = selTournamentRow?.name || ''
   const waivers: Waiver[] = data?.waivers ?? []
   // Waivers land on the team whose name they carry. Normalized both sides
   // because the form writes "Club \u2014 Team" and people type inconsistently.
@@ -457,12 +497,27 @@ export default function ClubDirectorDashboard() {
           <h1 className="text-2xl font-bold text-gray-800 mt-0.5">
             {(data?.clubs?.length ? data.clubs : linkClubs).join(', ') || 'Your club'}
           </h1>
-          {selTournamentName && <p className="text-sm text-gray-500 mt-0.5">{selTournamentName}</p>}
+          {selTournamentName && (
+            <div className="flex items-center gap-2 mt-1">
+              {/* h-6 with w-auto, not a square box: these marks are wordmarks as often
+                  as badges, and Monster Mash is 453x180 -- squaring it shrinks it to
+                  nothing. */}
+              {selTournamentRow?.logoUrl && (
+                <img src={selTournamentRow.logoUrl} alt="" className="h-6 w-auto max-w-[110px] object-contain" />
+              )}
+              <p className="text-sm text-gray-500">
+                {selTournamentName}
+                {selTournamentRow?.startDate && <span className="text-gray-400"> · {shortDate(selTournamentRow.startDate)}</span>}
+              </p>
+            </div>
+          )}
         </div>
         {tab !== 'history' && (
           <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadData(e.target.value) }}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-            {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {tournaments.map(t => (
+              <option key={t.id} value={t.id}>{t.name}{t.startDate ? ` — ${shortDate(t.startDate)}` : ''}</option>
+            ))}
           </select>
         )}
       </div>
