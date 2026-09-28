@@ -624,7 +624,16 @@ export default function RegistrationsPage() {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete the registration for "${name}"?\n\nIt moves to Recently Deleted at the bottom of this page — you can restore it any time in the next 30 days.`)) return
+    // A club that paid and was refunded is the case this warning exists for: the
+    // entry is going away but the money trail has to stay findable.
+    const reg = registrations.find(r => r.id === id)
+    const pays = reg?.payments || []
+    const gross = pays.filter(p => p.amount > 0).reduce((s2, p) => s2 + p.amount, 0)
+    const refunded = pays.filter(p => p.amount < 0).reduce((s2, p) => s2 + Math.abs(p.amount), 0)
+    const money = pays.length
+      ? `\n\nThis club has payment history — ${fmt(gross)} received${refunded > 0 ? `, ${fmt(refunded)} refunded` : ''}. That history is KEPT, and the entry stays in Recently Deleted permanently rather than being purged, so you can still look the refund up if they query it.`
+      : ''
+    if (!confirm(`Delete the registration for "${name}"?${money}\n\nIt moves to Recently Deleted at the bottom of this page — you can restore it any time${pays.length ? '' : ' in the next 30 days'}.`)) return
     try {
       await fetch(`/api/registrations/${id}`, { method: 'DELETE' })
       toast.success('Deleted.'); setExpanded(null); load()
@@ -2313,7 +2322,7 @@ export default function RegistrationsPage() {
           className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
         >
           <span>{showDeleted ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
-          <span>Recently Deleted <span className="text-xs text-slate-400">(restorable for 30 days)</span></span>
+          <span>Recently Deleted <span className="text-xs text-slate-400">(30 days — anything with payments is kept)</span></span>
         </button>
         {showDeleted && (
           <div className="mt-3 border border-slate-200 rounded-lg divide-y divide-slate-200">
@@ -2321,7 +2330,7 @@ export default function RegistrationsPage() {
               <p className="p-4 text-sm text-slate-400 italic">No recently deleted registrations.</p>
             ) : (
               deletedRegs.map(reg => (
-                <div key={reg.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100">
+                <div key={reg.id} className="flex items-start justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100">
                   <div className="min-w-0">
                     <span className="font-medium text-sm text-slate-800">{reg.clubName}</span>
                     <span className="ml-3 text-xs text-slate-500">
@@ -2330,6 +2339,36 @@ export default function RegistrationsPage() {
                     {reg.mergedIntoId
                       ? <span className="ml-3 text-xs text-amber-700">Merged into {reg.mergedIntoName || 'another registration'} — its teams and payments live there now</span>
                       : <span className="ml-3 text-xs text-slate-400">{reg.teams?.length || 0} teams</span>}
+                    {/* THE MONEY TRAIL. A deleted registration used to take its
+                        payments out of sight the moment it was deleted, which made
+                        "what did we refund Tampa Tarpons" unanswerable in the app.
+                        Charges and refunds are listed here, and any row carrying one
+                        is exempt from the 30-day purge. */}
+                    {(() => {
+                      const pays: any[] = reg.payments || []
+                      if (!pays.length) return null
+                      const gross = pays.filter(p => p.amount > 0).reduce((a: number, p: any) => a + p.amount, 0)
+                      const refunded = pays.filter(p => p.amount < 0).reduce((a: number, p: any) => a + Math.abs(p.amount), 0)
+                      return (
+                        <div className="mt-1.5">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            Kept — payment history
+                          </span>
+                          <span className="ml-2 text-xs text-slate-600">
+                            {fmt(gross)} received{refunded > 0 ? <> · <span className="text-red-600 font-medium">{fmt(refunded)} refunded</span></> : null}
+                          </span>
+                          <div className="mt-1 space-y-0.5">
+                            {pays.map((p: any, i: number) => (
+                              <div key={i} className="text-[11px] text-slate-500 [overflow-wrap:anywhere]">
+                                {fmtPayDate(p.receivedAt)} · {payLabel(p.method)} ·{' '}
+                                <span className={p.amount < 0 ? 'text-red-600 font-medium' : 'text-green-700 font-medium'}>{fmt(p.amount)}</span>
+                                {p.notes ? <> · <span className="text-slate-400">{p.notes}</span></> : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                   {!reg.mergedIntoId && (
                     <button
