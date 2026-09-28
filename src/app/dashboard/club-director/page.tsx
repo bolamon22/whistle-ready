@@ -97,7 +97,23 @@ const shortDate = (d: string) => {
 const PAY_LABEL: Record<string, string> = {
   check: 'Check', card: 'Credit card', credit_card: 'Credit card', stripe: 'Credit card',
   ach: 'Bank transfer (ACH)', cash: 'Cash', paypal: 'PayPal', venmo: 'Venmo', invoice: 'Invoice',
+  // 'zelle' is on the public registration form and was missing here, so every
+  // Zelle club fell through to the bare capitalize fallback.
+  zelle: 'Zelle',
 }
+
+// What a director may switch to, matching the public registration form and the
+// whitelist in api/club-director/pay-method. Order puts the no-fee option first,
+// the way the pay page does.
+const PAY_CHOICES: { value: string; label: string }[] = [
+  { value: 'ach',         label: 'Bank transfer (ACH) — no fee' },
+  { value: 'credit_card', label: 'Credit card — 3% fee' },
+  { value: 'paypal',      label: 'PayPal / Venmo — 3% fee' },
+  { value: 'zelle',       label: 'Zelle — no fee' },
+  { value: 'check',       label: 'Check' },
+]
+/** Methods that are actually settled on the pay page rather than by post or app. */
+const PAY_ONLINE = new Set(['ach', 'credit_card', 'paypal'])
 const payLabel = (m: string) => PAY_LABEL[String(m || '').toLowerCase()] || (m ? m[0].toUpperCase() + m.slice(1) : '—')
 
 const initials = (n: string) =>
@@ -232,7 +248,7 @@ export default function ClubDirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selTournament, setSelTournament] = useState('')
-  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string } } | null>(null)
+  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string }; payTo?: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
   const [playerView, setPlayerView] = useState<'cards' | 'list'>('cards')
   const [openPlayer, setOpenPlayer] = useState<string | null>(null)
@@ -400,6 +416,28 @@ export default function ClubDirectorDashboard() {
       await loadData(selTournament)
       toast.success(`${next.coachName} is now the coach of ${j?.teamName || 'that team'}`)
     } catch { toast.error('Could not update that coach') } finally { setCoachSaving(false) }
+  }
+
+  // Switching how this club intends to pay. What they picked during registration
+  // was picked to get past the form, not decided -- and by the time they come back
+  // to settle the invoice the treasurer has often changed their mind. Leaving it
+  // frozen meant the staff page kept promising Bo a Zelle nobody was sending.
+  const [payMethodSaving, setPayMethodSaving] = useState('')
+  async function savePayMethod(registrationId: string, paymentMethod: string) {
+    if (!registrationId || !selTournament || !paymentMethod) return
+    setPayMethodSaving(registrationId)
+    try {
+      const res = await fetch(`/api/club-director/pay-method${viewUserId ? `?userId=${encodeURIComponent(viewUserId)}` : ''}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: selTournament, registrationId, paymentMethod }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(j?.error || 'Could not change the payment method'); return }
+      await loadData(selTournament)
+      toast.success(PAY_ONLINE.has(paymentMethod)
+        ? `Set to ${payLabel(paymentMethod)} — use the Pay button when you're ready`
+        : `Set to ${payLabel(paymentMethod)} — we'll mark the invoice paid when it arrives`)
+    } catch { toast.error('Could not change the payment method') } finally { setPayMethodSaving('') }
   }
 
   function openCoachEdit(r: { teamId: string; coachName: string; coachEmail: string; coachPhone: string }) {
@@ -716,7 +754,28 @@ export default function ClubDirectorDashboard() {
                       <div className="px-5 py-2.5 bg-gray-50 border-y border-gray-100 flex flex-wrap gap-x-8 gap-y-1 text-sm">
                         {reg.clubBasedIn && <span className="text-gray-500">Based in: <span className="text-gray-700 font-medium">{reg.clubBasedIn}</span></span>}
                         <span className="text-gray-500">Hotel: <span className="text-gray-700 font-medium">{reg.needsHotel || 'No'}</span></span>
-                        <span className="text-gray-500">Pay method: <span className="text-gray-700 font-medium">{payLabel(reg.paymentMethod)}</span></span>
+                        <span className="text-gray-500 flex items-center gap-1.5">
+                          Pay method:
+                          {viewUserId ? (
+                            <span className="text-gray-700 font-medium">{payLabel(reg.paymentMethod)}</span>
+                          ) : (
+                            <select
+                              value={PAY_CHOICES.some(c => c.value === reg.paymentMethod) ? reg.paymentMethod : ''}
+                              disabled={payMethodSaving === reg.id}
+                              onChange={e => { const v = e.target.value; if (v && v !== reg.paymentMethod) savePayMethod(reg.id, v) }}
+                              className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white text-gray-700 font-medium disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            >
+                              {/* A stored value outside the list (an old import, or 'cash'
+                                  keyed in by staff) keeps its own entry rather than being
+                                  silently rewritten to whatever sorts first. */}
+                              {!PAY_CHOICES.some(c => c.value === reg.paymentMethod) && (
+                                <option value="">{payLabel(reg.paymentMethod)}</option>
+                              )}
+                              {PAY_CHOICES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                            </select>
+                          )}
+                          {payMethodSaving === reg.id && <span className="text-xs text-gray-400">Saving…</span>}
+                        </span>
                       </div>
 
                       {/* Teams — a real table on desktop, stacked rows on a phone,
@@ -807,9 +866,27 @@ export default function ClubDirectorDashboard() {
                           <span className="text-gray-500">Paid: <span className="font-medium text-green-600">{fmt(paid)}</span></span>
                           <span className="text-gray-500">Balance: <span className={`font-semibold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</span></span>
                         </div>
+                        {/* Having changed their method, a director needs to know what
+                            it now asks of them. Online methods are settled on the pay
+                            page; Zelle and check are settled by hand, and the details
+                            for those otherwise live only in an email sent weeks ago. */}
+                        {bal > 0 && reg.paymentMethod === 'zelle' && (
+                          <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 mb-3">
+                            Send <span className="font-semibold">{fmt(bal)}</span> by Zelle to{' '}
+                            <span className="font-semibold">{data?.payTo?.zelleHandle || 'the tournament'}</span>
+                            {' '}with &ldquo;{reg.clubName}&rdquo; in the memo. We&apos;ll mark the invoice paid when it arrives.
+                          </p>
+                        )}
+                        {bal > 0 && reg.paymentMethod === 'check' && (
+                          <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 mb-3">
+                            Mail a check for <span className="font-semibold">{fmt(bal)}</span> payable to{' '}
+                            <span className="font-semibold">{data?.payTo?.checkPayableTo || 'the tournament'}</span>
+                            {data?.payTo?.checkAddress ? <>, to:<br /><span className="text-gray-700">{data.payTo.checkAddress}</span></> : null}
+                          </p>
+                        )}
                         {reg.payments.length === 0
                           ? <p className="text-sm text-gray-400">
-                              No payments recorded yet.{bal > 0 ? ' Card, bank transfer, PayPal and Zelle are all on the payment page.' : ''}
+                              No payments recorded yet.{bal > 0 ? ' You can switch methods above at any time — the Pay button takes card, bank transfer and PayPal.' : ''}
                             </p>
                           : (
                             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">

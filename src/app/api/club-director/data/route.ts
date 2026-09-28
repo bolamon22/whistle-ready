@@ -166,9 +166,33 @@ export async function GET(req: NextRequest) {
     }).filter(c => mine.has(norm(c.club)))
   } catch { /* no submissions table yet -- the tab shows none rather than failing */ }
 
+  // Where to actually send a check or a Zelle, so a director who switches their
+  // pay method is not left to go hunting for it in an old email.
+  //
+  // THREE FIELDS ONLY, and the omission is the point: the Organization row also
+  // carries achBankName, achRoutingNumber and achAccountNumber. Those are the
+  // org's own bank account. They are not on the public registration form, not on
+  // the pay page, and they are not going into a club's browser either -- ACH
+  // payers go through Stripe on /pay/<id>, which never needs them. The three
+  // below are already shown publicly at registration time.
+  let payTo: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null = null
+  try {
+    const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+      `SELECT o."zelleHandle", o."checkPayableTo", o."checkAddress"
+         FROM "Organization" o
+         JOIN "Tournament" t ON t."orgId" = o.id
+        WHERE t.id = ?`, tournamentId)
+    const r = rows?.[0]
+    if (r) payTo = {
+      zelleHandle: String(r.zelleHandle || ''),
+      checkPayableTo: String(r.checkPayableTo || ''),
+      checkAddress: String(r.checkAddress || ''),
+    }
+  } catch { /* columns not there yet -- the portal falls back to "contact the tournament" */ }
+
   // Whether this director can still move players between their own teams, and why not.
   // Sent with the data so the portal can say so up front rather than only on a refusal.
   const lock = await rosterLock(tournamentId)
 
-  return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers, coachWaivers, lock })
+  return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers, coachWaivers, lock, payTo })
 }
