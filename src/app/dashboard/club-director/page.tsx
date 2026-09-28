@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, Globe, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, CreditCard, ExternalLink, Eye, Globe, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
@@ -456,6 +456,13 @@ export default function ClubDirectorDashboard() {
   const totalInvoiced = data?.registrations.reduce((s, r) => s + r.invoiceAmount - r.discountAmount, 0) ?? 0
   const totalPaid = data?.registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0) ?? 0
   const balance = totalInvoiced - totalPaid
+  // The single registration carrying the balance, when there is only one -- which
+  // is the ordinary case, one club registering once for one event. That lets the
+  // Balance due tile itself become the way in to paying, so a director who never
+  // scrolls past the tiles still finds it. With two or more open balances there is
+  // no single right destination, so the per-registration buttons below carry it.
+  const unpaidRegs = data?.registrations.filter(r => (r.invoiceAmount - r.discountAmount) - r.payments.reduce((p, x) => p + x.amount, 0) > 0) ?? []
+  const soloUnpaidId = unpaidRegs.length === 1 ? unpaidRegs[0].id : ''
 
   // Billing is gone as a tab — the invoice now sits under the teams it paid for,
   // on Overview. Schedule only appears once there is one: an empty tab during
@@ -525,17 +532,24 @@ export default function ClubDirectorDashboard() {
       {/* Stats — hide on History tab */}
       {tab !== 'history' && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          {[
-            { label: 'Teams', value: totalTeams, color: 'text-violet-600' },
-            { label: 'Waivers filed', value: totalPlayers, color: 'text-blue-600' },
+          {([
+            { label: 'Teams', value: totalTeams as string | number, color: 'text-violet-600', payHref: '' },
+            { label: 'Waivers filed', value: totalPlayers as string | number, color: 'text-blue-600', payHref: '' },
             ...(showMoney ? [
-              { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800' },
-              { label: 'Balance due', value: fmt(balance), color: balance > 0 ? 'text-red-600' : 'text-green-600' },
+              { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800', payHref: '' },
+              { label: 'Balance due', value: fmt(balance), color: balance > 0 ? 'text-red-600' : 'text-green-600',
+                payHref: balance > 0 && soloUnpaidId && !viewUserId ? `/pay/${soloUnpaidId}` : '' },
             ] : []),
-          ].map(s => (
+          ]).map(s => (
             <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
               <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
               <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+              {s.payHref ? (
+                <a href={s.payHref} target="_blank" rel="noreferrer"
+                  className="mt-2 inline-flex items-center justify-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 hover:underline">
+                  <CreditCard size={12} className="shrink-0" /> Pay now
+                </a>
+              ) : null}
             </div>
           ))}
         </div>
@@ -766,6 +780,24 @@ export default function ClubDirectorDashboard() {
                               <Check size={12} className="shrink-0" /> Paid in full
                             </span>
                           )}
+                          {/* WHERE DO I PAY? Directors were logging in, seeing a red
+                              balance, and having to email Bo to ask how to settle it --
+                              the pay page existed all along but the only way in was the
+                              link buried in a reminder email (Bo, Sep 28 2026).
+                              In staff view it renders as a preview: paying is acting on
+                              the director's behalf, but hiding it outright leaves staff
+                              unable to confirm the button is even there. */}
+                          {bal > 0 && (viewUserId ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-400 border border-gray-200 cursor-default"
+                              title="The director sees a working Pay now button here. Hidden in staff view so you can't pay on their behalf.">
+                              <CreditCard size={13} className="shrink-0" /> Pay {fmt(bal)} <span className="font-normal">(their view)</span>
+                            </span>
+                          ) : (
+                            <a href={`/pay/${reg.id}`} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white shrink-0">
+                              <CreditCard size={13} className="shrink-0" /> Pay {fmt(bal)}
+                            </a>
+                          ))}
                         </div>
                         <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm mb-3">
                           <span className="text-gray-500">Invoice: <span className="font-medium text-gray-800">{fmt(reg.invoiceAmount)}</span></span>
@@ -776,7 +808,9 @@ export default function ClubDirectorDashboard() {
                           <span className="text-gray-500">Balance: <span className={`font-semibold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</span></span>
                         </div>
                         {reg.payments.length === 0
-                          ? <p className="text-sm text-gray-400">No payments recorded yet.</p>
+                          ? <p className="text-sm text-gray-400">
+                              No payments recorded yet.{bal > 0 ? ' Card, bank transfer, PayPal and Zelle are all on the payment page.' : ''}
+                            </p>
                           : (
                             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                               <div className="hidden sm:grid grid-cols-12 gap-x-4 px-4 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
