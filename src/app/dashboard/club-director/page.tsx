@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, CreditCard, ExternalLink, Eye, Globe, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Copy, CreditCard, ExternalLink, Eye, Globe, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
@@ -448,6 +448,22 @@ export default function ClubDirectorDashboard() {
     } catch { toast.error('Could not change the payment method') } finally { setPayMethodSaving('') }
   }
 
+  // The person holding the card is often not the person logged in -- a director
+  // forwards it to their treasurer, and Bo texts it to a club that called him.
+  // Built in the handler rather than at render time so it never touches window
+  // during the server render.
+  async function copyPayLink(registrationId: string) {
+    const url = `${window.location.origin}/pay/${registrationId}`
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Payment link copied')
+    } catch {
+      // Clipboard is blocked in some embedded and non-secure contexts; showing the
+      // URL still lets someone copy it by hand rather than hitting a dead button.
+      toast(url, { duration: 8000 })
+    }
+  }
+
   function openCoachEdit(r: { teamId: string; coachName: string; coachEmail: string; coachPhone: string }) {
     setCoachForm({ coachName: r.coachName || '', coachEmail: r.coachEmail || '', coachPhone: r.coachPhone || '' })
     setCoachEdit(r.teamId)
@@ -851,20 +867,26 @@ export default function ClubDirectorDashboard() {
                               balance, and having to email Bo to ask how to settle it --
                               the pay page existed all along but the only way in was the
                               link buried in a reminder email (Bo, Sep 28 2026).
-                              In staff view it renders as a preview: paying is acting on
-                              the director's behalf, but hiding it outright leaves staff
-                              unable to confirm the button is even there. */}
-                          {bal > 0 && (viewUserId ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-400 border border-gray-200 cursor-default"
-                              title="The director sees a working Pay now button here. Hidden in staff view so you can't pay on their behalf.">
-                              <CreditCard size={13} className="shrink-0" /> Pay {fmt(bal)} <span className="font-normal">(their view)</span>
+                              THIS ONE WORKS IN STAFF VIEW TOO. It was greyed out at first,
+                              on the reading that paying is acting on the director's behalf.
+                              That was wrong: opening a payment page charges nothing, and
+                              clubs ring Bo to read him a card over the phone, which is the
+                              tournament collecting its own invoice. The rule the banner
+                              describes is about writing to a club's record, not about Bo
+                              taking a payment he is owed. */}
+                          {bal > 0 && (
+                            <span className="flex items-center gap-1.5 shrink-0">
+                              <a href={`/pay/${reg.id}`} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white">
+                                <CreditCard size={13} className="shrink-0" /> Pay {fmt(bal)}
+                              </a>
+                              <button type="button" onClick={() => copyPayLink(reg.id)}
+                                title="Copy this club's payment link"
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50">
+                                <Copy size={12} className="shrink-0" /> Copy link
+                              </button>
                             </span>
-                          ) : (
-                            <a href={`/pay/${reg.id}`} target="_blank" rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white shrink-0">
-                              <CreditCard size={13} className="shrink-0" /> Pay {fmt(bal)}
-                            </a>
-                          ))}
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm mb-3">
                           <span className="text-gray-500">Invoice: <span className="font-medium text-gray-800">{fmt(reg.invoiceAmount)}</span></span>
