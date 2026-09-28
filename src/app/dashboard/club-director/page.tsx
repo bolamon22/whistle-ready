@@ -278,6 +278,13 @@ export default function ClubDirectorDashboard() {
   // `moving` for living up here: below the early returns these would be conditional hooks.
   const [coachEdit, setCoachEdit] = useState('')
   const [coachSaving, setCoachSaving] = useState(false)
+  // HOOKS GO HERE, NOT BESIDE THE FUNCTION THAT USES THEM. This one was first
+  // declared down next to savePayMethod, which is below `if (loading) return` and
+  // `if (noLinks) return`. So the first render bailed out before reaching it and
+  // the second did not, React counted a different number of hooks between the two,
+  // and the whole portal died on "Minified React error #310" -- a blank page with
+  // a client-side exception, for staff and directors alike (Sep 28 2026).
+  const [payMethodSaving, setPayMethodSaving] = useState('')
   const [coachForm, setCoachForm] = useState({ coachName: '', coachEmail: '', coachPhone: '' })
 
   useEffect(() => {
@@ -422,7 +429,8 @@ export default function ClubDirectorDashboard() {
   // was picked to get past the form, not decided -- and by the time they come back
   // to settle the invoice the treasurer has often changed their mind. Leaving it
   // frozen meant the staff page kept promising Bo a Zelle nobody was sending.
-  const [payMethodSaving, setPayMethodSaving] = useState('')
+  // (payMethodSaving is declared with the other state at the top of the component,
+  //  ABOVE the loading/noLinks early returns -- see the note there.)
   async function savePayMethod(registrationId: string, paymentMethod: string) {
     if (!registrationId || !selTournament || !paymentMethod) return
     setPayMethodSaving(registrationId)
