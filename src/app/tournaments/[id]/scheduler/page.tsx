@@ -111,6 +111,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [showFieldPicker, setShowFieldPicker] = useState(false)
   const [dates, setDates]               = useState<string[]>([])
   const [activeDate, setActiveDate]     = useState('')
+  const [eventDays, setEventDays]       = useState<string[]>([])  // the tournament's own start..end dates
   const [increment, setIncrement]       = useState(30)
   const [storedVenuesRaw, setStoredVenuesRaw] = useState<any[]>([])
   const [dayAvail, setDayAvail] = useState<any[]>([])  // saved per-day field availability (source of truth = venue record)
@@ -258,6 +259,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         allDates = [t.toISOString().split('T')[0], new Date(t.getTime() + 86400000).toISOString().split('T')[0]]
       }
 
+      setEventDays(eventDates)
       setDates(allDates)
       setActiveDate(allDates[0] ?? '')
       setLoading(false)
@@ -546,6 +548,16 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     ))
     toast.success(`Unscheduled ${target.length} game${target.length !== 1 ? 's' : ''} for ${div}`)
     setUnscheduling(false)
+  }
+
+  // A day added with "+ Add Day" that has no games on it can be taken off again. Event
+  // days (start..end) and days with games stay: the tabs would rebuild them anyway.
+  function removeDay(d: string) {
+    setDates(prev => {
+      const next = prev.filter(x => x !== d)
+      if (activeDate === d) setActiveDate(next[next.length - 1] ?? '')
+      return next
+    })
   }
 
   function addDay() {
@@ -1576,19 +1588,27 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       {/* ── Date Tabs ── */}
       <div className="bg-white border-b border-slate-200 overflow-x-auto flex-shrink-0">
         <div className="flex min-w-max">
-          {dates.map(d => (
-            <button key={d} onClick={() => setActiveDate(d)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeDate === d
-                  ? 'border-teal-600 text-teal-600 bg-teal-50/50'
-                  : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}>
-              {fmtDate(d)}
-              <span className="ml-2 text-xs rounded-full px-1.5 py-0.5 bg-slate-100 text-slate-500">
-                {games.filter(g => g.date === d).length}
-              </span>
-            </button>
-          ))}
+          {dates.map(d => {
+            const n = games.filter(g => g.date === d).length
+            const removable = n === 0 && !eventDays.includes(d)
+            return (
+            <div key={d} className={`relative flex items-stretch border-b-2 transition-colors ${
+                activeDate === d ? 'border-teal-600 bg-teal-50/50' : 'border-transparent hover:bg-slate-50'}`}>
+              <button onClick={() => setActiveDate(d)}
+                className={`${removable ? 'pl-5 pr-1' : 'px-5'} py-3 text-sm font-medium whitespace-nowrap ${
+                  activeDate === d ? 'text-teal-600' : 'text-slate-600 hover:text-slate-900'}`}>
+                {fmtDate(d)}
+                <span className="ml-2 text-xs rounded-full px-1.5 py-0.5 bg-slate-100 text-slate-500">{n}</span>
+              </button>
+              {removable && (
+                <button onClick={() => removeDay(d)} aria-label={`Remove ${fmtDate(d)}`} title="Remove this day (no games on it)"
+                  className="self-center mr-2 w-5 h-5 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            )
+          })}
           <button onClick={addDay}
             className="px-4 py-3 text-sm text-slate-400 hover:text-slate-600 border-b-2 border-transparent hover:bg-slate-50 whitespace-nowrap">
             + Add Day
