@@ -4,7 +4,7 @@ import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import toast, { Toaster } from 'react-hot-toast'
-import { autoFill, isRealTeam } from '@/lib/autoSchedule'
+import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye } from 'lucide-react'
 
 interface Game {
@@ -742,10 +742,12 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   // Slots where either team of the dragged game is already scheduled today
   const busySlots = (() => {
     if (!dragGame) return new Set<string>()
-    const teams = [dragGame.team1, dragGame.team2].filter(t => t && t !== 'TBD')
+    // Same division only, and real teams only: a same-named team in another division,
+    // or another division's "Seed 1", is not this team.
+    const teams = [dragGame.team1, dragGame.team2].filter(isRealTeam)
     const s = new Set<string>()
     dayGames.forEach(g => {
-      if (g.id === dragGame.id) return
+      if (g.id === dragGame.id || g.division !== dragGame.division) return
       if (teams.includes(g.team1) || teams.includes(g.team2)) s.add(g.startTime)
     })
     return s
@@ -786,15 +788,22 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const conflictMsgs = new Map<string, string>()
   const backToBackMsgs = new Map<string, string>()
   const longGapMsgs = new Map<string, string>()
+  // Keyed by division + name: clubs reuse team names across divisions ("H44" in Boys
+  // HS A and Boys HS B are different rosters), and flagging those as double-booked
+  // was a false conflict.
   const teamGames: Record<string, Game[]> = {}
+  const teamLabel: Record<string, string> = {}
   scheduledGames.forEach(g => {
     ;[g.team1, g.team2].forEach(team => {
       if (!isRealTeam(team)) return // ignore bracket placeholders that repeat across divisions
-      teamGames[team] = teamGames[team] ?? []
-      teamGames[team].push(g)
+      const k = teamKey(g.division, team)
+      teamLabel[k] = team
+      teamGames[k] = teamGames[k] ?? []
+      teamGames[k].push(g)
     })
   })
-  Object.entries(teamGames).forEach(([team, tg]) => {
+  Object.entries(teamGames).forEach(([key, tg]) => {
+    const team = teamLabel[key]
     // Sort by date+time for gap detection
     const sorted = [...tg].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
     for (let i = 0; i < sorted.length - 1; i++) {

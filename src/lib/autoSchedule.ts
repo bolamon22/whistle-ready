@@ -72,6 +72,16 @@ export function isRealTeam(team: string): boolean {
 
 const isBracket = (g: AGame) => g.gameNumber.startsWith('B')
 
+// A team is its name WITHIN a division. Clubs reuse names across divisions ("H44" in
+// Boys HS A and Boys HS B are different rosters), and every division numbers its own
+// bracket games B1, B2..., so keying on the bare name or number mixes divisions up:
+// false double-books, rest spacing against another team's games, and bracket feeders
+// resolved from the wrong division.
+export function teamKey(division: string, team: string): string {
+  return `${division}\u0000${(team || '').trim()}`
+}
+const gameKey = (division: string, gameNumber: string) => `${division}\u0000${gameNumber}`
+
 // Faint younger-earlier nudge: extract a leading age number from the division.
 function divAge(div: string): number {
   const m = (div || '').match(/\b(?:U)?(\d{1,2})\b/i)
@@ -90,46 +100,49 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
   const fieldLoad = new Map<string, number>() // location -> # games
   const gameStartIdx = new Map<string, number>() // gameNumber -> slot index (for feeder ordering)
 
-  const addTeamSlot = (team: string, i: number) => {
+  const addTeamSlot = (div: string, team: string, i: number) => {
     if (!isRealTeam(team)) return // skip bracket placeholders ("Seed 4", "W-B3"…)
-    const a = teamSlots.get(team) ?? []
+    const k = teamKey(div, team)
+    const a = teamSlots.get(k) ?? []
     a.push(i)
-    teamSlots.set(team, a)
+    teamSlots.set(k, a)
   }
-  const addTeamField = (team: string, loc: string) => {
+  const addTeamField = (div: string, team: string, loc: string) => {
     if (!isRealTeam(team)) return
-    const s = teamFieldUse.get(team) ?? new Set<string>()
-    s.add(loc); teamFieldUse.set(team, s)
+    const k = teamKey(div, team)
+    const s = teamFieldUse.get(k) ?? new Set<string>()
+    s.add(loc); teamFieldUse.set(k, s)
   }
   const seed = (p: PlacedGame) => {
     const i = slotIndex.get(p.time)
     occ.add(`${p.time}|${p.location}`)
     fieldLoad.set(p.location, (fieldLoad.get(p.location) ?? 0) + 1)
-    addTeamField(p.game.team1, p.location)
-    addTeamField(p.game.team2, p.location)
+    addTeamField(p.game.division, p.game.team1, p.location)
+    addTeamField(p.game.division, p.game.team2, p.location)
     if (i != null) {
-      addTeamSlot(p.game.team1, i)
-      addTeamSlot(p.game.team2, i)
-      gameStartIdx.set(p.game.gameNumber, i)
+      addTeamSlot(p.game.division, p.game.team1, i)
+      addTeamSlot(p.game.division, p.game.team2, i)
+      gameStartIdx.set(gameKey(p.game.division, p.game.gameNumber), i)
     }
   }
   input.placed.forEach(seed)
 
   // ── Placement order: pools first (by division, game #), then brackets by
   //    feeder-depth so a game's feeders are placed before it. ──
-  const byNum = new Map(input.toPlace.map(g => [g.gameNumber, g]))
+  const byNum = new Map(input.toPlace.map(g => [gameKey(g.division, g.gameNumber), g]))
   const depthMemo = new Map<string, number>()
   const depth = (g: AGame): number => {
-    if (depthMemo.has(g.gameNumber)) return depthMemo.get(g.gameNumber)!
+    const gk = gameKey(g.division, g.gameNumber)
+    if (depthMemo.has(gk)) return depthMemo.get(gk)!
     if (!isBracket(g)) return 0
-    depthMemo.set(g.gameNumber, 0) // guard cycles
+    depthMemo.set(gk, 0) // guard cycles
     const feeders = [g.team1, g.team2]
       .map(bracketFeeders)
       .filter((f): f is string => !!f)
-      .map(fn => byNum.get(fn))
+      .map(fn => byNum.get(gameKey(g.division, fn)))
       .filter((x): x is AGame => !!x)
     const d = feeders.length ? 1 + Math.max(...feeders.map(depth)) : 1
-    depthMemo.set(g.gameNumber, d)
+    depthMemo.set(gk, d)
     return d
   }
   const numCmp = (a: string, b: string) =>
@@ -158,14 +171,14 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
       // bracket order: every feeder must already sit at an earlier slot
       if (isBracket(g) && feederNums.length) {
         const ok = feederNums.every(fn => {
-          const fi = gameStartIdx.get(fn)
+          const fi = gameStartIdx.get(gameKey(g.division, fn))
           return fi != null && fi < i
         })
         if (!ok) continue
       }
       // team double-book or over the daily cap
-      const t1s = teamSlots.get(g.team1) ?? []
-      const t2s = teamSlots.get(g.team2) ?? []
+      const t1s = teamSlots.get(teamKey(g.division, g.team1)) ?? []
+      const t2s = teamSlots.get(teamKey(g.division, g.team2)) ?? []
       if (t1s.includes(i) || t2s.includes(i)) continue
       if (t1s.length >= maxPerDay || t2s.length >= maxPerDay) continue
 
@@ -177,7 +190,7 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
         // keep each real team on consistent field(s) — minimise a team bouncing fields
         for (const tm of [g.team1, g.team2]) {
           if (!isRealTeam(tm)) continue
-          const usedF = teamFieldUse.get(tm)
+          const usedF = teamFieldUse.get(teamKey(g.division, tm))
           if (usedF && usedF.size > 0 && !usedF.has(f.fullName)) score += W_FIELDSWITCH
         }
         // rest spacing toward one-on/one-off (~2 slots)
@@ -204,11 +217,11 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
     const i = slotIndex.get(best.time)!
     occ.add(`${best.time}|${best.location}`)
     fieldLoad.set(best.location, (fieldLoad.get(best.location) ?? 0) + 1)
-    addTeamField(g.team1, best.location)
-    addTeamField(g.team2, best.location)
-    addTeamSlot(g.team1, i)
-    addTeamSlot(g.team2, i)
-    gameStartIdx.set(g.gameNumber, i)
+    addTeamField(g.division, g.team1, best.location)
+    addTeamField(g.division, g.team2, best.location)
+    addTeamSlot(g.division, g.team1, i)
+    addTeamSlot(g.division, g.team2, i)
+    gameStartIdx.set(gameKey(g.division, g.gameNumber), i)
     placements.push({ id: g.id, time: best.time, location: best.location })
   }
 
