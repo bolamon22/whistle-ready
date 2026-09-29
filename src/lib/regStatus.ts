@@ -169,6 +169,12 @@ export function divisionBadge(name: string, c: RegStatusFields | null | undefine
  *  decides in that second whether to close the tab, so this has to be visible
  *  without a hover (most of them are on a phone) and has to end somewhere they
  *  can act rather than at a full stop. */
-export const FULL_DIVISION_TITLE = 'Full divisions still take entries.'
+export const FULL_DIVISION_TITLE = 'Full divisions accept waitlist entries.'
+// Bo's words, Sep 29 2026. What was here opened with "Teams drop most years",
+// which was meant to say a waitlist is worth joining and instead told every club
+// reading it that teams bail on this event. A full division is evidence of demand
+// and the copy should carry itself that way: what the club needs is that the door
+// is open, that sitting in line costs nothing, and that someone will come back to
+// them. Nothing about anybody else's teams.
 export const FULL_DIVISION_NOTE =
-  'Teams drop most years. Register as you normally would — a team in a full division goes on the waiting list, is not billed, and keeps your club\u2019s team-count rate. We will be in touch as soon as a spot opens.'
+  'Lock in your position in line. You won\u2019t be charged unless a spot becomes available for your team. We will contact you as soon as a spot opens.'
