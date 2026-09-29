@@ -248,7 +248,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
             if (!b) return <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-3 py-1 rounded-full border border-teal-100">{d.show}</span>
             return (
               <span key={i} className={`text-xs font-medium px-3 py-1 rounded-full border inline-flex items-center gap-1.5 ${TONE_CLASS[b.tone]}`}>
-                {d.show}<span className="font-bold opacity-80">{b.suffix}</span>
+                {d.show}<span className="opacity-40">·</span><span className="font-bold opacity-80">{b.suffix}</span>
               </span>
             )
           }

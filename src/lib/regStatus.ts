@@ -100,17 +100,42 @@ export function regBadge(c: RegStatusFields | null | undefined, divisions: strin
 
 export type DivBadge = { tone: BadgeTone; suffix: string }
 
+// THE WORDING IS THE SETTING. Rather than one "limited" state with a wording
+// baked in here, the organizer picks the phrase itself -- different divisions
+// want different pressure, and the only person who knows which is the one
+// looking at the entries.
+//
+// The stored value is a slug, not the label, so rewording an option later does
+// not orphan the divisions already set to it. 'limited' and 'full' keep the
+// values they shipped with, so nothing already saved has to be migrated.
+//
+// Amber for anything still taking teams, navy for Full -- see TONE_CLASS. No
+// "Waiting list" option: there is no waiting list to join yet, and a pill must
+// not promise a thing the site cannot do.
+export const DIVISION_STATES: ReadonlyArray<{ value: string; label: string; tone: BadgeTone }> = [
+  { value: 'limited',     label: 'Limited',      tone: 'amber' },
+  { value: 'almostfull',  label: 'Almost full',  tone: 'amber' },
+  { value: 'fewleft',     label: 'Few left',     tone: 'amber' },
+  { value: 'lastspots',   label: 'Last spots',   tone: 'amber' },
+  { value: 'fillingfast', label: 'Filling fast', tone: 'amber' },
+  { value: 'full',        label: 'Full',         tone: 'navy' },
+]
+
+export const divisionState = (v: unknown) => DIVISION_STATES.find(s => s.value === String(v ?? '')) || null
+
 /** The state of one division's pill, or null to leave it as it is today. */
 export function divisionBadge(name: string, c: RegStatusFields | null | undefined): DivBadge | null {
-  const raw = c?.divisionStatus?.[name]
-  if (raw === 'full') return { tone: 'navy', suffix: 'Full' }
-  if (raw === 'limited') {
+  const state = divisionState(c?.divisionStatus?.[name])
+  if (!state) return null
+  // A real count beats any of the phrases: "2 spots" is the same urgency and
+  // says something the club can act on. The phrase is the fallback for when the
+  // organizer would rather not commit to a number.
+  if (state.tone === 'amber') {
     const n = String(c?.divisionSpots?.[name] ?? '').trim()
     const num = Number(n)
     if (n && Number.isFinite(num) && num > 0) return { tone: 'amber', suffix: `${num} spot${num === 1 ? '' : 's'}` }
-    return { tone: 'amber', suffix: 'Last spots' }
   }
-  return null
+  return { tone: state.tone, suffix: state.label }
 }
 
 /** Shown under the divisions when any is marked full, so a club reading "Full"

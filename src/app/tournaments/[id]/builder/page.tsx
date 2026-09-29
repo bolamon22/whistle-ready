@@ -20,7 +20,7 @@ import {
 import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
-import { regBadge, TONE_CLASS } from '@/lib/regStatus'
+import { regBadge, TONE_CLASS, DIVISION_STATES, divisionState } from '@/lib/regStatus'
 import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, LayoutGrid, Info, Megaphone, GripVertical } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -555,22 +555,24 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
               {divs.length > 0 && (
                 <div className="mt-4 border-t border-slate-200 pt-3">
                   <p className="text-xs text-slate-500 mb-2">
-                    Per division — this is the part clubs actually read. Marking one <strong>Full</strong> does not close
-                    anything: teams can still register for it and you sort the spot out with them.
+                    Per division — this is the part clubs actually read. Pick the wording that fits; type a number
+                    beside it and the number shows instead. Marking one <strong>Full</strong> does not close anything:
+                    teams can still register for it and you sort the spot out with them.
                   </p>
                   <div className="space-y-1.5 max-h-64 overflow-y-auto">
                     {divs.map(d => (
                       <div key={d} className="flex items-center gap-2">
                         <span className="flex-1 text-sm text-slate-700 truncate">{d}</span>
-                        <select className="input !py-1 !text-xs w-32 flex-shrink-0" value={status(d)}
+                        <select className="input !py-1 !text-xs w-36 flex-shrink-0" value={status(d)}
                           onChange={e => setMap('divisionStatus', d, e.target.value)} aria-label={`${d} status`}>
                           <option value="">Open</option>
-                          <option value="limited">Last spots</option>
-                          <option value="full">Full</option>
+                          {DIVISION_STATES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
+                        {/* A number beats the phrase, so the box stays open for
+                            any of the amber wordings -- not just one of them. */}
                         <input className="input !py-1 !text-xs w-16 flex-shrink-0 text-right" value={spots(d)}
                           onChange={e => setMap('divisionSpots', d, e.target.value)}
-                          disabled={status(d) !== 'limited'} placeholder="—" aria-label={`${d} spots left`} />
+                          disabled={divisionState(status(d))?.tone !== 'amber'} placeholder="—" aria-label={`${d} spots left`} />
                       </div>
                     ))}
                   </div>
