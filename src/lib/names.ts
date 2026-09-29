@@ -51,3 +51,41 @@ export function findNearMatch(typed: string, existing: string[]): string | null 
   }
   return fallback
 }
+
+// Short form of a division name for tight spaces (a schedule tile, a bracket label):
+//   Boys High School A        -> BHSA
+//   Girls Middle School B     -> GMSB
+//   Boys U14 A                -> B U14A
+//   Boys U10 (7v7)            -> B U10 7v7
+//   Girls Lower School (7v7)  -> GLS 7v7
+// Gender becomes one letter; an age group keeps its U-number with its letter; other
+// words contribute their initial; a parenthetical format is kept as a suffix.
+export function divisionAbbr(name: string): string {
+  const raw = String(name || '').trim()
+  if (!raw) return ''
+  let suffix = ''
+  const body = raw.replace(/\(([^)]*)\)/g, (_m, inner) => { suffix += ' ' + String(inner).replace(/\s+/g, ''); return ' ' })
+  const words = body.split(/\s+/).filter(Boolean)
+  let gender = ''
+  const rest: string[] = []
+  for (const w of words) {
+    if (/^boys?$/i.test(w) && !gender) gender = 'B'
+    else if (/^girls?$/i.test(w) && !gender) gender = 'G'
+    else if (/^co-?ed$/i.test(w) && !gender) gender = 'C'
+    else rest.push(w)
+  }
+  const ageIdx = rest.findIndex(w => /^U\d{1,2}[A-Z]?$/i.test(w))
+  let core: string
+  if (ageIdx >= 0) {
+    let age = rest[ageIdx].toUpperCase()
+    const next = rest[ageIdx + 1]
+    if (next && /^[A-Z]$/i.test(next)) age += next.toUpperCase()
+    core = (gender ? gender + ' ' : '') + age
+  } else if (!gender && rest.length === 1) {
+    core = rest[0].toUpperCase().slice(0, 6) // "8U", "Open": nothing to shorten
+  } else {
+    const initials = rest.map(w => w.replace(/[^a-zA-Z0-9]/g, '')).filter(Boolean).map(w => w[0].toUpperCase()).join('')
+    core = gender + initials
+  }
+  return (core + suffix).trim() || raw.slice(0, 4).toUpperCase()
+}

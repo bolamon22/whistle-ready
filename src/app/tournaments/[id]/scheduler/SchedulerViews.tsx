@@ -608,10 +608,14 @@ export function TimelineView(p: ViewsProps) {
         onClick={e => { e.stopPropagation(); setSelId(on ? null : g.id); disarmHover() }}
         onMouseEnter={e => { if (dragId || sel) return; const r = e.currentTarget.getBoundingClientRect(); armHover({ id: g.id, x: r.left + r.width / 2, y: r.bottom, below: window.innerHeight - r.bottom > 170 }) }}
         onMouseLeave={() => disarmHover(g.id)}
-        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden cursor-grab active:cursor-grabbing transition-shadow ${on ? 'ring-[3px] ring-teal-500/40' : 'hover:shadow-md'} ${done ? 'opacity-70' : ''}`}
-        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : d ? '#f1f5f9' : '#e2e8f0'}`, borderLeft: `4px solid ${d ? '#cbd5e1' : c}` }}>
+        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden cursor-grab active:cursor-grabbing transition-shadow ${on ? '' : 'hover:shadow-md'} ${done ? 'opacity-70' : ''}`}
+        // Selected: dark card, but the division still shows: its stripe stays and the
+        // selection ring takes the division color instead of a generic teal.
+        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : d ? '#f1f5f9' : '#e2e8f0'}`, borderLeft: `${on ? 5 : 4}px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: on ? `0 0 0 3px ${c}66` : undefined }}>
         <div className={`flex items-center gap-1 text-[9px] leading-none whitespace-nowrap ${on ? 'text-slate-300' : 'text-slate-500'}`}>
-          <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}
+          <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
+          <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : d ? '#94a3b8' : c }} title={g.division}>{p.divAbbr(g.division)}</span>
+          {g.pool && <span className="truncate">{g.pool}</span>}
           {g.isCanceled && <span className="ml-auto text-red-600 font-bold">CANC</span>}
         </div>
         <div className={`text-[11px] font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}{teamCount[teamKey(g.division, g.team1)] ? <span className={`font-normal ${on ? 'text-slate-400' : 'text-slate-500'}`}> ({teamCount[teamKey(g.division, g.team1)]})</span> : null}</div>

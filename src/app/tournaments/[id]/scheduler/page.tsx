@@ -6,6 +6,7 @@ import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import { TimelineView, TeamLanesView } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
+import { divisionAbbr } from '@/lib/names'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal } from 'lucide-react'
 
 interface Game {
@@ -91,14 +92,8 @@ function gameType(g: Game) {
   return 'regular'
 }
 
-function divAbbr(div: string) {
-  const abbr = div.split(/\s+/)
-    .map(w => w.replace(/[^a-zA-Z]/g, ''))
-    .filter(w => w.length > 0)
-    .map(w => w[0].toUpperCase())
-    .join('')
-  return abbr.slice(0, 4) || div.slice(0, 3).toUpperCase()
-}
+// One rule for every short division label (tiles, bracket ids, the builder): lib/names.
+function divAbbr(div: string) { return divisionAbbr(div) }
 
 function bracketFeeders(team: string): string | null {
   const m = team.match(/^[WL]-(B\d+)$/i)

@@ -9,6 +9,7 @@ import RegistrationTypesEditor from '@/components/RegistrationTypesEditor'
 import TournamentInfoEditor, { loadInfoSections, saveInfoSections, type InfoSection } from '@/components/TournamentInfoEditor'
 import BroadcastRolesEditor, { loadBroadcastRoles, saveBroadcastRoles } from '@/components/BroadcastRolesEditor'
 import { parseRegistrationTypes, registrationTypesPayload, DEFAULT_REGISTRATION_TYPES, type RegistrationTypes } from '@/lib/registrationTypes'
+import { divisionAbbr } from '@/lib/names'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import StaffPayEditor from '@/components/StaffPayEditor'
 import EventContentSection, { useEventContent, type EventSectionKey } from '@/components/EventContentEditor'
@@ -132,15 +133,7 @@ function fieldAbbr(name: string): string {
   return name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 5)
 }
 
-function divAbbr(name: string): string {
-  return name
-    .replace(/Boys/gi, 'B').replace(/Girls/gi, 'G')
-    .replace(/High School/gi, 'HS').replace(/Middle School/gi, 'MS')
-    .replace(/Lower School/gi, 'LS')
-    .replace(/\s+/g, '')
-    .toUpperCase()
-    .slice(0, 6)
-}
+function divAbbr(name: string): string { return divisionAbbr(name) }
 function fmtDate(d: string) {
   if (!d) return ''
   const dt = new Date(d + 'T12:00:00')
