@@ -221,6 +221,12 @@ model RegisteredTeam {
   coachPhone     String
   coachEmail     String
   logoUrl        String @default("")
+  // On the waiting list: registered, but not playing yet and NOT invoiced.
+  // Set when the team's division was marked full at registration, and editable
+  // by staff afterwards. calcFee() leaves these out of the total but STILL
+  // counts them toward the volume tier -- a club that waited does not lose its
+  // multi-team rate because the division it wanted was closed.
+  waitlisted     Boolean @default(false)
 
   registration TeamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 

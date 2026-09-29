@@ -12,6 +12,8 @@ async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelName" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelRooms" INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelNights" INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
+  // Waiting-list teams: registered but not invoiced. See src/lib/regPricing.ts.
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "RegisteredTeam" ADD COLUMN "waitlisted" BOOLEAN NOT NULL DEFAULT 0`) } catch { /* already exists */ }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -118,6 +120,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     coachPhone: String(t.coachPhone || '').trim(),
     coachEmail: String(t.coachEmail || '').trim(),
     logoUrl: t.logoUrl || (clubLogoUrl || ''),
+    // This PATCH deletes every team and recreates it, so a flag not carried here
+    // is a flag silently cleared: editing a club's phone number would put two
+    // waiting-list teams back on the invoice.
+    waitlisted: !!t.waitlisted,
   }))
 
   const registration = await prisma.teamRegistration.update({

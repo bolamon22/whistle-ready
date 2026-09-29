@@ -9,6 +9,7 @@ import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { cleanName } from '@/lib/names'
+import { isDivisionFull } from '@/lib/regStatus'
 import { carryDirectorLinks } from '@/lib/clubDirectorLinks'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
@@ -25,6 +26,8 @@ async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "confirmStatus" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "confirmNote" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "confirmAt" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+  // Waiting-list teams: registered but not invoiced. See src/lib/regPricing.ts.
+  try { await prisma.$executeRawUnsafe(`ALTER TABLE "RegisteredTeam" ADD COLUMN "waitlisted" BOOLEAN NOT NULL DEFAULT 0`) } catch { /* already exists */ }
 }
 
 // "@yourclub", "instagram.com/yourclub", "https://www.instagram.com/yourclub/" → "yourclub"
@@ -142,7 +145,10 @@ async function buildAndSendConfirmation(reg: any) {
 
     const teams = (reg.teams || []).map((x: any) => ({ team: x.teamName || x.clubName || 'Team', division: x.division || '' }))
     let amount = Number(reg.invoiceAmount) || 0
-    if (!amount) { try { amount = calcFee(teams, parsePricing((t as any).registrationPricing)) } catch {} }
+    // Recompute from reg.teams, NOT the display array above -- that one is
+    // mapped down to {team, division} and drops waitlisted, so billing off it
+    // would quote the club for teams the waiting list says we are not charging.
+    if (!amount) { try { amount = calcFee((reg.teams || []).map((x: any) => ({ division: x.division || '', waitlisted: !!x.waitlisted })), parsePricing((t as any).registrationPricing)) } catch {} }
     if (reg.discountAmount) amount = Math.max(0, amount - Number(reg.discountAmount))
     // Paid online at signup? Thank them in the letter instead of dunning them.
     const received = (reg.payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
@@ -268,11 +274,25 @@ export async function POST(req: NextRequest) {
   // invoiced at $0 on the staff page (the letter computed its own fee, hiding
   // the bug). The server now owns the number: compute from the tournament's
   // pricing whenever the caller didn't provide one.
+  // WAITING LIST. A team whose division is marked full right now is recorded but
+  // not billed; the organizer decides later whether it plays. Read once here, so
+  // a division marked full after this registration does not retro-change its
+  // invoice -- what the club was quoted is what they owe.
+  let siteContent: any = null
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: `tournamentSite:${tournamentId}` } })
+    if (row) siteContent = JSON.parse(row.value || '{}')
+  } catch { /* no status set: nothing is waitlisted */ }
+  const teamRows = (teams || []).map((x: any) => ({
+    ...x,
+    waitlisted: isDivisionFull(cleanName(x.division), siteContent),
+  }))
+
   let invoice = Number(invoiceAmount) || 0
   if (!invoice) {
     try {
       const t: any = await prisma.tournament.findUnique({ where: { id: tournamentId } })
-      invoice = calcFee((teams || []).map((x: any) => ({ division: x.division || '' })), parsePricing(t?.registrationPricing))
+      invoice = calcFee(teamRows.map((x: any) => ({ division: x.division || '', waitlisted: !!x.waitlisted })), parsePricing(t?.registrationPricing))
     } catch { /* leave 0 if pricing can't be read */ }
   }
 
@@ -298,7 +318,7 @@ export async function POST(req: NextRequest) {
       discountNote: discountNote || '',
       clubLogoUrl: clubLogoUrl || '',
       teams: {
-        create: (teams || []).map((t: any) => ({
+        create: teamRows.map((t: any) => ({
           clubName: cleanName(t.clubName) || club,
           teamName: cleanName(t.teamName),
           division: cleanName(t.division),
@@ -306,6 +326,7 @@ export async function POST(req: NextRequest) {
           coachPhone: String(t.coachPhone || '').trim(),
           coachEmail: String(t.coachEmail || '').trim(),
           logoUrl: t.logoUrl || (clubLogoUrl || ''),
+          waitlisted: !!t.waitlisted,
         })),
       },
     },

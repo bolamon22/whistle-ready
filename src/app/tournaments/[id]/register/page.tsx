@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
 import toast, { Toaster } from 'react-hot-toast'
 import { parsePricing, calcFee, feeScheduleLines, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
+import { isDivisionFull, type RegStatusFields } from '@/lib/regStatus'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import StripePayPanel, { type PayMethod } from '@/components/StripePayPanel'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
@@ -35,8 +36,13 @@ const DEFAULT_DIVISIONS = [
 type Pricing = RegPricing
 const DEFAULT_PRICING: Pricing = DEFAULT_REG_PRICING
 
-function calcInvoice(teams: TeamRow[], pricing: Pricing): number {
-  return calcFee(teams, pricing)
+// Mirrors the server (api/registrations): a team in a full division goes on the
+// waiting list, so it is not billed -- but it still counts toward the volume
+// tier, so the club keeps the rate it earned by committing the teams. If this
+// drifts from calcFee's rule the club is quoted one number and invoiced another,
+// which is the worst bug this page could have.
+function calcInvoice(teams: TeamRow[], pricing: Pricing, site: RegStatusFields | null): number {
+  return calcFee(teams.map(t => ({ division: t.division, waitlisted: isDivisionFull(t.division, site) })), pricing)
 }
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -93,6 +99,7 @@ export default function RegisterPage() {
   const [pricing, setPricing] = useState<Pricing>(DEFAULT_PRICING)
   const [showFees, setShowFees] = useState(false)
 
+  const [site, setSite] = useState<RegStatusFields | null>(null)
   const [clubLogoUrl, setClubLogoUrl] = useState('')
   const [clubLogoUploading, setClubLogoUploading] = useState(false)
   const [teamLogoUploading, setTeamLogoUploading] = useState<Record<number, boolean>>({})
@@ -111,6 +118,11 @@ export default function RegisterPage() {
           setPricing(parsePricing(d.registrationPricing))
         } catch {}
       })
+      .catch(() => {})
+    // Which divisions are marked full, so this form quotes what will be invoiced.
+    fetch(`/api/tournaments/${tournamentId}/site`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && typeof d === 'object') setSite(d) })
       .catch(() => {})
     fetch('/api/admin/org').then(r => r.json()).then(d => { if (d) setOrg(d) }).catch(() => {})
     fetch('/api/paypal/config').then(r => setPaypalLive(r.ok)).catch(() => {})
@@ -183,7 +195,7 @@ export default function RegisterPage() {
       setConf(registration.confirmation || null)
 
       if (paymentMethod === 'credit_card' || paymentMethod === 'ach' || (paymentMethod === 'paypal' && paypalLive)) {
-        setInvoiceBase(calcInvoice(teams, pricing))
+        setInvoiceBase(calcInvoice(teams, pricing, site))
         setSavedRegistrationId(registration.id)
         setStep('payment')
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -433,8 +445,11 @@ export default function RegisterPage() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">Division <span className="text-red-500">*</span></label>
                         <select required value={team.division} onChange={e => updateTeam(i, 'division', e.target.value)} className={smallInputCls}>
                           <option value="">Choose Division</option>
-                          {divisions.map(d => <option key={d}>{d}</option>)}
+                          {divisions.map(d => <option key={d} value={d}>{d}{isDivisionFull(d, site) ? ' — full, waiting list' : ''}</option>)}
                         </select>
+                        {isDivisionFull(team.division, site) && (
+                          <p className="text-xs text-amber-700 mt-1">On the waiting list — not included in your total below.</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Coach Name <span className="text-red-500">*</span></label>
@@ -482,16 +497,22 @@ export default function RegisterPage() {
             </section>
 
             <section>
-              {teams.length > 0 && calcInvoice(teams, pricing) > 0 && (
+              {teams.length > 0 && calcInvoice(teams, pricing, site) > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-blue-800">Estimated Total</p>
                     <p className="text-xs text-blue-600 mt-0.5">
-                      {teams.length} team{teams.length !== 1 ? 's' : ''} &middot;{' '}
+                      {teams.filter(t => !isDivisionFull(t.division, site)).length} team{teams.filter(t => !isDivisionFull(t.division, site)).length !== 1 ? 's' : ''} &middot;{' '}
                       <button type="button" onClick={() => setShowFees(!showFees)} className="underline hover:text-blue-800">
                         {showFees ? 'hide fee schedule' : 'view fee schedule'}
                       </button>
                     </p>
+                    {teams.some(t => isDivisionFull(t.division, site)) && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        {teams.filter(t => isDivisionFull(t.division, site)).length} on the waiting list — not billed.
+                        We will be in touch if a spot opens.
+                      </p>
+                    )}
                     {showFees && (
                       <div className="mt-2 text-xs text-blue-700 space-y-0.5">
                         {feeScheduleLines(pricing).map((line, i) => <div key={i}>{line}</div>)}
@@ -499,15 +520,15 @@ export default function RegisterPage() {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-blue-800">{fmt(calcInvoice(teams, pricing))}</p>
+                    <p className="text-2xl font-bold text-blue-800">{fmt(calcInvoice(teams, pricing, site))}</p>
                     {paymentMethod === 'credit_card' && (
-                      <p className="text-xs text-blue-500 mt-0.5">+3% CC fee = {fmt(Math.round(calcInvoice(teams, pricing) * 1.03))}</p>
+                      <p className="text-xs text-blue-500 mt-0.5">+3% CC fee = {fmt(Math.round(calcInvoice(teams, pricing, site) * 1.03))}</p>
                     )}
                     {paymentMethod === 'ach' && (
                       <p className="text-xs text-teal-600 mt-0.5">No fee with bank transfer (ACH)</p>
                     )}
                     {paymentMethod === 'paypal' && paypalLive && (
-                      <p className="text-xs text-blue-500 mt-0.5">+3% fee = {fmt(Math.round(calcInvoice(teams, pricing) * 1.03))}</p>
+                      <p className="text-xs text-blue-500 mt-0.5">+3% fee = {fmt(Math.round(calcInvoice(teams, pricing, site) * 1.03))}</p>
                     )}
                   </div>
                 </div>

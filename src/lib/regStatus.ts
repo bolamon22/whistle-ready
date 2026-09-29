@@ -10,11 +10,15 @@
 // BEFORE an event is really full, to get the stragglers moving, and a computed
 // badge could not be used that way (Bo, Sep 29 2026).
 //
-// IT NEVER BLOCKS ANYBODY. No state here is read by any registration route. A
-// division marked full still accepts teams through the normal form -- teams drop
-// late every year, and the organizer would rather take the entry and sort it out
-// than turn a club away at the door. So this file has no authority over money or
-// eligibility; the worst a wrong setting can do is tell a story that isn't true.
+// IT STILL NEVER BLOCKS ANYBODY, but it is no longer free of consequence.
+// A division marked full accepts teams exactly as before -- teams drop late every
+// year and the organizer would rather take the entry than turn a club away at the
+// door. What changed on Sep 29 2026 is that such a team is recorded as WAITLISTED
+// and left off the invoice until the organizer says otherwise.
+//
+// So one setting here does now move money: marking a division 'full'. Get it wrong
+// and a club is under-billed until somebody notices, which is a real cost rather
+// than just a story that isn't true. Every other state remains presentation only.
 //
 // Everything lives in the tournamentSite:{id} AppSetting blob alongside the rest
 // of the public page content, so there is no migration and no new column.
@@ -64,8 +68,7 @@ export function shortDay(d?: string): string {
 
 /** How many of this event's divisions are not marked full. */
 export function openDivisionCount(c: RegStatusFields, divisions: string[]): number {
-  const st = c.divisionStatus || {}
-  return divisions.filter(d => st[d] !== 'full').length
+  return divisions.filter(d => !isDivisionFull(d, c)).length
 }
 
 /**
@@ -123,22 +126,49 @@ export const DIVISION_STATES: ReadonlyArray<{ value: string; label: string; tone
 
 export const divisionState = (v: unknown) => DIVISION_STATES.find(s => s.value === String(v ?? '')) || null
 
+// The status map is keyed by the division name as the builder had it, but the
+// name arrives from three places that normalize differently: the public form
+// sends what the picker held, the API stores cleanName()'d text, and the staff
+// page edits it by hand. An exact hit wins; this is the fallback so a stray
+// space can never be the difference between billing a team and not.
+const normKey = (v: unknown) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+
+/** The key this division is filed under in divisionStatus / divisionSpots. */
+function statusKey(name: string, c: RegStatusFields | null | undefined): string | null {
+  const map = c?.divisionStatus
+  if (!map) return null
+  if (Object.prototype.hasOwnProperty.call(map, name)) return name
+  const want = normKey(name)
+  return Object.keys(map).find(k => normKey(k) === want) || null
+}
+
+/** Is this division at capacity? The one question with money attached -- a team
+ *  registering into it is recorded as waitlisted and left off the invoice. */
+export const isDivisionFull = (name: string, c: RegStatusFields | null | undefined): boolean => {
+  const k = statusKey(name, c)
+  return !!k && String(c?.divisionStatus?.[k] ?? '') === 'full'
+}
+
 /** The state of one division's pill, or null to leave it as it is today. */
 export function divisionBadge(name: string, c: RegStatusFields | null | undefined): DivBadge | null {
-  const state = divisionState(c?.divisionStatus?.[name])
+  const key = statusKey(name, c)
+  const state = key ? divisionState(c?.divisionStatus?.[key]) : null
   if (!state) return null
   // A real count beats any of the phrases: "2 spots" is the same urgency and
   // says something the club can act on. The phrase is the fallback for when the
   // organizer would rather not commit to a number.
   if (state.tone === 'amber') {
-    const n = String(c?.divisionSpots?.[name] ?? '').trim()
+    const n = String(c?.divisionSpots?.[key as string] ?? '').trim()
     const num = Number(n)
     if (n && Number.isFinite(num) && num > 0) return { tone: 'amber', suffix: `${num} spot${num === 1 ? '' : 's'}` }
   }
   return { tone: state.tone, suffix: state.label }
 }
 
-/** Shown under the divisions when any is marked full, so a club reading "Full"
- *  knows the form is still open to them rather than giving up on the page. */
+/** Shown under the divisions when any is marked full. A club that reads "Full"
+ *  decides in that second whether to close the tab, so this has to be visible
+ *  without a hover (most of them are on a phone) and has to end somewhere they
+ *  can act rather than at a full stop. */
+export const FULL_DIVISION_TITLE = 'Full divisions still take entries.'
 export const FULL_DIVISION_NOTE =
-  'Divisions marked full are at capacity, but teams do drop. You can still register and we will be in touch about a spot.'
+  'Teams drop most years. Register as you normally would — a team in a full division goes on the waiting list, is not billed, and keeps your club\u2019s team-count rate. We will be in touch as soon as a spot opens.'

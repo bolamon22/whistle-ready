@@ -17,7 +17,7 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 
 interface RegisteredTeam {
   id: string; clubName: string; teamName: string; division: string
-  coachName: string; coachPhone: string; coachEmail: string; logoUrl: string
+  coachName: string; coachPhone: string; coachEmail: string; logoUrl: string; waitlisted?: boolean
   waiverCount?: number
   /** Coaches who signed the coach waiver and claimed THIS team. */
   coachesSigned?: string[]
@@ -38,7 +38,7 @@ interface Registration {
   hasAccount?: boolean; accountRole?: string; accountUserId?: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
-interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string }
+interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string; waitlisted: boolean }
 type Pricing = RegPricing
 interface IndividualReg {
   id: string; firstName: string; lastName: string; email: string; phone: string
@@ -58,7 +58,7 @@ const DEFAULT_DIVISIONS = [
   'Girls Middle School A',"Girls Middle School B (No 2030's)",
   "Girls Lower School A (7v7)","Girls Lower School B (7v7 – No 2033's)",
 ]
-const emptyTeam = (): TeamRow => ({ clubName: '', teamName: '', division: '', coachName: '', coachPhone: '', coachEmail: '', logoUrl: '' })
+const emptyTeam = (): TeamRow => ({ clubName: '', teamName: '', division: '', coachName: '', coachPhone: '', coachEmail: '', logoUrl: '', waitlisted: false })
 const inputCls = "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
 const smallInputCls = "w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
 const payLabel = (m: string) => m === 'credit_card' ? 'Credit Card' : m === 'zelle' ? 'Zelle' : m === 'ach' ? 'Bank Transfer (ACH)' : m === 'paypal' ? 'PayPal' : m === 'venmo' ? 'Venmo' : m === 'cash' ? 'Cash' : 'Check'
@@ -537,7 +537,7 @@ export default function RegistrationsPage() {
     setTeams(newTeams)
     setInvoiceAmount(calcInvoice(newTeams, pricing))
   }
-  const handleTeamChange = (i: number, f: keyof TeamRow, v: string) => {
+  const handleTeamChange = (i: number, f: keyof TeamRow, v: string | boolean) => {
     const newTeams = teams.map((t, idx) => idx === i ? { ...t, [f]: v } : t)
     setTeams(newTeams)
     setInvoiceAmount(calcInvoice(newTeams, pricing))
@@ -557,7 +557,7 @@ export default function RegistrationsPage() {
     setNeedsHotel(reg.needsHotel); setPaymentMethod(reg.paymentMethod); setNotes(reg.notes)
     setInvoiceAmount(reg.invoiceAmount); setDiscountAmount(reg.discountAmount); setDiscountNote(reg.discountNote)
     setClubLogoUrl((reg as any).clubLogoUrl || '')
-    setTeams(reg.teams.map(t => ({ clubName: t.clubName, teamName: t.teamName, division: t.division, coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail, logoUrl: (t as any).logoUrl || '' })))
+    setTeams(reg.teams.map(t => ({ clubName: t.clubName, teamName: t.teamName, division: t.division, coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail, logoUrl: (t as any).logoUrl || '', waitlisted: !!(t as any).waitlisted })))
     setShowForm(true)
   }
 
@@ -961,6 +961,7 @@ export default function RegistrationsPage() {
       const teamName = getVal(row, m.teamName)
       if (teamName) {
         map.get(contact)!.teams.push({
+          waitlisted: false,
           clubName: getVal(row, m.teamClubName) || getVal(row, m.clubName),
           teamName,
           division: getVal(row, m.division),
@@ -1805,7 +1806,7 @@ export default function RegistrationsPage() {
                           {teams.length > 1 && <button type="button" onClick={() => removeTeam(i)} className="text-red-400 hover:text-red-600 text-xs">Remove</button>}
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {(['clubName','teamName','division','coachName','coachPhone','coachEmail'] as (keyof TeamRow)[]).map(field => (
+                          {(['clubName','teamName','division','coachName','coachPhone','coachEmail'] as const).map(field => (
                             <div key={field}>
                               <label className="block text-xs text-slate-500 mb-0.5">
                                 {field === 'clubName' ? 'Club Name' : field === 'teamName' ? 'Team' : field === 'coachName' ? 'Coach Name' : field === 'coachPhone' ? 'Coach Phone' : field === 'coachEmail' ? 'Coach Email' : 'Division'} *
@@ -1821,6 +1822,20 @@ export default function RegistrationsPage() {
                             </div>
                           ))}
                         </div>
+                        {/* WAITING LIST. Not billed, but still counted toward this
+                            club's team-count rate (see calcFee): the division being
+                            full is our problem, not theirs. Untick it when the team
+                            gets a spot and the invoice above goes up by exactly one
+                            team at that same rate. */}
+                        <label className="mt-2 flex items-start gap-2 cursor-pointer">
+                          <input type="checkbox" checked={!!team.waitlisted}
+                            onChange={e => handleTeamChange(i, 'waitlisted', e.target.checked)}
+                            className="mt-0.5 h-4 w-4 accent-amber-600 flex-shrink-0" />
+                          <span className="text-xs text-slate-600">
+                            On the waiting list — <span className="text-slate-500">not invoiced, still counts toward this club&rsquo;s rate.</span>
+                          </span>
+                        </label>
+
                         {/* Team logo */}
                         <div className="mt-2 flex items-center gap-3">
                           {team.logoUrl && (

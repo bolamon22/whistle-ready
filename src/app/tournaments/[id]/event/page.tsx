@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { cloneElement } from 'react'
 import { createClient } from '@libsql/client'
-import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap, Award, DollarSign } from 'lucide-react'
+import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap, Award, DollarSign, ArrowRight } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventInfoNav from '@/components/EventInfoNav'
@@ -20,7 +20,7 @@ import type { Metadata } from 'next'
 import { abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import { resolveRules } from '@/lib/rules'
-import { regBadge, divisionBadge, TONE_CLASS, TONE_CLASS_DARK, FULL_DIVISION_NOTE } from '@/lib/regStatus'
+import { regBadge, divisionBadge, TONE_CLASS, TONE_CLASS_DARK, FULL_DIVISION_NOTE, FULL_DIVISION_TITLE } from '@/lib/regStatus'
 import SponsorWall from '@/components/SponsorWall'
 import SponsorPitch from '@/components/SponsorPitch'
 import { sponsorList, sponsorsForEvent, sponsorPitch, statNum } from '@/lib/sponsors'
@@ -260,7 +260,20 @@ export default async function TournamentEventPage({ params }: { params: { id: st
                   <div className="flex flex-wrap gap-1.5">{list.map(chip)}</div>
                 </div>
               ))}
-              {anyFull && <p className="text-xs text-slate-500 leading-relaxed mt-3">{FULL_DIVISION_NOTE}</p>}
+              {/* Teal, not amber or navy: this is the one place on the page
+                  saying "you can still do something", and teal is what that
+                  means everywhere else on the site. */}
+              {anyFull && (
+                <div className="mt-4 bg-teal-50 border border-teal-100 rounded-xl p-4">
+                  <p className="text-sm font-semibold text-teal-800">{FULL_DIVISION_TITLE}</p>
+                  <p className="text-xs text-teal-700 leading-relaxed mt-1">{FULL_DIVISION_NOTE}</p>
+                  {registerHref && (
+                    <Link href={registerHref} className="inline-flex items-center gap-1.5 mt-3 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold px-4 py-2 rounded-full transition-colors">
+                      Register a team <ArrowRight size={14} />
+                    </Link>
+                  )}
+                </div>
+              )}
               {typeof c.divisionsNote === 'string' && c.divisionsNote.trim() !== '' && <p className="text-xs text-slate-500 leading-relaxed mt-3">{c.divisionsNote}</p>}
               {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
             </div>

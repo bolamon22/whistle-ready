@@ -108,12 +108,24 @@ function dateDiscount(base: number, dates: DateTier[], asOf: string): number {
 
 // Total invoice for a set of teams (each with a `division` string), as of a given
 // registration date (defaults to today — used for early-bird evaluation).
-export function calcFee(teams: { division?: string }[], p: RegPricing, asOf?: string): number {
+export function calcFee(teams: { division?: string; waitlisted?: boolean }[], p: RegPricing, asOf?: string): number {
   const when = asOf || todayISO()
+  // A waiting-list team is NOT BILLED but DOES COUNT toward the volume tier.
+  //
+  // The club committed those teams; the division being full is the tournament's
+  // problem, not theirs, and dropping them from the count would quietly move a
+  // five-team club up to the 1-3 rate and charge MORE per team than if every
+  // division had been open. Bo's call, Sep 29 2026: "if they waited this long
+  // they should get the discount."
+  //
+  // It also keeps the arithmetic honest later. Five committed at $1,450: three
+  // playing bill $4,350, and a team coming off the list adds exactly $1,450 --
+  // the same figure as every other line, with no retroactive re-rating.
+  const billable = teams.filter(t => !t.waitlisted)
   const regularCount = teams.filter(t => !matchedFlat(p.flats, t.division)).length
   const regRate = rateForCount(p.tiers, regularCount)
   let total = 0
-  for (const t of teams) {
+  for (const t of billable) {
     const f = matchedFlat(p.flats, t.division)
     const base = f ? f.price : regRate
     total += Math.max(0, base - dateDiscount(base, p.dates, when))
