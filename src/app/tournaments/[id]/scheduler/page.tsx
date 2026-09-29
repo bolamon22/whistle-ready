@@ -127,6 +127,12 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [autoFilling, setAutoFilling]   = useState(false)
   const [gridZoom, setGridZoom]         = useState(1)
   const [splitMode, setSplitMode]       = useState<'d1d2'|'spread'|'oneday'>('d1d2')
+  // Auto-fill dialog: what to place, where, and how many games per team on each day.
+  const [showAF, setShowAF]     = useState(false)
+  const [afDiv, setAfDiv]       = useState('__all__')
+  const [afType, setAfType]     = useState<'pool' | 'bracket' | 'both'>('pool')
+  const [afFields, setAfFields] = useState<Set<string>>(new Set())
+  const [afCaps, setAfCaps]     = useState<Record<string, number>>({})   // date -> max games per team (0 = skip)
   const [showWeather, setShowWeather] = useState(false)
   const [wxDelay, setWxDelay]         = useState(30)
   const [wxFrom, setWxFrom]           = useState('')
@@ -756,6 +762,101 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     toast.success(`Delayed ${wxMovable.length} game${wxMovable.length === 1 ? '' : 's'} by ${wxDelay} min — review & publish`)
   }
 
+  function openAutoFill() {
+    setAfDiv(gridDiv)
+    setAfFields(new Set(visibleFields.map(f => f.fullName)))
+    // Defaults: pool play up to 3 a team on the first day; bracket on the last day.
+    const first = dates[0], last = dates[dates.length - 1]
+    const caps: Record<string, number> = {}
+    dates.forEach(d => { caps[d] = 0 })
+    if (afType !== 'bracket' && first) caps[first] = 3
+    if (afType !== 'pool' && last) caps[last] = Math.max(caps[last] ?? 0, 3)
+    setAfCaps(caps)
+    setShowAF(true)
+  }
+  const isBracketGame = (g: Game) => { const t = gameType(g); return t === 'bracket' || t === 'championship' }
+  const afCandidates = unscheduled.filter(g =>
+    (afDiv === '__all__' || g.division === afDiv) &&
+    (afType === 'both' || (afType === 'bracket') === isBracketGame(g)))
+
+  async function runAutoFill() {
+    const fieldsArg = fields.filter(f => afFields.has(f.fullName)).map(f => ({ fullName: f.fullName }))
+    if (fieldsArg.length === 0) { toast.error('Pick at least one field'); return }
+    const days = dates.filter(d => (afCaps[d] ?? 0) > 0)
+    if (days.length === 0) { toast.error('Give at least one day a number of games per team'); return }
+    if (afCandidates.length === 0) { toast('Nothing unscheduled matches'); return }
+    const toA = (g: Game) => ({ id: g.id, gameNumber: g.gameNumber, division: g.division, pool: g.pool, team1: g.team1, team2: g.team2 })
+    const results: { id: string; time: string; location: string; date: string }[] = []
+    const occFor = (d: string) => {
+      const pre = games.filter(g => g.date === d && g.startTime && g.location && !results.some(r => r.id === g.id))
+        .map(g => ({ game: toA(g), time: g.startTime, location: g.location }))
+      const res = results.filter(r => r.date === d).map(r => { const g = games.find(x => x.id === r.id)!; return { game: toA(g), time: r.time, location: r.location } })
+      return [...pre, ...res]
+    }
+    const slotsFor = (d: string) => { const w = windowForDate(d); return makeSlots(w.s, w.e, increment) }
+    // Each checked day takes games until every team reaches that day's number; the
+    // rest roll to the next checked day. With "both", bracket games go after pool
+    // play so their feeders are already on the board.
+    // Pick which games a day gets before placing them, one "round" at a time: every
+    // team gets its 1st game of the day before anyone gets a 2nd, and so on up to the
+    // day's number. Without this, a capped day filled in game-number order and could
+    // give some teams their full count and others none.
+    const pickForDay = (list: Game[], d: string, cap: number) => {
+      const count = new Map<string, number>()
+      const key = (g: Game, t: string) => teamKey(g.division, t)
+      occFor(d).forEach(p => [p.game.team1, p.game.team2].forEach(t => { if (isRealTeam(t)) { const k = teamKey(p.game.division, t); count.set(k, (count.get(k) ?? 0) + 1) } }))
+      const chosen: Game[] = [], left = [...list]
+      for (let k = 1; k <= cap; k++) {
+        for (let i = 0; i < left.length; i++) {
+          const g = left[i]
+          const ts = [g.team1, g.team2].filter(isRealTeam)
+          if (ts.every(t => (count.get(key(g, t)) ?? 0) < k)) {
+            ts.forEach(t => count.set(key(g, t), (count.get(key(g, t)) ?? 0) + 1))
+            chosen.push(g); left.splice(i, 1); i--
+          }
+        }
+      }
+      return chosen
+    }
+    const fill = (list: Game[]) => {
+      let remaining = list
+      for (const d of days) {
+        if (!remaining.length) break
+        const batch = pickForDay(remaining, d, afCaps[d])
+        if (!batch.length) continue
+        const af = autoFill({ toPlace: batch.map(toA), placed: occFor(d), fields: fieldsArg, slots: slotsFor(d), maxPerDay: afCaps[d] })
+        af.placements.forEach(pp => results.push({ ...pp, date: d }))
+        const done = new Set(af.placements.map(pp => pp.id))
+        remaining = remaining.filter(g => !done.has(g.id))
+      }
+      return remaining.length
+    }
+    const pool = afCandidates.filter(g => !isBracketGame(g)), bracket = afCandidates.filter(isBracketGame)
+    const unfit = fill(pool) + fill(bracket)
+    if (results.length === 0) { toast.error("No room: add fields, raise a day's games per team, or widen the day window"); return }
+    if (!checkpoint) {
+      const snap: Record<string, {date:string,startTime:string,location:string}> = {}
+      games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
+      setCheckpoint(snap); setViewingCheckpoint(false)
+    }
+    setShowAF(false)
+    setAutoFilling(true)
+    try {
+      const ok = await Promise.all(results.map(pp =>
+        fetch(`/api/tournaments/${params.id}/games/${pp.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: pp.date, startTime: pp.time, location: pp.location }),
+        }).then(r => r.ok).catch(() => false)
+      ))
+      const byId = new Map(results.filter((_, i) => ok[i]).map(pp => [pp.id, pp]))
+      setGames(prev => prev.map(g => { const pp = byId.get(g.id); return pp ? { ...g, date: pp.date, startTime: pp.time, location: pp.location } : g }))
+      const perDay = days.map(d => `${fmtDate(d)} ${results.filter(r => r.date === d).length}`).join(', ')
+      const failed = ok.filter(x => !x).length
+      if (failed) toast.error(`${failed} of ${results.length} did not save — reload to check`)
+      else toast.success(`Placed ${results.length} (${perDay})` + (unfit ? ` · ${unfit} didn't fit` : '') + ' · Revert to undo')
+    } catch { toast.error('Auto-fill failed') } finally { setAutoFilling(false) }
+  }
+
   async function autoFillDay() {
     if (filtered.length === 0) { toast('Nothing in the parking lot to place'); return }
     const day1 = dates[0] || activeDate
@@ -1066,6 +1167,84 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       )}
 
       {/* ── Weather modal (delay / shorten) ── */}
+      {showAF && (() => {
+        const poolN = unscheduled.filter(g => (afDiv === '__all__' || g.division === afDiv) && !isBracketGame(g)).length
+        const brN = unscheduled.filter(g => (afDiv === '__all__' || g.division === afDiv) && isBracketGame(g)).length
+        const allOn = fields.length > 0 && fields.every(f => afFields.has(f.fullName))
+        const setType = (v: 'pool' | 'bracket' | 'both') => {
+          setAfType(v)
+          // keep the day numbers sensible when switching: bracket-only lives on the last day
+          const first = dates[0], last = dates[dates.length - 1]
+          if (v === 'bracket') setAfCaps(Object.fromEntries(dates.map(d => [d, d === last ? 3 : 0])))
+          else if (v === 'pool') setAfCaps(c => (Object.values(c).some(n => n > 0) && !(dates.length > 1 && c[last] && !c[first])) ? c : Object.fromEntries(dates.map(d => [d, d === first ? 3 : 0])))
+        }
+        return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowAF(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2"><Zap size={18} className="text-teal-600" /> Auto-fill</h2>
+              <button onClick={() => setShowAF(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4 overflow-auto">
+              <div>
+                <label className="text-xs font-semibold text-slate-600" htmlFor="af-div">Division</label>
+                <select id="af-div" value={afDiv} onChange={e => setAfDiv(e.target.value)} className="mt-1 w-full text-sm border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white">
+                  <option value="__all__">All divisions</option>
+                  {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-600">Games</div>
+                <div className="mt-1 inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200">
+                  {([['pool', `Pool play · ${poolN}`], ['bracket', `Bracket · ${brN}`], ['both', 'Both']] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setType(v)} className={`text-xs font-bold px-3 py-1 rounded-full ${afType === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}>{l}</button>
+                  ))}
+                </div>
+                {afType === 'both' && <p className="text-[11px] text-slate-400 mt-1">Pool games are placed first, bracket games after them.</p>}
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-600">Games per team, each day</div>
+                <p className="text-[11px] text-slate-400">0 skips the day. What doesn&apos;t fit rolls to the next day with a number. Counts include games already on that day.</p>
+                <div className="mt-2 space-y-1.5">
+                  {dates.map(d => (
+                    <div key={d} className="flex items-center gap-3">
+                      <span className="text-sm text-slate-700 w-36">{fmtDate(d)}</span>
+                      <div className="inline-flex items-center rounded-lg border border-slate-300 overflow-hidden">
+                        <button onClick={() => setAfCaps(c => ({ ...c, [d]: Math.max(0, (c[d] ?? 0) - 1) }))} aria-label={`Fewer on ${fmtDate(d)}`} className="px-2.5 py-1 text-slate-600 hover:bg-slate-50">−</button>
+                        <span className={`w-8 text-center text-sm font-bold ${(afCaps[d] ?? 0) ? 'text-slate-900' : 'text-slate-300'}`}>{afCaps[d] ?? 0}</span>
+                        <button onClick={() => setAfCaps(c => ({ ...c, [d]: Math.min(8, (c[d] ?? 0) + 1) }))} aria-label={`More on ${fmtDate(d)}`} className="px-2.5 py-1 text-slate-600 hover:bg-slate-50">+</button>
+                      </div>
+                      <span className="text-xs text-slate-400">{(afCaps[d] ?? 0) ? `up to ${afCaps[d]} a team · ${fmtTime(minToHM(windowForDate(d).s))}–${fmtTime(minToHM(windowForDate(d).e))}` : 'skip'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-600">Fields</span>
+                  <button onClick={() => setAfFields(allOn ? new Set() : new Set(fields.map(f => f.fullName)))} className="text-[11px] font-semibold text-teal-700 hover:underline">{allOn ? 'Clear' : 'All'}</button>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {fields.map(f => { const on = afFields.has(f.fullName); return (
+                    <button key={f.fullName} onClick={() => setAfFields(prev => { const n = new Set(prev); if (on) n.delete(f.fullName); else n.add(f.fullName); return n })}
+                      className={`text-xs font-bold px-3 py-1 rounded-full border ${on ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`} title={f.fullName}>{f.fieldName}</button>
+                  ) })}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex items-center gap-3">
+              <p className="text-[11px] text-slate-400 flex-1">Saves a checkpoint first, so Revert undoes it. Placed games can still be dragged.</p>
+              <button onClick={() => setShowAF(false)} className="text-sm text-slate-600 px-3 py-2 rounded-lg hover:bg-slate-100">Cancel</button>
+              <button onClick={runAutoFill} disabled={autoFilling || afCandidates.length === 0 || afFields.size === 0}
+                className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400 px-4 py-2 rounded-lg">
+                {afCandidates.length === 0 ? 'Nothing to place' : `Place ${afCandidates.length} game${afCandidates.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+        )
+      })()}
+
       {showWeather && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowWeather(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1169,16 +1348,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   <Bookmark size={13} className="text-slate-400" /> Save a checkpoint
                 </button>
               )}
-              <div className="flex items-center gap-2 px-2.5 py-2">
-                <Zap size={13} className="text-slate-400" />
-                <span className="text-xs text-slate-700">Auto-fill days</span>
-                <select value={splitMode} onChange={e => setSplitMode(e.target.value as 'd1d2'|'spread'|'oneday')}
-                  className="ml-auto text-[11px] rounded-md border border-slate-300 bg-white px-1.5 py-1 text-slate-700 max-w-[130px]">
-                  <option value="d1d2">Pool d1 / bracket d2</option>
-                  <option value="spread">Pool all / bracket last</option>
-                  <option value="oneday">All on this day</option>
-                </select>
-              </div>
               {games.some(g => g.date || g.startTime || g.location) && (() => {
                 const n = clearTargets(clrDiv, clrDay, clrType).length
                 const sel = 'text-[11px] rounded-md border border-slate-300 bg-white px-1.5 py-1 text-slate-700 w-full'
@@ -1254,9 +1423,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             <span className="inline-flex items-center gap-1"><CloudRain size={13} /> Weather</span>
           </button>
           <button
-            onClick={autoFillDay}
-            disabled={autoFilling || filtered.length === 0}
-            title="Place the unscheduled games (after your filters) onto this day, following the rules. You can still drag to adjust."
+            onClick={openAutoFill}
+            disabled={autoFilling || unscheduled.length === 0}
+            title="Pick a division, pool or bracket, fields and games per team per day, then place them automatically"
             className="text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors disabled:opacity-40 bg-teal-600 hover:bg-teal-700 text-white border-teal-700"
           >
             {autoFilling ? 'Filling…' : <span className="inline-flex items-center gap-1"><Zap size={13} /> Auto-fill</span>}
