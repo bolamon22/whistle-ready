@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, Maximize2, Minimize2, Search } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Search } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -205,7 +205,19 @@ export function TimelineView(p: ViewsProps) {
     setHover(h => (h && (!id || h.id === id)) ? null : h)
   }
   useEffect(() => () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current) }, [])
-  const [fit, setFit] = useState(false)
+  // Each rail collapses on its own (a scheduler working the board wants the
+  // unscheduled list open and the issues panel out of the way, or the reverse).
+  // "Fit day" is the shortcut for both at once. Remembered across visits.
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+  useEffect(() => {
+    try { const v = localStorage.getItem('wr-sched-rails'); if (v) { const o = JSON.parse(v); if (typeof o.left === 'boolean') setLeftOpen(o.left); if (typeof o.right === 'boolean') setRightOpen(o.right) } } catch {}
+  }, [])
+  const setRails = (left: boolean, right: boolean) => {
+    setLeftOpen(left); setRightOpen(right)
+    try { localStorage.setItem('wr-sched-rails', JSON.stringify({ left, right })) } catch {}
+  }
+  const fit = !leftOpen && !rightOpen
   const [tab, setTab] = useState<'issues' | 'day'>('issues')
   const [openDivs, setOpenDivs] = useState<Record<string, boolean>>({})
   const [q, setQ] = useState('')
@@ -253,7 +265,6 @@ export function TimelineView(p: ViewsProps) {
 
   const slotCol = fit ? 'minmax(0, 1fr)' : '128px'
   const fieldCol = fit ? 'minmax(0, 1fr)' : '168px'
-  const railsOpen = !fit
   const hovered = hover ? p.games.find(g => g.id === hover.id) : null
   const hoverIssues = hovered ? (byGame.get(hovered.id) ?? []) : []
 
@@ -267,11 +278,12 @@ export function TimelineView(p: ViewsProps) {
   return (
     <div className="flex-1 flex min-h-0 relative">
       {/* Left rail: unscheduled */}
-      {railsOpen ? (
+      {leftOpen ? (
         <div className="w-[232px] flex-shrink-0 flex flex-col bg-white border-r border-slate-200 min-h-0">
-          <div className="px-3.5 pt-3 pb-2 flex items-center justify-between">
+          <div className="pl-3.5 pr-2 pt-2.5 pb-1.5 flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Unscheduled</span>
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">{p.unscheduled.length}</span>
+            <button onClick={() => setRails(false, rightOpen)} aria-label="Collapse the unscheduled list" title="Collapse" className="ml-auto w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronsLeft size={14} /></button>
           </div>
           <div className="px-3 pb-2 relative">
             <Search size={12} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 -mt-1" />
@@ -316,7 +328,7 @@ export function TimelineView(p: ViewsProps) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setFit(false)} aria-label="Show the unscheduled list" className="w-10 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col items-center pt-3 gap-2 hover:bg-slate-50">
+        <button onClick={() => setRails(true, rightOpen)} aria-label="Show the unscheduled list" className="w-10 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col items-center pt-3 gap-2 hover:bg-slate-50">
           <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">{p.unscheduled.length}</span>
           <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400" style={{ writingMode: 'vertical-rl' }}>Unscheduled</span>
         </button>
@@ -328,7 +340,7 @@ export function TimelineView(p: ViewsProps) {
           <DivisionChips p={p} counts={counts} />
           <div className="flex-1" />
           {sel ? <SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /> : <span className="text-xs text-slate-400 hidden xl:inline">Click an unscheduled game, then a slot. Click a placed game to move it.</span>}
-          <button onClick={() => setFit(f => !f)} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={across ? 'Fit every field on screen' : 'Fit the whole day on screen'}>
+          <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={fit ? 'Reopen both side panels' : (across ? 'Collapse both side panels so every field fits' : 'Collapse both side panels so the whole day fits')}>
             {fit ? <Minimize2 size={13} /> : <Maximize2 size={13} />} {across ? 'Fit fields' : 'Fit day'}
           </button>
         </div>
@@ -387,14 +399,15 @@ export function TimelineView(p: ViewsProps) {
       </div>
 
       {/* Right rail: issues / day health */}
-      {railsOpen ? (
+      {rightOpen ? (
         <div className="w-[264px] flex-shrink-0 flex flex-col bg-white border-l border-slate-200 min-h-0">
-          <div className="flex px-3 pt-2 gap-1 border-b border-slate-200">
+          <div className="flex items-center pl-3 pr-2 pt-2 gap-1 border-b border-slate-200">
             {(['issues', 'day'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)} className={`px-2.5 py-2 text-xs font-bold border-b-2 -mb-px ${tab === t ? 'text-slate-900 border-teal-600' : 'text-slate-500 border-transparent hover:text-slate-700'}`}>
                 {t === 'issues' ? <>Issues <span className={`ml-1 text-[10px] px-1.5 py-px rounded-full ${issueList.length ? 'bg-red-100 text-red-700' : 'bg-teal-50 text-teal-700'}`}>{issueList.length}</span></> : 'Day health'}
               </button>
             ))}
+            <button onClick={() => setRails(leftOpen, false)} aria-label="Collapse the issues panel" title="Collapse" className="ml-auto mb-1 w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronsRight size={14} /></button>
           </div>
           {tab === 'issues' ? (
             <div className="flex-1 overflow-auto p-3 space-y-1.5">
@@ -447,7 +460,7 @@ export function TimelineView(p: ViewsProps) {
           )}
         </div>
       ) : (
-        <button onClick={() => setFit(false)} aria-label="Show the issues panel" className="w-10 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col items-center pt-3 gap-2 hover:bg-slate-50">
+        <button onClick={() => setRails(leftOpen, true)} aria-label="Show the issues panel" className="w-10 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col items-center pt-3 gap-2 hover:bg-slate-50">
           <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${issueList.length ? 'bg-red-100 text-red-700' : 'bg-teal-50 text-teal-700'}`}>{issueList.length}</span>
           <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400" style={{ writingMode: 'vertical-rl' }}>Issues</span>
         </button>
