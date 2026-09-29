@@ -30,6 +30,8 @@ function TeamAvatar({name,size='md'}:{name:string,size?:'sm'|'md'|'lg'}) {
   return <div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`} style={{backgroundColor:colors[idx]}}>{initials}</div>
 }
 
+// Pool names are often stored as "Pool A"; only add the word when it's missing.
+const poolLabel=(p:string)=>{const t=(p||'').trim();return /^(pool|group)\b/i.test(t)?t:`Pool ${t}`}
 const DEFAULT_TBS=['record','goal_diff','goals_for']
 const TB_LABEL:Record<string,string>={record:'record',win_pct:'win %',head_to_head:'head-to-head',h2h_two:'head-to-head',h2h_gd:'H2H goal diff',goal_diff:'goal diff',goals_for:'goals scored',goals_against:'goals allowed'}
 function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DEFAULT_TBS):Standing[] {
@@ -64,7 +66,7 @@ function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DE
   return Object.values(map).sort(cmp)
 }
 
-function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick}:{division:string;pool:string;standings:Standing[];games:Game[];followedTeams:string[];tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void}) {
+function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true}:{division:string;pool:string;standings:Standing[];games:Game[];followedTeams:string[];tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean}) {
   const [pview,setPview]=useState<'grid'|'list'>('list')
   const teamForm=(team:string)=>{
     const tg=games.filter(g=>g.division===division&&!g.isCanceled&&!g.isChampionship&&(pool?g.pool===pool:true)&&(g.team1===team||g.team2===team)&&g.score1!==null&&g.score2!==null)
@@ -75,7 +77,7 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
       <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
-        <span className="text-white font-bold text-sm uppercase tracking-wide">{division}{pool ? ` — Group ${pool}` : ''}</span>
+        <span className="text-white font-bold text-sm uppercase tracking-wide">{division}{pool ? ` — ${poolLabel(pool)}` : ''}</span>
         <div className="flex gap-1">
           {(['grid','list'] as const).map(v=>(
             <button key={v} onClick={()=>setPview(v)} className={`p-1.5 rounded ${pview===v?'bg-white/20 text-white':'text-slate-400 hover:text-white'}`}>
@@ -138,7 +140,7 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
           {tiebreakers.length>0 && <div className="px-3 py-2 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-400">Tiebreakers: {tiebreakers.map((tb,i)=>(i?' \u2192 ':'')+(TB_LABEL[tb]||tb)).join('')}</div>}
         </div>
       )}
-      <button onClick={onScheduleClick} className="w-full bg-[#0f1f3d] hover:bg-slate-700 text-white text-xs font-bold uppercase tracking-widest py-3 transition-colors">Schedule</button>
+      {showSchedule && <button onClick={onScheduleClick} className="w-full bg-[#0f1f3d] hover:bg-slate-700 text-white text-xs font-bold uppercase tracking-widest py-3 transition-colors">Schedule</button>}
     </div>
   )
 }
@@ -571,19 +573,19 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
       </div>
 
 
-      {divTab==='standings' && (
+      {(divTab==='standings'||!scheduleLive) && (
         <div className="space-y-4">
           {pools.length>0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {pools.map(pool=>(
-                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
+                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
               ))}
             </div>
-          ) : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
+          ) : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
         </div>
       )}
 
-      {divTab==='schedule' && (() => {
+      {scheduleLive && divTab==='schedule' && (() => {
         const now = Date.now()
         const all = [...divGames].sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):((parseStartMs(a.date,a.startTime)||0)-(parseStartMs(b.date,b.startTime)||0)))
         const isPlaceholder = (n:string)=>/^(seed\s|w-b|l-b|bracket\b|winner\b|loser\b|tbd$)/i.test((n||'').trim())
@@ -613,7 +615,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
           const t1w=hs&&g.score1!>g.score2!, t2w=hs&&g.score2!>g.score1!
           const isHL=followedTeams.includes(g.team1)||followedTeams.includes(g.team2)
           const chipCls=g.isChampionship?'bg-amber-100 text-amber-800':'bg-teal-100 text-teal-700'
-          const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-500'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.isChampionship?{t:'Bracket',c:'bg-amber-50 text-amber-700'}:g.pool?{t:'Pool '+g.pool,c:'bg-teal-50 text-teal-700'}:{t:'Upcoming',c:'bg-slate-100 text-slate-500'}
+          const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-500'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.isChampionship?{t:'Bracket',c:'bg-amber-50 text-amber-700'}:g.pool?{t:poolLabel(g.pool),c:'bg-teal-50 text-teal-700'}:{t:'Upcoming',c:'bg-slate-100 text-slate-500'}
           return (
             <div key={g.id} className={`bg-white border rounded-xl px-2.5 py-2 flex items-center gap-2.5 ${live?'border-red-200':isHL?'border-teal-300 bg-teal-50/30':'border-slate-200'}`}>
               <Link href={`/tournaments/${tournamentId}/public/games/${g.id}`} title="Game page" className={`text-[10px] font-bold w-8 text-center py-0.5 rounded flex-shrink-0 hover:ring-2 hover:ring-teal-300 ${chipCls}`}>{g.gameNumber}</Link>
@@ -687,7 +689,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
         )
       })()}
 
-      {divTab==='bracket' && (
+      {scheduleLive && divTab==='bracket' && (
         <BracketView bracketList={bracketList} scheduledGames={bracketGames}/>
       )}
     </div>
@@ -1077,7 +1079,7 @@ export default function PublicTournamentPage() {
                       <TeamAvatar name={t.name} size="sm" />
                       <div className="flex-1 min-w-0">
                         <button onClick={()=>{setSelectedDiv(t.division);setTeamSearch('')}} className="font-semibold text-sm text-blue-700 hover:underline text-left">{t.name}</button>
-                        <div className="text-xs text-gray-400">{t.division}{t.pool ? ` · Pool ${t.pool}` : ''}</div>
+                        <div className="text-xs text-gray-400">{t.division}{t.pool ? ` · ${poolLabel(t.pool)}` : ''}</div>
                       </div>
                       <button onClick={()=>toggleFollow(t.name)}
                         className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${followedTeams.includes(t.name) ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700'}`}>
