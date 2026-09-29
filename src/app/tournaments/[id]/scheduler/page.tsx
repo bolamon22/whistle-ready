@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
-import { TimelineView, TeamLanesView } from './SchedulerViews'
+import { TimelineView, TeamLanesView, useDragAutoScroll } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { divisionAbbr } from '@/lib/names'
@@ -120,6 +120,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [dragId, setDragId]             = useState<string | null>(null)
   const [dragGame, setDragGame]         = useState<Game | null>(null)
   const [overCell, setOverCell]         = useState<string | null>(null)
+  // Legacy grid: scroll while a game is dragged near the edge (see useDragAutoScroll).
+  const gridScrollRef = useRef<HTMLDivElement>(null)
+  useDragAutoScroll(gridScrollRef, !!dragId)
   const [autoFilling, setAutoFilling]   = useState(false)
   const [gridZoom, setGridZoom]         = useState(1)
   const [splitMode, setSplitMode]       = useState<'d1d2'|'spread'|'oneday'>('d1d2')
@@ -1629,7 +1632,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()
       ) : (
-        <div className="flex-1 overflow-auto" style={{ zoom: gridZoom }}>
+        <div ref={gridScrollRef} className="flex-1 overflow-auto" style={{ zoom: gridZoom }}>
           <table className="border-collapse" style={{ minWidth: `${80 + visibleFields.length * 160}px` }}>
             <thead className="sticky top-0 z-20">
               <tr>

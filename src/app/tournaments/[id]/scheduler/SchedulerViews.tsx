@@ -63,6 +63,36 @@ const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues']; label: string; 
   { kind: 'gap',      key: 'gap',      label: 'Long gap',      dot: '#14b8a6', bg: '',        border: '' },
 ]
 
+// Scroll a container while something is dragged near (or past) its edges. Browsers
+// barely auto-scroll during a native drag and the mouse wheel does nothing then, so a
+// game could not reach a slot below or right of the visible part of the board.
+export function useDragAutoScroll(ref: { current: HTMLElement | null }, active: boolean, opts: { bottomInset?: number } = {}) {
+  const bottomInset = opts.bottomInset ?? 0
+  useEffect(() => {
+    if (!active) return
+    let vx = 0, vy = 0, raf = 0
+    const ZONE = 80, MAX = 26
+    const speed = (d: number) => (d >= ZONE ? 0 : Math.ceil(MAX * (1 - Math.max(0, d) / ZONE)))
+    const onOver = (e: DragEvent) => {
+      const el = ref.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const inX = e.clientX >= r.left && e.clientX <= r.right
+      const inY = e.clientY >= r.top && e.clientY <= r.bottom + 40
+      const bottom = r.bottom - bottomInset
+      vy = inX ? (e.clientY < r.top + ZONE ? -speed(e.clientY - r.top) : e.clientY > bottom - ZONE ? speed(bottom - e.clientY) : 0) : 0
+      vx = inY ? (e.clientX < r.left + ZONE && e.clientX >= r.left ? -speed(e.clientX - r.left) : e.clientX > r.right - ZONE ? speed(r.right - e.clientX) : 0) : 0
+    }
+    const stop = () => { vx = 0; vy = 0 }
+    const tick = () => { const el = ref.current; if (el && (vx || vy)) el.scrollBy(vx, vy); raf = requestAnimationFrame(tick) }
+    window.addEventListener('dragover', onOver)
+    window.addEventListener('drop', stop)
+    window.addEventListener('dragend', stop)
+    raf = requestAnimationFrame(tick)
+    return () => { window.removeEventListener('dragover', onOver); window.removeEventListener('drop', stop); window.removeEventListener('dragend', stop); cancelAnimationFrame(raf) }
+  }, [active, ref, bottomInset])
+}
+
 type TypeFilter = 'all' | 'pool' | 'bracket'
 const isBracket = (g: { gameNumber: string }) => g.gameNumber.startsWith('B')
 const matchesType = (g: { gameNumber: string }, t: TypeFilter) => t === 'all' || (t === 'bracket') === isBracket(g)
@@ -274,6 +304,10 @@ export function TimelineView(p: ViewsProps) {
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useTypeFilter()
   const [dragId, setDragId] = useState<string | null>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+  // The floating "Moving…" bar covers the bottom of the board, so the scroll zone
+  // starts above it.
+  useDragAutoScroll(boardRef, !!dragId, { bottomInset: selId ? 64 : 0 })
   const [chipsOpen, setChipsOpenRaw] = useState(true)
   useEffect(() => { try { if (localStorage.getItem('wr-sched-chips') === 'closed') setChipsOpenRaw(false) } catch {} }, [])
   const setChipsOpen = (o: boolean) => { setChipsOpenRaw(o); try { localStorage.setItem('wr-sched-chips', o ? 'open' : 'closed') } catch {} }
@@ -432,8 +466,9 @@ export function TimelineView(p: ViewsProps) {
         <div className="flex-1 min-h-0 relative">
         {/* While a game is picked up, its bar floats over the bottom of the board so the
             chips row keeps its width and the bar is always in view. */}
-        {sel && <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40"><SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /></div>}
-        <div className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
+        {/* While dragging, the bar is see-through to the pointer so the slots under it still take the drop. */}
+        {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /></div>}
+        <div ref={boardRef} className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
           {across ? (
             <div className="grid" style={{ gridTemplateColumns: `100px repeat(${p.fields.length}, ${fieldCol})`, gridAutoRows: '64px', minWidth: fit ? undefined : 'max-content' }}>
               {/* header: fields */}
