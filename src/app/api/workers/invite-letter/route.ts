@@ -13,12 +13,13 @@ export async function GET(req: Request) {
   const viewOrgId = new URL(req.url).searchParams.get('viewOrgId')
   const orgId = gate.role === 'admin' ? String(viewOrgId || gate.orgId || '') : String(gate.orgId || '')
   if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 400 })
-  const [staff, recruit, org] = await Promise.all([
+  const [staff, recruit, assigner, org] = await Promise.all([
     inviteLetterFor(orgId, 'staff'),
     inviteLetterFor(orgId, 'recruit'),
+    inviteLetterFor(orgId, 'assigner'),
     orgById(orgId),
   ])
-  return NextResponse.json({ staff, recruit, orgName: org?.name || '', defaults: INVITE_LETTER_DEFAULTS })
+  return NextResponse.json({ staff, recruit, assigner, orgName: org?.name || '', defaults: INVITE_LETTER_DEFAULTS })
 }
 
 export async function PUT(req: Request) {
@@ -26,8 +27,9 @@ export async function PUT(req: Request) {
   if (!gate.ok) return gate.res
   let body: { audience?: unknown; subject?: unknown; body?: unknown; reset?: unknown; viewOrgId?: unknown } = {}
   try { body = await req.json() } catch { /* validated below */ }
-  const audience = body.audience === 'recruit' ? 'recruit' as const : body.audience === 'staff' ? 'staff' as const : null
-  if (!audience) return NextResponse.json({ error: 'audience must be staff or recruit' }, { status: 400 })
+  const AUDIENCES = ['staff', 'recruit', 'assigner'] as const
+  const audience = AUDIENCES.find(a => a === body.audience) ?? null
+  if (!audience) return NextResponse.json({ error: `audience must be one of ${AUDIENCES.join(', ')}` }, { status: 400 })
   const orgId = gate.role === 'admin' ? String(body.viewOrgId || gate.orgId || '') : String(gate.orgId || '')
   if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 400 })
 

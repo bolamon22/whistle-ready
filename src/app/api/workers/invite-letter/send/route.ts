@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
 import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
-import { inviteLetterFor, mergeLetter, letterBodyHtml, escapeHtml } from '@/lib/inviteLetter'
+import { inviteLetterFor, mergeLetter, letterBodyHtml, escapeHtml, type InviteAudience } from '@/lib/inviteLetter'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL (stale in prod)
 
@@ -15,7 +15,7 @@ const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT 
 export async function POST(req: Request) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
-  let body: { emails?: unknown; subject?: unknown; body?: unknown; viewOrgId?: unknown } = {}
+  let body: { emails?: unknown; subject?: unknown; body?: unknown; audience?: unknown; viewOrgId?: unknown } = {}
   try { body = await req.json() } catch { /* validated below */ }
 
   const orgId = gate.role === 'admin' ? String(body.viewOrgId || gate.orgId || '') : String(gate.orgId || '')
@@ -42,7 +42,13 @@ export async function POST(req: Request) {
 
   const org = await orgById(orgId)
   const orgLabel = org?.name || 'Whistle Ready'
-  const saved = await inviteLetterFor(orgId, 'recruit')
+  // The fallback letter has to match the one on screen. This was pinned to 'recruit',
+  // which was harmless while recruit was the only copy-and-send audience -- with the
+  // assigner letter added, a send whose subject or body arrived empty would have gone
+  // out as the wrong letter entirely (Sep 29 2026).
+  const audience: InviteAudience =
+    body.audience === 'assigner' ? 'assigner' : body.audience === 'staff' ? 'staff' : 'recruit'
+  const saved = await inviteLetterFor(orgId, audience)
   const subjectTpl = String(body.subject ?? '').trim().slice(0, 200) || saved.subject
   const bodyTpl = String(body.body ?? '').trim().slice(0, 4000) || saved.body
 

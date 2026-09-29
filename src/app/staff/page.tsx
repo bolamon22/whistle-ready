@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { certLabel, CERT_LEVELS, WORKER_ROLES, PAY_METHODS, isHourlyRole } from '@/lib/utils'
+import { mergeLetter, letterCopyHtml } from '@/lib/inviteLetterText'
 
 interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
@@ -97,7 +98,7 @@ function StaffEditForm({
 // what /api/workers/onboard emails with each person's claim link; 'recruit' is copy-paste
 // text carrying the public /join link. Saved per org via /api/workers/invite-letter.
 function InviteLetterPanel({workers}:{workers:Worker[]}){
-  type Aud='staff'|'recruit'
+  type Aud='staff'|'recruit'|'assigner'
   const [aud,setAud]=useState<Aud>('staff')
   const [tpl,setTpl]=useState<Record<Aud,{subject:string;body:string;custom?:boolean}>|null>(null)
   const [orgName,setOrgName]=useState('')
@@ -112,7 +113,7 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
     const v=viewOrg()
     fetch(`/api/workers/invite-letter${v?`?viewOrgId=${encodeURIComponent(v)}`:''}`)
       .then(r=>r.ok?r.json():null)
-      .then(d=>{if(d){setTpl({staff:d.staff,recruit:d.recruit});setOrgName(d.orgName||'')}})
+      .then(d=>{if(d){setTpl({staff:d.staff,recruit:d.recruit,assigner:d.assigner});setOrgName(d.orgName||'')}})
       .catch(()=>{})
     fetch('/api/tournaments').then(r=>r.ok?r.json():[]).then((ts:{id:string;name:string;startDate?:string;endDate?:string}[])=>{
       const cutoff=Date.now()-86400000
@@ -157,24 +158,44 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
         setSendMsg(parts.join(' · ')||'Nothing sent')
         if(sent){toast.success(`Invite sent to ${sent}`);setSendTo(missing.join(', '))}
       }else{
-        const res=await fetch('/api/workers/invite-letter/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails,subject:cur.subject,body:cur.body,viewOrgId:viewOrg()})})
+        const res=await fetch('/api/workers/invite-letter/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails,subject:cur.subject,body:cur.body,audience:aud,viewOrgId:viewOrg()})})
         const d=res.ok?await res.json():null
         if(d?.ok){toast.success(`Letter sent to ${d.results.length}`);setSendMsg(`Sent to ${emails.join(', ')} — with your live signup link`);setSendTo('')}
         else{toast.error('Failed to send');setSendMsg('')}
       }
     }finally{setSending(false)}
   }
+  // Copies the BODY, as rich text and plain text together.
+  //
+  // Two things were wrong. It pasted the SUBJECT into the message body, which you
+  // then deleted by hand every time; the subject belongs in Gmail's subject field and
+  // is on screen right above to copy. And it wrote plain text only, so the signup URL
+  // arrived as bare characters Gmail might not autolink -- Bo: "the links don't look
+  // right" (Sep 29 2026). text/html gives Gmail a real anchor; text/plain is carried
+  // alongside so anything that is not a rich editor still gets readable text.
   async function copyLetter(){
     setCopying(true)
     try{
-      let link='{link}'
+      let link=''
       if(cur.body.includes('{link}')||cur.subject.includes('{link}')){
         const r=await fetch('/api/workers/recruit-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewOrgId:viewOrg()})})
-        if(r.ok)link=(await r.json()).url||link
+        if(r.ok)link=(await r.json()).url||''
       }
-      const merged=`${cur.subject}\n\n${cur.body}`.replace(/\{org\}/g,orgName||'our organization').replace(/\{link\}/g,link)
-      await navigator.clipboard.writeText(merged)
-      toast.success(aud==='recruit'?'Letter copied — {link} filled with your live signup link':'Letter copied — {firstName} and {link} fill in per person when emailed')
+      const vals={org:orgName||'our organization',link,firstName:'{firstName}',name:'{name}'}
+      const plain=mergeLetter(cur.body,vals)
+      const html=letterCopyHtml(cur.body,vals,link)
+      let rich=false
+      try{
+        // Not available everywhere; the plain-text path below is the fallback.
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html':new Blob([html],{type:'text/html'}),
+          'text/plain':new Blob([plain],{type:'text/plain'}),
+        })])
+        rich=true
+      }catch{ await navigator.clipboard.writeText(plain) }
+      toast.success(aud==='staff'
+        ?`Letter copied${rich?'':' (plain text)'} — {firstName} fills in per person when emailed`
+        :`Letter copied${rich?' with a clickable link':' (plain text)'} — subject is in the field above`)
     }catch{toast.error('Copy failed')}
     setCopying(false)
   }
@@ -190,11 +211,14 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
         <select className="select w-auto text-sm" value={aud} onChange={e=>setAud(e.target.value as Aud)}>
           <option value="staff">Existing staff — in your pool already</option>
           <option value="recruit">New recruits — not in the pool yet</option>
+        <option value="assigner">Assigner — to forward to their officials</option>
         </select>
         {cur.custom&&<span className="badge bg-teal-50 text-teal-700">Customized</span>}
       </div>
       <p className="text-xs text-slate-400 mb-4">{aud==='staff'
         ?'Goes out when you use “Send app invites” — each email carries that person’s own login link on the button.'
+        :aud==='assigner'
+        ?'Written to be forwarded — copy it into your own email to the assigner, and they pass it to their officials. {link} becomes your live signup link, clickable when pasted into Gmail.'
         :'Copy this into an email or text (or hand it to your assigner) — {link} becomes your live signup link. People inquiring on the website use the signup form itself.'}</p>
       <div className="space-y-3">
         <div><label className="label">Subject</label><input className="input" value={cur.subject} onChange={e=>set({subject:e.target.value})}/></div>
