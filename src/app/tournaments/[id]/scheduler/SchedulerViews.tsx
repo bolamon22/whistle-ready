@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Search } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -158,15 +158,38 @@ function IssueBadge({ kind, count }: { kind: IssueKind; count: number }) {
   )
 }
 
-function DivisionChips({ p, counts }: { p: ViewsProps; counts: Record<string, { total: number; done: number }> }) {
+// The division chips fold to one line while you work one division: just that chip
+// (with an x to clear) and a "Divisions" button to reopen the full row. Picking a
+// chip folds the row; clearing it opens it again.
+function DivisionChips({ p, counts, open, setOpen }: { p: ViewsProps; counts: Record<string, { total: number; done: number }>; open: boolean; setOpen: (o: boolean) => void }) {
+  const active = p.filterDiv !== '__all__' ? p.filterDiv : null
+  if (!open) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border bg-white text-slate-700 border-slate-200 hover:border-slate-300" title="Show every division">
+          Divisions <span className="font-medium text-slate-400">{p.divisions.length}</span> <ChevronDown size={12} className="text-slate-400" />
+        </button>
+        {active ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-1 py-1 rounded-full border" style={{ background: p.divColor(active), borderColor: p.divColor(active), color: '#fff' }}>
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(255,255,255,.85)' }} />
+            {active}<span className="font-medium opacity-70">{counts[active]?.done ?? 0}/{counts[active]?.total ?? 0}</span>
+            <button onClick={() => { p.setFilterDiv('__all__'); setOpen(true) }} aria-label="Show all divisions" className="ml-0.5 w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/20"><X size={11} /></button>
+          </span>
+        ) : (
+          <span className="text-xs text-slate-500">All divisions</span>
+        )}
+      </div>
+    )
+  }
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
+      <button onClick={() => setOpen(false)} aria-label="Collapse the division row" title="Collapse" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronUp size={14} /></button>
       <button onClick={() => p.setFilterDiv('__all__')}
         className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors ${p.filterDiv === '__all__' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>All</button>
       {p.divisions.map(d => {
         const on = p.filterDiv === d, c = p.divColor(d)
         return (
-          <button key={d} onClick={() => p.setFilterDiv(on ? '__all__' : d)}
+          <button key={d} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }}
             className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-3 py-1 rounded-full border transition-colors"
             style={on ? { background: c, borderColor: c, color: '#fff' } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? 'rgba(255,255,255,.85)' : c }} />
@@ -243,6 +266,9 @@ export function TimelineView(p: ViewsProps) {
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useTypeFilter()
   const [dragId, setDragId] = useState<string | null>(null)
+  const [chipsOpen, setChipsOpenRaw] = useState(true)
+  useEffect(() => { try { if (localStorage.getItem('wr-sched-chips') === 'closed') setChipsOpenRaw(false) } catch {} }, [])
+  const setChipsOpen = (o: boolean) => { setChipsOpenRaw(o); try { localStorage.setItem('wr-sched-chips', o ? 'open' : 'closed') } catch {} }
 
   const { byGame, list: issueList } = useIssueList(p)
   const counts = useCounts(p.games, p.divisions)
@@ -375,7 +401,7 @@ export function TimelineView(p: ViewsProps) {
       {/* Center */}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         <div className="px-3 py-2 flex items-center gap-2 bg-white border-b border-slate-200 flex-shrink-0">
-          <DivisionChips p={p} counts={counts} />
+          <DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} />
           <div className="flex-1" />
           {sel ? <SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /> : <span className="text-xs text-slate-400 hidden xl:inline">Click an unscheduled game, then a slot. Click a placed game to move it.</span>}
           <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={fit ? 'Reopen both side panels' : (across ? 'Collapse both side panels so every field fits' : 'Collapse both side panels so the whole day fits')}>
