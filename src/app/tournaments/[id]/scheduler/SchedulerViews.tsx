@@ -212,11 +212,19 @@ function useCounts(games: SGame[], divisions: string[]) {
 
 function SelectionBar({ p, sel, onCancel }: { p: ViewsProps; sel: SGame; onCancel: () => void }) {
   const placed = !!(sel.date && sel.startTime && sel.location)
+  // Two lines of text and the buttons stacked beside them, so the bar stays short
+  // (one row of chips tall) and never clips a long team name.
   return (
-    <div className="flex items-center gap-2 pl-3 pr-1.5 py-1 rounded-full bg-slate-900 text-white text-xs shadow">
-      <span>{placed ? 'Moving' : 'Placing'} <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b> — click a <span className="text-emerald-300 font-bold">green</span> slot. Amber = back-to-back, striped = team busy.</span>
-      {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="px-2.5 py-1 rounded-full border border-slate-600 text-red-200 font-bold hover:bg-slate-800">Unschedule</button>}
-      <button onClick={onCancel} className="px-2.5 py-1 rounded-full bg-slate-700 font-bold hover:bg-slate-600">Cancel</button>
+    <div className="flex items-stretch gap-2 pl-3 pr-1.5 py-1 rounded-xl text-white shadow-xl min-w-0 w-[460px] max-w-[92vw]" style={{ background: '#065f46' }}
+      title={`${humanTeam(sel.team1)} vs ${humanTeam(sel.team2)} — click a green slot. Amber = back-to-back, striped = team busy.`}>
+      <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+        <div className="text-xs leading-tight truncate"><span className="text-emerald-200">{placed ? 'Moving' : 'Placing'}</span> <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b></div>
+        <div className="text-[11px] leading-tight text-emerald-100 truncate">Click a green slot · amber = back-to-back · striped = busy</div>
+      </div>
+      <div className="flex flex-col gap-1 flex-shrink-0 justify-center">
+        {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100">Unschedule</button>}
+        <button onClick={onCancel} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800">Cancel</button>
+      </div>
     </div>
   )
 }
@@ -400,15 +408,18 @@ export function TimelineView(p: ViewsProps) {
 
       {/* Center */}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        <div className="px-3 py-2 flex items-center gap-2 bg-white border-b border-slate-200 flex-shrink-0">
-          <DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} />
-          <div className="flex-1" />
-          {sel ? <SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /> : <span className="text-xs text-slate-400 hidden xl:inline">Click an unscheduled game, then a slot. Click a placed game to move it.</span>}
-          <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={fit ? 'Reopen both side panels' : (across ? 'Collapse both side panels so every field fits' : 'Collapse both side panels so the whole day fits')}>
+        <div className="px-3 py-1.5 flex items-start gap-2 bg-white border-b border-slate-200 flex-shrink-0">
+          <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} /></div>
+          {!sel && <span className="text-xs text-slate-400 hidden 2xl:inline pt-1.5 flex-shrink-0">Click an unscheduled game, then a slot.</span>}
+          <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border flex-shrink-0 mt-0.5 ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={fit ? 'Reopen both side panels' : (across ? 'Collapse both side panels so every field fits' : 'Collapse both side panels so the whole day fits')}>
             {fit ? <Minimize2 size={13} /> : <Maximize2 size={13} />} {across ? 'Fit fields' : 'Fit day'}
           </button>
         </div>
-        <div className="flex-1 overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
+        <div className="flex-1 min-h-0 relative">
+        {/* While a game is picked up, its bar floats over the bottom of the board so the
+            chips row keeps its width and the bar is always in view. */}
+        {sel && <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40"><SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /></div>}
+        <div className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
           {across ? (
             <div className="grid" style={{ gridTemplateColumns: `100px repeat(${p.fields.length}, ${fieldCol})`, gridAutoRows: '64px', minWidth: fit ? undefined : 'max-content' }}>
               {/* header: fields */}
@@ -459,6 +470,7 @@ export function TimelineView(p: ViewsProps) {
               <div className="text-[10px] text-slate-500 mt-1.5">Click to move · drag to another slot</div>
             </div>
           )}
+        </div>
         </div>
       </div>
 
