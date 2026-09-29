@@ -63,6 +63,26 @@ const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues']; label: string; 
   { kind: 'gap',      key: 'gap',      label: 'Long gap',      dot: '#14b8a6', bg: '',        border: '' },
 ]
 
+type TypeFilter = 'all' | 'pool' | 'bracket'
+const isBracket = (g: { gameNumber: string }) => g.gameNumber.startsWith('B')
+const matchesType = (g: { gameNumber: string }, t: TypeFilter) => t === 'all' || (t === 'bracket') === isBracket(g)
+function useTypeFilter(): [TypeFilter, (t: TypeFilter) => void] {
+  const [t, setT] = useState<TypeFilter>('all')
+  useEffect(() => { try { const v = localStorage.getItem('wr-sched-type'); if (v === 'pool' || v === 'bracket') setT(v) } catch {} }, [])
+  return [t, (v: TypeFilter) => { setT(v); try { localStorage.setItem('wr-sched-type', v) } catch {} }]
+}
+function TypeToggle({ value, onChange, counts }: { value: TypeFilter; onChange: (t: TypeFilter) => void; counts?: { pool: number; bracket: number } }) {
+  return (
+    <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-slate-100 border border-slate-200">
+      {([['all', 'All'], ['pool', 'Pool'], ['bracket', 'Bracket']] as const).map(([v, label]) => (
+        <button key={v} onClick={() => onChange(v)} className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full transition-colors ${value === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}>
+          {label}{counts && v !== 'all' ? <span className="font-medium opacity-70 ml-1">{counts[v]}</span> : null}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function humanTeam(t: string) {
   const m = (t || '').match(/^([WL])-(B\d+)$/i)
   if (m) return (m[1].toUpperCase() === 'W' ? 'Winner of ' : 'Loser of ') + m[2].toUpperCase()
@@ -221,6 +241,7 @@ export function TimelineView(p: ViewsProps) {
   const [tab, setTab] = useState<'issues' | 'day'>('issues')
   const [openDivs, setOpenDivs] = useState<Record<string, boolean>>({})
   const [q, setQ] = useState('')
+  const [typeFilter, setTypeFilter] = useTypeFilter()
   const [dragId, setDragId] = useState<string | null>(null)
 
   const { byGame, list: issueList } = useIssueList(p)
@@ -234,7 +255,9 @@ export function TimelineView(p: ViewsProps) {
   // a placed game that got moved/unscheduled elsewhere: drop the stale selection
   useEffect(() => { if (selId && !p.games.some(g => g.id === selId)) setSelId(null) }, [p.games, selId])
 
-  const dim = (g: SGame) => p.filterDiv !== '__all__' && g.division !== p.filterDiv
+  // A division chip and the Pool/Bracket toggle narrow the unscheduled list to just
+  // that; on the board the same games stay put but fade, so nothing moves under you.
+  const dim = (g: SGame) => (p.filterDiv !== '__all__' && g.division !== p.filterDiv) || !matchesType(g, typeFilter)
   const tint = (div: string) => p.divColor(div) + '1f'
 
   // games per team in its division (the "(n)" counts on cards)
@@ -250,11 +273,16 @@ export function TimelineView(p: ViewsProps) {
   // unscheduled, grouped by division, filtered by search
   const lot = useMemo(() => {
     const ql = q.trim().toLowerCase()
-    return p.divisions.map(d => ({
+    const divs = p.filterDiv === '__all__' ? p.divisions : p.divisions.filter(d => d === p.filterDiv)
+    return divs.map(d => ({
       div: d,
-      items: p.unscheduled.filter(g => g.division === d && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))),
+      items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))),
     })).filter(x => x.items.length > 0)
-  }, [p.unscheduled, p.divisions, q])
+  }, [p.unscheduled, p.divisions, p.filterDiv, typeFilter, q])
+  const lotCounts = useMemo(() => {
+    const inDiv = p.unscheduled.filter(g => p.filterDiv === '__all__' || g.division === p.filterDiv)
+    return { pool: inDiv.filter(g => !isBracket(g)).length, bracket: inDiv.filter(isBracket).length }
+  }, [p.unscheduled, p.filterDiv])
 
   const dropTarget = (e: React.DragEvent) => e.dataTransfer.getData('gameId') || dragId
   const place = async (g: SGame, time: string, field: string) => {
@@ -290,8 +318,18 @@ export function TimelineView(p: ViewsProps) {
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Team or game #" aria-label="Search unscheduled games"
               className="w-full pl-7 pr-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-400" />
           </div>
+          <div className="px-3 pb-2 flex items-center gap-2">
+            <TypeToggle value={typeFilter} onChange={setTypeFilter} counts={lotCounts} />
+          </div>
+          {p.filterDiv !== '__all__' && (
+            <div className="mx-3 mb-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-2 text-[11px] text-slate-600">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.divColor(p.filterDiv) }} />
+              <span className="truncate flex-1">Only <b className="text-slate-800">{p.filterDiv}</b></span>
+              <button onClick={() => p.setFilterDiv('__all__')} className="font-semibold text-teal-700 hover:underline flex-shrink-0">Show all</button>
+            </div>
+          )}
           <div className="flex-1 overflow-auto px-2 pb-3 space-y-2">
-            {lot.length === 0 && <p className="text-xs text-slate-400 text-center py-8">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : 'No games match.'}</p>}
+            {lot.length === 0 && <p className="text-xs text-slate-400 text-center py-8">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : typeFilter !== 'all' || p.filterDiv !== '__all__' ? 'Nothing left to place with these filters.' : 'No games match.'}</p>}
             {lot.map(grp => {
               const open = openDivs[grp.div] ?? true
               const c = p.divColor(grp.div)
@@ -566,7 +604,9 @@ export function TeamLanesView(p: ViewsProps) {
 
   const mine = useMemo(() => p.games.filter(g => g.division === div), [p.games, div])
   const dayMine = useMemo(() => p.dayGames.filter(g => g.division === div), [p.dayGames, div])
-  const todo = mine.filter(g => !g.date || !g.startTime || !g.location)
+  const [typeFilter, setTypeFilter] = useTypeFilter()
+  const todoAll = mine.filter(g => !g.date || !g.startTime || !g.location)
+  const todo = todoAll.filter(g => matchesType(g, typeFilter))
   const sel = mine.find(g => g.id === selId) ?? null
   const c = p.divColor(div)
   const tint = c + '1f'
@@ -614,12 +654,12 @@ export function TeamLanesView(p: ViewsProps) {
           <span className="text-xs text-slate-500 hidden lg:inline">Rest target <b className="text-slate-800">1 slot</b> · amber = back-to-back · red = double-booked</span>
         </div>
         <div className="flex items-start gap-3">
-          <div className="w-24 flex-shrink-0 pt-0.5">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Unscheduled</div>
-            <div className="text-lg font-extrabold text-orange-700 leading-tight">{todo.length}</div>
+          <div className="flex-shrink-0 pt-0.5 flex flex-col gap-1.5">
+            <div className="flex items-baseline gap-2"><span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Unscheduled</span><span className="text-lg font-extrabold text-orange-700 leading-tight">{todo.length}</span></div>
+            <TypeToggle value={typeFilter} onChange={setTypeFilter} counts={{ pool: todoAll.filter(g => !isBracket(g)).length, bracket: todoAll.filter(isBracket).length }} />
           </div>
           <div className="flex-1 flex flex-wrap gap-1.5 min-h-[36px] max-h-24 overflow-auto">
-            {todo.length === 0 && <span className="text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-100 rounded-full px-3 py-1.5">Every game in {div} is on the grid.</span>}
+            {todo.length === 0 && <span className="text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-100 rounded-full px-3 py-1.5">{todoAll.length === 0 ? `Every game in ${div} is on the grid.` : `No ${typeFilter} games left to place in ${div}.`}</span>}
             {todo.map(g => { const on = selId === g.id; return (
               <button key={g.id} onClick={() => { setSelId(on ? null : g.id); setSlot(null) }}
                 className={`text-left rounded-lg border px-2 py-1 leading-tight ${on ? 'bg-slate-900 border-slate-900 ring-[3px] ring-teal-500/40 text-white' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900'}`} style={{ borderLeft: `4px solid ${c}` }}>
