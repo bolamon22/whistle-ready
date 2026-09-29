@@ -51,6 +51,15 @@ export async function requireStaff(): Promise<AuthResult> {
   return ok(b.session)
 }
 
+/** True when the caller is logged-in staff. Never blocks — for routes that serve
+ *  everyone but must show the public less (contact info, unpublished schedule). */
+export async function isStaffRequest(): Promise<boolean> {
+  const b = await base()
+  if ('res' in b) return false
+  if (b.role === 'admin') return true
+  return !!b.role && !EXTERNAL_ROLES.includes(b.role)
+}
+
 /** Tournament director (or admin) only — for destructive or high-trust actions. */
 export async function requireDirector(): Promise<AuthResult> {
   const b = await base()

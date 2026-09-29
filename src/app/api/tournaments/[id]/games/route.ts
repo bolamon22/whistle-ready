@@ -1,17 +1,31 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 
-export async function GET(_: Request, { params }: { params:{id:string} }) {
-  const games = await prisma.game.findMany({
-    where: { tournamentId: params.id },
-    orderBy: [{ date:'asc' },{ startTime:'asc' },{ location:'asc' }],
-    include: { assignments:{ include:{ worker:true } } },
-  })
-  // Short shared cache -- this is hit on every public schedule page load;
-  // event-weekend load-readiness pass, Sep 2026.
-  return NextResponse.json(games, {
-    headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=30' },
+// Two audiences, two URLs:
+//   ?view=public  -> what the public schedule may show. Never includes staff
+//                    assignments. Shared-cached (hit on every public page load).
+//   (no param)    -> staff get everything, including who is working each game;
+//                    anyone else gets the public shape. Never shared-cached, because
+//                    the CDN keys on URL only and would hand one audience's copy to
+//                    the other.
+// Before this, the one cached URL returned every assigned worker's email, phone,
+// pay rate and pay handle to anyone holding the schedule link.
+export async function GET(req: Request, { params }: { params:{id:string} }) {
+  const publicView = new URL(req.url).searchParams.get('view') === 'public'
+  const staff = publicView ? false : await isStaffRequest()
+  const orderBy = [{ date:'asc' as const },{ startTime:'asc' as const },{ location:'asc' as const }]
+  if (staff) {
+    const games = await prisma.game.findMany({
+      where: { tournamentId: params.id }, orderBy,
+      include: { assignments:{ include:{ worker:true } } },
+    })
+    return NextResponse.json(games, { headers: { 'Cache-Control': 'private, no-store' } })
+  }
+  const games = await prisma.game.findMany({ where: { tournamentId: params.id }, orderBy })
+  const out = games.map(g => ({ ...g, assignments: [] as unknown[] }))
+  return NextResponse.json(out, {
+    headers: { 'Cache-Control': publicView ? 'public, s-maxage=5, stale-while-revalidate=30' : 'private, no-store' },
   })
 }
 

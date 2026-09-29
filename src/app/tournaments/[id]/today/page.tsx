@@ -44,7 +44,7 @@ export default function TodayPage() {
     if (!id) return
     try { setFollows(JSON.parse(localStorage.getItem(`follows-${id}`) || '[]')) } catch { }
     fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => d && setT(d)).catch(() => { })
-    fetch(`/api/tournaments/${id}/games`).then(r => r.ok ? r.json() : []).then(g => setGames(Array.isArray(g) ? g : [])).catch(() => { })
+    fetch(`/api/tournaments/${id}/games?view=public`).then(r => r.ok ? r.json() : []).then(g => setGames(Array.isArray(g) ? g : [])).catch(() => { })
     fetch(`/api/tournaments/${id}/announcements`).then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.announcements) && d.announcements.length) setAnn(d.announcements[0]) }).catch(() => { })
   }, [id])
 

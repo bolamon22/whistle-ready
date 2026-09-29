@@ -5,6 +5,9 @@ import { cleanName } from '@/lib/names'
 import { renameTeamRefs } from '@/lib/teamRename'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
+  // Staff only: this returns coach phone/email and what each club owes. It was open to
+  // anyone with a tournament id. Every caller is a staff Divisions/Bracket page.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const division = decodeURIComponent(params.division)
 

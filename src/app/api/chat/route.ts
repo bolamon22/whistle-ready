@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/db'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
+import { requireStaff } from '@/lib/apiAuth'
 
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
+  // Staff only: the prompt is built from every worker, registration and payment in the
+  // tournament, so an open endpoint let anyone ask it for staff phone numbers or who
+  // owes what (and ran up the Anthropic bill). The widget only lives on staff pages.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
       { error: 'AI assistant not configured — add ANTHROPIC_API_KEY to Vercel environment variables.' },

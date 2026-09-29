@@ -34,7 +34,7 @@ export default function PublicGamePage(){
   useEffect(()=>{ if(!id||!gameId) return
     Promise.all([
       fetch(`/api/tournaments/${id}`).then(r=>r.json()).catch(()=>null),
-      fetch(`/api/tournaments/${id}/games`).then(r=>r.json()).catch(()=>[]),
+      fetch(`/api/tournaments/${id}/games?view=public`).then(r=>r.json()).catch(()=>[]),
       fetch(`/api/tournaments/${id}/team-logos`).then(r=>r.ok?r.json():{}).catch(()=>({})),
     ]).then(([t,gs,lg])=>{
       setTournament(t); setLogos(lg||{})

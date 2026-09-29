@@ -748,7 +748,7 @@ export default function PublicTournamentPage() {
   useEffect(()=>{
     Promise.all([
       fetch(`/api/tournaments/${id}`).then(r=>r.json()),
-      fetch(`/api/tournaments/${id}/games`).then(r=>r.json()),
+      fetch(`/api/tournaments/${id}/games?view=public`).then(r=>r.json()),
       fetch(`/api/tournaments/${id}/team-logos`).then(r=>r.ok?r.json():{}).catch(()=>({})),
     ]).then(([t,g,lg])=>{setTournament(t);setGames(Array.isArray(g)?g:[]);setLogos(lg||{});try{const o=JSON.parse((t&&t.tiebreakers)||'{}');const pool=Array.isArray(o)?o:(o.pool||[]);if(pool.length)setTiebreakers(pool)}catch{};setLoading(false)})
     try{const saved=JSON.parse(localStorage.getItem(`follows-${id}`)||'[]');setFollowedTeams(saved)}catch{}
