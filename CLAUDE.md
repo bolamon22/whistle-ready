@@ -132,7 +132,34 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Sep 4, 2026)
+## Current state (as of Sep 29, 2026)
+
+- **Registration status badges + waiting list (Sep 29)** — per-event and per-division "how full
+  are we" signalling, and the billing rule that came with it.
+  - Content lives in the `tournamentSite:{id}` AppSetting blob (no migration): `regStatus` /
+    `regStatusText` / `regClosesOn` for the event badge, `divisionStatus` / `divisionSpots`
+    per division. Edited at **Setup → Divisions** (dropdown + editable badge text + live preview
+    + each division's current team count, so status is set against a real number).
+  - Helpers are centralized in **`src/lib/regStatus.ts`** — `regBadge()`, `divisionBadge()`,
+    `isDivisionFull()`, `TONE_CLASS`. Amber = still taking teams, navy = Full; never red (red is
+    the required-field color). The default event label counts what is **open**, never what is
+    gone. Rendered on the event hero, the org tournament cards, and the division pills.
+  - **⚠ Marking a division "full" MOVES MONEY.** A team registering into a full division is
+    stored `waitlisted` (new `RegisteredTeam.waitlisted`, guarded ALTER + in schema.prisma) and
+    left OFF the invoice — but it still **counts toward the volume tier**, so a club that waited
+    keeps its multi-team rate (Bo, Sep 29: "if they waited this long they should get the
+    discount"). See `calcFee()` in `src/lib/regPricing.ts`. A division left marked full after it
+    reopens silently under-bills every club that registers into it.
+  - Registration is never blocked: a full division is picked on the same form, and the club
+    submits one registration with one invoice covering the teams that are playing.
+
+- **Payment double-write closed (Sep 29)** — four Stripe write paths each did findFirst-then-create;
+  two interleaved on Sep 18 and left LaxManiax a duplicate credit. `src/lib/paymentGuard.ts` now owns
+  the write (`recordTeamPayment()`, returns false when the row already existed so the alert isn't sent
+  twice) behind a **partial unique index** on `stripeIntentId` (`WHERE "stripeIntentId" <> ''`, so
+  check/cash rows don't collide). `/api/payments/audit` checks Stripe→DB, the direction the old
+  reconcile never did. Monster Mash (9 payments, $26,755) and Fall Classic (4, $8,970) both reconcile
+  exactly against Stripe as of Sep 29.
 
 - **Staff portal + self-signup + ID cards (Sep 4)** — the staff-side experience Bo asked for:
   - `/api/staff-portal` + "My events" on `/dashboard/staff` (aliased to `/dashboard/ref`): staff
