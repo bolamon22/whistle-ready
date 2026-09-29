@@ -662,7 +662,16 @@ if (loading) return (
         <div className="flex gap-6">
 
           {/* -- Sidebar -------------------------------------------- */}
-          <div className="w-80 flex-shrink-0 sticky top-6 self-start z-40">
+          {/* BELOW THE APP NAV, NOT OVER IT. NavBar is `sticky top-0 z-40`; this rail
+              was also z-40, and being later in the DOM it won the tie and painted
+              across the bar as soon as you scrolled (Bo, Sep 29 2026). z-30 keeps it
+              above the page and under the chrome. The offset is measured, not
+              guessed: the bar renders 53px tall on whistleready.app, so top-20 (80px)
+              leaves the same ~24px of air the old top-6 gave from the viewport. It is
+              a few pixels tight while the amber "previewing as" banner is up, which
+              makes the chrome taller. Tournament pages on a club's own domain hide
+              the bar entirely (see the layout), and nothing here depends on that. */}
+          <div className="w-80 flex-shrink-0 sticky top-20 self-start z-30">
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="bg-slate-800 px-4 py-3">
                 <p className="text-xs font-bold text-white uppercase tracking-wider">Divisions</p>
