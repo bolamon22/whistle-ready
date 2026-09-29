@@ -177,4 +177,4 @@ export const FULL_DIVISION_TITLE = 'Full divisions accept waitlist entries.'
 // is open, that sitting in line costs nothing, and that someone will come back to
 // them. Nothing about anybody else's teams.
 export const FULL_DIVISION_NOTE =
-  'Lock in your position in line. You won\u2019t be charged unless a spot becomes available for your team. We will contact you as soon as a spot opens.'
+  'Register your team as you normally would and we\u2019ll hold your place in line. There\u2019s no charge to join the list \u2014 you\u2019re billed only if a spot opens, and we\u2019ll contact you as soon as one does.'
