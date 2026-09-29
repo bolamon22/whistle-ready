@@ -170,6 +170,10 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [regTypes, setRegTypes] = useState<RegistrationTypes>(DEFAULT_REGISTRATION_TYPES)
   // These two live behind their own endpoints, loaded/saved alongside the main row.
   const [infoSections, setInfoSections] = useState<InfoSection[]>([])
+  // Registered teams per division, so the status dropdowns are set against the
+  // actual entries rather than memory. Undefined for a division checked but not
+  // yet saved -- that is shown as a dash, not a zero.
+  const [divTeamCounts, setDivTeamCounts] = useState<Record<string, number> | null>(null)
   const [broadcastRoles, setBroadcastRoles] = useState<string[]>(['assigner'])
   const [loading, setLoading] = useState(true)
 
@@ -225,6 +229,17 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   // ─── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetch('/api/org-forms').then(r => r.ok ? r.json() : {}).then(d => setOrgRegDefault(resolveRegConfirmation(d.registration, null))).catch(() => {})
+    // Same endpoint the divisions page uses, so these counts and that page can
+    // never disagree: registered teams on non-deleted registrations.
+    fetch(`/api/tournaments/${params.id}/divisions`)
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: any[]) => {
+        if (!Array.isArray(rows)) return
+        const m: Record<string, number> = {}
+        for (const d of rows) if (d && typeof d.name === 'string') m[d.name] = Number(d.teamCount) || 0
+        setDivTeamCounts(m)
+      })
+      .catch(() => {})
     fetch(`/api/tournaments/${params.id}`).then(r => r.json()).then(t => {
       setName(t.name); setSport(t.sport || 'Lacrosse')
       setStartDate(t.startDate || ''); setEndDate(t.endDate || '')
@@ -558,11 +573,31 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                     Per division — this is the part clubs actually read. Pick the wording that fits; type a number
                     beside it and the number shows instead. Marking one <strong>Full</strong> does not close anything:
                     teams can still register for it and you sort the spot out with them.
+                    {divTeamCounts && (
+                      <> {' '}<strong className="text-slate-600">
+                        {divs.reduce((n2, d) => n2 + (divTeamCounts[d] ?? 0), 0)} teams registered across {divs.length} divisions.
+                      </strong></>
+                    )}
                   </p>
+                  <div className="flex items-center gap-2 pb-1 mb-1 border-b border-slate-200">
+                    <span className="flex-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Division</span>
+                    <span className="w-14 flex-shrink-0 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Teams</span>
+                    <span className="w-36 flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Status</span>
+                    <span className="w-16 flex-shrink-0 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Spots</span>
+                  </div>
                   <div className="space-y-1.5 max-h-64 overflow-y-auto">
                     {divs.map(d => (
                       <div key={d} className="flex items-center gap-2">
                         <span className="flex-1 text-sm text-slate-700 truncate">{d}</span>
+                        {/* A dash means "not saved yet", which is different from
+                            a real zero — don't let an unsaved division read as empty. */}
+                        <span className={`w-14 flex-shrink-0 text-right text-sm tabular-nums ${
+                          divTeamCounts == null ? 'text-slate-300'
+                          : divTeamCounts[d] === undefined ? 'text-slate-300'
+                          : divTeamCounts[d] === 0 ? 'text-slate-400'
+                          : 'text-slate-800 font-semibold'}`}>
+                          {divTeamCounts == null || divTeamCounts[d] === undefined ? '—' : divTeamCounts[d]}
+                        </span>
                         <select className="input !py-1 !text-xs w-36 flex-shrink-0" value={status(d)}
                           onChange={e => setMap('divisionStatus', d, e.target.value)} aria-label={`${d} status`}>
                           <option value="">Open</option>
