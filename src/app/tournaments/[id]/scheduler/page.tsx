@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
+import { TimelineView, TeamLanesView } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye } from 'lucide-react'
@@ -178,6 +179,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // ── Grid filters ─────────────────────────────────────────────────────────
   const [gridDiv,  setGridDiv]  = useState('__all__')
+  // Which layout of the day to show. The grid is the original; Timeline and Teams
+  // are the redesigned views (SchedulerViews.tsx). Remembered per tournament.
+  const [schedView, setSchedViewRaw] = useState<'grid' | 'timeline' | 'teams'>('grid')
+  useEffect(() => { try { const v = localStorage.getItem(`wr-sched-view-${params.id}`); if (v === 'timeline' || v === 'teams') setSchedViewRaw(v) } catch {} }, [params.id])
+  const setSchedView = (v: 'grid' | 'timeline' | 'teams') => { setSchedViewRaw(v); try { localStorage.setItem(`wr-sched-view-${params.id}`, v) } catch {} }
   const [gridPool, setGridPool] = useState('__all__')
   const [gridTeam, setGridTeam] = useState('__all__')
   const [gridType, setGridType] = useState('__all__')
@@ -1182,8 +1188,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* ── Parking Lot ── */}
-      {!sideStage && <div className="bg-slate-900 border-b border-slate-700 flex-shrink-0">
+      {/* ── Parking Lot (grid view only: the other views carry their own unscheduled list) ── */}
+      {schedView === 'grid' && !sideStage && <div className="bg-slate-900 border-b border-slate-700 flex-shrink-0">
 
         {/* Filter row */}
         <div className="px-4 sm:px-6 pt-2 pb-1 flex items-center gap-2 flex-wrap">
@@ -1399,7 +1405,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
       {/* ── Side staging wrapper ── */}
       <div className="flex flex-1 overflow-hidden">
-      {sideStage && (
+      {schedView === 'grid' && sideStage && (
         <div className="w-56 bg-slate-900 border-r border-slate-700 flex flex-col flex-shrink-0 overflow-hidden">
           {/* Sidebar header + filters */}
           <div className="px-3 pt-3 pb-2 border-b border-slate-700 flex-shrink-0">
@@ -1499,6 +1505,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       {/* ── Grid filter row ── */}
       <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center gap-2 flex-wrap flex-shrink-0">
         <label className="text-slate-500 text-xs font-semibold">View:</label>
+        <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-slate-100 border border-slate-200 mr-2">
+          {([['grid', 'Grid'], ['timeline', 'Timeline'], ['teams', 'Teams']] as const).map(([v, label]) => (
+            <button key={v} onClick={() => setSchedView(v)}
+              className={`text-xs font-bold px-3 py-1 rounded-full transition-colors ${schedView === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+              title={v === 'grid' ? 'The original grid: fields across, time down' : v === 'timeline' ? 'Fields down, time across, with an issues panel' : 'One row per team, so rest and conflicts show as a shape'}>
+              {label}
+            </button>
+          ))}
+        </div>
 
         <label className="text-slate-500 text-xs">Division:</label>
         <select value={gridDiv}
@@ -1588,6 +1603,19 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             </div>
           )}
         </div>
+      ) : schedView !== 'grid' ? (
+        (() => {
+          const viewProps = {
+            games, dayGames, unscheduled, activeDate, slots, fields: visibleFields, divisions, increment,
+            divColor: (d: string) => divColor(d, divisions, divColorMap), fmtTime, divAbbr,
+            issues: { conflict: conflictMsgs, b2b: backToBackMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
+            filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
+            onPlace: (id: string, time: string, field: string) => patchGame(id, { date: activeDate, startTime: time, location: field }),
+            onUnschedule: (id: string) => patchGame(id, { date: '', startTime: '', location: '' }),
+            saving,
+          }
+          return schedView === 'timeline' ? <TimelineView {...viewProps} /> : <TeamLanesView {...viewProps} />
+        })()
       ) : (
         <div className="flex-1 overflow-auto" style={{ zoom: gridZoom }}>
           <table className="border-collapse" style={{ minWidth: `${80 + visibleFields.length * 160}px` }}>
