@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { BarChart3, Wallet, ClipboardList, Users, Plus, Pencil, Trash2 } from 'lucide-react'
+import { BarChart3, Wallet, ClipboardList, Store, Users, Plus, Pencil, Trash2 } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import { Card } from '@/components/ui'
 
@@ -53,6 +53,15 @@ const catLabel  = (c: string) => ALL_CATEGORIES.find(x => x.value === c)?.label 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const today = () => new Date().toISOString().slice(0, 10)
 const inputCls = "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+/** A vendor application, as /api/tournaments/[id]/vendor-requests returns it. */
+type VendorSub = {
+  id: string
+  status?: string
+  amountDue?: number
+  paymentStatus?: string
+  data?: { companyName?: string; vendorTypeName?: string; level?: string }
+}
+
 const EMPTY_FORM = { type: 'expense' as 'income' | 'expense', category: 'facility', description: '', amount: '', method: 'check', date: today(), notes: '' }
 
 export default function FinancialsPage() {
@@ -62,6 +71,11 @@ export default function FinancialsPage() {
   const [individualRegs, setIndividualRegs] = useState<IndividualReg[]>([])
   const [staffSummary, setStaffSummary]   = useState<StaffEntry[]>([])
   const [staffPaidIds, setStaffPaidIds]   = useState<Set<string>>(new Set())
+  // Vendor booth fees. Real money that this page could not see: an approved booth
+  // carries amountDue, and the Stripe webhook flips paymentStatus when it settles,
+  // but neither reached Total Revenue or Net Cash. GOAT USA was approved for $600 on
+  // Monster Mash and appeared nowhere on the P&L (Bo, Sep 29 2026).
+  const [vendors, setVendors] = useState<VendorSub[]>([])
   const [loading, setLoading] = useState(true)
   const [tournamentName, setTournamentName] = useState('')
   const [tournamentLogo, setTournamentLogo] = useState('')
@@ -79,7 +93,10 @@ export default function FinancialsPage() {
       fetch(`/api/payment-records?tournamentId=${tournamentId}`).then(r => r.json()),
       fetch(`/api/tournaments/${tournamentId}`).then(r => r.json()),
       fetch(`/api/tournaments/${tournamentId}/individual-reg`).then(r => r.json()),
-    ]).then(([txs, regs, paySummary, payRecords, t, indivRegs]) => {
+      // Tolerated separately: a tournament with no vendor form configured still has
+      // a P&L, and this page failing whole because of it would be the worse bug.
+      fetch(`/api/tournaments/${tournamentId}/vendor-requests`).then(r => r.ok ? r.json() : { submissions: [] }).catch(() => ({ submissions: [] })),
+    ]).then(([txs, regs, paySummary, payRecords, t, indivRegs, vend]) => {
       setTransactions(txs)
       setRegistrations(regs)
       setIndividualRegs(Array.isArray(indivRegs) ? indivRegs : [])
@@ -87,6 +104,7 @@ export default function FinancialsPage() {
       setStaffPaidIds(new Set(payRecords.map((p: { workerId: string }) => p.workerId)))
       setTournamentName(t.name || '')
       if (t.logoUrl) setTournamentLogo(t.logoUrl)
+      setVendors(Array.isArray(vend?.submissions) ? vend.submissions : [])
       setLoading(false)
     })
   }
@@ -136,13 +154,26 @@ export default function FinancialsPage() {
   const staffPaid    = staffSummary.filter(w => staffPaidIds.has(w.worker.id)).reduce((s, w) => s + w.totalPay, 0)
   const staffUnpaid  = staffOwed - staffPaid
 
+  // VENDOR BOOTH FEES, split the same way team fees are: what is owed counts as
+  // revenue, what has landed counts as cash.
+  //
+  // Only APPROVED applications count. An application sitting unreviewed has no
+  // agreed price -- Bo's own Lacrossewear and Custom Tent Covers rows are on the
+  // Monster Mash list at $0 because nobody has priced them, and booking those as
+  // revenue would be inventing income. Approval is the moment the number becomes
+  // real, which is also when the vendor gets the link to pay.
+  const vendorApproved = vendors.filter(v => v.status === 'approved').reduce((s, v) => s + (Number(v.amountDue) || 0), 0)
+  const vendorPaid     = vendors.filter(v => v.paymentStatus === 'paid').reduce((s, v) => s + (Number(v.amountDue) || 0), 0)
+  const vendorBalance  = vendorApproved - vendorPaid
+  const vendorCount    = vendors.filter(v => v.status === 'approved').length
+
   const otherIncome  = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const otherExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
 
-  const totalRevenue = regInvoiced + otherIncome
+  const totalRevenue = regInvoiced + vendorApproved + otherIncome
   const totalExpense = staffOwed + otherExpense
   const grossProfit  = totalRevenue - totalExpense
-  const netCash      = regReceived + otherIncome - staffPaid - otherExpense
+  const netCash      = regReceived + vendorPaid + otherIncome - staffPaid - otherExpense
   const margin       = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0
 
   const tabs = [
@@ -189,6 +220,10 @@ export default function FinancialsPage() {
             className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100 whitespace-nowrap">
             <ClipboardList size={15} /> Team Fees ({registrations.length + individualRegs.length})
           </Link>
+          <Link href={`/tournaments/${tournamentId}/vendor-requests`}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+            <Store size={15} /> Vendors ({vendorCount})
+          </Link>
           <Link href={`/tournaments/${tournamentId}/pay-summary`}
             className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100 whitespace-nowrap">
             <Users size={15} /> Staff Pay ({staffSummary.length})
@@ -209,6 +244,12 @@ export default function FinancialsPage() {
                     <span className="text-slate-600">Registration fees ({registrations.length} clubs · {registrations.reduce((s,r)=>s+r.teams.length,0)} teams · {individualRegs.length} players)</span>
                     <span className="font-semibold">{fmt(regInvoiced)}</span>
                   </div>
+                  {vendorApproved > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Vendor booths ({vendorCount} approved)</span>
+                      <span className="font-semibold">{fmt(vendorApproved)}</span>
+                    </div>
+                  )}
                   {otherIncome > 0 && transactions.filter(t=>t.type==='income').map(tx => (
                     <div key={tx.id} className="flex justify-between text-slate-500 pl-4">
                       <span>{catLabel(tx.category)} — {tx.description}</span>
@@ -221,12 +262,18 @@ export default function FinancialsPage() {
                   </div>
                   <div className="flex justify-between text-sm text-slate-500">
                     <span>Collected so far</span>
-                    <span className="text-emerald-600 font-medium">{fmt(regReceived + otherIncome)}</span>
+                    <span className="text-emerald-600 font-medium">{fmt(regReceived + vendorPaid + otherIncome)}</span>
                   </div>
                   {regBalance > 0 && (
                     <div className="flex justify-between text-sm text-amber-600">
                       <span>Outstanding from teams</span>
                       <span className="font-medium">{fmt(regBalance)}</span>
+                    </div>
+                  )}
+                  {vendorBalance > 0 && (
+                    <div className="flex justify-between text-sm text-amber-600">
+                      <span>Outstanding from vendors</span>
+                      <span className="font-medium">{fmt(vendorBalance)}</span>
                     </div>
                   )}
                 </div>
