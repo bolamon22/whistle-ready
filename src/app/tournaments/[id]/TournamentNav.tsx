@@ -38,6 +38,15 @@ function fmtDate(d: string) {
   return `${parseInt(m)}/${parseInt(day)}/${y.slice(2)}`
 }
 
+// Event logos are artwork the organizer uploaded for print -- usually dark ink
+// on a transparent or white background. Tinting the tile (bg-white/5) left the
+// dark ones with nothing to sit against on this navy header, which is why
+// Monster Mash rendered as an empty square. White matches how the public org
+// cards already show the same logos, and reads for dark, light and
+// photographic artwork alike. Sizes and radii stay per-site; only the surface
+// is shared, so the four copies can't drift apart again.
+const LOGO_TILE = 'object-contain bg-white border border-white/20'
+
 export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const pathname = usePathname()
   const base = `/tournaments/${id}`
@@ -140,7 +149,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
           <div className="flex items-start gap-2.5">
             <Link href={`${base}/dashboard`} className="flex-shrink-0">
               {logo
-                ? <img src={logo} alt="logo" className="h-10 w-10 object-contain rounded-lg border border-white/10 bg-white/5" />
+                ? <img src={logo} alt="logo" className={`h-10 w-10 rounded-lg p-1 ${LOGO_TILE}`} />
                 : <div className="h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
               }
             </Link>
@@ -162,7 +171,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         ) : (
           <div className="flex items-center gap-2">
             <Link href={`${base}/dashboard`} className="flex items-center gap-2 min-w-0 flex-1">
-              {logo && <img src={logo} alt="" className="h-7 w-7 object-contain rounded-lg border border-white/10 bg-white/5 flex-shrink-0" />}
+              {logo && <img src={logo} alt="" className={`h-7 w-7 rounded-lg p-0.5 flex-shrink-0 ${LOGO_TILE}`} />}
               <span className="text-sm font-semibold text-white truncate">{name}</span>
             </Link>
             <div className="flex items-center flex-shrink-0 -mr-1.5">
@@ -227,7 +236,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
             {/* Logo */}
             <Link href={`${base}/dashboard`} className="flex-shrink-0">
               {logo
-                ? <img src={logo} alt="logo" className="h-12 w-12 object-contain rounded-xl border border-white/10 bg-white/5 hover:border-white/30 transition-colors" />
+                ? <img src={logo} alt="logo" className={`h-12 w-12 rounded-xl p-1.5 hover:border-white/40 transition-colors ${LOGO_TILE}`} />
                 : <div className="h-12 w-12 rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
               }
             </Link>
@@ -278,7 +287,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         <div className="flex gap-0 flex-wrap items-center">
           {collapsed && (
             <Link href={`${base}/dashboard`} className="flex items-center gap-2 mr-3 py-2 min-w-0">
-              {logo && <img src={logo} alt="" className="h-7 w-7 object-contain rounded-lg border border-white/10 bg-white/5 flex-shrink-0" />}
+              {logo && <img src={logo} alt="" className={`h-7 w-7 rounded-lg p-0.5 flex-shrink-0 ${LOGO_TILE}`} />}
               <span className="text-xs font-semibold text-white truncate max-w-[160px]">{name}</span>
             </Link>
           )}
