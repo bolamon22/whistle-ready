@@ -162,6 +162,18 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [publishing,     setPublishing]     = useState(false)
   const [showDiff,       setShowDiff]       = useState(false)
   const [visKey,         setVisKey]         = useState(0)
+  // Issue tooltip for a game card: opens on hovering anywhere on the card (the badge
+  // alone was a 16px target behind a slow native title), click the badge to pin it.
+  const [issueTip,       setIssueTip]       = useState<{ id: string; left: number; top: number; bottom: number; pinned: boolean } | null>(null)
+  useEffect(() => {
+    if (!issueTip) return
+    // Its position is a snapshot of the card's, so any scroll closes it.
+    const close = () => setIssueTip(null)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('keydown', onKey) }
+  }, [issueTip])
   const { vis: publicVis, update: updatePublicVis } = usePublicVisibility(params.id, visKey)
 
   // ── Grid filters ─────────────────────────────────────────────────────────
@@ -861,6 +873,24 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     })
   })
 
+  // Every issue on a game, worst first, for the hover card.
+  const ISSUE_KINDS = [
+    { map: conflictMsgs,     label: 'Conflict',      dot: 'bg-red-500' },
+    { map: backToBackMsgs,   label: 'Back-to-back',  dot: 'bg-yellow-400' },
+    { map: bracketOrderMsgs, label: 'Bracket order', dot: 'bg-orange-500' },
+    { map: longGapMsgs,      label: 'Long gap',      dot: 'bg-teal-400' },
+  ]
+  function gameIssues(id: string) {
+    return ISSUE_KINDS.flatMap(k => (k.map.get(id) ?? '').split('\n').filter(Boolean).map(text => ({ label: k.label, dot: k.dot, text })))
+  }
+  function showIssues(e: React.MouseEvent, id: string, pinned = false) {
+    if (dragId || gameIssues(id).length === 0) return
+    const r = (e.currentTarget as HTMLElement).closest('[data-game-card]')?.getBoundingClientRect()
+      ?? (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setIssueTip(t => (t?.pinned && !pinned && t.id !== id) ? t : { id, left: r.left, top: r.top, bottom: r.bottom, pinned })
+  }
+  function hideIssues(id: string) { setIssueTip(t => (t && t.id === id && !t.pinned) ? null : t) }
+
   const selectCls = 'text-xs bg-slate-800 text-slate-200 border border-slate-600 rounded px-2 py-0.5'
   const gridSelectCls = 'text-xs bg-white text-slate-700 border border-slate-300 rounded px-2 py-1'
 
@@ -877,6 +907,30 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
       <TournamentNav id={params.id} />
       <Toaster position="top-right" />
+      {issueTip && !dragId && (() => {
+        const items = gameIssues(issueTip.id)
+        if (items.length === 0) return null
+        const W = 280
+        const left = Math.max(8, Math.min(issueTip.left, (typeof window !== 'undefined' ? window.innerWidth : 1200) - W - 8))
+        const below = (typeof window !== 'undefined' ? window.innerHeight : 800) - issueTip.bottom > 140
+        return (
+          <div
+            className={`fixed z-[100] bg-slate-900 text-white rounded-lg shadow-xl px-3 py-2 text-xs ${issueTip.pinned ? '' : 'pointer-events-none'}`}
+            style={{ left, width: W, ...(below ? { top: issueTip.bottom + 6 } : { top: issueTip.top - 6, transform: 'translateY(-100%)' }) }}
+            onClick={() => setIssueTip(null)}
+          >
+            <ul className="space-y-1.5">
+              {items.map((it, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${it.dot}`} />
+                  <span><span className="font-semibold">{it.label}:</span> {it.text}</span>
+                </li>
+              ))}
+            </ul>
+            {issueTip.pinned && <p className="mt-1.5 text-[10px] text-slate-400">Click to close</p>}
+          </div>
+        )
+      })()}
 
       {/* ── Diff modal ── */}
       {showDiff && (
@@ -1602,6 +1656,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             onDragStart={e => handleDragStart(e, game.id)}
                             onDragEnd={handleDragEnd}
                             onClick={() => handleSwapClick(game.id)}
+                            data-game-card
+                            onMouseEnter={e => showIssues(e, game.id)}
+                            onMouseLeave={() => hideIssues(game.id)}
                             className={`relative rounded-md px-2 py-1 h-full min-h-[52px] flex flex-col justify-between transition-all
                               ${swapMode ? 'cursor-pointer hover:ring-2 hover:ring-white' : 'cursor-grab active:cursor-grabbing'}
                               ${dragId === game.id ? 'opacity-30' : ''}
@@ -1610,25 +1667,30 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             `}
                             style={{ backgroundColor: divColor(game.division, divisions, divColorMap), color: textColor(divColor(game.division, divisions, divColorMap)) }}
                           >
-                            {conflictMsgs.has(game.id) && (
-                              <span className="absolute bottom-0.5 right-0.5 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={conflictMsgs.get(game.id) ?? 'Same-time conflict'}><AlertTriangle size={10} /></span>
-                            )}
-                            {!conflictMsgs.has(game.id) && backToBackMsgs.has(game.id) && (
-                              <span className="absolute bottom-0.5 right-0.5 bg-yellow-400 text-slate-900 text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={backToBackMsgs.get(game.id) ?? 'Back-to-back game'}><ArrowLeftRight size={9} /></span>
-                            )}
-                            {!conflictMsgs.has(game.id) && !backToBackMsgs.has(game.id) && longGapMsgs.has(game.id) && (
-                              <span className="absolute bottom-0.5 right-0.5 bg-teal-400 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={longGapMsgs.get(game.id) ?? 'Long gap'}><Clock size={9} /></span>
-                            )}
-                            {!conflictMsgs.has(game.id) && !backToBackMsgs.has(game.id) && !longGapMsgs.has(game.id) && bracketOrderMsgs.has(game.id) && (
-                              <span className="absolute bottom-0.5 right-0.5 bg-orange-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow" title={bracketOrderMsgs.get(game.id) ?? 'Bracket order issue'}><Zap size={10} /></span>
-                            )}
+                            {(() => {
+                              const b = conflictMsgs.has(game.id) ? { cls: 'bg-red-500 text-white', icon: <AlertTriangle size={12} /> }
+                                : backToBackMsgs.has(game.id) ? { cls: 'bg-yellow-400 text-slate-900', icon: <ArrowLeftRight size={11} /> }
+                                : longGapMsgs.has(game.id) ? { cls: 'bg-teal-400 text-white', icon: <Clock size={11} /> }
+                                : bracketOrderMsgs.has(game.id) ? { cls: 'bg-orange-500 text-white', icon: <Zap size={12} /> }
+                                : null
+                              if (!b) return null
+                              const n = gameIssues(game.id).length
+                              return (
+                                <button type="button" aria-label="Show scheduling issues"
+                                  onClick={e => { e.stopPropagation(); if (issueTip?.id === game.id && issueTip.pinned) setIssueTip(null); else showIssues(e, game.id, true) }}
+                                  className={`absolute bottom-0.5 right-0.5 rounded-full w-5 h-5 flex items-center justify-center shadow ring-2 ring-white/70 ${b.cls}`}>
+                                  {b.icon}
+                                  {n > 1 && <span className="absolute -top-1.5 -right-1.5 bg-slate-900 text-white text-[8px] font-bold rounded-full min-w-[14px] h-[14px] px-0.5 flex items-center justify-center">{n}</span>}
+                                </button>
+                              )
+                            })()}
                             <div className="flex items-center justify-between gap-1">
                               <div className="font-bold text-[10px] leading-none" style={{ color: 'inherit' }}>{game.gameNumber.startsWith('B') ? `${divAbbr(game.division)}-${game.gameNumber}` : game.gameNumber}</div>
                               <div className="text-[9px] leading-none truncate" style={{ opacity: 0.75 }}>{game.division}{game.pool ? ` · ${game.pool}` : ''}</div>
                             </div>
                             <div>
-                              <div className="text-xs font-semibold truncate leading-tight">{game.team1}{(teamGames[game.team1]?.length ?? 0) > 0 && <span className="opacity-60 font-normal"> ({teamGames[game.team1]?.length})</span>}</div>
-                              <div className="text-[10px] truncate" style={{ opacity: 0.85 }}>vs {game.team2}{(teamGames[game.team2]?.length ?? 0) > 0 && <span className="opacity-60"> ({teamGames[game.team2]?.length})</span>}</div>
+                              <div className="text-xs font-semibold truncate leading-tight">{game.team1}{(teamGames[teamKey(game.division, game.team1)]?.length ?? 0) > 0 && <span className="opacity-60 font-normal"> ({teamGames[teamKey(game.division, game.team1)]?.length})</span>}</div>
+                              <div className="text-[10px] truncate" style={{ opacity: 0.85 }}>vs {game.team2}{(teamGames[teamKey(game.division, game.team2)]?.length ?? 0) > 0 && <span className="opacity-60"> ({teamGames[teamKey(game.division, game.team2)]?.length})</span>}</div>
                             </div>
                           </div>
                         ) : isTeamBusy ? (
