@@ -20,6 +20,7 @@ import {
 import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
+import { regBadge, TONE_CLASS } from '@/lib/regStatus'
 import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, LayoutGrid, Info, Megaphone, GripVertical } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -506,6 +507,78 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             placeholder="https://…" />
           <p className="text-xs text-slate-400 mt-1">Optional. Shown as a link under Divisions on the public event page.</p>
         </div>
+
+        {/* REGISTRATION STATUS — the nudge that pulls the last few clubs in.
+            A switch, never a calculation: it gets flipped on before an event is
+            really full, on purpose. Nothing here gates a registration — see
+            src/lib/regStatus.ts. */}
+        {(() => {
+          const divs = applyDivOrder(fromDivItems(divItems, customDivisions), divOrder)
+          const badge = regBadge(eventContent, divs)
+          const setMap = (key: 'divisionStatus' | 'divisionSpots', name: string, val: string) =>
+            setEventContent(v => {
+              const next: Record<string, string> = { ...((v[key] as Record<string, string>) || {}) }
+              if (val) next[name] = val; else delete next[name]
+              return { ...v, [key]: next }
+            })
+          const status = (n: string) => (eventContent.divisionStatus || {})[n] || ''
+          const spots = (n: string) => (eventContent.divisionSpots || {})[n] || ''
+          return (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
+              <label className="label">Registration status</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select className="input" value={eventContent.regStatus || ''}
+                  onChange={e => setEventContent(v => ({ ...v, regStatus: e.target.value }))}>
+                  <option value="">No badge</option>
+                  <option value="filling">Filling up</option>
+                  <option value="closing">Closing soon</option>
+                  <option value="full">Full</option>
+                </select>
+                <input className="input" type="date" value={eventContent.regClosesOn || ''}
+                  onChange={e => setEventContent(v => ({ ...v, regClosesOn: e.target.value }))}
+                  aria-label="Registration closes on" />
+              </div>
+              <input className="input mt-3" value={eventContent.regStatusText || ''}
+                onChange={e => setEventContent(v => ({ ...v, regStatusText: e.target.value }))}
+                placeholder={badge ? badge.label : 'Your own wording…'} />
+              <p className="text-xs text-slate-400 mt-1">
+                Leave the text blank to use the wording shown. Under ~34 characters keeps it on one line on a phone.
+                The badge shows on the event page, the org home page and the tournaments list.
+              </p>
+              {badge && (
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Preview</span>
+                  <span className={`text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${TONE_CLASS[badge.tone]}`}>{badge.label}</span>
+                </div>
+              )}
+
+              {divs.length > 0 && (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <p className="text-xs text-slate-500 mb-2">
+                    Per division — this is the part clubs actually read. Marking one <strong>Full</strong> does not close
+                    anything: teams can still register for it and you sort the spot out with them.
+                  </p>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {divs.map(d => (
+                      <div key={d} className="flex items-center gap-2">
+                        <span className="flex-1 text-sm text-slate-700 truncate">{d}</span>
+                        <select className="input !py-1 !text-xs w-32 flex-shrink-0" value={status(d)}
+                          onChange={e => setMap('divisionStatus', d, e.target.value)} aria-label={`${d} status`}>
+                          <option value="">Open</option>
+                          <option value="limited">Last spots</option>
+                          <option value="full">Full</option>
+                        </select>
+                        <input className="input !py-1 !text-xs w-16 flex-shrink-0 text-right" value={spots(d)}
+                          onChange={e => setMap('divisionSpots', d, e.target.value)}
+                          disabled={status(d) !== 'limited'} placeholder="—" aria-label={`${d} spots left`} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
           <label className="label">Divisions note</label>
           <textarea className="input" rows={2} value={eventContent.divisionsNote}

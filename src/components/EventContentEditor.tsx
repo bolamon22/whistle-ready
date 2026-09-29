@@ -30,10 +30,15 @@ export type EventContent = {
   rules: string; rulesSourceId?: string; contacts: Contact[]
   sectionOrder?: string[]; hiddenSections?: string[]
   blocks?: Block[]
+  // Registration-status badge. Presentation only -- see src/lib/regStatus.ts for
+  // why nothing here is allowed to gate a registration.
+  regStatus?: string; regStatusText?: string; regClosesOn?: string
+  divisionStatus?: Record<string, string>; divisionSpots?: Record<string, string>
 }
 export const EMPTY_EVENT_CONTENT: EventContent = {
   overview: '', ageChartUrl: '', divisionsNote: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '',
   rules: '', rulesSourceId: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [],
+  regStatus: '', regStatusText: '', regClosesOn: '', divisionStatus: {}, divisionSpots: {},
 }
 
 export type RuleSet = { id: string; name: string; format?: string; body: string }
@@ -77,7 +82,9 @@ export function useEventContent(id: string) {
     if (!id) return
     fetch(`/api/tournaments/${id}/site`)
       .then(r => r.ok ? r.json() : {})
-      .then(d => setContent(() => {
+      // `any` because the two branches above are a parsed body and a bare {}, so
+      // every d?.field read below is an error on the empty one without it.
+      .then((d: any) => setContent(() => {
         // Stored values may be null/undefined; coerce so consumers can safely
         // call .trim() without crashing the page.
         const str = (v: any) => typeof v === 'string' ? v : ''
@@ -88,13 +95,16 @@ export function useEventContent(id: string) {
           rules: str(d?.rules), rulesSourceId: str(d?.rulesSourceId),
           locations: Array.isArray(d?.locations) ? d.locations : [],
           contacts: Array.isArray(d?.contacts) ? d.contacts : [],
+          regStatus: str(d?.regStatus), regStatusText: str(d?.regStatusText), regClosesOn: str(d?.regClosesOn),
+          divisionStatus: (d?.divisionStatus && typeof d.divisionStatus === 'object') ? d.divisionStatus : {},
+          divisionSpots: (d?.divisionSpots && typeof d.divisionSpots === 'object') ? d.divisionSpots : {},
         }
       }))
       .catch(() => {})
       .finally(() => setLoaded(true))
     fetch('/api/org-rules')
       .then(r => r.ok ? r.json() : {})
-      .then(d => setRuleSets(Array.isArray(d.sets) ? d.sets : []))
+      .then((d: any) => setRuleSets(Array.isArray(d.sets) ? d.sets : []))
       .catch(() => {})
   }, [id])
 

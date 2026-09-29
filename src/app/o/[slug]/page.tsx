@@ -5,6 +5,7 @@ import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from './_chrome'
 import { fetchInstagram } from './_instagram'
 import type { Metadata } from 'next'
 import { SITE_URL, abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
+import { regBadge, TONE_CLASS, type RegBadge } from '@/lib/regStatus'
 import JsonLd from '@/components/JsonLd'
 import SponsorWall from '@/components/SponsorWall'
 import { sponsorList, sponsorPitch } from '@/lib/sponsors'
@@ -25,7 +26,7 @@ import DaysAway from '@/components/DaysAway'
 // dynamic/no-store — that made every visit re-run every query (~14s page loads).
 export const revalidate = 30
 
-interface Tourn { id: string; name: string; tagline?: string; startDate: string; endDate: string; location: string; logoUrl: string; sport: string; teamRegEnabled: number }
+interface Tourn { id: string; name: string; tagline?: string; startDate: string; endDate: string; location: string; logoUrl: string; sport: string; teamRegEnabled: number; badge?: RegBadge | null }
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -64,6 +65,7 @@ function FeaturedCard({ t }: { t: Tourn }) {
         <p className="text-sm text-slate-500 mt-1">
           {[t.tagline, fmtRange(t.startDate, t.endDate), t.location].filter(Boolean).join(' · ')}
         </p>
+        {t.badge && <span className={`inline-block mt-2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${TONE_CLASS[t.badge.tone]}`}>{t.badge.label}</span>}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {t.teamRegEnabled ? (
             <Link href={`/tournaments/${t.id}/register`} className="relative z-20 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 px-5 py-2 rounded-lg transition-colors">Register</Link>
@@ -89,6 +91,7 @@ function Card({ t }: { t: Tourn }) {
         <p className="text-xs text-slate-500 mt-0.5 truncate">
           {[fmtRange(t.startDate, t.endDate), t.location].filter(Boolean).join(' · ')}
         </p>
+        {t.badge && <span className={`inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${TONE_CLASS[t.badge.tone]}`}>{t.badge.label}</span>}
         <div className="mt-1.5 flex items-center gap-3 text-xs font-semibold">
           {t.teamRegEnabled ? <Link href={`/tournaments/${t.id}/register`} className="relative z-20 text-teal-700 hover:text-teal-900">Register →</Link> : null}
           <span className="text-slate-400 group-hover:text-slate-600 transition-colors">Details</span>
@@ -164,7 +167,7 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   const nav = buildNav(base, pages, gallery.length > 0, workHref)
 
   const tRes = await client.execute({
-    sql: 'SELECT id, name, startDate, endDate, location, logoUrl, sport, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate',
+    sql: 'SELECT id, name, startDate, endDate, location, logoUrl, sport, teamRegEnabled, registrationDivisions FROM "Tournament" WHERE orgId = ? ORDER BY startDate',
     args: [org.id as string],
   })
   const all = (tRes.rows as any[]).map(r => ({ ...r, teamRegEnabled: Number(r.teamRegEnabled) })) as Tourn[]
@@ -186,6 +189,29 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
   if (past.length) {
     try { hist = await computeOrgHistory(client, past, content) } catch { /* the band just doesn't render */ }
   }
+  // Registration-status badges. One query for every upcoming event rather than a
+  // round trip per card; a failure here just means no badges, never a broken page.
+  if (upcoming.length) {
+    try {
+      const keys = upcoming.map(t => `tournamentSite:${t.id}`)
+      const rows = await client.execute({
+        sql: `SELECT "key", "value" FROM "AppSetting" WHERE "key" IN (${keys.map(() => '?').join(',')})`,
+        args: keys,
+      })
+      const byId: Record<string, any> = {}
+      for (const r of rows.rows as any[]) {
+        try { byId[String(r.key).replace('tournamentSite:', '')] = JSON.parse(String(r.value || '{}')) } catch { /* skip one bad blob */ }
+      }
+      for (const t of upcoming) {
+        const content = byId[t.id]
+        if (!content) continue
+        let divs: string[] = []
+        try { const d = JSON.parse((t as any).registrationDivisions || '[]'); if (Array.isArray(d)) divs = d.filter(Boolean) } catch { /* no divisions, label falls back */ }
+        t.badge = regBadge(content, divs)
+      }
+    } catch { /* no badges this render */ }
+  }
+
   const registerHref = upcoming[0] ? `/tournaments/${upcoming[0].id}/register` : undefined
 
   const igItems = await fetchInstagram(ig.token || '', 8)

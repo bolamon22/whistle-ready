@@ -20,6 +20,7 @@ import type { Metadata } from 'next'
 import { abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import { resolveRules } from '@/lib/rules'
+import { regBadge, divisionBadge, TONE_CLASS, TONE_CLASS_DARK, FULL_DIVISION_NOTE } from '@/lib/regStatus'
 import SponsorWall from '@/components/SponsorWall'
 import SponsorPitch from '@/components/SponsorPitch'
 import { sponsorList, sponsorsForEvent, sponsorPitch, statNum } from '@/lib/sponsors'
@@ -161,6 +162,8 @@ export default async function TournamentEventPage({ params }: { params: { id: st
 
   const setupDivisions: string[] = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const divisions: string[] = setupDivisions
+  // Organizer-set, never computed. Null when no badge is switched on.
+  const statusBadge = regBadge(c, divisions)
   const pricing = parsePricing(t.registrationPricing)
   const feeLines: string[] = Number(t.teamRegEnabled) ? feeScheduleLines(pricing) : []
   // Venues are the single source of truth for "where we play". A venue appears on the
@@ -229,14 +232,26 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         {/* Grouped Boys / Girls when names allow it; anything else falls into a third
             group so nothing disappears for non-standard division names. */}
         {(() => {
-          const groups: [string, string[]][] = [
-            ['Boys', divisions.filter(d => /^boys\b/i.test(d)).map(d => d.replace(/^boys\s*/i, ''))],
-            ['Girls', divisions.filter(d => /^girls\b/i.test(d)).map(d => d.replace(/^girls\s*/i, ''))],
+          // Pairs, not plain strings: the pill SHOWS the name without its
+          // Boys/Girls prefix, but the status map is keyed by the full name.
+          type Div = { full: string; show: string }
+          const groups: [string, Div[]][] = [
+            ['Boys', divisions.filter(d => /^boys\b/i.test(d)).map(d => ({ full: d, show: d.replace(/^boys\s*/i, '') }))],
+            ['Girls', divisions.filter(d => /^girls\b/i.test(d)).map(d => ({ full: d, show: d.replace(/^girls\s*/i, '') }))],
           ]
-          const other = divisions.filter(d => !/^(boys|girls)\b/i.test(d))
+          const other = divisions.filter(d => !/^(boys|girls)\b/i.test(d)).map(d => ({ full: d, show: d }))
           if (other.length) groups.push(['Divisions', other])
           const shown = groups.filter(([, list]) => list.length > 0)
-          const chip = (d: string, i: number) => <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-3 py-1 rounded-full border border-teal-100">{d}</span>
+          const anyFull = divisions.some(d => (c.divisionStatus || {})[d] === 'full')
+          const chip = (d: Div, i: number) => {
+            const b = divisionBadge(d.full, c)
+            if (!b) return <span key={i} className="bg-teal-50 text-teal-700 text-xs font-medium px-3 py-1 rounded-full border border-teal-100">{d.show}</span>
+            return (
+              <span key={i} className={`text-xs font-medium px-3 py-1 rounded-full border inline-flex items-center gap-1.5 ${TONE_CLASS[b.tone]}`}>
+                {d.show}<span className="font-bold opacity-80">{b.suffix}</span>
+              </span>
+            )
+          }
           return (
             <div>
               {shown.map(([label, list]) => (
@@ -245,6 +260,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
                   <div className="flex flex-wrap gap-1.5">{list.map(chip)}</div>
                 </div>
               ))}
+              {anyFull && <p className="text-xs text-slate-500 leading-relaxed mt-3">{FULL_DIVISION_NOTE}</p>}
               {typeof c.divisionsNote === 'string' && c.divisionsNote.trim() !== '' && <p className="text-xs text-slate-500 leading-relaxed mt-3">{c.divisionsNote}</p>}
               {c.ageChartUrl && <a href={c.ageChartUrl} target="_blank" rel="noreferrer" className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 mt-3">Age &amp; eligibility chart <ExternalLink size={13} /></a>}
             </div>
@@ -469,7 +485,14 @@ export default async function TournamentEventPage({ params }: { params: { id: st
           <div className="flex flex-col sm:flex-row sm:items-end gap-5">
             {t.logoUrl && <img src={t.logoUrl} alt="" className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl object-contain bg-white/95 p-1.5 shrink-0 ring-2 ring-white/40" />}
             <div className="flex-1 min-w-0">
-              <div className="text-teal-300 text-[11px] sm:text-xs font-semibold tracking-[0.16em] uppercase">{eyebrow}</div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <div className="text-teal-300 text-[11px] sm:text-xs font-semibold tracking-[0.16em] uppercase">{eyebrow}</div>
+                {/* Sits with the eyebrow, never with the buttons: it is information,
+                    and it must not read as part of the path to registering. */}
+                {statusBadge && (
+                  <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${TONE_CLASS_DARK[statusBadge.tone]}`}>{statusBadge.label}</span>
+                )}
+              </div>
               <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.04] mt-1">{t.name}</h1>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0 sm:pb-1">
