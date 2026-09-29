@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, Maximize2, Minimize2, Search } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
@@ -193,6 +193,18 @@ export function TimelineView(p: ViewsProps) {
   const across = p.orientation === 'fields-across'
   const [selId, setSelId] = useState<string | null>(null)
   const [hover, setHover] = useState<{ id: string; x: number; y: number; below: boolean } | null>(null)
+  // The details popover waits for a still pointer. Showing it on entry covered the
+  // neighbouring tiles the moment you reached for a game to drag it.
+  const hoverTimer = useRef<number | null>(null)
+  const armHover = (h: { id: string; x: number; y: number; below: boolean }) => {
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = window.setTimeout(() => setHover(h), 550)
+  }
+  const disarmHover = (id?: string) => {
+    if (hoverTimer.current) { window.clearTimeout(hoverTimer.current); hoverTimer.current = null }
+    setHover(h => (h && (!id || h.id === id)) ? null : h)
+  }
+  useEffect(() => () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current) }, [])
   const [fit, setFit] = useState(false)
   const [tab, setTab] = useState<'issues' | 'day'>('issues')
   const [openDivs, setOpenDivs] = useState<Record<string, boolean>>({})
@@ -353,7 +365,7 @@ export function TimelineView(p: ViewsProps) {
           )}
 
           {/* hover popover */}
-          {hovered && hover && !dragId && (
+          {hovered && hover && !dragId && !sel && (
             <div className="fixed z-[60] w-[268px] rounded-xl bg-slate-900 text-white px-3 py-2.5 shadow-xl pointer-events-none"
               style={{ left: Math.max(8, Math.min(hover.x - 134, (typeof window !== 'undefined' ? window.innerWidth : 1400) - 276)), top: hover.below ? hover.y + 6 : hover.y - 6, transform: hover.below ? undefined : 'translateY(-100%)' }}>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-400"><span className="w-2 h-2 rounded-full" style={{ background: p.divColor(hovered.division) }} />{hovered.division}{hovered.pool ? ` · ${hovered.pool}` : ''} · <b className="text-white">{gameLabel(hovered, p.divAbbr)}</b></div>
@@ -501,11 +513,12 @@ export function TimelineView(p: ViewsProps) {
     const bg = on ? '#0f172a' : d ? '#f8fafc' : worst === 'conflict' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
     return (
       <div key={g.id} draggable data-tl-game={g.id}
-        onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id); setHover(null) }}
+        onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id); disarmHover() }}
+        onMouseDown={() => disarmHover()}
         onDragEnd={() => setDragId(null)}
-        onClick={e => { e.stopPropagation(); setSelId(on ? null : g.id); setHover(null) }}
-        onMouseEnter={e => { if (dragId) return; const r = e.currentTarget.getBoundingClientRect(); setHover({ id: g.id, x: r.left + r.width / 2, y: r.bottom, below: window.innerHeight - r.bottom > 170 }) }}
-        onMouseLeave={() => setHover(h => (h && h.id === g.id) ? null : h)}
+        onClick={e => { e.stopPropagation(); setSelId(on ? null : g.id); disarmHover() }}
+        onMouseEnter={e => { if (dragId || sel) return; const r = e.currentTarget.getBoundingClientRect(); armHover({ id: g.id, x: r.left + r.width / 2, y: r.bottom, below: window.innerHeight - r.bottom > 170 }) }}
+        onMouseLeave={() => disarmHover(g.id)}
         className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden cursor-grab active:cursor-grabbing transition-shadow ${on ? 'ring-[3px] ring-teal-500/40' : 'hover:shadow-md'} ${done ? 'opacity-70' : ''}`}
         style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : d ? '#f1f5f9' : '#e2e8f0'}`, borderLeft: `4px solid ${d ? '#cbd5e1' : c}` }}>
         <div className={`flex items-center gap-1 text-[9px] leading-none whitespace-nowrap ${on ? 'text-slate-300' : 'text-slate-500'}`}>
