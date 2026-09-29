@@ -164,6 +164,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [visKey,         setVisKey]         = useState(0)
   // The header's "Tools" menu: the seldom-used actions, so the bar fits on one line.
   const [toolsOpen,      setToolsOpen]      = useState(false)
+  // "Clear games" panel in Tools: which games to send back to Unscheduled.
+  const [clrDiv,  setClrDiv]  = useState('__all__')
+  const [clrDay,  setClrDay]  = useState<'day' | 'all'>('all')
+  const [clrType, setClrType] = useState<'all' | 'pool' | 'bracket'>('all')
   const toolsRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!toolsOpen) return
@@ -529,6 +533,43 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     ))
     setGames(prev => prev.map(g => ({ ...g, date: '', startTime: '', location: '' })))
     toast.success(`Unscheduled all ${scheduled.length} games`)
+    setUnscheduling(false)
+  }
+
+  // Bulk unschedule by division / day / game type. Takes a checkpoint first (unless one
+  // is already open) so the whole thing can be undone with Revert.
+  function clearTargets(div: string, day: 'day' | 'all', type: 'all' | 'pool' | 'bracket') {
+    return games.filter(g =>
+      (g.date || g.startTime || g.location) &&
+      (div === '__all__' || g.division === div) &&
+      (day === 'all' || g.date === activeDate) &&
+      (type === 'all' || (type === 'bracket') === g.gameNumber.startsWith('B')))
+  }
+  async function unscheduleWhere(div: string, day: 'day' | 'all', type: 'all' | 'pool' | 'bracket') {
+    const target = clearTargets(div, day, type)
+    if (target.length === 0) { toast('Nothing scheduled matches'); return }
+    const what = `${target.length} ${type === 'all' ? '' : type + ' '}game${target.length !== 1 ? 's' : ''}` +
+      `${div === '__all__' ? ' across every division' : ` in ${div}`}${day === 'day' ? ` on ${fmtDate(activeDate)}` : ''}`
+    if (!window.confirm(`Send ${what} back to Unscheduled?\n\nA checkpoint is saved first, so Tools > Revert puts them back.`)) return
+    if (div === '__all__' && day === 'all' && type === 'all' &&
+        !window.confirm(`That is the whole schedule (${target.length} games). Continue?`)) return
+    if (!checkpoint) {
+      const snap: Record<string, {date:string,startTime:string,location:string}> = {}
+      games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
+      setCheckpoint(snap); setViewingCheckpoint(false)
+    }
+    setUnscheduling(true)
+    const ids = new Set(target.map(g => g.id))
+    const results = await Promise.all(target.map(g =>
+      fetch(`/api/tournaments/${params.id}/games/${g.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: '', startTime: '', location: '' }),
+      }).then(r => r.ok).catch(() => false)
+    ))
+    const failed = results.filter(ok => !ok).length
+    setGames(prev => prev.map(g => ids.has(g.id) ? { ...g, date: '', startTime: '', location: '' } : g))
+    if (failed) toast.error(`${failed} of ${target.length} did not save — reload to see the real state`)
+    else toast.success(`Unscheduled ${what}. Revert in Tools to undo.`)
     setUnscheduling(false)
   }
 
@@ -1092,7 +1133,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       )}
 
       {/* ── Header: one line. Counts, day window, Tools menu, then status + actions. ── */}
-      <div className={`border-b px-3 sm:px-4 h-11 flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-shrink-0 ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
+      <div className={`border-b px-3 sm:px-4 h-11 flex items-center gap-2 whitespace-nowrap flex-shrink-0 relative z-30 ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
         <div className="flex items-baseline gap-2 mr-1 flex-shrink-0">
           <span className="text-sm font-semibold text-slate-800">Scheduler</span>
           <span className="text-[11px] text-slate-400">{games.length} games · <span className="text-amber-600 font-medium">{unscheduled.length} open</span></span>
@@ -1110,7 +1151,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
         {/* Tools menu */}
         <div className="relative flex-shrink-0" ref={toolsRef}>
-          <button onClick={() => setToolsOpen(o => !o)}
+          <button onClick={() => { if (!toolsOpen) setClrDiv(gridDiv); setToolsOpen(o => !o) }}
             className={`inline-flex items-center gap-1 text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors ${toolsOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200'}`}
             title="Renumber, side panel, checkpoint, unschedule all, auto-fill day mode">
             <MoreHorizontal size={14} /> Tools
@@ -1138,14 +1179,38 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   <option value="oneday">All on this day</option>
                 </select>
               </div>
-              {games.some(g => g.date || g.startTime || g.location) && (
-                <>
-                  <div className="my-1 border-t border-slate-100" />
-                  <button onClick={() => { unscheduleAll(); setToolsOpen(false) }} disabled={unscheduling} className="w-full flex items-center gap-2 text-xs text-red-600 px-2.5 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50">
-                    <Trash2 size={13} /> {unscheduling ? 'Unscheduling…' : 'Unschedule all games'}
-                  </button>
-                </>
-              )}
+              {games.some(g => g.date || g.startTime || g.location) && (() => {
+                const n = clearTargets(clrDiv, clrDay, clrType).length
+                const sel = 'text-[11px] rounded-md border border-slate-300 bg-white px-1.5 py-1 text-slate-700 w-full'
+                return (
+                  <>
+                    <div className="my-1 border-t border-slate-100" />
+                    <div className="px-2.5 pt-1.5 pb-2 space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Trash2 size={13} className="text-red-500" /> Unschedule games</div>
+                      <select value={clrDiv} onChange={e => setClrDiv(e.target.value)} className={sel} aria-label="Division to unschedule">
+                        <option value="__all__">All divisions</option>
+                        {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <select value={clrDay} onChange={e => setClrDay(e.target.value as 'day' | 'all')} className={sel} aria-label="Which days">
+                          <option value="all">All days</option>
+                          <option value="day">{activeDate ? fmtDate(activeDate) : 'This day'} only</option>
+                        </select>
+                        <select value={clrType} onChange={e => setClrType(e.target.value as 'all' | 'pool' | 'bracket')} className={sel} aria-label="Which games">
+                          <option value="all">Pool + bracket</option>
+                          <option value="pool">Pool only</option>
+                          <option value="bracket">Bracket only</option>
+                        </select>
+                      </div>
+                      <button onClick={() => { setToolsOpen(false); unscheduleWhere(clrDiv, clrDay, clrType) }} disabled={unscheduling || n === 0}
+                        className="w-full text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 rounded-lg py-1.5">
+                        {unscheduling ? 'Unscheduling…' : n === 0 ? 'Nothing scheduled matches' : `Unschedule ${n} game${n !== 1 ? 's' : ''}`}
+                      </button>
+                      <p className="text-[10px] text-slate-400 leading-snug">Saves a checkpoint first, so Revert undoes it.</p>
+                    </div>
+                  </>
+                )
+              })()}
             </div>
           )}
         </div>
