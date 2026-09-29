@@ -242,17 +242,19 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const avail: any[] = vData.defaultAvailability ?? []
       setDayAvail(avail)
 
-      const gameDates = [...new Set(allGames.map(g => g.date).filter(Boolean))].sort() as string[]
-      let allDates = gameDates
-
-      if (allDates.length === 0 && tData.startDate && tData.endDate) {
-        const d1 = new Date(tData.startDate)
-        const d2 = new Date(tData.endDate)
-        const arr: string[] = []
-        for (const d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1))
-          arr.push(d.toISOString().split('T')[0])
-        allDates = arr
+      // Day tabs: every day of the event, plus any date a game already sits on.
+      // Tabs used to come from game dates alone, so a day with nothing scheduled on
+      // it yet (or one whose games were all unscheduled) disappeared, and the only
+      // way to put a game there again was "Add Day".
+      const gameDates = [...new Set(allGames.map(g => g.date).filter(Boolean))] as string[]
+      const eventDates: string[] = []
+      if (tData.startDate && tData.endDate && /^\d{4}-\d{2}-\d{2}/.test(tData.startDate) && /^\d{4}-\d{2}-\d{2}/.test(tData.endDate)) {
+        const d1 = new Date(tData.startDate.slice(0, 10) + 'T12:00:00')
+        const d2 = new Date(tData.endDate.slice(0, 10) + 'T12:00:00')
+        for (const d = new Date(d1); d <= d2 && eventDates.length < 14; d.setDate(d.getDate() + 1))
+          eventDates.push(d.toISOString().split('T')[0])
       }
+      let allDates = [...new Set([...eventDates, ...gameDates])].sort()
       if (allDates.length === 0) {
         const t = new Date()
         allDates = [t.toISOString().split('T')[0], new Date(t.getTime() + 86400000).toISOString().split('T')[0]]
