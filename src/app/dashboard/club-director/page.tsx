@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Copy, CreditCard, ExternalLink, Eye, Globe, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Copy, CreditCard, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { compressImageFile } from '@/lib/imageCompress'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
 interface Waiver {
@@ -285,6 +286,7 @@ export default function ClubDirectorDashboard() {
   // and the whole portal died on "Minified React error #310" -- a blank page with
   // a client-side exception, for staff and directors alike (Sep 28 2026).
   const [payMethodSaving, setPayMethodSaving] = useState('')
+  const [logoSaving, setLogoSaving] = useState('')
   const [coachForm, setCoachForm] = useState({ coachName: '', coachEmail: '', coachPhone: '' })
 
   useEffect(() => {
@@ -462,6 +464,31 @@ export default function ClubDirectorDashboard() {
       // URL still lets someone copy it by hand rather than hitting a dead button.
       toast(url, { duration: 8000 })
     }
+  }
+
+  // The club's own crest. Before this the only route was emailing the file to Bo:
+  // the portal drew a grey letter tile and offered nothing to click.
+  async function saveClubLogo(registrationId: string, file: File | null) {
+    if (!registrationId || !selTournament) return
+    setLogoSaving(registrationId)
+    try {
+      // Compressed in the browser, because the data URL is stored in the row itself
+      // -- an uncompressed phone photo would be several megabytes of database.
+      const logoUrl = file ? await compressImageFile(file) : ''
+      const res = await fetch(`/api/club-director/logo${viewUserId ? `?userId=${encodeURIComponent(viewUserId)}` : ''}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: selTournament, registrationId, logoUrl, applyToTeams: true }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(j?.error || 'Could not save that logo'); return }
+      await loadData(selTournament)
+      if (!file) toast.success('Logo removed')
+      else toast.success(j?.applied > 0
+        ? `Logo saved and added to ${j.applied} team${j.applied === 1 ? '' : 's'}`
+        : 'Logo saved')
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not read that image')
+    } finally { setLogoSaving('') }
   }
 
   function openCoachEdit(r: { teamId: string; coachName: string; coachEmail: string; coachPhone: string }) {
@@ -746,14 +773,54 @@ export default function ClubDirectorDashboard() {
                       {/* Club + money */}
                       <div className="px-5 pt-5 pb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          {reg.clubLogoUrl
-                            ? <img src={reg.clubLogoUrl} alt="" className="h-11 w-11 rounded-lg object-contain bg-white border border-gray-200 flex-shrink-0" />
-                            : <span className="h-11 w-11 rounded-lg bg-gray-100 border border-gray-200 text-gray-400 font-semibold flex items-center justify-center flex-shrink-0">{(reg.clubName || '?').charAt(0).toUpperCase()}</span>}
+                          {/* THE TILE IS THE BUTTON. A club with no crest saw a grey
+                              letter and nothing to click, so the only way to get a
+                              logo on their teams was to email the file to Bo. The
+                              picture itself is the target, with a written label under
+                              the name as well -- an image you can click is not
+                              obvious, least of all on a phone. Read-only in staff view
+                              like every other write to a club's own record. */}
+                          {(() => {
+                            const busy = logoSaving === reg.id
+                            const tile = reg.clubLogoUrl
+                              ? <img src={reg.clubLogoUrl} alt="" className="h-11 w-11 rounded-lg object-contain bg-white border border-gray-200 flex-shrink-0" />
+                              : <span className="h-11 w-11 rounded-lg bg-gray-100 border border-gray-200 text-gray-400 font-semibold flex items-center justify-center flex-shrink-0">{(reg.clubName || '?').charAt(0).toUpperCase()}</span>
+                            if (viewUserId) return tile
+                            return (
+                              <label className={`relative group flex-shrink-0 ${busy ? 'opacity-50' : 'cursor-pointer'}`}
+                                title={reg.clubLogoUrl ? 'Change your club logo' : 'Add your club logo'}>
+                                <input type="file" accept="image/*" className="hidden" disabled={busy}
+                                  onChange={e => { const f = e.target.files?.[0]; e.currentTarget.value = ''; if (f) saveClubLogo(reg.id, f) }} />
+                                {tile}
+                                <span className="absolute inset-0 rounded-lg bg-black/45 text-white text-[10px] font-semibold
+                                  flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {busy ? '…' : reg.clubLogoUrl ? 'Change' : 'Add'}
+                                </span>
+                              </label>
+                            )
+                          })()}
                           <div className="min-w-0">
                             <div className="font-bold text-gray-800 truncate">{reg.clubName}</div>
                             {reg.clubContact && <div className="text-sm text-gray-600 truncate">{reg.clubContact}</div>}
                             <div className="text-sm text-gray-500 truncate">{reg.contactEmail}{reg.contactPhone ? ` · ${reg.contactPhone}` : ''}</div>
                             <div className="text-xs text-gray-400 mt-0.5">Registered {shortDate(reg.createdAt)}</div>
+                            {!viewUserId && (
+                              <div className="mt-1 flex items-center gap-2 text-xs">
+                                <label className={`inline-flex items-center gap-1 font-semibold ${logoSaving === reg.id ? 'text-gray-400' : 'text-teal-700 hover:text-teal-800 cursor-pointer hover:underline'}`}>
+                                  <input type="file" accept="image/*" className="hidden" disabled={logoSaving === reg.id}
+                                    onChange={e => { const f = e.target.files?.[0]; e.currentTarget.value = ''; if (f) saveClubLogo(reg.id, f) }} />
+                                  <ImagePlus size={12} className="shrink-0" />
+                                  {logoSaving === reg.id ? 'Saving\u2026' : reg.clubLogoUrl ? 'Change club logo' : 'Add your club logo'}
+                                </label>
+                                {reg.clubLogoUrl && logoSaving !== reg.id && (
+                                  <button type="button" onClick={() => saveClubLogo(reg.id, null)}
+                                    className="text-gray-400 hover:text-red-600">Remove</button>
+                                )}
+                                {!reg.clubLogoUrl && reg.teams.length > 0 && (
+                                  <span className="text-gray-400">&mdash; goes on your {reg.teams.length} team{reg.teams.length === 1 ? '' : 's'} too</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         {showMoney && (
