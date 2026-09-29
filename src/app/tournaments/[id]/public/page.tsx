@@ -738,6 +738,8 @@ export default function PublicTournamentPage() {
   const [showInfo,setShowInfo]=useState(false)
   const [infoSections,setInfoSections]=useState<any[]>([])
   const [announcements,setAnnouncements]=useState<any[]>([])
+  // Registered-team count per division (same numbers the staff Divisions page shows).
+  const [regTeamCounts,setRegTeamCounts]=useState<Record<string,number>>({})
   const [annOpen,setAnnOpen]=useState(false)
   const [dark,setDark]=useState(false)
   useEffect(()=>{ try{ setDark(localStorage.getItem(`theme-${id}`)==='dark') }catch{} },[id])
@@ -752,6 +754,7 @@ export default function PublicTournamentPage() {
     try{const saved=JSON.parse(localStorage.getItem(`follows-${id}`)||'[]');setFollowedTeams(saved)}catch{}
     fetch(`/api/tournaments/${id}/info`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.sections))setInfoSections(d.sections)}).catch(()=>{})
     fetch(`/api/tournaments/${id}/announcements`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.announcements))setAnnouncements(d.announcements)}).catch(()=>{})
+    fetch(`/api/tournaments/${id}/divisions`).then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)){const m:Record<string,number>={};d.forEach((x:any)=>{if(x&&typeof x.name==='string')m[x.name]=Number(x.teamCount)||0});setRegTeamCounts(m)}}).catch(()=>{})
   },[id])
 
   const toggleFollow=(team:string)=>{
@@ -769,8 +772,9 @@ export default function PublicTournamentPage() {
     const seen=new Set<string>()
     const teams:{name:string;division:string;pool:string|null}[]=[]
     games.filter(g=>!g.isCanceled).forEach(g=>{
-      if(!seen.has(g.team1+g.division)){seen.add(g.team1+g.division);teams.push({name:g.team1,division:g.division,pool:g.pool})}
-      if(!seen.has(g.team2+g.division)){seen.add(g.team2+g.division);teams.push({name:g.team2,division:g.division,pool:g.pool})}
+      if(isPlaceholderTeam(g.team1)&&isPlaceholderTeam(g.team2))return
+      if(!isPlaceholderTeam(g.team1)&&!seen.has(g.team1+g.division)){seen.add(g.team1+g.division);teams.push({name:g.team1,division:g.division,pool:g.pool})}
+      if(!isPlaceholderTeam(g.team2)&&!seen.has(g.team2+g.division)){seen.add(g.team2+g.division);teams.push({name:g.team2,division:g.division,pool:g.pool})}
     })
     return teams.sort((a,b)=>a.name.localeCompare(b.name))
   },[games])
@@ -779,7 +783,10 @@ export default function PublicTournamentPage() {
     const meta:Record<string,{teams:number;total:number;completed:number;pools:number;leader:string|null;champion:string|null;lastUpdated:string;status:string}>={}
     divisions.forEach(div=>{
       const divGames=games.filter(g=>g.division===div&&!g.isCanceled)
-      const teamSet=new Set<string>(); divGames.forEach(g=>{teamSet.add(g.team1);teamSet.add(g.team2)})
+      // Bracket slots not yet filled are stored as placeholders ("Seed 3", "W-B2", "TBD").
+      // Counting every name in the games made a 15-team division read 33. Prefer the
+      // registered count; fall back to real names found in the schedule.
+      const teamSet=new Set<string>(); divGames.forEach(g=>{[g.team1,g.team2].forEach(t=>{if(t&&!isPlaceholderTeam(t))teamSet.add(t)})})
       const poolSet=new Set(divGames.filter(g=>g.pool).map(g=>g.pool))
       const total=divGames.length
       const completed=divGames.filter(g=>g.score1!==null&&g.score2!==null).length
@@ -793,10 +800,10 @@ export default function PublicTournamentPage() {
       const scored=[...divGames.filter(g=>g.score1!==null)].sort((a,b)=>`${a.date}${a.startTime}`<`${b.date}${b.startTime}`?-1:1)
       const lastUpdated=scored.length>0?fmtDateTime(scored[scored.length-1].date+' '+scored[scored.length-1].startTime):''
       const status=champion?'Final':hasBracket?'Bracket':'Pool play'
-      meta[div]={teams:teamSet.size,total,completed,pools:poolSet.size,leader,champion,lastUpdated,status}
+      meta[div]={teams:regTeamCounts[div]??teamSet.size,total,completed,pools:poolSet.size,leader,champion,lastUpdated,status}
     })
     return meta
-  },[games,divisions,tiebreakers])
+  },[games,divisions,tiebreakers,regTeamCounts])
 
   const submitNotify = () => {
     if (!notifyEmail) return
