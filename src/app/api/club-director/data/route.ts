@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
 import { rosterLock } from '@/lib/rosterLock'
+import { isStaffRequest } from '@/lib/apiAuth'
+import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -62,7 +64,7 @@ export async function GET(req: NextRequest) {
 
   // Get games involving their teams
   const teamNames = registrations.flatMap(r => r.teams.map(t => t.teamName)).filter(Boolean)
-  const games = await prisma.game.findMany({
+  const rawGames = await prisma.game.findMany({
     where: {
       tournamentId,
       OR: [
@@ -72,6 +74,8 @@ export async function GET(req: NextRequest) {
     },
     orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
   })
+  // Club directors see the schedule when the public does, not while it's being built.
+  const games = (await isStaffRequest()) ? rawGames : applyPublicView(rawGames, await getPublicVisibility(tournamentId))
 
   // The actual signed waivers.
   //

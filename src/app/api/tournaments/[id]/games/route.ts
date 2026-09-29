@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 
 // Two audiences, two URLs:
 //   ?view=public  -> what the public schedule may show. Never includes staff
-//                    assignments. Shared-cached (hit on every public page load).
+//                    assignments, and only what the Publish switches allow
+//                    (lib/publicView). Shared-cached (hit on every public page load).
 //   (no param)    -> staff get everything, including who is working each game;
 //                    anyone else gets the public shape. Never shared-cached, because
 //                    the CDN keys on URL only and would hand one audience's copy to
@@ -22,8 +24,11 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
     })
     return NextResponse.json(games, { headers: { 'Cache-Control': 'private, no-store' } })
   }
-  const games = await prisma.game.findMany({ where: { tournamentId: params.id }, orderBy })
-  const out = games.map(g => ({ ...g, assignments: [] as unknown[] }))
+  const [games, vis] = await Promise.all([
+    prisma.game.findMany({ where: { tournamentId: params.id }, orderBy }),
+    getPublicVisibility(params.id),
+  ])
+  const out = applyPublicView(games, vis).map(g => ({ ...g, assignments: [] as unknown[] }))
   return NextResponse.json(out, {
     headers: { 'Cache-Control': publicView ? 'public, s-maxage=5, stale-while-revalidate=30' : 'private, no-store' },
   })

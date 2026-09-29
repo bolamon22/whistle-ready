@@ -527,7 +527,7 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
 
 type DivTab = 'standings'|'schedule'|'bracket'
 
-function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,tiebreakers}:{division:string;games:Game[];followedTeams:string[];toggleFollow:(t:string)=>void;tournamentId:string;tiebreakers:string[]}) {
+function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,tiebreakers,scheduleLive=true}:{division:string;games:Game[];followedTeams:string[];toggleFollow:(t:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean}) {
   const [divTab,setDivTab]=useState<DivTab>('standings')
   const [selectedTeam,setSelectedTeam]=useState<string|null>(null)
   const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'>('all')
@@ -543,7 +543,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
       setAdvanceCount(fl.reduce((acc:number,x:any)=>acc+(x.teamCount||0),0))
     }).catch(()=>{setBracketList([]);setAdvanceCount(0)})
   },[tournamentId,division])
-  const handleTeamClick=(team:string)=>{setSelectedTeam(team);setDivTab('schedule')}
+  const handleTeamClick=(team:string)=>{if(!scheduleLive)return;setSelectedTeam(team);setDivTab('schedule')}
   const divGames=games.filter(g=>g.division===division&&!g.isCanceled)
   const pools=Array.from(new Set(divGames.map(g=>g.pool).filter(Boolean))).sort() as string[]
   // isChampionship means THE FINAL -- the division tile names its winner as champion.
@@ -555,7 +555,8 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   const scheduleGames=divGames.sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)
   const bracketGames=divGames
 
-  const tabs:DivTab[]=['standings','schedule','bracket']
+  // Pools posted but schedule not published yet: standings only.
+  const tabs:DivTab[]=scheduleLive?['standings','schedule','bracket']:['standings']
   const tabLabels:{[k in DivTab]:string}={standings:'Standings',schedule:'Schedule',bracket:'Bracket'}
 
   return (
@@ -740,6 +741,9 @@ export default function PublicTournamentPage() {
   const [announcements,setAnnouncements]=useState<any[]>([])
   // Registered-team count per division (same numbers the staff Divisions page shows).
   const [regTeamCounts,setRegTeamCounts]=useState<Record<string,number>>({})
+  // What staff have published (lib/publicView). The games feed is already filtered
+  // server-side; this only decides which tabs and messages to show.
+  const [pubVis,setPubVis]=useState<{pools:'live'|'hidden';schedule:'live'|'hidden'}>({pools:'live',schedule:'live'})
   const [annOpen,setAnnOpen]=useState(false)
   const [dark,setDark]=useState(false)
   useEffect(()=>{ try{ setDark(localStorage.getItem(`theme-${id}`)==='dark') }catch{} },[id])
@@ -754,6 +758,7 @@ export default function PublicTournamentPage() {
     try{const saved=JSON.parse(localStorage.getItem(`follows-${id}`)||'[]');setFollowedTeams(saved)}catch{}
     fetch(`/api/tournaments/${id}/info`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.sections))setInfoSections(d.sections)}).catch(()=>{})
     fetch(`/api/tournaments/${id}/announcements`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.announcements))setAnnouncements(d.announcements)}).catch(()=>{})
+    fetch(`/api/tournaments/${id}/visibility`).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.pools)setPubVis({pools:d.pools,schedule:d.schedule})}).catch(()=>{})
     fetch(`/api/tournaments/${id}/divisions`).then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)){const m:Record<string,number>={};d.forEach((x:any)=>{if(x&&typeof x.name==='string')m[x.name]=Number(x.teamCount)||0});setRegTeamCounts(m)}}).catch(()=>{})
   },[id])
 
@@ -1026,6 +1031,11 @@ export default function PublicTournamentPage() {
             )}
           </div>
         )}
+        {pubVis.schedule!=='live'&&pubVis.pools==='live'&&divisions.length>0&&(
+          <div className="mb-4 rounded-xl px-4 py-3 border bg-sky-50 border-sky-200 text-sm text-sky-800 flex items-center gap-2">
+            <Calendar size={15} className="flex-shrink-0"/> Pools are posted. Game times and fields are coming soon.
+          </div>
+        )}
         {/* Back button when viewing a division */}
         {selectedDiv && (
           <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -1102,7 +1112,7 @@ export default function PublicTournamentPage() {
                             <div className="text-xs text-gray-500 mt-0.5">
                               Next: <span className="font-medium">{fmtDate(nextGame.date)} {nextGame.startTime}</span> vs <span className="font-medium">{nextGame.team1===team?nextGame.team2:nextGame.team1}</span> · {nextGame.location}
                             </div>
-                          ) : <div className="text-xs text-gray-400">No upcoming games</div>}
+                          ) : <div className="text-xs text-gray-400">{pubVis.schedule==='live'?'No upcoming games':'Schedule coming soon'}</div>}
                         </div>
                         <button onClick={()=>toggleFollow(team)} className="text-gray-300 hover:text-red-400 text-lg transition-colors" title="Unfollow"><X size={16}/></button>
                       </div>
@@ -1112,7 +1122,7 @@ export default function PublicTournamentPage() {
               </div>
             )}
 
-            {divisions.length===0 && <div className="text-center py-16 text-gray-400"><div className="flex justify-center mb-3"><Calendar size={36} className="text-slate-300"/></div><p>No games scheduled yet.</p></div>}
+            {divisions.length===0 && <div className="text-center py-16 text-gray-400"><div className="flex justify-center mb-3"><Calendar size={36} className="text-slate-300"/></div><p>{pubVis.schedule==='live'?'No games scheduled yet.':'The schedule is coming soon.'}</p></div>}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {divisions.map(div=>{
                 const m=divMeta[div]
@@ -1166,6 +1176,7 @@ export default function PublicTournamentPage() {
               toggleFollow={toggleFollow}
               tournamentId={id as string}
               tiebreakers={tiebreakers}
+              scheduleLive={pubVis.schedule==='live'}
             />
           </div>
         )}

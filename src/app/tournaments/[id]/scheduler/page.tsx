@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
+import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam } from '@/lib/autoSchedule'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye } from 'lucide-react'
@@ -160,6 +161,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [publishedAt,    setPublishedAt]    = useState<string | null>(null)
   const [publishing,     setPublishing]     = useState(false)
   const [showDiff,       setShowDiff]       = useState(false)
+  const [visKey,         setVisKey]         = useState(0)
+  const { vis: publicVis, update: updatePublicVis } = usePublicVisibility(params.id, visKey)
 
   // ── Grid filters ─────────────────────────────────────────────────────────
   const [gridDiv,  setGridDiv]  = useState('__all__')
@@ -476,7 +479,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
         setSnapshot(snap)
         setShowDiff(false)
-        toast.success('Schedule published!')
+        setVisKey(k => k + 1)
+        toast.success('Schedule published — the public page now shows it')
       }
     } finally { setPublishing(false) }
   }
@@ -555,6 +559,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     return { moved, newlyScheduled, nowUnscheduled, total: moved.length + newlyScheduled.length + nowUnscheduled.length }
   })()
   const hasChanges = publishedAt ? diffChanges.total > 0 : games.some(g => g.date && g.startTime && g.location)
+  // Publish also puts a hidden schedule back in front of the public, so it stays
+  // usable with no changes while the schedule is hidden.
+  const canPublish = hasChanges || (publicVis ? publicVis.schedule !== 'live' : false)
   const unscheduled = games.filter(g => (!g.date || !g.startTime || !g.location) && !scratchPad.includes(g.id))
 
   // Parking lot: available pools based on division filter
@@ -1092,9 +1099,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             >
               {autoFilling ? 'Filling…' : <span className="inline-flex items-center gap-1"><Zap size={13} /> Auto-fill</span>}
             </button>
+            <PublicVisibilityMenu tournamentId={params.id} vis={publicVis} update={updatePublicVis} />
             <button
               onClick={publishSchedule}
-              disabled={publishing || !hasChanges}
+              disabled={publishing || !canPublish}
+              title="Save the current times and fields as what the public sees, and show the schedule on the public page"
               className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40
                 bg-green-600 hover:bg-green-700 text-white border-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 whitespace-nowrap"
             >

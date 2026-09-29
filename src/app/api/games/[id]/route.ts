@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 
 // Middleware lets every /api/* request through, so the gate has to live here.
 // Without it this route rewrote or deleted any game by id with no login at all —
@@ -37,5 +38,8 @@ export async function DELETE(_: Request, { params }: { params:{id:string} }) {
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const game = await prisma.game.findUnique({ where: { id: params.id } })
   if (!game) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(game)
+  if (await isStaffRequest()) return NextResponse.json(game)
+  const [visible] = applyPublicView([game], await getPublicVisibility(game.tournamentId))
+  if (!visible) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(visible)
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { setPublicVisibility } from '@/lib/publicView'
 
 function getClient() {
   return createClient({
@@ -20,6 +21,9 @@ async function ensureColumns(client: ReturnType<typeof getClient>) {
 }
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
+  // Staff only (the Scheduler's diff): the public reads the snapshot through the
+  // games feed, which applies the Publish switches.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   const client = getClient()
   await ensureColumns(client)
   const result = await client.execute({
@@ -53,6 +57,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     sql: 'UPDATE "Tournament" SET scheduleSnapshot = ?, schedulePublishedAt = ? WHERE id = ?',
     args: [snapshot, publishedAt, params.id],
   })
+  // Publishing is what puts the schedule in front of the public: the public page now
+  // shows this snapshot's times and fields until the next Publish.
+  await setPublicVisibility(params.id, { schedule: 'live', pools: 'live' })
 
   return NextResponse.json({ ok: true, publishedAt, gamesCount: games.length })
 }

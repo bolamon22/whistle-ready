@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/db'
 import { parsePricing, feeScheduleLines } from '@/lib/regPricing'
+import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 
 export const runtime = 'nodejs'
 
@@ -18,11 +19,14 @@ export async function POST(req: NextRequest) {
 
     if (tournamentId) {
       try {
-        const [t, games, site] = await Promise.all([
+        const [t, allGames, site, vis] = await Promise.all([
           prisma.tournament.findUnique({ where: { id: tournamentId } }),
           prisma.game.findMany({ where: { tournamentId, isCanceled: false }, orderBy: [{ date: 'asc' }, { startTime: 'asc' }] }),
           prisma.appSetting.findUnique({ where: { key: `tournamentSite:${tournamentId}` } }).catch(() => null),
+          getPublicVisibility(tournamentId),
         ])
+        // The public assistant knows only what the public schedule shows.
+        const games = applyPublicView(allGames, vis)
         if (t) {
           const tt: any = t
           let c: any = {}

@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
+import { PublicVisibilityCard } from '../PublicVisibility'
 import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2, Calendar } from 'lucide-react'
 
 const PALETTE = [
@@ -821,6 +822,7 @@ if (loading) return (
               </span>
               <ArrowRight size={15} className="text-slate-300 group-hover:text-teal-500 flex-shrink-0" />
             </Link>
+            <PublicVisibilityCard tournamentId={id as string} />
             {showSmartEditor && (() => {
               const maxN = Math.max(smartMax, ...divisions.map(d => d.teamCount), 2)
               const counts: number[] = []; for (let n = 2; n <= maxN; n++) counts.push(n)

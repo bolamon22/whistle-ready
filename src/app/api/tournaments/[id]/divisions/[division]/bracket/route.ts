@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getTemplate } from '@/lib/bracketTemplates'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { getPublicVisibility } from '@/lib/publicView'
 
 function genId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
@@ -197,6 +198,11 @@ export async function GET(
 ) {
   const division = decodeURIComponent(params.division)
   try {
+    // Brackets belong to the schedule switch: while it's hidden the public gets none.
+    if (!(await isStaffRequest())) {
+      const vis = await getPublicVisibility(params.id)
+      if (vis.schedule !== 'live') return NextResponse.json([])
+    }
     const brackets = await prisma.bracket.findMany({
       where: { tournamentId: params.id, division },
       include: { games: { orderBy: { gameNumber: 'asc' } } },
