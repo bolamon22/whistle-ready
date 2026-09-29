@@ -51,6 +51,8 @@ export interface ViewsProps {
   onPlace: (gameId: string, time: string, field: string) => Promise<void> | void
   onUnschedule: (gameId: string) => Promise<void> | void
   saving: boolean
+  /** Timeline only: 'fields-down' (time across, the default) or 'fields-across' (time down, like the grid). */
+  orientation?: 'fields-down' | 'fields-across'
 }
 
 type IssueKind = 'conflict' | 'b2b' | 'bracket' | 'gap'
@@ -177,7 +179,8 @@ function SelectionBar({ p, sel, onCancel }: { p: ViewsProps; sel: SGame; onCance
 }
 
 const HINT = {
-  valid:   { border: '#10b981', bg: '#ecfdf5', text: '#047857', label: 'Place here' },
+  // valid is quiet on purpose: most of the day is valid, and it should read as background
+  valid:   { border: '#a7f3d0', bg: '#f0fdf4', text: '#34d399', label: 'Place here' },
   risk:    { border: '#f59e0b', bg: '#fffbeb', text: '#b45309', label: 'Back-to-back' },
   blocked: { border: '#ef4444', bg: 'repeating-linear-gradient(135deg,#fef2f2 0 6px,#fecaca 6px 8px)', text: '#b91c1c', label: 'Team busy' },
 }
@@ -187,6 +190,7 @@ const HINT = {
 // ───────────────────────────────────────────────────────────────────────────────
 
 export function TimelineView(p: ViewsProps) {
+  const across = p.orientation === 'fields-across'
   const [selId, setSelId] = useState<string | null>(null)
   const [hover, setHover] = useState<{ id: string; x: number; y: number; below: boolean } | null>(null)
   const [fit, setFit] = useState(false)
@@ -236,6 +240,7 @@ export function TimelineView(p: ViewsProps) {
   }
 
   const slotCol = fit ? 'minmax(0, 1fr)' : '128px'
+  const fieldCol = fit ? 'minmax(0, 1fr)' : '168px'
   const railsOpen = !fit
   const hovered = hover ? p.games.find(g => g.id === hover.id) : null
   const hoverIssues = hovered ? (byGame.get(hovered.id) ?? []) : []
@@ -311,11 +316,28 @@ export function TimelineView(p: ViewsProps) {
           <DivisionChips p={p} counts={counts} />
           <div className="flex-1" />
           {sel ? <SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /> : <span className="text-xs text-slate-400 hidden xl:inline">Click an unscheduled game, then a slot. Click a placed game to move it.</span>}
-          <button onClick={() => setFit(f => !f)} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title="Fit the whole day on screen">
-            {fit ? <Minimize2 size={13} /> : <Maximize2 size={13} />} Fit day
+          <button onClick={() => setFit(f => !f)} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={across ? 'Fit every field on screen' : 'Fit the whole day on screen'}>
+            {fit ? <Minimize2 size={13} /> : <Maximize2 size={13} />} {across ? 'Fit fields' : 'Fit day'}
           </button>
         </div>
         <div className="flex-1 overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
+          {across ? (
+            <div className="grid" style={{ gridTemplateColumns: `100px repeat(${p.fields.length}, ${fieldCol})`, gridAutoRows: '64px', minWidth: fit ? undefined : 'max-content' }}>
+              {/* header: fields */}
+              <div className="sticky top-0 left-0 z-30 h-11 bg-slate-50 border-b border-r border-slate-200" />
+              {p.fields.map(f => {
+                const n = p.dayGames.filter(g => g.location === f.fullName).length
+                return (
+                  <div key={f.fullName} className="sticky top-0 z-20 h-11 bg-slate-50 border-b border-slate-200 border-r border-slate-100 px-2.5 flex flex-col justify-center gap-0.5 min-w-0">
+                    <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
+                    <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
+                  </div>
+                )
+              })}
+              {/* rows: time slots */}
+              {p.slots.map((s, si) => renderSlotRow(s, si))}
+            </div>
+          ) : (
           <div className="grid" style={{ gridTemplateColumns: `96px repeat(${p.slots.length}, ${slotCol})`, gridAutoRows: '64px', minWidth: fit ? undefined : 'max-content' }}>
             {/* header */}
             <div className="sticky top-0 left-0 z-30 h-9 bg-slate-50 border-b border-r border-slate-200" />
@@ -328,6 +350,7 @@ export function TimelineView(p: ViewsProps) {
             {/* rows */}
             {p.fields.map(f => renderFieldRow(f))}
           </div>
+          )}
 
           {/* hover popover */}
           {hovered && hover && !dragId && (
@@ -422,6 +445,25 @@ export function TimelineView(p: ViewsProps) {
 
   // Plain render functions, not nested components: a nested component is a new type
   // every render, which remounts its DOM and cancels an in-progress drag.
+  // One cell of the day: a placed game, or a drop target while a game is picked up.
+  function renderCell(f: SField, s: string, si: number) {
+    const g = cellMap[s + '|' + f.fullName]
+    const status = sel && !g ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
+    const h = status ? HINT[status] : null
+    return (
+      <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
+        onDragOver={e => { if (!g) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
+        onDrop={e => { e.preventDefault(); const id = dropTarget(e); const src = id ? p.games.find(x => x.id === id) : null; if (src && !g) place(src, s, f.fullName); setDragId(null) }}
+        onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
+        style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined }}>
+        {g ? renderGameCard(g) : h ? (
+          <div className="absolute inset-1 rounded-lg flex items-center justify-center text-[10px] font-bold" style={{ border: `1.5px dashed ${h.border}`, background: h.bg, color: h.text }}>{h.label}</div>
+        ) : null}
+      </div>
+    )
+  }
+
+  // fields-down: one row per field, a cell per time slot
   function renderFieldRow(f: SField) {
     const n = p.dayGames.filter(g => g.location === f.fullName).length
     return (
@@ -430,22 +472,21 @@ export function TimelineView(p: ViewsProps) {
           <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
           <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
         </div>
-        {p.slots.map((s, si) => {
-          const g = cellMap[s + '|' + f.fullName]
-          const status = sel && !g ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
-          const h = status ? HINT[status] : null
-          return (
-            <div key={s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
-              onDragOver={e => { if (!g) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
-              onDrop={e => { e.preventDefault(); const id = dropTarget(e); const src = id ? p.games.find(x => x.id === id) : null; if (src && !g) place(src, s, f.fullName); setDragId(null) }}
-              onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
-              style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined }}>
-              {g ? renderGameCard(g) : h ? (
-                <div className="absolute inset-1 rounded-lg flex items-center justify-center text-[10px] font-bold" style={{ border: `1.5px dashed ${h.border}`, background: h.bg, color: h.text }}>{h.label}</div>
-              ) : null}
-            </div>
-          )
-        })}
+        {p.slots.map((s, si) => renderCell(f, s, si))}
+      </Fragment>
+    )
+  }
+
+  // fields-across: one row per time slot, a cell per field
+  function renderSlotRow(s: string, si: number) {
+    const n = perSlot[si]
+    return (
+      <Fragment key={s}>
+        <div className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 px-2.5 flex flex-col justify-center gap-1 min-w-0">
+          <span className="text-xs font-extrabold text-slate-900 truncate">{p.fmtTime(s)}</span>
+          <span className="h-1 rounded-full" style={{ width: `${Math.round(100 * n / Math.max(1, p.fields.length))}%`, background: n >= p.fields.length ? '#ef4444' : n ? '#14b8a6' : '#e2e8f0' }} />
+        </div>
+        {p.fields.map(f => renderCell(f, s, si))}
       </Fragment>
     )
   }

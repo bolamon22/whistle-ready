@@ -181,9 +181,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [gridDiv,  setGridDiv]  = useState('__all__')
   // Which layout of the day to show. The grid is the original; Timeline and Teams
   // are the redesigned views (SchedulerViews.tsx). Remembered per tournament.
-  const [schedView, setSchedViewRaw] = useState<'grid' | 'timeline' | 'teams'>('grid')
-  useEffect(() => { try { const v = localStorage.getItem(`wr-sched-view-${params.id}`); if (v === 'timeline' || v === 'teams') setSchedViewRaw(v) } catch {} }, [params.id])
-  const setSchedView = (v: 'grid' | 'timeline' | 'teams') => { setSchedViewRaw(v); try { localStorage.setItem(`wr-sched-view-${params.id}`, v) } catch {} }
+  type SchedView = 'grid' | 'board' | 'timeline' | 'teams'
+  const [schedView, setSchedViewRaw] = useState<SchedView>('grid')
+  useEffect(() => { try { const v = localStorage.getItem(`wr-sched-view-${params.id}`); if (v === 'board' || v === 'timeline' || v === 'teams') setSchedViewRaw(v) } catch {} }, [params.id])
+  const setSchedView = (v: SchedView) => { setSchedViewRaw(v); try { localStorage.setItem(`wr-sched-view-${params.id}`, v) } catch {} }
   const [gridPool, setGridPool] = useState('__all__')
   const [gridTeam, setGridTeam] = useState('__all__')
   const [gridType, setGridType] = useState('__all__')
@@ -1506,10 +1507,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center gap-2 flex-wrap flex-shrink-0">
         <label className="text-slate-500 text-xs font-semibold">View:</label>
         <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-slate-100 border border-slate-200 mr-2">
-          {([['grid', 'Grid'], ['timeline', 'Timeline'], ['teams', 'Teams']] as const).map(([v, label]) => (
+          {([['grid', 'Grid'], ['board', 'Board'], ['timeline', 'Timeline'], ['teams', 'Teams']] as const).map(([v, label]) => (
             <button key={v} onClick={() => setSchedView(v)}
               className={`text-xs font-bold px-3 py-1 rounded-full transition-colors ${schedView === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}
-              title={v === 'grid' ? 'The original grid: fields across, time down' : v === 'timeline' ? 'Fields down, time across, with an issues panel' : 'One row per team, so rest and conflicts show as a shape'}>
+              title={v === 'grid' ? 'The original grid: fields across, time down' : v === 'board' ? 'Fields across, time down, with the new tiles, drop hints and issues panel' : v === 'timeline' ? 'Fields down, time across, with an issues panel' : 'One row per team, so rest and conflicts show as a shape'}>
               {label}
             </button>
           ))}
@@ -1614,7 +1615,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             onUnschedule: (id: string) => patchGame(id, { date: '', startTime: '', location: '' }),
             saving,
           }
-          return schedView === 'timeline' ? <TimelineView {...viewProps} /> : <TeamLanesView {...viewProps} />
+          return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()
       ) : (
         <div className="flex-1 overflow-auto" style={{ zoom: gridZoom }}>
