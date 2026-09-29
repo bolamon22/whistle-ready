@@ -122,6 +122,14 @@ export default function DivisionsPage() {
     })
   }, [id])
 
+  // Keep the sidebar's "N unassigned" badge in step with the board. It was only
+  // computed at page load, so it kept warning after every team had a pool.
+  useEffect(() => {
+    if (!activeDiv || loadingDiv) return
+    const unassigned = teams.filter(t => !t.pool).length
+    setDivisions(d => d.map(x => x.name === activeDiv && x.unassignedTeams !== unassigned ? { ...x, unassignedTeams: unassigned } : x))
+  }, [teams, activeDiv, loadingDiv])
+
   async function loadPoolGames(div: string) {
     const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`)
     const data = await res.json()
@@ -391,10 +399,26 @@ export default function DivisionsPage() {
     const teamB = teams.find(t => t.teamName === swapB)
     if (!teamA || !teamB) return
     setSwapping(true)
-    await Promise.all([
-      assignTeamToPool(swapA, teamB.pool),
-      assignTeamToPool(swapB, teamA.pool),
-    ])
+    // Both moves must come from one snapshot of pools. Two separate
+    // assignTeamToPool calls each PATCH every pool from the same stale state,
+    // so whichever lands last undoes half the swap.
+    const a = swapA, b = swapB
+    const poolA = teamA.pool ?? null, poolB = teamB.pool ?? null
+    const newPools = pools.map(p => {
+      const names = p.teamNames.filter(n => n !== a && n !== b)
+      if (poolB && p.name === poolB) names.push(a)
+      if (poolA && p.name === poolA) names.push(b)
+      return { ...p, teamNames: names }
+    })
+    const changed = newPools.filter((p, i) => p.teamNames.join('\u0000') !== pools[i].teamNames.join('\u0000'))
+    await Promise.all(changed.map(p =>
+      fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pools`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ poolId: p.id, teamNames: p.teamNames }),
+      })
+    ))
+    setPools(newPools)
+    setTeams(ts => ts.map(t => t.teamName === a ? { ...t, pool: poolB } : t.teamName === b ? { ...t, pool: poolA } : t))
     setSwapA(null); setSwapB(null)
     setSwapping(false)
     toast.success('Teams swapped')
@@ -1006,7 +1030,7 @@ if (loading) return (
                             <Sparkles size={13} /> {autoAssigning ? 'Assigning…' : 'Auto-assign teams'}
                           </button>
                         </div>
-                        <div className="grid gap-5" style={{ gridTemplateColumns: `repeat(${Math.min(pools.length + (teams.some(t => !t.pool) ? 1 : 0), 4)}, minmax(180px, 1fr))` }}>
+                        <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
                           {[...pools.map(p => ({ key: p.name, label: p.name, list: teams.filter(t => t.pool === p.name) })),
                             ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', label: 'No Pool', list: teams.filter(t => !t.pool) }] : [])
                           ].map(col => (
@@ -1024,10 +1048,15 @@ if (loading) return (
                                     <div key={team.id} draggable
                                       onDragStart={() => setPoolDragging(team.teamName)}
                                       onDragEnd={() => { setPoolDragging(null); setPoolDragOver(null) }}
-                                      className={`flex items-center gap-2.5 bg-white border border-slate-200 rounded-lg px-3 py-2.5 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:shadow-sm transition-all select-none ${poolDragging === team.teamName || assigningTeam === team.teamName ? 'opacity-40' : ''}`}>
-                                      <GripVertical size={14} className="text-slate-300 flex-shrink-0 pointer-events-none" />
-                                      <span className="text-sm font-medium text-slate-700 truncate pointer-events-none">{team.teamName}</span>
-                                      {team.clubName && <span className="text-xs text-slate-400 truncate pointer-events-none ml-auto">{team.clubName}</span>}
+                                      title={team.clubName && team.clubName !== team.teamName ? `${team.teamName} — ${team.clubName}` : team.teamName}
+                                      className={`flex items-start gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:shadow-sm transition-all select-none ${poolDragging === team.teamName || assigningTeam === team.teamName ? 'opacity-40' : ''}`}>
+                                      <GripVertical size={14} className="text-slate-300 flex-shrink-0 pointer-events-none mt-0.5" />
+                                      <div className="min-w-0 flex-1 pointer-events-none">
+                                        <p className="text-sm font-medium text-slate-800 leading-snug break-words">{team.teamName}</p>
+                                        {team.clubName && team.clubName.trim().toLowerCase() !== team.teamName.trim().toLowerCase() && (
+                                          <p className="text-xs text-slate-400 leading-snug break-words mt-0.5">{team.clubName}</p>
+                                        )}
+                                      </div>
                                     </div>
                                   ))
                                 )}
