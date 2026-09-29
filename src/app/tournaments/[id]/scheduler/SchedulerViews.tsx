@@ -319,6 +319,15 @@ export function TimelineView(p: ViewsProps) {
   }, [p.unscheduled, p.filterDiv])
 
   const dropTarget = (e: React.DragEvent) => e.dataTransfer.getData('gameId') || dragId
+  // Dragging a placed game onto the unscheduled list (open or collapsed) takes it off
+  // the board; it lands under its division there. Only a placed game lights it up.
+  const [lotOver, setLotOver] = useState(false)
+  const draggingPlaced = !!dragId && p.dayGames.some(g => g.id === dragId)
+  const lotDrop = {
+    onDragOver: (e: React.DragEvent) => { if (draggingPlaced) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (!lotOver) setLotOver(true) } },
+    onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setLotOver(false) },
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); setLotOver(false); const id = dropTarget(e); setDragId(null); if (id && p.dayGames.some(g => g.id === id)) { setSelId(null); p.onUnschedule(id) } },
+  }
   const place = async (g: SGame, time: string, field: string) => {
     if (placementStatus(g, p.slots.indexOf(time), p.dayGames, p.slots, p.increment) === 'blocked') return
     setSelId(null); setHover(null)
@@ -341,7 +350,12 @@ export function TimelineView(p: ViewsProps) {
     <div className="flex-1 flex min-h-0 relative">
       {/* Left rail: unscheduled */}
       {leftOpen ? (
-        <div className="w-[232px] flex-shrink-0 flex flex-col bg-white border-r border-slate-200 min-h-0">
+        <div {...lotDrop} className={`relative w-[232px] flex-shrink-0 flex flex-col border-r border-slate-200 min-h-0 transition-colors ${lotOver ? 'bg-orange-50' : 'bg-white'}`}>
+          {draggingPlaced && (
+            <div className={`absolute inset-1.5 z-10 rounded-xl border-2 border-dashed flex items-center justify-center text-xs font-bold pointer-events-none ${lotOver ? 'border-orange-500 bg-orange-100/80 text-orange-800' : 'border-orange-300 bg-white/70 text-orange-600'}`}>
+              Drop here to unschedule
+            </div>
+          )}
           <div className="pl-3.5 pr-2 pt-2.5 pb-1.5 flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Unscheduled</span>
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">{p.unscheduled.length}</span>
@@ -400,7 +414,7 @@ export function TimelineView(p: ViewsProps) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setRails(true, rightOpen)} aria-label="Show the unscheduled list" className="w-10 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col items-center pt-3 gap-2 hover:bg-slate-50">
+        <button {...lotDrop} onClick={() => setRails(true, rightOpen)} aria-label="Show the unscheduled list" title={draggingPlaced ? 'Drop here to unschedule' : undefined} className={`w-10 flex-shrink-0 border-r flex flex-col items-center pt-3 gap-2 hover:bg-slate-50 ${lotOver ? 'bg-orange-50 border-orange-300' : draggingPlaced ? 'bg-orange-50/50 border-orange-200' : 'bg-white border-slate-200'}`}>
           <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">{p.unscheduled.length}</span>
           <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400" style={{ writingMode: 'vertical-rl' }}>Unscheduled</span>
         </button>
