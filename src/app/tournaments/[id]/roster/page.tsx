@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { certLabel, WORKER_ROLES, isHourlyRole, PAY_METHODS, CERT_LEVELS } from '@/lib/utils'
-import { Users, Calendar, Clock, Wallet, Mail, UserPlus, ShieldCheck } from 'lucide-react'
+import { Users, Calendar, Clock, Wallet, Link2, Mail, UserPlus, ShieldCheck } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
@@ -88,6 +88,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const [showInvite, setShowInvite] = useState(false)
   const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', name: '' })
   const [inviteSending, setInviteSending] = useState(false)
+  const [copyingLink, setCopyingLink] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string|null>(null)
   const [editSaving, setEditSaving] = useState(false)
@@ -342,6 +343,39 @@ export default function RosterPage({ params }: { params:{id:string} }) {
           <p className="text-sm text-slate-500 mt-1">Confirm who's working this tournament · {onRoster.length} confirmed</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* THE SIGNUP LINK, WHERE SOMEBODY LOOKING FOR IT ACTUALLY STANDS.
+              It already existed -- /api/workers/recruit-link hands out the org's
+              public /join code -- but the only way to reach it was the org Staff
+              page, opening the Invite letter panel, switching the audience dropdown
+              to "New recruits", and copying the whole letter so you could pick the
+              URL out of the body. Bo went looking from this page and could not find
+              it (Sep 29 2026). "Invite Staff" beside it emails one named person;
+              this is the one you paste into your own email to twenty.
+              The link is stable -- the same code comes back on every call -- so
+              copying it twice is not two different links. */}
+          <button type="button" disabled={copyingLink}
+            onClick={async () => {
+              setCopyingLink(true)
+              try {
+                const r = await fetch('/api/workers/recruit-link', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+                })
+                const j = await r.json().catch(() => ({}))
+                if (!r.ok || !j?.url) { toast.error(j?.error || 'Could not get the signup link'); return }
+                try {
+                  await navigator.clipboard.writeText(j.url)
+                  toast.success('Signup link copied — paste it into your email')
+                } catch {
+                  // Clipboard is blocked in some contexts; showing it beats a dead button.
+                  toast(j.url, { duration: 12000 })
+                }
+              } catch { toast.error('Could not get the signup link') }
+              finally { setCopyingLink(false) }
+            }}
+            className="btn-secondary btn-sm flex items-center gap-2"
+            title="Copy your public staff signup link to send in your own email">
+            <Link2 size={15} />{copyingLink ? 'Copying\u2026' : 'Copy signup link'}
+          </button>
           <Link href={`/tournaments/${params.id}/roster/exhibit-a`}
             className="btn-secondary btn-sm flex items-center gap-2" title="County background-check affidavit table, filled from this roster">
             <ShieldCheck size={15} />Exhibit A
