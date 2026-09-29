@@ -114,7 +114,7 @@ export function PublicVisibilityMenu({ tournamentId, vis, update }: {
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(o => !o)} title="What the public schedule page shows"
-        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1 whitespace-nowrap ${tone}`}>
+        className={`text-xs font-semibold h-7 px-2.5 rounded-lg border inline-flex items-center gap-1 whitespace-nowrap ${tone}`}>
         {vis.schedule === 'live' || vis.pools === 'live' ? <Eye size={13} /> : <EyeOff size={13} />} {label} <ChevronDown size={12} />
       </button>
       {open && (

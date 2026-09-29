@@ -1,12 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import { TimelineView, TeamLanesView } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
-import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye } from 'lucide-react'
+import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal } from 'lucide-react'
 
 interface Game {
   id: string
@@ -163,6 +163,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [publishing,     setPublishing]     = useState(false)
   const [showDiff,       setShowDiff]       = useState(false)
   const [visKey,         setVisKey]         = useState(0)
+  // The header's "Tools" menu: the seldom-used actions, so the bar fits on one line.
+  const [toolsOpen,      setToolsOpen]      = useState(false)
+  const toolsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!toolsOpen) return
+    const close = (e: MouseEvent) => { if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) setToolsOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [toolsOpen])
   // Issue tooltip for a game card: opens on hovering anywhere on the card (the badge
   // alone was a 16px target behind a slow native title), click the badge to pin it.
   const [issueTip,       setIssueTip]       = useState<{ id: string; left: number; top: number; bottom: number; pinned: boolean } | null>(null)
@@ -1070,116 +1079,121 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* ── Header (merged with publish status) ── */}
-      <div className={`border-b px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
-        <div className="flex items-center gap-2 mr-1">
+      {/* ── Header: one line. Counts, day window, Tools menu, then status + actions. ── */}
+      <div className={`border-b px-3 sm:px-4 h-11 flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-shrink-0 ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
+        <div className="flex items-baseline gap-2 mr-1 flex-shrink-0">
           <span className="text-sm font-semibold text-slate-800">Scheduler</span>
-          <span className="text-xs text-slate-400">{games.length} games · <span className="text-amber-600 font-medium">{unscheduled.length} unscheduled</span></span>
+          <span className="text-[11px] text-slate-400">{games.length} games · <span className="text-amber-600 font-medium">{unscheduled.length} open</span></span>
         </div>
-        <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
-          <label className="text-slate-500 text-xs">Day start</label>
+
+        {/* Day window as one control */}
+        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 h-7 flex-shrink-0" title="Day start and end for the selected day">
+          <Clock size={12} className="text-slate-400" />
           <input type="time" value={minToHM(dayWin.s)} onChange={e => { if (e.target.value) persistDayWindow(e.target.value, minToHM(dayWin.e)) }}
-            className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white" title="Applies to the selected day"/>
-          <label className="text-slate-500 text-xs">Day end</label>
+            className="text-xs bg-transparent border-0 p-0 w-[92px] text-slate-700 focus:outline-none" aria-label="Day start" />
+          <span className="text-slate-300 text-xs">–</span>
           <input type="time" value={minToHM(dayWin.e)} onChange={e => { if (e.target.value) persistDayWindow(minToHM(dayWin.s), e.target.value) }}
-            className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white" title="Applies to the selected day"/>
-          {saving && <span className="text-teal-500 text-xs animate-pulse">Saving…</span>}
-          <button onClick={renumberAll}
-            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg px-3 py-1 transition-colors whitespace-nowrap">
-            <span className="inline-flex items-center gap-1"><RotateCw size={13} /> Renumber all</span>
+            className="text-xs bg-transparent border-0 p-0 w-[92px] text-slate-700 focus:outline-none" aria-label="Day end" />
+        </div>
+
+        {/* Tools menu */}
+        <div className="relative flex-shrink-0" ref={toolsRef}>
+          <button onClick={() => setToolsOpen(o => !o)}
+            className={`inline-flex items-center gap-1 text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors ${toolsOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200'}`}
+            title="Renumber, side panel, checkpoint, unschedule all, auto-fill day mode">
+            <MoreHorizontal size={14} /> Tools
           </button>
-          <button onClick={() => setSideStage(v => !v)}
-            className={`text-xs border rounded-lg px-3 py-1 transition-colors whitespace-nowrap ${sideStage ? 'bg-slate-800 text-white border-slate-600' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'}`}
-            title={sideStage ? 'Switch to top bar layout' : 'Switch to side panel layout'}>
-            {sideStage ? <span className="inline-flex items-center gap-1"><PanelRight size={13} /> Side panel</span> : <span className="inline-flex items-center gap-1"><PanelLeft size={13} /> Side panel</span>}
-          </button>
-          {!checkpoint ? (
-            <button onClick={saveCheckpoint}
-              className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg px-3 py-1 transition-colors whitespace-nowrap"
-              title="Save a checkpoint of this schedule. Experiment freely, then compare, keep, or revert.">
-              <span className="inline-flex items-center gap-1"><Bookmark size={13} /> Checkpoint</span>
-            </button>
-          ) : (
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2 py-1">
-              <span className="text-[11px] font-semibold text-violet-700">Checkpoint</span>
-              <button onClick={() => setViewingCheckpoint(v => !v)}
-                className={`text-xs px-2 py-0.5 rounded border transition-colors ${viewingCheckpoint ? 'bg-violet-600 text-white border-violet-700' : 'bg-white text-violet-700 border-violet-300 hover:bg-violet-100'}`}
-                title="Flip between your working version and the saved checkpoint to compare">
-                <span className="inline-flex items-center gap-1"><Eye size={12} /> {viewingCheckpoint ? 'Viewing saved' : 'Compare'}</span>
+          {toolsOpen && (
+            <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-50 text-left whitespace-normal">
+              <button onClick={() => { renumberAll(); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50">
+                <RotateCw size={13} className="text-slate-400" /> Renumber all games
               </button>
-              {cpChanges > 0 && <span className="text-[11px] text-violet-600">{cpChanges} changed</span>}
-              <button onClick={revertToCheckpoint} disabled={viewingCheckpoint}
-                className="text-xs px-2 py-0.5 rounded border bg-white text-amber-700 border-amber-300 hover:bg-amber-50 disabled:opacity-40 transition-colors"
-                title="Discard your changes and restore the checkpoint">
-                <span className="inline-flex items-center gap-1"><RotateCw size={12} /> Revert</span>
+              <button onClick={() => { setSideStage(v => !v); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50">
+                {sideStage ? <PanelLeft size={13} className="text-slate-400" /> : <PanelRight size={13} className="text-slate-400" />} {sideStage ? 'Parking lot on top' : 'Parking lot as side panel'} <span className="ml-auto text-[10px] text-slate-400">Grid</span>
               </button>
-              <button onClick={discardCheckpoint}
-                className="text-xs px-2 py-0.5 rounded border bg-white text-green-700 border-green-300 hover:bg-green-50 transition-colors"
-                title="Keep your current changes and clear the checkpoint">
-                <span className="inline-flex items-center gap-1"><Check size={12} /> Keep</span>
-              </button>
+              {!checkpoint && (
+                <button onClick={() => { saveCheckpoint(); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50" title="Save a checkpoint of this schedule. Experiment freely, then compare, keep, or revert.">
+                  <Bookmark size={13} className="text-slate-400" /> Save a checkpoint
+                </button>
+              )}
+              <div className="flex items-center gap-2 px-2.5 py-2">
+                <Zap size={13} className="text-slate-400" />
+                <span className="text-xs text-slate-700">Auto-fill days</span>
+                <select value={splitMode} onChange={e => setSplitMode(e.target.value as 'd1d2'|'spread'|'oneday')}
+                  className="ml-auto text-[11px] rounded-md border border-slate-300 bg-white px-1.5 py-1 text-slate-700 max-w-[130px]">
+                  <option value="d1d2">Pool d1 / bracket d2</option>
+                  <option value="spread">Pool all / bracket last</option>
+                  <option value="oneday">All on this day</option>
+                </select>
+              </div>
+              {games.some(g => g.date || g.startTime || g.location) && (
+                <>
+                  <div className="my-1 border-t border-slate-100" />
+                  <button onClick={() => { unscheduleAll(); setToolsOpen(false) }} disabled={unscheduling} className="w-full flex items-center gap-2 text-xs text-red-600 px-2.5 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50">
+                    <Trash2 size={13} /> {unscheduling ? 'Unscheduling…' : 'Unschedule all games'}
+                  </button>
+                </>
+              )}
             </div>
           )}
-          {games.some(g => g.date || g.startTime || g.location) && (
-            <button onClick={unscheduleAll} disabled={unscheduling}
-              className="text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg px-3 py-1 disabled:opacity-50 transition-colors whitespace-nowrap">
-              {unscheduling ? 'Unscheduling…' : <span className="inline-flex items-center gap-1"><Trash2 size={13} /> Unschedule all</span>}
+        </div>
+
+        {/* Checkpoint, only while one exists */}
+        {checkpoint && (
+          <div className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-violet-50 px-1.5 h-7 flex-shrink-0">
+            <Bookmark size={12} className="text-violet-600" />
+            <button onClick={() => setViewingCheckpoint(v => !v)}
+              className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${viewingCheckpoint ? 'bg-violet-600 text-white border-violet-700' : 'bg-white text-violet-700 border-violet-300 hover:bg-violet-100'}`}
+              title="Flip between your working version and the saved checkpoint to compare">
+              <span className="inline-flex items-center gap-1"><Eye size={11} /> {viewingCheckpoint ? 'Viewing saved' : 'Compare'}</span>
             </button>
-          )}
-          <div className="flex items-center gap-2 ml-auto flex-shrink-0">
-            {!publishedAt ? (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /> Draft
-              </span>
-            ) : hasChanges ? (
-              <>
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" /> {diffChanges.total} changes
-                </span>
-                <button onClick={() => setShowDiff(true)} className="text-xs text-amber-700 underline hover:text-amber-900">diff</button>
-              </>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Published
-              </span>
-            )}
-            <select
-              value={splitMode}
-              onChange={e => setSplitMode(e.target.value as 'd1d2'|'spread'|'oneday')}
-              title="How Auto-fill assigns games to days"
-              className="text-xs rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-700"
-            >
-              <option value="d1d2">Pool d1 / bracket d2</option>
-              <option value="spread">Pool all days / bracket last</option>
-              <option value="oneday">All on this day</option>
-            </select>
-            <button
-              onClick={() => { setShowWeather(true); if (!wxFrom) { const u = dayGames.filter(g => !gameDone(g)).sort((a, b) => hmToMin(a.startTime) - hmToMin(b.startTime)); if (u.length) setWxFrom(u[0].startTime) } }}
-              disabled={dayGames.length === 0}
-              title="Weather delay — push back the rest of today's unplayed games"
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 bg-amber-500 hover:bg-amber-600 text-white border-amber-600 whitespace-nowrap"
-            >
-              <span className="inline-flex items-center gap-1"><CloudRain size={13} /> Weather</span>
-            </button>
-            <button
-              onClick={autoFillDay}
-              disabled={autoFilling || filtered.length === 0}
-              title="Place the parking-lot games (after your filters) onto this day, following the rules. You can still drag to adjust."
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 bg-teal-600 hover:bg-teal-700 text-white border-teal-700 whitespace-nowrap"
-            >
-              {autoFilling ? 'Filling…' : <span className="inline-flex items-center gap-1"><Zap size={13} /> Auto-fill</span>}
-            </button>
-            <PublicVisibilityMenu tournamentId={params.id} vis={publicVis} update={updatePublicVis} />
-            <button
-              onClick={publishSchedule}
-              disabled={publishing || !canPublish}
-              title="Save the current times and fields as what the public sees, and show the schedule on the public page"
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40
-                bg-green-600 hover:bg-green-700 text-white border-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 whitespace-nowrap"
-            >
-              {publishing ? 'Publishing…' : <span className="inline-flex items-center gap-1"><Send size={13} /> Publish</span>}
-            </button>
+            {cpChanges > 0 && <span className="text-[11px] text-violet-600">{cpChanges}</span>}
+            <button onClick={revertToCheckpoint} disabled={viewingCheckpoint} className="text-[11px] px-2 py-0.5 rounded border bg-white text-amber-700 border-amber-300 hover:bg-amber-50 disabled:opacity-40" title="Discard your changes and restore the checkpoint">Revert</button>
+            <button onClick={discardCheckpoint} className="text-[11px] px-2 py-0.5 rounded border bg-white text-green-700 border-green-300 hover:bg-green-50" title="Keep your current changes and clear the checkpoint">Keep</button>
           </div>
+        )}
+        {saving && <span className="text-teal-500 text-[11px] animate-pulse flex-shrink-0">Saving…</span>}
+
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          {!publishedAt ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /> Draft
+            </span>
+          ) : hasChanges ? (
+            <button onClick={() => setShowDiff(true)} className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:underline" title="See what changed since the last publish">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" /> {diffChanges.total} changes
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Published
+            </span>
+          )}
+          <button
+            onClick={() => { setShowWeather(true); if (!wxFrom) { const u = dayGames.filter(g => !gameDone(g)).sort((a, b) => hmToMin(a.startTime) - hmToMin(b.startTime)); if (u.length) setWxFrom(u[0].startTime) } }}
+            disabled={dayGames.length === 0}
+            title="Weather delay — push back the rest of today's unplayed games"
+            className="text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors disabled:opacity-40 bg-amber-500 hover:bg-amber-600 text-white border-amber-600"
+          >
+            <span className="inline-flex items-center gap-1"><CloudRain size={13} /> Weather</span>
+          </button>
+          <button
+            onClick={autoFillDay}
+            disabled={autoFilling || filtered.length === 0}
+            title="Place the unscheduled games (after your filters) onto this day, following the rules. You can still drag to adjust."
+            className="text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors disabled:opacity-40 bg-teal-600 hover:bg-teal-700 text-white border-teal-700"
+          >
+            {autoFilling ? 'Filling…' : <span className="inline-flex items-center gap-1"><Zap size={13} /> Auto-fill</span>}
+          </button>
+          <PublicVisibilityMenu tournamentId={params.id} vis={publicVis} update={updatePublicVis} />
+          <button
+            onClick={publishSchedule}
+            disabled={publishing || !canPublish}
+            title="Save the current times and fields as what the public sees, and show the schedule on the public page"
+            className="text-xs font-semibold h-7 px-3 rounded-lg border transition-colors disabled:opacity-40
+              bg-green-600 hover:bg-green-700 text-white border-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300"
+          >
+            {publishing ? 'Publishing…' : <span className="inline-flex items-center gap-1"><Send size={13} /> Publish</span>}
+          </button>
         </div>
       </div>
 
