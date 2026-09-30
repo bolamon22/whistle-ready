@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, updateSubmissionData } from '@/lib/formSubmissions'
 import { nameKey } from '@/lib/names'
+import { renameFollowRefs, removeFollowRefs } from '@/lib/follows'
 
 // Team and club names are string keys everywhere (pools, games, brackets,
 // follows, club-director links, waivers). When one is renamed — even just to
@@ -61,6 +62,9 @@ export async function renameTeamRefs(tournamentId: string, oldName: string, newN
     const r = await prisma.coachProfile.updateMany({ where: { tournamentId, teamName: oldName }, data: { teamName: newName } })
     if (r.count) n.coachProfiles = r.count
   } catch {}
+  // Public followers (device-keyed, lib/follows) -- a rename must not strand
+  // the phones that follow the old spelling.
+  try { const c = await renameFollowRefs(tournamentId, oldName, newName); if (c) n.follows = (n.follows || 0) + c } catch {}
 
   // Player waivers are tagged "Club — Team" (bare team name for legacy entries).
   try {
@@ -152,6 +156,7 @@ export async function removeTeamRefs(tournamentId: string, teamName: string): Pr
     const r = await prisma.userTeamFollow.deleteMany({ where: { tournamentId, teamName } })
     if (r.count) n.follows = r.count
   } catch {}
+  try { const c = await removeFollowRefs(tournamentId, teamName); if (c) n.follows = (n.follows || 0) + c } catch {}
 
   return n
 }
