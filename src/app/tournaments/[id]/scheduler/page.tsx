@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import ShortTeamsBanner from '@/components/ShortTeamsBanner'
+import { affectedTeams as digestAffectedTeams } from '@/lib/scheduleDigest'
 import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import { TimelineView, TeamLanesView, useDragAutoScroll } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { divisionAbbr } from '@/lib/names'
-import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal } from 'lucide-react'
+import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell } from 'lucide-react'
 
 interface Game {
   id: string
@@ -168,6 +169,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [publishedAt,    setPublishedAt]    = useState<string | null>(null)
   const [publishing,     setPublishing]     = useState(false)
   const [showDiff,       setShowDiff]       = useState(false)
+  // Who a Publish reaches, per team, from GET /publish: follows and phones with
+  // alerts on. And Bo's toggle -- on by default, off for a quiet publish.
+  const [followers,      setFollowers]      = useState<Record<string, { follows: number; phones: number }>>({})
+  const [notifyFollowers, setNotifyFollowers] = useState(true)
   const [visKey,         setVisKey]         = useState(0)
   // The header's "Tools" menu: the seldom-used actions, so the bar fits on one line.
   const [toolsOpen,      setToolsOpen]      = useState(false)
@@ -222,6 +227,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const tData = await tRes.json()
       const pData = await pRes.json()
       const cData = await cRes.json()
+      if (pData.followers) setFollowers(pData.followers)
       if (pData.publishedAt) {
         setPublishedAt(pData.publishedAt)
         const snap: Record<string, {date:string,startTime:string,location:string}> = {}
@@ -511,17 +517,31 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   async function publishSchedule() {
     setPublishing(true)
+    // Nothing to send when no follower of an affected team has alerts on, so skip the
+    // server-side digest work in that case rather than asking it to notify nobody.
+    const notify = notifyFollowers && notifyPlan.phones > 0
     try {
-      const res = await fetch(`/api/tournaments/${params.id}/publish`, { method: 'POST' })
+      const res = await fetch(`/api/tournaments/${params.id}/publish`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notify }),
+      })
       const data = await res.json()
       if (data.ok) {
+        const nt = data.notified || { teams: 0, sent: 0, failed: 0 }
         setPublishedAt(data.publishedAt)
         const snap: Record<string, {date:string,startTime:string,location:string}> = {}
         games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
         setSnapshot(snap)
         setShowDiff(false)
         setVisKey(k => k + 1)
-        toast.success('Schedule published — the public page now shows it')
+        toast.success(nt.sent > 0
+          ? `Schedule published — ${nt.sent} phone${nt.sent === 1 ? '' : 's'} alerted across ${nt.teams} team${nt.teams === 1 ? '' : 's'}`
+          : notify && nt.failed > 0
+            ? `Schedule published — but ${nt.failed} alert${nt.failed === 1 ? '' : 's'} could not be delivered`
+            : notify && nt.teams > 0
+              ? 'Schedule published — no followers have alerts on yet'
+              : 'Schedule published — the public page now shows it')
+        setNotifyFollowers(true)
       }
     } finally { setPublishing(false) }
   }
@@ -650,6 +670,17 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   // Publish also puts a hidden schedule back in front of the public, so it stays
   // usable with no changes while the schedule is hidden.
   const canPublish = hasChanges || (publicVis ? publicVis.schedule !== 'live' : false)
+
+  // Who this Publish would alert — the same rule the server applies (lib/scheduleDigest):
+  // on a first publish every scheduled team is affected; after that, the teams in games
+  // that were placed, pulled or moved since the last Publish. Drives both the toolbar
+  // button (ask only when somebody would actually hear about it) and the dialog toggle.
+  const notifyPlan = (() => {
+    const teams = digestAffectedTeams(publishedAt ? snapshot : null, games)
+    const follows = teams.reduce((a, t) => a + (followers[t]?.follows || 0), 0)
+    const phones  = teams.reduce((a, t) => a + (followers[t]?.phones  || 0), 0)
+    return { teams, follows, phones }
+  })()
   const unscheduled = games.filter(g => (!g.date || !g.startTime || !g.location) && !scratchPad.includes(g.id))
 
   // Parking lot: available pools based on division filter
@@ -1117,11 +1148,18 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowDiff(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold text-slate-900">Unpublished Changes</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{publishedAt ? 'Unpublished Changes' : 'Publish schedule'}</h2>
               <button onClick={() => setShowDiff(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none"><X size={15} /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-              {diffChanges.newlyScheduled.length > 0 && (
+              {/* A first publish has no "before" — every scheduled game would list as new, so summarize instead. */}
+              {!publishedAt && diffChanges.newlyScheduled.length > 0 && (
+                <div className="flex items-start gap-2 text-sm bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-green-800">
+                  <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-600" />
+                  <span><span className="font-semibold">{diffChanges.newlyScheduled.length} game{diffChanges.newlyScheduled.length === 1 ? '' : 's'}</span> go public for the first time. The public page will show the full schedule.</span>
+                </div>
+              )}
+              {publishedAt && diffChanges.newlyScheduled.length > 0 && (
                 <div>
                   <h3 className="flex items-center gap-1.5 text-sm font-semibold text-green-700 mb-2"><Check size={14} /> Newly scheduled ({diffChanges.newlyScheduled.length})</h3>
                   <div className="space-y-1">
@@ -1165,6 +1203,28 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                 </div>
               )}
             </div>
+            {(() => {
+              const { teams, follows, phones } = notifyPlan
+              const nobody = phones === 0
+              return (
+                <label className={`flex items-start gap-3 mx-6 mb-4 rounded-xl border px-4 py-3 ${nobody ? 'border-slate-200 bg-slate-50' : notifyFollowers ? 'border-teal-200 bg-teal-50/60' : 'border-slate-200 bg-white'} ${nobody ? 'cursor-default' : 'cursor-pointer'}`}>
+                  <input type="checkbox" className="mt-1 h-4 w-4 accent-teal-600" checked={notifyFollowers && !nobody} disabled={nobody}
+                    onChange={e => setNotifyFollowers(e.target.checked)} />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><Bell size={14} className={nobody ? 'text-slate-400' : 'text-teal-600'} />
+                      {publishedAt ? 'Tell followers their schedule changed' : 'Tell followers the schedule is out'}
+                    </span>
+                    <span className="block text-xs text-slate-500 mt-0.5">
+                      {teams.length === 0
+                        ? 'No team\u2019s games changed.'
+                        : nobody
+                          ? `${teams.length} team${teams.length === 1 ? '' : 's'} affected \u00b7 nobody following them has alerts on yet.`
+                          : `${teams.length} team${teams.length === 1 ? '' : 's'} affected \u00b7 ${phones} phone${phones === 1 ? '' : 's'} with alerts on (${follows} follower${follows === 1 ? '' : 's'}). One message per team with its current schedule \u2014 never one per game.`}
+                    </span>
+                  </span>
+                </label>
+              )
+            })()}
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t">
               <button onClick={() => setShowDiff(false)} className="text-sm text-slate-600 hover:text-slate-900 px-4 py-2">Cancel</button>
               <button onClick={publishSchedule} disabled={publishing}
@@ -1417,7 +1477,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             </span>
           ) : hasChanges ? (
             <button onClick={() => setShowDiff(true)} className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:underline" title="See what changed since the last publish">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" /> {diffChanges.total} changes
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" /> {diffChanges.total} change{diffChanges.total === 1 ? '' : 's'}
             </button>
           ) : (
             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700">
@@ -1442,9 +1502,14 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           </button>
           <PublicVisibilityMenu tournamentId={params.id} vis={publicVis} update={updatePublicVis} />
           <button
-            onClick={publishSchedule}
+            // When followers with alerts on would hear about this publish, stop at the
+            // dialog so Bo can choose to tell them or publish quietly (week-of shuffles).
+            // When nobody would be alerted there is nothing to ask, so publish right away.
+            onClick={() => (notifyPlan.phones > 0 ? setShowDiff(true) : publishSchedule())}
             disabled={publishing || !canPublish}
-            title="Save the current times and fields as what the public sees, and show the schedule on the public page"
+            title={notifyPlan.phones > 0
+              ? `Review the changes and choose whether the ${notifyPlan.phones} phone${notifyPlan.phones === 1 ? '' : 's'} following affected teams hear about them`
+              : 'Save the current times and fields as what the public sees, and show the schedule on the public page'}
             className="text-xs font-semibold h-7 px-3 rounded-lg border transition-colors disabled:opacity-40
               bg-green-600 hover:bg-green-700 text-white border-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300"
           >
