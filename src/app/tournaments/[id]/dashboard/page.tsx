@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   Target, ClipboardList, Radio, TriangleAlert, ClipboardCheck, Contact,
-  Megaphone, Wallet, ArrowRight, Trophy, ChevronDown, GripVertical, type LucideIcon,
+  Megaphone, Wallet, ArrowRight, Trophy, ChevronDown, GripVertical, Eye, EyeOff, type LucideIcon,
 } from 'lucide-react'
 import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
@@ -102,6 +102,12 @@ export default function DashboardPage() {
   const [divOrder, setDivOrder] = useState<string[] | null>(null)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [orderErr, setOrderErr] = useState('')
+  // Money is hidden until asked for, and goes back to hidden on every visit.
+  // Bo, Sep 30 2026: "Sometimes I'm in my office showing people the teams and it
+  // has all the money right out there in front." Deliberately NOT remembered --
+  // a stored "shown" would be shown to whoever is standing there next, which is
+  // the whole thing this is for.
+  const [showMoney, setShowMoney] = useState(false)
   const dragFrom = useRef<number | null>(null)
 
   useEffect(() => {
@@ -268,13 +274,31 @@ export default function DashboardPage() {
               title={regOpen ? 'Teams can register now — click to change' : 'Registration is closed — click to change'}>
               {regOpen ? 'Registration open' : 'Registration closed'}
             </Link>
+            {/* Sits beside the registration pill, and reads as state like it does,
+                because the thing you need to know at a glance is whether figures
+                are on screen before you turn the laptop around. */}
+            {hasMoney && (
+              <button onClick={() => setShowMoney(v => !v)}
+                title={showMoney ? 'Money is on screen — click to hide it' : 'Money is hidden — click to show it'}
+                className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full transition-colors ${
+                  showMoney
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                }`}>
+                {showMoney ? <Eye size={11} /> : <EyeOff size={11} />}
+                {showMoney ? 'Money shown' : 'Money hidden'}
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             <Kpi label="Teams" value={reg.teams} sub={reg.clubs > 0 ? `${reg.clubs} clubs` : undefined} href={`/tournaments/${id}/registrations`}
               extra={<GenderBar boys={split.boys} girls={split.girls} other={split.other} />} />
             <Kpi label="Games" value={games.active} sub={`${games.divisions} divisions`} href={`/tournaments/${id}/scheduler`} />
             <Kpi label="Staff assigned" value={`${assignPct}%`} sub={`${staff.onRoster} on roster`} href={`/tournaments/${id}/assignments`} />
-            <Kpi label="Collected" value={hasMoney ? `${collectPct}%` : '—'} sub={hasMoney ? `${fmt(reg.balance)} due` : undefined} href={`/tournaments/${id}/financials`} />
+            <Kpi label="Collected"
+              value={!hasMoney ? '—' : showMoney ? `${collectPct}%` : '••'}
+              sub={hasMoney ? (showMoney ? `${fmt(reg.balance)} due` : 'Hidden') : undefined}
+              href={`/tournaments/${id}/financials`} />
           </div>
         </section>
 
@@ -387,7 +411,19 @@ export default function DashboardPage() {
         {/* ── Money snapshot ────────────────────────────────────────────── */}
         {hasMoney && (
           <section>
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Money</h2>
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Money</h2>
+              <button onClick={() => setShowMoney(v => !v)}
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-teal-700 hover:text-teal-800 transition-colors">
+                {showMoney ? <><EyeOff size={11} /> Hide</> : <><Eye size={11} /> Show</>}
+              </button>
+            </div>
+            {!showMoney ? (
+              <button onClick={() => setShowMoney(true)}
+                className="w-full text-left bg-white border border-dashed border-slate-200 rounded-xl p-4 sm:p-5 text-sm text-slate-400 hover:border-teal-300 hover:text-slate-500 transition-colors">
+                Revenue, expenses and balances are hidden. Click to show them.
+              </button>
+            ) : (
             <Link href={`/tournaments/${id}/financials`}
               className="block bg-white border border-slate-200 rounded-xl p-4 sm:p-5 hover:border-teal-300 transition-colors">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -425,6 +461,7 @@ export default function DashboardPage() {
                 <Wallet size={15} /> View full financials <ArrowRight size={14} />
               </div>
             </Link>
+            )}
           </section>
         )}
 
