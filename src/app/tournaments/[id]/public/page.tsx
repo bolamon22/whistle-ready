@@ -11,7 +11,7 @@ import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Sta
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
 // One pool as staff set it on the Divisions page.
-interface PoolRoster { id:string; division:string; name:string; teams:string[] }
+interface PoolRoster { id:string; division:string; name:string; teams:string[]; unassigned?:boolean }
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
 interface Standing { team:string; w:number; l:number; t:number; gf:number; ga:number; pts:number }
 
@@ -79,8 +79,20 @@ function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DE
   return Object.values(map).sort(cmp)
 }
 
-function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true}:{division:string;pool:string;standings:Standing[];games:Game[];followedTeams:string[];tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean}) {
-  const [pview,setPview]=useState<'grid'|'list'>('list')
+// `preSchedule`: the schedule is not published, so there is nothing to rank or
+// open -- the card is a roster. Grid first, alphabetical, no rank numbers, no
+// stat columns, nothing clickable, and a team count by the toggle. Separate
+// from `showSchedule`, which only governs the Schedule button.
+function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true,preSchedule=false,title}:{division:string;pool:string;standings:Standing[];games:Game[];followedTeams:string[];tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean;preSchedule?:boolean;title?:string}) {
+  // The visitor's own toggle wins. Until they touch it, the default follows
+  // preSchedule -- which can change after mount, because the visibility switch
+  // arrives in its own request, so a plain useState default could stick on list.
+  const [picked,setPview]=useState<'grid'|'list'|null>(null)
+  const pview=picked??(preSchedule?'grid':'list')
+  // With no games every team ties at zero and the sort keeps roster order, so
+  // pre-schedule the order is set here: alphabetical, for a parent scanning
+  // for their club.
+  const rows=preSchedule?[...standings].sort((a,b)=>a.team.localeCompare(b.team)):standings
   const teamForm=(team:string)=>{
     const tg=games.filter(g=>g.division===division&&!g.isCanceled&&!g.isChampionship&&(pool?samePool(g.pool,pool):true)&&(g.team1===team||g.team2===team)&&g.score1!==null&&g.score2!==null)
       .sort((a,b)=>`${a.date}${a.startTime}`<`${b.date}${b.startTime}`?-1:1)
@@ -90,7 +102,9 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
       <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
-        <span className="text-white font-bold text-sm uppercase tracking-wide">{division}{pool ? ` — ${poolLabel(pool)}` : ''}</span>
+        <span className="text-white font-bold text-sm uppercase tracking-wide">{title ?? <>{division}{pool ? ` — ${poolLabel(pool)}` : ''}</>}</span>
+        <div className="flex items-center gap-2 flex-shrink-0">
+        {preSchedule && <span className="text-[11px] font-semibold text-white bg-white/15 px-2.5 py-0.5 rounded-full whitespace-nowrap">{rows.length} team{rows.length===1?'':'s'}</span>}
         <div className="flex gap-1">
           {(['grid','list'] as const).map(v=>(
             <button key={v} onClick={()=>setPview(v)} className={`p-1.5 rounded ${pview===v?'bg-white/20 text-white':'text-slate-400 hover:text-white'}`}>
@@ -100,10 +114,16 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
             </button>
           ))}
         </div>
+        </div>
       </div>
       {pview==='grid' && (
         <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 bg-white">
-          {standings.map((s,i)=>(
+          {rows.map((s,i)=>preSchedule ? (
+            <div key={s.team} className="flex flex-col items-center py-5 px-3 gap-2 w-full">
+              <TeamAvatar name={s.team}/>
+              <div className={`text-xs font-bold uppercase leading-tight text-center ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</div>
+            </div>
+          ) : (
             <button key={s.team} onClick={()=>onTeamClick(s.team)} className="flex flex-col items-center py-5 px-3 gap-2 hover:bg-teal-50 transition-colors w-full cursor-pointer" title={`View ${s.team} schedule`}>
               <TeamAvatar name={s.team}/>
               <div className="text-center">
@@ -114,7 +134,17 @@ function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advan
           ))}
         </div>
       )}
-      {pview==='list' && (
+      {pview==='list' && preSchedule && (
+        <div className="bg-white divide-y divide-slate-100">
+          {rows.map(s=>(
+            <div key={s.team} className="flex items-center gap-2.5 px-4 py-2.5">
+              <TeamAvatar name={s.team} size="sm"/>
+              <span className={`font-semibold text-xs leading-tight ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {pview==='list' && !preSchedule && (
         <div className="bg-white overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
@@ -563,11 +593,15 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   // Pools come from what staff assigned, so a division shows its pools before a
   // single game exists -- and still shows them if the schedule is wiped. Only a
   // division with no pools set falls back to reading them off the games.
-  const rosterPools=rosters.filter(r=>r.teams.length).map(r=>r.name)
+  // Real pools only. The `unassigned` row -- registered teams in no pool yet --
+  // is shown on its own below, and only while the schedule is unpublished.
+  const realRosters=rosters.filter(r=>!r.unassigned&&r.teams.length)
+  const loose=scheduleLive?undefined:rosters.find(r=>r.unassigned&&r.teams.length)
+  const rosterPools=realRosters.map(r=>r.name)
   const gamePools=Array.from(new Set(divGames.map(g=>g.pool).filter(Boolean))).sort() as string[]
   const pools=rosterPools.length?rosterPools:gamePools
-  const rosterFor=(p:string)=>rosters.find(r=>samePool(r.name,p))?.teams||[]
-  const divRoster=Array.from(new Set(rosters.flatMap(r=>r.teams)))
+  const rosterFor=(p:string)=>realRosters.find(r=>samePool(r.name,p))?.teams||[]
+  const divRoster=Array.from(new Set(realRosters.flatMap(r=>r.teams)))
   // isChampionship means THE FINAL -- the division tile names its winner as champion.
   // The bracket tree therefore cannot use it to decide which games to look at: it
   // resolves each bracket game by looking up the schedule game numbered B<n>, so it
@@ -577,31 +611,40 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   const scheduleGames=divGames.sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)
   const bracketGames=divGames
 
-  // Pools posted but schedule not published yet: standings only.
-  const tabs:DivTab[]=scheduleLive?['standings','schedule','bracket']:['standings']
+  // Before the schedule is published there is only the roster, so no tab bar
+  // at all -- it used to show a lone "Standings" tab over a division with no games.
+  const tabs:DivTab[]=['standings','schedule','bracket']
   const tabLabels:{[k in DivTab]:string}={standings:'Standings',schedule:'Schedule',bracket:'Bracket'}
 
   return (
     <div>
-      <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-xl overflow-hidden shadow-sm">
+      {scheduleLive && <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-xl overflow-hidden shadow-sm">
         {tabs.map(t=>(
           <button key={t} onClick={()=>setDivTab(t)}
             className={`flex-1 py-3 text-xs font-bold uppercase tracking-wide transition-colors ${divTab===t?'bg-[#0f1f3d] text-white':'text-gray-500 hover:bg-gray-50'}`}>
             {tabLabels[t]}
           </button>
         ))}
-      </div>
+      </div>}
 
 
       {(divTab==='standings'||!scheduleLive) && (
         <div className="space-y-4">
           {pools.length>0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            // items-start: a 4-team pool beside a 6-team one stretched to match,
+            // leaving a grey band inside its border (under the Schedule button,
+            // once the schedule is live).
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               {pools.map(pool=>(
-                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
+                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
               ))}
+              {loose && <PoolCard key="__loose" division={division} pool="" title={`${division} — Not in a pool yet`} standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={0} numPools={pools.length} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>}
             </div>
-          ) : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,divRoster)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
+          ) : loose
+            // No pools set yet: every registered team in one card, same shape,
+            // so the page doesn't change character once they are split up.
+            ? <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={0} numPools={1} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>
+            : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,divRoster)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
         </div>
       )}
 
@@ -744,6 +787,9 @@ export default function PublicTournamentPage() {
   // Kept separate from the games so the page still has something to show when
   // there is no schedule yet, or when one is cleared and rebuilt.
   const [poolRosters,setPoolRosters]=useState<PoolRoster[]>([])
+  // `unassigned` rows only show while the schedule is unpublished; once it is
+  // live the page reads the rosters exactly as it did before they existed.
+  const liveRosters=useMemo(()=>pubVis.schedule==='live'?poolRosters.filter(r=>!r.unassigned):poolRosters,[poolRosters,pubVis.schedule])
   const [annOpen,setAnnOpen]=useState(false)
 
   useEffect(()=>{
@@ -773,9 +819,9 @@ export default function PublicTournamentPage() {
   const divisions=useMemo(()=>{
     const set=new Set<string>()
     games.filter(g=>!g.isCanceled).forEach(g=>{if(g.division)set.add(g.division)})
-    poolRosters.forEach(r=>{if(r.division&&r.teams.length)set.add(r.division)})
+    liveRosters.forEach(r=>{if(r.division&&r.teams.length)set.add(r.division)})
     return Array.from(set).sort()
-  },[games,poolRosters])
+  },[games,liveRosters])
 
   // Per-division: last updated time and champion
   const allTeamsWithMeta=useMemo(()=>{
@@ -784,7 +830,7 @@ export default function PublicTournamentPage() {
     // Rostered divisions are listed from the roster and nothing else -- a team
     // dropped from every pool must not walk back in through an old game.
     const rostered=new Set<string>()
-    poolRosters.forEach(r=>{
+    liveRosters.forEach(r=>{
       if(!r.teams.length)return
       rostered.add(r.division)
       r.teams.forEach(name=>{
@@ -798,20 +844,26 @@ export default function PublicTournamentPage() {
       if(!isPlaceholderTeam(g.team2)&&!seen.has(g.team2+g.division)){seen.add(g.team2+g.division);teams.push({name:g.team2,division:g.division,pool:g.pool})}
     })
     return teams.sort((a,b)=>a.name.localeCompare(b.name))
-  },[games,poolRosters])
+  },[games,liveRosters])
 
   const divMeta=useMemo(()=>{
-    const meta:Record<string,{teams:number;total:number;completed:number;pools:number;leader:string|null;champion:string|null;lastUpdated:string;status:string}>={}
+    const meta:Record<string,{teams:number;rosterTeams:number;total:number;completed:number;pools:number;leader:string|null;champion:string|null;lastUpdated:string;status:string}>={}
     divisions.forEach(div=>{
       const divGames=games.filter(g=>g.division===div&&!g.isCanceled)
       // Bracket slots not yet filled are stored as placeholders ("Seed 3", "W-B2", "TBD").
       // Counting every name in the games made a 15-team division read 33. Prefer the
       // registered count; fall back to real names found in the schedule.
       const teamSet=new Set<string>(); divGames.forEach(g=>{[g.team1,g.team2].forEach(t=>{if(t&&!isPlaceholderTeam(t))teamSet.add(t)})})
-      const divRosters=poolRosters.filter(r=>r.division===div&&r.teams.length)
-      const poolSet=divRosters.length
-        ? new Set(divRosters.map(r=>r.name))
+      const divRosters=liveRosters.filter(r=>r.division===div&&r.teams.length)
+      // "Not in a pool yet" is not a pool; counting it made two pools read three.
+      const realPools=divRosters.filter(r=>!r.unassigned)
+      const poolSet=realPools.length
+        ? new Set(realPools.map(r=>r.name))
         : new Set(divGames.filter(g=>g.pool).map(g=>g.pool))
+      // What the division's cards list before the schedule: pooled teams plus
+      // those not in a pool yet, waitlisted teams left out. Registration counts
+      // include the waiting list, so the tile and the card could disagree.
+      const rosterTeams=new Set(divRosters.flatMap(r=>r.teams)).size
       const total=divGames.length
       const completed=divGames.filter(g=>g.score1!==null&&g.score2!==null).length
       const champ=divGames.find(g=>g.isChampionship&&g.score1!==null&&g.score2!==null)
@@ -824,10 +876,10 @@ export default function PublicTournamentPage() {
       const scored=[...divGames.filter(g=>g.score1!==null)].sort((a,b)=>`${a.date}${a.startTime}`<`${b.date}${b.startTime}`?-1:1)
       const lastUpdated=scored.length>0?fmtDateTime(scored[scored.length-1].date+' '+scored[scored.length-1].startTime):''
       const status=champion?'Final':hasBracket?'Bracket':'Pool play'
-      meta[div]={teams:regTeamCounts[div]??teamSet.size,total,completed,pools:poolSet.size,leader,champion,lastUpdated,status}
+      meta[div]={teams:regTeamCounts[div]??teamSet.size,rosterTeams,total,completed,pools:poolSet.size,leader,champion,lastUpdated,status}
     })
     return meta
-  },[games,divisions,tiebreakers,regTeamCounts])
+  },[games,divisions,tiebreakers,regTeamCounts,liveRosters])
 
   const submitNotify = () => {
     if (!notifyEmail) return
@@ -1012,20 +1064,27 @@ export default function PublicTournamentPage() {
                 if(!m) return null
                 const pctDone=m.total>0?Math.round(m.completed/m.total*100):0
                 const pill=m.status==='Final'?'bg-amber-100 text-amber-800':m.status==='Bracket'?'bg-amber-50 text-amber-700':'bg-teal-50 text-teal-700'
+                // Before the schedule is published the tile says who is in the
+                // division and nothing else: no game count, no progress bar, no
+                // "No scores yet" -- all of it only means something once games
+                // exist, and it comes back as it was the moment they do.
+                const pre=pubVis.schedule!=='live'
+                const teamCount=pre?(m.rosterTeams||m.teams):m.teams
                 return (
                   <button key={div} onClick={()=>setSelectedDiv(div)}
                     className="text-left bg-white border border-slate-200 rounded-xl p-3.5 hover:border-teal-300 hover:shadow-sm transition-all group">
                     <div className="flex items-center justify-between gap-2 mb-2.5">
                       <h3 className="font-semibold text-slate-900 text-sm truncate group-hover:text-teal-700 transition-colors">{div}</h3>
-                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full inline-flex items-center gap-1 flex-shrink-0 ${pill}`}>
+                      {!pre&&<span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full inline-flex items-center gap-1 flex-shrink-0 ${pill}`}>
                         {m.status==='Final'&&<Trophy size={10}/>}{m.status}
-                      </span>
+                      </span>}
                     </div>
-                    <div className="flex items-center gap-3.5 mb-3 text-xs text-slate-500 flex-wrap">
-                      <span className="inline-flex items-center gap-1"><Users size={13}/><b className="text-slate-800 font-semibold">{m.teams}</b> teams</span>
-                      <span className="inline-flex items-center gap-1"><Calendar size={13}/><b className="text-slate-800 font-semibold">{m.total}</b> games</span>
+                    <div className={`flex items-center gap-3.5 text-xs text-slate-500 flex-wrap ${pre?'':'mb-3'}`}>
+                      <span className="inline-flex items-center gap-1"><Users size={13}/><b className="text-slate-800 font-semibold">{teamCount}</b> team{teamCount===1?'':'s'}</span>
+                      {!pre&&<span className="inline-flex items-center gap-1"><Calendar size={13}/><b className="text-slate-800 font-semibold">{m.total}</b> games</span>}
                       {m.pools>0&&<span className="inline-flex items-center gap-1"><LayoutGrid size={13}/><b className="text-slate-800 font-semibold">{m.pools}</b> pool{m.pools!==1?'s':''}</span>}
                     </div>
+                    {!pre&&<>
                     <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
                       <span><b className="text-slate-800">{m.completed}</b> of {m.total} complete</span>
                       {m.completed>=m.total&&m.total>0?<span className="text-teal-600 font-semibold">Done</span>:<span><b className="text-slate-800">{m.total-m.completed}</b> left</span>}
@@ -1042,6 +1101,7 @@ export default function PublicTournamentPage() {
                           : <span className="text-slate-400 italic">No scores yet</span>}
                     </div>
                     {m.lastUpdated&&<p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1"><Clock size={10}/>Updated {m.lastUpdated}</p>}
+                    </>}
                   </button>
                 )
               })}
@@ -1060,7 +1120,7 @@ export default function PublicTournamentPage() {
               tournamentId={id as string}
               tiebreakers={tiebreakers}
               scheduleLive={pubVis.schedule==='live'}
-              rosters={poolRosters.filter(r=>r.division===selectedDiv)}
+              rosters={liveRosters.filter(r=>r.division===selectedDiv)}
             />
           </div>
         )}

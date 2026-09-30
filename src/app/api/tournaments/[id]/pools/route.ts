@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
 import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
+import { cleanName, nameKey } from '@/lib/names'
 
 // Who is in which pool, for the whole tournament, read from the Pool rows staff
 // edit on the Divisions page.
@@ -43,7 +44,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       // app can show an orphaned name, let alone remove it.
       registeredKeys(params.id),
     ])
-    const out = pools.map((p: { id: string; division: string; name: string; teamNames: string }) => {
+    // `unassigned` rows are registered teams in no pool yet -- see below.
+    type Row = { id: string; division: string; name: string; teams: string[]; unassigned?: boolean }
+    const out: Row[] = pools.map((p: { id: string; division: string; name: string; teamNames: string }) => {
       let teams: string[] = []
       try {
         const parsed = JSON.parse(p.teamNames || '[]')
@@ -53,6 +56,46 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       } catch { /* a malformed row is an empty pool, not a 500 */ }
       return { id: p.id, division: p.division, name: p.name, teams: keepRegistered(teams, p.division, byDiv) }
     })
+    // Registered teams that are in no pool yet. Before the schedule is
+    // published the public page shows teams, and "if I don't have a pool
+    // assigned, just show all the teams" (Bo) needs them: a division with no
+    // pools had nothing in this feed and no games, so it did not appear on the
+    // page at all.
+    //
+    // Waitlisted teams are left out -- they are not playing until Bo places
+    // them, and one he has placed in a pool is already listed above. The page
+    // only shows these rows while the schedule is unpublished.
+    //
+    // Its own try: a failure here should cost the unpooled list, not the pools.
+    try {
+      const reg = await prisma.registeredTeam.findMany({
+        where: { registration: { tournamentId: params.id, deletedAt: null }, waitlisted: false },
+        select: { division: true, teamName: true },
+      })
+      const pooled = new Map<string, Set<string>>()
+      const divName = new Map<string, string>()   // keep the pools' spelling of a division
+      for (const r of out) {
+        const d = nameKey(r.division)
+        if (!pooled.has(d)) pooled.set(d, new Set())
+        r.teams.forEach(t => pooled.get(d)!.add(nameKey(t)))
+        if (!divName.has(d)) divName.set(d, r.division)
+      }
+      const loose = new Map<string, { division: string; teams: string[]; seen: Set<string> }>()
+      for (const t of reg as { division: string; teamName: string }[]) {
+        const name = cleanName(t.teamName)
+        if (!name) continue
+        const d = nameKey(t.division), k = nameKey(name)
+        if (pooled.get(d)?.has(k)) continue
+        if (!loose.has(d)) loose.set(d, { division: divName.get(d) ?? cleanName(t.division), teams: [], seen: new Set() })
+        const grp = loose.get(d)!
+        if (grp.seen.has(k)) continue
+        grp.seen.add(k); grp.teams.push(name)
+      }
+      for (const grp of loose.values()) {
+        out.push({ id: `unassigned:${grp.division}`, division: grp.division, name: '', teams: grp.teams, unassigned: true })
+      }
+    } catch { /* best-effort: the pools above are still returned */ }
+
     return NextResponse.json(out, {
       headers: { 'Cache-Control': staff ? 'private, no-store' : 'public, s-maxage=5, stale-while-revalidate=30' },
     })
