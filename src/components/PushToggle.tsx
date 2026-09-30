@@ -1,20 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Bell, BellOff, Smartphone } from 'lucide-react'
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = atob(base64)
-  const out = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
-  return out
-}
-
-const isIOS = () => typeof navigator !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent)
-const isStandalone = () =>
-  typeof window !== 'undefined' &&
-  (window.matchMedia?.('(display-mode: standalone)')?.matches || (navigator as any).standalone === true)
+import { isIOS, isStandalone, urlBase64ToUint8Array } from '@/lib/pushClient'
 
 // Per-device toggle: subscribes THIS phone/browser to the org's registration &
 // payment push alerts. Web Push works on Android/desktop Chrome & Firefox, and

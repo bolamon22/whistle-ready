@@ -49,6 +49,33 @@ export async function removeSub(orgId: string, endpoint: string) {
   await jset(subsKey(orgId), list.filter(s => s.endpoint !== endpoint))
 }
 
+export type PushPayload = { title: string; body: string; url?: string; tag?: string }
+
+/**
+ * Send one payload to a list of subscriptions. Returns what happened, including
+ * the endpoints the push service says are gone (404/410) so the caller can prune
+ * its own store. Never throws; a bad subscription costs one failed send.
+ */
+export async function sendToSubscriptions(
+  subs: { endpoint: string; keys: { p256dh: string; auth: string } }[],
+  payload: PushPayload,
+): Promise<{ sent: number; failed: number; gone: string[] }> {
+  const out = { sent: 0, failed: 0, gone: [] as string[] }
+  if (!subs.length) return out
+  try {
+    const { publicKey, privateKey } = await getVapid()
+    webpush.setVapidDetails('mailto:info@sunshinelax.com', publicKey, privateKey)
+    const data = JSON.stringify(payload)
+    await Promise.all(subs.map(async (s) => {
+      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys } as any, data); out.sent++ }
+      catch (e: any) { out.failed++; const code = e?.statusCode; if (code === 404 || code === 410) out.gone.push(s.endpoint) }
+    }))
+  } catch (e) {
+    console.error('[push] sendToSubscriptions failed (non-blocking):', e)
+  }
+  return out
+}
+
 // Push a notification to every device subscribed for this org. Prunes any
 // subscription the push service reports as gone (404/410).
 export async function sendPushToOrg(
@@ -59,18 +86,7 @@ export async function sendPushToOrg(
   try {
     const list: PushSub[] = (await jget(subsKey(orgId))) || []
     if (!list.length) return
-    const { publicKey, privateKey } = await getVapid()
-    webpush.setVapidDetails('mailto:info@sunshinelax.com', publicKey, privateKey)
-    const data = JSON.stringify(payload)
-    const dead: string[] = []
-    await Promise.all(list.map(async (s) => {
-      try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys } as any, data)
-      } catch (e: any) {
-        const code = e?.statusCode
-        if (code === 404 || code === 410) dead.push(s.endpoint)
-      }
-    }))
+    const { gone: dead } = await sendToSubscriptions(list, payload)
     if (dead.length) {
       const fresh: PushSub[] = (await jget(subsKey(orgId))) || []
       await jset(subsKey(orgId), fresh.filter(s => !dead.includes(s.endpoint)))
