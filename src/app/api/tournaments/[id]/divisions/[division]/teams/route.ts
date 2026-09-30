@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
-import { cleanName } from '@/lib/names'
+import { cleanName, nameKey } from '@/lib/names'
 import { renameTeamRefs } from '@/lib/teamRename'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
@@ -235,13 +235,22 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     await prisma.registeredTeam.delete({ where: { id: teamId } })
 
-    // Drop the team name from any pool in this division
+    // Drop the team name from any pool in this division.
+    //
+    // Matched on nameKey(), not on the exact string. The pool stores a name that
+    // was typed or imported separately from the registration, so "Tarpons " or a
+    // case variant would slip an exact compare -- and the pool roster is what the
+    // public standings are built from, so a miss here leaves the deleted team
+    // showing publicly with no way for staff to see why.
     try {
+      const gone = nameKey(team.teamName)
       const pools = await prisma.pool.findMany({ where: { tournamentId: params.id, division } })
       for (const p of pools) {
-        const names: string[] = JSON.parse(p.teamNames || '[]')
-        if (names.includes(team.teamName)) {
-          await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(names.filter(n => n !== team.teamName)) } })
+        let names: string[] = []
+        try { const v = JSON.parse(p.teamNames || '[]'); if (Array.isArray(v)) names = v } catch { continue }
+        const kept = names.filter(n => nameKey(n) !== gone)
+        if (kept.length !== names.length) {
+          await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(kept) } })
         }
       }
     } catch { /* pools optional */ }
