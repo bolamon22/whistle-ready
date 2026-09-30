@@ -160,6 +160,21 @@ export async function followerCounts(tournamentId: string): Promise<Record<strin
   return out
 }
 
+/** Per team, how many following phones actually have alerts on. The dialog
+ *  shows this beside the follower count: a follow with alerts off hears nothing,
+ *  and "41 followers" would overstate who a Publish reaches. */
+export async function followerPhoneCounts(tournamentId: string): Promise<Record<string, number>> {
+  await ensureFollowTables()
+  const rows = (await prisma.$queryRawUnsafe(
+    `SELECT f."teamName", COUNT(DISTINCT d."deviceId") AS n
+       FROM "TeamFollow" f JOIN "FollowerDevice" d ON d."deviceId" = f."deviceId"
+      WHERE f."tournamentId" = ? AND d."endpoint" <> '' GROUP BY f."teamName"`, tournamentId,
+  )) as { teamName: string; n: number | bigint }[]
+  const out: Record<string, number> = {}
+  for (const r of rows) out[r.teamName] = Number(r.n)
+  return out
+}
+
 // ---- the device's phone -----------------------------------------------------
 
 export type PushKeys = { endpoint: string; keys: { p256dh: string; auth: string } }
