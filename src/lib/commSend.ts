@@ -9,6 +9,7 @@ import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { ensurePaymentGuard } from './paymentGuard'
+import { clubRecipients, clubDirectorEmailMap } from '@/lib/clubDirectorLinks'
 
 // The club-letter send itself, lifted out of the route so the scheduler can run
 // exactly the same code later (Bo, Sep 10: "schedule when we send the email").
@@ -122,11 +123,29 @@ export async function runCommSend(args: {
   const sharedCtaUrl = cta === 'waiver' ? waiverLink : cta === 'schedule' ? scheduleLink : ''
   const now = new Date().toISOString()
 
+  // Directors linked to each club, read once for the whole batch. The account
+  // letter never uses it (see below), so it isn't paid for on that send.
+  const directors = kind === 'account' ? null : await clubDirectorEmailMap(tournamentId)
+
   const results: SendResult[] = []
   // The first email that actually goes out is kept as the receipt's copy.
   let sample: { subject: string; html: string; to: string } | null = null
   for (const reg of regs) {
-    if (!reg.contactEmail) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_email' }); continue }
+    // A club can have more than one director -- two people who both handle waivers
+    // and schedules for the same club (Bo, Sep 30: "I would like to keep them both
+    // involved"). A registration still carries ONE contactEmail, so the letter went
+    // to whichever contact survived a merge and the other man silently dropped off.
+    // Club letters now go to the registration contact PLUS every director linked to
+    // that club name.
+    //
+    // The account letter is the one exception: it carries a claim token stored on the
+    // registration, so whoever clicks first consumes it and the second person lands on
+    // an already-claimed page. That one stays pointed at the registration contact --
+    // and anyone already holding a ClubDirectorLink has an account by definition.
+    const recipients = kind === 'account'
+      ? (reg.contactEmail ? [String(reg.contactEmail).trim().toLowerCase()] : [])
+      : clubRecipients(reg.clubName, reg.contactEmail, directors)
+    if (!recipients.length) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_email' }); continue }
 
     // Payment reminders ride the same dialog but keep their own machinery:
     // balance math, invoice-table chrome, and the lastPayReminderAt stamp.
@@ -142,10 +161,10 @@ export async function runCommSend(args: {
         eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome, logoBox, footerLogoBox,
         subjectTpl, bodyTpl,
       })
-      const rr = await sendEmail({ to: reg.contactEmail, subject, html, text, ...orgSender(org) })
+      const rr = await sendEmail({ to: recipients, subject, html, text, ...orgSender(org) })
       if (rr.ok) {
         try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "lastPayReminderAt" = ? WHERE id = ?`, now, reg.id) } catch { /* best effort */ }
-        if (!sample) sample = { subject, html, to: reg.contactEmail }
+        if (!sample) sample = { subject, html, to: recipients.join(', ') }
         results.push({ regId: reg.id, club: reg.clubName, status: 'sent' })
       } else results.push({ regId: reg.id, club: reg.clubName, status: 'failed' })
       continue
@@ -193,13 +212,13 @@ export async function runCommSend(args: {
       footerNote: 'Questions? Just reply to this email.',
     })
     const text = `${bodyText}${ctaUrl ? `\n\n${kindMeta?.ctaLabel ?? ''}: ${ctaUrl}` : ''}`
-    const r = await sendEmail({ to: reg.contactEmail, subject, html, text, ...orgSender(org) })
+    const r = await sendEmail({ to: recipients, subject, html, text, ...orgSender(org) })
     if (r.ok) {
       let log: Record<string, string> = {}
       try { const raw = logById.get(reg.id); if (raw) log = JSON.parse(raw) } catch { /* fresh log */ }
       log[kind] = now
       try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "commEmailLog" = ? WHERE id = ?`, JSON.stringify(log), reg.id) } catch { /* best effort */ }
-      if (!sample) sample = { subject, html, to: reg.contactEmail }
+      if (!sample) sample = { subject, html, to: recipients.join(', ') }
       results.push({ regId: reg.id, club: reg.clubName, status: 'sent' })
     } else {
       results.push({ regId: reg.id, club: reg.clubName, status: 'failed' })
