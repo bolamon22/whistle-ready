@@ -98,6 +98,8 @@ export default function DivisionsPage() {
   // Pool management
   const [newPoolName, setNewPoolName] = useState('')
   const [addingPool, setAddingPool] = useState(false)
+  const [renamingPool, setRenamingPool] = useState<{ id: string; value: string } | null>(null)
+  const [savingRename, setSavingRename] = useState(false)
   const [assigningTeam, setAssigningTeam] = useState<string | null>(null)
 
   useEffect(() => {
@@ -359,6 +361,32 @@ export default function DivisionsPage() {
     setNewPoolName('')
     setAddingPool(false)
     toast.success(`${pool.name} created`)
+  }
+
+  // Rename a pool in place. Bo, Sep 30 2026: "Sometimes we want to call them
+  // north, south." The route moves the games; this moves what is on screen,
+  // including teams[].pool, which holds the pool NAME rather than its id.
+  async function renamePool() {
+    const edit = renamingPool
+    if (!edit || !activeDiv || savingRename) return
+    const name = edit.value.replace(/\s+/g, ' ').trim()
+    const old = pools.find(p => p.id === edit.id)?.name ?? ''
+    if (!name || name === old) { setRenamingPool(null); return }
+    setSavingRename(true)
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pools`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ poolId: edit.id, name }),
+    })
+    const data = await res.json().catch(() => ({} as { name?: string; games?: number; error?: string }))
+    setSavingRename(false)
+    if (!res.ok) { toast.error(data.error ?? 'Could not rename the pool'); return }
+    const saved = data.name ?? name
+    setPools(p => p.map(x => (x.id === edit.id ? { ...x, name: saved } : x)))
+    setTeams(t => t.map(x => (x.pool === old ? { ...x, pool: saved } : x)))
+    setRenamingPool(null)
+    toast.success(data.games
+      ? `Renamed to ${saved} \u00b7 ${data.games} game${data.games === 1 ? '' : 's'} updated`
+      : `Renamed to ${saved}`)
   }
 
   async function deletePool(poolId: string) {
@@ -964,7 +992,17 @@ if (loading) return (
                       <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-1">Pools</span>
                       {pools.map(pool => (
                         <span key={pool.id} className="inline-flex items-center gap-1.5 text-xs bg-slate-100 border border-slate-200 rounded-full pl-2.5 pr-1 py-1">
-                          <span className="font-medium text-slate-700">{pool.name}</span>
+                          {renamingPool?.id === pool.id ? (
+                            <input autoFocus value={renamingPool.value}
+                              onChange={e => setRenamingPool({ id: pool.id, value: e.target.value })}
+                              onKeyDown={e => { if (e.key === 'Enter') renamePool(); if (e.key === 'Escape') setRenamingPool(null) }}
+                              onBlur={renamePool}
+                              className="w-24 bg-white border border-teal-300 rounded px-1.5 py-0.5 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                          ) : (
+                            <button onClick={() => setRenamingPool({ id: pool.id, value: pool.name })}
+                              title="Rename pool"
+                              className="font-medium text-slate-700 hover:text-teal-700 transition-colors">{pool.name}</button>
+                          )}
                           <span className="text-slate-400">· {teams.filter(t => t.pool === pool.name).length}</span>
                           <button onClick={() => deletePool(pool.id)} title="Delete pool"
                             className="text-slate-300 hover:text-red-500 rounded-full p-0.5 transition-colors"><X size={11} /></button>
@@ -1061,11 +1099,27 @@ if (loading) return (
                           </button>
                         </div>
                         <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-                          {[...pools.map(p => ({ key: p.name, label: p.name, list: teams.filter(t => t.pool === p.name) })),
-                            ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', label: 'No Pool', list: teams.filter(t => !t.pool) }] : [])
+                          {[...pools.map(p => ({ key: p.name, id: p.id, label: p.name, list: teams.filter(t => t.pool === p.name) })),
+                            ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', id: '', label: 'No Pool', list: teams.filter(t => !t.pool) }] : [])
                           ].map(col => (
                             <div key={col.key}>
-                              <p className="text-sm font-semibold text-slate-600 mb-2">{col.label}<span className="ml-1.5 text-xs font-normal text-slate-400">({col.list.length})</span></p>
+                              <p className="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
+                                {col.id && renamingPool?.id === col.id ? (
+                                  <input autoFocus value={renamingPool.value}
+                                    onChange={e => setRenamingPool({ id: col.id, value: e.target.value })}
+                                    onKeyDown={e => { if (e.key === 'Enter') renamePool(); if (e.key === 'Escape') setRenamingPool(null) }}
+                                    onBlur={renamePool}
+                                    className="w-32 border border-teal-300 rounded px-1.5 py-0.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                                ) : col.id ? (
+                                  <button onClick={() => setRenamingPool({ id: col.id, value: col.label })}
+                                    title="Rename pool"
+                                    className="group inline-flex items-center gap-1 hover:text-teal-700 transition-colors">
+                                    {col.label}
+                                    <Pencil size={11} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  </button>
+                                ) : col.label}
+                                <span className="text-xs font-normal text-slate-400">({col.list.length})</span>
+                              </p>
                               <div
                                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setPoolDragOver(col.key) }}
                                 onDragLeave={e => { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) setPoolDragOver(null) }}
