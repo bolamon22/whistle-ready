@@ -11,6 +11,8 @@ import { ArrowLeft, Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, Che
 
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
+// One pool as staff set it on the Divisions page.
+interface PoolRoster { id:string; division:string; name:string; teams:string[] }
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
 interface Standing { team:string; w:number; l:number; t:number; gf:number; ga:number; pts:number }
 
@@ -32,12 +34,24 @@ function TeamAvatar({name,size='md'}:{name:string,size?:'sm'|'md'|'lg'}) {
 
 // Pool names are often stored as "Pool A"; only add the word when it's missing.
 const poolLabel=(p:string)=>{const t=(p||'').trim();return /^(pool|group)\b/i.test(t)?t:`Pool ${t}`}
+// Staff name a pool "A" on the Divisions page while the scheduler writes "Pool A"
+// onto the game (or the other way round). Match on the bare letter so a roster
+// and its games always find each other.
+const poolKey=(p:string|null|undefined)=>String(p||'').trim().replace(/^(pool|group)\s*/i,'').toLowerCase()
+const samePool=(a:string|null|undefined,b:string|null|undefined)=>poolKey(a)===poolKey(b)
 const DEFAULT_TBS=['record','goal_diff','goals_for']
 const TB_LABEL:Record<string,string>={record:'record',win_pct:'win %',head_to_head:'head-to-head',h2h_two:'head-to-head',h2h_gd:'H2H goal diff',goal_diff:'goal diff',goals_for:'goals scored',goals_against:'goals allowed'}
-function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DEFAULT_TBS):Standing[] {
+// `roster` is the pool's team list as staff set it. When one is given it decides
+// who appears -- the schedule only supplies the record. Deriving the list from
+// the games instead is what kept a removed team on the standings: its old games
+// still named it, so it kept being re-created here.
+function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DEFAULT_TBS,roster?:string[]):Standing[] {
   const map:Record<string,Standing>={}
   const ensure=(t:string)=>{if(!map[t])map[t]={team:t,w:0,l:0,t:0,gf:0,ga:0,pts:0}}
-  const rel=games.filter(g=>g.division===division&&!g.isCanceled&&!g.isChampionship&&(pool!==undefined?g.pool===pool:true))
+  const only=roster&&roster.length?new Set(roster):null
+  if(only)roster!.forEach(ensure)
+  const listed=(t:string)=>!only||only.has(t)
+  const rel=games.filter(g=>g.division===division&&!g.isCanceled&&!g.isChampionship&&(pool!==undefined?samePool(g.pool,pool):true)&&listed(g.team1)&&listed(g.team2))
   rel.forEach(g=>{ensure(g.team1);ensure(g.team2)})
   const scored=rel.filter(g=>g.score1!==null&&g.score2!==null)
   scored.forEach(g=>{
@@ -69,7 +83,7 @@ function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DE
 function PoolCard({division,pool,standings,games,followedTeams,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true}:{division:string;pool:string;standings:Standing[];games:Game[];followedTeams:string[];tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean}) {
   const [pview,setPview]=useState<'grid'|'list'>('list')
   const teamForm=(team:string)=>{
-    const tg=games.filter(g=>g.division===division&&!g.isCanceled&&!g.isChampionship&&(pool?g.pool===pool:true)&&(g.team1===team||g.team2===team)&&g.score1!==null&&g.score2!==null)
+    const tg=games.filter(g=>g.division===division&&!g.isCanceled&&!g.isChampionship&&(pool?samePool(g.pool,pool):true)&&(g.team1===team||g.team2===team)&&g.score1!==null&&g.score2!==null)
       .sort((a,b)=>`${a.date}${a.startTime}`<`${b.date}${b.startTime}`?-1:1)
     return tg.slice(-3).map(g=>{const my=g.team1===team?g.score1!:g.score2!,op=g.team1===team?g.score2!:g.score1!;return my>op?'W':my<op?'L':'T'})
   }
@@ -529,7 +543,7 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
 
 type DivTab = 'standings'|'schedule'|'bracket'
 
-function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,tiebreakers,scheduleLive=true}:{division:string;games:Game[];followedTeams:string[];toggleFollow:(t:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean}) {
+function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,tiebreakers,scheduleLive=true,rosters=[]}:{division:string;games:Game[];followedTeams:string[];toggleFollow:(t:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean;rosters?:PoolRoster[]}) {
   const [divTab,setDivTab]=useState<DivTab>('standings')
   const [selectedTeam,setSelectedTeam]=useState<string|null>(null)
   const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'>('all')
@@ -547,7 +561,14 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   },[tournamentId,division])
   const handleTeamClick=(team:string)=>{if(!scheduleLive)return;setSelectedTeam(team);setDivTab('schedule')}
   const divGames=games.filter(g=>g.division===division&&!g.isCanceled)
-  const pools=Array.from(new Set(divGames.map(g=>g.pool).filter(Boolean))).sort() as string[]
+  // Pools come from what staff assigned, so a division shows its pools before a
+  // single game exists -- and still shows them if the schedule is wiped. Only a
+  // division with no pools set falls back to reading them off the games.
+  const rosterPools=rosters.filter(r=>r.teams.length).map(r=>r.name)
+  const gamePools=Array.from(new Set(divGames.map(g=>g.pool).filter(Boolean))).sort() as string[]
+  const pools=rosterPools.length?rosterPools:gamePools
+  const rosterFor=(p:string)=>rosters.find(r=>samePool(r.name,p))?.teams||[]
+  const divRoster=Array.from(new Set(rosters.flatMap(r=>r.teams)))
   // isChampionship means THE FINAL -- the division tile names its winner as champion.
   // The bracket tree therefore cannot use it to decide which games to look at: it
   // resolves each bracket game by looking up the schedule game numbered B<n>, so it
@@ -578,10 +599,10 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
           {pools.length>0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {pools.map(pool=>(
-                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
+                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
               ))}
             </div>
-          ) : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
+          ) : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,divRoster)} games={games} followedTeams={followedTeams} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
         </div>
       )}
 
@@ -746,6 +767,10 @@ export default function PublicTournamentPage() {
   // What staff have published (lib/publicView). The games feed is already filtered
   // server-side; this only decides which tabs and messages to show.
   const [pubVis,setPubVis]=useState<{pools:'live'|'hidden';schedule:'live'|'hidden'}>({pools:'live',schedule:'live'})
+  // Divisions, pools and who is in them -- the record this page is really about.
+  // Kept separate from the games so the page still has something to show when
+  // there is no schedule yet, or when one is cleared and rebuilt.
+  const [poolRosters,setPoolRosters]=useState<PoolRoster[]>([])
   const [annOpen,setAnnOpen]=useState(false)
   const [dark,setDark]=useState(false)
   useEffect(()=>{ try{ setDark(localStorage.getItem(`theme-${id}`)==='dark') }catch{} },[id])
@@ -761,6 +786,7 @@ export default function PublicTournamentPage() {
     fetch(`/api/tournaments/${id}/info`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.sections))setInfoSections(d.sections)}).catch(()=>{})
     fetch(`/api/tournaments/${id}/announcements`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.announcements))setAnnouncements(d.announcements)}).catch(()=>{})
     fetch(`/api/tournaments/${id}/visibility`).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.pools)setPubVis({pools:d.pools,schedule:d.schedule})}).catch(()=>{})
+    fetch(`/api/tournaments/${id}/pools?view=public`).then(r=>r.ok?r.json():[]).then(d=>{if(Array.isArray(d))setPoolRosters(d.filter((x:any)=>x&&typeof x.division==='string'))}).catch(()=>{})
     fetch(`/api/tournaments/${id}/divisions`).then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)){const m:Record<string,number>={};d.forEach((x:any)=>{if(x&&typeof x.name==='string')m[x.name]=Number(x.teamCount)||0});setRegTeamCounts(m)}}).catch(()=>{})
   },[id])
 
@@ -772,19 +798,38 @@ export default function PublicTournamentPage() {
     })
   }
 
-  const divisions=useMemo(()=>Array.from(new Set(games.filter(g=>!g.isCanceled).map(g=>g.division))).sort(),[games])
+  // A division counts as published once it has pools OR games. Reading only the
+  // games meant an event with no schedule yet showed an empty public page, which
+  // is why the schedule could never be cleared and rebuilt.
+  const divisions=useMemo(()=>{
+    const set=new Set<string>()
+    games.filter(g=>!g.isCanceled).forEach(g=>{if(g.division)set.add(g.division)})
+    poolRosters.forEach(r=>{if(r.division&&r.teams.length)set.add(r.division)})
+    return Array.from(set).sort()
+  },[games,poolRosters])
 
   // Per-division: last updated time and champion
   const allTeamsWithMeta=useMemo(()=>{
     const seen=new Set<string>()
     const teams:{name:string;division:string;pool:string|null}[]=[]
-    games.filter(g=>!g.isCanceled).forEach(g=>{
+    // Rostered divisions are listed from the roster and nothing else -- a team
+    // dropped from every pool must not walk back in through an old game.
+    const rostered=new Set<string>()
+    poolRosters.forEach(r=>{
+      if(!r.teams.length)return
+      rostered.add(r.division)
+      r.teams.forEach(name=>{
+        if(isPlaceholderTeam(name)||seen.has(name+r.division))return
+        seen.add(name+r.division); teams.push({name,division:r.division,pool:r.name})
+      })
+    })
+    games.filter(g=>!g.isCanceled&&!rostered.has(g.division)).forEach(g=>{
       if(isPlaceholderTeam(g.team1)&&isPlaceholderTeam(g.team2))return
       if(!isPlaceholderTeam(g.team1)&&!seen.has(g.team1+g.division)){seen.add(g.team1+g.division);teams.push({name:g.team1,division:g.division,pool:g.pool})}
       if(!isPlaceholderTeam(g.team2)&&!seen.has(g.team2+g.division)){seen.add(g.team2+g.division);teams.push({name:g.team2,division:g.division,pool:g.pool})}
     })
     return teams.sort((a,b)=>a.name.localeCompare(b.name))
-  },[games])
+  },[games,poolRosters])
 
   const divMeta=useMemo(()=>{
     const meta:Record<string,{teams:number;total:number;completed:number;pools:number;leader:string|null;champion:string|null;lastUpdated:string;status:string}>={}
@@ -794,7 +839,10 @@ export default function PublicTournamentPage() {
       // Counting every name in the games made a 15-team division read 33. Prefer the
       // registered count; fall back to real names found in the schedule.
       const teamSet=new Set<string>(); divGames.forEach(g=>{[g.team1,g.team2].forEach(t=>{if(t&&!isPlaceholderTeam(t))teamSet.add(t)})})
-      const poolSet=new Set(divGames.filter(g=>g.pool).map(g=>g.pool))
+      const divRosters=poolRosters.filter(r=>r.division===div&&r.teams.length)
+      const poolSet=divRosters.length
+        ? new Set(divRosters.map(r=>r.name))
+        : new Set(divGames.filter(g=>g.pool).map(g=>g.pool))
       const total=divGames.length
       const completed=divGames.filter(g=>g.score1!==null&&g.score2!==null).length
       const champ=divGames.find(g=>g.isChampionship&&g.score1!==null&&g.score2!==null)
@@ -1179,6 +1227,7 @@ export default function PublicTournamentPage() {
               tournamentId={id as string}
               tiebreakers={tiebreakers}
               scheduleLive={pubVis.schedule==='live'}
+              rosters={poolRosters.filter(r=>r.division===selectedDiv)}
             />
           </div>
         )}
