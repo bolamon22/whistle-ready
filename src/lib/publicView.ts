@@ -42,7 +42,9 @@ export function ensureVisibilityColumns(): Promise<void> {
   return columnsReady
 }
 
-function todayET(): string {
+/** Today's date, YYYY-MM-DD, in the event's time zone. Game dates are stored
+ *  as plain date strings, so this is what they compare against. */
+export function todayET(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 }
 
