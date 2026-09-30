@@ -134,7 +134,7 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 
 ## Current state (as of Sep 30, 2026)
 
-- **Follow your team + schedule alerts (Sep 30) — steps 1–2 of 5 live.** Instagram-style Follow on
+- **Follow your team + schedule alerts (Sep 30) — steps 1–3 of 5 live.** Instagram-style Follow on
   every team on `/public` (grid, names, standings, game rows, search, My Teams) with follower counts;
   a device can follow up to 40 teams per event. Follows are **anonymous and device-keyed**
   (localStorage `wr-device` UUID) in raw-SQL tables `TeamFollow` + `FollowerDevice` (created lazily,
@@ -147,10 +147,13 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
     The route (`publish/route.ts`) diffs the OLD snapshot → `affectedTeams()` (first publish = every
     scheduled team) → **one push per team** with that team's current schedule (`lib/scheduleDigest.ts`,
     tag `sched:{tournamentId}:{team}` so a republish replaces the earlier alert). Never one per game.
-  - Not built yet (steps 3–5): Broadcast delivering to followers, finals auto-notifying on score entry,
-    follower counts on pool cards. Keep it separate from the existing Broadcast/Communications system —
-    Bo does not want the two to overlap. Renames/deletes flow through `lib/teamRename.ts`
-    (`renameFollowRefs` / `removeFollowRefs`).
+  - **Broadcast reaches followers too** (`announcements/route.ts` + `GET follows/reach`): a broadcast for
+    Everyone / a division / a team can alert the phones following those teams, same on-by-default toggle,
+    reach shown as distinct people and phones (`lib/follows.followerReach`, `teamDivisions`). Coaches and
+    staff are not followers — banner only. It is one messaging system with one more delivery target, not a
+    second one (Bo does not want the two to overlap).
+  - Not built yet (steps 4–5): finals auto-notifying followers on score entry; follower counts on the
+    public pool cards. Renames/deletes flow through `lib/teamRename.ts` (`renameFollowRefs` / `removeFollowRefs`).
 
 - **Public page reads the roster, not the schedule; a deleted team leaves everywhere (Sep 29–30).**
   `/public` used to derive divisions/pools/teams from games, so nothing showed before the schedule and a
