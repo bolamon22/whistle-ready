@@ -19,6 +19,7 @@
 // the admin list and revocable with the existing DELETE.
 import { prisma } from '@/lib/db'
 import { tournamentOrgId } from '@/lib/org'
+import { nameKey } from '@/lib/names'
 
 /**
  * Give every director already linked to `clubName` (within this tournament's org)
@@ -58,4 +59,77 @@ export async function carryDirectorLinks(tournamentId: string, clubName: string)
   } catch {
     return 0
   }
+}
+
+// ---------------------------------------------------------------------------
+// WHO GETS A CLUB'S MAIL
+//
+// A registration holds exactly one contactEmail, so every club letter -- pay
+// reminders, confirmations, the lot -- went to one person. Jupiter Revolution
+// registered twice for Monster Mash under two directors, Nick O'Hara and David
+// Spennacchio, and merging those rows keeps one contact and drops the other
+// (Bo, Sep 30 2026: "I would like to keep them both involved... they both will
+// handle things like player waivers, and reviewing schedules").
+//
+// Access is already keyed on (user, tournament, club) and has always allowed
+// several directors. The two functions below make the MAILING list agree with
+// the ACCESS list, rather than adding a second contact field that would then
+// need keeping in step with it. Neither throws: a club letter must not fail
+// because the extra lookup did.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every club's director emails for one event, keyed by loose club name.
+ *
+ * Two queries for the whole batch rather than two per club: a club send walks every
+ * registration, and the links table is small enough to read once.
+ *
+ * Keyed on nameKey() -- the same loose key the portal's own ownership checks use --
+ * so "Jupiter Revolution" and "Jupiter  Revolution" are one club, not two.
+ */
+export async function clubDirectorEmailMap(tournamentId: string): Promise<Map<string, string[]>> {
+  const byClub = new Map<string, string[]>()
+  if (!tournamentId) return byClub
+  try {
+    const links = await prisma.clubDirectorLink.findMany({
+      where: { tournamentId }, select: { userId: true, clubName: true },
+    })
+    if (!links.length) return byClub
+    const users = await prisma.user.findMany({
+      where: { id: { in: [...new Set(links.map(l => l.userId))] } },
+      select: { id: true, email: true },
+    })
+    const emailFor = new Map(users.map(u => [u.id, String(u.email ?? '').trim().toLowerCase()]))
+    for (const l of links) {
+      const key = nameKey(l.clubName)
+      const email = emailFor.get(l.userId)
+      if (!key || !email) continue
+      const list = byClub.get(key) ?? []
+      if (!list.includes(email)) list.push(email)
+      byClub.set(key, list)
+    }
+  } catch { /* an empty map just means the contact alone gets the letter */ }
+  return byClub
+}
+
+/**
+ * Merge one club's registration contact with its linked directors.
+ *
+ * The contact stays FIRST so a send receipt still names the person the club put on
+ * the form. Deduped and lowercased; anything that isn't an address is dropped rather
+ * than handed to SendGrid, which rejects the whole send over one bad recipient.
+ */
+export function clubRecipients(
+  clubName: string,
+  contactEmail: string | null | undefined,
+  directors?: Map<string, string[]> | null,
+): string[] {
+  const out: string[] = []
+  const add = (e: unknown) => {
+    const v = String(e ?? '').trim().toLowerCase()
+    if (v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) && !out.includes(v)) out.push(v)
+  }
+  add(contactEmail)
+  for (const e of directors?.get(nameKey(clubName)) ?? []) add(e)
+  return out
 }
