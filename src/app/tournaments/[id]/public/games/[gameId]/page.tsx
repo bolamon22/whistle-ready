@@ -8,6 +8,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Trophy, MapPin, Calendar, Clock, Share2, CalendarPlus } from 'lucide-react'
+import { poolLabel } from '@/lib/poolNames'
 
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
 interface LiveScore { score1:number; score2:number; period:number; periodLabel:string; live:boolean; updatedAt:string }
@@ -142,7 +143,7 @@ export default function PublicGamePage(){
           <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-2 flex-wrap text-[11px]">
             <span className="bg-white border border-slate-200 rounded-full px-2.5 py-1 text-slate-600 font-medium">{game.division}</span>
             <span className={`rounded-full px-2.5 py-1 font-medium ${game.isChampionship?'bg-amber-100 text-amber-800':'bg-teal-50 text-teal-700'}`}>
-              {game.isChampionship?'Bracket':game.pool?`Pool ${game.pool}`:'Pool play'}
+              {game.isChampionship?'Bracket':game.pool?poolLabel(game.pool):'Pool play'}
             </span>
             {game.gameNumber&&<span className="bg-white border border-slate-200 rounded-full px-2.5 py-1 text-slate-500 font-medium">Game {game.gameNumber}</span>}
             {game.location&&<span className="bg-white border border-slate-200 rounded-full px-2.5 py-1 text-slate-500 font-medium">{game.location}</span>}
