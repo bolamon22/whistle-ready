@@ -134,7 +134,7 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 
 ## Current state (as of Sep 30, 2026)
 
-- **Follow your team + schedule alerts (Sep 30) — steps 1–3 of 5 live.** Instagram-style Follow on
+- **Follow your team + schedule alerts (Sep 30) — all 5 steps built.** Instagram-style Follow on
   every team on `/public` (grid, names, standings, game rows, search, My Teams) with follower counts;
   a device can follow up to 40 teams per event. Follows are **anonymous and device-keyed**
   (localStorage `wr-device` UUID) in raw-SQL tables `TeamFollow` + `FollowerDevice` (created lazily,
@@ -152,8 +152,21 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
     reach shown as distinct people and phones (`lib/follows.followerReach`, `teamDivisions`). Coaches and
     staff are not followers — banner only. It is one messaging system with one more delivery target, not a
     second one (Bo does not want the two to overlap).
-  - Not built yet (steps 4–5): finals auto-notifying followers on score entry; follower counts on the
-    public pool cards. Renames/deletes flow through `lib/teamRename.ts` (`renameFollowRefs` / `removeFollowRefs`).
+  - **Finals are automatic** (`lib/finalAlerts.ts`, called from `PATCH /api/games/[id]` and the bracket
+    page's game PATCH): when both scores land or change, followers of both teams get "Final: Ghost 8, H44 6"
+    — only during the event's dates (test scores the week before reach nobody), never for placeholder teams
+    or canceled games, tag `final:{tournamentId}:{divisionKey}:{gameNumber}` so a corrected score REPLACES
+    the alert and a game scored on both the Scores page and the bracket page shows once. The scorekeeper's
+    top-bar Save sends `provisional: true` (keeps the running score without announcing it); only
+    "End Game & Post Score" is the final. **Gotcha fixed here:** the game PATCH turned a null score into 0
+    (`Number(null)`), so the Scores page's first box made the public page show a phantom 8-0 final.
+  - **Follower counts** show under team names on `/public` (pool tiles, list, standings, search) via
+    `FollowCountsContext`; hidden at zero; optimistic bump, server count wins.
+  - Renames/deletes flow through `lib/teamRename.ts` (`renameFollowRefs` / `removeFollowRefs`).
+  - Test harness pattern that worked for all of this: bundle the real lib/route with esbuild, alias
+    `@/lib/db` to a `node:sqlite` stand-in for the raw-SQL tables (Prisma model calls return fixtures),
+    alias `next/server` / `next-auth` to tiny shims, and drive the real client pages in Playwright with
+    `window.fetch` mocked. Lives in `.harness/` on the sandbox side only (not committed).
 
 - **Public page reads the roster, not the schedule; a deleted team leaves everywhere (Sep 29–30).**
   `/public` used to derive divisions/pools/teams from games, so nothing showed before the schedule and a
