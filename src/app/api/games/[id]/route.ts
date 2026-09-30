@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
+import { notifyFinal } from '@/lib/finalAlerts'
 
 // Middleware lets every /api/* request through, so the gate has to live here.
 // Without it this route rewrote or deleted any game by id with no login at all —
@@ -9,12 +10,26 @@ import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 // (not requireDirector) because the table workers running the scorekeeper page
 // carry staff/ref/scorekeeper roles and must keep working; it only shuts out
 // anonymous callers and the coach/parent/club-director roles.
+//
+// A score write that makes (or corrects) a final also alerts the phones
+// following either team -- see lib/finalAlerts for the guards. The scorekeeper
+// page saves mid-game too, to survive a refresh; it marks those writes
+// `provisional: true` so they are not announced as finals. The response is the
+// updated game either way, so nothing about the callers had to change.
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const b = await req.json()
-  return NextResponse.json(await prisma.game.update({ where:{id:params.id}, data:{
-    ...(b.score1      !== undefined && { score1:      b.score1===''?null:Number(b.score1) }),
-    ...(b.score2      !== undefined && { score2:      b.score2===''?null:Number(b.score2) }),
+  const touchesScore = b.score1 !== undefined || b.score2 !== undefined
+  const before = touchesScore
+    ? await prisma.game.findUnique({ where: { id: params.id }, select: { score1: true, score2: true } })
+    : null
+  const updated = await prisma.game.update({ where:{id:params.id}, data:{
+    // null and '' both mean "no score". Number(null) is 0, so the old ''-only check
+    // turned the Scores page's empty box (it sends null) into a 0 -- filling in the
+    // first of two boxes made the public page show a final of 8-0 until the second
+    // box was typed, and would have pushed that phantom final to followers.
+    ...(b.score1      !== undefined && { score1:      b.score1===''||b.score1===null?null:Number(b.score1) }),
+    ...(b.score2      !== undefined && { score2:      b.score2===''||b.score2===null?null:Number(b.score2) }),
     ...(b.refCount    !== undefined && { refCount:    Number(b.refCount) }),
     ...(b.isChampionship !== undefined && { isChampionship: Boolean(b.isChampionship) }),
     ...(b.isCanceled  !== undefined && { isCanceled:  Boolean(b.isCanceled) }),
@@ -26,7 +41,11 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.team2       !== undefined && { team2:       String(b.team2) }),
     ...(b.gameNumber  !== undefined && { gameNumber:  String(b.gameNumber) }),
     ...(b.date        !== undefined && { date:        String(b.date) }),
-  }}))
+  }})
+  if (before && b.provisional !== true) {
+    await notifyFinal(before, { ...updated, url: `/tournaments/${updated.tournamentId}/public/games/${updated.id}` })
+  }
+  return NextResponse.json(updated)
 }
 
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {

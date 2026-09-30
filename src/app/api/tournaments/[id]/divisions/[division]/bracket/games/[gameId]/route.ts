@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { notifyFinal } from '@/lib/finalAlerts'
 
 export async function PATCH(
   req: NextRequest,
@@ -45,6 +46,26 @@ export async function PATCH(
         loser,
       },
     })
+
+    // A final entered here reaches the followers of both teams. The tag uses
+    // the scheduler's numbering (B + offset + game number), the same one the
+    // mirrored Game row carries, so scoring the game in both places shows one
+    // alert on the phone, not two. Tap lands on that mirror's public page.
+    if (!clearScore) {
+      const division = decodeURIComponent(params.division)
+      const bracket = await prisma.bracket.findUnique({ where: { id: game.bracketId }, select: { numberOffset: true } }).catch(() => null)
+      const gameNumber = 'B' + ((bracket?.numberOffset ?? 0) + game.gameNumber)
+      const mirror = await prisma.game.findFirst({ where: { tournamentId: params.id, division, gameNumber }, select: { id: true, date: true } }).catch(() => null)
+      await notifyFinal(
+        { score1: game.score1, score2: game.score2 },
+        {
+          tournamentId: params.id, division, gameNumber,
+          team1: newTeam1, team2: newTeam2, score1: newScore1, score2: newScore2,
+          date: mirror?.date || updated.gameDate,
+          url: mirror ? `/tournaments/${params.id}/public/games/${mirror.id}` : `/tournaments/${params.id}/public`,
+        },
+      )
+    }
 
     return NextResponse.json(updated)
   } catch (e) {

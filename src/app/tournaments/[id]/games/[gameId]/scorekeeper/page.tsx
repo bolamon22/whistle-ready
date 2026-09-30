@@ -188,13 +188,16 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     setShowClockSetup(false)
   }
 
-  async function saveScore() {
+  // The top-bar Save keeps the running score on the server so a dropped phone or
+  // a refresh loses nothing; only "End Game & Post Score" is the final. The
+  // server tells followers about finals, so mid-game saves say `provisional`.
+  async function saveScore(opts: { final?: boolean } = {}) {
     setSaving(true)
     await fetch(`/api/games/${params.gameId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ score1, score2 }),
+      body: JSON.stringify({ score1, score2, ...(opts.final ? {} : { provisional: true }) }),
     })
-    setSaving(false); setSaved(true); toast.success('Score saved!')
+    setSaving(false); setSaved(true); toast.success(opts.final ? 'Final posted!' : 'Score saved!')
     setTimeout(() => setSaved(false), 2000)
   }
 
@@ -336,7 +339,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
           <div className="flex items-center gap-2">
             <button onClick={openSettings} aria-label="Settings"
               className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-base">⚙</button>
-            <button onClick={saveScore} disabled={saving}
+            <button onClick={() => saveScore()} disabled={saving}
               className={`text-sm font-semibold px-4 py-1.5 rounded-xl transition-colors ${saved ? 'bg-emerald-700 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'} disabled:opacity-50`}>
               {saving ? '…' : saved ? '✓ Saved' : 'Save'}
             </button>
@@ -421,7 +424,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
         <button onClick={() => {
             if (noTies && score1 === score2) { if (!window.confirm('The score is tied and this tournament doesn’t allow ties. Post it as a tie anyway?')) return }
             if (!window.confirm(`Post the final score?\n\n${game.team1} ${score1} – ${score2} ${game.team2}`)) return
-            saveScore(); setGameEnded(true); setClockRunning(false); pushLive({ live: false })
+            saveScore({ final: true }); setGameEnded(true); setClockRunning(false); pushLive({ live: false })
           }}
           className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-base active:scale-[.98] transition-all">End Game &amp; Post Score</button>
         {gameEnded && (<p className="text-center text-xs text-emerald-400 mt-2">Final: {game.team1} {score1} – {score2} {game.team2}</p>)}
