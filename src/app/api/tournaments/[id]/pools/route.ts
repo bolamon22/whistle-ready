@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
+import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
 
 // Who is in which pool, for the whole tournament, read from the Pool rows staff
 // edit on the Divisions page.
@@ -31,10 +32,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    const pools = await prisma.pool.findMany({
-      where: { tournamentId: params.id },
-      orderBy: [{ division: 'asc' }, { name: 'asc' }],
-    })
+    const [pools, byDiv] = await Promise.all([
+      prisma.pool.findMany({
+        where: { tournamentId: params.id },
+        orderBy: [{ division: 'asc' }, { name: 'asc' }],
+      }),
+      // A pool can name a team whose registration is gone -- see
+      // lib/poolMembership. Filtering here is what heals the rows that went
+      // stale before the write paths started pruning, since no screen in the
+      // app can show an orphaned name, let alone remove it.
+      registeredKeys(params.id),
+    ])
     const out = pools.map((p: { id: string; division: string; name: string; teamNames: string }) => {
       let teams: string[] = []
       try {
@@ -43,7 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         // so trim on the way out -- see lib/names.
         if (Array.isArray(parsed)) teams = parsed.filter((t: unknown) => typeof t === 'string' && t.trim()).map((t: string) => t.trim())
       } catch { /* a malformed row is an empty pool, not a 500 */ }
-      return { id: p.id, division: p.division, name: p.name, teams }
+      return { id: p.id, division: p.division, name: p.name, teams: keepRegistered(teams, p.division, byDiv) }
     })
     return NextResponse.json(out, {
       headers: { 'Cache-Control': staff ? 'private, no-store' : 'public, s-maxage=5, stale-while-revalidate=30' },

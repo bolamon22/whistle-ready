@@ -6,6 +6,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { cleanName } from '@/lib/names'
 import { renameTeamRefs, renameClubRefs } from '@/lib/teamRename'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
+import { pruneOrphanPoolNames } from '@/lib/poolMembership'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -161,6 +162,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         if (was && now && was !== now) await renameTeamRefs(before.tournamentId, was, now, club)
       }
     }
+    // This PATCH deletes and recreates the whole team list, so dropping a team
+    // here removes its RegisteredTeam but left its name behind in the pool.
+    // Renames are handled above by renameTeamRefs; this catches the removals.
+    if (before.teams.length !== cleanTeams.length) await pruneOrphanPoolNames(before.tournamentId)
   }
 
   return NextResponse.json(registration)
@@ -172,9 +177,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const reg = await prisma.teamRegistration.findUnique({ where: { id: params.id }, select: { tournamentId: true } })
   await prisma.teamRegistration.update({
     where: { id: params.id },
     data: { deletedAt: new Date() },
   })
+  // The club's teams are gone from the event, so take their names out of the
+  // pools too. Only the Divisions page used to do this, which is how a team
+  // removed here stayed on the public standings with nothing able to shift it.
+  if (reg?.tournamentId) await pruneOrphanPoolNames(reg.tournamentId)
   return NextResponse.json({ ok: true })
 }
