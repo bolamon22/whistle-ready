@@ -132,7 +132,36 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
-## Current state (as of Sep 29, 2026)
+## Current state (as of Sep 30, 2026)
+
+- **Follow your team + schedule alerts (Sep 30) — steps 1–2 of 5 live.** Instagram-style Follow on
+  every team on `/public` (grid, names, standings, game rows, search, My Teams) with follower counts;
+  a device can follow up to 40 teams per event. Follows are **anonymous and device-keyed**
+  (localStorage `wr-device` UUID) in raw-SQL tables `TeamFollow` + `FollowerDevice` (created lazily,
+  deliberately NOT in schema.prisma — same precedent as ClubDirectorLink): `src/lib/follows.ts`.
+  Alerts = web push (shared VAPID in `lib/push.ts`, browser side `lib/pushClient.ts`, `public/sw.js`);
+  the first Follow offers the alerts opt-in (`FollowAlertsSheet`; iOS must Add to Home Screen first).
+  - **Publish is the only gate for schedule alerts** (Bo: slots get shuffled all week, most moves must
+    stay quiet). The Scheduler's Publish stops at the review dialog *only when a follower of an affected
+    team has alerts on*, with a "Tell followers" toggle (on by default); otherwise it publishes at once.
+    The route (`publish/route.ts`) diffs the OLD snapshot → `affectedTeams()` (first publish = every
+    scheduled team) → **one push per team** with that team's current schedule (`lib/scheduleDigest.ts`,
+    tag `sched:{tournamentId}:{team}` so a republish replaces the earlier alert). Never one per game.
+  - Not built yet (steps 3–5): Broadcast delivering to followers, finals auto-notifying on score entry,
+    follower counts on pool cards. Keep it separate from the existing Broadcast/Communications system —
+    Bo does not want the two to overlap. Renames/deletes flow through `lib/teamRename.ts`
+    (`renameFollowRefs` / `removeFollowRefs`).
+
+- **Public page reads the roster, not the schedule; a deleted team leaves everywhere (Sep 29–30).**
+  `/public` used to derive divisions/pools/teams from games, so nothing showed before the schedule and a
+  deleted team lingered in standings. Now: `GET /api/tournaments/[id]/pools` serves pools from
+  `Pool.teamNames` filtered through `src/lib/poolMembership.ts` (`keepRegistered`; `pruneOrphanPoolNames`
+  on registration delete/edit — `Pool.teamNames` is a JSON name list with no FK). Pre-schedule the page
+  shows just the teams per pool, alphabetical, no tab bar. Deleting a team (`lib/teamRename.removeTeamRefs`)
+  removes its games, blanks bracket slots and follows, and the Scheduler/Divisions show `ShortTeamsBanner`
+  (`lib/gameBalance.findShortTeams`, pool MAX games as the yardstick) so nobody ends up short unnoticed.
+  This is for BEFORE play; a team that withdraws mid-event is not deleted from registration. One shared
+  `EventHero` (`_eventHero.tsx` + `lib/eventHero.ts`) now heads every public event page, including `/public`.
 
 - **Registration status badges + waiting list (Sep 29)** — per-event and per-division "how full
   are we" signalling, and the billing rule that came with it.
