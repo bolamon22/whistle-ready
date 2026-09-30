@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import { cleanName, nameKey } from '@/lib/names'
 import { sendToSubscriptions } from '@/lib/push'
+import { isRealTeam } from '@/lib/autoSchedule'
 
 // Following a team, and the phone that follows it.
 //
@@ -209,33 +210,137 @@ export async function deviceHasPush(deviceId: string): Promise<boolean> {
 
 // ---- delivery (steps 2-4 call this) ---------------------------------------------
 
+/**
+ * Every team at this event and the division it plays in, from the same three
+ * sources canonicalTeamName() accepts a follow for: registered teams, pool
+ * lists, and the schedule (CSV-import events have only the last two). Bracket
+ * placeholders ("Seed 1", "W-B3") are not teams and are left out.
+ *
+ * The Broadcast page needs this to turn "the 14U division" into the phones
+ * following any of its teams, since a follow stores a team name and nothing
+ * else. Registered spelling wins over pool spelling over schedule spelling,
+ * matched loosely so "ghost" and "Ghost " are one team.
+ */
+export async function teamDivisions(tournamentId: string): Promise<{ team: string; division: string }[]> {
+  const out = new Map<string, { team: string; division: string }>()
+  const add = (team: unknown, division: unknown) => {
+    const t = cleanName(team), k = nameKey(t)
+    if (!k || out.has(k) || !isRealTeam(t)) return
+    out.set(k, { team: t, division: cleanName(division) })
+  }
+  try {
+    const reg = await prisma.registeredTeam.findMany({
+      where: { registration: { tournamentId, deletedAt: null } },
+      select: { teamName: true, division: true },
+    })
+    reg.forEach((r: { teamName: string; division: string }) => add(r.teamName, r.division))
+  } catch { /* fall through */ }
+  try {
+    const pools = await prisma.pool.findMany({ where: { tournamentId }, select: { division: true, teamNames: true } })
+    for (const p of pools) {
+      let names: unknown[] = []
+      try { names = JSON.parse(p.teamNames || '[]') } catch { continue }
+      if (Array.isArray(names)) names.forEach(n => add(n, p.division))
+    }
+  } catch { /* fall through */ }
+  try {
+    const games = await prisma.game.findMany({ where: { tournamentId }, select: { team1: true, team2: true, division: true } })
+    for (const g of games) { add(g.team1, g.division); add(g.team2, g.division) }
+  } catch { /* fall through */ }
+  return Array.from(out.values())
+}
+
+/** The teams playing in `division` at this event (see teamDivisions). */
+export async function teamsInDivision(tournamentId: string, division: string): Promise<string[]> {
+  const want = nameKey(division)
+  return (await teamDivisions(tournamentId)).filter(t => nameKey(t.division) === want).map(t => t.team)
+}
+
+export type Reach = { follows: number; phones: number }
+
+/**
+ * How many people a message to these teams would reach: distinct devices
+ * following any of them, and how many of those have alerts on. `null` means
+ * every team at the event. Counted per device, not per follow -- a parent
+ * following two of the teams is one person and one phone.
+ *
+ * Returned per team, per division and for the whole event in one pass, so the
+ * Broadcast page can show the reach of whatever audience is picked without a
+ * round trip per click.
+ */
+export async function followerReach(tournamentId: string): Promise<{
+  event: Reach
+  divisions: Record<string, Reach & { teams: string[] }>
+  teams: Record<string, Reach>
+}> {
+  await ensureFollowTables()
+  const [rows, roster] = await Promise.all([
+    prisma.$queryRawUnsafe(
+      `SELECT f."teamName", f."deviceId", CASE WHEN d."endpoint" <> '' THEN 1 ELSE 0 END AS "hasPush"
+         FROM "TeamFollow" f LEFT JOIN "FollowerDevice" d ON d."deviceId" = f."deviceId"
+        WHERE f."tournamentId" = ?`, tournamentId,
+    ) as Promise<{ teamName: string; deviceId: string; hasPush: number | bigint }[]>,
+    teamDivisions(tournamentId),
+  ])
+  type Tally = { all: Set<string>; on: Set<string> }
+  const tally = (): Tally => ({ all: new Set(), on: new Set() })
+  const count = (t: Tally, r: { deviceId: string; hasPush: number | bigint }) => { t.all.add(r.deviceId); if (Number(r.hasPush)) t.on.add(r.deviceId) }
+  const reach = (t: Tally | undefined): Reach => ({ follows: t?.all.size ?? 0, phones: t?.on.size ?? 0 })
+
+  const divisionOf = new Map(roster.map(t => [nameKey(t.team), t.division]))
+  const ev = tally()
+  const byDiv = new Map<string, Tally>()
+  const byTeam = new Map<string, Tally>()
+  for (const r of rows) {
+    const div = divisionOf.get(nameKey(r.teamName)) ?? ''
+    if (!byDiv.has(div)) byDiv.set(div, tally())
+    if (!byTeam.has(r.teamName)) byTeam.set(r.teamName, tally())
+    count(ev, r); count(byDiv.get(div)!, r); count(byTeam.get(r.teamName)!, r)
+  }
+
+  const divisions: Record<string, Reach & { teams: string[] }> = {}
+  for (const t of roster) {
+    if (!divisions[t.division]) divisions[t.division] = { ...reach(byDiv.get(t.division)), teams: [] }
+    divisions[t.division].teams.push(t.team)
+  }
+  for (const d of Object.values(divisions)) d.teams.sort((a, b) => a.localeCompare(b))
+  const teams: Record<string, Reach> = {}
+  for (const [name, t] of byTeam) teams[name] = reach(t)
+  return { event: reach(ev), divisions, teams }
+}
+
 /** The phones following any of these teams at this event, one per device even
  *  if it follows several of them -- a parent with two kids on two of the teams
- *  gets one message, not two. */
-export async function followerDevices(tournamentId: string, teamNames: string[]): Promise<PushKeys[]> {
-  // Not `.map(cleanName)`: its second parameter is a max length, and map would
-  // pass the index -- cleanName('Ghost', 0) is '', and nobody gets the alert.
-  const names = Array.from(new Set(teamNames.map(n => cleanName(n)).filter(Boolean)))
-  if (!names.length) return []
+ *  gets one message, not two. `null` = every phone following any team here. */
+export async function followerDevices(tournamentId: string, teamNames: string[] | null): Promise<PushKeys[]> {
   await ensureFollowTables()
-  const marks = names.map(() => '?').join(',')
+  let where = '', args: string[] = []
+  if (teamNames !== null) {
+    // Not `.map(cleanName)`: its second parameter is a max length, and map would
+    // pass the index -- cleanName('Ghost', 0) is '', and nobody gets the alert.
+    const names = Array.from(new Set(teamNames.map(n => cleanName(n)).filter(Boolean)))
+    if (!names.length) return []
+    where = ` AND f."teamName" IN (${names.map(() => '?').join(',')})`
+    args = names
+  }
   const rows = (await prisma.$queryRawUnsafe(
     `SELECT DISTINCT d."endpoint", d."p256dh", d."auth"
        FROM "TeamFollow" f JOIN "FollowerDevice" d ON d."deviceId" = f."deviceId"
-      WHERE f."tournamentId" = ? AND f."teamName" IN (${marks}) AND d."endpoint" <> ''`,
-    tournamentId, ...names,
+      WHERE f."tournamentId" = ?${where} AND d."endpoint" <> ''`,
+    tournamentId, ...args,
   )) as { endpoint: string; p256dh: string; auth: string }[]
   return rows.map(r => ({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }))
 }
 
 /**
- * Push one message to everyone following any of `teamNames`. Never throws.
- * Subscriptions the push service reports gone (404/410) are cleared, so a
- * phone that uninstalled stops costing a send.
+ * Push one message to everyone following any of `teamNames` (`null` = anyone
+ * following any team at this event). Never throws. Subscriptions the push
+ * service reports gone (404/410) are cleared, so a phone that uninstalled
+ * stops costing a send.
  */
 export async function sendPushToFollowers(
   tournamentId: string,
-  teamNames: string[],
+  teamNames: string[] | null,
   payload: { title: string; body: string; url?: string; tag?: string },
 ): Promise<{ sent: number; failed: number }> {
   try {

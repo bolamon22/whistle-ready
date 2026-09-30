@@ -2,11 +2,38 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { canonicalTeamName, teamsInDivision, sendPushToFollowers } from '@/lib/follows'
 
 // In-app broadcasts/announcements. Stored as JSON in the hand-migrated AppSetting
 // table (no schema migration needed): key `announcements:<id>`.
 // GET is public (the public page banner reads it). POST/DELETE require a logged-in
 // staffer whose role the director has allowed to broadcast (key `broadcastRoles:<id>`).
+//
+// A broadcast can also go to the phones of people following the teams it is
+// for (lib/follows): everyone at the event, one division, or one team. The
+// banner is still the record; the push is a pointer to it. Coaches and staff
+// are not followers, so those audiences stay banner-only until messaging
+// reaches them some other way.
+
+type Audience = { type?: string; division?: string; team?: string }
+
+/** The teams whose followers should hear this, `null` for every follower at the
+ *  event, or `[]` when the audience has no followers to reach (coaches, staff,
+ *  an unknown team). */
+async function followerTargets(tournamentId: string, aud: Audience): Promise<string[] | null> {
+  switch (aud.type) {
+    case 'everyone': return null
+    case 'division': {
+      const division = String(aud.division || '').trim()
+      return division ? teamsInDivision(tournamentId, division) : null
+    }
+    case 'team': {
+      const name = await canonicalTeamName(tournamentId, String(aud.team || ''))
+      return name ? [name] : []
+    }
+    default: return []
+  }
+}
 
 async function ensureTable() {
   try {
@@ -69,7 +96,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       update: { value: JSON.stringify(next) },
       create: { key: annKey(params.id), value: JSON.stringify(next) },
     })
-    return NextResponse.json({ ok: true, announcement: entry })
+
+    // Phones hear only when the sender left "alert followers" on. Sent after
+    // the banner is saved, so a tap on the alert lands on a page that shows it.
+    // Each broadcast is its own notification (tag by entry id): a weather delay
+    // and the restart notice an hour later must not replace each other.
+    let notified: { sent: number; failed: number } | null = null
+    if (body.notify === true) {
+      const targets = await followerTargets(params.id, body.audience || {})
+      if (targets === null || targets.length > 0) {
+        const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { name: true } }).catch(() => null)
+        const tname = t?.name || 'Whistle Ready'
+        notified = await sendPushToFollowers(params.id, targets, {
+          title: entry.urgent ? `Urgent: ${tname}` : tname,
+          body: text.length > 240 ? `${text.slice(0, 237)}...` : text,
+          url: `/tournaments/${params.id}/public`,
+          tag: `ann:${params.id}:${entry.id}`,
+        })
+      } else {
+        notified = { sent: 0, failed: 0 }
+      }
+    }
+    return NextResponse.json({ ok: true, announcement: entry, notified })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to post' }, { status: 500 })
   }
