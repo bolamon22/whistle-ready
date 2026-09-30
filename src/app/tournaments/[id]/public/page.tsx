@@ -1,13 +1,12 @@
 'use client'
 import { useEffect, useState, useMemo, useContext, createContext, Fragment } from 'react'
-import { INFO_ICONS } from '@/lib/infoIcons'
 import { useParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
 import LiveTicker from '@/components/LiveTicker'
 
 const LogosContext = createContext<Record<string, string>>({})
 import Link from 'next/link'
-import { ArrowLeft, Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Sun, Moon, MapPin, ClipboardList, Bell, Share2, X, Info, ScrollText, Utensils, Megaphone, LogIn } from 'lucide-react'
+import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Bell, X, Megaphone, CheckCircle2, Search } from 'lucide-react'
 
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
@@ -717,23 +716,6 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
   )
 }
 
-// Scoped dark-mode override: recolors the light utility classes used on this page
-// when the root carries `.gd-dark`. Keeps the markup untouched; fully reversible.
-const GD_DARK_CSS = `
-.gd-dark{background:#0b0f17}
-.gd-dark .bg-gray-50{background:#0b0f17!important}
-.gd-dark .bg-white{background:#111827!important}
-.gd-dark .bg-gray-100,.gd-dark .bg-slate-100,.gd-dark .bg-slate-50,.gd-dark .bg-gray-200,.gd-dark .bg-yellow-50{background:#1f2937!important}
-.gd-dark .bg-gray-300,.gd-dark .bg-slate-200,.gd-dark .bg-slate-300{background:#374151!important}
-.gd-dark .text-gray-900,.gd-dark .text-slate-900,.gd-dark .text-gray-800,.gd-dark .text-slate-800,.gd-dark .text-gray-700,.gd-dark .text-slate-700{color:#f1f5f9!important}
-.gd-dark .text-gray-600,.gd-dark .text-slate-600,.gd-dark .text-gray-500,.gd-dark .text-slate-500{color:#cbd5e1!important}
-.gd-dark .text-gray-400,.gd-dark .text-slate-400,.gd-dark .text-gray-300,.gd-dark .text-slate-300{color:#94a3b8!important}
-.gd-dark .border-slate-200,.gd-dark .border-gray-200,.gd-dark .border-slate-100,.gd-dark .border-gray-100,.gd-dark .border-slate-50,.gd-dark .border-gray-50,.gd-dark .border-slate-300,.gd-dark .border-gray-300{border-color:#1f2937!important}
-.gd-dark .divide-slate-100>:not([hidden])~:not([hidden]),.gd-dark .divide-y>:not([hidden])~:not([hidden]),.gd-dark .divide-x>:not([hidden])~:not([hidden]){border-color:#1f2937!important}
-.gd-dark .shadow-sm,.gd-dark .shadow-xl{box-shadow:0 1px 0 rgba(255,255,255,0.04)!important}
-.gd-dark [class*="bg-amber-50"]{background:rgba(120,53,15,0.30)!important}
-.gd-dark input,.gd-dark textarea{background:#1f2937!important;color:#f1f5f9!important}
-`
 
 export default function PublicTournamentPage() {
   const {id}=useParams()
@@ -742,13 +724,6 @@ export default function PublicTournamentPage() {
   // final evening -- parents check scores on the drive home. Dates are plain
   // YYYY-MM-DD, so build them from parts: new Date('2025-12-14') parses as UTC and
   // flips the answer for anyone west of Greenwich.
-  const eventOver=useMemo(()=>{
-    const end=tournament?.endDate||tournament?.startDate||''
-    const m=end.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return false
-    const last=new Date(Number(m[1]),Number(m[2])-1,Number(m[3])); last.setHours(0,0,0,0)
-    const today=new Date(); today.setHours(0,0,0,0)
-    return today.getTime()>last.getTime()
-  },[tournament?.startDate,tournament?.endDate])
   const [logos,setLogos]=useState<Record<string,string>>({})
   const [tiebreakers,setTiebreakers]=useState<string[]>(DEFAULT_TBS)
   const [games,setGames]=useState<Game[]>([])
@@ -759,8 +734,6 @@ export default function PublicTournamentPage() {
   const [showNotifyModal,setShowNotifyModal]=useState(false)
   const [notifyEmail,setNotifyEmail]=useState('')
   const [notifySent,setNotifySent]=useState(false)
-  const [showInfo,setShowInfo]=useState(false)
-  const [infoSections,setInfoSections]=useState<any[]>([])
   const [announcements,setAnnouncements]=useState<any[]>([])
   // Registered-team count per division (same numbers the staff Divisions page shows).
   const [regTeamCounts,setRegTeamCounts]=useState<Record<string,number>>({})
@@ -772,9 +745,6 @@ export default function PublicTournamentPage() {
   // there is no schedule yet, or when one is cleared and rebuilt.
   const [poolRosters,setPoolRosters]=useState<PoolRoster[]>([])
   const [annOpen,setAnnOpen]=useState(false)
-  const [dark,setDark]=useState(false)
-  useEffect(()=>{ try{ setDark(localStorage.getItem(`theme-${id}`)==='dark') }catch{} },[id])
-  useEffect(()=>{ try{ localStorage.setItem(`theme-${id}`, dark?'dark':'light') }catch{} },[dark,id])
 
   useEffect(()=>{
     Promise.all([
@@ -783,7 +753,6 @@ export default function PublicTournamentPage() {
       fetch(`/api/tournaments/${id}/team-logos`).then(r=>r.ok?r.json():{}).catch(()=>({})),
     ]).then(([t,g,lg])=>{setTournament(t);setGames(Array.isArray(g)?g:[]);setLogos(lg||{});try{const o=JSON.parse((t&&t.tiebreakers)||'{}');const pool=Array.isArray(o)?o:(o.pool||[]);if(pool.length)setTiebreakers(pool)}catch{};setLoading(false)})
     try{const saved=JSON.parse(localStorage.getItem(`follows-${id}`)||'[]');setFollowedTeams(saved)}catch{}
-    fetch(`/api/tournaments/${id}/info`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.sections))setInfoSections(d.sections)}).catch(()=>{})
     fetch(`/api/tournaments/${id}/announcements`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.announcements))setAnnouncements(d.announcements)}).catch(()=>{})
     fetch(`/api/tournaments/${id}/visibility`).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.pools)setPubVis({pools:d.pools,schedule:d.schedule})}).catch(()=>{})
     fetch(`/api/tournaments/${id}/pools?view=public`).then(r=>r.ok?r.json():[]).then(d=>{if(Array.isArray(d))setPoolRosters(d.filter((x:any)=>x&&typeof x.division==='string'))}).catch(()=>{})
@@ -867,27 +836,12 @@ export default function PublicTournamentPage() {
     setNotifySent(true)
   }
 
-  const sportIcon = (() => {
-    const s = (tournament?.sport || '').toLowerCase()
-    if (s.includes('lacrosse')) return '🥍'
-    if (s.includes('football') && s.includes('flag')) return '🏈'
-    if (s.includes('football')) return '🏈'
-    if (s.includes('soccer')) return '⚽'
-    if (s.includes('basketball')) return '🏀'
-    if (s.includes('baseball')) return '⚾'
-    if (s.includes('softball')) return '🥎'
-    if (s.includes('hockey')) return '🏒'
-    if (s.includes('volleyball')) return '🏐'
-    if (s.includes('rugby')) return '🏉'
-    return '🏆'
-  })()
 
-  if(loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400">Loading…</div></div>
+  if(loading) return <div className="bg-slate-50 py-24 flex items-center justify-center"><div className="text-slate-400">Loading…</div></div>
 
   return (
     <LogosContext.Provider value={logos}>
-    <div className={`min-h-screen bg-gray-50 ${dark ? 'gd-dark' : ''}`}>
-      <style>{GD_DARK_CSS}</style>
+    <div className="bg-slate-50">
       {/* Live-score ticker: live games + recent finals, linking to per-game pages */}
       <LiveTicker tournamentId={String(id)} games={games} logos={logos}/>
       {/* Notification modal */}
@@ -896,7 +850,7 @@ export default function PublicTournamentPage() {
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm" onClick={e=>e.stopPropagation()}>
             {notifySent ? (
               <div className="text-center py-4">
-                <div className="text-4xl mb-3">✅</div>
+                <CheckCircle2 size={40} className="mx-auto mb-3 text-emerald-500" />
                 <h3 className="text-lg font-bold text-gray-800 mb-1">You're all set!</h3>
                 <p className="text-sm text-gray-500 mb-4">We'll notify you at <strong>{notifyEmail}</strong> when your teams play.</p>
                 <button onClick={()=>{setShowNotifyModal(false);setNotifySent(false)}} className="bg-blue-600 text-white font-semibold text-sm px-6 py-2.5 rounded-lg w-full">Done</button>
@@ -936,128 +890,7 @@ export default function PublicTournamentPage() {
         </div>
       )}
 
-      {/* Info modal */}
-      {showInfo && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setShowInfo(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] overflow-auto" onClick={e=>e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-slate-100 sticky top-0 bg-white">
-              <h3 className="text-lg font-bold text-gray-800 inline-flex items-center gap-2"><Info size={18}/> Tournament Info</h3>
-              <button onClick={()=>setShowInfo(false)} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
-            </div>
-            <div className="p-5 space-y-4">
-              {infoSections.map((s:any,i:number)=>{const C=INFO_ICONS[s.icon]||Info;return (
-                <div key={i} className="flex gap-3">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center"><C size={18}/></div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-800">{s.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{s.body}</p>
-                  </div>
-                </div>
-              )})}
-              {infoSections.length===0 && <p className="text-sm text-gray-400 text-center py-6">No tournament info posted yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sport header bar */}
-      <div className="bg-[#0f1f3d] text-white px-4 py-2.5 flex items-center gap-2">
-        <span className="text-sm">{sportIcon}</span>
-        <span className="text-xs font-bold uppercase tracking-widest text-gray-300">{tournament?.sport||'Flag Football'}</span>
-        <button onClick={()=>setDark(d=>!d)} title="Toggle light / dark" aria-label="Toggle light or dark mode"
-          className="ml-auto hover:opacity-80 transition-opacity">{dark?<Sun size={16}/>:<Moon size={16}/>}</button>
-      </div>
-
-      {/* Tournament card */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-5 flex gap-4 items-start">
-          {tournament?.logoUrl ? (
-            <img src={tournament.logoUrl} alt="logo" className="w-20 h-20 object-contain rounded-xl border border-gray-100 flex-shrink-0"/>
-          ) : (
-            <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center text-3xl flex-shrink-0">{sportIcon}</div>
-          )}
-          <div className="flex-1 min-w-0">
-            {/* A tournament page is a dead end without this: every route in reaches one
-                event and nothing leads back out to the rest of them. A finished event
-                belongs to the results archive, an upcoming one to the tournament list. */}
-            <Link href={eventOver ? '/results' : '/#tournaments'}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-teal-700 transition-colors mb-1">
-              <ArrowLeft size={13}/> {eventOver ? 'All results' : 'All tournaments'}
-            </Link>
-            <h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight flex flex-wrap items-center gap-x-2 gap-y-1">
-              {tournament?.name}
-              {eventOver && (
-                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  <Trophy size={12}/> Final results
-                </span>
-              )}
-            </h1>
-            <p className="text-sm font-semibold text-teal-600 mt-0.5">
-              {tournament?.startDate&&fmtDate(tournament.startDate)}{tournament?.endDate&&tournament.endDate!==tournament.startDate&&` - ${fmtDate(tournament.endDate)}`}
-            </p>
-            <p className="text-sm mt-0.5">
-              {tournament?.location ? (
-                <a href={`https://maps.google.com/?q=${encodeURIComponent(tournament.location)}`} target="_blank" rel="noopener noreferrer"
-                  className="text-gray-500 hover:text-blue-600 hover:underline transition-colors inline-flex items-center gap-1">
-                  <MapPin size={13}/> {tournament.location}
-                </a>
-              ) : null}
-            </p>
-            <div className="flex flex-wrap gap-2 mt-3">
-              {/* Registration, both waivers, the vendor form and Get Notified are all
-                  dead once an event has been played -- they led to forms nobody can
-                  act on. A finished event keeps what still works and points at the
-                  next one, because a visitor arriving from a search result for last
-                  year's results is exactly who should see the upcoming schedule. */}
-              {!eventOver && (
-                <Link href={`/tournaments/${id}/player-register`} target="_blank"
-                  className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                  <ClipboardList size={14}/> Register
-                </Link>
-              )}
-              {eventOver && (
-                <Link href="/#tournaments"
-                  className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                  <Calendar size={14}/> See upcoming events
-                </Link>
-              )}
-              <Link href={`/tournaments/${id}/event`} target="_blank"
-                className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                <Info size={14}/> Event Info
-              </Link>
-              {!eventOver && (<>
-                <Link href={`/tournaments/${id}/player-waiver`} target="_blank"
-                  className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                  <ScrollText size={14}/> Player Waiver
-                </Link>
-                <Link href={`/tournaments/${id}/coach-waiver`} target="_blank"
-                  className="flex items-center gap-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                  <ScrollText size={14}/> Coach Waiver
-                </Link>
-                <Link href={`/tournaments/${id}/vendor-request`} target="_blank"
-                  className="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                  <Utensils size={14}/> Vendor Request
-                </Link>
-                <button className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold px-3 py-2 rounded hover:bg-green-200 transition-colors">
-                  <Bell size={14}/> Get Notified
-                </button>
-              </>)}
-              <button className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs font-bold px-3 py-2 rounded hover:bg-gray-200 transition-colors">
-                <Share2 size={14}/> Share
-              </button>
-              <button onClick={()=>setShowInfo(true)} className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs font-bold px-3 py-2 rounded hover:bg-gray-200 transition-colors">
-                <Info size={14}/> Info
-              </button>
-              <Link href="/login"
-                className="flex items-center gap-1.5 bg-[#0f1f3d] hover:bg-[#16294a] text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                <LogIn size={14}/> Log in
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-5">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-12">
         {announcements.length > 0 && (
           <div className="mb-4">
             <button onClick={() => setAnnOpen(o => !o)}
@@ -1105,13 +938,13 @@ export default function PublicTournamentPage() {
           <>
             {/* Search bar */}
             <div className="relative mb-4">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 value={teamSearch}
                 onChange={e => setTeamSearch(e.target.value)}
                 placeholder="Search for a team…"
-                className="w-full pl-9 pr-4 py-3 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                className="w-full pl-9 pr-4 py-3 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent shadow-sm"
               />
               {teamSearch && <button onClick={()=>setTeamSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={16}/></button>}
             </div>

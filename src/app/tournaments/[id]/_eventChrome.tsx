@@ -1,31 +1,27 @@
-import Link from 'next/link'
 import { createClient } from '@libsql/client'
 import { sponsorList, sponsorsForEvent } from '@/lib/sponsors'
-import { ClipboardList, ScrollText, Utensils, ListChecks, CalendarDays, MapPin, Zap } from 'lucide-react'
 import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
-import EventInfoNav from '@/components/EventInfoNav'
+import { buildHeroProps } from '@/lib/eventHero'
+import EventHero from './_eventHero'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 
-const fmtDay = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); return new Date(+y, +m - 1, +day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) }
-const yr = (d: string) => (d ? d.split('-')[0] : '')
-function fmtRange(s: string, e: string) {
-  if (s && e && s !== e) return `${fmtDay(s)} – ${fmtDay(e)}, ${yr(e)}`
-  if (s) return `${fmtDay(s)}, ${yr(s)}`
-  return 'Dates TBA'
-}
-
-// Wraps a tournament-scoped public page (forms, waiver, vendor) in the org site
-// header + the same event hero (logo, name, dates, action buttons) so these
-// pages look and behave like a section of the event page.
-export default async function EventChrome({ tournamentId, children }: { tournamentId: string; children: React.ReactNode }) {
+// Wraps a tournament-scoped public page (schedule, forms, waivers, rules) in the
+// org site header + the event page's own hero, so each reads as a section of
+// the event rather than a separate site. The hero is the SAME component the
+// event page renders (_eventHero) fed by the same derivation (lib/eventHero);
+// this file only loads the data.
+//
+// `active` is the fact-strip cell for the page being shown -- 'schedule' on the
+// public schedule, 'waiver' on the player waiver -- so the strip also works as
+// the event's section nav.
+export default async function EventChrome({ tournamentId, active, children }: { tournamentId: string; active?: string; children: React.ReactNode }) {
   const client = db()
   const base = `/tournaments/${tournamentId}`
   let t: any = {}
-  try { const r = await client.execute({ sql: 'SELECT id, name, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions, sport FROM "Tournament" WHERE id = ?', args: [tournamentId] }); if (r.rows.length) t = r.rows[0] } catch {}
+  try { const r = await client.execute({ sql: 'SELECT id, name, startDate, endDate, location, logoUrl, orgId, teamRegEnabled, registrationDivisions, registrationPricing, sport FROM "Tournament" WHERE id = ?', args: [tournamentId] }); if (r.rows.length) t = r.rows[0] } catch {}
   let cs: any = {}
   try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${tournamentId}`] }); if (r.rows.length) cs = JSON.parse(((r.rows[0] as any).value as string) || '{}') } catch {}
-  const eyebrow = ((t.sport ? String(t.sport) + ' ' : '') + 'tournament')
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
   let navPages: any[] = []; let hasGallery = false; let contact: any = {}; let socials: any = {}; let orgLogo = ''; let sponsors: any[] = []; let wantsSponsors = false
   if (t.orgId) {
@@ -36,7 +32,6 @@ export default async function EventChrome({ tournamentId, children }: { tourname
   const heroLogo = t.logoUrl || headerLogo
   const orgForChrome = { name: org.name, logoUrl: headerLogo, contactEmail: org.contactEmail }
   const nav = org.slug ? buildNav(orgBase(org.slug), navPages, hasGallery) : []
-  const registerHref = Number(t.teamRegEnabled) ? `${base}/register` : undefined
 
   const divs = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const infoItems = [
@@ -50,41 +45,27 @@ export default async function EventChrome({ tournamentId, children }: { tourname
     // Counted the same way the section is rendered, or an event with no partners
     // of its own still advertises a link to an empty section.
     (sponsorsForEvent(sponsorList(sponsors), tournamentId).length > 0 || wantsSponsors) && { href: `${base}/event#sponsors`, label: 'Sponsors & partners' },
+    // On the event page these two sit in the side rail. These pages have no
+    // rail, and the old hero's buttons for them are gone -- so the menu carries
+    // them or nothing does.
+    { href: `${base}/coach-waiver`, label: 'Coach waiver' },
+    { href: `${base}/today`, label: 'Game day hub' },
     { href: `${base}/vendor-request`, label: 'Vendor Request' },
     { href: `${base}/work`, label: 'Work at our event' },
   ].filter(Boolean) as { href: string; label: string }[]
 
-  const actions = [
-    Number(t.teamRegEnabled) ? { href: `${base}/register`, label: 'Register', icon: <ClipboardList size={15} />, primary: true } : null,
-    { href: `${base}/player-waiver`, label: 'Player Waiver', icon: <ScrollText size={15} /> },
-    { href: `${base}/coach-waiver`, label: 'Coach Waiver', icon: <ScrollText size={15} /> },
-    { href: `${base}/today`, label: 'Live', icon: <Zap size={15} /> },
-  ].filter(Boolean) as any[]
+  // The facts link into the event page's sections; the menu above already
+  // knows which of those exist, so it is the one source for both.
+  const sectionHref = (sid: string) => infoItems.find(i => i.href === `${base}/event#${sid}`)?.href
+  const hero = buildHeroProps({
+    t, c: cs, base, divisions: divs, infoItems, sectionHref,
+    logoUrl: heroLogo, active, homeHref: `${base}/event`,
+  })
 
   return (
     <>
-      {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
-      {t.name && (
-        <section className="relative bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a] text-white">
-          {cs.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${cs.heroImage})` }} aria-hidden />}
-          {cs.heroImage && <div className="absolute inset-0 bg-[#0b1f3a]/55" aria-hidden />}
-          <div className="relative max-w-4xl mx-auto px-6 py-8">
-            <Link href={`${base}/event`} className="flex items-center gap-4 w-fit">
-              {heroLogo && <img src={heroLogo} alt="" className="w-16 h-16 rounded-xl object-contain bg-white/95 p-1.5" />}
-              <div>
-                <div className="text-teal-300 text-[10px] sm:text-[11px] font-semibold tracking-[0.18em] uppercase">{eyebrow}</div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">{t.name}</h1>
-              </div>
-            </Link>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {actions.map((a, i) => (
-                <Link key={i} href={a.href} className={`inline-flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-full transition-colors ${a.primary ? 'bg-[#16b886] hover:bg-[#13a87b] text-[#04241b] shadow-lg shadow-emerald-900/20' : 'bg-white/95 hover:bg-white text-[#0b1f3a]'}`}>{a.icon} {a.label}</Link>
-              ))}
-              <EventInfoNav items={infoItems} />
-            </div>
-          </div>
-        </section>
-      )}
+      {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={hero.registerHref} />}
+      {t.name && <EventHero {...hero} />}
       {children}
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} base={orgBase(org.slug)} pages={navPages} />}
     </>

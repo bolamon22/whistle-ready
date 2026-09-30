@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { createClient } from '@libsql/client'
 import { tournamentAbs, clip } from '@/lib/seo'
+import EventChrome from '@/app/tournaments/[id]/_eventChrome'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 
@@ -13,6 +14,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url }, twitter: { title, description } }
 }
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
+// The schedule is a section of the event, not a separate site: same org header,
+// same hero, same fact strip (with SCHEDULE marked as the current page). It
+// used to draw a header of its own, the third one in the codebase.
+export default function PublicLayout({ children, params }: { children: React.ReactNode; params: { id: string } }) {
+  return <EventChrome tournamentId={params.id} active="schedule">{children}</EventChrome>
 }

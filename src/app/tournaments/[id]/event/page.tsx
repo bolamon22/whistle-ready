@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { cloneElement } from 'react'
 import { createClient } from '@libsql/client'
-import { Trophy, MapPin, CalendarDays, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap, Award, DollarSign, ArrowRight } from 'lucide-react'
+import { Trophy, MapPin, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap, ArrowRight } from 'lucide-react'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
-import EventInfoNav from '@/components/EventInfoNav'
+import EventHero from '../_eventHero'
+import { buildHeroProps, eventIsOver, fmtRangeShort, shortLocation } from '@/lib/eventHero'
 import PublicChirp from '@/components/PublicChirp'
 import EventSection from '@/components/EventSection'
 import CountdownBlock from '@/components/CountdownBlock'
@@ -13,14 +14,14 @@ import ExpandableContent from '@/components/ExpandableContent'
 import ScheduleBlock from '@/components/ScheduleBlock'
 import StandingsBlock from '@/components/StandingsBlock'
 import { SECTION_LABELS } from '@/lib/eventSections'
-import { parsePricing, baseFee, feeScheduleLines } from '@/lib/regPricing'
+import { parsePricing, feeScheduleLines } from '@/lib/regPricing'
 import { resolveBlocks, isBuiltin } from '@/lib/eventBlocks'
 import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
 import type { Metadata } from 'next'
 import { abs, orgAbs, tournamentAbs, clip, stripMd } from '@/lib/seo'
 import JsonLd from '@/components/JsonLd'
 import { resolveRules } from '@/lib/rules'
-import { regBadge, divisionBadge, TONE_CLASS, TONE_CLASS_DARK, FULL_DIVISION_NOTE, FULL_DIVISION_TITLE } from '@/lib/regStatus'
+import { divisionBadge, TONE_CLASS, FULL_DIVISION_NOTE, FULL_DIVISION_TITLE } from '@/lib/regStatus'
 import SponsorWall from '@/components/SponsorWall'
 import SponsorPitch from '@/components/SponsorPitch'
 import { sponsorList, sponsorsForEvent, sponsorPitch, statNum } from '@/lib/sponsors'
@@ -49,24 +50,6 @@ function fmtRange(s: string, e: string) {
   if (s) return `${fmtDay(s)}, ${yr(s)}`
   return 'Dates TBA'
 }
-const fmtDayShort = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); return new Date(+y, +m - 1, +day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
-function fmtRangeShort(s: string, e: string) {
-  if (!s) return 'TBA'
-  if (e && e !== s) {
-    const [sy, sm] = s.split('-'); const [ey, em] = e.split('-')
-    if (sy === ey && sm === em) return `${fmtDayShort(s)}–${parseInt(e.split('-')[2])}, ${ey}`
-    if (sy === ey) return `${fmtDayShort(s)} – ${fmtDayShort(e)}, ${ey}`
-    return `${fmtDayShort(s)}, ${sy} – ${fmtDayShort(e)}, ${ey}`
-  }
-  return `${fmtDayShort(s)}, ${s.split('-')[0]}`
-}
-function shortLocation(loc: string) {
-  if (!loc) return ''
-  const m = loc.match(/([A-Za-z .'-]+),\s*([A-Z]{2})(?:\s*\d{5})?/)
-  if (m) return `${m[1].trim()}, ${m[2]}`
-  return loc.split(',')[0].trim()
-}
-
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const client = db()
   let t: any = null
@@ -143,7 +126,9 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   if (!t.logoUrl) t.logoUrl = headerLogo
   const orgForChrome = { name: org.name, logoUrl: headerLogo, contactEmail: org.contactEmail }
   const nav = org.slug ? buildNav(orgBase(org.slug), navPages, hasGallery) : []
-  const registerHref = Number(t.teamRegEnabled) ? `/tournaments/${params.id}/register` : undefined
+  // Same rule the hero uses (lib/eventHero): a finished event has nothing to
+  // register for, so no page-lower CTA may offer it either.
+  const registerHref = Number(t.teamRegEnabled) && !eventIsOver(t.startDate, t.endDate) ? `/tournaments/${params.id}/register` : undefined
   const base = `/tournaments/${params.id}`
 
   // Sponsors & partners: normalize once, here, so the wall, the pitch and the open
@@ -163,7 +148,6 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const setupDivisions: string[] = (() => { try { const d = JSON.parse(t.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const divisions: string[] = setupDivisions
   // Organizer-set, never computed. Null when no badge is switched on.
-  const statusBadge = regBadge(c, divisions)
   const pricing = parsePricing(t.registrationPricing)
   const feeLines: string[] = Number(t.teamRegEnabled) ? feeScheduleLines(pricing) : []
   // Venues are the single source of truth for "where we play". A venue appears on the
@@ -417,36 +401,12 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     { href: `${base}/vendor-request`, label: 'Vendor Request' },
   ]
 
-  // The hero carries ONE dominant action (Register) plus the Event info menu. Player
-  // waiver and Game Day moved to the "For players" rail card — three equal buttons in
-  // the hero buried the only one that converts.
-  const eyebrow = [
-    (t.sport ? String(t.sport) : 'Tournament'),
-    t.startDate ? fmtRangeShort(t.startDate, t.endDate) : '',
-    shortLocation(t.location || ''),
-  ].filter(Boolean).join(' · ')
-  const minFee = (() => { if (!Number(t.teamRegEnabled)) return ''; const b = baseFee(pricing); return b > 0 ? `from $${b.toLocaleString()}` : '' })()
-  const quickFacts = [
-    t.startDate && { icon: <CalendarDays size={22} />, label: 'DATES', value: fmtRangeShort(t.startDate, t.endDate) },
-    t.location && { icon: <MapPin size={22} />, label: 'LOCATION', value: shortLocation(t.location), href: panelIds.has('locations') ? '#locations' : undefined },
-    divisions.length > 0 && { icon: <Award size={22} />, label: 'DIVISIONS', value: `${divisions.length} division${divisions.length > 1 ? 's' : ''}`, href: panelIds.has('divisions') ? '#divisions' : undefined },
-    minFee && { icon: <DollarSign size={22} />, label: 'TEAM FEE', value: minFee, href: registerHref || (panelIds.has('fees') ? '#fees' : undefined) },
-    (c.hotelsUrl || c.hotels) && { icon: <Hotel size={22} />, label: 'HOTELS', value: 'Book hotels', href: c.hotelsUrl || (panelIds.has('hotels') ? '#hotels' : undefined) },
-    // Every player needs one signed before they step on a field, and it was only
-    // reachable from the rail card and the Event info menu -- two places a parent
-    // scrolling on a phone does not necessarily look. It sits with the other two
-    // do-this-now links rather than up among the facts about the event.
-    // Label short, words in the value: "PLAYER WAIVER" as a label wrapped to two
-    // lines in a six-across bar at tablet width (measured at 820px, 128px cells),
-    // and this way round matches the two neighbours anyway -- HOTELS/Book hotels,
-    // SCHEDULE/View games, WAIVER/Player waiver.
-    { icon: <ScrollText size={22} />, label: 'WAIVER', value: 'Player waiver', href: `${base}/player-waiver` },
-    { icon: <ListChecks size={22} />, label: 'SCHEDULE', value: 'View games', href: `${base}/public` },
-  ].filter(Boolean) as any[]
-  // Tailwind only ships classes it can see, so these are written out rather than
-  // built from the count. Seven across is tight but each cell is a short label and
-  // two words; below lg it drops to four and wraps.
-  const factCols = ({ 1: 'sm:grid-cols-2', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6', 7: 'sm:grid-cols-4 lg:grid-cols-7' } as any)[quickFacts.length] || 'sm:grid-cols-4' 
+  // The hero carries ONE dominant action (Register) plus the Event info menu.
+  // Worked out by lib/eventHero, the same as on every other page of this event.
+  const hero = buildHeroProps({
+    t, c, base, divisions, infoItems,
+    sectionHref: (sid: string) => (panelIds.has(sid) ? `#${sid}` : undefined),
+  })
 
   // All in-page sections, stacked in order. Previously these were tab panels, which
   // meant only ONE section rendered at a time — a coach had to click through to see
@@ -489,54 +449,8 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     <div className="min-h-screen bg-slate-50">
       <JsonLd data={[sportsEventLd, breadcrumbLd, ...(faqLd ? [faqLd] : [])]} />
       {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
-      <section className="relative text-white bg-gradient-to-br from-[#0b1f3a] via-[#0e7490] to-[#0b1f3a]">
-        {c.heroImage && <div className="absolute inset-0 bg-center bg-cover" style={{ backgroundImage: `url(${c.heroImage})` }} aria-hidden />}
-        {/* Bottom-weighted scrim: the title sits low, so darkness concentrates where
-            the text is and any hero photo stays visible up top. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#040c18]/90 via-[#040c18]/45 to-[#040c18]/15" aria-hidden />
-        <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-10">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-5">
-            {t.logoUrl && <img src={t.logoUrl} alt="" className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl object-contain bg-white/95 p-1.5 shrink-0 ring-2 ring-white/40" />}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <div className="text-teal-300 text-[11px] sm:text-xs font-semibold tracking-[0.16em] uppercase">{eyebrow}</div>
-                {/* Sits with the eyebrow, never with the buttons: it is information,
-                    and it must not read as part of the path to registering. */}
-                {statusBadge && (
-                  <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${TONE_CLASS_DARK[statusBadge.tone]}`}>{statusBadge.label}</span>
-                )}
-              </div>
-              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.04] mt-1">{t.name}</h1>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0 sm:pb-1">
-              {registerHref && (
-                <Link href={registerHref} className="inline-flex items-center gap-1.5 text-sm font-semibold px-6 py-3 rounded-xl bg-[#16b886] hover:bg-[#13a87b] text-[#04241b] shadow-lg shadow-emerald-900/20 transition-colors">
-                  <ClipboardList size={15} /> Register a team
-                </Link>
-              )}
-              <EventInfoNav items={infoItems} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {quickFacts.length > 0 && (
-        <div className="max-w-6xl mx-auto px-6 relative -mt-6">
-          <div className={`bg-white border border-slate-200 rounded-2xl shadow-sm grid grid-cols-2 ${factCols} divide-x divide-slate-100 overflow-hidden`}>
-            {quickFacts.map((f: any, i: number) => {
-              const inner = (
-                <>
-                  <div className="text-[10px] tracking-[0.08em] text-slate-400 font-semibold uppercase">{f.label}</div>
-                  <div className={`text-sm font-bold mt-1 line-clamp-2 ${f.href ? 'text-teal-700' : 'text-slate-900'}`}>{f.value}</div>
-                </>
-              )
-              return f.href
-                ? <a key={i} href={f.href} {...(String(f.href).startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})} className="px-4 py-4 text-center block hover:bg-slate-50 transition-colors">{inner}</a>
-                : <div key={i} className="px-4 py-4 text-center">{inner}</div>
-            })}
-          </div>
-        </div>
-      )}
+      {/* Shared with every other public page of this event -- see _eventHero. */}
+      <EventHero {...hero} />
 
       <div className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-10 items-start">
         <div className="space-y-12 min-w-0">
