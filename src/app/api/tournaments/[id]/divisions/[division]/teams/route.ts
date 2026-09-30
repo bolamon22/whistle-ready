@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { cleanName, nameKey } from '@/lib/names'
-import { renameTeamRefs } from '@/lib/teamRename'
+import { renameTeamRefs, removeTeamRefs } from '@/lib/teamRename'
+import { findShortTeams, describeFinding } from '@/lib/gameBalance'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
   // Staff only: this returns coach phone/email and what each club owes. It was open to
@@ -235,25 +236,26 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     await prisma.registeredTeam.delete({ where: { id: teamId } })
 
-    // Drop the team name from any pool in this division.
-    //
-    // Matched on nameKey(), not on the exact string. The pool stores a name that
-    // was typed or imported separately from the registration, so "Tarpons " or a
-    // case variant would slip an exact compare -- and the pool roster is what the
-    // public standings are built from, so a miss here leaves the deleted team
-    // showing publicly with no way for staff to see why.
+    // Take the name off the schedule everywhere it appears -- pools, games,
+    // bracket slots, follows. A team name is a string key in more places than
+    // anyone remembers, which is why removeTeamRefs is kept next to its rename
+    // twin in lib/teamRename: one list, maintained once.
+    const removed = await removeTeamRefs(params.id, team.teamName)
+
+    // Deleting its games takes a game off each opponent it was drawn against,
+    // so say who is now short. The organizer is usually rebuilding a schedule
+    // when they do this and would otherwise find out on game day.
+    let shortWarning: { division: string; pool: string; expected: number; shortTeams: { team: string; games: number; short: number }[]; message: string }[] = []
     try {
-      const gone = nameKey(team.teamName)
-      const pools = await prisma.pool.findMany({ where: { tournamentId: params.id, division } })
-      for (const p of pools) {
-        let names: string[] = []
-        try { const v = JSON.parse(p.teamNames || '[]'); if (Array.isArray(v)) names = v } catch { continue }
-        const kept = names.filter(n => nameKey(n) !== gone)
-        if (kept.length !== names.length) {
-          await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(kept) } })
-        }
-      }
-    } catch { /* pools optional */ }
+      const rest = await prisma.game.findMany({
+        where: { tournamentId: params.id, division },
+        select: { division: true, pool: true, team1: true, team2: true, isCanceled: true, isChampionship: true },
+      })
+      shortWarning = findShortTeams(rest as any).map(f => ({
+        division: f.division, pool: f.pool, expected: f.expected, shortTeams: f.shortTeams,
+        message: describeFinding(f),
+      }))
+    } catch { /* advisory only: never fail the delete over it */ }
 
     // Clean up the parent registration
     if (team.registrationId) {
@@ -267,7 +269,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       } catch { /* registration may have linked records; non-fatal */ }
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, removed, shortWarning })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to delete team' }, { status: 500 })

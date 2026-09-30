@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
+import ShortTeamsBanner from '@/components/ShortTeamsBanner'
 import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import { TimelineView, TeamLanesView, useDragAutoScroll } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
@@ -1077,6 +1078,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
       <TournamentNav id={params.id} />
       <Toaster position="top-right" />
+
+      {/* A pool short a team is short of games for everyone it was drawn
+          against, and nothing else on this page would say so -- the per-game
+          issue badges are about placement, not about games that do not exist.
+          Computed live, so it clears itself once the pool is level again. */}
+      <div className="px-4 pt-3 flex-shrink-0 empty:hidden">
+        <ShortTeamsBanner games={games} />
+      </div>
+
       {issueTip && !dragId && (() => {
         const items = gameIssues(issueTip.id)
         if (items.length === 0) return null

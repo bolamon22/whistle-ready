@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, updateSubmissionData } from '@/lib/formSubmissions'
+import { nameKey } from '@/lib/names'
 
 // Team and club names are string keys everywhere (pools, games, brackets,
 // follows, club-director links, waivers). When one is renamed — even just to
@@ -75,6 +76,81 @@ export async function renameTeamRefs(tournamentId: string, oldName: string, newN
         }
       }
     }
+  } catch {}
+
+  return n
+}
+
+/**
+ * Take a team off the schedule entirely, for a team being removed before the
+ * event runs. The mirror of renameTeamRefs, and deliberately the same list of
+ * places -- a name lives in more of them than anyone remembers, which is how a
+ * deleted team kept turning up.
+ *
+ * Deletes its games outright: a pool game is a PAIRING, so the opponent loses
+ * that game too. That is the real cost of a drop and the caller is expected to
+ * tell the organizer about it -- see the counts returned here and
+ * lib/gameBalance, which works out who is now short.
+ *
+ * Bracket slots are blanked rather than deleted, because a bracket game is a
+ * position in a tree; removing the row would orphan whatever feeds it. The slot
+ * shows as TBD instead.
+ *
+ * What it does NOT touch: player waivers and coach profiles. Those are signed
+ * records of something that happened, not schedule, and a team leaving is no
+ * reason to destroy them.
+ */
+export async function removeTeamRefs(tournamentId: string, teamName: string): Promise<RenameCounts> {
+  const n: RenameCounts = {}
+  if (!tournamentId || !teamName) return n
+
+  // Pools keep a JSON array of team names.
+  try {
+    const pools = await prisma.pool.findMany({ where: { tournamentId } })
+    for (const p of pools) {
+      let names: string[] = []
+      try { names = JSON.parse(p.teamNames || '[]') } catch { continue }
+      if (!Array.isArray(names)) continue
+      const kept = names.filter(x => nameKey(x) !== nameKey(teamName))
+      if (kept.length === names.length) continue
+      await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(kept) } })
+      n.pools = (n.pools || 0) + 1
+    }
+  } catch {}
+
+  // Its games go. Count the scored ones separately so the caller can say so.
+  try {
+    const mine = await prisma.game.findMany({
+      where: { tournamentId, OR: [{ team1: teamName }, { team2: teamName }] },
+      select: { id: true, score1: true, score2: true },
+    })
+    if (mine.length) {
+      type Row = { id: string; score1: number | null; score2: number | null }
+      const scored = mine.filter((g: Row) => g.score1 !== null && g.score2 !== null).length
+      await prisma.game.deleteMany({ where: { id: { in: mine.map((g: Row) => g.id) } } })
+      n.games = mine.length
+      if (scored) n.scoredGames = scored
+    }
+  } catch {}
+
+  // Bracket slots: blank the seed and any resolved winner / loser label.
+  try {
+    const brackets = await prisma.bracket.findMany({ where: { tournamentId }, select: { id: true } })
+    const ids = brackets.map((b: { id: string }) => b.id)
+    if (ids.length) {
+      let c = 0
+      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, team1: teamName }, data: { team1: '' } })).count
+      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, team2: teamName }, data: { team2: '' } })).count
+      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, winner: teamName }, data: { winner: '' } })).count
+      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, loser: teamName }, data: { loser: '' } })).count
+      if (c) n.bracketSlots = c
+    }
+  } catch {}
+
+  // Fans following a team that is no longer in the event.
+  try {
+    const r = await prisma.userTeamFollow.deleteMany({ where: { tournamentId, teamName } })
+    if (r.count) n.follows = r.count
   } catch {}
 
   return n

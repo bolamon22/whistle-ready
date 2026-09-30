@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
+import ShortTeamsBanner from '@/components/ShortTeamsBanner'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
@@ -294,16 +295,34 @@ export default function DivisionsPage() {
 
   async function deleteTeam(team: Team) {
     if (!activeDiv) return
-    if (!confirm(`Delete "${team.teamName}" from ${activeDiv}? This also removes it from registrations.`)) return
+    // Say what it costs BEFORE the click, not after. A pool game is a pairing,
+    // so deleting this team's games takes one off each opponent as well -- the
+    // thing an organizer discovers on game day if nobody tells them now.
+    const theirs = [...poolGames, ...bracketGames].filter(g => g.team1 === team.teamName || g.team2 === team.teamName)
+    const gameLine = theirs.length
+      ? `\n\nThis also deletes ${theirs.length} scheduled game${theirs.length === 1 ? '' : 's'}. Each opponent loses that game too, so rebuild the pool games afterwards.`
+      : ''
+    if (!confirm(`Delete "${team.teamName}" from ${activeDiv}? This also removes it from registrations.${gameLine}`)) return
     const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`, {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teamId: team.id }),
     })
     if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error ?? 'Failed to delete team'); return }
+    const data: any = await res.json().catch(() => ({}))
     setTeams(t => t.filter(x => x.id !== team.id))
     setPools(ps => ps.map(p => ({ ...p, teamNames: p.teamNames.filter(n => n !== team.teamName) })))
     setDivisions(d => d.map(x => x.name === activeDiv ? { ...x, teamCount: Math.max(0, x.teamCount - 1) } : x))
-    toast.success(`${team.teamName} deleted`)
+    // Mirror what the server did: its games are gone, its bracket slots blanked.
+    setPoolGames(gs => gs.filter(g => g.team1 !== team.teamName && g.team2 !== team.teamName))
+    setBracketGames(gs => gs.map(g => ({
+      ...g,
+      team1: g.team1 === team.teamName ? '' : g.team1,
+      team2: g.team2 === team.teamName ? '' : g.team2,
+    })))
+    const gone = Number(data?.removed?.games) || 0
+    toast.success(gone
+      ? `${team.teamName} deleted — ${gone} game${gone === 1 ? '' : 's'} removed from the schedule`
+      : `${team.teamName} deleted`)
   }
 
   const selectDiv = useCallback((div: string) => {
@@ -1383,6 +1402,15 @@ if (loading) return (
                 {/* -- POOL GAMES TAB -- */}
                 {activeTab === 'pool-games' && (
                   <div className="space-y-4">
+                    {/* Sits above the controls, because "Generate games" is the
+                        fix. PoolGame rows are already scoped to activeDiv and
+                        carry no division of their own, so it is stamped on. */}
+                    <ShortTeamsBanner
+                      games={poolGames.map(g => ({ division: activeDiv || '', pool: g.pool, team1: g.team1, team2: g.team2 }))}
+                      guarantee={Number(divGamesPerTeam[activeDiv || ''] ?? 0) || 0}
+                      onFix={generateGames}
+                      fixLabel="Regenerate this division's games"
+                    />
                     <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
                       <div className="flex flex-wrap items-end gap-3">
                         <div>
