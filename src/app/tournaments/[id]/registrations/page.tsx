@@ -695,7 +695,13 @@ export default function RegistrationsPage() {
   // The payment letter is org-editable with tokens; the invoice table + Pay
   // button are fixed chrome the email always carries below it. Sent from the
   // Email clubs dialog's payment pill.
-  const [payLetter, setPayLetter] = useState<{ subject: string; body: string } | null>(null)
+  // Two payment letters, kept side by side so switching between them does not throw
+  // away an unsaved edit: 'reminder' is the everyday ask, 'final' the waiting-list
+  // escalation for a full event.
+  type PayVariant = 'reminder' | 'final'
+  const [payVariant, setPayVariant] = useState<PayVariant>('reminder')
+  const [payLetters, setPayLetters] = useState<Partial<Record<PayVariant, { subject: string; body: string }>>>({})
+  const payLetter = payLetters[payVariant] ?? null
   const [payOrgName, setPayOrgName] = useState('')
   const [payEventName, setPayEventName] = useState('')
   const [payStartDate, setPayStartDate] = useState('')
@@ -741,6 +747,12 @@ export default function RegistrationsPage() {
     if (res.ok) { toast.success('Canceled'); setScheduled(s => s.filter(x => x.id !== id)) }
     else toast.error('Could not cancel — it may have already gone out')
   }
+  const loadPayLetter = (v: 'reminder' | 'final') => {
+    fetch(`/api/registrations/pay-letter?variant=${v}`).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.letter) { setPayLetters(l => ({ ...l, [v]: { subject: d.letter.subject, body: d.letter.body } })); setPayOrgName(o => o || d.orgName || '') } })
+      .catch(() => {})
+  }
+
   const commLog = (reg: Registration): Record<string, string> => { try { return reg.commEmailLog ? JSON.parse(reg.commEmailLog) : {} } catch { return {} } }
   const openComm = (reg?: Registration, kind?: CommKind) => {
     setCommSel(new Set(reg ? [reg.id] : registrations.filter(r => r.contactEmail).map(r => r.id)))
@@ -753,11 +765,7 @@ export default function RegistrationsPage() {
         .then(d => { if (d?.letters) { setCommLetters(d.letters); if (d.orgName) setPayOrgName(o => o || d.orgName) } })
         .catch(() => {})
     }
-    if (!payLetter) {
-      fetch('/api/registrations/pay-letter').then(r => r.ok ? r.json() : null)
-        .then(d => { if (d?.letter) { setPayLetter({ subject: d.letter.subject, body: d.letter.body }); setPayOrgName(o => o || d.orgName || '') } })
-        .catch(() => {})
-    }
+    if (!payLetters[payVariant]) loadPayLetter(payVariant)
     if (!payEventName) {
       fetch(`/api/tournaments/${tournamentId}`).then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.name) { setPayEventName(d.name); setPayStartDate(d.startDate || '') } }).catch(() => {})
@@ -786,7 +794,7 @@ export default function RegistrationsPage() {
   // three edit their commLetters entry.
   const commCur = commKind === 'payment' ? payLetter : (commLetters ? commLetters[commKind] : null)
   const setCommCur = (patch: Partial<{ subject: string; body: string }>) => {
-    if (commKind === 'payment') setPayLetter(l => l ? { ...l, ...patch } : l)
+    if (commKind === 'payment') setPayLetters(l => (l[payVariant] ? { ...l, [payVariant]: { ...l[payVariant]!, ...patch } } : l))
     else setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], ...patch } } : l)
   }
   const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0))
@@ -848,7 +856,7 @@ export default function RegistrationsPage() {
     if (!commCur) return
     setCommSaving(true)
     const res = commKind === 'payment'
-      ? await fetch('/api/registrations/pay-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(commCur) })
+      ? await fetch('/api/registrations/pay-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...commCur, variant: payVariant }) })
       : await fetch('/api/registrations/comm-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: commKind, ...commCur }) })
     if (res.ok) toast.success('Saved as your default')
     else toast.error('Failed to save')
@@ -1347,6 +1355,27 @@ export default function RegistrationsPage() {
                   </button>
                 ))}
               </div>
+              {/* Which payment letter. A full event with clubs waiting and an event
+                  that is simply owed money are different conversations, so they are
+                  two saved letters rather than one that has to cover both. */}
+              {commKind === 'payment' && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-1">
+                    {([['reminder', 'Standard'], ['final', 'Waiting list']] as const).map(([v, label]) => (
+                      <button key={v}
+                        onClick={() => { setPayVariant(v); if (!payLetters[v]) loadPayLetter(v) }}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${payVariant === v ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {payVariant === 'final'
+                      ? 'For a full event — names the waiting list and says unconfirmed spots get reassigned.'
+                      : 'The everyday ask — no deadline, no waiting list. Each letter is saved separately.'}
+                  </p>
+                </div>
+              )}
               <div className="mb-4">
                 <div className="flex items-baseline justify-between mb-1">
                   <label className="text-xs font-medium text-slate-600">Send to ({commSel.size} selected{commKind === 'payment' && commPayFilter !== 'all' ? ` · ${commVisible.length} shown` : ` of ${registrations.length} clubs`})</label>

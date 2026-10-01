@@ -40,15 +40,38 @@ export function mergePayLetter(text: string, vals: Record<string, string>): stri
   return text.replace(/\{(contact|club|event|balance|teams|org|countdown|eventTeams)\}/g, (_m, k: string) => vals[k] ?? '')
 }
 
-// Org-editable payment-reminder letter (Bo, Sep 9: "the current letter isn't great
-// for reminding teams they need to pay"). The invoice table, Pay button, and fee
-// note are FIXED chrome below this -- the editable part is the human note on top.
+// TWO payment letters, because a tournament that is full and a tournament that is
+// simply owed money are different conversations (Bo, Oct 1: "we're not always going
+// to have a waiting list, we're just going to be asking them to pay"). Both are
+// org-editable and stored separately; the invoice table, Pay button and fee note are
+// FIXED chrome below whichever one is sent.
 //
-// Oct 1: rewritten around the waiting list. The event fills up, so the lever is not
-// "you are late" (they are not) but "payment is what confirms the spot, and other
-// clubs are asking for it". {countdown} and {eventTeams} are computed at send time
-// so this copy can sit here for years without going stale.
+// {countdown} and {eventTeams} are computed at send time so either letter can sit
+// here for years without a hand-typed date or team count going stale.
+
+export type PayLetterVariant = 'reminder' | 'final'
+
+/** The everyday ask. No waiting list, no reassignment, no deadline. */
 export const PAY_LETTER_DEFAULTS: { subject: string; body: string } = {
+  subject: 'Balance due for {event} — {club}',
+  body: `Hi {contact},
+
+A quick reminder that {club} ({teams}) still shows a balance of {balance} for {event}, which is {countdown}.
+
+You can take care of it online in about a minute using the button below:
+
+• Bank transfer (ACH) — no fee
+• Credit card — 3% processing fee
+
+Payment before the event is what confirms your spots, and we aren't able to take payments at the tournament site. If a check is already on the way or anything looks off on your account, just reply to this email and we'll square it up.
+
+Thanks for being part of the event — we can't wait to see your teams out on the field!
+
+— {org}`,
+}
+
+/** The escalation, for a full event with clubs waiting on a spot. */
+export const PAY_LETTER_FINAL_DEFAULTS: { subject: string; body: string } = {
   subject: 'Payment required to confirm your spots — {event}',
   body: `Hi {contact},
 
@@ -69,3 +92,11 @@ Thanks for being part of the event — we can't wait to see your teams out on th
 
 — {org}`,
 }
+
+export const payLetterDefaults = (variant?: PayLetterVariant) =>
+  variant === 'final' ? PAY_LETTER_FINAL_DEFAULTS : PAY_LETTER_DEFAULTS
+
+/** AppSetting key per variant. 'reminder' keeps the original key so nothing an org
+ *  already saved is orphaned by the split. */
+export const payLetterKey = (orgId: string, variant?: PayLetterVariant) =>
+  `${variant === 'final' ? 'payLetterFinal' : 'payLetter'}:${orgId}`

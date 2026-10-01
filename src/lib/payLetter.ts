@@ -1,16 +1,17 @@
 import { prisma } from '@/lib/db'
 import { renderEmail } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
-import { PAY_LETTER_DEFAULTS, mergePayLetter, countdownPhrase } from '@/lib/payLetterText'
+import { mergePayLetter, countdownPhrase, payLetterDefaults, payLetterKey, type PayLetterVariant } from '@/lib/payLetterText'
 
 // The copy, the token merge and the countdown live in payLetterText (no prisma), so
 // the registrations page can preview exactly what the send path will produce.
-export { PAY_LETTER_DEFAULTS, mergePayLetter, countdownPhrase, PAY_LETTER_TOKENS } from '@/lib/payLetterText'
+export { PAY_LETTER_DEFAULTS, PAY_LETTER_FINAL_DEFAULTS, payLetterDefaults, payLetterKey, mergePayLetter, countdownPhrase, PAY_LETTER_TOKENS } from '@/lib/payLetterText'
+export type { PayLetterVariant } from '@/lib/payLetterText'
 
-export async function payLetterFor(orgId: string | null): Promise<{ subject: string; body: string; custom: boolean }> {
+export async function payLetterFor(orgId: string | null, variant: PayLetterVariant = 'reminder'): Promise<{ subject: string; body: string; custom: boolean }> {
   if (orgId) {
     try {
-      const row = await prisma.appSetting.findUnique({ where: { key: `payLetter:${orgId}` } })
+      const row = await prisma.appSetting.findUnique({ where: { key: payLetterKey(orgId, variant) } })
       if (row?.value) {
         const v = JSON.parse(row.value) as { subject?: unknown; body?: unknown }
         if (typeof v?.subject === 'string' && typeof v?.body === 'string' && v.body.trim()) {
@@ -19,7 +20,7 @@ export async function payLetterFor(orgId: string | null): Promise<{ subject: str
       }
     } catch { /* bad JSON — fall through to default */ }
   }
-  return { ...PAY_LETTER_DEFAULTS, custom: false }
+  return { ...payLetterDefaults(variant), custom: false }
 }
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
