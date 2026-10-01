@@ -39,7 +39,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const eventTeams = await prisma.registeredTeam.count({ where: { registration: { tournamentId: reg.tournamentId, deletedAt: null } } })
     const origin = req.headers.get('origin') || `https://${req.headers.get('host') || 'whistleready.app'}`
     const link = `${origin}/pay/${reg.id}`
-    const totalWithFee = Math.round(balance * 1.03 * 100) / 100
     const org = await orgForTournament(reg.tournamentId)
     const teamsLabel = `${reg.teams.length} team${reg.teams.length !== 1 ? 's' : ''}`
 

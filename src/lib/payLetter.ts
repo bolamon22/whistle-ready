@@ -38,7 +38,6 @@ export function buildPayReminderEmail(args: {
   eventLogo?: string; eventHref?: string; orgLogo?: string; orgHref?: string
   logoBox?: { w: number; h: number }; footerLogoBox?: { w: number; h: number }
 }): { subject: string; html: string; text: string } {
-  const totalWithFee = Math.round(args.balance * 1.03 * 100) / 100
   const teamsLabel = `${args.teamsCount} team${args.teamsCount !== 1 ? 's' : ''}`
   const vals = {
     contact: args.clubContact || args.clubName, club: args.clubName, event: args.tName,
@@ -57,7 +56,7 @@ export function buildPayReminderEmail(args: {
   <p style="text-align:center;margin:24px 0">
     <a href="${args.link}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">Pay ${fmt(args.balance)} online</a>
   </p>
-  <p style="font-size:13px;color:#64748b">Pay by <strong>bank transfer (ACH) with no fee</strong>, or by card (3% processing fee &mdash; ${fmt(totalWithFee)} total). Prefer to pay by check? Just reply to this email.</p>
+  <p style="font-size:13px;color:#64748b">Pay by <strong>bank transfer (ACH) with no fee</strong>, or by card (3% processing fee). Prefer to pay by check? Just reply to this email.</p>
   <p style="font-size:13px;color:#64748b">If the button does not work, copy this link into your browser:<br>${args.link}</p>`
   const html = renderEmail({
     orgName: args.orgName,
@@ -67,6 +66,6 @@ export function buildPayReminderEmail(args: {
     body,
     footerNote: 'Prefer to pay by check? Just reply to this email.',
   })
-  const text = `${letterText}\n\nInvoiced: ${fmt(args.due)}\nPaid: ${fmt(args.paid)}\nBalance due: ${fmt(args.balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee, ${fmt(totalWithFee)} total):\n${args.link}`
+  const text = `${letterText}\n\nInvoiced: ${fmt(args.due)}\nPaid: ${fmt(args.paid)}\nBalance due: ${fmt(args.balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee):\n${args.link}`
   return { subject, html, text }
 }
