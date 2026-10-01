@@ -88,6 +88,15 @@ export default function DivisionsPage() {
   // way to tell why.
   const activeTeam = teamFilter && teamGameCounts.some(([n]) => n === teamFilter) ? teamFilter : ''
 
+  /** Clicking a team name filters to it; clicking the same one again clears. A
+   *  different name switches rather than clears, which is what you want when the
+   *  row you are reading is the one you want to look at next. */
+  const toggleTeamFilter = (name: string) => {
+    const t = String(name || '').trim()
+    if (!t) return
+    setTeamFilter(prev => (prev === t ? '' : t))
+  }
+
   const unevenByDivision = useMemo(() => {
     const m = new Map<string, string[]>()
     for (const f of findShortTeams(allGames)) {
@@ -1609,10 +1618,26 @@ if (loading) return (
                               </thead>
                               <tbody>
                                 {games.map((g, i) => (
-                                  <tr key={g.id} className={`border-b border-slate-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}${activeTeam && g.team1?.trim() !== activeTeam && g.team2?.trim() !== activeTeam ? ' opacity-30' : ''}`}>
+                                  <tr key={g.id} className={`border-b border-slate-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}${activeTeam && g.team1?.trim() !== activeTeam && g.team2?.trim() !== activeTeam ? ' opacity-50' : ''}`}>
                                     <td className="px-5 py-2.5 font-mono text-xs text-slate-500">{g.gameNumber}</td>
-                                    <td className="px-3 py-2.5 font-medium text-slate-800">{g.team1}</td>
-                                    <td className="px-3 py-2.5 text-slate-600">{g.team2}</td>
+                                    {/* Both names are buttons: filtering from the row you
+                                        are already reading beats going back to the
+                                        dropdown, and a dimmed row's name stays live so you
+                                        can move straight from one team to the next. */}
+                                    <td className="px-3 py-2.5 font-medium text-slate-800">
+                                      <button type="button" onClick={() => toggleTeamFilter(g.team1)}
+                                        title={activeTeam === g.team1?.trim() ? 'Show all teams again' : `Show only ${g.team1}'s games`}
+                                        className={`text-left rounded hover:underline underline-offset-2 hover:text-teal-700 transition-colors ${activeTeam === g.team1?.trim() ? 'text-teal-700 underline' : ''}`}>
+                                        {g.team1}
+                                      </button>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-slate-600">
+                                      <button type="button" onClick={() => toggleTeamFilter(g.team2)}
+                                        title={activeTeam === g.team2?.trim() ? 'Show all teams again' : `Show only ${g.team2}'s games`}
+                                        className={`text-left rounded hover:underline underline-offset-2 hover:text-teal-700 transition-colors ${activeTeam === g.team2?.trim() ? 'text-teal-700 underline font-medium' : ''}`}>
+                                        {g.team2}
+                                      </button>
+                                    </td>
                                     <td className="px-3 py-2.5 text-xs text-slate-400">{g.date || '--'}</td>
                                     <td className="px-3 py-2.5 text-xs text-slate-400">{g.startTime || '--'}</td>
                                     <td className="px-3 py-2.5 text-xs text-slate-400">{g.location || '--'}</td>
