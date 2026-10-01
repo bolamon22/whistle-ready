@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, GripVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, GripVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -195,7 +195,7 @@ function IssueBadge({ kind, count }: { kind: IssueKind; count: number }) {
 // The division chips fold to one line while you work one division: just that chip
 // (with an x to clear) and a "Divisions" button to reopen the full row. Picking a
 // chip folds the row; clearing it opens it again.
-function DivisionChips({ p, counts, open, setOpen }: { p: ViewsProps; counts: Record<string, { total: number; done: number }>; open: boolean; setOpen: (o: boolean) => void }) {
+function DivisionChips({ p, counts, open, setOpen }: { p: ViewsProps; counts: Record<string, DivCount>; open: boolean; setOpen: (o: boolean) => void }) {
   const active = p.filterDiv !== '__all__' ? p.filterDiv : null
   if (!open) {
     return (
@@ -222,24 +222,54 @@ function DivisionChips({ p, counts, open, setOpen }: { p: ViewsProps; counts: Re
         className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors ${p.filterDiv === '__all__' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>All</button>
       {p.divisions.map(d => {
         const on = p.filterDiv === d, c = p.divColor(d)
+        const stage = divStage(counts[d]), st = stage ? STAGE[stage] : null
         return (
-          <button key={d} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }}
+          <button key={d} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }} title={st?.title}
             className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-3 py-1 rounded-full border transition-colors"
-            style={on ? { background: c, borderColor: c, color: '#fff' } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
+            style={on ? { background: c, borderColor: c, color: '#fff' } : st ? { background: st.bg, borderColor: st.border, color: st.text } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? 'rgba(255,255,255,.85)' : c }} />
-            {d}<span className="font-medium opacity-70">{counts[d]?.done ?? 0}/{counts[d]?.total ?? 0}</span>
+            {d}
+            {stage === 'complete'
+              ? <span className="inline-flex items-center gap-0.5 font-semibold opacity-80"><Check size={12} strokeWidth={3} />{counts[d]?.total}</span>
+              : <span className="font-medium opacity-70">{counts[d]?.done ?? 0}/{counts[d]?.total ?? 0}</span>}
           </button>
         )
       })}
+      {p.divisions.some(d => divStage(counts[d])) && (
+        <span className="inline-flex items-center gap-2.5 ml-1 text-[10px] text-slate-400">
+          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border" style={{ background: STAGE.pools.bg, borderColor: STAGE.pools.border }} />pools placed</span>
+          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border" style={{ background: STAGE.complete.bg, borderColor: STAGE.complete.border }} />all placed</span>
+        </span>
+      )}
     </div>
   )
 }
 
+interface DivCount { total: number; done: number; poolTotal: number; poolDone: number }
+// How far a division's placement has got, for the chip shading: every game placed,
+// or every pool game placed with bracket games still to go.
+function divStage(c: DivCount | undefined): 'complete' | 'pools' | null {
+  if (!c || c.total === 0) return null
+  if (c.done >= c.total) return 'complete'
+  if (c.poolTotal > 0 && c.poolDone >= c.poolTotal) return 'pools'
+  return null
+}
+const STAGE = {
+  pools:    { bg: '#e9eef4', border: '#cbd5e1', text: '#334155', title: 'Pool play is fully placed; bracket games still to go' },
+  complete: { bg: '#cbd5e1', border: '#94a3b8', text: '#334155', title: 'Every game in this division is placed' },
+}
+
 function useCounts(games: SGame[], divisions: string[]) {
   return useMemo(() => {
-    const c: Record<string, { total: number; done: number }> = {}
-    divisions.forEach(d => { c[d] = { total: 0, done: 0 } })
-    games.forEach(g => { if (!c[g.division]) c[g.division] = { total: 0, done: 0 }; c[g.division].total++; if (g.date && g.startTime && g.location) c[g.division].done++ })
+    const c: Record<string, DivCount> = {}
+    const blank = (): DivCount => ({ total: 0, done: 0, poolTotal: 0, poolDone: 0 })
+    divisions.forEach(d => { c[d] = blank() })
+    games.forEach(g => {
+      const x = c[g.division] ?? (c[g.division] = blank())
+      const placed = !!(g.date && g.startTime && g.location)
+      x.total++; if (placed) x.done++
+      if (!isBracket(g)) { x.poolTotal++; if (placed) x.poolDone++ }
+    })
     return c
   }, [games, divisions])
 }
@@ -836,9 +866,9 @@ export function TeamLanesView(p: ViewsProps) {
       <div className="px-3 py-2 bg-white border-b border-slate-200 flex-shrink-0 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {p.divisions.map(d => { const on = d === div, cc = p.divColor(d); return (
-              <button key={d} onClick={() => p.setFilterDiv(d)} className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-3 py-1 rounded-full border"
-                style={on ? { background: cc, borderColor: cc, color: '#fff' } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
+            {p.divisions.map(d => { const on = d === div, cc = p.divColor(d), st = divStage(counts[d]) ? STAGE[divStage(counts[d])!] : null; return (
+              <button key={d} onClick={() => p.setFilterDiv(d)} title={st?.title} className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-3 py-1 rounded-full border"
+                style={on ? { background: cc, borderColor: cc, color: '#fff' } : st ? { background: st.bg, borderColor: st.border, color: st.text } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? 'rgba(255,255,255,.85)' : cc }} />{d}<span className="font-medium opacity-70">{counts[d]?.done ?? 0}/{counts[d]?.total ?? 0}</span>
               </button>
             ) })}
