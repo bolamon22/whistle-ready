@@ -49,14 +49,23 @@ export function mergePayLetter(text: string, vals: Record<string, string>): stri
 // clubs are asking for it". {countdown} and {eventTeams} are computed at send time
 // so this copy can sit here for years without going stale.
 export const PAY_LETTER_DEFAULTS: { subject: string; body: string } = {
-  subject: 'Payment secures your spots for {event} — {club}',
-  body: `Hi {contact} — {event} is {countdown}, and {club} ({teams}) still shows a balance of {balance}.
+  subject: 'Payment required to confirm your spots — {event}',
+  body: `Hi {contact},
 
-We're at {eventTeams} teams this year and running a waiting list, with clubs asking us weekly about openings. Payment is what fully secures your spots — until the balance is cleared we can't confirm them, and as we finalize the field those spots are what we'd be offering to the teams waiting.
+{event} is {countdown}! We're at {eventTeams} teams this year with an active waiting list, and clubs are asking us weekly about open spots.
 
-You can take care of it online in about a minute with the button below. Bank transfer (ACH) has no fee; card runs 3%.
+Our records currently show an unpaid balance of {balance} for {club} ({teams}).
 
-If a check is already on the way, or anything here looks off, just reply to this email — we'll hold your spots and square it up.
+Please take care of this balance today. Full payment prior to the event is required to officially confirm your spots — we do not accept payments at the tournament site. As we finalize division schedules, unconfirmed spots will be reassigned to teams on the waiting list.
 
-Thanks for being part of the event. We can't wait to see your teams out there.`,
+You can complete payment online in about a minute using the button below:
+
+• Bank transfer (ACH) — no fee
+• Credit card — 3% processing fee
+
+If a check is already in the mail or anything looks off on your account, please reply to this email right away so we can hold your spot while we clear things up.
+
+Thanks for being part of the event — we can't wait to see your teams out on the field!
+
+— {org}`,
 }
