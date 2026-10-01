@@ -25,6 +25,7 @@ interface DashData {
     clubs: number; teams: number; invoiced: number; received: number; balance: number
     paidInFull: number; outstanding: number
     byMethod: Record<string, number>; byDivision: Record<string, number>
+    byDivisionWaitlist?: Record<string, number>; waitlisted?: number
     hotelYes: number; hotelMaybe: number
   }
   playerCount: number
@@ -86,7 +87,7 @@ function GameDayCard({ href, icon: Icon, label, hint, accent }: { href: string; 
   )
 }
 
-type DivTeam = { teamName: string; clubName: string; logoUrl: string }
+type DivTeam = { teamName: string; clubName: string; logoUrl: string; waitlisted: boolean }
 
 export default function DashboardPage() {
   const { id } = useParams()
@@ -134,10 +135,11 @@ export default function DashboardPage() {
           ;(reg.teams || []).forEach((t: any) => {
             const div = String(t.division || '').trim() || 'Unassigned'   // same key the API counts under
             if (!map[div]) map[div] = []
-            map[div].push({ teamName: t.teamName || t.clubName || 'Team', clubName: t.clubName || reg.clubName || '', logoUrl: t.logoUrl || '' })
+            map[div].push({ teamName: t.teamName || t.clubName || 'Team', clubName: t.clubName || reg.clubName || '', logoUrl: t.logoUrl || '', waitlisted: !!t.waitlisted })
           })
         })
-        Object.values(map).forEach(list => list.sort((a, b) => a.teamName.localeCompare(b.teamName)))
+        // waiting-list teams go last, so the confirmed ones read as the division
+        Object.values(map).forEach(list => list.sort((a, b) => Number(a.waitlisted) - Number(b.waitlisted) || a.teamName.localeCompare(b.teamName)))
         setTeamsByDiv(map)
       })
       .catch(() => {})
@@ -174,6 +176,8 @@ export default function DashboardPage() {
     : savedOrder
   const divisionRows = shown.map(d => [d, reg.byDivision[d]] as [string, number])
   const divisionTeams = divisionRows.reduce((s, [, n]) => s + n, 0)
+  const wlBy = reg.byDivisionWaitlist || {}
+  const wlTotal = reg.waitlisted || 0
   // Boys/girls, read off the division names -- see src/lib/divisionGender.ts for why
   // that is a guess and how it refuses to hide what it could not place.
   const split = splitByGender(divisionRows)
@@ -291,7 +295,7 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-            <Kpi label="Teams" value={reg.teams} sub={reg.clubs > 0 ? `${reg.clubs} clubs` : undefined} href={`/tournaments/${id}/registrations`}
+            <Kpi label="Teams" value={reg.teams - wlTotal} sub={[reg.clubs > 0 ? `${reg.clubs} clubs` : '', wlTotal > 0 ? `+${wlTotal} waitlisted` : ''].filter(Boolean).join(' · ') || undefined} href={`/tournaments/${id}/registrations`}
               extra={<GenderBar boys={split.boys} girls={split.girls} other={split.other} />} />
             <Kpi label="Games" value={games.active} sub={`${games.divisions} divisions`} href={`/tournaments/${id}/scheduler`} />
             <Kpi label="Staff assigned" value={`${assignPct}%`} sub={`${staff.onRoster} on roster`} href={`/tournaments/${id}/assignments`} />
@@ -320,7 +324,7 @@ export default function DashboardPage() {
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Registered teams</h2>
             <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400">· {divisionTeams} team{divisionTeams === 1 ? '' : 's'} in {divisionRows.length} division{divisionRows.length === 1 ? '' : 's'}</span>{(split.boys > 0 || split.girls > 0) && <span className="text-xs font-normal text-slate-400">· {split.boys} boys · {split.girls} girls{split.other > 0 ? ` · ${split.other} unclassified` : ''}</span>}<span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap one to see teams, drag the grip to reorder</span>{orderErr && <span className="text-xs font-normal text-rose-600">· {orderErr}</span>}</h3>
+              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400">· {divisionTeams} team{divisionTeams === 1 ? '' : 's'} in {divisionRows.length} division{divisionRows.length === 1 ? '' : 's'}{wlTotal > 0 && <> · <span className="text-amber-700">{wlTotal} on waiting list</span></>}</span>{(split.boys > 0 || split.girls > 0) && <span className="text-xs font-normal text-slate-400">· {split.boys} boys · {split.girls} girls{split.other > 0 ? ` · ${split.other} unclassified` : ''}</span>}<span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap one to see teams, drag the grip to reorder</span>{orderErr && <span className="text-xs font-normal text-rose-600">· {orderErr}</span>}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {divisionRows.map(([div, count], idx) => {
                   const open = openDiv === div
@@ -371,7 +375,13 @@ export default function DashboardPage() {
                           <ChevronDown size={13} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                           <span className="text-xs text-slate-600 truncate">{div}</span>
                         </span>
-                        <span className="text-sm font-semibold text-slate-800 flex-shrink-0">{count}</span>
+                        <span className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-sm font-semibold text-slate-800">{count}</span>
+                          {(wlBy[div] || 0) > 0 && (
+                            <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-px whitespace-nowrap"
+                              title={`${count} team${count === 1 ? '' : 's'} in, plus ${wlBy[div]} on the waiting list`}>+{wlBy[div]} waitlist</span>
+                          )}
+                        </span>
                       </button>
                     </div>
                     </Fragment>
@@ -383,14 +393,14 @@ export default function DashboardPage() {
                 <div className="mt-4 border-t border-slate-100 pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-slate-700">{openDiv}</span>
-                    <span className="text-xs text-slate-400">{(teamsByDiv[openDiv] || []).length} teams</span>
+                    <span className="text-xs text-slate-400">{(() => { const l = teamsByDiv[openDiv] || []; const w = l.filter(x => x.waitlisted).length; const n = l.length - w; return `${n} team${n === 1 ? '' : 's'}${w ? ` + ${w} on waiting list` : ''}` })()}</span>
                   </div>
                   {(teamsByDiv[openDiv] || []).length === 0 ? (
                     <p className="text-sm text-slate-400">No team details found.</p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {(teamsByDiv[openDiv] || []).map((tm, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                        <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 ${tm.waitlisted ? 'bg-amber-50 border border-dashed border-amber-300' : 'bg-slate-50'}`}>
                           {tm.logoUrl
                             ? <img src={tm.logoUrl} alt="" className="w-6 h-6 rounded object-contain bg-white border border-slate-200 flex-shrink-0" />
                             : <span className="w-6 h-6 rounded bg-slate-200 text-slate-500 text-[11px] font-bold flex items-center justify-center flex-shrink-0">{tm.teamName.charAt(0).toUpperCase()}</span>}
@@ -398,6 +408,7 @@ export default function DashboardPage() {
                             <span className="block text-sm text-slate-800 truncate">{tm.teamName}</span>
                             {tm.clubName && tm.clubName !== tm.teamName && <span className="block text-[11px] text-slate-400 truncate">{tm.clubName}</span>}
                           </span>
+                          {tm.waitlisted && <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">Waiting list</span>}
                         </div>
                       ))}
                     </div>

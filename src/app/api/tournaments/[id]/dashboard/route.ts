@@ -12,7 +12,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     prisma.game.findMany({ where: { tournamentId: id }, select: { id: true, division: true, isCanceled: true, assignments: { select: { id: true } } } }),
     prisma.teamRegistration.findMany({
       where: { tournamentId: id, deletedAt: null },
-      include: { teams: { select: { id: true, division: true } }, payments: { select: { amount: true } } },
+      include: { teams: { select: { id: true, division: true, waitlisted: true } }, payments: { select: { amount: true } } },
     }),
     prisma.rosterEntry.findMany({ where: { tournamentId: id }, select: { workerId: true } }),
     prisma.assignment.findMany({ where: { game: { tournamentId: id } }, select: { id: true, payRate: true, role: true } }),
@@ -71,11 +71,21 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   // 'Unassigned' — the same key the dashboard files them under when it lists the teams, so
   // the chip opens instead of reading "No team details found". Every team lands somewhere,
   // so these counts always add up to totalTeams.
+  //
+  // Waiting-list teams are counted apart: they registered but are not playing
+  // until Bo places them, and the tile has to answer "can I fit one more?",
+  // which a count that includes them gets wrong. A division whose only entry is
+  // waitlisted still gets a tile (count 0) so the waiting team is visible.
+  // byDivision + byDivisionWaitlist still adds up to totalTeams.
   const divisionCounts: Record<string, number> = {}
+  const divisionWaitlist: Record<string, number> = {}
+  let waitlistedTeams = 0
   for (const reg of registrations) {
     for (const team of reg.teams) {
       const div = String(team.division || '').trim() || 'Unassigned'
-      divisionCounts[div] = (divisionCounts[div] || 0) + 1
+      divisionCounts[div] = divisionCounts[div] || 0
+      if (team.waitlisted) { divisionWaitlist[div] = (divisionWaitlist[div] || 0) + 1; waitlistedTeams++ }
+      else divisionCounts[div]++
     }
   }
 
@@ -122,6 +132,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       outstanding: totalClubs - paidInFull,
       byMethod,
       byDivision: divisionCounts,
+      byDivisionWaitlist: divisionWaitlist,
+      waitlisted: waitlistedTeams,
       hotelYes,
       hotelMaybe,
     },
