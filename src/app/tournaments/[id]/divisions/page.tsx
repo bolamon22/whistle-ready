@@ -462,8 +462,15 @@ export default function DivisionsPage() {
       : `${team.teamName} deleted`)
   }
 
+  // Which division (if any) was opened by clicking its rail bracket chip, so the
+  // Bracket tab lands on Preview for that one click. Any other way into a division
+  // clears it and the tab opens on Seeds as before.
+  const [previewDiv, setPreviewDiv] = useState<string | null>(null)
+  const [previewNonce, setPreviewNonce] = useState(0)
+
   const selectDiv = useCallback((div: string) => {
     setActiveDiv(div)
+    setPreviewDiv(null)
     setLoadingDiv(true)
     setTeamFilter('')   // a name from the previous division would filter this one to nothing
     setSwapA(null); setSwapB(null)
@@ -951,7 +958,14 @@ if (loading) return (
                         </div>
                       ) : (
                         <div className="flex items-center pr-1">
-                          <button onClick={() => selectDiv(div.name)} className="flex-1 text-left px-4 py-2.5 min-w-0">
+                          {/* A div, not a button: the count chips below are now
+                              buttons of their own (a bracket chip jumps straight to
+                              the bracket preview), and a button inside a button is
+                              invalid markup that React will not render. */}
+                          <div role="button" tabIndex={0}
+                            onClick={() => selectDiv(div.name)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDiv(div.name) } }}
+                            className="flex-1 text-left px-4 py-2.5 min-w-0 cursor-pointer">
                             <div className="flex items-center gap-2">
                               <span
                                 className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm"
@@ -972,10 +986,16 @@ if (loading) return (
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
                               {div.gameCount > 0 && (
-                                <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full" title="Pool games">{div.gameCount} pool</span>
+                                <button
+                                  onClick={e => { e.stopPropagation(); selectDiv(div.name); setActiveTab('pool-games') }}
+                                  className="text-[10px] text-slate-500 bg-slate-100 hover:bg-slate-200 hover:text-slate-700 px-1.5 py-0.5 rounded-full transition-colors"
+                                  title={`See the ${div.gameCount} pool game${div.gameCount !== 1 ? 's' : ''}`}>{div.gameCount} pool</button>
                               )}
                               {(div.bracketGameCount ?? 0) > 0 && (
-                                <span className="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full" title="Bracket games">{div.bracketGameCount} bracket</span>
+                                <button
+                                  onClick={e => { e.stopPropagation(); selectDiv(div.name); setActiveTab('bracket'); setPreviewDiv(div.name); setPreviewNonce(n => n + 1) }}
+                                  className="text-[10px] text-violet-600 bg-violet-50 hover:bg-violet-100 hover:text-violet-800 px-1.5 py-0.5 rounded-full transition-colors"
+                                  title="See the bracket">{div.bracketGameCount} bracket</button>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount > 0 && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full" title={`${div.unassignedTeams} team${div.unassignedTeams !== 1 ? 's' : ''} not assigned to a pool`}>
@@ -988,7 +1008,7 @@ if (loading) return (
                                 </span>
                               )}
                             </div>
-                          </button>
+                          </div>
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                             <button
                               onClick={() => { setRenamingDiv(div.name); setRenameValue(div.name) }}
@@ -1935,7 +1955,7 @@ if (loading) return (
                   const def = defaultBracketPlan(tc, poolG, guar)
                   const cnt = owes2 ? String(tc) : String(sd.advance ?? def.advance)
                   const cons = owes2 ? undefined : String(sd.consolation ?? def.consolation)
-                  return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} />
+                  return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} initialTab={previewDiv === activeDiv ? 'preview' : 'seeding'} openPreviewAt={previewNonce} />
                 })()
               )}
               </>

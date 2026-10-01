@@ -31,6 +31,12 @@ interface Props {
   planCount?: string
   planConsolation?: string
   planLoserConsolation?: boolean
+  // Which view the rail asked for. 'preview' when the click came from a bracket
+  // chip, 'seeding' otherwise; openPreviewAt is a counter whose VALUE means nothing
+  // -- it changing is what re-asks, so clicking the same chip twice still works
+  // after the user has switched tabs by hand.
+  initialTab?: 'seeding' | 'preview'
+  openPreviewAt?: number
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -67,10 +73,10 @@ const SECTION_LABELS: Record<string, string> = {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function BracketBuilder({ tournamentId, division, planFormat, planCount, planConsolation, planLoserConsolation }: Props) {
+export default function BracketBuilder({ tournamentId, division, planFormat, planCount, planConsolation, planLoserConsolation, initialTab, openPreviewAt }: Props) {
   const [loading, setLoading] = useState(true)
   const [bracket, setBracket] = useState<BracketData | null>(null)
-  const [tab, setTab] = useState<'seeding' | 'manage' | 'preview'>('seeding')
+  const [tab, setTab] = useState<'seeding' | 'manage' | 'preview'>(initialTab ?? 'seeding')
   const [showAddGame, setShowAddGame] = useState(false)
   const [seeds, setSeeds] = useState<Record<string, string>>({})
   const [standings, setStandings] = useState<{ team: string; w: number; l: number; t: number; gf: number; ga: number }[]>([])
@@ -136,6 +142,10 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   }, [apiBase])
 
   useEffect(() => { loadBracket() }, [loadBracket])
+
+  // Follow the rail only when the rail actually asks. A tab the user picked by hand
+  // changes none of these, so it stays put.
+  useEffect(() => { setTab(initialTab ?? 'seeding') }, [initialTab, division, openPreviewAt])
 
   const loadStandings = useCallback(async () => {
     try {
