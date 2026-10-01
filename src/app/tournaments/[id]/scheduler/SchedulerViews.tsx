@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Search, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, GripVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -53,6 +53,10 @@ export interface ViewsProps {
   saving: boolean
   /** Timeline only: 'fields-down' (time across, the default) or 'fields-across' (time down, like the grid). */
   orientation?: 'fields-down' | 'fields-across'
+  /** Timeline/Board: per-tournament key for the remembered minimized fields and times. */
+  prefsKey?: string
+  /** Timeline/Board: a field header dropped on another takes its place. The page saves the order. */
+  onReorderFields?: (fromFullName: string, toFullName: string) => void
 }
 
 type IssueKind = 'conflict' | 'b2b' | 'bracket' | 'gap'
@@ -270,6 +274,10 @@ const HINT = {
 // Timeline view
 // ───────────────────────────────────────────────────────────────────────────────
 
+const ROW_H = '64px', MIN_W = '34px', MIN_H = '26px'
+const fieldShort = (n: string) => n.replace(/^field\s*/i, '') || n
+const timeShort = (t: string) => t.replace(/\s*[AP]M$/i, '')
+
 export function TimelineView(p: ViewsProps) {
   const across = p.orientation === 'fields-across'
   const [selId, setSelId] = useState<string | null>(null)
@@ -304,10 +312,49 @@ export function TimelineView(p: ViewsProps) {
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useTypeFilter()
   const [dragId, setDragId] = useState<string | null>(null)
+  // Minimized fields and times shrink to a thin strip. Their games still show (as a
+  // one-line chip) and still take drops, so the part of the day being worked on can
+  // stay wide. Remembered per tournament on this device.
+  const minKey = 'wr-sched-min:' + (p.prefsKey ?? '')
+  const [minFields, setMinFields] = useState<Set<string>>(new Set())
+  const [minSlots, setMinSlots] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem(minKey) || 'null'); setMinFields(new Set(v?.f ?? [])); setMinSlots(new Set(v?.s ?? [])) } catch {}
+  }, [minKey])
+  const saveMin = (f: Set<string>, sl: Set<string>) => {
+    setMinFields(f); setMinSlots(sl)
+    try { localStorage.setItem(minKey, JSON.stringify({ f: Array.from(f), s: Array.from(sl) })) } catch {}
+  }
+  const toggleMinField = (n: string) => { const f = new Set(minFields); if (f.has(n)) f.delete(n); else f.add(n); saveMin(f, minSlots) }
+  const toggleMinSlot = (n: string) => { const sl = new Set(minSlots); if (sl.has(n)) sl.delete(n); else sl.add(n); saveMin(minFields, sl) }
+  const minCount = p.fields.filter(f => minFields.has(f.fullName)).length + p.slots.filter(x => minSlots.has(x)).length
+  // Field headers drag onto each other to reorder. Uses its own dataTransfer type, so
+  // a field dropped on a cell (or a game dropped on a header) does nothing.
+  const [dragField, setDragField] = useState<string | null>(null)
+  const [fieldOver, setFieldOver] = useState<string | null>(null)
+  const fieldDrag = (f: SField) => p.onReorderFields ? {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => { e.dataTransfer.setData('wr-field', f.fullName); e.dataTransfer.effectAllowed = 'move'; setDragField(f.fullName) },
+    onDragEnd: () => { setDragField(null); setFieldOver(null) },
+    onDragOver: (e: React.DragEvent) => { if (dragField) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (fieldOver !== f.fullName) setFieldOver(f.fullName) } },
+    onDrop: (e: React.DragEvent) => {
+      if (!dragField) return
+      e.preventDefault(); e.stopPropagation()
+      const from = e.dataTransfer.getData('wr-field') || dragField
+      setDragField(null); setFieldOver(null)
+      if (from && from !== f.fullName) p.onReorderFields!(from, f.fullName)
+    },
+  } : {}
+  // where the dragged field would land: a teal bar on the near side of the target
+  const dropEdge = (f: SField) => {
+    if (!dragField || fieldOver !== f.fullName || dragField === f.fullName) return undefined
+    const before = p.fields.findIndex(x => x.fullName === dragField) > p.fields.findIndex(x => x.fullName === f.fullName)
+    return { boxShadow: across ? `inset ${before ? '3px' : '-3px'} 0 0 #0d9488` : `inset 0 ${before ? '3px' : '-3px'} 0 #0d9488` }
+  }
   const boardRef = useRef<HTMLDivElement>(null)
   // The floating "Moving…" bar covers the bottom of the board, so the scroll zone
   // starts above it.
-  useDragAutoScroll(boardRef, !!dragId, { bottomInset: selId ? 64 : 0 })
+  useDragAutoScroll(boardRef, !!dragId || !!dragField, { bottomInset: selId ? 64 : 0 })
   const [chipsOpen, setChipsOpenRaw] = useState(true)
   useEffect(() => { try { if (localStorage.getItem('wr-sched-chips') === 'closed') setChipsOpenRaw(false) } catch {} }, [])
   const setChipsOpen = (o: boolean) => { setChipsOpenRaw(o); try { localStorage.setItem('wr-sched-chips', o ? 'open' : 'closed') } catch {} }
@@ -459,6 +506,11 @@ export function TimelineView(p: ViewsProps) {
         <div className="px-3 py-1.5 flex items-start gap-2 bg-white border-b border-slate-200 flex-shrink-0">
           <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} /></div>
           {!sel && <span className="text-xs text-slate-400 hidden 2xl:inline pt-1.5 flex-shrink-0">Click an unscheduled game, then a slot.</span>}
+          {minCount > 0 && (
+            <button onClick={() => saveMin(new Set(), new Set())} className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border flex-shrink-0 mt-0.5 bg-white text-teal-700 border-teal-300 hover:bg-teal-50" title="Show every minimized field and time at full size">
+              <Maximize2 size={13} /> Expand {minCount} minimized
+            </button>
+          )}
           <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border flex-shrink-0 mt-0.5 ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={fit ? 'Reopen both side panels' : (across ? 'Collapse both side panels so every field fits' : 'Collapse both side panels so the whole day fits')}>
             {fit ? <Minimize2 size={13} /> : <Maximize2 size={13} />} {across ? 'Fit fields' : 'Fit day'}
           </button>
@@ -470,15 +522,28 @@ export function TimelineView(p: ViewsProps) {
         {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /></div>}
         <div ref={boardRef} className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
           {across ? (
-            <div className="grid" style={{ gridTemplateColumns: `100px repeat(${p.fields.length}, ${fieldCol})`, gridAutoRows: '64px', minWidth: fit ? undefined : 'max-content' }}>
-              {/* header: fields */}
-              <div className="sticky top-0 left-0 z-30 h-11 bg-slate-50 border-b border-r border-slate-200" />
+            <div className="grid" style={{ gridTemplateColumns: `100px ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
+              {/* header: fields (drag to reorder, minimize to a strip) */}
+              <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200" />
               {p.fields.map(f => {
                 const n = p.dayGames.filter(g => g.location === f.fullName).length
+                const mf = minFields.has(f.fullName)
                 return (
-                  <div key={f.fullName} className="sticky top-0 z-20 h-11 bg-slate-50 border-b border-slate-200 border-r border-slate-100 px-2.5 flex flex-col justify-center gap-0.5 min-w-0">
-                    <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
-                    <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
+                  <div key={f.fullName} {...fieldDrag(f)} title={p.onReorderFields ? `${f.fieldName} · drag to move this field` : undefined}
+                    className={`sticky top-0 z-20 bg-slate-50 border-b border-slate-200 border-r border-slate-100 min-w-0 ${p.onReorderFields ? 'cursor-grab active:cursor-grabbing' : ''} ${dragField === f.fullName ? 'opacity-40' : ''}`}
+                    style={dropEdge(f)}>
+                    {mf ? (
+                      <button onClick={() => toggleMinField(f.fullName)} title={`Show ${f.fieldName}`} aria-label={`Show ${f.fieldName}`} className="w-full h-full flex items-center justify-center text-[10px] font-extrabold text-slate-600 hover:bg-slate-100 hover:text-slate-900 px-0.5 truncate">{fieldShort(f.fieldName)}</button>
+                    ) : (
+                      <div className="h-full pl-1 pr-1 flex items-center gap-0.5">
+                        {p.onReorderFields && <GripVertical size={12} className="text-slate-300 flex-shrink-0" />}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+                          <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
+                          <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
+                        </div>
+                        <button onClick={() => toggleMinField(f.fullName)} title="Minimize this field" aria-label={`Minimize ${f.fieldName}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -486,13 +551,18 @@ export function TimelineView(p: ViewsProps) {
               {p.slots.map((s, si) => renderSlotRow(s, si))}
             </div>
           ) : (
-          <div className="grid" style={{ gridTemplateColumns: `96px repeat(${p.slots.length}, ${slotCol})`, gridAutoRows: '64px', minWidth: fit ? undefined : 'max-content' }}>
-            {/* header */}
-            <div className="sticky top-0 left-0 z-30 h-9 bg-slate-50 border-b border-r border-slate-200" />
-            {p.slots.map((s, i) => (
-              <div key={s} className="sticky top-0 z-20 h-9 bg-slate-50 border-b border-slate-200 border-r border-slate-100 px-2 pt-1.5 flex flex-col gap-1 min-w-0">
-                <span className="text-[11px] font-bold text-slate-700 truncate">{p.fmtTime(s)}</span>
-                <span className="h-1 rounded-full" style={{ width: `${Math.round(100 * perSlot[i] / Math.max(1, p.fields.length))}%`, background: perSlot[i] >= p.fields.length ? '#ef4444' : perSlot[i] ? '#14b8a6' : '#e2e8f0' }} />
+          <div className="grid" style={{ gridTemplateColumns: `116px ${p.slots.map(x => minSlots.has(x) ? MIN_W : slotCol).join(' ')}`, gridTemplateRows: `36px ${p.fields.map(f => minFields.has(f.fullName) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
+            {/* header: times (minimize to a strip) */}
+            <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200" />
+            {p.slots.map((s, i) => minSlots.has(s) ? (
+              <button key={s} onClick={() => toggleMinSlot(s)} title={`Show ${p.fmtTime(s)}`} aria-label={`Show ${p.fmtTime(s)}`} className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 border-r border-slate-100 text-[9px] font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-900 truncate px-0.5">{timeShort(p.fmtTime(s))}</button>
+            ) : (
+              <div key={s} className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 border-r border-slate-100 pl-2 pr-0.5 flex items-center gap-0.5 min-w-0">
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                  <span className="text-[11px] font-bold text-slate-700 truncate">{p.fmtTime(s)}</span>
+                  <span className="h-1 rounded-full" style={{ width: `${Math.round(100 * perSlot[i] / Math.max(1, p.fields.length))}%`, background: perSlot[i] >= p.fields.length ? '#ef4444' : perSlot[i] ? '#14b8a6' : '#e2e8f0' }} />
+                </div>
+                <button onClick={() => toggleMinSlot(s)} title="Minimize this time" aria-label={`Minimize ${p.fmtTime(s)}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
               </div>
             ))}
             {/* rows */}
@@ -596,7 +666,7 @@ export function TimelineView(p: ViewsProps) {
   // Plain render functions, not nested components: a nested component is a new type
   // every render, which remounts its DOM and cancels an in-progress drag.
   // One cell of the day: a placed game, or a drop target while a game is picked up.
-  function renderCell(f: SField, s: string, si: number) {
+  function renderCell(f: SField, s: string, si: number, mini = false) {
     const g = cellMap[s + '|' + f.fullName]
     const status = sel && !g ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
     const h = status ? HINT[status] : null
@@ -606,8 +676,8 @@ export function TimelineView(p: ViewsProps) {
         onDrop={e => { e.preventDefault(); const id = dropTarget(e); const src = id ? p.games.find(x => x.id === id) : null; if (src && !g) place(src, s, f.fullName); setDragId(null) }}
         onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
         style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined }}>
-        {g ? renderGameCard(g) : h ? (
-          <div className="absolute inset-1 rounded-lg flex items-center justify-center text-[10px] font-bold" style={{ border: `1.5px dashed ${h.border}`, background: h.bg, color: h.text }}>{h.label}</div>
+        {g ? renderGameCard(g, mini) : h ? (
+          <div className={`absolute ${mini ? 'inset-0.5 rounded' : 'inset-1 rounded-lg'} flex items-center justify-center text-[10px] font-bold overflow-hidden`} style={{ border: `1.5px dashed ${h.border}`, background: h.bg, color: h.text }} title={h.label}>{mini ? null : h.label}</div>
         ) : null}
       </div>
     )
@@ -616,13 +686,24 @@ export function TimelineView(p: ViewsProps) {
   // fields-down: one row per field, a cell per time slot
   function renderFieldRow(f: SField) {
     const n = p.dayGames.filter(g => g.location === f.fullName).length
+    const mf = minFields.has(f.fullName)
     return (
       <Fragment key={f.fullName}>
-        <div className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 px-2.5 flex flex-col justify-center gap-0.5 min-w-0">
-          <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
-          <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
+        <div {...fieldDrag(f)} title={p.onReorderFields ? `${f.fieldName} · drag to move this field` : undefined}
+          className={`sticky left-0 z-10 bg-white border-b border-r border-slate-200 pl-1 pr-0.5 flex items-center gap-0.5 min-w-0 ${p.onReorderFields ? 'cursor-grab active:cursor-grabbing' : ''} ${dragField === f.fullName ? 'opacity-40' : ''}`}
+          style={dropEdge(f)}>
+          {mf ? (
+            <button onClick={() => toggleMinField(f.fullName)} title={`Show ${f.fieldName}`} className="flex-1 text-left pl-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-900 truncate">{f.fieldName}</button>
+          ) : (<>
+            {p.onReorderFields && <GripVertical size={12} className="text-slate-300 flex-shrink-0" />}
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+              <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
+              <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
+            </div>
+            <button onClick={() => toggleMinField(f.fullName)} title="Minimize this field" aria-label={`Minimize ${f.fieldName}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
+          </>)}
         </div>
-        {p.slots.map((s, si) => renderCell(f, s, si))}
+        {p.slots.map((s, si) => renderCell(f, s, si, mf || minSlots.has(s)))}
       </Fragment>
     )
   }
@@ -630,18 +711,26 @@ export function TimelineView(p: ViewsProps) {
   // fields-across: one row per time slot, a cell per field
   function renderSlotRow(s: string, si: number) {
     const n = perSlot[si]
+    const ms = minSlots.has(s)
     return (
       <Fragment key={s}>
-        <div className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 px-2.5 flex flex-col justify-center gap-1 min-w-0">
-          <span className="text-xs font-extrabold text-slate-900 truncate">{p.fmtTime(s)}</span>
-          <span className="h-1 rounded-full" style={{ width: `${Math.round(100 * n / Math.max(1, p.fields.length))}%`, background: n >= p.fields.length ? '#ef4444' : n ? '#14b8a6' : '#e2e8f0' }} />
+        <div className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 pl-2.5 pr-0.5 flex items-center gap-0.5 min-w-0">
+          {ms ? (
+            <button onClick={() => toggleMinSlot(s)} title={`Show ${p.fmtTime(s)}`} className="flex-1 text-left text-[10px] font-bold text-slate-500 hover:text-slate-900 truncate">{p.fmtTime(s)} <span className="font-normal text-slate-400">· {n}</span></button>
+          ) : (<>
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+              <span className="text-xs font-extrabold text-slate-900 truncate">{p.fmtTime(s)}</span>
+              <span className="h-1 rounded-full" style={{ width: `${Math.round(100 * n / Math.max(1, p.fields.length))}%`, background: n >= p.fields.length ? '#ef4444' : n ? '#14b8a6' : '#e2e8f0' }} />
+            </div>
+            <button onClick={() => toggleMinSlot(s)} title="Minimize this time" aria-label={`Minimize ${p.fmtTime(s)}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
+          </>)}
         </div>
-        {p.fields.map(f => renderCell(f, s, si))}
+        {p.fields.map(f => renderCell(f, s, si, ms || minFields.has(f.fullName)))}
       </Fragment>
     )
   }
 
-  function renderGameCard(g: SGame) {
+  function renderGameCard(g: SGame, mini = false) {
     const c = p.divColor(g.division)
     const items = byGame.get(g.id)
     const worst = worstOf(items)
@@ -649,14 +738,27 @@ export function TimelineView(p: ViewsProps) {
     const on = selId === g.id, d = dim(g)
     const done = g.isCanceled || (g.score1 != null && g.score2 != null)
     const bg = on ? '#0f172a' : d ? '#f8fafc' : worst === 'conflict' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
+    const handlers = {
+      draggable: true,
+      'data-tl-game': g.id,
+      onDragStart: (e: React.DragEvent) => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id); disarmHover() },
+      onMouseDown: () => disarmHover(),
+      onDragEnd: () => setDragId(null),
+      onClick: (e: React.MouseEvent) => { e.stopPropagation(); setSelId(on ? null : g.id); disarmHover() },
+      onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => { if (dragId || sel) return; const r = e.currentTarget.getBoundingClientRect(); armHover({ id: g.id, x: r.left + r.width / 2, y: r.bottom, below: window.innerHeight - r.bottom > 170 }) },
+      onMouseLeave: () => disarmHover(g.id),
+    }
+    // In a minimized field or time: one line, game number in the division color.
+    if (mini) return (
+      <div key={g.id} {...handlers}
+        className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none cursor-grab active:cursor-grabbing ${done ? 'opacity-70' : ''}`}
+        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `3px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: on ? `0 0 0 2px ${c}66` : undefined }}>
+        <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
+        <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>{humanTeam(g.team1)} v {humanTeam(g.team2)}</span>
+      </div>
+    )
     return (
-      <div key={g.id} draggable data-tl-game={g.id}
-        onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id); disarmHover() }}
-        onMouseDown={() => disarmHover()}
-        onDragEnd={() => setDragId(null)}
-        onClick={e => { e.stopPropagation(); setSelId(on ? null : g.id); disarmHover() }}
-        onMouseEnter={e => { if (dragId || sel) return; const r = e.currentTarget.getBoundingClientRect(); armHover({ id: g.id, x: r.left + r.width / 2, y: r.bottom, below: window.innerHeight - r.bottom > 170 }) }}
-        onMouseLeave={() => disarmHover(g.id)}
+      <div key={g.id} {...handlers}
         className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden cursor-grab active:cursor-grabbing transition-shadow ${on ? '' : 'hover:shadow-md'} ${done ? 'opacity-70' : ''}`}
         // Selected: dark card, but the division still shows: its stripe stays and the
         // selection ring takes the division color instead of a generic teal.

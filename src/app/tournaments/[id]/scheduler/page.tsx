@@ -326,17 +326,57 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     } catch { /* non-fatal */ }
   }
 
+  // The scheduler only edits field names and order, but Setup stores more on each
+  // venue (address, map links) and each field (id, abbreviation, availability window,
+  // division limits). Saving just {name, fields: string[]} wiped all of that, so the
+  // stored objects are carried through and only brand-new fields get new ones.
+  function mergeVenues(next: {name:string,fields:string[]}[]) {
+    const nameOf = (f: any) => typeof f === 'string' ? f : (f?.name ?? String(f))
+    return next.map(v => {
+      const old = storedVenuesRaw.find((x: any) => x?.name === v.name)
+      const oldFields: any[] = Array.isArray(old?.fields) ? old.fields : []
+      const asObjects = oldFields.some(f => typeof f !== 'string')
+      return {
+        ...(old ?? {}), name: v.name,
+        fields: v.fields.map(fn => oldFields.find(f => nameOf(f) === fn) ?? (asObjects ? { id: Math.random().toString(36).slice(2, 10), name: fn } : fn)),
+      }
+    })
+  }
+
   async function saveVenues(venues: {name:string,fields:string[]}[]) {
+    const merged = mergeVenues(venues)
     setRawVenues(venues)
-    setStoredVenuesRaw(venues)
+    setStoredVenuesRaw(merged)
     const flat: Field[] = []
     venues.forEach(v => v.fields.forEach(f => flat.push({ venueName: v.name, fieldName: f, fullName: `${v.name} - ${f}` })))
     setFields(flat)
     // Preserve the saved per-day availability — only venues/fields change here.
-    await fetch(`/api/venues/${params.id}`, {
+    const r = await fetch(`/api/venues/${params.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venues, defaultAvailability: dayAvail }),
-    })
+      body: JSON.stringify({ venues: merged, defaultAvailability: dayAvail }),
+    }).catch(() => null)
+    if (!r || !r.ok) toast.error('Could not save the field change. Reload and try again.')
+  }
+
+  // Board/Timeline: a field header dropped on another takes its place. The order is
+  // saved on the venue, so the grid, auto-fill and the public page follow it too. A
+  // field can't leave its venue; dropped on another venue's field, its venue moves.
+  async function reorderField(fromFull: string, toFull: string) {
+    const from = fields.find(f => f.fullName === fromFull), to = fields.find(f => f.fullName === toFull)
+    if (!from || !to || fromFull === toFull) return
+    const next = rawVenues.map(v => ({ ...v, fields: [...v.fields] }))
+    if (from.venueName === to.venueName) {
+      const v = next.find(x => x.name === from.venueName)
+      if (!v) return
+      const i = v.fields.indexOf(from.fieldName), j = v.fields.indexOf(to.fieldName)
+      if (i < 0 || j < 0) return
+      v.fields.splice(i, 1); v.fields.splice(j, 0, from.fieldName)
+    } else {
+      const i = next.findIndex(x => x.name === from.venueName), j = next.findIndex(x => x.name === to.venueName)
+      if (i < 0 || j < 0) return
+      const [v] = next.splice(i, 1); next.splice(j, 0, v)
+    }
+    await saveVenues(next)
   }
 
   async function addField() {
@@ -1960,6 +2000,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             onPlace: (id: string, time: string, field: string) => patchGame(id, { date: activeDate, startTime: time, location: field }),
             onUnschedule: (id: string) => patchGame(id, { date: '', startTime: '', location: '' }),
             saving,
+            prefsKey: params.id,
+            onReorderFields: reorderField,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()
