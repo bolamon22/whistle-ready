@@ -138,11 +138,19 @@ export async function removeTeamRefs(tournamentId: string, teamName: string, div
   } catch {}
 
   // Its games go. Count the scored ones separately so the caller can say so.
+  //
+  // Matched on nameKey, the same loose key as the pools above. An exact match
+  // missed games whose stored name differed only in case or spacing from the
+  // registration: the team left its pool but kept its games (Boys U10 7v7,
+  // Oct 2026: "Jump" stayed on 3 games after being deleted).
+  const me = nameKey(teamName)
   try {
-    const mine = await prisma.game.findMany({
-      where: { tournamentId, ...(division ? { division } : {}), OR: [{ team1: teamName }, { team2: teamName }] },
-      select: { id: true, score1: true, score2: true },
+    type Row = { id: string; score1: number | null; score2: number | null; team1: string; team2: string; division: string }
+    const all: Row[] = await prisma.game.findMany({
+      where: { tournamentId },
+      select: { id: true, score1: true, score2: true, team1: true, team2: true, division: true },
     })
+    const mine = all.filter(g => inDiv(g.division) && (nameKey(g.team1) === me || nameKey(g.team2) === me))
     if (mine.length) {
       type Row = { id: string; score1: number | null; score2: number | null }
       const scored = mine.filter((g: Row) => g.score1 !== null && g.score2 !== null).length
@@ -157,11 +165,15 @@ export async function removeTeamRefs(tournamentId: string, teamName: string, div
     const brackets = await prisma.bracket.findMany({ where: { tournamentId }, select: { id: true, division: true } })
     const ids = brackets.filter((b: { id: string; division: string }) => inDiv(b.division)).map((b: { id: string }) => b.id)
     if (ids.length) {
+      // Same loose match as the games: read the slots, blank the ones that name it.
       let c = 0
-      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, team1: teamName }, data: { team1: '' } })).count
-      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, team2: teamName }, data: { team2: '' } })).count
-      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, winner: teamName }, data: { winner: '' } })).count
-      c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, loser: teamName }, data: { loser: '' } })).count
+      const rows: { id: string; team1: string | null; team2: string | null; winner: string | null; loser: string | null }[] =
+        await prisma.bracketGame.findMany({ where: { bracketId: { in: ids } }, select: { id: true, team1: true, team2: true, winner: true, loser: true } })
+      for (const r of rows) {
+        const data: Record<string, string> = {}
+        for (const k of ['team1', 'team2', 'winner', 'loser'] as const) if (r[k] && nameKey(r[k]) === me) data[k] = ''
+        if (Object.keys(data).length) { await prisma.bracketGame.update({ where: { id: r.id }, data }); c += Object.keys(data).length }
+      }
       if (c) n.bracketSlots = c
     }
   } catch {}
