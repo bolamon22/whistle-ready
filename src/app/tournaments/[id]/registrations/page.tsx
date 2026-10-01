@@ -790,6 +790,15 @@ export default function RegistrationsPage() {
     else setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], ...patch } } : l)
   }
   const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0))
+
+  // Payment reminders go out to a field of 30 clubs where most have already paid.
+  // Scrolling a 30-row list hunting for amber text is how a club gets missed, so the
+  // payment letter gets a paid/unpaid filter and opens on the ones who owe.
+  const [commPayFilter, setCommPayFilter] = useState<'owes' | 'paid' | 'all'>('owes')
+  const owesCount = registrations.filter(r => regBalance(r) > 0).length
+  const commVisible = commKind !== 'payment' || commPayFilter === 'all'
+    ? registrations
+    : registrations.filter(r => commPayFilter === 'owes' ? regBalance(r) > 0 : regBalance(r) <= 0)
   const sendComm = async () => {
     if (!commCur || commSel.size === 0) return
     if (commWhen === 'later' && !commAt) { toast.error('Pick a date and time'); return }
@@ -1327,7 +1336,12 @@ export default function RegistrationsPage() {
               <p className="text-sm text-slate-500 mb-3">Goes to each club's team director — they pass it on to their families. {'{contact}'} {'{club}'} {'{event}'} {'{teamsList}'} and the links fill in per club.</p>
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {(['waiver', 'schedule', 'confirm', 'payment', 'account'] as const).map(k => (
-                  <button key={k} onClick={() => { setCommKind(k); if (k === 'account') setCommSel(sel => new Set([...sel].filter(id => !registrations.find(r => r.id === id)?.hasAccount))) }}
+                  <button key={k} onClick={() => { setCommKind(k)
+                    if (k === 'account') setCommSel(sel => new Set([...sel].filter(id => !registrations.find(r => r.id === id)?.hasAccount)))
+                    // A paid club left ticked from another letter is a send that does
+                    // nothing -- commSend skips a zero balance -- but it still inflates
+                    // the "Send to 30 clubs" count on the button. Drop them here.
+                    if (k === 'payment') { setCommPayFilter('owes'); setCommSel(sel => new Set([...sel].filter(id => { const r = registrations.find(x => x.id === id); return r ? regBalance(r) > 0 : false }))) } }}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${commKind === k ? 'bg-teal-600 text-white border-teal-600' : 'text-slate-600 border-slate-300 hover:border-slate-400'}`}>
                     {COMM_KIND_LABELS[k]}
                   </button>
@@ -1335,15 +1349,28 @@ export default function RegistrationsPage() {
               </div>
               <div className="mb-4">
                 <div className="flex items-baseline justify-between mb-1">
-                  <label className="text-xs font-medium text-slate-600">Send to ({commSel.size} of {registrations.length} clubs)</label>
+                  <label className="text-xs font-medium text-slate-600">Send to ({commSel.size} selected{commKind === 'payment' && commPayFilter !== 'all' ? ` · ${commVisible.length} shown` : ` of ${registrations.length} clubs`})</label>
                   <span className="text-xs">
-                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set(registrations.filter(r => r.contactEmail && (commKind !== 'account' || !r.hasAccount)).map(r => r.id)))}>All</button>
+                    {/* All means all of what you are looking at. Picking "owes" and then
+                        hitting All used to select the clubs who had already paid too. */}
+                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set(commVisible.filter(r => r.contactEmail && (commKind !== 'account' || !r.hasAccount)).map(r => r.id)))}>All</button>
                     <span className="text-slate-300 mx-1">·</span>
                     <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set())}>None</button>
                   </span>
                 </div>
+                {commKind === 'payment' && (
+                  <div className="flex items-center gap-1 mb-1.5">
+                    {([['owes', `Owes (${owesCount})`], ['paid', `Paid (${registrations.length - owesCount})`], ['all', `All (${registrations.length})`]] as const).map(([k, label]) => (
+                      <button key={k} onClick={() => setCommPayFilter(k)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${commPayFilter === k ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="border border-slate-200 rounded-lg max-h-36 overflow-y-auto divide-y divide-slate-100">
-                  {registrations.map(r => (
+                  {commVisible.length === 0 && <p className="px-3 py-4 text-xs text-slate-400 text-center">No clubs match this filter.</p>}
+                  {commVisible.map(r => (
                     <label key={r.id} className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer ${!r.contactEmail ? 'opacity-40' : ''}`}>
                       <input type="checkbox" disabled={!r.contactEmail} checked={commSel.has(r.id)}
                         onChange={e => setCommSel(sel => { const n = new Set(sel); if (e.target.checked) { n.add(r.id) } else { n.delete(r.id) } return n })} />
