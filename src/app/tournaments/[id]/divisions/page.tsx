@@ -197,6 +197,9 @@ export default function DivisionsPage() {
   const [divGamesPerTeam, setDivGamesPerTeam] = useState<Record<string, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
   const [includeBrackets, setIncludeBrackets] = useState(true)
+  // Pool play and brackets are now independent ticks on the one button, so either
+  // can be rebuilt without disturbing the other.
+  const [includePoolGames, setIncludePoolGames] = useState(true)
   const [guarantee, setGuarantee] = useState('4')
   const [smartTable, setSmartTable] = useState<Record<number, { games?: number; pools?: number; bracket?: string; advance?: number; consolation?: number }>>({})
   const [showSmartEditor, setShowSmartEditor] = useState(false)
@@ -765,13 +768,19 @@ export default function DivisionsPage() {
 
   async function generateAllDivisions() {
     if (divisions.length === 0) { toast.error('No divisions found'); return }
+    if (!includePoolGames && !includeBrackets) { toast.error('Tick pool games, brackets, or both'); return }
 
-    // Check total scheduled games across all divisions
+    // Only warn about work this run can actually destroy. Pool generation clears and
+    // rebuilds, so scheduled pool games are at risk -- bracket generation refuses to
+    // touch a bracket that already has times on it, so a brackets-only run cannot
+    // cost anything and should not throw up a scary dialog.
     let totalScheduled = 0
-    for (const div of divisions) {
-      if (div.teamCount === 0) continue
-      const existing = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`).then(r => r.json()).catch(() => [])
-      totalScheduled += Array.isArray(existing) ? existing.filter((g: {startTime: string}) => g.startTime).length : 0
+    if (includePoolGames) {
+      for (const div of divisions) {
+        if (div.teamCount === 0) continue
+        const existing = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`).then(r => r.json()).catch(() => [])
+        totalScheduled += Array.isArray(existing) ? existing.filter((g: {startTime: string}) => g.startTime).length : 0
+      }
     }
     if (totalScheduled > 0) {
       setGenerateConfirm({ div: 'ALL', scheduledCount: totalScheduled, all: true })
@@ -789,6 +798,7 @@ export default function DivisionsPage() {
 
     // Clean up stale games for 0-team divisions
     for (const div of divisions) {
+      if (!includePoolGames) break
       if (div.teamCount === 0 && div.gameCount > 0) {
         await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, { method: 'DELETE' })
         setDivisions(d => d.map(x => x.name === div.name ? { ...x, gameCount: 0 } : x))
@@ -798,40 +808,42 @@ export default function DivisionsPage() {
     for (const div of divisions) {
       if (div.teamCount === 0) continue
 
-      // Auto-create the planned number of pools and split teams across them, if no pools exist
-      let poolCount = div.poolCount
-      if (poolCount === 0) {
-        const tRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/teams`)
-        const tData = await tRes.json()
-        const teamNames: string[] = (tData.teams ?? []).map((t: { teamName: string }) => t.teamName)
-        if (teamNames.length === 0) continue
-        const wantPools = Math.max(1, Math.min(smartTable[div.teamCount]?.pools ?? 1, teamNames.length))
-        const buckets: string[][] = Array.from({ length: wantPools }, () => [])
-        teamNames.forEach((t, i) => buckets[i % wantPools].push(t))
-        for (let p = 0; p < wantPools; p++) {
-          const pRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'Pool ' + String.fromCharCode(65 + p) }),
-          })
-          const pool = await pRes.json()
-          if (!pRes.ok) continue
-          await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ poolId: pool.id, teamNames: buckets[p] }),
-          })
+      if (includePoolGames) {
+        // Auto-create the planned number of pools and split teams across them, if no pools exist
+        let poolCount = div.poolCount
+        if (poolCount === 0) {
+          const tRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/teams`)
+          const tData = await tRes.json()
+          const teamNames: string[] = (tData.teams ?? []).map((t: { teamName: string }) => t.teamName)
+          if (teamNames.length === 0) continue
+          const wantPools = Math.max(1, Math.min(smartTable[div.teamCount]?.pools ?? 1, teamNames.length))
+          const buckets: string[][] = Array.from({ length: wantPools }, () => [])
+          teamNames.forEach((t, i) => buckets[i % wantPools].push(t))
+          for (let p = 0; p < wantPools; p++) {
+            const pRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: 'Pool ' + String.fromCharCode(65 + p) }),
+            })
+            const pool = await pRes.json()
+            if (!pRes.ok) continue
+            await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pools`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ poolId: pool.id, teamNames: buckets[p] }),
+            })
+          }
+          poolCount = wantPools
+          autoPooled++
+          setDivisions(d => d.map(x => x.name === div.name ? { ...x, poolCount: wantPools } : x))
         }
-        poolCount = wantPools
-        autoPooled++
-        setDivisions(d => d.map(x => x.name === div.name ? { ...x, poolCount: wantPools } : x))
-      }
 
-      // Generate games
-      const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[div.name] ?? 3), clearExisting: true }),
-      })
-      const data = await res.json()
-      if (res.ok) totalGames += data.generated ?? 0
+        // Generate games
+        const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[div.name] ?? 3), clearExisting: true }),
+        })
+        const data = await res.json()
+        if (res.ok) totalGames += data.generated ?? 0
+      }
 
       // Generate the bracket structure from this division's Smart Defaults plan
       if (includeBrackets) {
@@ -858,12 +870,13 @@ export default function DivisionsPage() {
 
     setGeneratingAll(false)
     const poolMsg = autoPooled > 0 ? ` (auto-created pools for ${autoPooled} divisions)` : ''
+    const headline = includePoolGames ? `${totalGames} pool games generated${poolMsg}` : 'Brackets only — pool games left alone'
     const bits = [
       bracketsCreated ? `${bracketsCreated} bracket${bracketsCreated !== 1 ? 's' : ''} created` : '',
       bracketsRebuilt ? `${bracketsRebuilt} resized` : '',
       bracketsKept ? `${bracketsKept} already fit` : '',
     ].filter(Boolean)
-    toast.success(`${totalGames} pool games generated${poolMsg}${bits.length ? `, ${bits.join(', ')}` : ''}`)
+    toast.success(`${headline}${bits.length ? `, ${bits.join(', ')}` : ''}`)
     // A bracket that no longer fits its division but holds seeds, a flight split or
     // scheduled times is not something to silently overwrite -- or to silently leave
     // wrong. Name the divisions so Bo can reset the ones he wants.
@@ -1090,18 +1103,36 @@ if (loading) return (
                   <Pencil size={13} />
                 </button>
               </div>
-              <label className="flex items-center justify-center gap-2 text-[11px] text-slate-600 mb-2 cursor-pointer">
-                <input type="checkbox" checked={includeBrackets} onChange={e => setIncludeBrackets(e.target.checked)} className="accent-teal-600" />
-                Include brackets
-              </label>
+              {/* Two ticks rather than two buttons: the guarantee, the smart-defaults
+                  table and the confirm are shared, so splitting the panel would only
+                  duplicate them. Untick pool games to rebuild brackets without
+                  touching a schedule you have already worked on, and vice versa. */}
+              <div className="flex items-center justify-center gap-4 mb-2">
+                <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+                  <input type="checkbox" checked={includePoolGames} onChange={e => setIncludePoolGames(e.target.checked)} className="accent-teal-600" />
+                  Pool games
+                </label>
+                <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+                  <input type="checkbox" checked={includeBrackets} onChange={e => setIncludeBrackets(e.target.checked)} className="accent-teal-600" />
+                  Brackets
+                </label>
+              </div>
               <button
                 onClick={generateAllDivisions}
-                disabled={generatingAll}
+                disabled={generatingAll || (!includePoolGames && !includeBrackets)}
                 className="w-full flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
               >
-        {generatingAll ? 'Generating...' : <><Zap size={13} /> Generate all divisions</>}
+                {/* The label says what this click will actually do -- "Generate all
+                    divisions" read the same whether it was about to rebuild the whole
+                    schedule or only the brackets. */}
+                {generatingAll ? 'Generating...' : <><Zap size={13} /> {includePoolGames && includeBrackets ? 'Generate all divisions' : includePoolGames ? 'Generate pool games' : 'Generate brackets'}</>}
               </button>
-              <p className="text-[10px] text-slate-400 text-center leading-tight">{includeBrackets ? 'Pools, pool games & brackets' : 'Pool games only'} · auto-creates Pool A if needed{includeBrackets ? ' · resizes brackets that no longer fit' : ''}</p>
+              <p className="text-[10px] text-slate-400 text-center leading-tight">
+                {includePoolGames && includeBrackets ? 'Pools, pool games & brackets · auto-creates Pool A if needed · resizes brackets that no longer fit'
+                  : includePoolGames ? 'Pool games only · auto-creates Pool A if needed · brackets untouched'
+                  : includeBrackets ? 'Brackets only · resizes ones that no longer fit · pool games untouched'
+                  : 'Tick pool games, brackets, or both'}
+              </p>
             </div>
             <Link href={`/tournaments/${id}/scheduler`} className="mt-3 flex items-center justify-between gap-2 bg-white border border-slate-200 hover:border-teal-300 rounded-xl px-4 py-3 transition-colors group">
               <span className="min-w-0">
@@ -1635,12 +1666,14 @@ if (loading) return (
                               const staleHere: string[] = []
                               for (const d of divisions) {
                                 if (d.teamCount === 0) continue
-                                const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(d.name)}/pool-games`, {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[d.name] ?? 3), clearExisting: true }),
-                                })
-                                const data = await res.json()
-                                if (res.ok) totalGames += data.generated ?? 0
+                                if (includePoolGames) {
+                                  const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(d.name)}/pool-games`, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[d.name] ?? 3), clearExisting: true }),
+                                  })
+                                  const data = await res.json()
+                                  if (res.ok) totalGames += data.generated ?? 0
+                                }
                                 if (includeBrackets) {
                                   const br = await generateBracketForDivision(d.name, d.teamCount)
                                   if (br === 'created' || br === 'rebuilt') bracketsCreated++
