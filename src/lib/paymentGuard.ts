@@ -25,6 +25,9 @@ export type GuardState = {
   column: boolean
   index: boolean
   backfilled: number
+  /** Refund rows an earlier backfill wrongly stamped with the intent they
+   *  reverse. Each one blocked the unique index on its own. */
+  refundsUnstamped: number
   /** Rows already duplicated when we tried to build the index; it cannot exist
    *  until they are cleaned up, and a silent failure here would mean the guard
    *  quietly is not guarding. Surfaced by /api/payments/audit. */
@@ -53,7 +56,7 @@ export function ensurePaymentGuard(): Promise<GuardState> {
 }
 
 async function build(): Promise<GuardState> {
-  const state: GuardState = { column: false, index: false, backfilled: 0, duplicatesBlocking: 0, duplicateRows: [] }
+  const state: GuardState = { column: false, index: false, backfilled: 0, refundsUnstamped: 0, duplicatesBlocking: 0, duplicateRows: [] }
 
   // Raw ALTER rather than a migration, the same way every other late column on
   // this schema was added (see ensureRegistrationColumns in api/registrations).
@@ -69,13 +72,41 @@ async function build(): Promise<GuardState> {
     return state           // no column, no guard -- writers fall back to plain inserts
   }
 
+  // A REFUND IS NOT ITS PAYMENT. This is what kept the guard switched off.
+  //
+  // The backfill below reads the intent id out of a row's note. A refund's note
+  // reads "Refund · re_xxx · OF pi_yyy", so the regex happily found pi_yyy and
+  // stamped the reversing row with the id of the row it reverses. Under an index
+  // on (registrationId, stripeIntentId) that pair is indistinguishable from a
+  // duplicate, so CREATE UNIQUE INDEX failed -- and kept failing, because every
+  // new refund poisoned another pair. index:false, guard degraded to the same
+  // check-then-act race it exists to prevent, and on 1 Oct Creator's Game was
+  // recorded twice for one $1,539.85 charge.
+  //
+  // Negative rows are reversals and carry no intent of their own. Clear them
+  // first so the index has a chance of building; the refund's note still names
+  // the intent for anyone reading it.
+  try {
+    const cleared: { n: unknown }[] = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*) AS n FROM "RegistrationPayment" WHERE amount < 0 AND "stripeIntentId" <> ''`)
+    state.refundsUnstamped = Number(cleared?.[0]?.n || 0)
+    if (state.refundsUnstamped > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "RegistrationPayment" SET "stripeIntentId" = '' WHERE amount < 0 AND "stripeIntentId" <> ''`)
+      console.log(`[payment] cleared the payment intent off ${state.refundsUnstamped} refund row(s); they are reversals, not duplicates`)
+    }
+  } catch { /* best effort -- the guard still reports index:false if this leaves it blocked */ }
+
   // Every historical row put the intent in its note, so the column can be filled
   // from what is already there and the index covers the back catalogue too.
+  // amount >= 0 keeps refunds out of it, for the reason above.
   try {
     const rows: { id: unknown; notes: unknown }[] = await prisma.$queryRawUnsafe(
-      `SELECT id, notes FROM "RegistrationPayment" WHERE "stripeIntentId" = '' AND notes LIKE '%pi/_%' ESCAPE '/'`)
+      `SELECT id, notes FROM "RegistrationPayment" WHERE "stripeIntentId" = '' AND amount >= 0 AND notes LIKE '%pi/_%' ESCAPE '/'`)
     for (const r of rows || []) {
-      const pi = /pi_[A-Za-z0-9]+/.exec(String(r.notes || ''))?.[0]
+      const note = String(r.notes || '')
+      if (/^\s*Refund\b/i.test(note)) continue   // belt and braces: a zero-value reversal
+      const pi = /pi_[A-Za-z0-9]+/.exec(note)?.[0]
       if (!pi) continue
       await prisma.$executeRawUnsafe(
         `UPDATE "RegistrationPayment" SET "stripeIntentId" = ? WHERE id = ?`, pi, String(r.id))
