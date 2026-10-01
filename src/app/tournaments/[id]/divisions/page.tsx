@@ -692,14 +692,26 @@ export default function DivisionsPage() {
 
   // Generate a division's bracket structure (placeholder seeds) from its Smart Defaults plan.
   // Returns true if created. Skips when no bracket is planned or one already exists.
-  async function generateBracketForDivision(divName: string, teamCount: number): Promise<boolean> {
+  /**
+   * Returns WHY, not just whether. Four different outcomes used to come back as a
+   * bare false, so "no brackets" and "every division already had one" read the same
+   * on screen -- which is how eleven of fourteen divisions ended up with no bracket
+   * and nothing said about it.
+   */
+  async function generateBracketForDivision(divName: string, teamCount: number): Promise<'created' | 'exists' | 'too-small' | 'failed'> {
     const tc = teamCount
+    if (tc < 2) return 'too-small'
     const sd = smartTable[tc] || {}
-    const planFmt = sd.bracket ?? ''
-    if (!planFmt || tc < 2) return false
+    // THE BUG. The format had no fallback, while advance and consolation below both
+    // fall back to defaultBracketPlan. smartTable is keyed by exact team count and
+    // lives in THIS browser's localStorage, so until someone opens the Smart
+    // Defaults editor and saves it, there is no row for any team count -- and every
+    // division was skipped, silently. Single elimination is the right default for a
+    // pool-play tournament; the editor still overrides it per team count.
+    const planFmt = sd.bracket || 'single'
     const existing = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(divName)}/bracket`).then(r => r.ok ? r.json() : null).catch(() => null)
     const hasBracket = Array.isArray(existing) ? existing.length > 0 : !!(existing && existing.id)
-    if (hasBracket) return false
+    if (hasBracket) return 'exists'
     const g = Number(guarantee) || 4
     const poolG = Number(divGamesPerTeam[divName] ?? sd.games ?? smartPoolGames(tc, g)) || 2
     const owes2 = (g - poolG) >= 2 || planFmt === '2gg'
@@ -711,7 +723,7 @@ export default function DivisionsPage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ format: fmt, teamCount: Math.max(2, advance), consolationCount, loserConsolation: owes2, seeds: {} }),
     })
-    return bRes.ok
+    return bRes.ok ? 'created' : 'failed'
   }
 
   async function generateAllDivisions() {
@@ -733,6 +745,8 @@ export default function DivisionsPage() {
     let totalGames = 0
     let bracketsCreated = 0
     let autoPooled = 0
+    let bracketsKept = 0
+    let bracketsFailed = 0
 
     // Clean up stale games for 0-team divisions
     for (const div of divisions) {
@@ -781,7 +795,12 @@ export default function DivisionsPage() {
       if (res.ok) totalGames += data.generated ?? 0
 
       // Generate the bracket structure from this division's Smart Defaults plan
-      if (includeBrackets && await generateBracketForDivision(div.name, div.teamCount)) bracketsCreated++
+      if (includeBrackets) {
+        const r = await generateBracketForDivision(div.name, div.teamCount)
+        if (r === 'created') bracketsCreated++
+        else if (r === 'exists') bracketsKept++
+        else if (r === 'failed') bracketsFailed++
+      }
     }
 
     // reload current division data
@@ -798,7 +817,14 @@ export default function DivisionsPage() {
 
     setGeneratingAll(false)
     const poolMsg = autoPooled > 0 ? ` (auto-created pools for ${autoPooled} divisions)` : ''
-    toast.success(`${totalGames} pool games generated${poolMsg}${bracketsCreated ? `, ${bracketsCreated} bracket${bracketsCreated !== 1 ? 's' : ''} created` : ''}`)
+    const bits = [
+      bracketsCreated ? `${bracketsCreated} bracket${bracketsCreated !== 1 ? 's' : ''} created` : '',
+      bracketsKept ? `${bracketsKept} already had one` : '',
+    ].filter(Boolean)
+    toast.success(`${totalGames} pool games generated${poolMsg}${bits.length ? `, ${bits.join(', ')}` : ''}`)
+    // Said separately and in red: a bracket that failed to build is not a detail to
+    // tuck into a success message.
+    if (bracketsFailed) toast.error(`${bracketsFailed} bracket${bracketsFailed !== 1 ? 's' : ''} could not be built — open the Bracket tab for those divisions`)
   }
 
   async function renumberGames() {
@@ -1542,7 +1568,7 @@ if (loading) return (
                                 })
                                 const data = await res.json()
                                 if (res.ok) totalGames += data.generated ?? 0
-                                if (includeBrackets && await generateBracketForDivision(d.name, d.teamCount)) bracketsCreated++
+                                if (includeBrackets && await generateBracketForDivision(d.name, d.teamCount) === 'created') bracketsCreated++
                               }
                               if (activeDiv) {
                                 const [teamData, gameData] = await Promise.all([
