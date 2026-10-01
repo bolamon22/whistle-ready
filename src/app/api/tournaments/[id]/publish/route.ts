@@ -35,9 +35,10 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const row = result.rows[0]
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const snapshot = JSON.parse((row.scheduleSnapshot as string) || '{}')
-  // Who a Publish would reach, per team: follows, and phones with alerts on.
-  // The Scheduler's diff works out which teams are affected; this gives it the
-  // numbers to put beside the "Tell followers" toggle. Best-effort.
+  // Who a Publish would reach, per team (keyed by teamRefKey(division, team)):
+  // follows, and phones with alerts on. The Scheduler's diff works out which
+  // teams are affected; this gives it the numbers to put beside the "Tell
+  // followers" toggle. Best-effort.
   let followers: Record<string, { follows: number; phones: number }> = {}
   try {
     const [f, ph] = await Promise.all([followerCounts(params.id), followerPhoneCounts(params.id)])

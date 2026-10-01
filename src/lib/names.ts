@@ -26,6 +26,14 @@ export function nameKey(v: unknown): string {
     .replace(/[^a-z0-9]+/g, '')
 }
 
+/**
+ * One team at one event is a (division, name) pair, never a name alone: a club
+ * fields "Miami Reign" in Boys HS A, Boys HS B and Boys U14 B, and those are
+ * three teams with three schedules. Anything keyed by team -- follows, follower
+ * counts, alerts -- keys by this. Loose on both parts, like nameKey.
+ */
+export const teamRefKey = (division: unknown, team: unknown): string => `${nameKey(division)}|${nameKey(team)}`
+
 /** Even looser club key: also ignores the usual "Lacrosse / Lax / LC / Club" tails. */
 export function clubKey(v: unknown): string {
   const k = nameKey(v)

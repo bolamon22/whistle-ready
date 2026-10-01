@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { canonicalTeamName, teamsInDivision, sendPushToFollowers } from '@/lib/follows'
+import { canonicalTeam, teamsInDivision, sendPushToFollowers, TeamRef } from '@/lib/follows'
 
 // In-app broadcasts/announcements. Stored as JSON in the hand-migrated AppSetting
 // table (no schema migration needed): key `announcements:<id>`.
@@ -19,8 +19,8 @@ type Audience = { type?: string; division?: string; team?: string }
 
 /** The teams whose followers should hear this, `null` for every follower at the
  *  event, or `[]` when the audience has no followers to reach (coaches, staff,
- *  an unknown team). */
-async function followerTargets(tournamentId: string, aud: Audience): Promise<string[] | null> {
+ *  an unknown team). A team is (division, name): the page sends both. */
+async function followerTargets(tournamentId: string, aud: Audience): Promise<TeamRef[] | null> {
   switch (aud.type) {
     case 'everyone': return null
     case 'division': {
@@ -28,8 +28,8 @@ async function followerTargets(tournamentId: string, aud: Audience): Promise<str
       return division ? teamsInDivision(tournamentId, division) : null
     }
     case 'team': {
-      const name = await canonicalTeamName(tournamentId, String(aud.team || ''))
-      return name ? [name] : []
+      const team = await canonicalTeam(tournamentId, String(aud.division || ''), String(aud.team || ''))
+      return team ? [team] : []
     }
     default: return []
   }

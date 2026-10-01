@@ -20,6 +20,10 @@ import { todayET } from '@/lib/publicView'
 //   * one tag per game, so a corrected score replaces the earlier alert on the
 //     phone instead of stacking a second, contradictory one.
 //
+// Followers are keyed by (division, team): the final of HS A's Miami Reign
+// reaches HS A's followers, not the HS B or U14 B parents who follow a team
+// of the same name.
+//
 // Two tables hold finals -- Game (pool play and the scheduler's B# mirror of
 // the bracket) and BracketGame (the bracket page) -- and nothing keeps their
 // scores in step. The tag is built from tournament + division + game number,
@@ -96,7 +100,8 @@ export async function notifyFinal(before: ScoreState, after: FinalGame): Promise
       select: { name: true, startDate: true, endDate: true, dates: true },
     })
     if (!t || !duringEvent(t, todayET(), after.date)) return null
-    return await sendPushToFollowers(after.tournamentId, [after.team1, after.team2], finalPayload(after, t.name))
+    const division = after.division
+    return await sendPushToFollowers(after.tournamentId, [{ division, team: after.team1 }, { division, team: after.team2 }], finalPayload(after, t.name))
   } catch (e) {
     console.error('[finalAlerts] notifyFinal failed (non-blocking):', e)
     return null
