@@ -66,11 +66,35 @@ function amountsOf(pi: any): { charged: number; amount: number } {
  *  the account defaults, so an includes() check mislabels cards (bug, Aug 27). */
 const isAch = (pi: any) => (pi.payment_method_types || []).join(',') === 'us_bank_account'
 
+/** The first instant the scan covers: MIDNIGHT UTC on the boundary day.
+ *
+ *  THE OFF-BY-A-FEW-HOURS THAT INVENTED $7,475 OF MISSING MONEY.
+ *
+ *  This used to be `now - days*86400`, a timestamp at whatever time of day the
+ *  audit happened to run -- 19:00 UTC on 1 Oct meant Stripe was asked for intents
+ *  created after 19:00 UTC on 1 Sep. But the row classifier compares a payment's
+ *  DATE STRING against `since` as a DATE ("2026-09-01"), so a row dated 2026-09-01
+ *  is not "outside the window". Anything charged on the boundary day before the
+ *  clock time therefore fell in the gap: never fetched, yet judged in-window, and
+ *  reported as a card row Stripe has no record of.
+ *
+ *  On 1 Oct 2026 that was three real, succeeded charges -- Lax Mafia $1,539.85 and
+ *  $3,079.70, LaxManiax $3,079.70, all on 1 Sep, all verified by hand in the Stripe
+ *  dashboard. An audit that cries wolf about money that is sitting in the bank is
+ *  worse than no audit, because the real duplicate in the same report gets read as
+ *  one more false alarm.
+ *
+ *  Flooring to midnight makes the fetch window and the comparison agree. */
+function windowStart(days: number): number {
+  const day = 86400_000
+  return Math.floor((Date.now() - days * day) / day) * 86400
+}
+
 /** Succeeded intents from the last `days`, newest first. */
 async function fetchIntents(days: number): Promise<{ intents: any[]; error?: string }> {
   const headers = stripeHeaders()
   if (!headers) return { intents: [], error: 'Stripe is not configured on this deployment' }
-  const since = Math.floor(Date.now() / 1000) - days * 86400
+  const since = windowStart(days)
   const out: any[] = []
   let startingAfter = ''
   // Up to 5 pages — 500 intents covers far more than any window we scan.
