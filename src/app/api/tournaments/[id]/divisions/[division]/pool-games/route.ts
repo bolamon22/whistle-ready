@@ -55,6 +55,120 @@ function roundRobinByRound(teams: string[]): [string, string][][] {
   return rounds
 }
 
+/**
+ * Rounds under-deliver when a pool has an odd number of teams.
+ *
+ * roundRobinByRound pads an odd list with a bye, so every round drops one pairing
+ * and a different team sits out each time. Taking the first `gpt` rounds therefore
+ * leaves exactly `gpt` teams one game short -- invisible on a FULL round robin,
+ * where every team eventually takes its bye, and wrong on every partial one.
+ *
+ * Girls Lower School, Oct 2026: 7 teams at 2 games each is 7 games (14 team-slots,
+ * halved). The generator made 6, and Florida Elite LS Girls and Jup RevLax 2035/36
+ * came out with 1 apiece -- they were the two who sat. Bo spotted that the game
+ * between those two was the whole of what was missing. It was.
+ *
+ * A pool schedule does not need rounds to be simultaneous, so the fix is to keep
+ * pairing the neediest teams that have not met until nobody short is left with a
+ * partner. Never a rematch: a team playing someone twice is worse than a team being
+ * one short, and the uneven-pool warning says so either way.
+ */
+function topUpShortTeams(rounds: [string, string][][], teamNames: string[], gpt: number): [string, string][] {
+  const pairKey = (a: string, b: string) => [a, b].sort().join('\u0000')
+  const counts = new Map<string, number>(teamNames.map(t => [t, 0]))
+  const played = new Set<string>()
+  for (const round of rounds) {
+    for (const [a, b] of round) {
+      counts.set(a, (counts.get(a) ?? 0) + 1)
+      counts.set(b, (counts.get(b) ?? 0) + 1)
+      played.add(pairKey(a, b))
+    }
+  }
+
+  const extra: [string, string][] = []
+  // Repeat only so a team short by more than one is still handled; the usual case
+  // is settled in a single pass, because the circle gives each team at most one bye
+  // in a partial round robin.
+  for (;;) {
+    const short = teamNames
+      .filter(t => (counts.get(t) ?? 0) < gpt)
+      .sort((a, b) => (counts.get(a)! - counts.get(b)!) || a.localeCompare(b))
+    if (short.length < 2) break
+    const pairs = bestPairing(short, (a, b) => !played.has(pairKey(a, b)))
+    if (!pairs.length) break   // every short team has already met every other
+    for (const [a, b] of pairs) {
+      extra.push([a, b])
+      played.add(pairKey(a, b))
+      counts.set(a, counts.get(a)! + 1)
+      counts.set(b, counts.get(b)! + 1)
+    }
+  }
+  return extra
+}
+
+/**
+ * The most teams that can be paired off at once, given who has already met.
+ *
+ * A maximum matching rather than "walk the list taking the first partner that
+ * works". Greedy strands people: seven teams at four games each leaves four short,
+ * and the obvious first pairing can leave the remaining two as a couple who have
+ * already played -- one extra game instead of two, and a team short for no reason.
+ * Checked across pool sizes 3-18 at one to five games each.
+ *
+ * Exhaustive with a bound, which is affordable because the short list is at most
+ * one team per round played. The cap is a guard for a pool far larger than anything
+ * this app schedules, where greedy is still better than hanging.
+ */
+function bestPairing(nodes: string[], canPair: (a: string, b: string) => boolean): [string, string][] {
+  if (nodes.length > 14) {
+    const out: [string, string][] = []
+    const used = new Set<string>()
+    for (let i = 0; i < nodes.length; i++) {
+      if (used.has(nodes[i])) continue
+      for (let j = i + 1; j < nodes.length; j++) {
+        if (used.has(nodes[j]) || !canPair(nodes[i], nodes[j])) continue
+        out.push([nodes[i], nodes[j]]); used.add(nodes[i]); used.add(nodes[j]); break
+      }
+    }
+    return out
+  }
+
+  let best: [string, string][] = []
+  const search = (remaining: string[], acc: [string, string][]) => {
+    if (acc.length > best.length) best = [...acc]
+    if (remaining.length < 2) return
+    if (acc.length + Math.floor(remaining.length / 2) <= best.length) return   // cannot win
+    const [first, ...rest] = remaining
+    for (let i = 0; i < rest.length; i++) {
+      if (!canPair(first, rest[i])) continue
+      acc.push([first, rest[i]])
+      search(rest.filter((_, j) => j !== i), acc)
+      acc.pop()
+    }
+    search(rest, acc)   // leaving `first` out may still pair more of the others
+  }
+  search(nodes, [])
+  return best
+}
+
+/** Spread extra pairings over as few rounds as possible without a team appearing
+ *  twice in one, so the P-numbering keeps its no-back-to-back property. */
+function packIntoRounds(pairs: [string, string][]): [string, string][][] {
+  const left = [...pairs]
+  const rounds: [string, string][][] = []
+  while (left.length) {
+    const round: [string, string][] = []
+    const used = new Set<string>()
+    for (let i = 0; i < left.length;) {
+      const [a, b] = left[i]
+      if (used.has(a) || used.has(b)) { i++; continue }
+      round.push(left[i]); used.add(a); used.add(b); left.splice(i, 1)
+    }
+    rounds.push(round)
+  }
+  return rounds
+}
+
 // POST – generate round-robin pool games OR add a single game
 export async function POST(req: NextRequest, { params }: { params: { id: string; division: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
@@ -109,7 +223,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       // For partial RRs, use gpt rounds directly.
       const roundsToUse = gpt >= teamsCount - 1 ? maxRounds : Math.min(gpt, maxRounds)
 
-      poolSchedules.push({ poolName: pool.name, rounds: allRounds.slice(0, roundsToUse), rc: Number(refCount ?? 2) })
+      const rounds = allRounds.slice(0, roundsToUse)
+      // Only ever finds anything on a partial round robin over an odd pool; a full
+      // one and an even pool both come out level and get nothing added.
+      const extra = topUpShortTeams(rounds, teamNames, Math.min(gpt, teamsCount - 1))
+      if (extra.length) rounds.push(...packIntoRounds(extra))
+
+      poolSchedules.push({ poolName: pool.name, rounds, rc: Number(refCount ?? 2) })
     }
 
     // Number games ROUND BY ROUND across all pools:
