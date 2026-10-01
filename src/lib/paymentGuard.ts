@@ -154,6 +154,49 @@ function isDuplicateRow(e: unknown): boolean {
  * use it to decide whether to fire the "payment received" notification, so a
  * club is not pinged twice for one payment.
  */
+/**
+ * Follow a merged-away registration to the one that survived.
+ *
+ * WHY. A Stripe PaymentIntent carries the registration id that existed when the
+ * club paid, frozen in its metadata. Merge that registration into another and the
+ * id in Stripe still names the dead row -- nothing goes back and rewrites metadata
+ * on an intent already in flight. ACH makes this routine rather than rare: the
+ * money takes four business days, long enough for staff to merge a duplicate in
+ * between.
+ *
+ * Miami Thunder, Sep 2026: paid $1,495 by bank transfer on the 25th, their two
+ * duplicate registrations were merged the same week, and the intent was still
+ * processing. Without this the payment lands on the deleted row and the club reads
+ * $1,495 still owing with the money already in the bank.
+ *
+ * /pay already does this -- see mergedInto in pay-info and the redirect in
+ * pay/[regId]. The recorders never got the same treatment.
+ *
+ * Follows a chain (A merged into B merged into C) with a hop cap and a seen-set so
+ * a cycle returns instead of spinning. mergedIntoId is a lazy raw ALTER, so on a
+ * database where nothing has ever been merged this throws -- which correctly means
+ * "no redirect".
+ */
+async function liveRegistrationId(id: string): Promise<string> {
+  let current = String(id || '')
+  if (!current) return current
+  const seen = new Set<string>([current])
+  for (let hop = 0; hop < 5; hop++) {
+    let next = ''
+    try {
+      const rows = await prisma.$queryRawUnsafe<{ mergedIntoId?: string }[]>(
+        `SELECT "mergedIntoId" FROM "TeamRegistration" WHERE id = ?`, current)
+      next = String(rows?.[0]?.mergedIntoId || '').trim()
+    } catch {
+      return current   // column not there: nothing in this database has been merged
+    }
+    if (!next || seen.has(next)) return current
+    seen.add(next)
+    current = next
+  }
+  return current
+}
+
 export async function recordTeamPayment(row: {
   registrationId: string
   amount: number
@@ -165,19 +208,27 @@ export async function recordTeamPayment(row: {
 }): Promise<boolean> {
   const guard = await ensurePaymentGuard()
 
+  // Resolved BEFORE the duplicate check, not merely before the insert: that check
+  // is scoped to a registration id, so asking it about the dead row would miss a
+  // payment already recorded against the live one and write a second copy.
+  const registrationId = await liveRegistrationId(row.registrationId)
+  if (registrationId !== row.registrationId) {
+    console.log(`[payment] ${row.piId || 'manual'} names merged registration ${row.registrationId}; recording against ${registrationId}`)
+  }
+
   // The pre-flight check stays. It is no longer what makes this correct -- the
   // index is -- but it saves a thrown error on the overwhelmingly common path
   // where the payment really was already recorded minutes ago.
   if (row.piId) {
     const existing = await prisma.registrationPayment.findFirst({
-      where: { registrationId: row.registrationId, notes: { contains: row.piId } },
+      where: { registrationId, notes: { contains: row.piId } },
       select: { id: true },
     })
     if (existing) return false
   }
 
   const data: Record<string, unknown> = {
-    registrationId: row.registrationId,
+    registrationId,
     amount: row.amount,
     method: row.method,
     checkNumber: '',
