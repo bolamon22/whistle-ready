@@ -1206,6 +1206,19 @@ if (loading) return (
               <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 animate-pulse">Loading...</div>
             ) : (
               <>
+                {/* Which division you are looking at. The rail shows it, but a
+                    tournament runs fourteen divisions and the rail scrolls -- by the
+                    time you are reading a bracket the highlighted row is often off
+                    screen, and nothing on the content side said the name. */}
+                <div className="flex items-center gap-2.5 mb-3 min-w-0">
+                  <span className="inline-block w-3.5 h-3.5 rounded-full flex-shrink-0 border border-white shadow-sm"
+                    style={{ backgroundColor: divColors[activeDiv] || PALETTE[Math.max(0, divisions.findIndex(d => d.name === activeDiv)) % PALETTE.length] }} />
+                  <h2 className="text-lg font-bold text-slate-800 truncate">{activeDiv}</h2>
+                  <span className="text-xs text-slate-400 flex-shrink-0">
+                    {teams.length} team{teams.length !== 1 ? 's' : ''} · {pools.length} pool{pools.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
                 {/* Sub-tabs */}
                 <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
                   {(['teams', 'pool-games', 'bracket'] as const).map(tab => (

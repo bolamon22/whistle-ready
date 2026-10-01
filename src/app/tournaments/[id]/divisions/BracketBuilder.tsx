@@ -571,10 +571,13 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <span className="font-semibold text-white text-sm">
+          {/* These were text-white and text-slate-400 -- styles for the dark panel
+              this component used to sit in. On the white card it renders on now,
+              "Double Elimination" was white on white and simply could not be read. */}
+          <span className="font-semibold text-slate-800 text-sm">
             {entry?.label ?? FORMAT_LABELS[bracket.format] ?? bracket.format}
           </span>
-          <span className="ml-2 text-slate-400 text-sm">
+          <span className="ml-2 text-slate-500 text-sm">
             {bracket.teamCount} seeds · {bracket.games.length} games
           </span>
         </div>
@@ -586,7 +589,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 tab === t
                   ? 'bg-teal-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
               }`}
             >
               {t === 'seeding' ? 'Seeds' : 'Preview'}
@@ -595,7 +598,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="ml-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+            className="ml-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
           >
             {deleting ? 'Deleting…' : 'Reset'}
           </button>
