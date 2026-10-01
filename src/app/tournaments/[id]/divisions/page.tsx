@@ -698,7 +698,7 @@ export default function DivisionsPage() {
    * on screen -- which is how eleven of fourteen divisions ended up with no bracket
    * and nothing said about it.
    */
-  async function generateBracketForDivision(divName: string, teamCount: number): Promise<'created' | 'exists' | 'too-small' | 'failed'> {
+  async function generateBracketForDivision(divName: string, teamCount: number): Promise<'created' | 'rebuilt' | 'exists' | 'stale' | 'too-small' | 'failed'> {
     const tc = teamCount
     if (tc < 2) return 'too-small'
     const sd = smartTable[tc] || {}
@@ -709,9 +709,10 @@ export default function DivisionsPage() {
     // division was skipped, silently. Single elimination is the right default for a
     // pool-play tournament; the editor still overrides it per team count.
     const planFmt = sd.bracket || 'single'
-    const existing = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(divName)}/bracket`).then(r => r.ok ? r.json() : null).catch(() => null)
-    const hasBracket = Array.isArray(existing) ? existing.length > 0 : !!(existing && existing.id)
-    if (hasBracket) return 'exists'
+    const api = `/api/tournaments/${id}/divisions/${encodeURIComponent(divName)}/bracket`
+    const raw = await fetch(api).then(r => r.ok ? r.json() : null).catch(() => null)
+    const flights: { id?: string; teamCount?: number; format?: string; seeds?: Record<string, string> }[] =
+      Array.isArray(raw) ? raw : (raw && raw.id ? [raw] : [])
     const g = Number(guarantee) || 4
     const poolG = Number(divGamesPerTeam[divName] ?? sd.games ?? smartPoolGames(tc, g)) || 2
     const owes2 = (g - poolG) >= 2 || planFmt === '2gg'
@@ -719,11 +720,40 @@ export default function DivisionsPage() {
     const fmt = planFmt === 'double' ? 'double' : planFmt === '2gg' ? '2gg' : 'single'
     const advance = owes2 ? tc : (sd.advance ?? def.advance)
     const consolationCount = owes2 ? 0 : (sd.consolation ?? def.consolation)
-    const bRes = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(divName)}/bracket`, {
+    const wantCount = Math.max(2, advance)
+
+    // A bracket is sized when it is built, and teams keep registering after that.
+    // Skipping every division that already had one is how a division that had two
+    // teams in March keeps a two-seed, one-game bracket after it fills to eight.
+    // So compare what is there against the plan, and only leave it alone when it
+    // still fits.
+    let rebuilt = false
+    if (flights.length) {
+      const b = flights[0]
+      const bg = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(divName)}/pool-games?scope=bracket`)
+        .then(r => r.ok ? r.json() : []).catch(() => [])
+      const bGames: { startTime?: string; date?: string; location?: string }[] = Array.isArray(bg) ? bg : []
+      // Two ways an existing bracket is wrong: it was sized for a division that has
+      // since grown, or its schedulable B-games were wiped out from under it and the
+      // Bracket row is all that's left (which is what the old clearExisting did).
+      const sized = flights.length === 1 && b.teamCount === wantCount && b.format === fmt
+      if (sized && bGames.length > 0) return 'exists'
+      // Rebuilding wipes the division's brackets. Hand-entered seeds, a deliberate
+      // flight split, and B-games the Scheduler has already given times to are work
+      // that isn't ours to throw away -- call it stale and let Bo decide.
+      if (flights.length > 1) return 'stale'
+      if (Object.keys(b.seeds || {}).length > 0) return 'stale'
+      if (bGames.some(x => x.startTime || x.date || x.location)) return 'stale'
+      const del = await fetch(api, { method: 'DELETE' })
+      if (!del.ok) return 'failed'
+      rebuilt = true
+    }
+    const bRes = await fetch(api, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ format: fmt, teamCount: Math.max(2, advance), consolationCount, loserConsolation: owes2, seeds: {} }),
+      body: JSON.stringify({ format: fmt, teamCount: wantCount, consolationCount, loserConsolation: owes2, seeds: {} }),
     })
-    return bRes.ok ? 'created' : 'failed'
+    if (!bRes.ok) return 'failed'
+    return rebuilt ? 'rebuilt' : 'created'
   }
 
   async function generateAllDivisions() {
@@ -747,6 +777,8 @@ export default function DivisionsPage() {
     let autoPooled = 0
     let bracketsKept = 0
     let bracketsFailed = 0
+    let bracketsRebuilt = 0
+    const staleDivs: string[] = []
 
     // Clean up stale games for 0-team divisions
     for (const div of divisions) {
@@ -798,7 +830,9 @@ export default function DivisionsPage() {
       if (includeBrackets) {
         const r = await generateBracketForDivision(div.name, div.teamCount)
         if (r === 'created') bracketsCreated++
+        else if (r === 'rebuilt') bracketsRebuilt++
         else if (r === 'exists') bracketsKept++
+        else if (r === 'stale') staleDivs.push(div.name)
         else if (r === 'failed') bracketsFailed++
       }
     }
@@ -819,9 +853,14 @@ export default function DivisionsPage() {
     const poolMsg = autoPooled > 0 ? ` (auto-created pools for ${autoPooled} divisions)` : ''
     const bits = [
       bracketsCreated ? `${bracketsCreated} bracket${bracketsCreated !== 1 ? 's' : ''} created` : '',
-      bracketsKept ? `${bracketsKept} already had one` : '',
+      bracketsRebuilt ? `${bracketsRebuilt} resized` : '',
+      bracketsKept ? `${bracketsKept} already fit` : '',
     ].filter(Boolean)
     toast.success(`${totalGames} pool games generated${poolMsg}${bits.length ? `, ${bits.join(', ')}` : ''}`)
+    // A bracket that no longer fits its division but holds seeds, a flight split or
+    // scheduled times is not something to silently overwrite -- or to silently leave
+    // wrong. Name the divisions so Bo can reset the ones he wants.
+    if (staleDivs.length) toast(`${staleDivs.length} bracket${staleDivs.length !== 1 ? 's no' : ' no'} longer fit${staleDivs.length !== 1 ? '' : 's'} the division: ${staleDivs.join(', ')} — open the Bracket tab and Reset to rebuild`, { duration: 9000, icon: '\u26A0\uFE0F' })
     // Said separately and in red: a bracket that failed to build is not a detail to
     // tuck into a success message.
     if (bracketsFailed) toast.error(`${bracketsFailed} bracket${bracketsFailed !== 1 ? 's' : ''} could not be built — open the Bracket tab for those divisions`)
@@ -1042,7 +1081,7 @@ if (loading) return (
               >
         {generatingAll ? 'Generating...' : <><Zap size={13} /> Generate all divisions</>}
               </button>
-              <p className="text-[10px] text-slate-400 text-center leading-tight">{includeBrackets ? 'Pools, pool games & brackets' : 'Pool games only'} · auto-creates Pool A if needed{includeBrackets ? ' · skips existing brackets' : ''}</p>
+              <p className="text-[10px] text-slate-400 text-center leading-tight">{includeBrackets ? 'Pools, pool games & brackets' : 'Pool games only'} · auto-creates Pool A if needed{includeBrackets ? ' · resizes brackets that no longer fit' : ''}</p>
             </div>
             <Link href={`/tournaments/${id}/scheduler`} className="mt-3 flex items-center justify-between gap-2 bg-white border border-slate-200 hover:border-teal-300 rounded-xl px-4 py-3 transition-colors group">
               <span className="min-w-0">
@@ -1560,6 +1599,7 @@ if (loading) return (
                               // re-run all without the check
                               let totalGames = 0
                               let bracketsCreated = 0
+                              const staleHere: string[] = []
                               for (const d of divisions) {
                                 if (d.teamCount === 0) continue
                                 const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(d.name)}/pool-games`, {
@@ -1568,7 +1608,11 @@ if (loading) return (
                                 })
                                 const data = await res.json()
                                 if (res.ok) totalGames += data.generated ?? 0
-                                if (includeBrackets && await generateBracketForDivision(d.name, d.teamCount) === 'created') bracketsCreated++
+                                if (includeBrackets) {
+                                  const br = await generateBracketForDivision(d.name, d.teamCount)
+                                  if (br === 'created' || br === 'rebuilt') bracketsCreated++
+                                  else if (br === 'stale') staleHere.push(d.name)
+                                }
                               }
                               if (activeDiv) {
                                 const [teamData, gameData] = await Promise.all([
@@ -1581,7 +1625,8 @@ if (loading) return (
                                 loadBracketGames(activeDiv)
                               }
                               setGeneratingAll(false)
-                              toast.success(`${totalGames} games generated${bracketsCreated ? `, ${bracketsCreated} bracket${bracketsCreated !== 1 ? 's' : ''} created` : ''} · moved to parking lot`)
+                              toast.success(`${totalGames} games generated${bracketsCreated ? `, ${bracketsCreated} bracket${bracketsCreated !== 1 ? 's' : ''} built` : ''} · moved to parking lot`)
+                              if (staleHere.length) toast(`Bracket no longer fits the division in: ${staleHere.join(', ')} — open the Bracket tab and Reset to rebuild`, { duration: 9000, icon: '\u26A0\uFE0F' })
                             } else {
                               await doGenerateGames(div)
                             }
