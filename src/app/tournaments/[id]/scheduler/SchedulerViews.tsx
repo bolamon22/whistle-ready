@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, GripVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -384,6 +384,9 @@ export function TimelineView(p: ViewsProps) {
   const toggleMinField = (n: string) => { const f = new Set(minFields); if (f.has(n)) f.delete(n); else f.add(n); saveMin(f, minSlots) }
   const toggleMinSlot = (n: string) => { const sl = new Set(minSlots); if (sl.has(n)) sl.delete(n); else sl.add(n); saveMin(minFields, sl) }
   const minCount = p.fields.filter(f => minFields.has(f.fullName)).length + p.slots.filter(x => minSlots.has(x)).length
+  // One click shrinks every time of the day (Compact), one more brings them back.
+  const allTimesMin = p.slots.length > 0 && p.slots.every(x => minSlots.has(x))
+  const toggleCompact = () => saveMin(minFields, allTimesMin ? new Set() : new Set([...Array.from(minSlots), ...p.slots]))
   // Field headers drag onto each other to reorder. Uses its own dataTransfer type, so
   // a field dropped on a cell (or a game dropped on a header) does nothing.
   const [dragField, setDragField] = useState<string | null>(null)
@@ -714,15 +717,20 @@ export function TimelineView(p: ViewsProps) {
   // division row above can use the full width.
   function renderCorner() {
     return (
-      <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 flex items-center justify-center gap-1 px-1">
+      <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 flex items-center justify-center gap-0.5 px-0.5">
         <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} aria-label={across ? 'Fit fields' : 'Fit day'}
           title={fit ? 'Reopen both side panels' : (across ? 'Fit fields: collapse both side panels so every field fits' : 'Fit day: collapse both side panels so the whole day fits')}
-          className={`h-7 inline-flex items-center gap-1 px-2 rounded-full border text-[11px] font-bold ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
-          {fit ? <Minimize2 size={12} /> : <Maximize2 size={12} />}{minCount > 0 ? null : 'Fit'}
+          className={`h-7 inline-flex items-center gap-1 px-1.5 rounded-full border text-[11px] font-bold ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+          {fit ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+        </button>
+        <button onClick={toggleCompact} aria-label={allTimesMin ? 'Show every time at full size' : 'Compact: shrink every time'}
+          title={allTimesMin ? 'Show every time at full size' : 'Compact: shrink every time so the whole day fits'}
+          className={`h-7 inline-flex items-center px-1.5 rounded-full border ${allTimesMin ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+          {across ? (allTimesMin ? <UnfoldVertical size={12} /> : <FoldVertical size={12} />) : (allTimesMin ? <UnfoldHorizontal size={12} /> : <FoldHorizontal size={12} />)}
         </button>
         {minCount > 0 && (
           <button onClick={() => saveMin(new Set(), new Set())} aria-label={`Expand ${minCount} minimized`} title={`Expand ${minCount} minimized field${minCount === 1 ? '' : 's'} / time${minCount === 1 ? '' : 's'}`}
-            className="h-7 inline-flex items-center gap-1 px-2 rounded-full border text-[11px] font-bold bg-white text-teal-700 border-teal-300 hover:bg-teal-50">
+            className="h-7 inline-flex items-center gap-1 px-1.5 rounded-full border text-[11px] font-bold bg-white text-teal-700 border-teal-300 hover:bg-teal-50">
             +{minCount}
           </button>
         )}
