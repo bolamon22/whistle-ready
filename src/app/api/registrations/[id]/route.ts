@@ -3,8 +3,8 @@ import { prisma } from '@/lib/db'
 import { recordTeamPayment } from '@/lib/paymentGuard'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { requireStaff } from '@/lib/apiAuth'
-import { cleanName } from '@/lib/names'
-import { renameTeamRefs, renameClubRefs } from '@/lib/teamRename'
+import { cleanName, nameKey } from '@/lib/names'
+import { renameTeamRefs, renameClubRefs, removeTeamRefs } from '@/lib/teamRename'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { pruneOrphanPoolNames } from '@/lib/poolMembership'
 
@@ -15,6 +15,28 @@ async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "hotelNights" INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
   // Waiting-list teams: registered but not invoiced. See src/lib/regPricing.ts.
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "RegisteredTeam" ADD COLUMN "waitlisted" BOOLEAN NOT NULL DEFAULT 0`) } catch { /* already exists */ }
+}
+
+// A team that leaves the event here takes its games with it, the same as a
+// delete on the Divisions page. Leaving them kept opponents booked against a
+// team that no longer exists, and the hole was invisible: the board looked full.
+// With the games gone, the empty slots show on the Scheduler and the Divisions
+// rail flags the pool as short.
+//
+// Skipped for any name still registered in that division through another
+// registration (a club entered twice), whose games are still real.
+async function dropTeamsFromSchedule(tournamentId: string, gone: { teamName: string; division: string }[]) {
+  if (!tournamentId || !gone.length) return
+  const still = await prisma.registeredTeam.findMany({
+    where: { registration: { tournamentId, deletedAt: null } },
+    select: { teamName: true, division: true },
+  })
+  const k = (d: string, t: string) => nameKey(d) + '|' + nameKey(t)
+  const live = new Set(still.map((t: { teamName: string; division: string }) => k(t.division, t.teamName)))
+  for (const t of gone) {
+    if (!t.teamName || live.has(k(t.division, t.teamName))) continue
+    try { await removeTeamRefs(tournamentId, t.teamName, t.division || undefined) } catch { /* the registration change still stands */ }
+  }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -165,7 +187,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // This PATCH deletes and recreates the whole team list, so dropping a team
     // here removes its RegisteredTeam but left its name behind in the pool.
     // Renames are handled above by renameTeamRefs; this catches the removals.
-    if (before.teams.length !== cleanTeams.length) await pruneOrphanPoolNames(before.tournamentId)
+    if (before.teams.length !== cleanTeams.length) {
+      const kept = new Set(cleanTeams.map((t: { teamName: string; division: string }) => nameKey(t.division) + '|' + nameKey(t.teamName)))
+      const gone = before.teams.filter((t: { teamName: string; division: string }) => !kept.has(nameKey(t.division) + '|' + nameKey(t.teamName)))
+      await dropTeamsFromSchedule(before.tournamentId, gone)
+      await pruneOrphanPoolNames(before.tournamentId)
+    }
   }
 
   return NextResponse.json(registration)
@@ -177,11 +204,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  const reg = await prisma.teamRegistration.findUnique({ where: { id: params.id }, select: { tournamentId: true } })
+  const reg = await prisma.teamRegistration.findUnique({ where: { id: params.id }, select: { tournamentId: true, teams: { select: { teamName: true, division: true } } } })
   await prisma.teamRegistration.update({
     where: { id: params.id },
     data: { deletedAt: new Date() },
   })
+  if (reg?.tournamentId) await dropTeamsFromSchedule(reg.tournamentId, reg.teams ?? [])
   // The club's teams are gone from the event, so take their names out of the
   // pools too. Only the Divisions page used to do this, which is how a team
   // removed here stayed on the public standings with nothing able to shift it.

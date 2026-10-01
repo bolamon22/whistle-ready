@@ -633,7 +633,11 @@ export default function RegistrationsPage() {
     const money = pays.length
       ? `\n\nThis club has payment history — ${fmt(gross)} received${refunded > 0 ? `, ${fmt(refunded)} refunded` : ''}. That history is KEPT, and the entry stays in Recently Deleted permanently rather than being purged, so you can still look the refund up if they query it.`
       : ''
-    if (!confirm(`Delete the registration for "${name}"?${money}\n\nIt moves to Recently Deleted at the bottom of this page — you can restore it any time${pays.length ? '' : ' in the next 30 days'}.`)) return
+    // Its teams' games come off the schedule with it (see api/registrations/[id]),
+    // and restoring brings the teams back but not the games, so say so here.
+    const nTeams = (reg as any)?.teams?.length || 0
+    const games = nTeams ? `\n\nTheir games come off the schedule too, leaving open slots to refill. Restoring the registration brings the team${nTeams === 1 ? '' : 's'} back, not the games.` : ''
+    if (!confirm(`Delete the registration for "${name}"?${money}${games}\n\nIt moves to Recently Deleted at the bottom of this page — you can restore it any time${pays.length ? '' : ' in the next 30 days'}.`)) return
     try {
       await fetch(`/api/registrations/${id}`, { method: 'DELETE' })
       toast.success('Deleted.'); setExpanded(null); load()
