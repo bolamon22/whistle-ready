@@ -7,10 +7,11 @@ import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import ShortTeamsBanner from '@/components/ShortTeamsBanner'
 import { findShortTeams, describeFinding, type BalanceGame } from '@/lib/gameBalance'
+import { poolKey } from '@/lib/poolNames'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
-import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2, Calendar } from 'lucide-react'
+import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2, Calendar, Plus } from 'lucide-react'
 
 const PALETTE = [
   '#3b82f6', '#10b981', '#a855f7', '#f97316', '#ec4899',
@@ -54,6 +55,12 @@ export default function DivisionsPage() {
   const [divColors, setDivColors] = useState<Record<string, string>>({})
   const [poolGames, setPoolGames] = useState<PoolGame[]>([])
   const [teamFilter, setTeamFilter] = useState('')
+  // Manual add. Open for one pool at a time; the pool is implied by which card's
+  // button you pressed, so there is no pool picker to get wrong.
+  const [addGamePool, setAddGamePool] = useState('')
+  const [addHome, setAddHome] = useState('')
+  const [addAway, setAddAway] = useState('')
+  const [addingGame, setAddingGame] = useState(false)
 
   // Every division's games, for the page-level uneven-pool warning.
   //
@@ -91,6 +98,43 @@ export default function DivisionsPage() {
   /** Clicking a team name filters to it; clicking the same one again clears. A
    *  different name switches rather than clears, which is what you want when the
    *  row you are reading is the one you want to look at next. */
+  /** The teams eligible for a game in this pool. Matched on poolKey because the
+   *  scheduler writes "Pool A" onto a game while staff may have named the pool "A"
+   *  -- see lib/poolNames. Falls back to the whole division for an unpooled group. */
+  const poolTeamsFor = (poolName: string) => {
+    const p = pools.find(x => poolKey(x.name) === poolKey(poolName))
+    const names = p?.teamNames?.length ? p.teamNames : teams.map(t => t.teamName)
+    return [...new Set(names.map(n => String(n || '').trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b))
+  }
+
+  async function addGame(poolName: string) {
+    if (!activeDiv || !addHome || !addAway || addHome === addAway || addingGame) return
+    setAddingGame(true)
+    // Continue this division's P-numbering from its highest, rather than from the
+    // count: a deleted game would make a count collide with a number already used.
+    const next = poolGames.reduce((max, g) => {
+      const n = parseInt(String(g.gameNumber || '').replace(/^\D+/, ''), 10)
+      return Number.isFinite(n) && n > max ? n : max
+    }, 0) + 1
+    const base = `/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pool-games`
+    const res = await fetch(base, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'add', gameNumber: `P${next}`, team1: addHome, team2: addAway,
+        pool: poolName, date: '', startTime: '', location: '', refCount: 2,
+      }),
+    })
+    setAddingGame(false)
+    if (!res.ok) { toast.error('Could not add the game'); return }
+    // Re-read rather than push the new row in: this also refreshes the uneven-pool
+    // check, which is usually the reason a game is being added by hand.
+    const gameData = await fetch(base).then(r => r.json()).catch(() => null)
+    if (Array.isArray(gameData)) setPoolGames(gameData)
+    setAddGamePool(''); setAddHome(''); setAddAway('')
+    toast.success(`Added ${addHome} vs ${addAway}`)
+  }
+
   const toggleTeamFilter = (name: string) => {
     const t = String(name || '').trim()
     if (!t) return
@@ -1645,6 +1689,48 @@ if (loading) return (
                                 ))}
                               </tbody>
                             </table>
+                            {/* Footer rather than a toolbar button: the pool is implied
+                                by which card you are under, so there is no pool picker
+                                to pick wrongly. Counts ride in the option labels, since
+                                a game added by hand is usually one being added TO a team
+                                that is short. */}
+                            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+                              {addGamePool === poolName ? (() => {
+                                const opts = poolTeamsFor(poolName)
+                                const counts = new Map(teamGameCounts)
+                                const label = (t: string) => `${t} — ${counts.get(t) ?? 0} game${(counts.get(t) ?? 0) !== 1 ? 's' : ''}`
+                                const dupe = addHome && addAway && poolGames.some(g =>
+                                  (g.team1?.trim() === addHome && g.team2?.trim() === addAway) ||
+                                  (g.team1?.trim() === addAway && g.team2?.trim() === addHome))
+                                return (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <select className="input text-sm" value={addHome} onChange={e => setAddHome(e.target.value)}>
+                                      <option value="">Home team…</option>
+                                      {opts.map(t => <option key={t} value={t}>{label(t)}</option>)}
+                                    </select>
+                                    <span className="text-xs text-slate-400">vs</span>
+                                    <select className="input text-sm" value={addAway} onChange={e => setAddAway(e.target.value)}>
+                                      <option value="">Away team…</option>
+                                      {opts.filter(t => t !== addHome).map(t => <option key={t} value={t}>{label(t)}</option>)}
+                                    </select>
+                                    <button onClick={() => addGame(poolName)} disabled={!addHome || !addAway || addingGame}
+                                      className="btn-primary btn-sm disabled:opacity-50">
+                                      {addingGame ? 'Adding…' : 'Add game'}
+                                    </button>
+                                    <button onClick={() => { setAddGamePool(''); setAddHome(''); setAddAway('') }}
+                                      className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+                                    {/* A rematch is allowed -- some formats want one -- but
+                                        it is almost always a slip, so it gets said out loud. */}
+                                    {dupe && <span className="text-xs text-amber-600">These two already play each other in this division.</span>}
+                                  </div>
+                                )
+                              })() : (
+                                <button onClick={() => { setAddGamePool(poolName); setAddHome(''); setAddAway('') }}
+                                  className="text-xs font-semibold text-teal-700 hover:text-teal-800 inline-flex items-center gap-1">
+                                  <Plus size={13} /> Add a game to {poolName}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))
                       })()}
