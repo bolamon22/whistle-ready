@@ -6,8 +6,9 @@ import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import ShortTeamsBanner from '@/components/ShortTeamsBanner'
-import { findShortTeams, describeFinding, type BalanceGame } from '@/lib/gameBalance'
+import { findShortTeams, describeFinding, isPlaceholder, type BalanceGame } from '@/lib/gameBalance'
 import { poolKey } from '@/lib/poolNames'
+import { nameKey } from '@/lib/names'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
@@ -172,21 +173,6 @@ export default function DivisionsPage() {
     setTeamFilter(prev => (prev === t ? '' : t))
   }
 
-  const unevenByDivision = useMemo(() => {
-    const m = new Map<string, string[]>()
-    for (const f of findShortTeams(allGames)) {
-      const lines = m.get(f.division) ?? []
-      lines.push(describeFinding(f))
-      m.set(f.division, lines)
-    }
-    return m
-  }, [allGames])
-  useEffect(() => {
-    fetch(`/api/tournaments/${id}/games`)
-      .then(r => r.json())
-      .then(g => setAllGames(Array.isArray(g) ? g : []))
-      .catch(() => { /* the warning just stays hidden rather than breaking the page */ })
-  }, [id, poolGames])
   const [bracketGames, setBracketGames] = useState<PoolGame[]>([])
 
   // Pool games state
@@ -195,6 +181,60 @@ export default function DivisionsPage() {
   const [renumbering, setRenumbering] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [divGamesPerTeam, setDivGamesPerTeam] = useState<Record<string, string>>({})
+
+  // Every division's roster (pooled and not-yet-pooled registered teams), so the
+  // rail can spot games that name a team the division no longer has.
+  const [allRosters, setAllRosters] = useState<{ division: string; teams: string[] }[]>([])
+
+  // What the rail flags beside a division name. Each is something that has to be
+  // fixed before game day and is easy to lose track of across 14 divisions:
+  //  - an uneven pool, or one under the division's games-per-team guarantee (the
+  //    same check as the banner on the Pool games tab, which the rail used to run
+  //    without the guarantee and so missed a level-but-short pool)
+  //  - games that still name a team no longer in the division (deleted or renamed)
+  //  - a bracket drawn for more seeds than the division has teams
+  const { issuesByDivision, rosterIssuesByDivision } = useMemo(() => {
+    const m = new Map<string, string[]>()
+    // stray-team and bracket lines also show inside the division (the uneven-pool
+    // ones already have their own banner on the Pool games tab)
+    const r = new Map<string, string[]>()
+    const add = (d: string, line: string, roster = false) => {
+      const l = m.get(d) ?? []; l.push(line); m.set(d, l)
+      if (roster) { const x = r.get(d) ?? []; x.push(line); r.set(d, x) }
+    }
+    const divs = Array.from(new Set(allGames.map(g => g.division).filter(Boolean)))
+    for (const d of divs) {
+      const mine = allGames.filter(g => g.division === d)
+      const guarantee = Number(divGamesPerTeam[d] ?? 0) || 0
+      for (const f of findShortTeams(mine, guarantee)) {
+        add(d, describeFinding(f) + (f.belowGuarantee && f.shortTeams.length ? ` Under the ${guarantee}-game guarantee.` : ''))
+      }
+      const roster = allRosters.filter(r => r.division === d)
+      if (!roster.length) continue
+      const keys = new Set(roster.flatMap(r => r.teams).map(t => nameKey(t)))
+      const isBracket = (g: any) => g.isChampionship || /^B/i.test(String(g.gameNumber || ''))
+      const strays = Array.from(new Set(mine.filter(g => !isBracket(g) && !g.isCanceled)
+        .flatMap(g => [g.team1, g.team2]).filter(t => t && !isPlaceholder(t) && !keys.has(nameKey(t)))))
+      if (strays.length) add(d, `${strays.join(', ')} ${strays.length === 1 ? 'is' : 'are'} still on the schedule but no longer in this division. Regenerate its pool games.`, true)
+      const seeds = mine.filter(isBracket).flatMap(g => [g.team1, g.team2])
+        .map(t => Number((String(t || '').match(/^seed\s*(\d+)/i) || [])[1] || 0))
+      const maxSeed = seeds.length ? Math.max(...seeds) : 0
+      if (keys.size > 0 && maxSeed > keys.size) add(d, `The bracket is drawn for ${maxSeed} teams; the division has ${keys.size}. Rebuild the bracket.`, true)
+    }
+    return { issuesByDivision: m, rosterIssuesByDivision: r }
+  }, [allGames, allRosters, divGamesPerTeam])
+  useEffect(() => {
+    fetch(`/api/tournaments/${id}/games`)
+      .then(r => r.json())
+      .then(g => setAllGames(Array.isArray(g) ? g : []))
+      .catch(() => { /* the warning just stays hidden rather than breaking the page */ })
+  }, [id, poolGames, bracketGames])
+  useEffect(() => {
+    fetch(`/api/tournaments/${id}/pools`)
+      .then(r => r.json())
+      .then(rows => setAllRosters(Array.isArray(rows) ? rows.map((r: any) => ({ division: String(r.division || ''), teams: Array.isArray(r.teams) ? r.teams : [] })) : []))
+      .catch(() => {})
+  }, [id, teams, pools])
   const [generatingAll, setGeneratingAll] = useState(false)
   const [includeBrackets, setIncludeBrackets] = useState(true)
   // Pool play and brackets are now independent ticks on the one button, so either
@@ -990,8 +1030,8 @@ if (loading) return (
                                   is the one view that shows every division at once.
                                   Wrapped in a span because a title on the svg itself is
                                   not a tooltip. */}
-                              {unevenByDivision.has(div.name) && (
-                                <span className="flex-shrink-0 inline-flex" title={`Uneven pool — ${unevenByDivision.get(div.name)!.join('  ')}`}>
+                              {issuesByDivision.has(div.name) && (
+                                <span className="flex-shrink-0 inline-flex" title={`Needs attention — ${issuesByDivision.get(div.name)!.join('  ')}`}>
                                   <AlertTriangle size={13} className="text-amber-500" />
                                 </span>
                               )}
@@ -1749,6 +1789,14 @@ if (loading) return (
                       onFix={generateGames}
                       fixLabel="Regenerate this division's games"
                     />
+                    {activeDiv && rosterIssuesByDivision.has(activeDiv) && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2.5">
+                        <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                        <ul className="space-y-1 text-sm text-amber-900">
+                          {rosterIssuesByDivision.get(activeDiv)!.map((line, i) => <li key={i}>{line}</li>)}
+                        </ul>
+                      </div>
+                    )}
                     <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
                       <div className="flex flex-wrap items-end gap-3">
                         <div>
@@ -2001,7 +2049,17 @@ if (loading) return (
                   const def = defaultBracketPlan(tc, poolG, guar)
                   const cnt = owes2 ? String(tc) : String(sd.advance ?? def.advance)
                   const cons = owes2 ? undefined : String(sd.consolation ?? def.consolation)
-                  return <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} initialTab={previewDiv === activeDiv ? 'preview' : 'seeding'} openPreviewAt={previewNonce} />
+                  return <>
+                    {rosterIssuesByDivision.has(activeDiv) && (
+                      <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2.5">
+                        <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                        <ul className="space-y-1 text-sm text-amber-900">
+                          {rosterIssuesByDivision.get(activeDiv)!.map((line, i) => <li key={i}>{line}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} initialTab={previewDiv === activeDiv ? 'preview' : 'seeding'} openPreviewAt={previewNonce} />
+                  </>
                 })()
               )}
               </>
