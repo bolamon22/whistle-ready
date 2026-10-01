@@ -6,15 +6,19 @@ import LiveTicker from '@/components/LiveTicker'
 import FollowButton from '@/components/FollowButton'
 import FollowAlertsSheet from '@/components/FollowAlertsSheet'
 import { deviceId as getDeviceId } from '@/lib/pushClient'
+import { teamRefKey } from '@/lib/names'
 
 const LogosContext = createContext<Record<string, string>>({})
 // Follower counts per team, from /follows. Bo wants Follow to read like Instagram --
 // "how many people are following a particular team" -- so the number sits under
 // the name wherever a Follow button does. Hidden at zero: a wall of "0 followers"
 // on launch day reads as nobody cares, and the first tap fixes it anyway.
+// Keyed by teamRefKey(division, team): "Miami Reign" in HS A, HS B and U14 B are
+// three teams with three follower counts, not one.
 const FollowCountsContext = createContext<Record<string, number>>({})
-function FollowerCount({team,className=''}:{team:string;className?:string}) {
-  const n=useContext(FollowCountsContext)[team]||0
+type FollowRef = {division:string;team:string}
+function FollowerCount({division,team,className=''}:{division:string;team:string;className?:string}) {
+  const n=useContext(FollowCountsContext)[teamRefKey(division,team)]||0
   if(!n) return null
   return <span className={`inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 ${className}`} title={`${n} follower${n===1?'':'s'}`}><Users size={10} aria-hidden/>{n} follower{n===1?'':'s'}</span>
 }
@@ -96,7 +100,7 @@ function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DE
 // open -- the card is a roster. Grid first, alphabetical, no rank numbers, no
 // stat columns, nothing clickable, and a team count by the toggle. Separate
 // from `showSchedule`, which only governs the Schedule button.
-function PoolCard({division,pool,standings,games,followedTeams,onFollow,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true,preSchedule=false,title}:{division:string;pool:string;standings:Standing[];games:Game[];followedTeams:string[];onFollow:(team:string)=>void;tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean;preSchedule?:boolean;title?:string}) {
+function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true,preSchedule=false,title}:{division:string;pool:string;standings:Standing[];games:Game[];followed:(team:string)=>boolean;onFollow:(team:string)=>void;tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean;preSchedule?:boolean;title?:string}) {
   // The visitor's own toggle wins. Until they touch it, the default follows
   // preSchedule -- which can change after mount, because the visibility switch
   // arrives in its own request, so a plain useState default could stick on list.
@@ -134,10 +138,10 @@ function PoolCard({division,pool,standings,games,followedTeams,onFollow,tiebreak
           {rows.map((s,i)=>preSchedule ? (
             <div key={s.team} className="flex flex-col items-center py-4 px-3 gap-2 w-full">
               <TeamAvatar name={s.team}/>
-              <div className={`text-xs font-bold uppercase leading-tight text-center ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</div>
-              <FollowerCount team={s.team} className="-mt-1"/>
+              <div className={`text-xs font-bold uppercase leading-tight text-center ${followed(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</div>
+              <FollowerCount division={division} team={s.team} className="-mt-1"/>
               {/* mt-auto: a tile with no count line is shorter, so pin the button to the bottom of the row */}
-              <FollowButton team={s.team} following={followedTeams.includes(s.team)} onToggle={onFollow} className="w-full mt-auto" />
+              <FollowButton team={s.team} following={followed(s.team)} onToggle={onFollow} className="w-full mt-auto" />
             </div>
           ) : (
             <div key={s.team} className="flex flex-col items-center py-4 px-3 gap-2 w-full">
@@ -146,10 +150,10 @@ function PoolCard({division,pool,standings,games,followedTeams,onFollow,tiebreak
                 <div className="text-center">
                   <div className="text-xs text-slate-400 mb-0.5">{i+1}</div>
                   <div className="text-xs font-bold text-slate-800 uppercase leading-tight">{s.team}</div>
-                  <FollowerCount team={s.team} className="mt-1"/>
+                  <FollowerCount division={division} team={s.team} className="mt-1"/>
                 </div>
               </button>
-              <FollowButton team={s.team} following={followedTeams.includes(s.team)} onToggle={onFollow} className="w-full mt-auto" />
+              <FollowButton team={s.team} following={followed(s.team)} onToggle={onFollow} className="w-full mt-auto" />
             </div>
           ))}
         </div>
@@ -160,10 +164,10 @@ function PoolCard({division,pool,standings,games,followedTeams,onFollow,tiebreak
             <div key={s.team} className="flex items-center gap-2.5 px-4 py-2.5">
               <TeamAvatar name={s.team} size="sm"/>
               <span className="flex-1 min-w-0 flex flex-col">
-                <span className={`font-semibold text-xs leading-tight ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</span>
-                <FollowerCount team={s.team}/>
+                <span className={`font-semibold text-xs leading-tight ${followed(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</span>
+                <FollowerCount division={division} team={s.team}/>
               </span>
-              <FollowButton team={s.team} following={followedTeams.includes(s.team)} onToggle={onFollow} />
+              <FollowButton team={s.team} following={followed(s.team)} onToggle={onFollow} />
             </div>
           ))}
         </div>
@@ -189,14 +193,14 @@ function PoolCard({division,pool,standings,games,followedTeams,onFollow,tiebreak
                   <Fragment key={s.team}>
                     <tr className={`border-t border-slate-50 ${i===0&&mp>0?'bg-amber-50/40':''}`}>
                       <td className="px-3 py-2.5 text-slate-400 font-semibold">{i+1}</td>
-                      <td className="px-2 py-2.5"><div className="flex items-center gap-2"><TeamAvatar name={s.team} size="sm"/><span className="flex flex-col"><button onClick={()=>onTeamClick(s.team)} className={`font-semibold text-xs leading-tight text-left hover:underline ${followedTeams.includes(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</button><FollowerCount team={s.team}/></span></div></td>
+                      <td className="px-2 py-2.5"><div className="flex items-center gap-2"><TeamAvatar name={s.team} size="sm"/><span className="flex flex-col"><button onClick={()=>onTeamClick(s.team)} className={`font-semibold text-xs leading-tight text-left hover:underline ${followed(s.team)?'text-teal-700':'text-slate-800'}`}>{s.team}</button><FollowerCount division={division} team={s.team}/></span></div></td>
                       <td className="px-2 py-2.5 text-center font-semibold text-slate-700">{s.w}</td>
                       <td className="px-2 py-2.5 text-center text-slate-600">{s.l}</td>
                       <td className="hidden sm:table-cell px-2 py-2.5 text-center text-slate-600">{s.ga}</td>
                       <td className="hidden sm:table-cell px-2 py-2.5 text-center text-slate-600">{s.gf}</td>
                       <td className={`px-2 py-2.5 text-center font-bold ${gd>0?'text-emerald-600':gd<0?'text-red-500':'text-slate-400'}`}>{gd>0?'+':''}{gd}</td>
                       <td className="px-2 py-2.5"><div className="flex items-center justify-center gap-1">{form.length===0?<span className="text-slate-300">—</span>:form.map((r,fi)=><span key={fi} className={`w-4 h-4 rounded-full text-[8px] font-bold text-white flex items-center justify-center ${r==='W'?'bg-emerald-500':r==='L'?'bg-red-500':'bg-slate-400'}`}>{r}</span>)}</div></td>
-                      <td className="px-1 py-2.5"><FollowButton team={s.team} following={followedTeams.includes(s.team)} onToggle={onFollow} compact /></td>
+                      <td className="px-1 py-2.5"><FollowButton team={s.team} following={followed(s.team)} onToggle={onFollow} compact /></td>
                     </tr>
                     {cutoff>0 && cutoff<standings.length && i===cutoff-1 && (
                       <tr><td colSpan={9} className="p-0"><div className="border-t-2 border-dashed border-teal-300 mx-3 relative h-0"><span className="absolute right-2 -top-2 bg-white px-2 text-[9px] font-semibold text-teal-600 uppercase tracking-wide">Advances &uarr;</span></div></td></tr>
@@ -598,7 +602,10 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
 
 type DivTab = 'standings'|'schedule'|'bracket'
 
-function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,tiebreakers,scheduleLive=true,rosters=[]}:{division:string;games:Game[];followedTeams:string[];toggleFollow:(t:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean;rosters?:PoolRoster[]}) {
+function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,scheduleLive=true,rosters=[]}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean;rosters?:PoolRoster[]}) {
+  // Every team on this view plays in `division`; follows are per (division, team).
+  const followed=(team:string)=>isFollowed(division,team)
+  const onFollow=(team:string)=>toggleFollow(division,team)
   const [divTab,setDivTab]=useState<DivTab>('standings')
   const [selectedTeam,setSelectedTeam]=useState<string|null>(null)
   const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'>('all')
@@ -662,15 +669,15 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
             // once the schedule is live).
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               {pools.map(pool=>(
-                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followedTeams={followedTeams} onFollow={toggleFollow} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
+                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
               ))}
-              {loose && <PoolCard key="__loose" division={division} pool="" title={`${division} — Not in a pool yet`} standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followedTeams={followedTeams} onFollow={toggleFollow} tiebreakers={tiebreakers} advanceCount={0} numPools={pools.length} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>}
+              {loose && <PoolCard key="__loose" division={division} pool="" title={`${division} — Not in a pool yet`} standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={0} numPools={pools.length} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>}
             </div>
           ) : loose
             // No pools set yet: every registered team in one card, same shape,
             // so the page doesn't change character once they are split up.
-            ? <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followedTeams={followedTeams} onFollow={toggleFollow} tiebreakers={tiebreakers} advanceCount={0} numPools={1} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>
-            : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,divRoster)} games={games} followedTeams={followedTeams} onFollow={toggleFollow} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
+            ? <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={0} numPools={1} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>
+            : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,divRoster)} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
         </div>
       )}
 
@@ -686,7 +693,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
           ? <img src={schedLogos[name]} alt="" className="w-5 h-5 rounded-full object-contain bg-white border border-slate-200 flex-shrink-0"/>
           : <span className="w-5 h-5 rounded-full bg-slate-300 text-white text-[9px] font-semibold flex items-center justify-center flex-shrink-0">{(name||'?').charAt(0).toUpperCase()}</span>
         const downloadIcs = (g:Game)=>{ const st=parseStartMs(g.date,g.startTime); if(st==null) return; const fmt=(ms:number)=>new Date(ms).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z'; const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Whistle Ready//EN','BEGIN:VEVENT','UID:'+g.id+'@whistleready','DTSTART:'+fmt(st),'DTEND:'+fmt(st+3600000),'SUMMARY:'+g.team1+' vs '+g.team2,'LOCATION:'+(g.location||''),'DESCRIPTION:'+division,'END:VEVENT','END:VCALENDAR'].join('\r\n'); const blob=new Blob([ics],{type:'text/calendar'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=(g.team1+'-vs-'+g.team2).replace(/[^a-z0-9]+/gi,'-')+'.ics'; a.click(); URL.revokeObjectURL(url) }
-        const upNext = followedTeams.length>0 ? all.find(g=>g.score1==null && (followedTeams.includes(g.team1)||followedTeams.includes(g.team2))) : null
+        const upNext = anyFollowed ? all.find(g=>g.score1==null && (isFollowed(g.division,g.team1)||isFollowed(g.division,g.team2))) : null
         const base = all.filter(g=>{
           if(selectedTeam && g.team1!==selectedTeam && g.team2!==selectedTeam) return false
           if(schedField && g.location!==schedField) return false
@@ -702,7 +709,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
           const hs=g.score1!=null&&g.score2!=null
           const live=isLive(g)
           const t1w=hs&&g.score1!>g.score2!, t2w=hs&&g.score2!>g.score1!
-          const isHL=followedTeams.includes(g.team1)||followedTeams.includes(g.team2)
+          const isHL=isFollowed(g.division,g.team1)||isFollowed(g.division,g.team2)
           const chipCls=g.isChampionship?'bg-amber-100 text-amber-800':'bg-teal-100 text-teal-700'
           const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-500'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.isChampionship?{t:'Bracket',c:'bg-amber-50 text-amber-700'}:g.pool?{t:poolLabel(g.pool),c:'bg-teal-50 text-teal-700'}:{t:'Upcoming',c:'bg-slate-100 text-slate-500'}
           return (
@@ -714,7 +721,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
               </div>
               <div className="flex-1 flex items-center gap-1.5 min-w-0">
                 <div className="flex-1 flex items-center justify-end gap-1.5 min-w-0">
-                  <FollowButton team={g.team1} following={followedTeams.includes(g.team1)} onToggle={toggleFollow} compact />
+                  <FollowButton team={g.team1} following={isFollowed(g.division,g.team1)} onToggle={t=>toggleFollow(g.division,t)} compact />
                   {realTeams.has(g.team1)
                     ? <button onClick={()=>setSelectedTeam(g.team1)} className={`text-[12.5px] truncate text-right hover:underline ${t1w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team1}</button>
                     : <span className={`text-[12.5px] truncate ${t1w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team1||'TBD'}</span>}
@@ -732,7 +739,7 @@ function DivisionView({division,games,followedTeams,toggleFollow,tournamentId,ti
                   {realTeams.has(g.team2)
                     ? <button onClick={()=>setSelectedTeam(g.team2)} className={`text-[12.5px] truncate text-left hover:underline ${t2w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team2}</button>
                     : <span className={`text-[12.5px] truncate ${t2w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team2||'TBD'}</span>}
-                  <FollowButton team={g.team2} following={followedTeams.includes(g.team2)} onToggle={toggleFollow} compact />
+                  <FollowButton team={g.team2} following={isFollowed(g.division,g.team2)} onToggle={t=>toggleFollow(g.division,t)} compact />
                 </div>
               </div>
               {!hs && parseStartMs(g.date,g.startTime)!=null && <button onClick={()=>downloadIcs(g)} title="Add to calendar" className="flex-shrink-0 text-slate-400 hover:text-teal-600"><CalendarPlus size={15}/></button>}
@@ -801,7 +808,12 @@ export default function PublicTournamentPage() {
   // Follows live on the server, keyed by a device id this browser minted once
   // (lib/pushClient). They used to live only in localStorage, which is why
   // nothing could count them and nothing could send to them.
-  const [followedTeams,setFollowedTeams]=useState<string[]>([])
+  // What this device follows: (division, team) pairs, in the order they were followed.
+  const [followed,setFollowed]=useState<FollowRef[]>([])
+  const isFollowed=(division:string,team:string)=>followed.some(f=>teamRefKey(f.division,f.team)===teamRefKey(division,team))
+  // Follows saved before they were saved anywhere but this browser: names only,
+  // carried over once the rosters say which divisions those names play in.
+  const [legacyNames,setLegacyNames]=useState<string[]>([])
   const [device,setDevice]=useState('')
   const [alertsOn,setAlertsOn]=useState<boolean|null>(null)
   const [askAlertsFor,setAskAlertsFor]=useState<string|null>(null)
@@ -834,20 +846,16 @@ export default function PublicTournamentPage() {
       // browser: carry those over once, then the server is the truth.
       let legacy:string[]=[]
       try{ legacy=JSON.parse(localStorage.getItem(`follows-${id}`)||'[]'); if(!Array.isArray(legacy)) legacy=[] }catch{}
-      if(!dev) setFollowedTeams(legacy)   // storage blocked: still show everyone else's counts
+      if(dev&&legacy.length) setLegacyNames(legacy.filter(x=>typeof x==='string'))
       try{
-        if(dev&&legacy.length){
-          await Promise.all(legacy.map(team=>fetch(`/api/tournaments/${id}/follows`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:dev,teamName:team,follow:true})}).catch(()=>{})))
-          try{ localStorage.removeItem(`follows-${id}`) }catch{}
-        }
         const r=await fetch(`/api/tournaments/${id}/follows?device=${encodeURIComponent(dev||'')}`)
         const d=r.ok?await r.json():null
         if(d&&d.counts&&typeof d.counts==='object') setFollowCounts(d.counts)
-        if(!dev) return
-        if(d&&Array.isArray(d.following)) setFollowedTeams(d.following)
+        if(!dev) return   // storage blocked: everyone else's counts still show; following works for this visit only
+        if(d&&Array.isArray(d.following)) setFollowed(d.following.filter((f:any)=>f&&typeof f.team==='string').map((f:any)=>({division:String(f.division||''),team:f.team})))
         const dv=await fetch(`/api/follows/device?device=${encodeURIComponent(dev)}`).then(r=>r.ok?r.json():null).catch(()=>null)
         setAlertsOn(!!dv?.enabled)
-      }catch{ if(dev) setFollowedTeams(legacy) }
+      }catch{}
     })()
     fetch(`/api/tournaments/${id}/announcements`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.announcements))setAnnouncements(d.announcements)}).catch(()=>{})
     fetch(`/api/tournaments/${id}/visibility`).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.pools)setPubVis({pools:d.pools,schedule:d.schedule})}).catch(()=>{})
@@ -855,26 +863,49 @@ export default function PublicTournamentPage() {
     fetch(`/api/tournaments/${id}/divisions`).then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)){const m:Record<string,number>={};d.forEach((x:any)=>{if(x&&typeof x.name==='string')m[x.name]=Number(x.teamCount)||0});setRegTeamCounts(m)}}).catch(()=>{})
   },[id])
 
-  const toggleFollow=async(team:string)=>{
-    const was=followedTeams.includes(team)
-    const firstEver=!was&&followedTeams.length===0
+  // A name-only legacy follow becomes a follow of that name in every division it
+  // plays in -- which is what the follower saw before follows knew divisions.
+  useEffect(()=>{
+    if(!device||!legacyNames.length||(!liveRosters.length&&!games.length)) return
+    const names=legacyNames; setLegacyNames([])
+    ;(async()=>{
+      const refs:FollowRef[]=[]
+      const seen=new Set<string>()
+      const add=(division:string,team:string)=>{const k=teamRefKey(division,team); if(!seen.has(k)){seen.add(k);refs.push({division,team})}}
+      liveRosters.forEach(r=>r.teams.forEach(t=>{ if(names.some(n=>teamRefKey('',n)===teamRefKey('',t))) add(r.division,t) }))
+      games.forEach(g=>[g.team1,g.team2].forEach(t=>{ if(!isPlaceholderTeam(t)&&names.some(n=>teamRefKey('',n)===teamRefKey('',t))) add(g.division,t) }))
+      await Promise.all(refs.map(f=>fetch(`/api/tournaments/${id}/follows`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:device,division:f.division,teamName:f.team,follow:true})}).catch(()=>{})))
+      try{ localStorage.removeItem(`follows-${id}`) }catch{}
+      try{
+        const r=await fetch(`/api/tournaments/${id}/follows?device=${encodeURIComponent(device)}`); const d=r.ok?await r.json():null
+        if(d&&Array.isArray(d.following)) setFollowed(d.following.map((f:any)=>({division:String(f.division||''),team:String(f.team||'')})))
+        if(d&&d.counts) setFollowCounts(d.counts)
+      }catch{}
+    })()
+  },[device,legacyNames,liveRosters,games,id])
+
+  const toggleFollow=async(division:string,team:string)=>{
+    const key=teamRefKey(division,team)
+    const was=isFollowed(division,team)
+    const firstEver=!was&&followed.length===0
     // Optimistic: the button flips now, the server confirms, a failure flips it back.
-    setFollowedTeams(prev=>was?prev.filter(t=>t!==team):[...prev,team])
+    const without=(list:FollowRef[])=>list.filter(f=>teamRefKey(f.division,f.team)!==key)
+    setFollowed(prev=>was?without(prev):[...without(prev),{division,team}])
     if(!device){ return }   // storage blocked: works for this visit only
-    const bump=(delta:number)=>setFollowCounts(c=>({...c,[team]:Math.max(0,(c[team]||0)+delta)}))
+    const bump=(delta:number)=>setFollowCounts(c=>({...c,[key]:Math.max(0,(c[key]||0)+delta)}))
     bump(was?-1:1)
     try{
-      const r=await fetch(`/api/tournaments/${id}/follows`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:device,teamName:team,follow:!was})})
+      const r=await fetch(`/api/tournaments/${id}/follows`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:device,division,teamName:team,follow:!was})})
       const d=r.ok?await r.json():null
-      if(d&&Array.isArray(d.following)) setFollowedTeams(d.following)
-      else if(!r.ok){ setFollowedTeams(prev=>was?[...prev,team]:prev.filter(t=>t!==team)); bump(was?1:-1) }
+      if(d&&Array.isArray(d.following)) setFollowed(d.following.map((f:any)=>({division:String(f.division||''),team:String(f.team||'')})))
+      else if(!r.ok){ setFollowed(prev=>was?[...without(prev),{division,team}]:without(prev)); bump(was?1:-1) }
       // The server's count is the truth -- other phones have been tapping too.
-      if(d&&typeof d.count==='number') setFollowCounts(c=>({...c,[d.teamName||team]:d.count}))
+      if(d&&typeof d.count==='number') setFollowCounts(c=>({...c,[d.team?teamRefKey(d.team.division,d.team.team):key]:d.count}))
       // The soft ask, once per device: asked again only if they never decided.
       let asked=false; try{ asked=localStorage.getItem('wr-alerts-asked')==='1' }catch{}
       if(r.ok&&firstEver&&!asked&&alertsOn!==true) setAskAlertsFor(team)
     }catch{
-      setFollowedTeams(prev=>was?[...prev,team]:prev.filter(t=>t!==team)); bump(was?1:-1)
+      setFollowed(prev=>was?[...without(prev),{division,team}]:without(prev)); bump(was?1:-1)
     }
   }
   const closeAlertsAsk=(enabled:boolean)=>{
@@ -1034,9 +1065,9 @@ export default function PublicTournamentPage() {
                       <TeamAvatar name={t.name} size="sm" />
                       <div className="flex-1 min-w-0">
                         <button onClick={()=>{setSelectedDiv(t.division);setTeamSearch('')}} className="font-semibold text-sm text-blue-700 hover:underline text-left">{t.name}</button>
-                        <div className="text-xs text-gray-400 flex items-center gap-2">{t.division}{t.pool ? ` · ${poolLabel(t.pool)}` : ''}<FollowerCount team={t.name}/></div>
+                        <div className="text-xs text-gray-400 flex items-center gap-2">{t.division}{t.pool ? ` · ${poolLabel(t.pool)}` : ''}<FollowerCount division={t.division} team={t.name}/></div>
                       </div>
-                      <FollowButton team={t.name} following={followedTeams.includes(t.name)} onToggle={toggleFollow} />
+                      <FollowButton team={t.name} following={isFollowed(t.division,t.name)} onToggle={n=>toggleFollow(t.division,n)} />
                     </div>
                   ))
                 )}
@@ -1044,7 +1075,7 @@ export default function PublicTournamentPage() {
             )}
 
             {/* My Teams section */}
-            {followedTeams.length > 0 && !teamSearch && (
+            {followed.length > 0 && !teamSearch && (
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide inline-flex items-center gap-1.5"><Star size={14} fill="currentColor"/> My Teams</h2>
@@ -1052,27 +1083,28 @@ export default function PublicTournamentPage() {
                       phone hears, and offers to turn it on if not. */}
                   {alertsOn
                     ? <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-full inline-flex items-center gap-1"><Bell size={13}/> Alerts on</span>
-                    : device && <button onClick={()=>setAskAlertsFor(followedTeams[0])}
+                    : device && <button onClick={()=>setAskAlertsFor(followed[0].team)}
                         className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1">
                         <Bell size={13}/> Turn on alerts
                       </button>}
                 </div>
                 <div className="space-y-2">
-                  {followedTeams.map(team => {
-                    const nextGame = games.filter(g=>!g.isCanceled&&(g.team1===team||g.team2===team)).sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)[0]
-                    const teamMeta = allTeamsWithMeta.find(t=>t.name===team)
+                  {followed.map(({division,team}) => {
+                    const sameDiv=(d:string)=>teamRefKey(d,'x')===teamRefKey(division,'x')
+                    const nextGame = games.filter(g=>!g.isCanceled&&sameDiv(g.division)&&(g.team1===team||g.team2===team)).sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)[0]
+                    const teamMeta = allTeamsWithMeta.find(t=>t.name===team&&sameDiv(t.division))
                     return (
-                      <div key={team} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                      <div key={teamRefKey(division,team)} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3">
                         <TeamAvatar name={team} size="sm" />
                         <div className="flex-1 min-w-0">
-                          <button onClick={()=>teamMeta&&setSelectedDiv(teamMeta.division)} className="font-bold text-sm text-gray-800 hover:text-blue-700 hover:underline text-left truncate block">{team}</button>
+                          <button onClick={()=>setSelectedDiv(teamMeta?.division||division)} className="font-bold text-sm text-gray-800 hover:text-blue-700 hover:underline text-left truncate block">{team} <span className="font-normal text-xs text-gray-400">· {division}</span></button>
                           {nextGame ? (
                             <div className="text-xs text-gray-500 mt-0.5">
                               Next: <span className="font-medium">{fmtDate(nextGame.date)} {nextGame.startTime}</span> vs <span className="font-medium">{nextGame.team1===team?nextGame.team2:nextGame.team1}</span> · {nextGame.location}
                             </div>
                           ) : <div className="text-xs text-gray-400">{pubVis.schedule==='live'?'No upcoming games':'Schedule coming soon'}</div>}
                         </div>
-                        <FollowButton team={team} following onToggle={toggleFollow} />
+                        <FollowButton team={team} following onToggle={t=>toggleFollow(division,t)} />
                       </div>
                     )
                   })}
@@ -1138,7 +1170,8 @@ export default function PublicTournamentPage() {
             <DivisionView
               division={selectedDiv}
               games={games}
-              followedTeams={followedTeams}
+              isFollowed={isFollowed}
+              anyFollowed={followed.length>0}
               toggleFollow={toggleFollow}
               tournamentId={id as string}
               tiebreakers={tiebreakers}

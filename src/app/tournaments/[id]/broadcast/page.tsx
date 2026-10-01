@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
 import { Megaphone, Send, TriangleAlert, Trash2, ChevronLeft, Globe, Layers, Star, Users, Shield, Bell } from 'lucide-react'
-import { nameKey } from '@/lib/names'
+import { teamRefKey } from '@/lib/names'
 
 const AUD_TYPES: [string, string, any][] = [
   ['everyone', 'Everyone', Globe],
@@ -24,7 +24,9 @@ const TEMPLATES = [
 ]
 
 // Who a broadcast would reach, from /follows/reach: distinct people following
-// any team in the audience, and how many of them have alerts on.
+// any team in the audience, and how many of them have alerts on. Teams are
+// keyed by teamRefKey(division, team) -- the same club name plays in several
+// divisions at one event, and those are different teams with different fans.
 type Reach = { follows: number; phones: number }
 type ReachMap = { event: Reach; divisions: Record<string, Reach & { teams: string[] }>; teams: Record<string, Reach> }
 const NONE: Reach = { follows: 0, phones: 0 }
@@ -40,7 +42,10 @@ export default function BroadcastPage({ embedded = false }: { embedded?: boolean
   const [announcements, setAnnouncements] = useState<any[]>([])
   const [type, setType] = useState<string>('everyone')
   const [div, setDiv] = useState('')
-  const [team, setTeam] = useState('')
+  // A team audience is one team in one division; the picker's value carries both.
+  const [teamSel, setTeamSel] = useState<{ division: string; team: string } | null>(null)
+  const team = teamSel?.team ?? ''
+  const teamDiv = teamSel?.division ?? ''
   const [urgent, setUrgent] = useState(false)
   const [notify, setNotify] = useState(true)
   const [msg, setMsg] = useState('')
@@ -66,37 +71,30 @@ export default function BroadcastPage({ embedded = false }: { embedded?: boolean
   const teamGroups = Object.entries(reach?.divisions ?? {}).filter(([, d]) => d.teams.length > 0).sort(([a], [b]) => a.localeCompare(b))
   const hasTeamList = teamGroups.length > 0
 
-  // Follower counts are keyed by the team's stored spelling; match loosely so the
-  // roster's spelling of the same name finds them.
-  const teamReach = (name: string): Reach => {
-    if (!reach) return NONE
-    const k = nameKey(name)
-    const hit = Object.entries(reach.teams).find(([n]) => nameKey(n) === k)
-    return hit ? hit[1] : NONE
-  }
+  const teamReach = (division: string, name: string): Reach => reach?.teams[teamRefKey(division, name)] ?? NONE
   const canAlert = type === 'everyone' || type === 'division' || type === 'team'
   const audienceReach: Reach | null = !reach || !canAlert ? null
     : type === 'everyone' ? reach.event
     : type === 'division' ? (div ? (reach.divisions[div] ?? NONE) : reach.event)
-    : team ? teamReach(team) : NONE
+    : teamSel ? teamReach(teamSel.division, teamSel.team) : NONE
   const phones = audienceReach?.phones ?? 0
   const willAlert = canAlert && notify && phones > 0
 
   function scopeLabel(): string {
     if (type === 'division') return div || 'All divisions'
-    if (type === 'team') return team ? `Team · ${team}` : 'Team'
+    if (type === 'team') return team ? `Team · ${team}${teamDiv ? ` (${teamDiv})` : ''}` : 'Team'
     if (type === 'coaches') return 'Coaches'
     if (type === 'staff') return 'Staff'
     return 'Everyone'
   }
-  const canSend = msg.trim() && !(type === 'team' && !team) && canBroadcast
+  const canSend = msg.trim() && !(type === 'team' && !(team && teamDiv)) && canBroadcast
 
   async function send() {
     setSending(true)
     try {
       const res = await fetch(`/api/tournaments/${id}/announcements`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: msg.trim(), scope: scopeLabel(), urgent, audience: { type, division: div, team }, notify: willAlert }),
+        body: JSON.stringify({ text: msg.trim(), scope: scopeLabel(), urgent, audience: { type, division: type === 'team' ? teamDiv : div, team }, notify: willAlert }),
       })
       if (res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -161,19 +159,27 @@ export default function BroadcastPage({ embedded = false }: { embedded?: boolean
             <div>
               <label className="block text-[11px] text-slate-500 mb-1">Team</label>
               {hasTeamList ? (
-                <select value={team} onChange={e => setTeam(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                <select value={teamSel ? JSON.stringify([teamSel.division, teamSel.team]) : ''}
+                  onChange={e => { try { const [d, t] = JSON.parse(e.target.value); setTeamSel({ division: d, team: t }) } catch { setTeamSel(null) } }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
                   <option value="">Pick a team…</option>
                   {teamGroups.map(([d, g]) => (
                     <optgroup key={d} label={d}>
                       {g.teams.map(t => {
-                        const r = teamReach(t)
-                        return <option key={t} value={t}>{t}{r.follows > 0 ? ` (${r.follows} follower${r.follows === 1 ? '' : 's'})` : ''}</option>
+                        const r = teamReach(d, t)
+                        return <option key={t} value={JSON.stringify([d, t])}>{t}{r.follows > 0 ? ` (${r.follows} follower${r.follows === 1 ? '' : 's'})` : ''}</option>
                       })}
                     </optgroup>
                   ))}
                 </select>
               ) : (
-                <input value={team} onChange={e => setTeam(e.target.value)} placeholder="e.g. CocoTropics" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={teamDiv} onChange={e => setTeamSel({ division: e.target.value, team })} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">Division…</option>
+                    {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <input value={team} onChange={e => setTeamSel({ division: teamDiv, team: e.target.value })} placeholder="Team name" className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
               )}
             </div>
           )}

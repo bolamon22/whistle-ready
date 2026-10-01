@@ -8,7 +8,7 @@ import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import { TimelineView, TeamLanesView, useDragAutoScroll } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
-import { divisionAbbr } from '@/lib/names'
+import { divisionAbbr, teamRefKey } from '@/lib/names'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell } from 'lucide-react'
 
 interface Game {
@@ -171,6 +171,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [showDiff,       setShowDiff]       = useState(false)
   // Who a Publish reaches, per team, from GET /publish: follows and phones with
   // alerts on. And Bo's toggle -- on by default, off for a quiet publish.
+  // Keyed by teamRefKey(division, team): the same club name plays in several divisions.
   const [followers,      setFollowers]      = useState<Record<string, { follows: number; phones: number }>>({})
   const [notifyFollowers, setNotifyFollowers] = useState(true)
   const [visKey,         setVisKey]         = useState(0)
@@ -677,8 +678,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   // button (ask only when somebody would actually hear about it) and the dialog toggle.
   const notifyPlan = (() => {
     const teams = digestAffectedTeams(publishedAt ? snapshot : null, games)
-    const follows = teams.reduce((a, t) => a + (followers[t]?.follows || 0), 0)
-    const phones  = teams.reduce((a, t) => a + (followers[t]?.phones  || 0), 0)
+    const follows = teams.reduce((a, t) => a + (followers[teamRefKey(t.division, t.team)]?.follows || 0), 0)
+    const phones  = teams.reduce((a, t) => a + (followers[teamRefKey(t.division, t.team)]?.phones  || 0), 0)
     return { teams, follows, phones }
   })()
   const unscheduled = games.filter(g => (!g.date || !g.startTime || !g.location) && !scratchPad.includes(g.id))
