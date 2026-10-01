@@ -298,7 +298,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     // Build round-based schedule for each pool using circle rotation
     const poolSchedules: { poolName: string; rounds: [string, string][][]; rc: number }[] = []
     for (const pool of pools) {
-      const teamNames: string[] = JSON.parse(pool.teamNames || '[]')
+      // Deduped here as well as on save: a pool saved before that guard existed is
+      // still on disk, and a regenerate has to be able to fix it without the
+      // organizer first dragging a team around. A duplicate reads as a second team
+      // to the round robin, which is how a 7-team pool produced 8 games.
+      const teamNames: string[] = [...new Set(
+        (JSON.parse(pool.teamNames || '[]') as unknown[]).map(n => String(n ?? '').trim()).filter(Boolean)
+      )]
       if (teamNames.length < 2) continue
 
       const teamsCount = teamNames.length

@@ -34,7 +34,10 @@ export async function renameTeamRefs(tournamentId: string, oldName: string, newN
       let names: string[] = []
       try { names = JSON.parse(p.teamNames || '[]') } catch { continue }
       if (!Array.isArray(names) || !names.includes(oldName)) continue
-      await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(names.map(x => (x === oldName ? newName : x))) } })
+      // Deduped: renaming a team to a name the pool already carries would otherwise
+      // leave two identical entries, and the generator counts those as two teams.
+      const renamed = [...new Set(names.map(x => (x === oldName ? newName : x)))]
+      await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(renamed) } })
       n.pools = (n.pools || 0) + 1
     }
   } catch {}

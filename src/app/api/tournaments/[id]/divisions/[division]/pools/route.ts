@@ -66,9 +66,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ ...updated, teamNames: JSON.parse(updated.teamNames || '[]'), games: moved.games })
     }
 
+    // A pool roster is a SET. Both client writers remove a team by exact string
+    // and then push it back, so anything that lands a second byte-identical copy
+    // slips past them -- a rename onto a name already in the pool is the likely
+    // one. The generator then treats the duplicate as a second team: Boys U14 B
+    // had 8 roster entries for 7 teams, so it built 8 games and gave Creators:
+    // White four of them. Deduping on the way in heals every pool on its next save.
+    const cleanNames = Array.isArray(teamNames)
+      ? [...new Set(teamNames.map((n: unknown) => String(n ?? '').trim()).filter(Boolean))]
+      : []
     const pool = await prisma.pool.update({
       where: { id: poolId },
-      data: { teamNames: JSON.stringify(teamNames) },
+      data: { teamNames: JSON.stringify(cleanNames) },
     })
     return NextResponse.json({ ...pool, teamNames: JSON.parse(pool.teamNames) })
   } catch {
