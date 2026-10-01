@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, GripVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
@@ -215,32 +215,58 @@ function DivisionChips({ p, counts, open, setOpen }: { p: ViewsProps; counts: Re
       </div>
     )
   }
+  // The open row is capped at two lines so the board keeps its height. A hidden copy
+  // with full names is measured at the row's width; when it would need a third line
+  // the chips switch to the division abbreviations (full name on hover).
+  return <OpenChips p={p} counts={counts} setOpen={setOpen} />
+}
+
+function OpenChips({ p, counts, setOpen }: { p: ViewsProps; counts: Record<string, DivCount>; setOpen: (o: boolean) => void }) {
+  const probeRef = useRef<HTMLDivElement>(null)
+  const [short, setShort] = useState(false)
+  useLayoutEffect(() => {
+    const el = probeRef.current
+    if (!el) return
+    const check = () => {
+      const tops = new Set(Array.from(el.children).map(c => (c as HTMLElement).offsetTop))
+      setShort(tops.size > 2)
+    }
+    check()
+    const ro = new ResizeObserver(check); ro.observe(el)
+    return () => ro.disconnect()
+  }, [p.divisions, counts])
+  const anyStage = p.divisions.some(d => divStage(counts[d]))
+  const row = (abbr: boolean, live: boolean) => (<>
+    <button tabIndex={live ? 0 : -1} onClick={() => setOpen(false)} aria-label="Collapse the division row" title="Collapse" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronUp size={14} /></button>
+    <button tabIndex={live ? 0 : -1} onClick={() => p.setFilterDiv('__all__')}
+      className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors ${p.filterDiv === '__all__' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>All</button>
+    {p.divisions.map(d => {
+      const on = p.filterDiv === d, c = p.divColor(d)
+      const stage = divStage(counts[d]), st = stage ? STAGE[stage] : null
+      return (
+        <button key={d} tabIndex={live ? 0 : -1} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }} title={abbr ? (st ? `${d} · ${st.title}` : d) : st?.title}
+          className={`inline-flex items-center gap-1.5 text-xs font-bold pl-2 ${abbr ? 'pr-2.5' : 'pr-3'} py-1 rounded-full border transition-colors whitespace-nowrap`}
+          style={on ? { background: c, borderColor: c, color: '#fff' } : st ? { background: st.bg, borderColor: st.border, color: st.text } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? 'rgba(255,255,255,.85)' : c }} />
+          {abbr ? p.divAbbr(d) : d}
+          {stage === 'complete'
+            ? <span className="inline-flex items-center gap-0.5 font-semibold opacity-80"><Check size={12} strokeWidth={3} />{counts[d]?.total}</span>
+            : <span className="font-medium opacity-70">{counts[d]?.done ?? 0}/{counts[d]?.total ?? 0}</span>}
+        </button>
+      )
+    })}
+    {anyStage && !abbr && (
+      <span className="inline-flex items-center gap-2.5 ml-1 text-[10px] text-slate-400 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border" style={{ background: STAGE.pools.bg, borderColor: STAGE.pools.border }} />pools placed</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border" style={{ background: STAGE.complete.bg, borderColor: STAGE.complete.border }} />all placed</span>
+      </span>
+    )}
+  </>)
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <button onClick={() => setOpen(false)} aria-label="Collapse the division row" title="Collapse" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronUp size={14} /></button>
-      <button onClick={() => p.setFilterDiv('__all__')}
-        className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors ${p.filterDiv === '__all__' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>All</button>
-      {p.divisions.map(d => {
-        const on = p.filterDiv === d, c = p.divColor(d)
-        const stage = divStage(counts[d]), st = stage ? STAGE[stage] : null
-        return (
-          <button key={d} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }} title={st?.title}
-            className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-3 py-1 rounded-full border transition-colors"
-            style={on ? { background: c, borderColor: c, color: '#fff' } : st ? { background: st.bg, borderColor: st.border, color: st.text } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? 'rgba(255,255,255,.85)' : c }} />
-            {d}
-            {stage === 'complete'
-              ? <span className="inline-flex items-center gap-0.5 font-semibold opacity-80"><Check size={12} strokeWidth={3} />{counts[d]?.total}</span>
-              : <span className="font-medium opacity-70">{counts[d]?.done ?? 0}/{counts[d]?.total ?? 0}</span>}
-          </button>
-        )
-      })}
-      {p.divisions.some(d => divStage(counts[d])) && (
-        <span className="inline-flex items-center gap-2.5 ml-1 text-[10px] text-slate-400">
-          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border" style={{ background: STAGE.pools.bg, borderColor: STAGE.pools.border }} />pools placed</span>
-          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border" style={{ background: STAGE.complete.bg, borderColor: STAGE.complete.border }} />all placed</span>
-        </span>
-      )}
+    <div className="relative">
+      <div ref={probeRef} aria-hidden className="absolute inset-x-0 top-0 flex items-center gap-1.5 flex-wrap invisible pointer-events-none">{row(false, false)}</div>
+      {/* even abbreviated, a narrow screen can need a third line: it scrolls instead */}
+      <div className="flex items-center gap-1.5 flex-wrap overflow-y-auto" style={{ maxHeight: 60 }}>{row(short, true)}</div>
     </div>
   )
 }
@@ -535,15 +561,6 @@ export function TimelineView(p: ViewsProps) {
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         <div className="px-3 py-1.5 flex items-start gap-2 bg-white border-b border-slate-200 flex-shrink-0">
           <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} /></div>
-          {!sel && <span className="text-xs text-slate-400 hidden 2xl:inline pt-1.5 flex-shrink-0">Click an unscheduled game, then a slot.</span>}
-          {minCount > 0 && (
-            <button onClick={() => saveMin(new Set(), new Set())} className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border flex-shrink-0 mt-0.5 bg-white text-teal-700 border-teal-300 hover:bg-teal-50" title="Show every minimized field and time at full size">
-              <Maximize2 size={13} /> Expand {minCount} minimized
-            </button>
-          )}
-          <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border flex-shrink-0 mt-0.5 ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`} title={fit ? 'Reopen both side panels' : (across ? 'Collapse both side panels so every field fits' : 'Collapse both side panels so the whole day fits')}>
-            {fit ? <Minimize2 size={13} /> : <Maximize2 size={13} />} {across ? 'Fit fields' : 'Fit day'}
-          </button>
         </div>
         <div className="flex-1 min-h-0 relative">
         {/* While a game is picked up, its bar floats over the bottom of the board so the
@@ -554,7 +571,7 @@ export function TimelineView(p: ViewsProps) {
           {across ? (
             <div className="grid" style={{ gridTemplateColumns: `100px ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
               {/* header: fields (drag to reorder, minimize to a strip) */}
-              <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200" />
+              {renderCorner()}
               {p.fields.map(f => {
                 const n = p.dayGames.filter(g => g.location === f.fullName).length
                 const mf = minFields.has(f.fullName)
@@ -583,7 +600,7 @@ export function TimelineView(p: ViewsProps) {
           ) : (
           <div className="grid" style={{ gridTemplateColumns: `116px ${p.slots.map(x => minSlots.has(x) ? MIN_W : slotCol).join(' ')}`, gridTemplateRows: `36px ${p.fields.map(f => minFields.has(f.fullName) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
             {/* header: times (minimize to a strip) */}
-            <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200" />
+            {renderCorner()}
             {p.slots.map((s, i) => minSlots.has(s) ? (
               <button key={s} onClick={() => toggleMinSlot(s)} title={`Show ${p.fmtTime(s)}`} aria-label={`Show ${p.fmtTime(s)}`} className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 border-r border-slate-100 text-[9px] font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-900 truncate px-0.5">{timeShort(p.fmtTime(s))}</button>
             ) : (
@@ -692,6 +709,26 @@ export function TimelineView(p: ViewsProps) {
       )}
     </div>
   )
+
+  // The board's top-left corner (otherwise empty) holds Fit and Expand, so the
+  // division row above can use the full width.
+  function renderCorner() {
+    return (
+      <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 flex items-center justify-center gap-1 px-1">
+        <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} aria-label={across ? 'Fit fields' : 'Fit day'}
+          title={fit ? 'Reopen both side panels' : (across ? 'Fit fields: collapse both side panels so every field fits' : 'Fit day: collapse both side panels so the whole day fits')}
+          className={`h-7 inline-flex items-center gap-1 px-2 rounded-full border text-[11px] font-bold ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+          {fit ? <Minimize2 size={12} /> : <Maximize2 size={12} />}{minCount > 0 ? null : 'Fit'}
+        </button>
+        {minCount > 0 && (
+          <button onClick={() => saveMin(new Set(), new Set())} aria-label={`Expand ${minCount} minimized`} title={`Expand ${minCount} minimized field${minCount === 1 ? '' : 's'} / time${minCount === 1 ? '' : 's'}`}
+            className="h-7 inline-flex items-center gap-1 px-2 rounded-full border text-[11px] font-bold bg-white text-teal-700 border-teal-300 hover:bg-teal-50">
+            +{minCount}
+          </button>
+        )}
+      </div>
+    )
+  }
 
   // Plain render functions, not nested components: a nested component is a new type
   // every render, which remounts its DOM and cancels an in-progress drag.
