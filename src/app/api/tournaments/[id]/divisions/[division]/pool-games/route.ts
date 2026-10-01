@@ -285,8 +285,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     } catch { /* no club data: rule 1 simply finds nothing to avoid */ }
 
     if (clearExisting) {
-      // Delete ALL games for the division (pool and non-pool) so old legacy games don't persist
-      await prisma.game.deleteMany({ where: { tournamentId: params.id, division } })
+      // Clear the division's pool games (and legacy un-pooled ones) so stale games
+      // don't persist -- but NOT the bracket's B-games.
+      //
+      // This used to delete every game in the division. Bulk Generate calls this for
+      // every division with clearExisting, so one run wiped every B-game while the
+      // Bracket and BracketGame rows survived in their own tables: the Bracket tab
+      // still drew a bracket, the rail's bracket count read 0, and the bracket games
+      // disappeared from the Scheduler's parking lot with nothing said. Then bracket
+      // generation saw the surviving Bracket row, called it "already exists", and
+      // never rebuilt the games it had just destroyed.
+      await prisma.game.deleteMany({
+        where: { tournamentId: params.id, division, NOT: { gameNumber: { startsWith: 'B' } } },
+      })
     }
 
     // Count existing pool games for this division to continue numbering from there
