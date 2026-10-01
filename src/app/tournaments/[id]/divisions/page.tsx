@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import ShortTeamsBanner from '@/components/ShortTeamsBanner'
+import type { BalanceGame } from '@/lib/gameBalance'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
@@ -52,6 +53,23 @@ export default function DivisionsPage() {
   const [loadingDiv, setLoadingDiv] = useState(false)
   const [divColors, setDivColors] = useState<Record<string, string>>({})
   const [poolGames, setPoolGames] = useState<PoolGame[]>([])
+
+  // Every division's games, for the page-level uneven-pool warning.
+  //
+  // The rest of this page works one division at a time -- selectDiv fetches that
+  // division's pool games -- so a tournament-wide view needs a read of its own.
+  //
+  // Re-read whenever poolGames changes. That is the signal that a schedule was
+  // generated, cleared, or a different division was opened, and it catches every
+  // one of those paths without six separate call sites having to remember. The
+  // cost is one small request per division click.
+  const [allGames, setAllGames] = useState<BalanceGame[]>([])
+  useEffect(() => {
+    fetch(`/api/tournaments/${id}/games`)
+      .then(r => r.json())
+      .then(g => setAllGames(Array.isArray(g) ? g : []))
+      .catch(() => { /* the warning just stays hidden rather than breaking the page */ })
+  }, [id, poolGames])
   const [bracketGames, setBracketGames] = useState<PoolGame[]>([])
 
   // Pool games state
@@ -706,6 +724,19 @@ if (loading) return (
       <TournamentNav id={id} name={tournament?.name ?? ''} logoUrl={tournament?.logoUrl} />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
+
+        {/* Above the rail and the tabs, so it is on screen whichever division is
+            open. Bo, Oct 1: he wants to know a pool is short from this page, which
+            is where pools are actually built -- the Scheduler now carries the same
+            warning as one line. Each finding gets a button into that division's
+            Pool Games tab, where the regenerate control is. */}
+        <ShortTeamsBanner
+          games={allGames}
+          onFix={div => { selectDiv(div); setActiveTab('pool-games') }}
+          fixLabel="Open this division"
+          className="mb-4"
+        />
+
         <div className="flex gap-6">
 
           {/* -- Sidebar -------------------------------------------- */}
