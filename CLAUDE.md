@@ -137,8 +137,15 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - **Follow your team + schedule alerts (Sep 30) — all 5 steps built.** Instagram-style Follow on
   every team on `/public` (grid, names, standings, game rows, search, My Teams) with follower counts;
   a device can follow up to 40 teams per event. Follows are **anonymous and device-keyed**
-  (localStorage `wr-device` UUID) in raw-SQL tables `TeamFollow` + `FollowerDevice` (created lazily,
+  (localStorage `wr-device` UUID) in raw-SQL tables `TeamFollow2` + `FollowerDevice` (created lazily,
   deliberately NOT in schema.prisma — same precedent as ClubDirectorLink): `src/lib/follows.ts`.
+  **A team is a (division, name) pair everywhere in this feature** — `teamRefKey(division, team)` in
+  `lib/names.ts` is the key for follows, counts, reach, digests and final tags, because the same club
+  fields "Miami Reign" in HS A, HS B and U14 B (Bo, Oct 1: one tap was following all three). The
+  day-one name-only table `TeamFollow` is left in place as a backup; its rows were carried into
+  `TeamFollow2` once (a name in several divisions → one follow per division). `renameTeamRefs` /
+  `removeTeamRefs` in `lib/teamRename.ts` take the division too — deleting one club's HS B team must
+  not delete its HS A games.
   Alerts = web push (shared VAPID in `lib/push.ts`, browser side `lib/pushClient.ts`, `public/sw.js`);
   the first Follow offers the alerts opt-in (`FollowAlertsSheet`; iOS must Add to Home Screen first).
   - **Publish is the only gate for schedule alerts** (Bo: slots get shuffled all week, most moves must
@@ -146,7 +153,7 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
     team has alerts on*, with a "Tell followers" toggle (on by default); otherwise it publishes at once.
     The route (`publish/route.ts`) diffs the OLD snapshot → `affectedTeams()` (first publish = every
     scheduled team) → **one push per team** with that team's current schedule (`lib/scheduleDigest.ts`,
-    tag `sched:{tournamentId}:{team}` so a republish replaces the earlier alert). Never one per game.
+    tag `sched:{tournamentId}:{teamRefKey}` so a republish replaces the earlier alert). Never one per game.
   - **Broadcast reaches followers too** (`announcements/route.ts` + `GET follows/reach`): a broadcast for
     Everyone / a division / a team can alert the phones following those teams, same on-by-default toggle,
     reach shown as distinct people and phones (`lib/follows.followerReach`, `teamDivisions`). Coaches and
