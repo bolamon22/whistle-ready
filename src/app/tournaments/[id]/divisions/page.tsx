@@ -53,6 +53,7 @@ export default function DivisionsPage() {
   const [loadingDiv, setLoadingDiv] = useState(false)
   const [divColors, setDivColors] = useState<Record<string, string>>({})
   const [poolGames, setPoolGames] = useState<PoolGame[]>([])
+  const [teamFilter, setTeamFilter] = useState('')
 
   // Every division's games, for the page-level uneven-pool warning.
   //
@@ -67,6 +68,26 @@ export default function DivisionsPage() {
   // Which divisions have a short pool, and what to say about each. Keyed by
   // division so the rail can answer per row without walking the findings again,
   // and a division with two uneven pools collects both lines in one tooltip.
+  // Every team in this division's pool games, with how many it plays. Counted from
+  // the games rather than from the pool roster, so the number is what is actually
+  // scheduled -- which is the thing being verified.
+  const teamGameCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const g of poolGames) {
+      for (const name of [g.team1, g.team2]) {
+        const t = String(name || '').trim()
+        if (t) m.set(t, (m.get(t) || 0) + 1)
+      }
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [poolGames])
+
+  // Regenerating games can redraw the pairings, and a team picked before that is
+  // not guaranteed to still appear. Reading the filter through the live list means
+  // a stale name falls back to "all teams" instead of dimming every row with no
+  // way to tell why.
+  const activeTeam = teamFilter && teamGameCounts.some(([n]) => n === teamFilter) ? teamFilter : ''
+
   const unevenByDivision = useMemo(() => {
     const m = new Map<string, string[]>()
     for (const f of findShortTeams(allGames)) {
@@ -360,6 +381,7 @@ export default function DivisionsPage() {
   const selectDiv = useCallback((div: string) => {
     setActiveDiv(div)
     setLoadingDiv(true)
+    setTeamFilter('')   // a name from the previous division would filter this one to nothing
     setSwapA(null); setSwapB(null)
     Promise.all([
       fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/teams`).then(r => r.json()),
@@ -1531,6 +1553,17 @@ if (loading) return (
                             ) : (
                               <button onClick={() => setShowClearConfirm(true)} className="text-xs text-red-400 hover:text-red-600">Clear all</button>
                             )}
+                            {/* Counts live in the option labels, so the list answers
+                                "how many does everyone play" before you pick anything. */}
+                            <div className="ml-auto">
+                              <label className="block text-xs text-slate-500 mb-1">Filter by team</label>
+                              <select className="input text-sm" value={activeTeam} onChange={e => setTeamFilter(e.target.value)}>
+                                <option value="">All teams ({teamGameCounts.length})</option>
+                                {teamGameCounts.map(([name, n]) => (
+                                  <option key={name} value={name}>{name} — {n} game{n !== 1 ? 's' : ''}</option>
+                                ))}
+                              </select>
+                            </div>
                           </>
                         )}
                       </div>
@@ -1555,7 +1588,13 @@ if (loading) return (
                           <div key={poolName} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                             <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                               <h3 className="font-semibold text-slate-700">{poolName}</h3>
-                              <span className="text-xs text-slate-400">{games.length} game{games.length !== 1 ? 's' : ''}</span>
+                              {/* "2 of 8" rather than "2", so a filtered pool never reads
+                                  as a pool that lost six games. */}
+                              <span className="text-xs text-slate-400">
+                                {activeTeam
+                                  ? `${games.filter(g => g.team1?.trim() === activeTeam || g.team2?.trim() === activeTeam).length} of ${games.length} games`
+                                  : `${games.length} game${games.length !== 1 ? 's' : ''}`}
+                              </span>
                             </div>
                             <table className="w-full text-sm">
                               <thead>
@@ -1570,7 +1609,7 @@ if (loading) return (
                               </thead>
                               <tbody>
                                 {games.map((g, i) => (
-                                  <tr key={g.id} className={`border-b border-slate-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                                  <tr key={g.id} className={`border-b border-slate-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}${activeTeam && g.team1?.trim() !== activeTeam && g.team2?.trim() !== activeTeam ? ' opacity-30' : ''}`}>
                                     <td className="px-5 py-2.5 font-mono text-xs text-slate-500">{g.gameNumber}</td>
                                     <td className="px-3 py-2.5 font-medium text-slate-800">{g.team1}</td>
                                     <td className="px-3 py-2.5 text-slate-600">{g.team2}</td>
