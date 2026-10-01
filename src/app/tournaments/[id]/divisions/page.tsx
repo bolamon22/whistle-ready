@@ -61,6 +61,9 @@ export default function DivisionsPage() {
   const [addHome, setAddHome] = useState('')
   const [addAway, setAddAway] = useState('')
   const [addingGame, setAddingGame] = useState(false)
+  const [editGame, setEditGame] = useState<{ id: string; home: string; away: string } | null>(null)
+  const [deleteGameId, setDeleteGameId] = useState('')
+  const [savingRow, setSavingRow] = useState(false)
 
   // Every division's games, for the page-level uneven-pool warning.
   //
@@ -106,6 +109,34 @@ export default function DivisionsPage() {
     const names = p?.teamNames?.length ? p.teamNames : teams.map(t => t.teamName)
     return [...new Set(names.map(n => String(n || '').trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b))
+  }
+
+  async function saveGameEdit() {
+    const e = editGame
+    if (!e || !e.home || !e.away || e.home === e.away || savingRow) return
+    setSavingRow(true)
+    const res = await fetch(`/api/games/${e.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team1: e.home, team2: e.away }),
+    })
+    setSavingRow(false)
+    if (!res.ok) { toast.error('Could not change the matchup'); return }
+    // Patched in place rather than refetched: the row is already on screen and a
+    // reload would lose the scroll position in a long pool.
+    setPoolGames(gs => gs.map(g => (g.id === e.id ? { ...g, team1: e.home, team2: e.away } : g)))
+    setEditGame(null)
+    toast.success('Matchup changed')
+  }
+
+  async function removeGame(gameId: string) {
+    if (savingRow) return
+    setSavingRow(true)
+    const res = await fetch(`/api/games/${gameId}`, { method: 'DELETE' })
+    setSavingRow(false)
+    if (!res.ok) { toast.error('Could not delete the game'); return }
+    setPoolGames(gs => gs.filter(g => g.id !== gameId))
+    setDeleteGameId('')
+    toast.success('Game deleted')
   }
 
   async function addGame(poolName: string) {
@@ -1658,35 +1689,85 @@ if (loading) return (
                                   <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
                                   <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Time</th>
                                   <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Location</th>
+                                  <th className="px-3 py-2 w-px"></th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {games.map((g, i) => (
+                                {games.map((g, i) => {
+                                  const editing = editGame?.id === g.id
+                                  const opts = poolTeamsFor(poolName)
+                                  return (
                                   <tr key={g.id} className={`border-b border-slate-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}${activeTeam && g.team1?.trim() !== activeTeam && g.team2?.trim() !== activeTeam ? ' opacity-50' : ''}`}>
                                     <td className="px-5 py-2.5 font-mono text-xs text-slate-500">{g.gameNumber}</td>
-                                    {/* Both names are buttons: filtering from the row you
-                                        are already reading beats going back to the
-                                        dropdown, and a dimmed row's name stays live so you
-                                        can move straight from one team to the next. */}
-                                    <td className="px-3 py-2.5 font-medium text-slate-800">
-                                      <button type="button" onClick={() => toggleTeamFilter(g.team1)}
-                                        title={activeTeam === g.team1?.trim() ? 'Show all teams again' : `Show only ${g.team1}'s games`}
-                                        className={`text-left rounded hover:underline underline-offset-2 hover:text-teal-700 transition-colors ${activeTeam === g.team1?.trim() ? 'text-teal-700 underline' : ''}`}>
-                                        {g.team1}
-                                      </button>
-                                    </td>
-                                    <td className="px-3 py-2.5 text-slate-600">
-                                      <button type="button" onClick={() => toggleTeamFilter(g.team2)}
-                                        title={activeTeam === g.team2?.trim() ? 'Show all teams again' : `Show only ${g.team2}'s games`}
-                                        className={`text-left rounded hover:underline underline-offset-2 hover:text-teal-700 transition-colors ${activeTeam === g.team2?.trim() ? 'text-teal-700 underline font-medium' : ''}`}>
-                                        {g.team2}
-                                      </button>
-                                    </td>
+                                    {editing ? (
+                                      <>
+                                        <td className="px-3 py-1.5">
+                                          <select className="input text-sm" value={editGame!.home}
+                                            onChange={e => setEditGame(v => v && ({ ...v, home: e.target.value }))}>
+                                            {[editGame!.home, ...opts.filter(t => t !== editGame!.home)].map(t => <option key={t} value={t}>{t}</option>)}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-1.5">
+                                          <select className="input text-sm" value={editGame!.away}
+                                            onChange={e => setEditGame(v => v && ({ ...v, away: e.target.value }))}>
+                                            {[editGame!.away, ...opts.filter(t => t !== editGame!.away)].map(t => <option key={t} value={t}>{t}</option>)}
+                                          </select>
+                                        </td>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <td className="px-3 py-2.5 font-medium text-slate-800">
+                                          <button type="button" onClick={() => toggleTeamFilter(g.team1)}
+                                            title={activeTeam === g.team1?.trim() ? 'Show all teams again' : `Show only ${g.team1}'s games`}
+                                            className={`text-left rounded hover:underline underline-offset-2 hover:text-teal-700 transition-colors ${activeTeam === g.team1?.trim() ? 'text-teal-700 underline' : ''}`}>
+                                            {g.team1}
+                                          </button>
+                                        </td>
+                                        <td className="px-3 py-2.5 text-slate-600">
+                                          <button type="button" onClick={() => toggleTeamFilter(g.team2)}
+                                            title={activeTeam === g.team2?.trim() ? 'Show all teams again' : `Show only ${g.team2}'s games`}
+                                            className={`text-left rounded hover:underline underline-offset-2 hover:text-teal-700 transition-colors ${activeTeam === g.team2?.trim() ? 'text-teal-700 underline font-medium' : ''}`}>
+                                            {g.team2}
+                                          </button>
+                                        </td>
+                                      </>
+                                    )}
                                     <td className="px-3 py-2.5 text-xs text-slate-400">{g.date || '--'}</td>
                                     <td className="px-3 py-2.5 text-xs text-slate-400">{g.startTime || '--'}</td>
                                     <td className="px-3 py-2.5 text-xs text-slate-400">{g.location || '--'}</td>
+                                    {/* Always visible rather than revealed on hover: this
+                                        runs on an iPad, where there is no hover to reveal
+                                        anything. Low contrast until you reach for them. */}
+                                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                      {editing ? (
+                                        <span className="inline-flex items-center gap-2">
+                                          <button onClick={saveGameEdit} disabled={savingRow || editGame!.home === editGame!.away}
+                                            className="text-xs font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-40">
+                                            {savingRow ? 'Saving…' : 'Save'}
+                                          </button>
+                                          <button onClick={() => setEditGame(null)} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+                                        </span>
+                                      ) : deleteGameId === g.id ? (
+                                        <span className="inline-flex items-center gap-2">
+                                          <span className="text-xs text-red-600">Delete?</span>
+                                          <button onClick={() => removeGame(g.id)} disabled={savingRow}
+                                            className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-40">Yes</button>
+                                          <button onClick={() => setDeleteGameId('')} className="text-xs text-slate-400 hover:text-slate-600">No</button>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5">
+                                          <button onClick={() => { setDeleteGameId(''); setEditGame({ id: g.id, home: g.team1, away: g.team2 }) }}
+                                            title="Change this matchup"
+                                            className="text-slate-300 hover:text-teal-700 transition-colors p-0.5"><Pencil size={13} /></button>
+                                          <button onClick={() => { setEditGame(null); setDeleteGameId(g.id) }}
+                                            title="Delete this game"
+                                            className="text-slate-300 hover:text-red-500 transition-colors p-0.5"><Trash2 size={13} /></button>
+                                        </span>
+                                      )}
+                                    </td>
                                   </tr>
-                                ))}
+                                  )
+                                })}
                               </tbody>
                             </table>
                             {/* Footer rather than a toolbar button: the pool is implied
