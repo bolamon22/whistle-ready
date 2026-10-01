@@ -9,6 +9,7 @@ import TournamentNav from '../TournamentNav'
 import RegPricingEditor from '@/components/RegPricingEditor'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
+import { countdownPhrase } from '@/lib/payLetterText'
 import toast, { Toaster } from 'react-hot-toast'
 import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail } from 'lucide-react'
 import { nameKey } from '@/lib/names'
@@ -697,6 +698,7 @@ export default function RegistrationsPage() {
   const [payLetter, setPayLetter] = useState<{ subject: string; body: string } | null>(null)
   const [payOrgName, setPayOrgName] = useState('')
   const [payEventName, setPayEventName] = useState('')
+  const [payStartDate, setPayStartDate] = useState('')
   const mergePayPreview = (text: string, reg: Registration) => {
     const paid = reg.payments.reduce((sum, p) => sum + p.amount, 0)
     const bal = Math.max(0, reg.invoiceAmount - reg.discountAmount - paid)
@@ -707,6 +709,11 @@ export default function RegistrationsPage() {
       .replace(/\{balance\}/g, fmt(bal))
       .replace(/\{teams\}/g, `${reg.teams.length} team${reg.teams.length !== 1 ? 's' : ''}`)
       .replace(/\{org\}/g, payOrgName || 'the tournament team')
+      // Same two helpers the send path uses, so the preview is not a near-miss:
+      // countdownPhrase is shared, and the field size is the sum of every club's
+      // teams on this page.
+      .replace(/\{countdown\}/g, countdownPhrase(payStartDate))
+      .replace(/\{eventTeams\}/g, String(registrations.reduce((n, r) => n + r.teams.length, 0) || '') || 'a full field of')
   }
 
   // Pre-tournament club emails (Bo): waiver push, schedule announcement, team
@@ -753,7 +760,7 @@ export default function RegistrationsPage() {
     }
     if (!payEventName) {
       fetch(`/api/tournaments/${tournamentId}`).then(r => r.ok ? r.json() : null)
-        .then(d => { if (d?.name) setPayEventName(d.name) }).catch(() => {})
+        .then(d => { if (d?.name) { setPayEventName(d.name); setPayStartDate(d.startDate || '') } }).catch(() => {})
     }
   }
   const mergeCommPreview = (text: string, reg: Registration) => {
@@ -1361,6 +1368,14 @@ export default function RegistrationsPage() {
                   <textarea className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[130px] resize-y focus:outline-none focus:ring-2 focus:ring-teal-400"
                     value={commCur.body}
                     onChange={e => setCommCur({ body: e.target.value })} />
+                  {/* Named here because a token nobody knows about never gets used --
+                      countdown and eventTeams exist so a saved letter stops needing a
+                      hand-typed "three weeks away" and "over 90 teams". */}
+                  {commKind === 'payment' && (
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                      Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{balance}'} {'{event}'} {'{org}'} · and per send: {'{countdown}'} (&ldquo;about three weeks away&rdquo;, from the event date) {'{eventTeams}'} (teams registered right now)
+                    </p>
+                  )}
                   {(() => {
                     const sample = registrations.find(r => commSel.has(r.id)) || registrations[0]
                     if (!sample) return null

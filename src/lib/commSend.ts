@@ -53,6 +53,9 @@ export async function runCommSend(args: {
 
   const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, startDate: true, endDate: true, logoUrl: true } })
   if (!t) return { ok: false, error: 'Tournament not found', status: 404 }
+  // Read once, not per registration: the {eventTeams} token is the whole field's
+  // team count and is identical for every letter in the batch.
+  const eventTeams = await prisma.registeredTeam.count({ where: { registration: { tournamentId, deletedAt: null } } })
   const org = await orgForTournament(tournamentId)
 
   const orgId = (org as { id?: string } | null)?.id ?? null
@@ -158,6 +161,7 @@ export async function runCommSend(args: {
         clubName: reg.clubName, clubContact: reg.clubContact, teamsCount: reg.teams.length,
         tName: t.name || 'the tournament', link: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         due, paid, balance, orgName: org?.name || 'the tournament team',
+        startDate: t.startDate, eventTeams,
         eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome, logoBox, footerLogoBox,
         subjectTpl, bodyTpl,
       })

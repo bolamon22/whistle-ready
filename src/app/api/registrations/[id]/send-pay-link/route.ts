@@ -32,8 +32,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const balance = Math.round(Math.max(0, due - paid) * 100) / 100
     if (balance <= 0) return NextResponse.json({ error: 'No balance due on this registration — set the invoice amount first (Edit) if this is wrong.' }, { status: 400 })
 
-    const tournament = await prisma.tournament.findUnique({ where: { id: reg.tournamentId }, select: { name: true } })
+    const tournament = await prisma.tournament.findUnique({ where: { id: reg.tournamentId }, select: { name: true, startDate: true } })
     const tName = tournament?.name || 'the tournament'
+    // Event-wide team count for {eventTeams} -- the field size the letter quotes
+    // ("we're at 94 teams"), not this club's own, which is {teams}.
+    const eventTeams = await prisma.registeredTeam.count({ where: { registration: { tournamentId: reg.tournamentId, deletedAt: null } } })
     const origin = req.headers.get('origin') || `https://${req.headers.get('host') || 'whistleready.app'}`
     const link = `${origin}/pay/${reg.id}`
     const totalWithFee = Math.round(balance * 1.03 * 100) / 100
@@ -49,6 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { subject, html, text } = buildPayReminderEmail({
       clubName: reg.clubName, clubContact: reg.clubContact, teamsCount: reg.teams.length,
       tName, link, due, paid, balance,
+      startDate: tournament?.startDate, eventTeams,
       orgName: org?.name || 'the tournament team',
       subjectTpl: String(overrides.subject ?? '').trim().slice(0, 200) || letter.subject,
       bodyTpl: String(overrides.body ?? '').trim().slice(0, 4000) || letter.body,

@@ -1,21 +1,11 @@
 import { prisma } from '@/lib/db'
 import { renderEmail } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
+import { PAY_LETTER_DEFAULTS, mergePayLetter, countdownPhrase } from '@/lib/payLetterText'
 
-// Org-editable payment-reminder letter (Bo, Sep 9: "the current letter isn't great
-// for reminding teams they need to pay"). Same pattern as the invite letter:
-// AppSetting payLetter:{orgId} holds {subject, body}; tokens merge at send time.
-// The invoice table, Pay button, and fee note are FIXED chrome the email always
-// carries below the letter — the editable part is the human note on top.
-
-export const PAY_LETTER_DEFAULTS: { subject: string; body: string } = {
-  subject: 'Payment reminder — {club} balance for {event}',
-  body: `Hi {contact} — a friendly reminder from {org}: {club} ({teams}) still shows a balance of {balance} for {event}.
-
-You can take care of it online in about a minute with the button below — bank transfer (ACH) has no fee; card runs 3%. If a check is already on the way or anything here looks off, just reply to this email and we'll square it up.
-
-Thanks for being part of the event — we can't wait to see your teams out there.`,
-}
+// The copy, the token merge and the countdown live in payLetterText (no prisma), so
+// the registrations page can preview exactly what the send path will produce.
+export { PAY_LETTER_DEFAULTS, mergePayLetter, countdownPhrase, PAY_LETTER_TOKENS } from '@/lib/payLetterText'
 
 export async function payLetterFor(orgId: string | null): Promise<{ subject: string; body: string; custom: boolean }> {
   if (orgId) {
@@ -32,10 +22,6 @@ export async function payLetterFor(orgId: string | null): Promise<{ subject: str
   return { ...PAY_LETTER_DEFAULTS, custom: false }
 }
 
-export function mergePayLetter(text: string, vals: Record<string, string>): string {
-  return text.replace(/\{(contact|club|event|balance|teams|org)\}/g, (_m, k: string) => vals[k] ?? '')
-}
-
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 // One builder for BOTH send paths (the per-club modal and the bulk Email clubs
@@ -45,6 +31,9 @@ export function buildPayReminderEmail(args: {
   clubName: string; clubContact: string; teamsCount: number
   tName: string; link: string; due: number; paid: number; balance: number
   orgName: string; subjectTpl: string; bodyTpl: string
+  /** Tournament.startDate (YYYY-MM-DD) and the event-wide team count, for the
+   *  {countdown} and {eventTeams} tokens. Omit and those merge to a safe phrase. */
+  startDate?: string | null; eventTeams?: number
   /** Branding. Absolute URLs; omit and the shell simply renders without them. */
   eventLogo?: string; eventHref?: string; orgLogo?: string; orgHref?: string
   logoBox?: { w: number; h: number }; footerLogoBox?: { w: number; h: number }
@@ -54,6 +43,8 @@ export function buildPayReminderEmail(args: {
   const vals = {
     contact: args.clubContact || args.clubName, club: args.clubName, event: args.tName,
     balance: fmt(args.balance), teams: teamsLabel, org: args.orgName,
+    countdown: countdownPhrase(args.startDate),
+    eventTeams: args.eventTeams && args.eventTeams > 0 ? String(args.eventTeams) : 'a full field of',
   }
   const subject = mergePayLetter(args.subjectTpl, vals)
   const letterText = mergePayLetter(args.bodyTpl, vals)
