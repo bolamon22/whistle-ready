@@ -197,7 +197,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
       await prisma.registeredTeam.update({ where: { id: teamId }, data })
       // A rename has to follow the team into its pool, games, bracket and waivers.
       if (before && data.teamName && before.teamName !== data.teamName) {
-        await renameTeamRefs(params.id, before.teamName, data.teamName, before.registration?.clubName || undefined)
+        await renameTeamRefs(params.id, before.teamName, data.teamName, before.registration?.clubName || undefined, before.division)
       }
     }
 
@@ -240,7 +240,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     // bracket slots, follows. A team name is a string key in more places than
     // anyone remembers, which is why removeTeamRefs is kept next to its rename
     // twin in lib/teamRename: one list, maintained once.
-    const removed = await removeTeamRefs(params.id, team.teamName)
+    const removed = await removeTeamRefs(params.id, team.teamName, team.division)
 
     // Deleting its games takes a game off each opponent it was drawn against,
     // so say who is now short. The organizer is usually rebuilding a schedule

@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
           const entry: Change = { tournament: t.name, kind: 'team', id: tm.id, from: JSON.stringify(pick(tm, Object.keys(teamData))), to: JSON.stringify(teamData) }
           if (apply) {
             await prisma.registeredTeam.update({ where: { id: tm.id }, data: teamData })
-            if (teamData.teamName) entry.refs = await renameTeamRefs(t.id, tm.teamName, teamName, club)
+            if (teamData.teamName) entry.refs = await renameTeamRefs(t.id, tm.teamName, teamName, club, tm.division)
           }
           changes.push(entry)
         }

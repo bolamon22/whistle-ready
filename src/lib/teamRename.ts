@@ -11,17 +11,26 @@ import { renameFollowRefs, removeFollowRefs } from '@/lib/follows'
 // tournament and do NOT touch TeamRegistration / RegisteredTeam themselves
 // (the caller already wrote those). They never throw; each returns a count of
 // what it touched, per table.
+//
+// A team is a (division, name) pair: the same club fields "Miami Reign" in
+// three divisions at Monster Mash, and renaming or deleting the HS B one must
+// leave HS A's and U14 B's pools, games and followers alone. Both helpers take
+// the division when the caller knows it (every real caller does); a blank
+// division is the old name-wide behavior, kept for the admin clean-up pass that
+// normalizes spelling across the whole event.
 
 export type RenameCounts = Record<string, number>
 
-export async function renameTeamRefs(tournamentId: string, oldName: string, newName: string, clubName?: string): Promise<RenameCounts> {
+export async function renameTeamRefs(tournamentId: string, oldName: string, newName: string, clubName?: string, division?: string): Promise<RenameCounts> {
   const n: RenameCounts = {}
   if (!tournamentId || !oldName || !newName || oldName === newName) return n
+  const inDiv = (d: string) => !division || nameKey(d) === nameKey(division)
 
   // Pools keep a JSON array of team names.
   try {
     const pools = await prisma.pool.findMany({ where: { tournamentId } })
     for (const p of pools) {
+      if (!inDiv(p.division)) continue
       let names: string[] = []
       try { names = JSON.parse(p.teamNames || '[]') } catch { continue }
       if (!Array.isArray(names) || !names.includes(oldName)) continue
@@ -32,15 +41,16 @@ export async function renameTeamRefs(tournamentId: string, oldName: string, newN
 
   // Scheduled games (pool play and anything else the scheduler wrote).
   try {
-    const a = await prisma.game.updateMany({ where: { tournamentId, team1: oldName }, data: { team1: newName } })
-    const b = await prisma.game.updateMany({ where: { tournamentId, team2: oldName }, data: { team2: newName } })
+    const divWhere = division ? { division } : {}
+    const a = await prisma.game.updateMany({ where: { tournamentId, team1: oldName, ...divWhere }, data: { team1: newName } })
+    const b = await prisma.game.updateMany({ where: { tournamentId, team2: oldName, ...divWhere }, data: { team2: newName } })
     if (a.count + b.count) n.games = a.count + b.count
   } catch {}
 
   // Bracket games: the two slots plus the resolved winner / loser labels.
   try {
-    const brackets = await prisma.bracket.findMany({ where: { tournamentId }, select: { id: true } })
-    const ids = brackets.map(b => b.id)
+    const brackets = await prisma.bracket.findMany({ where: { tournamentId }, select: { id: true, division: true } })
+    const ids = brackets.filter((b: { id: string; division: string }) => inDiv(b.division)).map((b: { id: string }) => b.id)
     if (ids.length) {
       let c = 0
       c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, team1: oldName }, data: { team1: newName } })).count
@@ -64,7 +74,7 @@ export async function renameTeamRefs(tournamentId: string, oldName: string, newN
   } catch {}
   // Public followers (device-keyed, lib/follows) -- a rename must not strand
   // the phones that follow the old spelling.
-  try { const c = await renameFollowRefs(tournamentId, oldName, newName); if (c) n.follows = (n.follows || 0) + c } catch {}
+  try { const c = await renameFollowRefs(tournamentId, oldName, newName, division); if (c) n.follows = (n.follows || 0) + c } catch {}
 
   // Player waivers are tagged "Club — Team" (bare team name for legacy entries).
   try {
@@ -104,14 +114,16 @@ export async function renameTeamRefs(tournamentId: string, oldName: string, newN
  * records of something that happened, not schedule, and a team leaving is no
  * reason to destroy them.
  */
-export async function removeTeamRefs(tournamentId: string, teamName: string): Promise<RenameCounts> {
+export async function removeTeamRefs(tournamentId: string, teamName: string, division?: string): Promise<RenameCounts> {
   const n: RenameCounts = {}
   if (!tournamentId || !teamName) return n
+  const inDiv = (d: string) => !division || nameKey(d) === nameKey(division)
 
   // Pools keep a JSON array of team names.
   try {
     const pools = await prisma.pool.findMany({ where: { tournamentId } })
     for (const p of pools) {
+      if (!inDiv(p.division)) continue
       let names: string[] = []
       try { names = JSON.parse(p.teamNames || '[]') } catch { continue }
       if (!Array.isArray(names)) continue
@@ -125,7 +137,7 @@ export async function removeTeamRefs(tournamentId: string, teamName: string): Pr
   // Its games go. Count the scored ones separately so the caller can say so.
   try {
     const mine = await prisma.game.findMany({
-      where: { tournamentId, OR: [{ team1: teamName }, { team2: teamName }] },
+      where: { tournamentId, ...(division ? { division } : {}), OR: [{ team1: teamName }, { team2: teamName }] },
       select: { id: true, score1: true, score2: true },
     })
     if (mine.length) {
@@ -139,8 +151,8 @@ export async function removeTeamRefs(tournamentId: string, teamName: string): Pr
 
   // Bracket slots: blank the seed and any resolved winner / loser label.
   try {
-    const brackets = await prisma.bracket.findMany({ where: { tournamentId }, select: { id: true } })
-    const ids = brackets.map((b: { id: string }) => b.id)
+    const brackets = await prisma.bracket.findMany({ where: { tournamentId }, select: { id: true, division: true } })
+    const ids = brackets.filter((b: { id: string; division: string }) => inDiv(b.division)).map((b: { id: string }) => b.id)
     if (ids.length) {
       let c = 0
       c += (await prisma.bracketGame.updateMany({ where: { bracketId: { in: ids }, team1: teamName }, data: { team1: '' } })).count
@@ -156,7 +168,7 @@ export async function removeTeamRefs(tournamentId: string, teamName: string): Pr
     const r = await prisma.userTeamFollow.deleteMany({ where: { tournamentId, teamName } })
     if (r.count) n.follows = r.count
   } catch {}
-  try { const c = await removeFollowRefs(tournamentId, teamName); if (c) n.follows = (n.follows || 0) + c } catch {}
+  try { const c = await removeFollowRefs(tournamentId, teamName, division); if (c) n.follows = (n.follows || 0) + c } catch {}
 
   return n
 }

@@ -159,7 +159,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       for (let i = 0; i < cleanTeams.length; i++) {
         const was = before.teams[i]?.teamName || ''
         const now = cleanTeams[i].teamName
-        if (was && now && was !== now) await renameTeamRefs(before.tournamentId, was, now, club)
+        if (was && now && was !== now) await renameTeamRefs(before.tournamentId, was, now, club, before.teams[i]?.division || undefined)
       }
     }
     // This PATCH deletes and recreates the whole team list, so dropping a team
