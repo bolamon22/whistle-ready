@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
+import { orgBaseUrl } from '@/lib/orgDomains'
 import { sendEmail, orgSender } from '@/lib/email'
 import { notifyStaffRegistered } from '@/lib/staffNotify'
 import { encrypt } from '@/lib/encrypt'
@@ -215,7 +216,7 @@ export async function POST(req: NextRequest) {
             2. Set your availability for each event.<br>
             3. Game assignments land in your portal — pay follows each event.
           </p>
-          <a href="${APP_URL}/login"
+          <a href="${orgBaseUrl(org?.slug, APP_URL)}/login"
             style="display: inline-block; background: #14b8a6; color: white; font-weight: 600;
                    font-size: 15px; padding: 12px 28px; border-radius: 10px; text-decoration: none;">
             Sign in to your portal &rarr;

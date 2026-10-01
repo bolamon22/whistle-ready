@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { orgById } from '@/lib/org'
+import { orgBaseUrl } from '@/lib/orgDomains'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 
@@ -37,5 +39,9 @@ export async function POST(req: Request) {
   const mapKey = `joinCodeMap:${code}`
   await prisma.appSetting.upsert({ where: { key: mapKey }, update: { value: orgId }, create: { key: mapKey, value: orgId } })
 
-  return NextResponse.json({ url: `${APP_URL}/join/${code}` })
+  // On the org's own domain when it has one. A ref being recruited has never
+  // heard of Whistle Ready -- the link has to read as the tournament company's.
+  // Falls back to the platform for an org without a custom domain.
+  const org = await orgById(orgId)
+  return NextResponse.json({ url: `${orgBaseUrl(org?.slug, APP_URL)}/join/${code}` })
 }

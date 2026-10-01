@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
 import { inviteLetterFor, mergeLetter, letterBodyHtml, escapeHtml } from '@/lib/inviteLetter'
 import { orgById } from '@/lib/org'
+import { orgBaseUrl } from '@/lib/orgDomains'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
@@ -98,12 +99,15 @@ export async function POST(req: Request) {
       })
     }
 
-    const inviteUrl = `${APP_URL}/invite/${token}`
+    // Hoisted above the url: a claim link copied for a worker with no email still
+    // has to carry the org's domain, and the branches below return before the
+    // lookup used to happen. orgFor caches, so this costs nothing per worker.
+    const org = await orgFor(workerOrgId)
+    const inviteUrl = `${orgBaseUrl(org?.slug, APP_URL)}/invite/${token}`
 
     if (!email) { results.push({ workerId, status: 'link_only', inviteUrl }); continue }
     if (mode === 'link') { results.push({ workerId, status: 'link', inviteUrl }); continue }
 
-    const org = await orgFor(workerOrgId)
     const orgLabel = org?.name || 'Whistle Ready'
     const firstName = String(worker.name ?? '').trim().split(/\s+/)[0] || ''
     const letter = await letterFor(workerOrgId)

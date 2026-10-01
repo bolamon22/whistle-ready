@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
+import { orgBaseUrl } from '@/lib/orgDomains'
 import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
 import { inviteLetterFor, mergeLetter, letterBodyHtml, escapeHtml, type InviteAudience } from '@/lib/inviteLetter'
 
@@ -38,9 +39,10 @@ export async function POST(req: Request) {
   }
   const mapKey = `joinCodeMap:${code}`
   await prisma.appSetting.upsert({ where: { key: mapKey }, update: { value: orgId }, create: { key: mapKey, value: orgId } })
-  const joinUrl = `${APP_URL}/join/${code}`
-
+  // The org is looked up before the link, not after: {link} in the letter has to
+  // point at the org's domain, same rule as /api/workers/recruit-link.
   const org = await orgById(orgId)
+  const joinUrl = `${orgBaseUrl(org?.slug, APP_URL)}/join/${code}`
   const orgLabel = org?.name || 'Whistle Ready'
   // The fallback letter has to match the one on screen. This was pinned to 'recruit',
   // which was harmless while recruit was the only copy-and-send audience -- with the
