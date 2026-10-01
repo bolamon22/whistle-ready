@@ -1114,9 +1114,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       {/* A pool short a team is short of games for everyone it was drawn
           against, and nothing else on this page would say so -- the per-game
           issue badges are about placement, not about games that do not exist.
-          Computed live, so it clears itself once the pool is level again. */}
+          Computed live, so it clears itself once the pool is level again.
+          Compact here: the board is what this page is for, and the fix lives on
+          Divisions, which this links to. */}
       <div className="px-4 pt-3 flex-shrink-0 empty:hidden">
-        <ShortTeamsBanner games={games} />
+        <ShortTeamsBanner games={games} compact detailsHref={`/tournaments/${params.id}/divisions`} />
       </div>
 
       {issueTip && !dragId && (() => {
