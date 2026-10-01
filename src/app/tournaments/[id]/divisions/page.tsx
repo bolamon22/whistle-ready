@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import ShortTeamsBanner from '@/components/ShortTeamsBanner'
-import type { BalanceGame } from '@/lib/gameBalance'
+import { findShortTeams, describeFinding, type BalanceGame } from '@/lib/gameBalance'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
@@ -64,6 +64,18 @@ export default function DivisionsPage() {
   // one of those paths without six separate call sites having to remember. The
   // cost is one small request per division click.
   const [allGames, setAllGames] = useState<BalanceGame[]>([])
+  // Which divisions have a short pool, and what to say about each. Keyed by
+  // division so the rail can answer per row without walking the findings again,
+  // and a division with two uneven pools collects both lines in one tooltip.
+  const unevenByDivision = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const f of findShortTeams(allGames)) {
+      const lines = m.get(f.division) ?? []
+      lines.push(describeFinding(f))
+      m.set(f.division, lines)
+    }
+    return m
+  }, [allGames])
   useEffect(() => {
     fetch(`/api/tournaments/${id}/games`)
       .then(r => r.json())
@@ -725,18 +737,6 @@ if (loading) return (
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
 
-        {/* Above the rail and the tabs, so it is on screen whichever division is
-            open. Bo, Oct 1: he wants to know a pool is short from this page, which
-            is where pools are actually built -- the Scheduler now carries the same
-            warning as one line. Each finding gets a button into that division's
-            Pool Games tab, where the regenerate control is. */}
-        <ShortTeamsBanner
-          games={allGames}
-          onFix={div => { selectDiv(div); setActiveTab('pool-games') }}
-          fixLabel="Open this division"
-          className="mb-4"
-        />
-
         <div className="flex gap-6">
 
           {/* -- Sidebar -------------------------------------------- */}
@@ -787,6 +787,16 @@ if (loading) return (
                                 style={{ backgroundColor: divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length] }}
                               />
                               <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-teal-700' : 'text-slate-700'}`}>{div.name}</p>
+                              {/* Beside the NAME, not down with the count pills: the
+                                  point is to be findable while scanning the rail, which
+                                  is the one view that shows every division at once.
+                                  Wrapped in a span because a title on the svg itself is
+                                  not a tooltip. */}
+                              {unevenByDivision.has(div.name) && (
+                                <span className="flex-shrink-0 inline-flex" title={`Uneven pool — ${unevenByDivision.get(div.name)!.join('  ')}`}>
+                                  <AlertTriangle size={13} className="text-amber-500" />
+                                </span>
+                              )}
                             </div>
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
