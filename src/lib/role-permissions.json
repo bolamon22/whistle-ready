@@ -90,6 +90,23 @@
       ]
     },
     {
+      "key": "tournament_people",
+      "label": "Waivers, applications & club contacts",
+      "group": "Registrations",
+      "routes": [
+        "/tournaments/*/player-waivers",
+        "/tournaments/*/coach-waivers",
+        "/tournaments/*/staff-applications",
+        "/tournaments/*/media-requests",
+        "/tournaments/*/photo-requests",
+        "/tournaments/*/vendor-requests",
+        "/tournaments/*/gallery-uploads",
+        "/tournaments/*/returning-teams",
+        "/tournaments/*/broadcast",
+        "/tournaments/*/chirp-insights"
+      ]
+    },
+    {
       "key": "tournament_settings",
       "label": "Tournament Settings",
       "group": "Tournaments",
@@ -199,11 +216,13 @@
       "cd_billing": false,
       "tournament_scores": true,
       "game_scorekeeper": true,
-      "social_scheduler": true
+      "social_scheduler": true,
+      "staff_gameday": true,
+      "tournament_people": true
     },
     "assigner": {
       "tournaments_list": true,
-      "tournament_dashboard": false,
+      "tournament_dashboard": true,
       "tournament_schedule": true,
       "tournament_roster": true,
       "tournament_availability": true,
@@ -222,7 +241,9 @@
       "cd_billing": false,
       "tournament_scores": true,
       "game_scorekeeper": true,
-      "social_scheduler": false
+      "social_scheduler": false,
+      "staff_gameday": true,
+      "tournament_people": true
     },
     "scheduler": {
       "tournaments_list": true,
@@ -234,10 +255,10 @@
       "tournament_time_entries": false,
       "tournament_pay_summary": false,
       "tournament_financials": false,
-      "tournament_registrations": true,
-      "tournament_player_regs": true,
-      "tournament_settings": true,
-      "staff_pool": true,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_settings": false,
+      "staff_pool": false,
       "admin_users": false,
       "cd_overview": false,
       "cd_players": false,
@@ -245,7 +266,8 @@
       "cd_billing": false,
       "tournament_scores": true,
       "game_scorekeeper": true,
-      "social_scheduler": false
+      "social_scheduler": false,
+      "tournament_people": false
     },
     "coach": {
       "tournaments_list": false,
@@ -268,7 +290,8 @@
       "cd_billing": false,
       "tournament_scores": false,
       "game_scorekeeper": false,
-      "social_scheduler": false
+      "social_scheduler": false,
+      "tournament_people": false
     },
     "parent": {
       "tournaments_list": false,
@@ -291,7 +314,8 @@
       "cd_billing": false,
       "tournament_scores": false,
       "game_scorekeeper": false,
-      "social_scheduler": false
+      "social_scheduler": false,
+      "tournament_people": false
     },
     "club_director": {
       "tournaments_list": false,
@@ -314,7 +338,8 @@
       "cd_billing": true,
       "tournament_scores": false,
       "game_scorekeeper": false,
-      "social_scheduler": false
+      "social_scheduler": false,
+      "tournament_people": false
     },
     "staff": {
       "tournaments_list": false,
@@ -338,7 +363,8 @@
       "tournament_scores": true,
       "game_scorekeeper": true,
       "staff_gameday": true,
-      "social_scheduler": false
+      "social_scheduler": false,
+      "tournament_people": false
     }
   }
 }

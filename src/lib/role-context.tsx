@@ -23,8 +23,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const cookie = document.cookie.split(';').find(c => c.trim().startsWith('preview-role='))
     const cookieVal = cookie ? cookie.trim().split('=')[1] : null
-    const stored = localStorage.getItem('previewRole')
-    const val = cookieVal || stored || null
+    // The cookie alone: it is what the server reads, and a role remembered only in
+    // localStorage showed one role's tabs over another role's data.
+    const val = cookieVal || null
     if (val) setPreviewRoleState(val)
   }, [])
 
@@ -36,6 +37,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem('previewRole')
       document.cookie = 'preview-role=; path=/; max-age=0; SameSite=Lax'
+    }
+    // The server answers as the previewed role too (pages and API data), so the
+    // page has to be fetched again; switching in place left the old role's data
+    // on screen.
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname.startsWith('/unauthorized')) window.location.href = '/'
+      else window.location.reload()
     }
   }
 

@@ -5,6 +5,9 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { eventStatus } from '@/lib/eventDays'
 import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp, LayoutDashboard, Settings, Users, Zap, DollarSign, type LucideIcon } from 'lucide-react'
 import HelpCenter from '@/components/HelpCenter'
+import { useSession } from 'next-auth/react'
+import { useRole } from '@/lib/role-context'
+import { roleCanAccess } from '@/lib/routeAccess'
 
 interface Props {
   id: string
@@ -74,7 +77,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
-  const groups: NavGroup[] = [
+  const allGroups: NavGroup[] = [
     { label: 'Dashboard', href: `${base}/dashboard` },
     { label: 'Setup', items: [
       { href: `${base}/builder`,    label: 'Tournament setup' },
@@ -108,6 +111,16 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     ]},
     { label: 'Financials', href: `${base}/financials` },
   ]
+
+  // Only the tabs this role can open (the same rule middleware enforces), so a
+  // scheduler is not shown Financials or Registrations to be bounced from.
+  // While the session loads, show everything rather than flash an empty bar.
+  const { status } = useSession()
+  const { effectiveRole } = useRole()
+  const canOpen = (href: string) => status !== 'authenticated' || roleCanAccess(effectiveRole, href)
+  const groups: NavGroup[] = allGroups
+    .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href)) } : g)
+    .filter(g => g.href ? canOpen(g.href) : (g.items?.length ?? 0) > 0)
 
   const hrefActive = (href: string) => href === base ? pathname === base : pathname.startsWith(href)
   const groupActive = (g: NavGroup) => g.href ? hrefActive(g.href) : !!g.items?.some(i => hrefActive(i.href))

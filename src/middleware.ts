@@ -1,6 +1,7 @@
 import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
-import permissionsConfig from './lib/role-permissions.json'
+import { roleCanAccess } from './lib/routeAccess'
+import { PREVIEW_ROLES } from './lib/roleScope'
 import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES, aliasRedirectForHost } from './lib/orgDomains'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm']  // /housing/[code] = housing board; /confirm/[regId] = club team-confirmation (the id IS the key, like /pay)  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
@@ -13,11 +14,6 @@ const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/'
 // to anyone who guessed the slug.
 const PUBLIC_TOURNAMENT_PATH = /^\/tournaments\/[^/]+\/(public|register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/
 
-const FEATURE_ROUTE_MAP: Record<string, string[]> = {}
-for (const feature of permissionsConfig.features) {
-  FEATURE_ROUTE_MAP[feature.key] = feature.routes
-}
-
 const ROLE_HOME: Record<string, string> = {
   director:      '/dashboard/director',
   club_director: '/dashboard/club-director',
@@ -28,24 +24,8 @@ const ROLE_HOME: Record<string, string> = {
   parent:        '/dashboard/parent',
 }
 
-const ALWAYS_ADMIN_ONLY = ['/admin']
-
-function roleCanAccess(role: string, pathname: string): boolean {
-  if (role === 'admin') return true
-  if (ALWAYS_ADMIN_ONLY.some(r => pathname.startsWith(r))) return false
-  const rolePerms = permissionsConfig.roles[role as keyof typeof permissionsConfig.roles]
-  if (!rolePerms) return false
-  for (const [featureKey, allowed] of Object.entries(rolePerms)) {
-    if (!allowed) continue
-    const routes = FEATURE_ROUTE_MAP[featureKey] || []
-    for (const route of routes) {
-      const pattern = route.replace(/\*/g, '[^/]+')
-      const regex = new RegExp(`^${pattern}`)
-      if (regex.test(pathname) || pathname.startsWith(route.replace('/*', ''))) return true
-    }
-  }
-  return false
-}
+// Page access lives in lib/routeAccess, shared with the tournament nav so a tab
+// the role cannot open is not shown either.
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -195,7 +175,7 @@ export async function middleware(req: NextRequest) {
                  : rawRole
   const previewCookie = req.cookies.get('preview-role')?.value
   const previewOrgCookie = req.cookies.get('preview-org')?.value
-  const isAdminPreviewing = realRole === 'admin' && !!previewCookie
+  const isAdminPreviewing = realRole === 'admin' && !!previewCookie && (PREVIEW_ROLES as readonly string[]).includes(previewCookie)
   const role = isAdminPreviewing ? previewCookie! : realRole
   // Inject preview-org into request headers so API routes can read it
   const requestHeaders = new Headers(req.headers)

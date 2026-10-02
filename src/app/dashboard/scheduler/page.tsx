@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Calendar, Trophy, LayoutGrid, Radio, Globe } from 'lucide-react'
+import { Calendar, Trophy, LayoutGrid, Settings, Globe } from 'lucide-react'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; location?: string; logoUrl: string; _count: { games: number } }
 
@@ -38,7 +38,9 @@ export default function SchedulerDashboard() {
               { href: `/tournaments/${t.id}/scheduler`, Icon: Calendar,   label: 'Schedule' },
               { href: `/tournaments/${t.id}/divisions`, Icon: Trophy,     label: 'Divisions' },
               { href: `/tournaments/${t.id}/dashboard`, Icon: LayoutGrid, label: 'Manage' },
-              { href: `/tournaments/${t.id}/ops`,       Icon: Radio,      label: 'Field Req' },
+              // Setup, not Field Req: field requests sit with game-day ops, which the
+              // scheduler role does not open (Oct 2026 permissions).
+              { href: `/tournaments/${t.id}/builder`,   Icon: Settings,   label: 'Setup' },
             ]
             return (
               <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
