@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { cleanName, nameKey } from '@/lib/names'
 import { renameTeamRefs, removeTeamRefs } from '@/lib/teamRename'
 import { findShortTeams, describeFinding } from '@/lib/gameBalance'
+import { parsePricing, calcFee } from '@/lib/regPricing'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
   // Staff only: this returns coach phone/email and what each club owes. It was open to
@@ -258,18 +259,59 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     } catch { /* advisory only: never fail the delete over it */ }
 
     // Clean up the parent registration
+    //
+    // YOU CANNOT BILL A CLUB FOR A TEAM THAT IS NOT PLAYING. This used to drop the
+    // team and decrement numTeams while leaving invoiceAmount untouched, so a club
+    // that pulled a team stayed invoiced for it -- and because dropping below a
+    // volume break re-rates the teams that remain, hand-editing the figure gets it
+    // wrong as often as not. The staff edit drawer has always recomputed on every
+    // team change; this path simply never learned to.
+    //
+    // Only recomputed when the stored figure still MATCHES the schedule for the
+    // roster as it was a moment ago. If someone negotiated a price by hand, that
+    // number is a decision, not a stale total, and silently replacing it would be
+    // the same class of bug in the other direction -- so it is reported instead.
+    let invoice: { was: number; now: number; teams: number } | null = null
+    let invoiceHeldBack: { was: number; wouldBe: number; reason: string } | null = null
     if (team.registrationId) {
       try {
-        const remaining = await prisma.registeredTeam.count({ where: { registrationId: team.registrationId } })
-        if (remaining === 0) {
+        const reg = await prisma.teamRegistration.findUnique({
+          where: { id: team.registrationId },
+          include: { teams: true },
+        })
+        const remaining = reg?.teams.length ?? 0
+        if (!reg) { /* already gone */ }
+        else if (remaining === 0) {
           await prisma.teamRegistration.delete({ where: { id: team.registrationId } })
         } else {
-          await prisma.teamRegistration.update({ where: { id: team.registrationId }, data: { numTeams: remaining } })
+          const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { registrationPricing: true } })
+          const pricing = parsePricing(t?.registrationPricing)
+          const asOf = reg.createdAt.toISOString().slice(0, 10)   // price as of when they registered, not today
+          const before = calcFee([...reg.teams, team].map(x => ({ division: x.division, waitlisted: x.waitlisted })), pricing, asOf)
+          const after = calcFee(reg.teams.map(x => ({ division: x.division, waitlisted: x.waitlisted })), pricing, asOf)
+          const unedited = Math.round((reg.invoiceAmount || 0) * 100) === Math.round(before * 100)
+          // A DELETION MUST NEVER RAISE A BILL ON ITS OWN.
+          //
+          // Waitlisted teams are not billed but DO count toward the volume tier, so
+          // a club with four committed and one waiting pays the four-team rate.
+          // Delete the waiting team and the schedule says three teams at the higher
+          // rate -- $4,350 becomes $4,485, and a club that did nothing owes $135 more
+          // for being told there was no room. The fix for that club is to leave the
+          // team waitlisted, not to delete it, so this reports and leaves it alone.
+          const goesUp = Math.round(after * 100) > Math.round((reg.invoiceAmount || 0) * 100)
+          const data: { numTeams: number; invoiceAmount?: number } = { numTeams: remaining }
+          if (unedited && !goesUp && Math.round(after * 100) !== Math.round(reg.invoiceAmount * 100)) {
+            data.invoiceAmount = after
+            invoice = { was: reg.invoiceAmount, now: after, teams: remaining }
+          } else if (!unedited || goesUp) {
+            invoiceHeldBack = { was: reg.invoiceAmount, wouldBe: after, reason: goesUp ? 'would raise the invoice' : 'invoice was set by hand' }
+          }
+          await prisma.teamRegistration.update({ where: { id: team.registrationId }, data })
         }
       } catch { /* registration may have linked records; non-fatal */ }
     }
 
-    return NextResponse.json({ ok: true, removed, shortWarning })
+    return NextResponse.json({ ok: true, removed, shortWarning, invoice, invoiceHeldBack })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to delete team' }, { status: 500 })

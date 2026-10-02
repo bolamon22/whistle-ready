@@ -503,6 +503,15 @@ export default function DivisionsPage() {
     toast.success(gone
       ? `${team.teamName} deleted — ${gone} game${gone === 1 ? '' : 's'} removed from the schedule`
       : `${team.teamName} deleted`)
+    // Money changed hands here, so say so out loud rather than leaving it to be
+    // discovered on the registrations page. Dropping below a volume break re-rates
+    // the teams that remain, so the drop is rarely one team's price.
+    const money = (n: number) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (data?.invoice) {
+      toast.success(`Invoice updated: ${money(data.invoice.was)} → ${money(data.invoice.now)} for ${data.invoice.teams} team${data.invoice.teams === 1 ? '' : 's'}`, { duration: 8000 })
+    } else if (data?.invoiceHeldBack) {
+      toast(`Invoice left at ${money(data.invoiceHeldBack.was)} — the schedule now says ${money(data.invoiceHeldBack.wouldBe)}, but that ${data.invoiceHeldBack.reason}. Change it on the registrations page if that is right.`, { duration: 11000, icon: '\u26A0\uFE0F' })
+    }
   }
 
   // Which division (if any) was opened by clicking its rail bracket chip, so the
