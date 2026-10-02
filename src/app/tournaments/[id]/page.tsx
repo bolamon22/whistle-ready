@@ -4,7 +4,6 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import ChatWidget from './ChatWidget'
 import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X } from 'lucide-react'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
@@ -1311,7 +1310,6 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
     </div>
-    {tournament && <ChatWidget tournamentId={params.id} tournamentName={tournament.name} />}
     </>
   )
 }

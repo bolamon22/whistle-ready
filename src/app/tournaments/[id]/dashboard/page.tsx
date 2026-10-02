@@ -6,7 +6,6 @@ import {
   Target, ClipboardList, Radio, TriangleAlert, ClipboardCheck, Contact,
   Megaphone, Wallet, ArrowRight, Trophy, ChevronDown, GripVertical, Eye, EyeOff, CheckCircle2, XCircle, Circle, type LucideIcon,
 } from 'lucide-react'
-import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
 import CopyTournamentButton from '@/components/CopyTournamentButton'
 import { genderOf, genderLabel, splitByGender, type DivisionGender } from '@/lib/divisionGender'
@@ -559,7 +558,6 @@ export default function DashboardPage() {
       </div>
       </div>
     </div>
-    <ChatWidget tournamentId={String(id)} tournamentName={t.name} />
     </>
   )
 }

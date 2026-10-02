@@ -13,6 +13,7 @@ import Analytics from '@/components/Analytics'
 import { Analytics as VercelAnalytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import ClientErrorReporter from './ClientErrorReporter'
+import GlobalChirp from './GlobalChirp'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <NavBar />
           <DynamicTitle />
           <AppMain>{children}</AppMain>
+          <GlobalChirp />
           <Toaster position="top-right" toastOptions={{ style: { borderRadius: '10px', fontFamily: 'inherit', fontSize: '14px' } }}/>
         </Providers>
       </body>
