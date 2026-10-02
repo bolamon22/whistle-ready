@@ -8,6 +8,9 @@ import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, FileText, ClipboardList, Save, ExternalLink, Link2, Inbox, Pencil, X, Users, ImagePlus } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import RegConfirmationEditor from '@/components/RegConfirmationEditor'
+import ScopedNotifyEditor from '@/components/ScopedNotifyEditor'
+import { seriesLabelsFromNames } from '@/lib/eventSeries'
+import type { ScopedRecipient } from '@/lib/scopedNotify'
 import PushToggle from '@/components/PushToggle'
 import SampleCardEditor from '@/components/SampleCardEditor'
 import { DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
@@ -87,6 +90,7 @@ type StaffForm = {
   enabled: boolean; heroImage: string
   intro: string; positions: string[]; refLevels: string[]; ageLabel: string
   confirmationTitle: string; confirmationMessage: string; emailConfirmation: boolean
+  notifyEmail?: string; notifyScoped?: ScopedRecipient[]
 }
 type Forms = { player: PlayerForm; vendor: VendorForm; staff: StaffForm; registration: RegConfirmation }
 
@@ -121,6 +125,7 @@ const EMPTY: Forms = {
     confirmationTitle: 'Application received!',
     confirmationMessage: "Thanks for your interest in working our events! We've received your application and will reach out about open positions.",
     emailConfirmation: true,
+    notifyEmail: '', notifyScoped: [],
   },
   registration: DEFAULT_REG_CONFIRMATION,
 }
@@ -158,6 +163,7 @@ function FormsInner() {
   const [open, setOpen] = useState<{ [k: string]: boolean }>({})
   const [editing, setEditing] = useState<{ [k: string]: boolean }>({})
   const [loading, setLoading] = useState(true)
+  const [seriesOptions, setSeriesOptions] = useState<string[]>([])
   const [saving, setSaving] = useState('')
 
   useEffect(() => {
@@ -189,6 +195,11 @@ function FormsInner() {
         const sj = await fetch(`/api/org-forms/submit${apiQ}`).then(r => r.ok ? r.json() : { submissions: [], counts: {} })
         setSubs(Array.isArray(sj.submissions) ? sj.submissions : [])
         setSubCounts(sj.counts && typeof sj.counts === 'object' ? sj.counts : {})
+        try {
+          const tj = await fetch(`/api/tournaments${apiQ}`).then(r => r.ok ? r.json() : [])
+          const list = Array.isArray(tj) ? tj : (Array.isArray(tj?.tournaments) ? tj.tournaments : [])
+          setSeriesOptions(seriesLabelsFromNames(list.map((t: any) => String(t?.name || '')).filter(Boolean)))
+        } catch {}
       } catch {} finally { setLoading(false) }
     })()
   }, [status, session, role])
@@ -303,7 +314,7 @@ function FormsInner() {
             <p className="text-xs text-slate-500 mb-3">Shown on the confirmation screen and emailed to the club contact. Use <code className="bg-slate-100 px-1 rounded">{'{club}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{tournament}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{dates}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{location}'}</code>, <code className="bg-slate-100 px-1 rounded">{'{org}'}</code> — these fill in automatically. The teams, fees and links are added for you.</p>
             <div className="flex justify-end mb-3"><EditBar k="reg" /></div>
             {editing.reg ? (
-              <RegConfirmationEditor mode="org" value={rf} onChange={patch => setF(v => ({ ...v, registration: { ...v.registration, ...patch } }))} />
+              <RegConfirmationEditor mode="org" value={rf} onChange={patch => setF(v => ({ ...v, registration: { ...v.registration, ...patch } }))} seriesOptions={seriesOptions} />
             ) : (
               <div className="space-y-2">
                 <div><div className={labelCls}>Welcome</div>{ro(rf.welcome)}</div>
@@ -476,6 +487,8 @@ function FormsInner() {
                 <p className="text-xs text-slate-500 -mt-1 mb-1">Emailed the moment a vendor applies, so you aren&rsquo;t refreshing the requests page. Blank uses your org contact address.</p>
                 <input className={inputCls} type="email" value={vf.notifyEmail} placeholder="you@yourorg.com"
                   onChange={e => setF(v => ({ ...v, vendor: { ...v.vendor, notifyEmail: e.target.value } }))} />
+                <ScopedNotifyEditor value={(vf as any).notifyScoped} onChange={list => setF(v => ({ ...v, vendor: { ...v.vendor, notifyScoped: list } as any }))} seriesOptions={seriesOptions}
+                  help="Notify someone for only some events' vendor applications — tick their events." />
 
                 <label className={labelCls}>Approval notice</label>
                 <p className="text-xs text-slate-500 -mt-1 mb-1">Shown at the top of the form, so nobody assumes submitting reserves a spot.</p>
@@ -630,6 +643,12 @@ function FormsInner() {
                   <input type="checkbox" className="mt-0.5 accent-teal-500" checked={stf.emailConfirmation} onChange={e => setF(v => ({ ...v, staff: { ...v.staff, emailConfirmation: e.target.checked } }))} />
                   <span className="text-sm text-slate-700">Email a confirmation to the applicant</span>
                 </label>
+                <label className={labelCls}>Notify me at</label>
+                <p className="text-xs text-slate-500 -mt-1 mb-1">Emailed when someone signs up to work your events. Blank uses your org contact address.</p>
+                <input className={inputCls} type="email" value={(stf as any).notifyEmail || ''} placeholder="you@yourorg.com"
+                  onChange={e => setF(v => ({ ...v, staff: { ...v.staff, notifyEmail: e.target.value } as any }))} />
+                <ScopedNotifyEditor value={(stf as any).notifyScoped} onChange={list => setF(v => ({ ...v, staff: { ...v.staff, notifyScoped: list } as any }))} seriesOptions={seriesOptions}
+                  help="Notify someone only when staff sign up for certain events — tick their events." />
               </>
             ) : (
               <div className="space-y-3">

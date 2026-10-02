@@ -12,6 +12,7 @@ import { orgLogoUrl } from '@/lib/org'
 import { vendorConfig, priceLabel } from '@/lib/vendorForm'
 import { mediaConfig, photographerSharePct, commitmentLines } from '@/lib/mediaForm'
 import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
+import { scopedEmailsForEventNames } from '@/lib/scopedNotify'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
 // exists, then stores the submission as its own row (see src/lib/formSubmissions.ts —
@@ -382,7 +383,9 @@ export async function POST(req: NextRequest) {
         }
 
         // --- to the organizer ---
-        const notify = String(cfg.notifyEmail || org.contactEmail || OFFICE_CC).trim()
+        // Base recipient plus anyone scoped to one of the applied-for events.
+        const notify = Array.from(new Set([String(cfg.notifyEmail || org.contactEmail || OFFICE_CC), ...scopedEmailsForEventNames((cfg as any).notifyScoped, evNames)]
+          .join(',').split(',').map((s: string) => s.trim().toLowerCase()).filter((s: string) => s.includes('@')))).join(',')
         if (notify && emailEnabled()) {
           const link = `${base}${data.tournamentId ? `/tournaments/${data.tournamentId}/vendor-requests` : '/dashboard/org/forms'}`
           const body = [

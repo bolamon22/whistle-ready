@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Office heads-up — Bo wants to know the moment someone registers
-    await notifyStaffRegistered({ org, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name) })
+    await notifyStaffRegistered({ org, orgId, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name) })
 
     return NextResponse.json({ ok: true, linked, workerId, events: joined.map(e => ({ name: e.name, logoUrl: e.logoUrl })) }, { status: 201 })
   } catch (e) {

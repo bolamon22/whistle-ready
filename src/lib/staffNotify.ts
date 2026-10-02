@@ -1,4 +1,6 @@
 import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
+import { prisma } from '@/lib/db'
+import { scopedEmailsForEventNames } from '@/lib/scopedNotify'
 
 // "Let me know they registered" (Bo, Sep 5): one compact office email the moment a
 // staff login gets created — clearer than CC'ing the new staffer's own welcome mail.
@@ -20,6 +22,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 export async function notifyStaffRegistered(opts: {
   org: { name?: string | null } | null
+  orgId?: string | null
   name: string
   email: string
   phone?: string | null
@@ -28,12 +31,26 @@ export async function notifyStaffRegistered(opts: {
   events?: string[]
 }) {
   try {
+    // Recipients: the org's configured staff-notify address (falls back to the shared
+    // office inbox), plus anyone scoped to one of the events this person signed up for.
+    let base = OFFICE_CC
+    let scoped: string[] = []
+    try {
+      if (opts.orgId) {
+        const row = await prisma.appSetting.findUnique({ where: { key: `orgForms:${opts.orgId}` } })
+        const staff = row ? (JSON.parse(row.value || '{}').staff || {}) : {}
+        if (String(staff.notifyEmail || '').trim()) base = String(staff.notifyEmail).trim()
+        scoped = scopedEmailsForEventNames(staff.notifyScoped, opts.events || [])
+      }
+    } catch { /* fall back to the office inbox */ }
+    const to = Array.from(new Set([base, ...scoped].join(',').split(',').map(x => x.trim().toLowerCase()).filter(x => x.includes('@')))).join(',')
+    if (!to) return
     const roleLine = opts.roles.map(r => ROLE_LABELS[r] ?? r).join(', ') || 'Staff'
     const row = (label: string, value: string) =>
       `<tr><td style="padding:3px 12px 3px 0;color:#94a3b8;font-size:12px;white-space:nowrap;">${label}</td><td style="padding:3px 0;color:#0f172a;font-size:13px;">${value}</td></tr>`
     await sendEmail({
       ...orgSender(opts.org),
-      to: OFFICE_CC,
+      to,
       subject: `Staff registered — ${opts.name} (${roleLine})`,
       html: `
         <div style="font-family: sans-serif; max-width: 440px; margin: 0 auto; padding: 28px 24px;">

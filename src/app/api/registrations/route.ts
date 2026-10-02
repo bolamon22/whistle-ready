@@ -5,6 +5,8 @@ import { tournamentOrgId, orgById } from '@/lib/org'
 import { sendPushToOrg } from '@/lib/push'
 import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, organizerEmailHtml, organizerEmailSubject, type RegLetterData, type RegNotifyData } from '@/lib/regConfirmation'
+import { scopedEmailsForSeries } from '@/lib/scopedNotify'
+import { seriesLabelOf } from '@/lib/eventSeries'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
@@ -253,8 +255,11 @@ async function buildAndSendConfirmation(reg: any) {
     if (emailEnabled()) {
       const orgSite = orgId ? await jget(`orgSite:${orgId}`) : {}
       const fallback = [orgSite?.contact?.email, org?.contactEmail].filter(Boolean).join(',')
-      const recipients = Array.from(new Set(String(cfg.notifyEmails || fallback || '')
-        .split(',').map(s => s.trim().toLowerCase()).filter(s => s.includes('@'))))
+      // Base list (all-events notifyEmails, or the org fallback) plus anyone scoped
+      // to THIS tournament's event via the per-person checkboxes.
+      const scoped = scopedEmailsForSeries(cfg.notifyScoped, seriesLabelOf(String(t.name || '')))
+      const recipients = Array.from(new Set([...String(cfg.notifyEmails || fallback || '').split(','), ...scoped]
+        .map(s => s.trim().toLowerCase()).filter(s => s.includes('@'))))
       // Loud on purpose: silently sending to nobody is why new registrations
       // went unnoticed. Set "Notify your team" in the org Forms library, or give
       // the org a contactEmail.

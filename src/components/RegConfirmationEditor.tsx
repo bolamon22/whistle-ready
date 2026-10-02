@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Eye, Pencil } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import AiGenerateButton from '@/components/AiGenerateButton'
+import ScopedNotifyEditor from '@/components/ScopedNotifyEditor'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, type RegConfirmation, type RegLetterData } from '@/lib/regConfirmation'
 
 const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-3 mb-1'
@@ -34,12 +35,13 @@ const SAMPLE: RegLetterData = {
 //                       optional; leaving it blank inherits the org default
 //                       (shown as the placeholder). No email toggle (org-level).
 export default function RegConfirmationEditor({
-  value, onChange, mode = 'org', inherit,
+  value, onChange, mode = 'org', inherit, seriesOptions,
 }: {
   value: Partial<RegConfirmation>
   onChange: (patch: Partial<RegConfirmation>) => void
   mode?: 'org' | 'tournament'
   inherit?: RegConfirmation // org default, used as placeholders in tournament mode
+  seriesOptions?: string[] // org mode only: event labels for per-person scoping
 }) {
   const v = value || {}
   const ph = (k: keyof RegConfirmation) => mode === 'tournament' ? String((inherit as any)?.[k] ?? '') : ''
@@ -115,6 +117,10 @@ export default function RegConfirmationEditor({
       <div className={labelCls}>Notify your team</div>
       <input className={inputCls} value={v.notifyEmails ?? ''} placeholder={ph('notifyEmails') || 'organizer@example.com, office@example.com'} onChange={e => onChange({ notifyEmails: e.target.value })} />
       <p className="text-xs text-slate-400 mt-1">Each new registration also sends an internal heads-up (contact info, teams, payment status) to these addresses — comma-separated — so someone can call the club director. Blank = your org contact email.</p>
+      {mode === 'org' && seriesOptions && seriesOptions.length > 0 && (
+        <ScopedNotifyEditor value={(v as any).notifyScoped} onChange={list => onChange({ notifyScoped: list } as any)} seriesOptions={seriesOptions}
+          help="Add someone who should only be notified for certain events — e.g. a co-director. Tick their events; new yearly editions are included automatically." />
+      )}
     </div>
   )
 }

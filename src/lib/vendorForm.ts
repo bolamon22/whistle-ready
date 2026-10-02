@@ -80,6 +80,8 @@ export type VendorConfig = {
   sponsorEmail: string
   /** Where 'a vendor applied' lands. Blank falls back to the org contact address. */
   notifyEmail: string
+  /** People notified for only some events (by event). Added on top of notifyEmail. */
+  notifyScoped?: import('./scopedNotify').ScopedRecipient[]
   approvalNotice: string
   disclaimer: string
   confirmationTitle: string
@@ -211,6 +213,7 @@ export function vendorConfig(raw: any): VendorConfig {
     webAddOn,
     sponsorEmail: String(vf.sponsorEmail || ''),
     notifyEmail: String(vf.notifyEmail || ''),
+    notifyScoped: Array.isArray(vf.notifyScoped) ? vf.notifyScoped : [],
     approvalNotice: typeof vf.approvalNotice === 'string' ? vf.approvalNotice : DEFAULT_APPROVAL_NOTICE,
     disclaimer: vf.disclaimer || DEFAULT_VENDOR_DISCLAIMER,
     confirmationTitle: vf.confirmationTitle || DEFAULT_CONFIRMATION_TITLE,

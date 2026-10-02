@@ -1,3 +1,5 @@
+import type { ScopedRecipient } from './scopedNotify'
+
 // Registration confirmation "response letter" — shared by the on-screen success
 // screen and the email sent to the club contact. The editable voice (welcome,
 // next steps, sign-off, subject) comes from the org Forms library, optionally
@@ -13,6 +15,9 @@ export type RegConfirmation = {
   /** Comma-separated internal recipients for the new-registration notification.
       Falls back to the org contact email when empty. */
   notifyEmails?: string
+  /** People CC'd on the heads-up for only some events (by event, not tournament id).
+      Org-level only; added on top of notifyEmails. See src/lib/scopedNotify.ts. */
+  notifyScoped?: ScopedRecipient[]
 }
 
 export const DEFAULT_REG_CONFIRMATION: RegConfirmation = {
@@ -46,6 +51,7 @@ export function resolveRegConfirmation(orgCfg: any, override: any): RegConfirmat
     nextSteps: String(pick('nextSteps')),
     signoff: String(pick('signoff')),
     notifyEmails: String(ov.notifyEmails ?? o.notifyEmails ?? ''),
+    notifyScoped: Array.isArray(o.notifyScoped) ? o.notifyScoped : [],
   }
 }
 

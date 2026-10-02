@@ -1,27 +1,37 @@
-// WHICH REPEATING EVENT A TOURNAMENT BELONGS TO.
-//
-// Four series run once a year and have since 2007, so a tournament's name carries its
-// series and its edition together ("Monster Mash 2024", "Jingle Brawl 25"). Anything that
-// matches none of them is a one-off -- a flag football weekend, a Father's Day event --
-// and those are grouped under their own heading rather than forced into a series.
-//
-// Its own module, with no database import, because both a server component (lib/orgHistory
-// computing the track record) and a client page (the Website admin grouping event pages by
-// event) need it. Putting it in orgHistory would pull that file's libsql query code into
-// the browser bundle; copying it into the admin page is how the front page and /stats came
-// to disagree about how many tournaments there have been.
-const SERIES: [RegExp, string][] = [
+// An org's tournaments repeat as a handful of named EVENTS across the years
+// (Monster Mash, Summer Kick Off, Fall Classic, Jingle Brawl). Notification
+// recipients are scoped to the EVENT, not to a dated tournament id, so a new
+// yearly edition inherits its people automatically and nothing accumulates to
+// clean up after an event is over. `seriesLabelOf` is the single source of truth
+// for mapping a tournament name -> event label: it is used both to build the
+// checkbox options in the editor AND to match at send time, so they can't drift.
+
+const KNOWN: [RegExp, string][] = [
   [/monster mash/i, 'Monster Mash'],
   [/fall classic/i, 'Fall Classic'],
   [/jingle brawl/i, 'Jingle Brawl'],
   [/summer kick ?off|sunshine state games/i, 'Summer Kick Off'],
 ]
 
-/** The catch-all heading. Exported so a caller can sort it last rather than test the string. */
-export const ONE_OFF = 'One-off events'
+/** Map a tournament name to its recurring-event label. Known Sunshine series win;
+ *  any other name falls back to itself with a trailing year / season token stripped,
+ *  so "Spring Shootout 2027" and "Spring Shootout 2028" group as "Spring Shootout". */
+export function seriesLabelOf(name: string): string {
+  const s = String(name || '').trim()
+  if (!s) return ''
+  for (const [re, label] of KNOWN) if (re.test(s)) return label
+  const base = s
+    .replace(/\b(19|20)\d{2}\b/g, '')
+    .replace(/\b(spring|summer|fall|autumn|winter)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[\s\-–—|:,]+$/, '')
+    .trim()
+  return base || s
+}
 
-export function seriesOf(name: unknown): string {
-  const s = String(name ?? '')
-  for (const [re, label] of SERIES) if (re.test(s)) return label
-  return ONE_OFF
+/** Distinct event labels present across a set of tournament names, sorted. */
+export function seriesLabelsFromNames(names: string[]): string[] {
+  const seen = new Set<string>(); const out: string[] = []
+  for (const n of names || []) { const l = seriesLabelOf(n); if (l && !seen.has(l)) { seen.add(l); out.push(l) } }
+  return out.sort((a, b) => a.localeCompare(b))
 }

@@ -144,7 +144,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
       // Office heads-up — Bo wants to know the moment someone registers
       await notifyStaffRegistered({
-        org: await orgById(workerOrgId), name: String(worker.name ?? claim.name ?? email), email,
+        org: await orgById(workerOrgId), orgId: workerOrgId, name: String(worker.name ?? claim.name ?? email), email,
         phone: (worker.phone as string | null) ?? null, roles: parseWorkerRoles(worker), source: 'claim',
       })
       return NextResponse.json({ ok: true, workerId: String(claim.workerId) })
@@ -219,7 +219,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     await prisma.staffInvite.update({ where: { token: params.token }, data: { usedAt: new Date() } })
 
     // Office heads-up — Bo wants to know the moment someone registers
-    await notifyStaffRegistered({ org: await orgById(orgId), name, email, phone: phone || null, roles: [defaultRole], source: 'invite' })
+    await notifyStaffRegistered({ org: await orgById(orgId), orgId, name, email, phone: phone || null, roles: [defaultRole], source: 'invite' })
 
     return NextResponse.json({ ok: true, workerId })
   } catch (e) {
