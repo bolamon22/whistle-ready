@@ -62,3 +62,32 @@ export function eventStatus(startDate: string, endDate?: string, now: number = D
   if (days === -1) return { phase: 'yesterday', days, label: 'Yesterday' }
   return { phase: 'past', days, label: `${Math.abs(days)} days ago` }
 }
+
+/**
+ * The days of an event, 'YYYY-MM-DD', sorted: every day from startDate to endDate,
+ * any day in the old `dates` list, and any day a game already sits on.
+ *
+ * The Assigner, Availability and Time entries built their day tabs from `dates`
+ * alone. Setup now saves start/end dates and leaves `dates` as "[]", so those pages
+ * had no days at all and the Assigner grid showed the unscheduled games instead of
+ * the schedule. The Scheduler already worked from start/end plus game dates; this
+ * is that rule, in one place.
+ */
+export function eventDayList(
+  t: { dates?: string | null; startDate?: string | null; endDate?: string | null } | null | undefined,
+  gameDates: (string | null | undefined)[] = [],
+): string[] {
+  const out = new Set<string>()
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const a = parts(String(t?.startDate || '')), b = parts(String(t?.endDate || t?.startDate || ''))
+  if (a && b) {
+    const d = new Date(a[0], a[1] - 1, a[2], 12), end = new Date(b[0], b[1] - 1, b[2], 12)
+    for (let n = 0; d <= end && n < 14; n++, d.setDate(d.getDate() + 1)) out.add(ymd(d))
+  }
+  try {
+    const listed = JSON.parse(String(t?.dates || '[]'))
+    if (Array.isArray(listed)) for (const x of listed) if (parts(String(x))) out.add(String(x).slice(0, 10))
+  } catch { /* not a list: ignore */ }
+  for (const g of gameDates) if (g && parts(g)) out.add(g.slice(0, 10))
+  return [...out].sort()
+}

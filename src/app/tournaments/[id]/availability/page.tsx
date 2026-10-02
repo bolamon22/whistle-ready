@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { formatDate, formatTime } from '@/lib/utils'
 import { Users, Calendar, Clock, Wallet } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
+import { eventDayList } from '@/lib/eventDays'
 
 interface Worker { id:string;name:string;defaultRole:string }
 interface Avail { workerId:string;date:string;timeSlots:string }
-interface Tournament { id:string;name:string;dates:string;logoUrl:string }
+interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;logoUrl:string }
 
 export default function AvailabilityPage({ params }: { params:{id:string} }) {
   const [tournament,setTournament]=useState<Tournament|null>(null)
@@ -30,7 +31,7 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
     setTournament(t);setAvails(a)
     const rIds=new Set(r.map((x:{workerId:string})=>x.workerId))
     setWorkers(w.filter((x:Worker)=>rIds.has(x.id)))
-    const dates:string[]=JSON.parse(t.dates||'[]');const day=dates[0]||''
+    const dates=eventDayList(t);const day=dates[0]||''
     setActiveDay(d=>d||day)
     setTimes([...new Set((g as{date:string;startTime:string}[]).filter(x=>x.date===(activeDay||day)).map(x=>x.startTime))].sort())
     setLoading(false)
@@ -91,7 +92,7 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
 
   if(loading)return<div className="text-slate-400 text-center py-12">Loading…</div>
   if(!tournament)return<div className="text-red-500">Not found</div>
-  const dates:string[]=JSON.parse(tournament.dates||'[]')
+  const dates=eventDayList(tournament)
 
   return(
     <div className="px-0 sm:px-6">

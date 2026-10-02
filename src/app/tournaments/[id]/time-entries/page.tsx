@@ -5,10 +5,11 @@ import toast from 'react-hot-toast'
 import { formatDate } from '@/lib/utils'
 import { Users, Calendar, Clock, Wallet, Play, Square } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
+import { eventDayList } from '@/lib/eventDays'
 
 interface Worker { id:string;name:string;defaultRole:string;hourlyRate:number|null }
 interface TimeEntry { id:string;workerId:string;date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;notes:string|null;isManualEdit:boolean;worker:Worker }
-interface Tournament { id:string;name:string;dates:string;logoUrl:string }
+interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;logoUrl:string }
 
 function calcHours(e:TimeEntry):number {
   if(e.hoursManual!=null)return e.hoursManual
@@ -37,7 +38,7 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
     const t=await tR.json();const w=await wR.json();const e=await eR.json()
     setTournament(t);setEntries(e)
     setWorkers(w.filter((x:Worker)=>x.defaultRole==='athletic_trainer'||x.defaultRole==='field_ops'))
-    const dates:string[]=JSON.parse(t.dates||'[]');if(dates.length>0)setActiveDay(d=>d||dates[0])
+    const dates=eventDayList(t);if(dates.length>0)setActiveDay(d=>d||dates[0])
     // Find currently clocked-in (has clockIn, no clockOut, no manual hours)
     const ci:Record<string,string>={}
     for(const en of e){if(en.clockIn&&!en.clockOut&&en.hoursManual==null)ci[en.workerId]=en.id}
@@ -71,7 +72,7 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
 
   if(loading)return<div className="text-slate-400 text-center py-12">Loading…</div>
   if(!tournament)return<div className="text-red-500">Not found</div>
-  const dates:string[]=JSON.parse(tournament.dates||'[]')
+  const dates=eventDayList(tournament)
   const dayEntries=entries.filter(e=>e.date===activeDay)
 
   return(

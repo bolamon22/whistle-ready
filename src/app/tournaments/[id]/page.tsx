@@ -6,11 +6,12 @@ import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetD
 import TournamentNav from './TournamentNav'
 import ChatWidget from './ChatWidget'
 import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X } from 'lucide-react'
+import { eventDayList } from '@/lib/eventDays'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
 interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[] }
-interface Tournament { id:string;name:string;dates:string;divisionRules:string;logoUrl:string }
+interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string }
 interface Availability { workerId:string;date:string;timeSlots:string }
 interface RosterEntry { workerId:string;gameTarget:number }
 interface GapEntry { gameNumber:string;division:string;location:string;missingRoles:string[] }
@@ -153,8 +154,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
     const t=await tR.json();const g=await gR.json();const w=await wR.json();const a=await aR.json();const r=await rR.json()
     setTournament(t);setGames(g);setWorkers(w);setAvails(a)
     setRoster(r.map((e:{workerId:string;gameTarget:number})=>({workerId:e.workerId,gameTarget:e.gameTarget})))
-    const dates:string[]=JSON.parse(t.dates||'[]')
-    if(dates.length>0)setActiveDay(d=>d||dates[0])
+    // Same days as the Scheduler: start..end from Setup plus any day a game is on.
+    const dates=eventDayList(t,(Array.isArray(g)?g:[]).map((x:Game)=>x.date))
+    if(dates.length>0)setActiveDay(d=>d&&dates.includes(d)?d:dates[0])
     resetDivisionColors();setLoading(false)
   },[params.id])
 
@@ -323,7 +325,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   if(loading)return<div className="text-slate-400 text-center py-16">Loading…</div>
   if(!tournament)return<div className="text-red-500">Not found</div>
 
-  const dates:string[]=JSON.parse(tournament.dates||'[]')
+  const dates=eventDayList(tournament,games.map(g=>g.date))
   function gameGenderOf(div:string):'boys'|'girls'|'both'{const d=div.toLowerCase();return d.includes('girl')||d.includes('women')?'girls':d.includes('boy')||d.includes('men')?'boys':'both'}
   const dayReqs=dates.map(date=>{
     const gs=games.filter(g=>g.date===date&&!g.isCanceled)
