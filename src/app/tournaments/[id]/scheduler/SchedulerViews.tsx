@@ -264,7 +264,7 @@ function OpenChips({ p, counts, setOpen }: { p: ViewsProps; counts: Record<strin
       const on = p.filterDiv === d, c = p.divColor(d)
       const stage = divStage(counts[d]), st = stage ? STAGE[stage] : null
       return (
-        <button key={d} tabIndex={live ? 0 : -1} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }} title={abbr ? (st ? `${d} · ${st.title}` : d) : st?.title}
+        <button key={d} tabIndex={live ? 0 : -1} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }} title={[abbr ? d : null, teamsNote(counts[d], true), st?.title].filter(Boolean).join(' · ')}
           className={`inline-flex items-center gap-1.5 text-xs font-bold pl-2 ${abbr ? 'pr-2.5' : 'pr-3'} py-1 rounded-full border transition-colors whitespace-nowrap`}
           style={on ? { background: c, borderColor: c, color: '#fff' } : st ? { background: st.bg, borderColor: st.border, color: st.text } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? 'rgba(255,255,255,.85)' : c }} />
@@ -291,7 +291,15 @@ function OpenChips({ p, counts, setOpen }: { p: ViewsProps; counts: Record<strin
   )
 }
 
-interface DivCount { total: number; done: number; poolTotal: number; poolDone: number }
+interface DivCount { total: number; done: number; poolTotal: number; poolDone: number; teams: number }
+// "8 teams · 3 games each": the per-team number is what tells Bo how many games a
+// division should get per day. It counts pool games only (bracket teams are
+// placeholders), which the long form says outright.
+function teamsNote(c: DivCount | undefined, long = false): string | null {
+  if (!c || !c.teams) return null
+  const per = c.poolTotal ? Math.round((c.poolTotal * 2 / c.teams) * 10) / 10 : 0
+  return `${c.teams} team${c.teams === 1 ? '' : 's'}${per ? ` · ${per} ${long ? 'pool ' : ''}game${per === 1 ? '' : 's'} each` : ''}`
+}
 // How far a division's placement has got, for the chip shading: every game placed,
 // or every pool game placed with bracket games still to go.
 function divStage(c: DivCount | undefined): 'complete' | 'pools' | null {
@@ -308,14 +316,18 @@ const STAGE = {
 function useCounts(games: SGame[], divisions: string[]) {
   return useMemo(() => {
     const c: Record<string, DivCount> = {}
-    const blank = (): DivCount => ({ total: 0, done: 0, poolTotal: 0, poolDone: 0 })
+    const blank = (): DivCount => ({ total: 0, done: 0, poolTotal: 0, poolDone: 0, teams: 0 })
+    const teams: Record<string, Set<string>> = {}
     divisions.forEach(d => { c[d] = blank() })
     games.forEach(g => {
       const x = c[g.division] ?? (c[g.division] = blank())
       const placed = !!(g.date && g.startTime && g.location)
       x.total++; if (placed) x.done++
       if (!isBracket(g)) { x.poolTotal++; if (placed) x.poolDone++ }
+      const ts = teams[g.division] ?? (teams[g.division] = new Set())
+      ;[g.team1, g.team2].forEach(t => { if (isRealTeam(t)) ts.add(t.trim().toLowerCase()) })
     })
+    Object.entries(teams).forEach(([d, ts]) => { c[d].teams = ts.size })
     return c
   }, [games, divisions])
 }
@@ -562,7 +574,11 @@ export function TimelineView(p: ViewsProps) {
                 <div key={grp.div}>
                   <button onClick={() => setOpenDivs(o => ({ ...o, [grp.div]: !open }))} className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 text-left">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c }} />
-                    <span className="text-xs font-bold text-slate-800 flex-1 truncate">{grp.div}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-slate-800 truncate">{grp.div}</span>
+                      {/* quiet second line: how big the division is, so "how many games per day" has an answer right here */}
+                      {teamsNote(counts[grp.div]) && <span className="block text-[10px] text-slate-400 truncate leading-tight">{teamsNote(counts[grp.div])}</span>}
+                    </span>
                     <span className="text-[11px] text-slate-500">{grp.items.length}</span>
                     <ChevronDown size={12} className="text-slate-400 transition-transform" style={{ transform: open ? 'none' : 'rotate(-90deg)' }} />
                   </button>
