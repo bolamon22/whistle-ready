@@ -7,6 +7,7 @@ import { cleanName, nameKey } from '@/lib/names'
 import { renameTeamRefs, renameClubRefs, removeTeamRefs } from '@/lib/teamRename'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { pruneOrphanPoolNames } from '@/lib/poolMembership'
+import { sendSpotOpened, type PromotedTeam } from '@/lib/spotOpened'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -195,7 +196,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  return NextResponse.json(registration)
+  // OFF THE WAITING LIST. Which teams were waitlisted before this save and are
+  // not now? Matched by name+division first, then by position when the list kept
+  // its length -- the same position rule the rename carry-through uses, so a team
+  // renamed and promoted in one save is still caught.
+  const promoted: PromotedTeam[] = []
+  if (before) {
+    cleanTeams.forEach((t: { teamName: string; division: string; waitlisted: boolean }, i: number) => {
+      if (t.waitlisted) return
+      const byName = before.teams.find(b => nameKey(b.teamName) === nameKey(t.teamName) && nameKey(b.division) === nameKey(t.division))
+      const byPos = before.teams.length === cleanTeams.length ? before.teams[i] : undefined
+      const prev = byName || byPos
+      if (prev && (prev as { waitlisted?: boolean }).waitlisted) promoted.push({ teamName: t.teamName, division: t.division })
+    })
+  }
+  // Emailed only when the staff drawer asked for it (its checkbox defaults on).
+  // Unticking a waitlist box to correct a data-entry mistake must not tell a club
+  // it has a spot.
+  let spotOpenedEmail: { sent: boolean; to: string[]; error?: string } | null = null
+  if (promoted.length && body.notifyPromoted === true) {
+    const r = await sendSpotOpened(params.id, promoted)
+    spotOpenedEmail = { sent: r.ok, to: r.to, ...(r.error ? { error: r.error } : {}) }
+  }
+
+  return NextResponse.json({ ...registration, promoted, spotOpenedEmail })
   } catch (e: any) {
     console.error('Registration PATCH failed:', e)
     return NextResponse.json({ error: e?.message || 'Failed to save registration' }, { status: 500 })

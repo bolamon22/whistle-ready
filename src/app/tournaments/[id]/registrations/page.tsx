@@ -39,7 +39,10 @@ interface Registration {
   hasAccount?: boolean; accountRole?: string; accountUserId?: string
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
-interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string; waitlisted: boolean }
+// wasWaitlisted: the row's waitlist state when the edit drawer opened. Rides on the
+// row itself so it survives rows being added, removed or reordered, and lets the
+// drawer see a promotion (was waiting, now not) before it is saved.
+interface TeamRow { clubName: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string; waitlisted: boolean; wasWaitlisted?: boolean }
 type Pricing = RegPricing
 interface IndividualReg {
   id: string; firstName: string; lastName: string; email: string; phone: string
@@ -558,9 +561,15 @@ export default function RegistrationsPage() {
     setNeedsHotel(reg.needsHotel); setPaymentMethod(reg.paymentMethod); setNotes(reg.notes)
     setInvoiceAmount(reg.invoiceAmount); setDiscountAmount(reg.discountAmount); setDiscountNote(reg.discountNote)
     setClubLogoUrl((reg as any).clubLogoUrl || '')
-    setTeams(reg.teams.map(t => ({ clubName: t.clubName, teamName: t.teamName, division: t.division, coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail, logoUrl: (t as any).logoUrl || '', waitlisted: !!(t as any).waitlisted })))
+    setTeams(reg.teams.map(t => ({ clubName: t.clubName, teamName: t.teamName, division: t.division, coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail, logoUrl: (t as any).logoUrl || '', waitlisted: !!(t as any).waitlisted, wasWaitlisted: !!(t as any).waitlisted })))
+    setNotifyPromoted(true)
     setShowForm(true)
   }
+
+  // Promoting a team off the waiting list tells the club, unless unticked here --
+  // unticking a waitlist box to fix a data-entry mistake must not announce a spot.
+  const [notifyPromoted, setNotifyPromoted] = useState(true)
+  const promotedNow = editingId ? teams.filter(t => t.wasWaitlisted && !t.waitlisted) : []
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true)
@@ -574,14 +583,18 @@ export default function RegistrationsPage() {
       const res = await fetch(url, {
         method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentId, clubName, clubContact, contactEmail, contactPhone, clubBasedIn, clubWebsite, needsHotel, paymentMethod, notes, teams: teamsCompact, invoiceAmount, discountAmount, discountNote, clubLogoUrl: clubLogoCompact }),
+        body: JSON.stringify({ tournamentId, clubName, clubContact, contactEmail, contactPhone, clubBasedIn, clubWebsite, needsHotel, paymentMethod, notes, teams: teamsCompact, invoiceAmount, discountAmount, discountNote, clubLogoUrl: clubLogoCompact, notifyPromoted: promotedNow.length > 0 && notifyPromoted }),
       })
       if (!res.ok) {
         let msg = ''
         try { const d = await res.json(); msg = d?.error || '' } catch { /* ignore */ }
         throw new Error(msg || `Save failed (${res.status})`)
       }
+      const saved: any = await res.json().catch(() => null)
       toast.success(editingId ? 'Updated!' : 'Registration added!')
+      // Said separately: an email to a customer either went or it did not.
+      if (saved?.spotOpenedEmail?.sent) toast.success(`"A spot opened" email sent to ${saved.spotOpenedEmail.to.join(', ')}`, { duration: 7000 })
+      else if (saved?.spotOpenedEmail && !saved.spotOpenedEmail.sent) toast.error(`Saved, but the "spot opened" email did not send: ${saved.spotOpenedEmail.error || 'unknown error'}`, { duration: 9000 })
       setShowForm(false); resetForm(); load()
     } catch (err: any) { toast.error(err?.message ? `Failed to save: ${err.message}` : 'Failed to save.') }
     finally { setSaving(false) }
@@ -1932,6 +1945,20 @@ export default function RegistrationsPage() {
                   </div>
                   <button type="button" onClick={addTeam} className="mt-3 border border-teal-300 text-teal-700 hover:bg-teal-50 rounded-lg px-3 py-1.5 text-sm font-medium">+ Add Team</button>
                 </div>
+
+                {/* Off the waiting list: the invoice below has already re-rated; this
+                    is the part that tells the club they are in. */}
+                {promotedNow.length > 0 && (
+                  <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-emerald-900">
+                      A spot opened for {promotedNow.map(t => t.teamName || 'a team').join(', ')}
+                    </p>
+                    <label className="mt-2 flex items-start gap-2 text-sm text-emerald-900 cursor-pointer">
+                      <input type="checkbox" checked={notifyPromoted} onChange={e => setNotifyPromoted(e.target.checked)} className="mt-0.5 accent-emerald-600" />
+                      <span>Email {contactEmail || 'the club'} the good news with their updated invoice and pay link when I save.</span>
+                    </label>
+                  </div>
+                )}
 
                 {/* Invoice */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-teal-50 space-y-3">
