@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-import { helpArticlesText, helpPagesText, CHIRP_HOWTO_RULES } from '@/lib/helpArticles'
+import { requireStaff } from '@/lib/apiAuth'
+import { askerName, chirpReply, cleanId, cleanPage, lastQuestion, logStaffQuestion, staffPrompt } from '@/lib/chirp'
 
 export const runtime = 'nodejs'
 
-// AI help assistant: answers "how do I…" questions about using Whistle Ready, grounded
-// in the in-app help articles. Separate from /api/chat (which answers questions
-// about a tournament's live data).
+// Help & support → Ask Chirp: "how do I…" questions, answered from the manual
+// pages the asker's role can use. No live data. Signed-in staff only, so the
+// answer can be cut to the role and the question logged for Chirp insights.
 export async function POST(req: NextRequest) {
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
       { error: 'Help assistant not configured — add ANTHROPIC_API_KEY to Vercel environment variables.' },
@@ -15,30 +16,13 @@ export async function POST(req: NextRequest) {
     )
   }
   try {
-    const { messages, tournamentId: rawId } = await req.json()
-    const tournamentId = typeof rawId === 'string' && /^[A-Za-z0-9_-]+$/.test(rawId) ? rawId : undefined
-    const system = `You are Chirp, the friendly in-app help assistant for Whistle Ready (a tournament-management app) for sports event directors and staff. If asked your name, you are Chirp. Keep a warm, can-do tone.
-
-${CHIRP_HOWTO_RULES}
-
-=== PAGES ===
-${helpPagesText(tournamentId)}
-
-=== MANUAL ===
-${helpArticlesText()}`
-
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system,
-      messages: (messages || []).map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      })),
-    })
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    return NextResponse.json({ message: text })
+    const body = await req.json()
+    const tournamentId = cleanId(body.tournamentId)
+    const page = cleanPage(body.page)
+    const system = staffPrompt({ role: gate.role, page, tournamentId })
+    const message = await chirpReply(system, body.messages)
+    await logStaffQuestion({ tournamentId, role: gate.role, name: askerName(gate.session, gate.role), page, question: lastQuestion(body.messages), answer: message })
+    return NextResponse.json({ message })
   } catch (e: unknown) {
     console.error('Help chat error:', e)
     const msg = e instanceof Error ? e.message : 'Unknown error'
