@@ -12,14 +12,14 @@ import { nameKey } from '@/lib/names'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
-import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2, Calendar, Plus } from 'lucide-react'
+import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2, Calendar, Plus, Hourglass } from 'lucide-react'
 
 const PALETTE = [
   '#3b82f6', '#10b981', '#a855f7', '#f97316', '#ec4899',
   '#14b8a6', '#ef4444', '#f59e0b', '#6366f1', '#06b6d4',
 ]
 
-interface Division { name: string; teamCount: number; poolCount: number; unassignedTeams: number; gameCount: number; bracketGameCount?: number }
+interface Division { name: string; teamCount: number; waitlistCount?: number; poolCount: number; unassignedTeams: number; gameCount: number; bracketGameCount?: number }
 interface Pool { id: string; name: string; teamNames: string[] }
 interface PoolGame {
   id: string; gameNumber: string; pool: string | null
@@ -31,6 +31,7 @@ interface Team {
   coachName: string; coachPhone: string; coachEmail: string; logoUrl: string
   pool: string | null; paid: number; owed: number; paymentStatus: 'paid' | 'partial' | 'unpaid'
   status: 'confirmed' | 'placeholder'
+  waitlisted?: boolean  // registered on the waiting list: not in the draw, so never in a pool or a game
 }
 
 function payBadge(status: Team['paymentStatus']) {
@@ -308,7 +309,7 @@ export default function DivisionsPage() {
   // computed at page load, so it kept warning after every team had a pool.
   useEffect(() => {
     if (!activeDiv || loadingDiv) return
-    const unassigned = teams.filter(t => !t.pool).length
+    const unassigned = teams.filter(t => !t.pool && !t.waitlisted).length
     setDivisions(d => d.map(x => x.name === activeDiv && x.unassignedTeams !== unassigned ? { ...x, unassignedTeams: unassigned } : x))
   }, [teams, activeDiv, loadingDiv])
 
@@ -598,6 +599,7 @@ export default function DivisionsPage() {
 
   async function assignTeamToPool(teamName: string, poolName: string | null) {
     if (!activeDiv) return
+    if (poolName && teams.find(t => t.teamName === teamName)?.waitlisted) { toast.error(`${teamName} is on the waiting list. Take it off the list in Registrations first, then place it.`); return }
     setAssigningTeam(teamName)
     const newPools = pools.map(p => {
       const names = p.teamNames.filter(n => n !== teamName)
@@ -618,7 +620,7 @@ export default function DivisionsPage() {
   async function autoAssignPools() {
     if (!activeDiv || pools.length === 0) return
     setAutoAssigning(true)
-    const all = [...teams.map(t => t.teamName)].sort(() => Math.random() - 0.5)
+    const all = [...teams.filter(t => !t.waitlisted).map(t => t.teamName)].sort(() => Math.random() - 0.5)
     const newPools = pools.map(p => ({ ...p, teamNames: [] as string[] }))
     all.forEach((name, i) => newPools[i % newPools.length].teamNames.push(name))
     await Promise.all(newPools.map(p =>
@@ -1046,7 +1048,7 @@ if (loading) return (
                               )}
                             </div>
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
-                              <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
+                              <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''}{div.waitlistCount ? <span className="text-amber-600" title={`${div.waitlistCount} on the waiting list, not in the draw`}> +{div.waitlistCount} waitlist</span> : null} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
                               {div.gameCount > 0 && (
                                 <button
                                   onClick={e => { e.stopPropagation(); selectDiv(div.name); setActiveTab('pool-games') }}
@@ -1343,8 +1345,8 @@ if (loading) return (
                         </button>
                       </div>
                       <div className="ml-auto flex items-center gap-2">
-                        {teams.filter(t => !t.pool).length > 0 && (
-                          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{teams.filter(t => !t.pool).length} unassigned</span>
+                        {teams.filter(t => !t.pool && !t.waitlisted).length > 0 && (
+                          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{teams.filter(t => !t.pool && !t.waitlisted).length} unassigned</span>
                         )}
                         {pools.length > 0 && (groupByPool ? (
                           <button onClick={() => setGroupByPool(false)}
@@ -1365,7 +1367,7 @@ if (loading) return (
                     <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-3">
                         <div>
-                          <h2 className="font-bold text-slate-800">Teams ({teams.length})</h2>
+                          <h2 className="font-bold text-slate-800">Teams ({teams.filter(t => !t.waitlisted).length}{teams.some(t => t.waitlisted) ? <span className="text-amber-600 font-semibold"> + {teams.filter(t => t.waitlisted).length} waitlisted</span> : null})</h2>
                           <p className="text-xs text-slate-400 mt-0.5">{activeDiv}</p>
                         </div>
                         <div className="flex items-center gap-1.5 ml-1">
@@ -1425,7 +1427,7 @@ if (loading) return (
                         </div>
                         <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
                           {[...pools.map(p => ({ key: p.name, id: p.id, label: p.name, list: teams.filter(t => t.pool === p.name) })),
-                            ...(teams.some(t => !t.pool) ? [{ key: '__unassigned', id: '', label: 'No Pool', list: teams.filter(t => !t.pool) }] : [])
+                            ...(teams.some(t => !t.pool && !t.waitlisted) ? [{ key: '__unassigned', id: '', label: 'No Pool', list: teams.filter(t => !t.pool && !t.waitlisted) }] : [])
                           ].map(col => (
                             <div key={col.key}>
                               <p className="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
@@ -1472,6 +1474,31 @@ if (loading) return (
                               </div>
                             </div>
                           ))}
+                          {teams.some(t => t.waitlisted) && (
+                            <div>
+                              <p className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
+                                <Hourglass size={13} /> Waiting list
+                                <span className="text-xs font-normal text-amber-600/70">({teams.filter(t => t.waitlisted).length})</span>
+                              </p>
+                              {/* not a drop target and not draggable: a waitlisted team isn't in the draw.
+                                  It gets a pool once Registrations takes it off the list. */}
+                              <div className="min-h-52 rounded-xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-2 space-y-2">
+                                {teams.filter(t => t.waitlisted).map(team => (
+                                  <div key={team.id} title={`${team.teamName} is on the waiting list. Take it off the list in Registrations to place it in a pool.`}
+                                    className="flex items-start gap-2 bg-white/70 border border-amber-200 rounded-lg px-3 py-2 select-none">
+                                    <Hourglass size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium text-slate-700 leading-snug break-words">{team.teamName}</p>
+                                      {team.clubName && team.clubName.trim().toLowerCase() !== team.teamName.trim().toLowerCase() && (
+                                        <p className="text-xs text-slate-400 leading-snug break-words mt-0.5">{team.clubName}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                                <p className="text-[11px] text-amber-700/80 px-1 pt-1">Not in the draw. Clear the waitlist flag in Registrations to place these teams.</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <p className="mt-4 text-xs text-slate-400">Switch to <strong className="text-slate-500">List view</strong> to edit team details.</p>
                       </div>
@@ -1510,11 +1537,16 @@ if (loading) return (
                                     {team.status === 'placeholder' && (
                                       <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
                                     )}
+                                    {team.waitlisted && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full" title="On the waiting list: not in the draw. Clear the flag in Registrations to place this team."><Hourglass size={10} /> Waitlist</span>
+                                    )}
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 text-slate-500 text-xs">{team.clubName}</td>
                                 <td className="px-3 py-3">
-                                  {pools.length > 0 ? (
+                                  {team.waitlisted ? (
+                                    <span className="text-xs text-amber-600" title="Take this team off the waiting list in Registrations to place it">Waiting list</span>
+                                  ) : pools.length > 0 ? (
                                     <select
                                       value={team.pool ?? ''}
                                       onChange={e => { e.stopPropagation(); assignTeamToPool(team.teamName, e.target.value || null) }}

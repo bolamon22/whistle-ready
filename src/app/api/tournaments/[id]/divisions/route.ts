@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       // to clear them.
       prisma.registeredTeam.findMany({
         where: { registration: { tournamentId: params.id, deletedAt: null } },
-        select: { division: true },
+        select: { division: true, waitlisted: true },
       }),
       prisma.tournament.findUnique({ where: { id: params.id }, select: { registrationDivisions: true } }),
       prisma.game.findMany({
@@ -29,26 +29,28 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       })
     } catch { /* Pool table not migrated yet */ }
 
-    const divMap = new Map<string, { teams: number; pools: number; assignedTeams: number; gameCount: number }>()
+    // teams = teams in the draw; waitlisted teams are counted apart so they never
+    // read as "unassigned" (they have no pool on purpose).
+    const divMap = new Map<string, { teams: number; waitlisted: number; pools: number; assignedTeams: number; gameCount: number }>()
 
     // Seed from registrationDivisions so empty divisions show up
     const regDivs: string[] = JSON.parse(tournament?.registrationDivisions ?? '[]')
     for (const name of regDivs) {
-      if (!divMap.has(name)) divMap.set(name, { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 })
+      if (!divMap.has(name)) divMap.set(name, { teams: 0, waitlisted: 0, pools: 0, assignedTeams: 0, gameCount: 0 })
     }
 
     for (const t of teams) {
-      const cur = divMap.get(t.division) ?? { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
-      divMap.set(t.division, { ...cur, teams: cur.teams + 1 })
+      const cur = divMap.get(t.division) ?? { teams: 0, waitlisted: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
+      divMap.set(t.division, t.waitlisted ? { ...cur, waitlisted: cur.waitlisted + 1 } : { ...cur, teams: cur.teams + 1 })
     }
     for (const p of pools) {
-      const cur = divMap.get(p.division) ?? { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
+      const cur = divMap.get(p.division) ?? { teams: 0, waitlisted: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
       const names: string[] = JSON.parse(p.teamNames || '[]')
       divMap.set(p.division, { ...cur, pools: cur.pools + 1, assignedTeams: cur.assignedTeams + names.length })
     }
     const bracketCount = new Map<string, number>()
     for (const g of games) {
-      const cur = divMap.get(g.division) ?? { teams: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
+      const cur = divMap.get(g.division) ?? { teams: 0, waitlisted: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
       const isBracket = (g.gameNumber || '').startsWith('B')
       if (isBracket) {
         divMap.set(g.division, cur)
@@ -62,6 +64,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       .map(([name, data]) => ({
         name,
         teamCount: data.teams,
+        waitlistCount: data.waitlisted,
         poolCount: data.pools,
         unassignedTeams: Math.max(0, data.teams - data.assignedTeams),
         gameCount: data.gameCount,

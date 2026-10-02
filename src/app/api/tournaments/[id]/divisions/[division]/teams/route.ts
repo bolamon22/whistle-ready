@@ -65,6 +65,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
         // discounted invoice used to read as partial.
         paymentStatus: st === 'none' ? 'unpaid' : st,
         status: statusRow[0]?.status ?? 'confirmed',
+        waitlisted: !!t.waitlisted,
       }
     }))
 
