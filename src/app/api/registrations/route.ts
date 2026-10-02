@@ -184,7 +184,11 @@ async function buildAndSendConfirmation(reg: any) {
     try { const rr: any[] = await prisma.$queryRawUnsafe('SELECT regConfirmationOverride FROM "Tournament" WHERE id = ?', reg.tournamentId); const raw = rr?.[0]?.regConfirmationOverride; if (raw) override = JSON.parse(raw) } catch {}
     const cfg = resolveRegConfirmation(orgForms.registration, override)
 
-    const teams = (reg.teams || []).map((x: any) => ({ team: x.teamName || x.clubName || 'Team', division: x.division || '' }))
+    // waitlisted is carried through now. It used to be dropped right here, so the
+    // letter (and the organizer's call sheet) could not tell a full-division team
+    // from a confirmed one -- Fire Ants, Oct 1 2026, waitlisted with their only
+    // team, were told their spot was reserved and shown a $0 total.
+    const teams = (reg.teams || []).map((x: any) => ({ team: x.teamName || x.clubName || 'Team', division: x.division || '', waitlisted: !!x.waitlisted }))
     let amount = Number(reg.invoiceAmount) || 0
     // Recompute from reg.teams, NOT the display array above -- that one is
     // mapped down to {team, division} and drops waitlisted, so billing off it

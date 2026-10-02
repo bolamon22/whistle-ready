@@ -56,7 +56,10 @@ export type RegLetterData = {
   location?: string
   clubName: string
   contactName?: string
-  teams: { team?: string; division?: string }[]
+  // waitlisted: the division was full when they registered. Carried all the way
+  // to the letter because the letter used to drop it -- a club whose only team
+  // was waitlisted got "your spot is reserved" and a $0 total with no reason why.
+  teams: { team?: string; division?: string; waitlisted?: boolean }[]
   amount?: number           // total owed/charged
   paymentMethod?: string    // 'card' | 'ach' | 'check' | 'invoice' | ...
   paid?: boolean
@@ -102,20 +105,53 @@ export type RegLetter = {
   subject: string
   greeting: string
   welcome: string     // tokens resolved, still markdown
-  teams: { team?: string; division?: string }[]
+  teams: { team?: string; division?: string; waitlisted?: boolean }[]
   numTeams: number
+  /** Markdown. Present when any team is on the waiting list; says which, why,
+   *  that it is not billed, and what happens if a spot opens. Fixed wording, not
+   *  org-editable -- it states facts about THIS registration. */
+  waitlistNote: string | null
+  /** Every team is waitlisted: nothing about this registration is confirmed. */
+  allWaitlisted: boolean
   payment: string | null
   nextSteps: string   // markdown, tokens resolved
   signoff: string     // markdown, tokens resolved
 }
 
+const listJoin = (xs: string[]) => xs.length <= 1 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]
+
+/** What a waitlisted registrant needs to hear, in plain words: which team, that
+ *  the division is full, that they are NOT charged and NOT in, and that we will
+ *  email them if that changes. */
+export function waitlistNote(d: RegLetterData): string | null {
+  const all = d.teams || []
+  const wl = all.filter(t => t.waitlisted)
+  if (!wl.length) return null
+  const one = wl.length === 1
+  const names = listJoin(wl.map(t => `**${t.team || 'Team'}**${t.division ? ` (${t.division})` : ''}`))
+  if (wl.length === all.length) {
+    return `${names} ${one ? 'is' : 'are'} on the waiting list — ${one ? 'that division is' : 'those divisions are'} full right now, so we've saved your place in line. You haven't been charged anything. If a spot opens, we'll email you right away with your invoice and a link to pay; ${one ? 'your team is' : 'your teams are'} not in the event until then.`
+  }
+  return `${names} ${one ? 'is' : 'are'} on the waiting list because ${one ? 'that division is' : 'those divisions are'} full right now. ${one ? "It isn't" : "They aren't"} included in your total. If a spot opens, we'll email you right away with the updated invoice.`
+}
+
 export function buildRegLetter(cfg: RegConfirmation, d: RegLetterData): RegLetter {
+  const teams = d.teams || []
+  const allWaitlisted = teams.length > 0 && teams.every(t => t.waitlisted)
+  // A club whose every team is waitlisted has nothing confirmed, and the default
+  // subject ("Registration confirmed") and welcome ("your spot is reserved") would
+  // both be false. Only in that case are they replaced; a club with even one team
+  // in keeps the org's own wording, plus the note naming the team that is not.
   return {
-    subject: tokens(cfg.subject, d),
+    subject: allWaitlisted ? tokens("You're on the waiting list — {tournament}", d) : tokens(cfg.subject, d),
     greeting: d.contactName ? `Hi ${d.contactName.split(' ')[0]},` : 'Hello,',
-    welcome: tokens(cfg.welcome, d),
-    teams: d.teams || [],
-    numTeams: (d.teams || []).length,
+    welcome: allWaitlisted
+      ? tokens("Thank you for registering **{club}** for **{tournament}**! The division you picked is full right now, so you're on our waiting list — we have your details, and you'll hear from us the moment a spot opens.", d)
+      : tokens(cfg.welcome, d),
+    teams,
+    numTeams: teams.length,
+    waitlistNote: waitlistNote(d),
+    allWaitlisted,
     payment: paymentLine(d),
     nextSteps: tokens(cfg.nextSteps, d),
     signoff: tokens(cfg.signoff, d),
@@ -147,9 +183,11 @@ function emailMd(src: string): string {
 }
 
 export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
-  const teamRows = (letter.teams.length ? letter.teams : [{}]).map(t =>
-    `<tr><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600">${escHtml(t.team || 'Team')}</td><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;text-align:right">${escHtml(t.division || '')}</td></tr>`
+  const wlTag = '<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:9px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase">Waiting list</span>'
+  const teamRows = (letter.teams.length ? letter.teams : [{} as { team?: string; division?: string; waitlisted?: boolean }]).map(t =>
+    `<tr><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600">${escHtml(t.team || 'Team')}</td><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;text-align:right">${escHtml(t.division || '')}${t.waitlisted ? wlTag : ''}</td></tr>`
   ).join('')
+  const wlNote = letter.waitlistNote ? `<div style="margin:14px 0;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#92400e;font-size:14px;line-height:1.6">${emailMd(letter.waitlistNote).replace(/color:#475569/g, 'color:#92400e').replace(/color:#0f172a/g, 'color:#78350f')}</div>` : ''
   const pay = letter.payment ? `<p style="margin:14px 0;padding:12px 14px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;color:#0f766e;font-size:14px">${escHtml(letter.payment)}</p>` : ''
   const links: string[] = []
   if (d.eventUrl) links.push(`<a href="${d.eventUrl}" style="color:#0f766e">Event page</a>`)
@@ -187,6 +225,7 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
       ${teamRows}
       <tr><td style="padding:6px 12px;color:#64748b">Teams</td><td style="padding:6px 12px;color:#0f172a;font-weight:600;text-align:right">${letter.numTeams}</td></tr>
     </table>
+    ${wlNote}
     ${pay}
     ${claim}
     ${emailMd(letter.nextSteps)}
@@ -212,7 +251,8 @@ export type RegNotifyData = RegLetterData & {
 
 export function organizerEmailSubject(d: RegNotifyData): string {
   const n = (d.teams || []).length
-  return `New registration — ${d.clubName || 'Unknown club'} (${n} team${n === 1 ? '' : 's'}) — ${d.tournamentName}`
+  const w = (d.teams || []).filter(t => t.waitlisted).length
+  return `New registration — ${d.clubName || 'Unknown club'} (${n} team${n === 1 ? '' : 's'}${w ? `, ${w === n ? 'all' : w} on waiting list` : ''}) — ${d.tournamentName}`
 }
 
 export function organizerEmailHtml(d: RegNotifyData): string {
@@ -221,7 +261,7 @@ export function organizerEmailHtml(d: RegNotifyData): string {
     <td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600;text-align:right">${href ? `<a href="${href}" style="color:#0f766e">${escHtml(value)}</a>` : escHtml(value)}</td>
   </tr>` : ''
   const teamRows = (d.teams || []).map(t =>
-    `<tr><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a">${escHtml(t.team || 'Team')}</td><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;text-align:right">${escHtml(t.division || '')}</td></tr>`
+    `<tr><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a">${escHtml(t.team || 'Team')}</td><td style="padding:6px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;text-align:right">${escHtml(t.division || '')}${t.waitlisted ? ' <strong style="color:#92400e">· WAITING LIST</strong>' : ''}</td></tr>`
   ).join('')
   const pay = d.amount ? `<p style="margin:12px 0;padding:10px 14px;background:${d.paid ? '#f0fdf4;border:1px solid #bbf7d0' : '#fffbeb;border:1px solid #fde68a'};border-radius:8px;font-size:14px;color:${d.paid ? '#166534' : '#92400e'}">${d.paid ? `Paid online — ${money(d.amount)} received.` : `${money(d.amount)} due · method: ${escHtml(d.paymentMethod || 'not set')}`}</p>` : ''
   return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:24px">

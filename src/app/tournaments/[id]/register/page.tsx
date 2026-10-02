@@ -220,16 +220,19 @@ export default function RegisterPage() {
           <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
-          <h2 className="text-2xl font-bold text-center text-slate-900 mb-1">{donePaid && !achNote ? 'Payment complete!' : 'Registration received!'}</h2>
+          <h2 className="text-2xl font-bold text-center text-slate-900 mb-1">{donePaid && !achNote ? 'Payment complete!' : L?.allWaitlisted ? "You're on the waiting list" : 'Registration received!'}</h2>
           {L ? (
             <div className="mt-4 text-left">
               <p className="font-semibold text-slate-800">{L.greeting}</p>
               <div className="text-slate-600 text-sm mt-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(L.welcome) }} />
               <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden text-sm">
                 <div className="flex justify-between px-4 py-2 bg-slate-50"><span className="text-slate-500">Club</span><span className="font-semibold text-slate-800">{D?.clubName}</span></div>
-                {L.teams.map((t: any, i: number) => <div key={i} className="flex justify-between px-4 py-2 border-t border-slate-100"><span className="text-slate-700">{t.team}</span><span className="text-slate-500">{t.division}</span></div>)}
+                {L.teams.map((t: any, i: number) => <div key={i} className="flex justify-between gap-2 px-4 py-2 border-t border-slate-100"><span className="text-slate-700">{t.team}</span><span className="text-slate-500 text-right">{t.division}{t.waitlisted && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-100 rounded-full px-2 py-0.5 whitespace-nowrap">Waiting list</span>}</span></div>)}
                 <div className="flex justify-between px-4 py-2 border-t border-slate-100"><span className="text-slate-500">Teams</span><span className="font-semibold text-slate-800">{L.numTeams}</span></div>
               </div>
+              {/* Same note as the email, so the screen and the inbox say the same
+                  thing about which teams are in and which are waiting. */}
+              {L.waitlistNote && <div className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2 leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(L.waitlistNote) }} />}
               {achNote === 'processing' && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">Bank transfer (ACH) initiated — it typically clears within 4 business days, and we&apos;ll mark your registration paid automatically once it does.</p>}
               {achNote === 'micro' && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">One more step: Stripe is sending a small verification deposit to your bank (1&ndash;2 days). Follow the emailed instructions{microUrl ? <> or <a href={microUrl} className="underline" target="_blank" rel="noreferrer">verify here</a></> : null} to complete your payment.</p>}
               {!achNote && (donePaid || L.payment) && <p className="mt-3 text-sm bg-teal-50 border border-teal-100 text-teal-800 rounded-lg px-3 py-2">{donePaid ? "Payment received — you're all set." : L.payment}</p>}
