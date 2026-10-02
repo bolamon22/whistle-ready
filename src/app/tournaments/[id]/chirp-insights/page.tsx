@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import TournamentNav from '../TournamentNav'
 import ChirpFaqSuggest from '@/components/ChirpFaqSuggest'
 import { MessageCircleQuestion } from 'lucide-react'
+import { roleLabel, staffLogKey, type StaffLogEntry } from '@/lib/chirp'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,13 +15,24 @@ function ago(ms: number): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
-export default async function ChirpInsightsPage({ params }: { params: { id: string } }) {
-  const [t, row] = await Promise.all([
+const shortRole = (r: string) => roleLabel(r).replace(/^an? /, '').split(',')[0].replace(/ \(.*$/, '')
+
+export default async function ChirpInsightsPage({ params, searchParams }: { params: { id: string }; searchParams?: { staff?: string } }) {
+  const [t, row, staffRow] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: params.id } }).catch(() => null),
     prisma.appSetting.findUnique({ where: { key: `chirpLog:${params.id}` } }).catch(() => null),
+    prisma.appSetting.findUnique({ where: { key: staffLogKey(params.id) } }).catch(() => null),
   ])
   let log: { q: string; at: number; team?: string }[] = []
   try { const v = JSON.parse((row as any)?.value || '[]'); if (Array.isArray(v)) log = v } catch {}
+  // Staff questions from the floating Chirp and Help → Ask Chirp. The ones the
+  // manual could not answer are the to-do list for the help pages.
+  let staffLog: StaffLogEntry[] = []
+  try { const v = JSON.parse((staffRow as any)?.value || '[]'); if (Array.isArray(v)) staffLog = v } catch {}
+  const missedOnly = searchParams?.staff === 'missed'
+  const missedCount = staffLog.filter(e => !e.covered).length
+  const staffShown = [...staffLog].reverse().filter(e => !missedOnly || !e.covered).slice(0, 80)
+  const tabCls = (on: boolean) => `text-xs font-medium px-3 py-1.5 rounded-full border ${on ? 'bg-teal-50 border-teal-200 text-teal-800' : 'border-slate-200 text-slate-500 hover:text-slate-800'}`
 
   const counts = new Map<string, { q: string; n: number }>()
   for (const e of log) { const k = norm(e.q || ''); if (!k) continue; const c = counts.get(k); if (c) c.n++; else counts.set(k, { q: e.q, n: 1 }) }
@@ -34,8 +46,39 @@ export default async function ChirpInsightsPage({ params }: { params: { id: stri
 
         <div className="mb-5">
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2"><MessageCircleQuestion size={20} className="text-teal-600" /> Chirp insights</h1>
-          <p className="text-sm text-slate-500 mt-1">What attendees are asking Chirp on your public pages. {log.length} question{log.length === 1 ? '' : 's'} so far.</p>
+          <p className="text-sm text-slate-500 mt-1">What your staff and attendees ask Chirp.</p>
         </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">Staff questions</h2>
+              <p className="text-sm text-slate-500">{staffLog.length} asked · {missedCount} the help manual couldn't answer</p>
+            </div>
+            <div className="flex gap-1.5">
+              <a href="?" className={tabCls(!missedOnly)}>All</a>
+              <a href="?staff=missed" className={tabCls(missedOnly)}>Couldn't answer ({missedCount})</a>
+            </div>
+          </div>
+          {staffShown.length === 0 ? (
+            <p className="text-sm text-slate-400 py-3">{missedOnly ? 'Nothing unanswered.' : 'No staff questions yet. Questions asked in the floating Chirp or Help → Ask Chirp show up here.'}</p>
+          ) : (
+            <div className="space-y-1">
+              {staffShown.map((e, i) => (
+                <div key={i} className="flex items-start justify-between gap-3 text-sm py-1.5 border-b border-slate-100 last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-slate-700">{e.q}{!e.covered && <span className="ml-2 text-[11px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">Not in manual</span>}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{[e.name, shortRole(e.role), e.page].filter(Boolean).join(' · ')}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-400">{ago(e.at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <h2 className="font-semibold text-slate-900 mb-1">Public questions</h2>
+        <p className="text-sm text-slate-500 mb-3">What attendees ask Chirp on your public pages, without names. {log.length} question{log.length === 1 ? '' : 's'} so far.</p>
 
         {log.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500">
