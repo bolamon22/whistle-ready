@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import ChirpAvatar from '@/components/ChirpAvatar'
+import DictateButton from '@/components/DictateButton'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 interface Props { tournamentId: string; tournamentName: string }
@@ -9,8 +10,8 @@ interface Props { tournamentId: string; tournamentName: string }
 const SUGGESTIONS = [
   'How many games are unscheduled?',
   'How many refs are on the roster?',
-  "What's the balance due?",
-  'Which divisions have the most teams?',
+  'Who gets the new-registration emails?',
+  'How do I assign refs to games?',
 ]
 
 export default function ChatWidget({ tournamentId, tournamentName }: Props) {
@@ -94,7 +95,7 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
             {messages.length === 0 ? (
               <div className="space-y-3">
                 <p className="text-xs text-slate-500 text-center pt-2">
-                  Ask me anything about <strong>{tournamentName}</strong>
+                  Ask about <strong>{tournamentName}</strong>, or how to do something in Whistle Ready
                 </p>
                 <div className="space-y-1.5">
                   {SUGGESTIONS.map(s => (
@@ -138,10 +139,11 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-                placeholder="Ask about this tournament…"
+                placeholder="Ask a question…"
                 className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 disabled={loading}
               />
+              <DictateButton value={input} onChange={setInput} disabled={loading} />
               <button onClick={() => send()} disabled={loading || !input.trim()}
                 className="bg-teal-500 hover:bg-teal-400 disabled:opacity-40 text-white px-3 py-2 rounded-xl transition-colors text-sm font-medium">
                 →

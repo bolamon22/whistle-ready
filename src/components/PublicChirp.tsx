@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import ChirpAvatar from '@/components/ChirpAvatar'
+import DictateButton from '@/components/DictateButton'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 const SUGGESTIONS = [
@@ -96,6 +97,7 @@ export default function PublicChirp({ tournamentId, tournamentName }: { tourname
             <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
               placeholder="Ask about this event…" disabled={loading}
               className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+            <DictateButton value={input} onChange={setInput} disabled={loading} />
             <button onClick={() => send()} disabled={loading || !input.trim()} className="bg-teal-500 hover:bg-teal-400 disabled:opacity-40 text-white px-3 py-2 rounded-xl text-sm font-medium">→</button>
           </div>
         </div>

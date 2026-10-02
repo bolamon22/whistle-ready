@@ -4,6 +4,7 @@ import { HelpCircle, X, ArrowLeft, Search, Send, Mail, BookOpen, Sparkles } from
 import { HELP_ARTICLES, HELP_CATEGORIES } from '@/lib/helpArticles'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import ChirpAvatar from '@/components/ChirpAvatar'
+import DictateButton from '@/components/DictateButton'
 
 const SUPPORT_EMAIL = 'support@whistleready.com'
 const SUGGESTIONS = [
@@ -48,7 +49,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
     try {
       const res = await fetch('/api/help', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, tournamentId }),
       })
       const data = await res.json()
       setMessages(m => [...m, { role: 'assistant', content: res.ok ? (data.message ?? 'Sorry, something went wrong.') : (data.error || 'Something went wrong.') }])
@@ -163,6 +164,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                 <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
                   placeholder="Ask a question…" disabled={loading}
                   className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                <DictateButton value={input} onChange={setInput} disabled={loading} />
                 <button type="button" onClick={() => send()} disabled={loading || !input.trim()}
                   className="bg-teal-500 hover:bg-teal-400 disabled:opacity-40 text-white px-3 py-2 rounded-xl transition-colors inline-flex items-center"><Send size={15} /></button>
               </div>
