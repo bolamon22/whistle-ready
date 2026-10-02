@@ -326,6 +326,42 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     } catch { /* non-fatal */ }
   }
 
+  // Fields closed for a day (Oct 2026). Bo: "3B I'm not going to be using on
+  // Saturday" -- block it so nothing lands there by hand or by Auto-fill, and
+  // reopen it if he changes his mind. Stored on the day's availability record
+  // beside its hours (closedFields: fullName[]), so it rides along with the venue
+  // and the same day on another device sees it. Games already on a closed field
+  // stay put and are flagged; closing a field never moves anything.
+  const closedFor = (date: string): Set<string> => {
+    const d = dayAvail.find((x: any) => x.date === date)
+    return new Set<string>(Array.isArray(d?.closedFields) ? d.closedFields : [])
+  }
+  const closedToday = closedFor(activeDate)
+  async function toggleFieldClosed(fullName: string) {
+    const target = activeDate || dates[0] || ''
+    if (!target) return
+    const nowClosed = closedToday.has(fullName)
+    const f = fields.find(x => x.fullName === fullName)
+    if (!nowClosed) {
+      const n = games.filter(g => g.date === target && g.location === fullName && g.startTime).length
+      if (n > 0 && !confirm(`${f?.fieldName ?? fullName} has ${n} game${n === 1 ? '' : 's'} on ${fmtDate(target)}. Close it anyway?\n\nThe games stay where they are and are flagged until you move them. Nothing new can be placed there.`)) return
+    }
+    const cur = dayAvail.find((x: any) => x.date === target)
+    const list = new Set<string>(Array.isArray(cur?.closedFields) ? cur.closedFields : [])
+    if (nowClosed) list.delete(fullName); else list.add(fullName)
+    const entry = { ...(cur ?? { date: target, slots: [] }), closedFields: Array.from(list) }
+    const next = cur ? dayAvail.map((d: any) => d.date === target ? entry : d) : [...dayAvail, entry]
+    setDayAvail(next)
+    try {
+      const r = await fetch(`/api/venues/${params.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venues: storedVenuesRaw, defaultAvailability: next }),
+      })
+      if (!r.ok) throw new Error()
+      toast.success(nowClosed ? `${f?.fieldName ?? fullName} is open on ${fmtDate(target)}` : `${f?.fieldName ?? fullName} is closed on ${fmtDate(target)}`)
+    } catch { toast.error('Could not save that. Reload and try again.') }
+  }
+
   // The scheduler only edits field names and order, but Setup stores more on each
   // venue (address, map links) and each field (id, abbreviation, availability window,
   // division limits). Saving just {name, fields: string[]} wiped all of that, so the
@@ -497,6 +533,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     setOverCell(null)
     const gameId = e.dataTransfer.getData('gameId') || dragId
     if (!gameId) return
+    if (closedToday.has(field)) { toast.error(`${fields.find(f => f.fullName === field)?.fieldName ?? field} is closed on this day`); return }
     const occupied = games.find(g => g.id !== gameId && g.date === activeDate && g.startTime === time && g.location === field)
     if (occupied) { toast.error(`${field} is already booked at ${time}`); return }
     setScratchPad(prev => prev.filter(id => id !== gameId))
@@ -837,7 +874,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   function openAutoFill() {
     setAfDiv(gridDiv)
-    setAfFields(new Set(visibleFields.map(f => f.fullName)))
+    setAfFields(new Set(visibleFields.filter(f => !closedToday.has(f.fullName)).map(f => f.fullName)))
     // Defaults: pool play up to 3 a team on the first day; bracket on the last day.
     const first = dates[0], last = dates[dates.length - 1]
     const caps: Record<string, number> = {}
@@ -897,7 +934,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         if (!remaining.length) break
         const batch = pickForDay(remaining, d, afCaps[d])
         if (!batch.length) continue
-        const af = autoFill({ toPlace: batch.map(toA), placed: occFor(d), fields: fieldsArg, slots: slotsFor(d), maxPerDay: afCaps[d] })
+        const closed = closedFor(d)
+        const af = autoFill({ toPlace: batch.map(toA), placed: occFor(d), fields: fieldsArg.filter(f => !closed.has(f.fullName)), slots: slotsFor(d), maxPerDay: afCaps[d] })
         af.placements.forEach(pp => results.push({ ...pp, date: d }))
         const done = new Set(af.placements.map(pp => pp.id))
         remaining = remaining.filter(g => !done.has(g.id))
@@ -953,7 +991,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       let remaining = toPlace
       for (const d of days) {
         if (!remaining.length) break
-        const af = autoFill({ toPlace: remaining.map(toA), placed: occFor(d), fields: fieldsArg, slots: allSlots })
+        const closed = closedFor(d)
+        const af = autoFill({ toPlace: remaining.map(toA), placed: occFor(d), fields: fieldsArg.filter(f => !closed.has(f.fullName)), slots: allSlots })
         af.placements.forEach(pp => results.push({ ...pp, date: d }))
         const done = new Set(af.placements.map(pp => pp.id))
         remaining = remaining.filter(g => !done.has(g.id))
@@ -2002,6 +2041,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             saving,
             prefsKey: params.id,
             onReorderFields: reorderField,
+            closedFields: closedToday,
+            onToggleClosed: toggleFieldClosed,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()
@@ -2014,9 +2055,14 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   Time
                 </th>
                 {visibleFields.map(f => (
-                  <th key={f.fullName} className="bg-slate-100 border border-slate-200 px-3 py-2 text-center min-w-[155px] group relative">
+                  <th key={f.fullName} className={`border border-slate-200 px-3 py-2 text-center min-w-[155px] group relative ${closedToday.has(f.fullName) ? 'bg-red-50' : 'bg-slate-100'}`}>
                     <div className="text-[10px] text-slate-400 font-normal">{f.venueName}</div>
                     <div className="text-xs font-semibold text-slate-700">{f.fieldName}</div>
+                    <button onClick={() => toggleFieldClosed(f.fullName)}
+                      className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full border ${closedToday.has(f.fullName) ? 'bg-red-100 border-red-300 text-red-700' : 'border-transparent text-slate-300 opacity-0 group-hover:opacity-100 hover:text-slate-600 hover:border-slate-300'}`}
+                      title={closedToday.has(f.fullName) ? 'Closed on this day. Click to reopen.' : 'Close this field for this day: nothing can be placed on it by hand or by Auto-fill'}>
+                      {closedToday.has(f.fullName) ? 'Closed today' : 'Close today'}
+                    </button>
                     <button
                       onClick={() => removeField(f.fullName)}
                       className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 text-xs leading-none transition-opacity"
@@ -2062,8 +2108,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     return (
                       <td
                         key={f.fullName}
-                        className={`border border-slate-200 p-1 align-top ${slotHasGame ? 'h-16' : 'h-8'} transition-colors ${isOver ? 'bg-teal-50' : 'bg-white hover:bg-slate-50'}`}
-                        onDragOver={e => { e.preventDefault(); setOverCell(cellKey) }}
+                        className={`border border-slate-200 p-1 align-top ${slotHasGame ? 'h-16' : 'h-8'} transition-colors ${isOver ? 'bg-teal-50' : closedToday.has(f.fullName) ? '' : 'bg-white hover:bg-slate-50'}`}
+                        style={closedToday.has(f.fullName) && !game ? { background: 'repeating-linear-gradient(135deg,#fff 0 8px,#fef2f2 8px 10px)' } : undefined}
+                        onDragOver={e => { if (closedToday.has(f.fullName)) return; e.preventDefault(); setOverCell(cellKey) }}
                         onDragLeave={() => setOverCell(null)}
                         onDrop={e => handleDropCell(e, slot, f.fullName)}
                       >

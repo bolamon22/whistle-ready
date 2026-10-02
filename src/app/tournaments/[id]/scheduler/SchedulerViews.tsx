@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -57,11 +57,16 @@ export interface ViewsProps {
   prefsKey?: string
   /** Timeline/Board: a field header dropped on another takes its place. The page saves the order. */
   onReorderFields?: (fromFullName: string, toFullName: string) => void
+  /** Fields closed on the active day: nothing can be placed there; games already there are flagged. */
+  closedFields?: Set<string>
+  onToggleClosed?: (fullName: string) => void
 }
 
-type IssueKind = 'conflict' | 'b2b' | 'bracket' | 'gap'
-const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues']; label: string; dot: string; bg: string; border: string }[] = [
+type IssueKind = 'conflict' | 'closed' | 'b2b' | 'bracket' | 'gap'
+const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues'] | null; label: string; dot: string; bg: string; border: string }[] = [
   { kind: 'conflict', key: 'conflict', label: 'Double-booked', dot: '#ef4444', bg: '#fee2e2', border: '#ef4444' },
+  // not in p.issues: computed from closedFields + dayGames in useIssueList
+  { kind: 'closed',   key: null,       label: 'Field closed',  dot: '#dc2626', bg: '#fee2e2', border: '#dc2626' },
   { kind: 'b2b',      key: 'b2b',      label: 'Back-to-back',  dot: '#f59e0b', bg: '#fef3c7', border: '#f59e0b' },
   { kind: 'bracket',  key: 'bracket',  label: 'Bracket order', dot: '#ea580c', bg: '#ffedd5', border: '#ea580c' },
   { kind: 'gap',      key: 'gap',      label: 'Long gap',      dot: '#14b8a6', bg: '',        border: '' },
@@ -151,6 +156,7 @@ function useIssueList(p: ViewsProps) {
     const seen = new Set<string>()
     const gameById = new Map(p.games.map(g => [g.id, g]))
     for (const k of KINDS) {
+      if (!k.key) continue
       p.issues[k.key].forEach((msgs, id) => {
         const g = gameById.get(id); if (!g) return
         const items = msgs.split('\n').filter(Boolean)
@@ -164,15 +170,26 @@ function useIssueList(p: ViewsProps) {
         })
       })
     }
-    const order: Record<IssueKind, number> = { conflict: 0, b2b: 1, bracket: 2, gap: 3 }
+    // Games sitting on a field that is closed today: they have to move before publish.
+    const closedKind = KINDS.find(k => k.kind === 'closed')!
+    if (p.closedFields && p.closedFields.size) {
+      for (const g of p.dayGames) {
+        if (!p.closedFields.has(g.location)) continue
+        const field = p.fields.find(f => f.fullName === g.location)?.fieldName ?? g.location
+        const text = `${g.gameNumber} is on ${field}, which is closed today. Move it.`
+        byGame.set(g.id, [...(byGame.get(g.id) ?? []), { kind: 'closed', label: closedKind.label, dot: closedKind.dot, text }])
+        list.push({ kind: 'closed', label: closedKind.label, dot: closedKind.dot, text, gameId: g.id, division: g.division })
+      }
+    }
+    const order: Record<IssueKind, number> = { conflict: 0, closed: 1, b2b: 2, bracket: 3, gap: 4 }
     list.sort((a, b) => order[a.kind] - order[b.kind])
     return { byGame, list }
-  }, [p.games, p.issues])
+  }, [p.games, p.issues, p.closedFields, p.dayGames, p.fields])
 }
 
 function worstOf(items: { kind: IssueKind }[] | undefined) {
   if (!items || items.length === 0) return null
-  const order: IssueKind[] = ['conflict', 'b2b', 'bracket', 'gap']
+  const order: IssueKind[] = ['conflict', 'closed', 'b2b', 'bracket', 'gap']
   return order.find(k => items.some(i => i.kind === k)) ?? null
 }
 const KIND = (k: IssueKind | null) => KINDS.find(x => x.kind === k)
@@ -183,7 +200,7 @@ const KIND = (k: IssueKind | null) => KINDS.find(x => x.kind === k)
 
 function IssueBadge({ kind, count }: { kind: IssueKind; count: number }) {
   const k = KIND(kind)!
-  const Icon = kind === 'conflict' ? AlertTriangle : kind === 'b2b' ? ArrowLeftRight : kind === 'bracket' ? Zap : Clock
+  const Icon = kind === 'conflict' ? AlertTriangle : kind === 'closed' ? Ban : kind === 'b2b' ? ArrowLeftRight : kind === 'bracket' ? Zap : Clock
   return (
     <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow ring-2 ring-white" style={{ background: k.dot, color: kind === 'b2b' ? '#0f172a' : '#fff' }}>
       <Icon size={11} />
@@ -468,7 +485,9 @@ export function TimelineView(p: ViewsProps) {
     onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setLotOver(false) },
     onDrop: (e: React.DragEvent) => { e.preventDefault(); setLotOver(false); const id = dropTarget(e); setDragId(null); if (id && p.dayGames.some(g => g.id === id)) { setSelId(null); p.onUnschedule(id) } },
   }
+  const isClosed = (field: string) => !!p.closedFields?.has(field)
   const place = async (g: SGame, time: string, field: string) => {
+    if (isClosed(field)) return
     if (placementStatus(g, p.slots.indexOf(time), p.dayGames, p.slots, p.increment) === 'blocked') return
     setSelId(null); setHover(null)
     await p.onPlace(g.id, time, field)
@@ -585,12 +604,13 @@ export function TimelineView(p: ViewsProps) {
                     {mf ? (
                       <button onClick={() => toggleMinField(f.fullName)} title={`Show ${f.fieldName}`} aria-label={`Show ${f.fieldName}`} className="w-full h-full flex items-center justify-center text-[10px] font-extrabold text-slate-600 hover:bg-slate-100 hover:text-slate-900 px-0.5 truncate">{fieldShort(f.fieldName)}</button>
                     ) : (
-                      <div className="h-full pl-1 pr-1 flex items-center gap-0.5">
+                      <div className={`h-full pl-1 pr-1 flex items-center gap-0.5 group/fh ${isClosed(f.fullName) ? 'bg-red-50' : ''}`}>
                         {p.onReorderFields && <GripVertical size={12} className="text-slate-300 flex-shrink-0" />}
                         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-                          <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
-                          <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
+                          <span className={`text-xs font-extrabold truncate ${isClosed(f.fullName) ? 'text-red-700 line-through decoration-red-300' : 'text-slate-900'}`}>{f.fieldName}</span>
+                          <span className={`text-[10px] truncate ${isClosed(f.fullName) ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>{isClosed(f.fullName) ? (n ? `Closed · ${n} to move` : 'Closed today') : `${f.venueName} · ${n}`}</span>
                         </div>
+                        {p.onToggleClosed && <button onClick={() => p.onToggleClosed!(f.fullName)} title={isClosed(f.fullName) ? 'Closed on this day. Click to reopen.' : 'Close this field for this day: nothing can be placed on it by hand or by Auto-fill'} aria-label={isClosed(f.fullName) ? `Reopen ${f.fieldName}` : `Close ${f.fieldName} for this day`} aria-pressed={isClosed(f.fullName)} className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center ${isClosed(f.fullName) ? 'text-red-600 bg-red-100' : 'text-slate-300 opacity-0 group-hover/fh:opacity-100 hover:bg-slate-200 hover:text-slate-700'}`}><Ban size={11} /></button>}
                         <button onClick={() => toggleMinField(f.fullName)} title="Minimize this field" aria-label={`Minimize ${f.fieldName}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
                       </div>
                     )}
@@ -743,14 +763,16 @@ export function TimelineView(p: ViewsProps) {
   // One cell of the day: a placed game, or a drop target while a game is picked up.
   function renderCell(f: SField, s: string, si: number, mini = false) {
     const g = cellMap[s + '|' + f.fullName]
-    const status = sel && !g ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
+    const closed = isClosed(f.fullName)
+    const status = sel && !g && !closed ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
     const h = status ? HINT[status] : null
     return (
       <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
-        onDragOver={e => { if (!g) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
+        title={closed && !g ? `${f.fieldName} is closed today` : undefined}
+        onDragOver={e => { if (!g && !closed) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
         onDrop={e => { e.preventDefault(); const id = dropTarget(e); const src = id ? p.games.find(x => x.id === id) : null; if (src && !g) place(src, s, f.fullName); setDragId(null) }}
         onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
-        style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined }}>
+        style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined, background: closed && !g ? 'repeating-linear-gradient(135deg,#ffffff 0 8px,#fef2f2 8px 10px)' : undefined }}>
         {g ? renderGameCard(g, mini) : h ? (
           <div className={`absolute ${mini ? 'inset-0.5 rounded' : 'inset-1 rounded-lg'} flex items-center justify-center text-[10px] font-bold overflow-hidden`} style={{ border: `1.5px dashed ${h.border}`, background: h.bg, color: h.text }} title={h.label}>{mini ? null : h.label}</div>
         ) : null}
@@ -765,16 +787,17 @@ export function TimelineView(p: ViewsProps) {
     return (
       <Fragment key={f.fullName}>
         <div {...fieldDrag(f)} title={p.onReorderFields ? `${f.fieldName} · drag to move this field` : undefined}
-          className={`sticky left-0 z-10 bg-white border-b border-r border-slate-200 pl-1 pr-0.5 flex items-center gap-0.5 min-w-0 ${p.onReorderFields ? 'cursor-grab active:cursor-grabbing' : ''} ${dragField === f.fullName ? 'opacity-40' : ''}`}
+          className={`sticky left-0 z-10 border-b border-r border-slate-200 pl-1 pr-0.5 flex items-center gap-0.5 min-w-0 ${isClosed(f.fullName) ? 'bg-red-50' : 'bg-white'} ${p.onReorderFields ? 'cursor-grab active:cursor-grabbing' : ''} ${dragField === f.fullName ? 'opacity-40' : ''}`}
           style={dropEdge(f)}>
           {mf ? (
             <button onClick={() => toggleMinField(f.fullName)} title={`Show ${f.fieldName}`} className="flex-1 text-left pl-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-900 truncate">{f.fieldName}</button>
           ) : (<>
             {p.onReorderFields && <GripVertical size={12} className="text-slate-300 flex-shrink-0" />}
             <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-              <span className="text-xs font-extrabold text-slate-900 truncate">{f.fieldName}</span>
-              <span className="text-[10px] text-slate-400 truncate">{f.venueName} · {n}</span>
+              <span className={`text-xs font-extrabold truncate ${isClosed(f.fullName) ? 'text-red-700 line-through decoration-red-300' : 'text-slate-900'}`}>{f.fieldName}</span>
+              <span className={`text-[10px] truncate ${isClosed(f.fullName) ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>{isClosed(f.fullName) ? (n ? `Closed · ${n} to move` : 'Closed today') : `${f.venueName} · ${n}`}</span>
             </div>
+            {p.onToggleClosed && <button onClick={() => p.onToggleClosed!(f.fullName)} title={isClosed(f.fullName) ? 'Closed on this day. Click to reopen.' : 'Close this field for this day: nothing can be placed on it by hand or by Auto-fill'} aria-label={isClosed(f.fullName) ? `Reopen ${f.fieldName}` : `Close ${f.fieldName} for this day`} aria-pressed={isClosed(f.fullName)} className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center ${isClosed(f.fullName) ? 'text-red-600 bg-red-100' : 'text-slate-300 hover:bg-slate-200 hover:text-slate-700'}`}><Ban size={11} /></button>}
             <button onClick={() => toggleMinField(f.fullName)} title="Minimize this field" aria-label={`Minimize ${f.fieldName}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
           </>)}
         </div>
@@ -812,7 +835,7 @@ export function TimelineView(p: ViewsProps) {
     const k = KIND(worst)
     const on = selId === g.id, d = dim(g)
     const done = g.isCanceled || (g.score1 != null && g.score2 != null)
-    const bg = on ? '#0f172a' : d ? '#f8fafc' : worst === 'conflict' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
+    const bg = on ? '#0f172a' : d ? '#f8fafc' : worst === 'conflict' || worst === 'closed' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
     const handlers = {
       draggable: true,
       'data-tl-game': g.id,

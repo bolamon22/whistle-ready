@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
+import { requireStaff } from '@/lib/apiAuth'
 
 function getClient() {
   return createClient({
@@ -26,6 +27,9 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  // Staff only: this rewrites the venue list, field hours and which fields are
+  // closed on a day. It took writes from anyone with a tournament id.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
     const { venues, defaultAvailability } = await req.json()
     const client = getClient()
