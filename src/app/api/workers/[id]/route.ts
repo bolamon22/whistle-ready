@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { redactWorker, stripWorkerUpdate } from '@/lib/roleScope'
 // Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
 // handles or edit/delete workers).
 export async function GET(_: Request, { params }: { params:{id:string} }) {
@@ -8,12 +9,12 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
   if (!gate.ok) return gate.res
   const w = await prisma.worker.findUnique({ where:{id:params.id} })
   if (!w) return NextResponse.json({ error:'Not found' }, { status:404 })
-  return NextResponse.json(w)
+  return NextResponse.json(redactWorker(w, gate.role))
 }
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
-  const b=await req.json()
+  const b = stripWorkerUpdate(await req.json(), gate.role) as any
   // Background-check date (Aug 2026): raw column, not in the Prisma schema.
   // Used by the county Exhibit A affidavit -- re-screen required every 12 months.
   // Mailing address + Venmo/Zelle handles (raw columns) — staff keep all three payment
@@ -28,7 +29,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   }
   if (Object.keys(b).length === 0) {
     const w = await prisma.worker.findUnique({ where: { id: params.id } })
-    return NextResponse.json(w ?? { ok: true })
+    return NextResponse.json(w ? redactWorker(w, gate.role) : { ok: true })
   }
   if (b.bgCheckDate !== undefined) {
     try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "bgCheckDate" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
@@ -36,10 +37,10 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     const rest = { ...b }; delete rest.bgCheckDate
     if (Object.keys(rest).length === 0) {
       const w = await prisma.worker.findUnique({ where: { id: params.id } })
-      return NextResponse.json(w ?? { ok: true })
+      return NextResponse.json(w ? redactWorker(w, gate.role) : { ok: true })
     }
   }
-  return NextResponse.json(await prisma.worker.update({where:{id:params.id},data:{
+  return NextResponse.json(redactWorker(await prisma.worker.update({where:{id:params.id},data:{
     ...(b.name!==undefined&&{name:b.name}),
     ...(b.email!==undefined&&{email:b.email||null}),
     ...(b.phone!==undefined&&{phone:b.phone||null}),
@@ -54,7 +55,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.notes!==undefined&&{notes:b.notes||null}),...(b.association!==undefined&&{association:b.association}),
     ...(b.photoUrl!==undefined&&{photoUrl:b.photoUrl||null}),
     ...(b.roles!==undefined&&{roles:JSON.stringify(b.roles)}),
-  }}))
+  }}), gate.role))
 }
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()

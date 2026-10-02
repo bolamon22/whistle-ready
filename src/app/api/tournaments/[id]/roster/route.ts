@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { redactWorker } from '@/lib/roleScope'
 
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const r = await prisma.rosterEntry.findMany({ where:{tournamentId:params.id}, include:{worker:true} })
-  return NextResponse.json(r)
+  return NextResponse.json(r.map((e: any) => ({ ...e, worker: redactWorker(e.worker, gate.role) })))
 }
 
 export async function POST(req: Request, { params }: { params:{id:string} }) {

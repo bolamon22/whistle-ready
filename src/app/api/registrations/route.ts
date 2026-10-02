@@ -12,6 +12,8 @@ import { cleanName } from '@/lib/names'
 import { isDivisionFull } from '@/lib/regStatus'
 import { carryDirectorLinks } from '@/lib/clubDirectorLinks'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
+import { viewerRole } from '@/lib/apiAuth'
+import { canSeeMoney, canSeeContacts, payStatus } from '@/lib/roleScope'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -38,6 +40,44 @@ function normalizeInstagram(raw?: string): string {
   return s.slice(0, 60)
 }
 
+// What a caller who is not allowed the whole registration still gets.
+//
+// This list had no sign-in check, so every club's contact email, phone, notes,
+// invoice and payment history was readable by anyone with a tournament id, and
+// by every coach (the coach dashboard reads it for team names). Now:
+//  - director / admin: everything, as before
+//  - other staff (scheduler, assigner, staff): clubs and teams, waiver and coach
+//    counts, and whether the club has paid (paid / partial / unpaid) but no
+//    amounts. Contacts only for roles that work with clubs and staff (assigner).
+//  - signed out or external (coach, parent, club director): team names and
+//    divisions, which the public page shows anyway.
+const EXTERNAL = ['coach', 'parent', 'club_director']
+function shapeForRole(list: any[], role: string): any[] {
+  if (canSeeMoney(role)) return list
+  const staff = !!role && !EXTERNAL.includes(role)
+  const contacts = staff && canSeeContacts(role)
+  return list.map((r: any) => {
+    const teams = (r.teams || []).map((t: any) => staff
+      ? {
+          id: t.id, registrationId: t.registrationId, teamName: t.teamName, clubName: t.clubName,
+          division: t.division, logoUrl: t.logoUrl, waitlisted: !!t.waitlisted, pool: t.pool ?? null,
+          coachName: t.coachName, waiverCount: t.waiverCount, coachesSigned: t.coachesSigned,
+          ...(contacts ? { coachEmail: t.coachEmail, coachPhone: t.coachPhone } : {}),
+        }
+      : { teamName: t.teamName, clubName: t.clubName, division: t.division, logoUrl: t.logoUrl })
+    if (!staff) return { id: r.id, clubName: r.clubName, teams }
+    const received = (r.payments || []).reduce((n: number, x: any) => n + (Number(x.amount) || 0), 0)
+    return {
+      id: r.id, tournamentId: r.tournamentId, clubName: r.clubName, clubLogoUrl: r.clubLogoUrl,
+      numTeams: r.numTeams, createdAt: r.createdAt, confirmStatus: r.confirmStatus,
+      payStatus: payStatus((Number(r.invoiceAmount) || 0) - (Number(r.discountAmount) || 0), received),
+      waiverUnassigned: r.waiverUnassigned, coachesSigned: r.coachesSigned,
+      teams,
+      ...(contacts ? { clubContact: r.clubContact, contactEmail: r.contactEmail, contactPhone: r.contactPhone } : {}),
+    }
+  })
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const tournamentId = searchParams.get('tournamentId')
@@ -45,6 +85,7 @@ export async function GET(req: NextRequest) {
 
   await ensureRegistrationColumns()
   await ensurePaymentGuard()
+  const role = await viewerRole()
   const registrations = await prisma.teamRegistration.findMany({
     where: { tournamentId, deletedAt: null },
     include: { teams: true, payments: { orderBy: { receivedAt: 'asc' } } },
@@ -89,7 +130,7 @@ export async function GET(req: NextRequest) {
       }
     } catch { /* no account info — the card just won't show a badge */ }
 
-    return NextResponse.json(registrations.map((r: any) => {
+    return NextResponse.json(shapeForRole(registrations.map((r: any) => {
       const sum = summarizeClub(counts, r.clubName, r.teams || [])
       return {
         ...r,
@@ -106,9 +147,9 @@ export async function GET(req: NextRequest) {
         accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.role || '',
         accountUserId: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id || '',
       }
-    }))
+    }), role))
   } catch {
-    return NextResponse.json(registrations)
+    return NextResponse.json(shapeForRole(registrations, role))
   }
 }
 

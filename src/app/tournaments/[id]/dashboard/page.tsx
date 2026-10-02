@@ -1,5 +1,4 @@
 'use client'
-
 import { Fragment, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -11,8 +10,12 @@ import ChatWidget from '../ChatWidget'
 import TournamentNav from '../TournamentNav'
 import CopyTournamentButton from '@/components/CopyTournamentButton'
 import { genderOf, genderLabel, splitByGender, type DivisionGender } from '@/lib/divisionGender'
+import { useRole } from '@/lib/role-context'
+import { roleCanAccess } from '@/lib/routeAccess'
 
 interface DashData {
+  /** False for staff without money access (the scheduler): dollar figures come back 0. */
+  canSeeMoney?: boolean
   tournament: {
     id: string; name: string; sport: string; startDate: string; endDate: string
     location: string; logoUrl: string; dates: string
@@ -116,6 +119,7 @@ export default function DashboardPage() {
   // the money hidden tab. Can we just make them work together?" -- a second button
   // for the marks was one control too many.
   const [showMoney, setShowMoney] = useState(false)
+  const { effectiveRole } = useRole()
   const dragFrom = useRef<number | null>(null)
 
   useEffect(() => {
@@ -139,9 +143,15 @@ export default function DashboardPage() {
       .then((regs: any[]) => {
         const map: Record<string, DivTeam[]> = {}
         ;(Array.isArray(regs) ? regs : []).forEach(reg => {
-          // Same arithmetic as regBalance on the registrations page.
-          const paid = (reg.payments || []).reduce((n: number, x: any) => n + (Number(x.amount) || 0), 0)
-          const balance = Math.round(((Number(reg.invoiceAmount) || 0) - (Number(reg.discountAmount) || 0) - paid) * 100) / 100
+          // Same arithmetic as regBalance on the registrations page. A role without
+          // money access gets payStatus instead of amounts (see api/registrations);
+          // stand-in figures keep the three marks below working unchanged.
+          let paid = (reg.payments || []).reduce((n: number, x: any) => n + (Number(x.amount) || 0), 0)
+          let balance = Math.round(((Number(reg.invoiceAmount) || 0) - (Number(reg.discountAmount) || 0) - paid) * 100) / 100
+          if (reg.payStatus) {
+            paid = reg.payStatus === 'unpaid' ? 0 : 1
+            balance = reg.payStatus === 'partial' || reg.payStatus === 'unpaid' ? 1 : 0
+          }
           ;(reg.teams || []).forEach((t: any) => {
             const div = String(t.division || '').trim() || 'Unassigned'   // same key the API counts under
             if (!map[div]) map[div] = []
@@ -159,6 +169,14 @@ export default function DashboardPage() {
   if (!data) return <div className="text-slate-400 text-center py-20">Tournament not found.</div>
 
   const { tournament: t, games, staff, registrations: reg, financials: fin } = data
+  // A scheduler sees who has paid (Bo: "red flags if a team is in jeopardy of a
+  // no show") but no amounts, so the paid marks show for that role without the
+  // money switch, and their tooltips leave the figures out.
+  const statusOnly = data.canSeeMoney === false
+  // Links go only where this role may go; a tile that bounced to "unauthorized"
+  // reads as broken.
+  const linkIf = (href: string) => (roleCanAccess(effectiveRole, href) ? href : undefined)
+  const showMarks = showMoney || statusOnly
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
   const collectPct = reg.invoiced > 0 ? Math.round((reg.received / reg.invoiced) * 100) : 0
   // Tile order follows registrationDivisions -- the same curated list the divisions page
@@ -305,14 +323,19 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-            <Kpi label="Teams" value={reg.teams - wlTotal} sub={[reg.clubs > 0 ? `${reg.clubs} clubs` : '', wlTotal > 0 ? `+${wlTotal} waitlisted` : ''].filter(Boolean).join(' · ') || undefined} href={`/tournaments/${id}/registrations`}
+            <Kpi label="Teams" value={reg.teams - wlTotal} sub={[reg.clubs > 0 ? `${reg.clubs} clubs` : '', wlTotal > 0 ? `+${wlTotal} waitlisted` : ''].filter(Boolean).join(' · ') || undefined} href={linkIf(`/tournaments/${id}/registrations`)}
               extra={<GenderBar boys={split.boys} girls={split.girls} other={split.other} />} />
             <Kpi label="Games" value={games.active} sub={`${games.divisions} divisions`} href={`/tournaments/${id}/scheduler`} />
             <Kpi label="Staff assigned" value={`${assignPct}%`} sub={`${staff.onRoster} on roster`} href={`/tournaments/${id}/assignments`} />
+            {statusOnly ? (
+              <Kpi label="Clubs paid in full" value={`${reg.paidInFull}/${reg.clubs}`}
+                sub={reg.outstanding > 0 ? `${reg.outstanding} still owe` : undefined} />
+            ) : (
             <Kpi label="Collected"
               value={!hasMoney ? '—' : showMoney ? `${collectPct}%` : '••'}
               sub={hasMoney ? (showMoney ? `${fmt(reg.balance)} due` : 'Hidden') : undefined}
               href={`/tournaments/${id}/financials`} />
+            )}
           </div>
         </section>
 
@@ -325,7 +348,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             <GameDayCard href={`/tournaments/${id}/scores`}         icon={Target}         label="Post scores"     hint="Quick entry" accent />
             <GameDayCard href={`/tournaments/${id}/assignments`}    icon={ClipboardList}  label="Assignments"     hint={`~${assignPct}% filled`} />
-            <GameDayCard href={`/tournaments/${id}/communications`} icon={Megaphone}      label="Communications"  hint="Field requests · broadcast · incidents · contacts" />
+            {linkIf(`/tournaments/${id}/communications`) && <GameDayCard href={`/tournaments/${id}/communications`} icon={Megaphone}      label="Communications"  hint="Field requests · broadcast · incidents · contacts" />}
           </div>
         </section>
 
@@ -407,7 +430,7 @@ export default function DashboardPage() {
                       {/* The decision this page gets used for: is there a team in
                           here that has not paid and may not show, so a waiting-list
                           team can have its spot? Only when money is on screen. */}
-                      {showMoney && (() => {
+                      {showMarks && (() => {
                         const l = (teamsByDiv[openDiv] || []).filter(x => !x.waitlisted)
                         const paidN = l.filter(x => x.balance <= 0).length
                         const noneN = l.filter(x => x.balance > 0 && x.paid <= 0).length
@@ -435,12 +458,12 @@ export default function DashboardPage() {
                               deposit down is coming; a club that has not touched the
                               invoice may not be. The figure is the club's balance, so a
                               three-team club shows it three times -- the tooltip says so. */}
-                          {showMoney && !tm.waitlisted && (
+                          {showMarks && !tm.waitlisted && (
                             tm.balance <= 0
                               ? <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 flex-shrink-0" title="Club paid in full"><CheckCircle2 size={15} className="text-emerald-600" /> Paid</span>
                               : tm.paid > 0
-                                ? <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 flex-shrink-0" title={`Club has paid ${fmt(tm.paid)}; ${fmt(tm.balance)} still owed across all its teams`}><Circle size={15} className="text-amber-500" /> Partial</span>
-                                : <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 flex-shrink-0" title={`Club has paid nothing; ${fmt(tm.balance)} owed across all its teams`}><XCircle size={15} className="text-rose-500" /> Unpaid</span>
+                                ? <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 flex-shrink-0" title={statusOnly ? 'Club has paid part of its invoice' : `Club has paid ${fmt(tm.paid)}; ${fmt(tm.balance)} still owed across all its teams`}><Circle size={15} className="text-amber-500" /> Partial</span>
+                                : <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 flex-shrink-0" title={statusOnly ? 'Club has not paid yet' : `Club has paid nothing; ${fmt(tm.balance)} owed across all its teams`}><XCircle size={15} className="text-rose-500" /> Unpaid</span>
                           )}
                         </div>
                       ))}

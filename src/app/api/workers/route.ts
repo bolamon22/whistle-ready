@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
+import { redactWorker } from '@/lib/roleScope'
 import { createClient } from '@libsql/client'
 
 function db() {
@@ -57,13 +58,18 @@ async function withAppStatus(client: ReturnType<typeof db>, rows: unknown[]) {
 }
 
 export async function GET(req: Request) {
+  // Staff only, and pay / payout / contact columns come back blank for staff
+  // whose role does not cover them (the scheduler). This was readable by any
+  // signed-in account in the org, coaches included.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const shape = (rows: any[]) => rows.map(r => redactWorker(r, gate.role))
   const { orgId, isAdmin } = await resolveOrgId(req)
   const client = db()
 
   if (isAdmin && !orgId) {
     // Platform view — all workers
     const res = await client.execute(`SELECT * FROM "Worker" ORDER BY name ASC`)
-    return NextResponse.json(await withAppStatus(client, res.rows as unknown[]))
+    return NextResponse.json(shape(await withAppStatus(client, res.rows as unknown[])))
   }
 
   if (orgId) {
@@ -72,7 +78,7 @@ export async function GET(req: Request) {
         sql: `SELECT * FROM "Worker" WHERE orgId = ? ORDER BY name ASC`,
         args: [orgId],
       })
-      return NextResponse.json(await withAppStatus(client, res.rows as unknown[]))
+      return NextResponse.json(shape(await withAppStatus(client, res.rows as unknown[])))
     } catch {
       // orgId column not yet migrated — return empty until migration is run
       return NextResponse.json([])

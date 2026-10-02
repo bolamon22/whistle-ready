@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { canSeeMoney, canSeeContacts, payStatus } from '@/lib/roleScope'
 import { cleanName, nameKey } from '@/lib/names'
 import { renameTeamRefs, removeTeamRefs } from '@/lib/teamRename'
 import { findShortTeams, describeFinding } from '@/lib/gameBalance'
@@ -15,7 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
 
     const teams = await prisma.registeredTeam.findMany({
       where: { registration: { tournamentId: params.id, deletedAt: null }, division },
-      include: { registration: { select: { invoiceAmount: true, payments: { select: { amount: true } } } } },
+      include: { registration: { select: { invoiceAmount: true, discountAmount: true, payments: { select: { amount: true } } } } },
       orderBy: { teamName: 'asc' },
     })
 
@@ -38,9 +39,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
       await prisma.$executeRawUnsafe(`ALTER TABLE "RegisteredTeam" ADD COLUMN "status" TEXT DEFAULT 'confirmed'`)
     } catch { /* already exists */ }
 
+    // The scheduler sees whether a club has paid, not how much, and no coach
+    // contacts. Amounts come back as 0 and contacts as '' for those roles.
+    const money = canSeeMoney(gate.role), contacts = canSeeContacts(gate.role)
     const result = await Promise.all(teams.map(async t => {
       const paid = t.registration.payments.reduce((s, p) => s + p.amount, 0)
-      const owed = t.registration.invoiceAmount
+      const owed = t.registration.invoiceAmount - (t.registration.discountAmount || 0)
+      const st = payStatus(owed, paid)
       // Read status via raw query since it may not be in Prisma schema yet
       const statusRow = await prisma.$queryRawUnsafe<{status: string}[]>(
         'SELECT status FROM "RegisteredTeam" WHERE id = ?', t.id
@@ -52,11 +57,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
         logoUrl: t.logoUrl || '',
         division: t.division,
         coachName: t.coachName,
-        coachPhone: t.coachPhone,
-        coachEmail: t.coachEmail,
+        coachPhone: contacts ? t.coachPhone : '',
+        coachEmail: contacts ? t.coachEmail : '',
         pool: teamPool.get(t.teamName) ?? null,
-        paid, owed,
-        paymentStatus: paid >= owed && owed > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
+        paid: money ? paid : 0, owed: money ? owed : 0,
+        // "Paid" now also counts the club's discount; a club that paid its
+        // discounted invoice used to read as partial.
+        paymentStatus: st === 'none' ? 'unpaid' : st,
         status: statusRow[0]?.status ?? 'confirmed',
       }
     }))
@@ -189,8 +196,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
     if (cleanName(teamName)) data.teamName = cleanName(teamName)
     if (clubName !== undefined) data.clubName = cleanName(clubName)
     if (coachName !== undefined) data.coachName = cleanName(coachName)
-    if (coachEmail !== undefined) data.coachEmail = String(coachEmail || '').trim()
-    if (coachPhone !== undefined) data.coachPhone = String(coachPhone || '').trim()
+    // A role that cannot see contacts gets them blank in the edit form, so its
+    // save must not write those blanks over the real ones.
+    if (canSeeContacts(gate.role)) {
+      if (coachEmail !== undefined) data.coachEmail = String(coachEmail || '').trim()
+      if (coachPhone !== undefined) data.coachPhone = String(coachPhone || '').trim()
+    }
     if (logoUrl !== undefined) data.logoUrl = logoUrl
 
     if (Object.keys(data).length > 0) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { canSeeMoney, canSeeStaffPay } from '@/lib/roleScope'
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
@@ -99,8 +100,17 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     return r.invoiceAmount > 0 && paid >= (r.invoiceAmount - r.discountAmount)
   }).length
 
+  // Staff without money access (the scheduler) get the counts -- teams, clubs,
+  // who has paid in full -- but every dollar figure comes back as 0, so the page
+  // has nothing to show and the figures never reach the browser.
+  const money = canSeeMoney(gate.role)
+  const pay = canSeeStaffPay(gate.role)
+  const $ = (n: number) => (money ? n : 0)
+  const $pay = (n: number) => (pay ? n : 0)
+
   return NextResponse.json({
-    tournament,
+    canSeeMoney: money,
+    tournament: money ? tournament : { ...tournament, payRates: undefined, registrationPricing: undefined },
     games: {
       total: games.length,
       active: activeGames.length,
@@ -110,27 +120,27 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     },
     staff: {
       onRoster: rosterEntries.length,
-      refPayTotal,
-      hourlyPayTotal,
-      totalStaffExpense,
-      totalStaffPaid,
+      refPayTotal: $pay(refPayTotal),
+      hourlyPayTotal: $pay(hourlyPayTotal),
+      totalStaffExpense: $(totalStaffExpense),
+      totalStaffPaid: $(totalStaffPaid),
       refCount,
       skCount,
     },
     financials: {
-      otherIncome,
-      otherExpenses,
-      txByCategory,
+      otherIncome: $(otherIncome),
+      otherExpenses: $(otherExpenses),
+      txByCategory: money ? txByCategory : {},
     },
     registrations: {
       clubs: totalClubs,
       teams: totalTeams,
-      invoiced: totalInvoiced,
-      received: totalReceived,
-      balance: totalBalance,
+      invoiced: $(totalInvoiced),
+      received: $(totalReceived),
+      balance: $(totalBalance),
       paidInFull,
       outstanding: totalClubs - paidInFull,
-      byMethod,
+      byMethod: money ? byMethod : {},
       byDivision: divisionCounts,
       byDivisionWaitlist: divisionWaitlist,
       waitlisted: waitlistedTeams,
