@@ -3,6 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/db'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { requireStaff } from '@/lib/apiAuth'
+import { canSeeMoney } from '@/lib/roleScope'
+import { helpArticlesText, helpPagesText, CHIRP_HOWTO_RULES } from '@/lib/helpArticles'
 
 export const runtime = 'nodejs'
 
@@ -19,9 +21,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { messages, tournamentId } = await req.json()
+    const { messages, tournamentId: rawId } = await req.json()
+    const tournamentId = typeof rawId === 'string' && /^[A-Za-z0-9_-]+$/.test(rawId) ? rawId : ''
+    // Dollar amounts go into the prompt only for roles that may see them (View as
+    // included). Anything in the prompt can come out in an answer.
+    const money = canSeeMoney(gate.role)
 
-    let context = 'You are Chirp, the assistant for Whistle Ready, a tournament management app. Be concise. If asked your name, you are Chirp.'
+    let liveData = 'No tournament is open.'
 
     if (tournamentId) {
       try {
@@ -48,19 +54,35 @@ export async function POST(req: NextRequest) {
           const indivPaid = indivRegs.filter((r: { paymentStatus: string }) => r.paymentStatus === 'paid')
             .reduce((s: number, r: { feeTierAmount: number }) => s + r.feeTierAmount, 0)
 
-          context = `You are Chirp, the assistant for Whistle Ready. Be concise and use the live data below. If asked your name, you are Chirp.
-
-TOURNAMENT: ${tournament.name} | Sport: ${tournament.sport || 'N/A'} | Dates: ${dates.join(', ')} | Location: ${tournament.location || 'N/A'}
+          liveData = `TOURNAMENT: ${tournament.name} | Sport: ${tournament.sport || 'N/A'} | Dates: ${dates.join(', ')} | Location: ${tournament.location || 'N/A'}
 GAMES: ${active.length} total | ${assigned.length} assigned | ${unscheduled.length} unscheduled
 ROSTER: ${rosterWorkers.length} staff on roster (refs/scorekeepers)
 TEAM REGISTRATIONS: ${regs.length} clubs | ${regs.reduce((s: number, r: { teams: unknown[] }) => s + r.teams.length, 0)} teams
-INDIVIDUAL PLAYERS: ${indivRegs.length} registered | ${indivRegs.filter((r: { paymentStatus: string }) => r.paymentStatus === 'paid').length} paid | ${indivRegs.filter((r: { paymentStatus: string }) => r.paymentStatus === 'pending').length} pending
-FINANCIALS: Team invoiced $${totalInvoiced.toLocaleString()} | Team collected $${totalPaid.toLocaleString()} | Player fees collected $${indivPaid.toLocaleString()} | Balance $${(totalInvoiced - totalPaid).toLocaleString()}`
+INDIVIDUAL PLAYERS: ${indivRegs.length} registered | ${indivRegs.filter((r: { paymentStatus: string }) => r.paymentStatus === 'paid').length} paid | ${indivRegs.filter((r: { paymentStatus: string }) => r.paymentStatus === 'pending').length} pending` +
+            (money ? `
+FINANCIALS: Team invoiced $${totalInvoiced.toLocaleString()} | Team collected $${totalPaid.toLocaleString()} | Player fees collected $${indivPaid.toLocaleString()} | Balance $${(totalInvoiced - totalPaid).toLocaleString()}` : '')
         }
       } catch (e) {
         console.error('Context fetch error:', e)
       }
     }
+
+    // One floating Chirp answers both kinds of question: numbers about this
+    // tournament, and how to use the app (it used to know only the numbers).
+    const context = `You are Chirp, the assistant for Whistle Ready, a tournament-management app. If asked your name, you are Chirp. Be concise and warm.
+
+You answer two kinds of questions:
+1. Questions about this tournament: answer from LIVE DATA.${money ? '' : ' LIVE DATA holds no dollar amounts for this person\'s role; if they ask about money, say the tournament director can see that.'}
+2. How to use Whistle Ready: ${CHIRP_HOWTO_RULES}
+
+=== LIVE DATA ===
+${liveData}
+
+=== PAGES ===
+${helpPagesText(tournamentId || undefined)}
+
+=== MANUAL ===
+${helpArticlesText()}`
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 

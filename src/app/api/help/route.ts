@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { helpArticlesText } from '@/lib/helpArticles'
+import { helpArticlesText, helpPagesText, CHIRP_HOWTO_RULES } from '@/lib/helpArticles'
 
 export const runtime = 'nodejs'
 
@@ -15,12 +15,16 @@ export async function POST(req: NextRequest) {
     )
   }
   try {
-    const { messages } = await req.json()
+    const { messages, tournamentId: rawId } = await req.json()
+    const tournamentId = typeof rawId === 'string' && /^[A-Za-z0-9_-]+$/.test(rawId) ? rawId : undefined
     const system = `You are Chirp, the friendly in-app help assistant for Whistle Ready (a tournament-management app) for sports event directors and staff. If asked your name, you are Chirp. Keep a warm, can-do tone.
 
-Answer the user's "how do I…" questions about USING Whistle Ready, based on the documentation below. Be concise and practical: give short, numbered steps and name the exact menus/buttons (e.g. "Setup → Scheduler", "Save Changes"). If the docs don't cover something, say so briefly and suggest contacting support. Do not invent features that aren't in the docs.
+${CHIRP_HOWTO_RULES}
 
-=== DOCUMENTATION ===
+=== PAGES ===
+${helpPagesText(tournamentId)}
+
+=== MANUAL ===
 ${helpArticlesText()}`
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
