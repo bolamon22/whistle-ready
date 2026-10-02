@@ -42,6 +42,7 @@ export interface AutoFillInput {
   fields: AField[]
   slots: string[] // ordered "HH:MM"
   maxPerDay?: number
+  blocked?: string[] // `${time}|${location}` cells nothing may land in (field closed for part of the day)
 }
 
 export interface AutoFillResult {
@@ -126,6 +127,7 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
     }
   }
   input.placed.forEach(seed)
+  for (const k of input.blocked ?? []) occ.add(k) // closed cells read as taken, but don't count toward field load
 
   // ── Placement order: pools first (by division, game #), then brackets by
   //    feeder-depth so a game's feeders are placed before it. ──

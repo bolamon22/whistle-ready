@@ -57,15 +57,18 @@ export interface ViewsProps {
   prefsKey?: string
   /** Timeline/Board: a field header dropped on another takes its place. The page saves the order. */
   onReorderFields?: (fromFullName: string, toFullName: string) => void
-  /** Fields closed on the active day: nothing can be placed there; games already there are flagged. */
-  closedFields?: Set<string>
+  /** Field closed at this start time on the active day (all day or a window): nothing can be placed there. */
+  isFieldClosed?: (fullName: string, time: string) => boolean
+  /** Header text when any part of the day is closed ("Closed today", "Closed from 1:00 PM"); null when open. */
+  closedLabel?: (fullName: string) => string | null
+  /** Opens the close/reopen dialog for a field. */
   onToggleClosed?: (fullName: string) => void
 }
 
 type IssueKind = 'conflict' | 'closed' | 'b2b' | 'bracket' | 'gap'
 const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues'] | null; label: string; dot: string; bg: string; border: string }[] = [
   { kind: 'conflict', key: 'conflict', label: 'Double-booked', dot: '#ef4444', bg: '#fee2e2', border: '#ef4444' },
-  // not in p.issues: computed from closedFields + dayGames in useIssueList
+  // not in p.issues: computed from isFieldClosed + dayGames in useIssueList
   { kind: 'closed',   key: null,       label: 'Field closed',  dot: '#dc2626', bg: '#fee2e2', border: '#dc2626' },
   { kind: 'b2b',      key: 'b2b',      label: 'Back-to-back',  dot: '#f59e0b', bg: '#fef3c7', border: '#f59e0b' },
   { kind: 'bracket',  key: 'bracket',  label: 'Bracket order', dot: '#ea580c', bg: '#ffedd5', border: '#ea580c' },
@@ -172,11 +175,11 @@ function useIssueList(p: ViewsProps) {
     }
     // Games sitting on a field that is closed today: they have to move before publish.
     const closedKind = KINDS.find(k => k.kind === 'closed')!
-    if (p.closedFields && p.closedFields.size) {
+    if (p.isFieldClosed) {
       for (const g of p.dayGames) {
-        if (!p.closedFields.has(g.location)) continue
+        if (!g.location || !g.startTime || !p.isFieldClosed(g.location, g.startTime)) continue
         const field = p.fields.find(f => f.fullName === g.location)?.fieldName ?? g.location
-        const text = `${g.gameNumber} is on ${field}, which is closed today. Move it.`
+        const text = `${g.gameNumber} is on ${field} at ${p.fmtTime(g.startTime)}, when it is closed. Move it.`
         byGame.set(g.id, [...(byGame.get(g.id) ?? []), { kind: 'closed', label: closedKind.label, dot: closedKind.dot, text }])
         list.push({ kind: 'closed', label: closedKind.label, dot: closedKind.dot, text, gameId: g.id, division: g.division })
       }
@@ -184,7 +187,7 @@ function useIssueList(p: ViewsProps) {
     const order: Record<IssueKind, number> = { conflict: 0, closed: 1, b2b: 2, bracket: 3, gap: 4 }
     list.sort((a, b) => order[a.kind] - order[b.kind])
     return { byGame, list }
-  }, [p.games, p.issues, p.closedFields, p.dayGames, p.fields])
+  }, [p.games, p.issues, p.isFieldClosed, p.dayGames, p.fields, p.fmtTime])
 }
 
 function worstOf(items: { kind: IssueKind }[] | undefined) {
@@ -485,9 +488,24 @@ export function TimelineView(p: ViewsProps) {
     onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setLotOver(false) },
     onDrop: (e: React.DragEvent) => { e.preventDefault(); setLotOver(false); const id = dropTarget(e); setDragId(null); if (id && p.dayGames.some(g => g.id === id)) { setSelId(null); p.onUnschedule(id) } },
   }
-  const isClosed = (field: string) => !!p.closedFields?.has(field)
+  // Header state: any part of the day closed. Cell state: closed at that start time.
+  const isClosed = (field: string) => !!p.closedLabel?.(field)
+  const closedAt = (field: string, time: string) => !!p.isFieldClosed?.(field, time)
+  // games on this field that sit inside its closed window (they need moving)
+  const toMove = (field: string) => p.dayGames.filter(g => g.location === field && g.startTime && closedAt(field, g.startTime)).length
+  // Header room is about 100px, so the window reads as arrows: "Closed 11:20a →", "Closed → 1:00p",
+  // "Closed 11:20a–1:00p". The to-move count fits only beside "Closed today"; otherwise the flagged
+  // games and the Issues rail carry it, and the button tooltip has the full sentence.
+  const closedShort = (field: string) => {
+    const full = p.closedLabel?.(field) ?? ''
+    const n = toMove(field)
+    if (full === 'Closed today') return n ? `Closed · ${n} to move` : full
+    const t = full.replace(/ AM\b/g, 'a').replace(/ PM\b/g, 'p')
+    return t.replace(/^Closed from (.+)$/, 'Closed $1 →').replace(/^Closed until (.+)$/, 'Closed → $1')
+  }
+  const closedTitle = (field: string) => { const n = toMove(field); return `${p.closedLabel?.(field)}${n ? ` · ${n} game${n === 1 ? '' : 's'} to move` : ''}. Click to change the hours or reopen.` }
   const place = async (g: SGame, time: string, field: string) => {
-    if (isClosed(field)) return
+    if (closedAt(field, time)) return
     if (placementStatus(g, p.slots.indexOf(time), p.dayGames, p.slots, p.increment) === 'blocked') return
     setSelId(null); setHover(null)
     await p.onPlace(g.id, time, field)
@@ -608,9 +626,9 @@ export function TimelineView(p: ViewsProps) {
                         {p.onReorderFields && <GripVertical size={12} className="text-slate-300 flex-shrink-0" />}
                         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
                           <span className={`text-xs font-extrabold truncate ${isClosed(f.fullName) ? 'text-red-700 line-through decoration-red-300' : 'text-slate-900'}`}>{f.fieldName}</span>
-                          <span className={`text-[10px] truncate ${isClosed(f.fullName) ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>{isClosed(f.fullName) ? (n ? `Closed · ${n} to move` : 'Closed today') : `${f.venueName} · ${n}`}</span>
+                          <span className={`text-[10px] truncate ${isClosed(f.fullName) ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>{isClosed(f.fullName) ? closedShort(f.fullName) : `${f.venueName} · ${n}`}</span>
                         </div>
-                        {p.onToggleClosed && <button onClick={() => p.onToggleClosed!(f.fullName)} title={isClosed(f.fullName) ? 'Closed on this day. Click to reopen.' : 'Close this field for this day: nothing can be placed on it by hand or by Auto-fill'} aria-label={isClosed(f.fullName) ? `Reopen ${f.fieldName}` : `Close ${f.fieldName} for this day`} aria-pressed={isClosed(f.fullName)} className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center ${isClosed(f.fullName) ? 'text-red-600 bg-red-100' : 'text-slate-300 opacity-0 group-hover/fh:opacity-100 hover:bg-slate-200 hover:text-slate-700'}`}><Ban size={11} /></button>}
+                        {p.onToggleClosed && <button onClick={() => p.onToggleClosed!(f.fullName)} title={isClosed(f.fullName) ? closedTitle(f.fullName) : 'Close this field for all or part of this day: nothing can be placed there by hand or by Auto-fill'} aria-label={isClosed(f.fullName) ? `Change or reopen ${f.fieldName}` : `Close ${f.fieldName} for all or part of this day`} aria-pressed={isClosed(f.fullName)} className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center ${isClosed(f.fullName) ? 'text-red-600 bg-red-100' : 'text-slate-300 opacity-0 group-hover/fh:opacity-100 hover:bg-slate-200 hover:text-slate-700'}`}><Ban size={11} /></button>}
                         <button onClick={() => toggleMinField(f.fullName)} title="Minimize this field" aria-label={`Minimize ${f.fieldName}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
                       </div>
                     )}
@@ -763,12 +781,12 @@ export function TimelineView(p: ViewsProps) {
   // One cell of the day: a placed game, or a drop target while a game is picked up.
   function renderCell(f: SField, s: string, si: number, mini = false) {
     const g = cellMap[s + '|' + f.fullName]
-    const closed = isClosed(f.fullName)
+    const closed = closedAt(f.fullName, s)
     const status = sel && !g && !closed ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
     const h = status ? HINT[status] : null
     return (
       <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
-        title={closed && !g ? `${f.fieldName} is closed today` : undefined}
+        title={closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : undefined}
         onDragOver={e => { if (!g && !closed) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
         onDrop={e => { e.preventDefault(); const id = dropTarget(e); const src = id ? p.games.find(x => x.id === id) : null; if (src && !g) place(src, s, f.fullName); setDragId(null) }}
         onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
@@ -795,9 +813,9 @@ export function TimelineView(p: ViewsProps) {
             {p.onReorderFields && <GripVertical size={12} className="text-slate-300 flex-shrink-0" />}
             <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
               <span className={`text-xs font-extrabold truncate ${isClosed(f.fullName) ? 'text-red-700 line-through decoration-red-300' : 'text-slate-900'}`}>{f.fieldName}</span>
-              <span className={`text-[10px] truncate ${isClosed(f.fullName) ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>{isClosed(f.fullName) ? (n ? `Closed · ${n} to move` : 'Closed today') : `${f.venueName} · ${n}`}</span>
+              <span className={`text-[10px] truncate ${isClosed(f.fullName) ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>{isClosed(f.fullName) ? closedShort(f.fullName) : `${f.venueName} · ${n}`}</span>
             </div>
-            {p.onToggleClosed && <button onClick={() => p.onToggleClosed!(f.fullName)} title={isClosed(f.fullName) ? 'Closed on this day. Click to reopen.' : 'Close this field for this day: nothing can be placed on it by hand or by Auto-fill'} aria-label={isClosed(f.fullName) ? `Reopen ${f.fieldName}` : `Close ${f.fieldName} for this day`} aria-pressed={isClosed(f.fullName)} className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center ${isClosed(f.fullName) ? 'text-red-600 bg-red-100' : 'text-slate-300 hover:bg-slate-200 hover:text-slate-700'}`}><Ban size={11} /></button>}
+            {p.onToggleClosed && <button onClick={() => p.onToggleClosed!(f.fullName)} title={isClosed(f.fullName) ? closedTitle(f.fullName) : 'Close this field for all or part of this day: nothing can be placed there by hand or by Auto-fill'} aria-label={isClosed(f.fullName) ? `Change or reopen ${f.fieldName}` : `Close ${f.fieldName} for all or part of this day`} aria-pressed={isClosed(f.fullName)} className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center ${isClosed(f.fullName) ? 'text-red-600 bg-red-100' : 'text-slate-300 hover:bg-slate-200 hover:text-slate-700'}`}><Ban size={11} /></button>}
             <button onClick={() => toggleMinField(f.fullName)} title="Minimize this field" aria-label={`Minimize ${f.fieldName}`} className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-slate-300 hover:bg-slate-200 hover:text-slate-700"><Minimize2 size={11} /></button>
           </>)}
         </div>

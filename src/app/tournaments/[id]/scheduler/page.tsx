@@ -8,8 +8,9 @@ import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import { TimelineView, TeamLanesView, useDragAutoScroll } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
+import { closuresOf, isFieldClosedAt, fieldClosure, closureLabel, withClosure, blockedKeys, isAllDay, type Closure } from '@/lib/fieldClosures'
 import { divisionAbbr, teamRefKey } from '@/lib/names'
-import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell } from 'lucide-react'
+import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban } from 'lucide-react'
 
 interface Game {
   id: string
@@ -326,39 +327,46 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     } catch { /* non-fatal */ }
   }
 
-  // Fields closed for a day (Oct 2026). Bo: "3B I'm not going to be using on
-  // Saturday" -- block it so nothing lands there by hand or by Auto-fill, and
-  // reopen it if he changes his mind. Stored on the day's availability record
-  // beside its hours (closedFields: fullName[]), so it rides along with the venue
-  // and the same day on another device sees it. Games already on a closed field
-  // stay put and are flagged; closing a field never moves anything.
-  const closedFor = (date: string): Set<string> => {
-    const d = dayAvail.find((x: any) => x.date === date)
-    return new Set<string>(Array.isArray(d?.closedFields) ? d.closedFields : [])
+  // Fields closed for a day, or part of one (Oct 2026). Bo: "3B I'm not going to
+  // be using on Saturday", and later "we might use it for the first half of the
+  // day and then it's converted to one big field". Closures live on the day's
+  // availability record beside its hours (see src/lib/fieldClosures.ts), so they
+  // ride along with the venue and the same day on another device sees them.
+  // Games already inside a closed window stay put and are flagged; closing never
+  // moves anything.
+  const closuresFor = (date: string): Closure[] => closuresOf(dayAvail.find((x: any) => x.date === date))
+  const closuresToday = closuresFor(activeDate)
+  const closedAt = (field: string, time: string) => isFieldClosedAt(closuresToday, field, time)
+  const closedLabelFor = (field: string) => closureLabel(fieldClosure(closuresToday, field), fmtTime)
+  const [closeDlg, setCloseDlg] = useState<{ field: string; mode: 'day' | 'part'; from: string; to: string } | null>(null)
+  function openCloseDialog(fullName: string) {
+    const cur = fieldClosure(closuresToday, fullName)
+    const part = !!cur && !isAllDay(cur)
+    setCloseDlg({ field: fullName, mode: part ? 'part' : 'day', from: (part && cur?.from) || '', to: (part && cur?.to) || '' })
   }
-  const closedToday = closedFor(activeDate)
-  async function toggleFieldClosed(fullName: string) {
+  async function saveClosure(fullName: string, next: Closure | null) {
     const target = activeDate || dates[0] || ''
     if (!target) return
-    const nowClosed = closedToday.has(fullName)
     const f = fields.find(x => x.fullName === fullName)
-    if (!nowClosed) {
-      const n = games.filter(g => g.date === target && g.location === fullName && g.startTime).length
-      if (n > 0 && !confirm(`${f?.fieldName ?? fullName} has ${n} game${n === 1 ? '' : 's'} on ${fmtDate(target)}. Close it anyway?\n\nThe games stay where they are and are flagged until you move them. Nothing new can be placed there.`)) return
+    const name = f?.fieldName ?? fullName
+    if (next) {
+      const probe = [next]
+      const n = games.filter(g => g.date === target && g.location === fullName && g.startTime && isFieldClosedAt(probe, fullName, g.startTime)).length
+      if (n > 0 && !confirm(`${name} has ${n} game${n === 1 ? '' : 's'} in that window on ${fmtDate(target)}. Close it anyway?\n\nThe games stay where they are and are flagged until you move them. Nothing new can be placed there.`)) return
     }
     const cur = dayAvail.find((x: any) => x.date === target)
-    const list = new Set<string>(Array.isArray(cur?.closedFields) ? cur.closedFields : [])
-    if (nowClosed) list.delete(fullName); else list.add(fullName)
-    const entry = { ...(cur ?? { date: target, slots: [] }), closedFields: Array.from(list) }
-    const next = cur ? dayAvail.map((d: any) => d.date === target ? entry : d) : [...dayAvail, entry]
-    setDayAvail(next)
+    const entry = withClosure(cur ?? { date: target, slots: [] }, fullName, next)
+    const nextAvail = cur ? dayAvail.map((d: any) => d.date === target ? entry : d) : [...dayAvail, entry]
+    setDayAvail(nextAvail)
+    setCloseDlg(null)
     try {
       const r = await fetch(`/api/venues/${params.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venues: storedVenuesRaw, defaultAvailability: next }),
+        body: JSON.stringify({ venues: storedVenuesRaw, defaultAvailability: nextAvail }),
       })
       if (!r.ok) throw new Error()
-      toast.success(nowClosed ? `${f?.fieldName ?? fullName} is open on ${fmtDate(target)}` : `${f?.fieldName ?? fullName} is closed on ${fmtDate(target)}`)
+      const label = closureLabel(next, fmtTime)
+      toast.success(next ? `${name}: ${label!.toLowerCase()} on ${fmtDate(target)}` : `${name} is open all day on ${fmtDate(target)}`)
     } catch { toast.error('Could not save that. Reload and try again.') }
   }
 
@@ -533,7 +541,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     setOverCell(null)
     const gameId = e.dataTransfer.getData('gameId') || dragId
     if (!gameId) return
-    if (closedToday.has(field)) { toast.error(`${fields.find(f => f.fullName === field)?.fieldName ?? field} is closed on this day`); return }
+    if (closedAt(field, time)) { toast.error(`${fields.find(f => f.fullName === field)?.fieldName ?? field} is closed at ${fmtTime(time)} on this day`); return }
     const occupied = games.find(g => g.id !== gameId && g.date === activeDate && g.startTime === time && g.location === field)
     if (occupied) { toast.error(`${field} is already booked at ${time}`); return }
     setScratchPad(prev => prev.filter(id => id !== gameId))
@@ -874,7 +882,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   function openAutoFill() {
     setAfDiv(gridDiv)
-    setAfFields(new Set(visibleFields.filter(f => !closedToday.has(f.fullName)).map(f => f.fullName)))
+    setAfFields(new Set(visibleFields.filter(f => { const c = fieldClosure(closuresToday, f.fullName); return !(c && isAllDay(c)) }).map(f => f.fullName)))
     // Defaults: pool play up to 3 a team on the first day; bracket on the last day.
     const first = dates[0], last = dates[dates.length - 1]
     const caps: Record<string, number> = {}
@@ -934,8 +942,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         if (!remaining.length) break
         const batch = pickForDay(remaining, d, afCaps[d])
         if (!batch.length) continue
-        const closed = closedFor(d)
-        const af = autoFill({ toPlace: batch.map(toA), placed: occFor(d), fields: fieldsArg.filter(f => !closed.has(f.fullName)), slots: slotsFor(d), maxPerDay: afCaps[d] })
+        const cl = closuresFor(d), daySlots = slotsFor(d)
+        const af = autoFill({ toPlace: batch.map(toA), placed: occFor(d), fields: fieldsArg, slots: daySlots, maxPerDay: afCaps[d], blocked: blockedKeys(cl, fieldsArg, daySlots) })
         af.placements.forEach(pp => results.push({ ...pp, date: d }))
         const done = new Set(af.placements.map(pp => pp.id))
         remaining = remaining.filter(g => !done.has(g.id))
@@ -991,8 +999,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       let remaining = toPlace
       for (const d of days) {
         if (!remaining.length) break
-        const closed = closedFor(d)
-        const af = autoFill({ toPlace: remaining.map(toA), placed: occFor(d), fields: fieldsArg.filter(f => !closed.has(f.fullName)), slots: allSlots })
+        const cl = closuresFor(d)
+        const af = autoFill({ toPlace: remaining.map(toA), placed: occFor(d), fields: fieldsArg, slots: allSlots, blocked: blockedKeys(cl, fieldsArg, allSlots) })
         af.placements.forEach(pp => results.push({ ...pp, date: d }))
         const done = new Set(af.placements.map(pp => pp.id))
         remaining = remaining.filter(g => !done.has(g.id))
@@ -1317,6 +1325,74 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
+
+      {/* ── Close a field for all or part of the day ── */}
+      {closeDlg && (() => {
+        const f = fields.find(x => x.fullName === closeDlg.field)
+        const name = f?.fieldName ?? closeDlg.field
+        const cur = fieldClosure(closuresToday, closeDlg.field)
+        const dayLabel = fmtDate(activeDate || dates[0] || '')
+        const fromOk = closeDlg.mode === 'day' || closeDlg.from || closeDlg.to
+        const rangeOk = closeDlg.mode === 'day' || !closeDlg.from || !closeDlg.to || hmToMin(closeDlg.from) < hmToMin(closeDlg.to)
+        const preview: Closure = closeDlg.mode === 'day' ? { field: closeDlg.field } : { field: closeDlg.field, from: closeDlg.from || null, to: closeDlg.to || null }
+        const affected = fromOk && rangeOk ? games.filter(g => g.date === activeDate && g.location === closeDlg.field && g.startTime && isFieldClosedAt([preview], closeDlg.field, g.startTime)).length : 0
+        const timeOpts = allSlots
+        // plain render function, not a nested component (a nested component is a new type every render and remounts)
+        const sel = (id: string, value: string, onChange: (v: string) => void, blank: string) => (
+          <select id={id} value={value} onChange={e => onChange(e.target.value)} className="mt-1 w-full text-sm border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white">
+            <option value="">{blank}</option>
+            {timeOpts.map(t => <option key={t} value={t}>{fmtTime(t)}</option>)}
+          </select>
+        )
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setCloseDlg(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b">
+                <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2"><Ban size={18} className="text-red-600" /> Close {name}</h2>
+                <button onClick={() => setCloseDlg(null)} aria-label="Close" className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div className="text-xs text-slate-500">{dayLabel}{cur ? <> · currently <span className="font-semibold text-red-700">{closureLabel(cur, fmtTime)!.toLowerCase()}</span></> : null}</div>
+                <div className="inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200 text-xs font-semibold">
+                  {(['day', 'part'] as const).map(m => (
+                    <button key={m} onClick={() => setCloseDlg(d => d && { ...d, mode: m })} aria-pressed={closeDlg.mode === m}
+                      className={`px-3 py-1 rounded-full ${closeDlg.mode === m ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
+                      {m === 'day' ? 'All day' : 'Part of the day'}
+                    </button>
+                  ))}
+                </div>
+                {closeDlg.mode === 'part' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600" htmlFor="cl-from">Closed from</label>
+                      {sel('cl-from', closeDlg.from, v => setCloseDlg(d => d && { ...d, from: v }), 'Start of day')}
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600" htmlFor="cl-to">Open again at</label>
+                      {sel('cl-to', closeDlg.to, v => setCloseDlg(d => d && { ...d, to: v }), 'End of day')}
+                    </div>
+                    {!fromOk && <div className="col-span-2 text-xs text-slate-500">Pick a start or an end time, or switch to All day.</div>}
+                    {fromOk && !rangeOk && <div className="col-span-2 text-xs text-red-600">The field has to reopen after it closes.</div>}
+                  </div>
+                )}
+                <p className="text-xs text-slate-500">
+                  {closeDlg.mode === 'day' ? 'Nothing can be placed on this field today, by hand or by Auto-fill.' : 'Games can\u2019t start inside the closed window, by hand or by Auto-fill.'}
+                  {affected > 0 && <> <span className="font-semibold text-amber-700">{affected} game{affected === 1 ? '' : 's'} already there</span> will stay put and show in Issues until moved.</>}
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-2 px-6 py-3 border-t bg-slate-50 rounded-b-2xl">
+                {cur ? <button onClick={() => saveClosure(closeDlg.field, null)} className="text-sm font-semibold text-teal-700 hover:text-teal-900">Reopen all day</button> : <span />}
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setCloseDlg(null)} className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100">Cancel</button>
+                  <button disabled={!fromOk || !rangeOk} onClick={() => saveClosure(closeDlg.field, preview)} className="text-sm px-3 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {cur ? 'Save' : 'Close field'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Weather modal (delay / shorten) ── */}
       {showAF && (() => {
@@ -2041,8 +2117,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             saving,
             prefsKey: params.id,
             onReorderFields: reorderField,
-            closedFields: closedToday,
-            onToggleClosed: toggleFieldClosed,
+            isFieldClosed: closedAt,
+            closedLabel: closedLabelFor,
+            onToggleClosed: openCloseDialog,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()
@@ -2055,13 +2132,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   Time
                 </th>
                 {visibleFields.map(f => (
-                  <th key={f.fullName} className={`border border-slate-200 px-3 py-2 text-center min-w-[155px] group relative ${closedToday.has(f.fullName) ? 'bg-red-50' : 'bg-slate-100'}`}>
+                  <th key={f.fullName} className={`border border-slate-200 px-3 py-2 text-center min-w-[155px] group relative ${closedLabelFor(f.fullName) ? 'bg-red-50' : 'bg-slate-100'}`}>
                     <div className="text-[10px] text-slate-400 font-normal">{f.venueName}</div>
                     <div className="text-xs font-semibold text-slate-700">{f.fieldName}</div>
-                    <button onClick={() => toggleFieldClosed(f.fullName)}
-                      className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full border ${closedToday.has(f.fullName) ? 'bg-red-100 border-red-300 text-red-700' : 'border-transparent text-slate-300 opacity-0 group-hover:opacity-100 hover:text-slate-600 hover:border-slate-300'}`}
-                      title={closedToday.has(f.fullName) ? 'Closed on this day. Click to reopen.' : 'Close this field for this day: nothing can be placed on it by hand or by Auto-fill'}>
-                      {closedToday.has(f.fullName) ? 'Closed today' : 'Close today'}
+                    <button onClick={() => openCloseDialog(f.fullName)}
+                      className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full border ${closedLabelFor(f.fullName) ? 'bg-red-100 border-red-300 text-red-700' : 'border-transparent text-slate-300 opacity-0 group-hover:opacity-100 hover:text-slate-600 hover:border-slate-300'}`}
+                      title={closedLabelFor(f.fullName) ? 'Closed on this day. Click to change the hours or reopen.' : 'Close this field for all or part of this day: nothing can be placed there by hand or by Auto-fill'}>
+                      {closedLabelFor(f.fullName) ?? 'Close today'}
                     </button>
                     <button
                       onClick={() => removeField(f.fullName)}
@@ -2108,9 +2185,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     return (
                       <td
                         key={f.fullName}
-                        className={`border border-slate-200 p-1 align-top ${slotHasGame ? 'h-16' : 'h-8'} transition-colors ${isOver ? 'bg-teal-50' : closedToday.has(f.fullName) ? '' : 'bg-white hover:bg-slate-50'}`}
-                        style={closedToday.has(f.fullName) && !game ? { background: 'repeating-linear-gradient(135deg,#fff 0 8px,#fef2f2 8px 10px)' } : undefined}
-                        onDragOver={e => { if (closedToday.has(f.fullName)) return; e.preventDefault(); setOverCell(cellKey) }}
+                        className={`border border-slate-200 p-1 align-top ${slotHasGame ? 'h-16' : 'h-8'} transition-colors ${isOver ? 'bg-teal-50' : closedAt(f.fullName, slot) ? '' : 'bg-white hover:bg-slate-50'}`}
+                        style={closedAt(f.fullName, slot) && !game ? { background: 'repeating-linear-gradient(135deg,#fff 0 8px,#fef2f2 8px 10px)' } : undefined}
+                        title={closedAt(f.fullName, slot) && !game ? `${f.fieldName} is closed at ${fmtTime(slot)}` : undefined}
+                        onDragOver={e => { if (closedAt(f.fullName, slot)) return; e.preventDefault(); setOverCell(cellKey) }}
                         onDragLeave={() => setOverCell(null)}
                         onDrop={e => handleDropCell(e, slot, f.fullName)}
                       >
