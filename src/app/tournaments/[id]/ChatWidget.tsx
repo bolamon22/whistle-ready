@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import DictateButton from '@/components/DictateButton'
+import ChirpText from '@/components/ChirpText'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 interface Props { tournamentId: string; tournamentName: string }
@@ -43,7 +44,7 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next, tournamentId }),
+        body: JSON.stringify({ messages: next, tournamentId, page: window.location.pathname }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -114,7 +115,7 @@ export default function ChatWidget({ tournamentId, tournamentName }: Props) {
                       ? 'bg-[#0f1f3d] text-white rounded-br-sm'
                       : 'bg-slate-100 text-slate-800 rounded-bl-sm'
                   }`}>
-                    {m.content}
+                    {m.role === 'assistant' ? <ChirpText text={m.content} /> : m.content}
                   </div>
                 </div>
               ))

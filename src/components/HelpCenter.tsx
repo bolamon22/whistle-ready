@@ -5,6 +5,7 @@ import { HELP_ARTICLES, HELP_CATEGORIES } from '@/lib/helpArticles'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import DictateButton from '@/components/DictateButton'
+import ChirpText from '@/components/ChirpText'
 
 const SUPPORT_EMAIL = 'support@whistleready.com'
 const SUGGESTIONS = [
@@ -49,7 +50,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
     try {
       const res = await fetch('/api/help', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next, tournamentId }),
+        body: JSON.stringify({ messages: next, tournamentId, page: window.location.pathname }),
       })
       const data = await res.json()
       setMessages(m => [...m, { role: 'assistant', content: res.ok ? (data.message ?? 'Sorry, something went wrong.') : (data.error || 'Something went wrong.') }])
@@ -149,7 +150,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                   ) : messages.map((m, i) => (
                     <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       {m.role === 'assistant' && <ChirpAvatar size={26} />}
-                      <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.content}</div>
+                      <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.role === 'assistant' ? <ChirpText text={m.content} /> : m.content}</div>
                     </div>
                   ))}
                   {loading && <div className="flex gap-1 px-1"><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} /></div>}
