@@ -18,6 +18,27 @@ type Props = {
 
 let refusedThisVisit = false
 
+// Chrome hands back each pause as its own piece with no space before it and a
+// capital letter at its start, so pasting the pieces together read
+// "works well nowShould weBe sure". Join with spaces, and lowercase a piece's
+// first word when the piece before it didn't end a sentence (but keep "I",
+// "I'm" and the like). The person still reads it over before sending.
+export function joinSpoken(parts: string[]): string {
+  let out = ''
+  for (const raw of parts) {
+    let p = (raw || '').replace(/\s+/g, ' ').trim()
+    if (!p) continue
+    if (out) {
+      const endsSentence = /[.!?]$/.test(out)
+      if (!endsSentence && /^[A-Z][a-z]/.test(p) && !/^I(\b|')/.test(p)) p = p[0].toLowerCase() + p.slice(1)
+      out += ' ' + p
+    } else {
+      out = p
+    }
+  }
+  return out ? out[0].toUpperCase() + out.slice(1) : ''
+}
+
 export default function DictateButton({ value, onChange, disabled, className = '' }: Props) {
   const [supported, setSupported] = useState(false)
   const [listening, setListening] = useState(false)
@@ -54,9 +75,9 @@ export default function DictateButton({ value, onChange, disabled, className = '
     rec.continuous = true
     baseRef.current = valueRef.current.trim()
     rec.onresult = (e: any) => {
-      let spoken = ''
-      for (let i = 0; i < e.results.length; i++) spoken += e.results[i][0].transcript
-      spoken = spoken.trim()
+      const parts: string[] = []
+      for (let i = 0; i < e.results.length; i++) parts.push(e.results[i][0].transcript)
+      const spoken = joinSpoken(parts)
       if (!spoken) return
       rec._heard = true
       onChange(baseRef.current ? `${baseRef.current} ${spoken}` : spoken)
