@@ -29,6 +29,20 @@ function shape(t: any) {
   }
 }
 
+// _count.placedGames: games with a time and a field, so a list can show how far a
+// schedule has got ("198 games · 11 placed") without loading every game. One
+// groupBy for the whole list.
+async function withPlaced(list: any[]) {
+  if (list.length === 0) return list
+  const rows = await prisma.game.groupBy({
+    by: ['tournamentId'],
+    where: { tournamentId: { in: list.map(t => t.id) }, NOT: [{ startTime: '' }, { location: '' }] },
+    _count: { _all: true },
+  })
+  const placed = new Map(rows.map((r: any) => [r.tournamentId as string, r._count._all as number]))
+  return list.map(t => ({ ...t, _count: { ...t._count, placedGames: placed.get(t.id) ?? 0 } }))
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const viewOrgId = url.searchParams.get('viewOrgId')
@@ -44,10 +58,10 @@ export async function GET(req: Request) {
       const ids = res.rows.map((r: any) => r.id as string)
       if (ids.length === 0) return NextResponse.json([])
       const ts = await prisma.tournament.findMany({ where: { id: { in: ids } }, orderBy: { startDate: 'desc' }, include: INCLUDE })
-      return NextResponse.json(ts.map(shape))
+      return NextResponse.json(await withPlaced(ts.map(shape)))
     }
     const all = await prisma.tournament.findMany({ orderBy: { startDate: 'desc' }, include: INCLUDE })
-    return NextResponse.json(all.map(shape))
+    return NextResponse.json(await withPlaced(all.map(shape)))
   }
 
   // Org user: scope to their org
@@ -61,7 +75,7 @@ export async function GET(req: Request) {
       orderBy: { startDate: 'desc' },
       include: INCLUDE,
     })
-    return NextResponse.json(tournaments.map(shape))
+    return NextResponse.json(await withPlaced(tournaments.map(shape)))
   }
 
   // Logged in but not assigned to any organization — show nothing (prevents
