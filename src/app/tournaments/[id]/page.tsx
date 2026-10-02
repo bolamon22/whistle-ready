@@ -7,6 +7,7 @@ import TournamentNav from './TournamentNav'
 import ChatWidget from './ChatWidget'
 import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X } from 'lucide-react'
 import { eventDayList } from '@/lib/eventDays'
+import { divisionAbbr } from '@/lib/names'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
@@ -32,10 +33,12 @@ function staffRank(w:Worker):number{
 }
 
 // Searchable dropdown component
-function SearchSelect({ value, onChange, options, placeholder, assigned, disabled }: {
+function SearchSelect({ value, onChange, options, placeholder, assigned, disabled, chip }: {
   value: string; onChange: (v:string)=>void
   options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string}[]
   placeholder: string; assigned: boolean; disabled: boolean
+  /** Compact board: a one-line chip (role · last name · games) instead of the row select. */
+  chip?: { short:string; color:string; display:string; count?:number; danger?:boolean; tone:'ref'|'sk'; title?:string }
 }) {
   const [open,setOpen]=useState(false)
   const [search,setSearch]=useState('')
@@ -50,6 +53,42 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
 
   const selected=options.find(o=>o.id===value)
   const filtered=options.filter(o=>o.label.toLowerCase().includes(search.toLowerCase()))
+
+  const list=(
+    <div className="max-h-48 overflow-y-auto">
+      <div className="px-2 py-1.5 text-[10px] text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100" onClick={()=>{onChange('');setOpen(false);setSearch('')}}>— unassigned —</div>
+      {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>(
+        <div key={o.id} onClick={()=>{onChange(o.id);setOpen(false);setSearch('')}}
+          className={`px-2 py-1.5 cursor-pointer hover:bg-sky-50 ${o.id===value?'bg-sky-100':''}`}>
+          <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}{o.warning?'⚠ ':''}{o.label}</div>
+          {o.sublabel&&<div className="text-[10px] text-slate-400">{o.sublabel}</div>}
+        </div>
+      ))}
+    </div>
+  )
+
+  if(chip){
+    const look=chip.danger?'bg-red-50 border-red-300 text-red-700'
+      :assigned?(chip.tone==='sk'?'bg-emerald-50 border-emerald-200 text-slate-900':'bg-teal-50 border-teal-200 text-slate-900')
+      :'bg-white border-dashed border-slate-300 text-slate-400 hover:border-teal-500 hover:bg-teal-50'
+    return(
+      <div ref={ref} className="relative w-full min-w-0">
+        <button type="button" disabled={disabled} title={chip.title}
+          onClick={()=>{if(!disabled){setOpen(o=>!o);setTimeout(()=>inputRef.current?.focus(),50)}}}
+          className={`flex items-center gap-1 h-5 w-full px-1 rounded-md border text-[10px] min-w-0 text-left transition-colors ${look} ${disabled?'opacity-50 cursor-not-allowed':''}`}>
+          <span className="text-[8px] font-extrabold shrink-0" style={{color:chip.danger?'#b91c1c':chip.color}}>{chip.short}</span>
+          <span className={`truncate ${assigned?'font-semibold':'font-medium'}`}>{assigned?chip.display:'open'}</span>
+          {assigned&&chip.count!==undefined&&<span className={`ml-auto text-[9px] shrink-0 ${chip.danger?'text-red-600':'text-slate-500'}`}>{chip.count}</span>}
+        </button>
+        {open&&(
+          <div className="absolute z-50 left-0 top-full mt-0.5 w-56 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+            <input ref={inputRef} className="w-full px-2 py-1.5 text-[11px] border-b border-slate-100 outline-none" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Type a name…"/>
+            {list}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return(
     <div ref={ref} className="relative w-full">
@@ -66,16 +105,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
       </div>
       {open&&(
         <div className="absolute z-50 left-0 top-6 w-52 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
-          <div className="max-h-48 overflow-y-auto">
-            <div className="px-2 py-1.5 text-[10px] text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100" onClick={()=>{onChange('');setOpen(false);setSearch('')}}>— unassigned —</div>
-            {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>(
-              <div key={o.id} onClick={()=>{onChange(o.id);setOpen(false);setSearch('')}}
-                className={`px-2 py-1.5 cursor-pointer hover:bg-sky-50 ${o.id===value?'bg-sky-100':''}`}>
-                <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}{o.warning?'⚠ ':''}{o.label}</div>
-                {o.sublabel&&<div className="text-[10px] text-slate-400">{o.sublabel}</div>}
-              </div>
-            ))}
-          </div>
+          {list}
         </div>
       )}
     </div>
@@ -138,6 +168,26 @@ export default function GridPage({ params }: { params:{id:string} }) {
   // Collapsible time rows
   const [collapsedTimes,setCollapsedTimes]=useState<Set<string>>(new Set())
   function toggleTime(t:string){setCollapsedTimes(s=>{const n=new Set(s);n.has(t)?n.delete(t):n.add(t);return n})}
+
+  // Board density and fit (Oct 2026). A game card was 190 px wide and ~200 px tall,
+  // so Saturday at 10 fields x 13 start times needed 2,000 x 2,600 px and most of
+  // it was off-screen even on a large monitor. Compact (default) is a 3-line card;
+  // Mini is one line; Full is the old card. Fit shares the width between the
+  // day's fields so there is no sideways scroll. Remembered per tournament.
+  type Density='full'|'compact'|'mini'
+  const [density,setDensityRaw]=useState<Density>('compact')
+  const [fitFields,setFitFieldsRaw]=useState(true)
+  const [miniOpen,setMiniOpen]=useState<Set<string>>(new Set())   // games shown as a card while in Mini
+  const [staffOpen,setStaffOpen]=useState(false)
+  const [staffSearch,setStaffSearch]=useState('')
+  const [staffSort,setStaffSort]=useState<'load'|'name'>('load')
+  const [staffFilter,setStaffFilter]=useState<'all'|'boys'|'girls'|'sk'>('all')
+  useEffect(()=>{try{
+    const d=localStorage.getItem('assignerDensity:'+params.id); if(d==='full'||d==='compact'||d==='mini')setDensityRaw(d)
+    const f=localStorage.getItem('assignerFit:'+params.id); if(f==='0')setFitFieldsRaw(false)
+  }catch{}},[params.id])
+  function setDensity(d:Density){setDensityRaw(d);setMiniOpen(new Set());try{localStorage.setItem('assignerDensity:'+params.id,d)}catch{}}
+  function setFitFields(v:boolean){setFitFieldsRaw(v);try{localStorage.setItem('assignerFit:'+params.id,v?'1':'0')}catch{}}
 
   // Game edit/add
   const [editGame,setEditGame]=useState<Game|null>(null)
@@ -319,6 +369,28 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
   const rosterIds=new Set(roster.map(r=>r.workerId))
   const rosterWorkers=workers.filter(w=>rosterIds.has(w.id))
+
+  // Last names for the compact chips: at 10 fields across a chip is ~70 px, and
+  // "Andriesse 6" fits where "Mark Andriesse 6" does not. Two people sharing a
+  // last name get a first initial ("C Cox", "G Cox").
+  const lastNames=(()=>{
+    const m=new Map<string,string>(); const byLast=new Map<string,Worker[]>()
+    for(const w of workers){const parts=w.name.trim().split(/\s+/);const last=(parts[parts.length-1]||w.name).toLowerCase();if(!byLast.has(last))byLast.set(last,[]);byLast.get(last)!.push(w)}
+    byLast.forEach(ws=>{for(const w of ws){const parts=w.name.trim().split(/\s+/);const last=parts[parts.length-1]||w.name;m.set(w.id,ws.length>1&&parts.length>1?`${parts[0][0]} ${last}`:last)}})
+    return m
+  })()
+  const lastNameOf=(w:{id:string;name:string})=>lastNames.get(w.id)||w.name.trim().split(/\s+/).pop()||w.name
+  // Slots a game needs: its ref count (3 for a championship) plus a scorekeeper.
+  const slotsOf=(g:Game)=>g.isChampionship?Math.max(g.refCount,3):g.refCount
+  const slotRoles=(rc:number)=>['ref1','ref2','ref3'].slice(0,rc)
+  // Who is on a game, slot by slot, and whether it is fully crewed.
+  const crewOf=(g:Game,doubled:Set<string>)=>{
+    const rc=slotsOf(g)
+    const parts=[...slotRoles(rc),'scorekeeper'].map((role,i)=>({role,short:role==='scorekeeper'?'SK':`R${i+1}`,a:g.assignments.find(x=>x.role===role)}))
+    const open=parts.filter(p=>!p.a).length
+    const dbl=parts.some(p=>p.a&&doubled.has(p.a.workerId))
+    return{parts,open,total:parts.length,dbl,full:open===0&&!dbl}
+  }
   function workerRoles(w:Worker):string[]{try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.length?r:[w.defaultRole]}catch{return[w.defaultRole]}}
   function canScorekeeper(w:Worker):boolean{return w.defaultRole==='scorekeeper'||(w.defaultRole==='ref'&&workerRoles(w).includes('scorekeeper'))}
 
@@ -805,74 +877,192 @@ export default function GridPage({ params }: { params:{id:string} }) {
           )}
         </div>
       )}
-      {viewMode==='grid'&&dayGames.length>0&&(
+      {viewMode==='grid'&&dayGames.length>0&&(()=>{
+        // Day-level counts for the toolbar: slots to fill (refs + scorekeeper per game),
+        // how many are filled, who is on two games at once.
+        let slotsTotal=0,slotsFilled=0; const doubledIds=new Set<string>()
+        for(const g of dayGames){if(g.isCanceled)continue;const rc=slotsOf(g);slotsTotal+=rc+1;slotsFilled+=g.assignments.filter(a=>a.role==='scorekeeper'||slotRoles(rc).includes(a.role)).length}
+        for(const t of times)getDoubleBookedWorkers(t).forEach(id=>doubledIds.add(id))
+        const staffedTimes=times.filter(t=>{const gs=dayGames.filter(g=>g.startTime===t&&!g.isCanceled);return gs.length>0&&gs.every(g=>crewOf(g,getDoubleBookedWorkers(t)).full)})
+        const seg=(on:boolean)=>`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-colors ${on?'bg-slate-900 text-white':'text-slate-600 hover:text-slate-900'}`
+        const btn='px-2 py-0.5 rounded-full border border-slate-300 bg-white hover:border-slate-400 font-medium text-slate-600 transition-colors'
+        return(
         <div className="mb-3 flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-          <span className="font-semibold text-slate-600">Refs per game:</span>
+          <span className="font-semibold text-slate-600">Density</span>
+          <div className="inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200">
+            {(['full','compact','mini'] as const).map(d=><button key={d} type="button" onClick={()=>setDensity(d)} className={seg(density===d)} title={d==='full'?'The large card: full names, one picker per slot':d==='compact'?'Three lines: game, teams, officials as chips':'One line per game: who is on it'}>{d==='full'?'Full':d==='compact'?'Compact':'Mini'}</button>)}
+          </div>
+          <button type="button" onClick={()=>setFitFields(!fitFields)} aria-pressed={fitFields}
+            className={`px-2.5 py-0.5 rounded-full border text-[11px] font-bold transition-colors ${fitFields?'bg-slate-900 text-white border-slate-900':'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
+            title={fitFields?'Fields share the width of the window. Click for fixed-width columns that scroll sideways.':'Fixed-width columns that scroll sideways. Click to fit every field on the screen.'}>
+            Fit all fields{fitFields?'':': off'}
+          </button>
+          <span className="text-slate-300">|</span>
+          <span className="font-semibold text-slate-600">Rows</span>
+          <button type="button" onClick={()=>setCollapsedTimes(new Set(staffedTimes))} className={btn} title="Fold every start time whose games all have a full crew">Fold staffed</button>
+          <button type="button" onClick={()=>setCollapsedTimes(new Set(times))} className={btn}>Fold all</button>
+          <button type="button" onClick={()=>setCollapsedTimes(new Set())} className={btn}>Open all</button>
+          <span className="text-slate-300">|</span>
+          <span className="font-semibold text-slate-600">Refs per game</span>
           {[1,2,3].map(n=>(
-            <button key={n} type="button" disabled={locked} onClick={()=>applyDefaultRefs(n)} className="px-2 py-0.5 rounded-md border border-slate-300 bg-white hover:bg-sky-50 hover:border-sky-400 font-medium text-slate-600 transition-colors disabled:opacity-40">{n}</button>
+            <button key={n} type="button" disabled={locked} onClick={()=>applyDefaultRefs(n)} className="px-2 py-0.5 rounded-md border border-slate-300 bg-white hover:bg-sky-50 hover:border-sky-400 font-medium text-slate-600 transition-colors disabled:opacity-40" title={`Set every game on this day to ${n} ref${n===1?'':'s'}; use − / + on a game to change just that one`}>{n}</button>
           ))}
-          <span className="text-slate-400">— sets every game on this day; use the − / + on a game to change just that one.</span>
-          <label className="ml-auto flex items-center gap-1.5 cursor-pointer select-none">
-            <input type="checkbox" checked={locked} onChange={e=>toggleLock(e.target.checked)} className="accent-sky-600"/>
-            <Lock size={13} className={locked?'text-sky-600':'text-slate-400'}/>
-            <span className={`font-medium ${locked?'text-sky-700':'text-slate-600'}`}>Lock editing</span>
-          </label>
+          <span className="ml-auto flex items-center gap-2 flex-wrap">
+            <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold ${slotsFilled>=slotsTotal?'bg-emerald-50 border-emerald-200 text-emerald-700':'bg-amber-50 border-amber-200 text-amber-800'}`}>{slotsFilled} of {slotsTotal} slots filled{slotsTotal>slotsFilled?` · ${slotsTotal-slotsFilled} open`:''}</span>
+            {doubledIds.size>0&&<span className="px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-red-50 border-red-200 text-red-700">{doubledIds.size} double-booked</span>}
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input type="checkbox" checked={locked} onChange={e=>toggleLock(e.target.checked)} className="accent-sky-600"/>
+              <Lock size={13} className={locked?'text-sky-600':'text-slate-400'}/>
+              <span className={`font-medium ${locked?'text-sky-700':'text-slate-600'}`}>Lock editing</span>
+            </label>
+          </span>
         </div>
-      )}
-      {viewMode==='grid'&&dayGames.length>0&&(
-        <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Users size={14} className="text-slate-400"/>
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Staff — drag a name onto a game&apos;s R1 / R2 / R3 / SK slot</span>
+        )})()}
+      {/* Staff drawer: one row, fewest games first, with search and quick filters.
+          The six-row pill wall it replaced pushed the grid down the screen and put
+          the two refs with 0 games at the end of row four. "All N" opens it out. */}
+      {viewMode==='grid'&&dayGames.length>0&&(()=>{
+        const q=staffSearch.trim().toLowerCase()
+        const list=rosterWorkers.filter(w=>{
+          if(q&&!w.name.toLowerCase().includes(q))return false
+          if(staffFilter==='sk')return canScorekeeper(w)
+          if(staffFilter==='boys')return w.defaultRole==='ref'&&(w.gender==='boys'||w.gender==='both')
+          if(staffFilter==='girls')return w.defaultRole==='ref'&&(w.gender==='girls'||w.gender==='both')
+          return true
+        }).map(w=>({w,count:getGameCount(w.id)})).sort((a,b)=>staffSort==='load'?(a.count-b.count||a.w.name.localeCompare(b.w.name)):a.w.name.localeCompare(b.w.name))
+        const loadCls=(n:number)=>n>=8?'bg-red-50 text-red-700':n>=5?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'
+        const seg=(on:boolean)=>`px-2 py-0.5 rounded-full text-[11px] font-bold transition-colors ${on?'bg-slate-900 text-white':'text-slate-600 hover:text-slate-900'}`
+        return(
+        <div className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2 flex items-start gap-2">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <span className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide"><Users size={14} className="text-slate-400"/><span className="hidden 2xl:inline">Staff · drag onto a slot</span></span>
+            <input value={staffSearch} onChange={e=>setStaffSearch(e.target.value)} placeholder="Find a name" aria-label="Find a staff member" className="h-6 w-32 rounded-md border border-slate-300 bg-slate-50 px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-teal-500"/>
+            <div className="inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200">
+              <button type="button" onClick={()=>setStaffSort('load')} className={seg(staffSort==='load')} title="Fewest games first">Fewest games</button>
+              <button type="button" onClick={()=>setStaffSort('name')} className={seg(staffSort==='name')}>A–Z</button>
+            </div>
+            <div className="inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200">
+              {([['all','All'],['boys','Boys refs'],['girls','Girls refs'],['sk','SK']] as const).map(([k,l])=><button key={k} type="button" onClick={()=>setStaffFilter(k)} className={seg(staffFilter===k)}>{l}</button>)}
+            </div>
           </div>
-          <div className="flex items-center gap-3 mb-2 text-[10px] text-slate-400 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"/> Boys ref</span>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-pink-500 inline-block"/> Girls ref</span>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-violet-500 inline-block"/> Boys &amp; girls</span>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/> Scorekeeper</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {rosterWorkers.length===0?(
-              <span className="text-xs text-slate-400 italic">No staff on the roster yet.</span>
-            ):[...rosterWorkers].sort((a,b)=>staffRank(a)-staffRank(b)||a.name.localeCompare(b.name)).map(w=>{
-              const count=getGameCount(w.id)
+          <div className={`flex gap-1.5 min-w-0 flex-1 ${staffOpen?'flex-wrap':'overflow-hidden h-6'}`}>
+            {list.length===0?(
+              <span className="text-xs text-slate-400 italic pt-1">{rosterWorkers.length===0?'No staff on the roster yet.':'Nobody matches.'}</span>
+            ):list.map(({w,count})=>{
               const kind=staffKind(w)
               return(
                 <div key={w.id} draggable={!locked}
                   onDragStart={e=>{e.dataTransfer.setData('workerId',w.id);e.dataTransfer.effectAllowed='copy';setDragWorker(w)}}
                   onDragEnd={()=>{setDragWorker(null);setDragSlot(null)}}
-                  className={`flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] transition-colors ${locked?'opacity-60 cursor-default':'cursor-grab active:cursor-grabbing hover:border-sky-400'} ${dragWorker?.id===w.id?'opacity-40':''}`}
+                  className={`flex items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-2 pr-1 h-6 text-[11px] whitespace-nowrap shrink-0 transition-colors ${locked?'opacity-60 cursor-default':'cursor-grab active:cursor-grabbing hover:border-sky-400'} ${dragWorker?.id===w.id?'opacity-40':''}`}
                   title={`${w.name} · ${kind.label} · ${certLabel(w.certLevel)} · ${count} game${count!==1?'s':''} today`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${kind.dot}`}/>
                   <span className="font-medium text-slate-700">{w.name}</span>
-                  <span className="text-slate-400">{count}</span>
+                  <span className={`text-[10px] font-bold px-1.5 rounded-full ${loadCls(count)}`}>{count}</span>
                 </div>
               )
             })}
           </div>
+          <button type="button" onClick={()=>setStaffOpen(o=>!o)} className="shrink-0 h-6 px-2.5 rounded-full border border-slate-300 bg-white text-[11px] font-bold text-slate-600 hover:border-slate-400">{staffOpen?'Fewer ▴':`All ${list.length} ▾`}</button>
         </div>
-      )}
+        )})()}
       {/* ── GRID VIEW ── */}
       {viewMode==='grid'&&games.length===0?(
         <div className="card p-16 text-center"><div className="text-5xl mb-4">📋</div><p className="font-semibold text-slate-700">No games imported yet</p><p className="text-sm text-slate-400 mt-1">Click "↑ Import" to upload your schedule</p></div>
       ):viewMode==='grid'&&dayGames.length===0?<div className="text-slate-400 text-center py-12">No games on this day</div>:viewMode==='grid'&&(
-        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-          <table className="border-collapse text-xs min-w-max bg-white">
+        (()=>{
+          // Division colors; the card keeps a left stripe and tint in every density.
+          const dcOf=(g:Game)=>divColorMap.get(g.division)||{bg:'#f8fafc',border:'#e2e8f0',text:'#475569'}
+          const dropWorkerOnGame=(e:React.DragEvent,game:Game)=>{
+            // A name dropped on a one-line game goes into its first open slot.
+            const wid=e.dataTransfer.getData('workerId'); if(!wid||locked)return false
+            const rc=slotsOf(game); const openRole=[...slotRoles(rc),'scorekeeper'].find(r=>!game.assignments.some(a=>a.role===r))
+            if(openRole)assign(game.id,openRole,wid); else toast.error('Every slot on that game is filled')
+            return true
+          }
+          const renderSlots=(game:Game,doubled:Set<string>,isAssigning:boolean,chip:boolean)=>{
+            const rc=slotsOf(game)
+            const nodes=slotRoles(rc).map((role,i)=>{
+              const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
+              const existing=game.assignments.find(a=>a.role===role)
+              return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
+            })
+            const sk=game.assignments.find(a=>a.role==='scorekeeper')
+            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
+            return nodes
+          }
+          // One line: status dot, game, division, the crew by last name. Used by the
+          // Mini density and by folded time rows, so folding a row keeps it readable.
+          const renderMini=(game:Game,doubled:Set<string>,onClick:(()=>void)|null,hint:string)=>{
+            const dc=dcOf(game); const c=crewOf(game,doubled)
+            const dot=c.dbl||c.open===c.total?'bg-red-500':c.open?'bg-amber-500':'bg-emerald-500'
+            return(
+              <div onClick={onClick??undefined} role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onKeyDown={onClick?e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onClick()}}:undefined}
+                className={`flex items-center gap-1 h-[22px] px-1.5 rounded border border-slate-200 text-[10px] text-slate-600 whitespace-nowrap overflow-hidden ${onClick?'cursor-pointer hover:border-slate-400':''} ${game.isCanceled?'opacity-40':''}`}
+                style={{borderLeft:`4px solid ${dc.border}`,background:dc.bg}}
+                title={`#${game.gameNumber} ${game.division}${game.pool?` · ${game.pool}`:''} · ${game.team1} v ${game.team2}${hint?` · ${hint}`:''}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`}/>
+                <b className="text-slate-900 shrink-0">#{game.gameNumber}</b>
+                <i className="not-italic font-bold shrink-0" style={{color:dc.text}}>{divisionAbbr(game.division)}</i>
+                {game.isChampionship&&<span className="text-amber-600 font-bold shrink-0">★</span>}
+                <span className="truncate">
+                  {c.open===c.total?<span className="text-red-700 font-bold">Nobody yet</span>:c.parts.map((p,i)=>(
+                    <span key={p.role}>{i>0&&<span className="text-slate-300"> · </span>}{p.a?<span className={doubled.has(p.a.workerId)?'text-red-700 font-bold':''}>{p.a.worker?lastNameOf(p.a.worker):'?'}</span>:<span className="text-amber-700 font-semibold">{p.short} open</span>}</span>
+                  ))}
+                </span>
+              </div>
+            )
+          }
+          // Three lines: game · division · pool with the ref count, the teams, the
+          // officials as chips. 76 px against the old card's ~200.
+          const renderCompact=(game:Game,doubled:Set<string>,isAssigning:boolean,hasDoubleBooking:boolean)=>{
+            const dc=dcOf(game); const refCount=slotsOf(game)
+            return(
+              <div className={`relative group/card rounded-lg border border-slate-200 px-1.5 py-1 flex flex-col gap-0.5 min-w-0 ${game.isCanceled?'opacity-40':''}`} style={{borderLeft:`4px solid ${dc.border}`,background:dc.bg}}>
+                <div className="flex items-center gap-1 text-[9px] text-slate-500 whitespace-nowrap overflow-hidden leading-none">
+                  <span draggable={!locked} onDragStart={e=>{e.dataTransfer.setData('gameId',game.id);e.dataTransfer.effectAllowed='move';setDragGame(game)}} onDragEnd={()=>{setDragGame(null);setDragOver(null)}} className={`select-none text-[11px] leading-none ${locked?'text-slate-200':'cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500'}`} title="Drag to move game">⠿</span>
+                  <b className="text-slate-900">#{game.gameNumber}</b>
+                  <span className="font-bold truncate" style={{color:dc.text}} title={game.division}>{divisionAbbr(game.division)}</span>
+                  {game.pool&&<span className="truncate" title={game.pool}>· {String(game.pool).replace(/^(pool|group)\s*/i,'')}</span>}
+                  {game.isChampionship&&<span className="text-amber-600 font-bold shrink-0">★</span>}
+                  {hasDoubleBooking&&<span className="text-red-600 font-bold shrink-0" title={`Double-booked: ${game.assignments.filter(a=>doubled.has(a.workerId)).map(a=>a.worker?.name).join(', ')}`}>⚠</span>}
+                  <span className="ml-auto flex items-center gap-0.5 shrink-0" title={`${refCount} ref${refCount===1?'':'s'} on this game`}>
+                    <button type="button" onClick={()=>setRefCount(game.id,refCount-1)} disabled={refCount<=1||locked} className="w-3 h-3 flex items-center justify-center rounded border border-slate-300 text-slate-500 text-[10px] leading-none hover:bg-white disabled:opacity-30 opacity-0 group-hover/card:opacity-100 transition-opacity" title="One ref fewer on this game">−</button>
+                    <span className="font-bold text-slate-600">{refCount}<span className="font-medium text-slate-400">R</span></span>
+                    <button type="button" onClick={()=>setRefCount(game.id,refCount+1)} disabled={refCount>=3||locked} className="w-3 h-3 flex items-center justify-center rounded border border-slate-300 text-slate-500 text-[10px] leading-none hover:bg-white disabled:opacity-30 opacity-0 group-hover/card:opacity-100 transition-opacity" title="One more ref on this game">+</button>
+                    {!locked&&<button type="button" className="ml-0.5 text-slate-400 hover:text-slate-700 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={e=>{e.stopPropagation();openEditGame(game)}} title="Edit game">✎</button>}
+                  </span>
+                </div>
+                <div className="text-[11px] font-bold text-slate-900 truncate leading-tight" title={`${game.team1} v ${game.team2}`}>{game.team1}<span className="font-normal text-slate-400 px-1">v</span>{game.team2}</div>
+                {/* Chips sit three across when the column has room (a wide monitor) and
+                    wrap to two + one when it does not, so a last name stays readable. */}
+                <div className="flex flex-wrap gap-0.5 [&>*]:flex-[1_1_68px] [&>*]:min-w-0">{renderSlots(game,doubled,isAssigning,true)}</div>
+              </div>
+            )
+          }
+          return(
+        <div className={`rounded-xl border border-slate-200 shadow-sm ${fitFields?'overflow-x-hidden':'overflow-x-auto'}`}>
+          <table className={`border-collapse text-xs bg-white ${fitFields?'w-full table-fixed':'min-w-max'}`}>
+            <colgroup>
+              <col style={{width:76}}/>
+              {fields.map(f=><col key={f} style={collapsedFields.has(f)?{width:32}:fitFields?undefined:{width:density==='full'?200:190}}/>)}
+            </colgroup>
             <thead>
               <tr>
-                <th className="sticky left-0 z-20 bg-slate-700 text-white border-r border-slate-600 px-4 py-3 text-left font-semibold min-w-[90px]">Time</th>
+                <th className="sticky left-0 z-20 bg-slate-700 text-white border-r border-slate-600 px-2 py-2 text-left font-semibold text-[11px]">Time<span className="block text-[9px] font-medium text-slate-300">click to fold</span></th>
                 {fields.map(f=>{
                   const collapsed=collapsedFields.has(f)
+                  const n=dayGames.filter(g=>g.location===f&&!g.isCanceled).length
                   return(
-                    <th key={f} onClick={()=>toggleField(f)} className={`border-r border-slate-200 py-3 text-center bg-slate-100 last:border-r-0 cursor-pointer hover:bg-slate-200 transition-colors select-none ${collapsed?'w-8 px-0':'min-w-[190px] px-3'}`} title={collapsed?`Expand ${fieldLabel(f)}`:`Collapse ${fieldLabel(f)}`}>
+                    <th key={f} onClick={()=>toggleField(f)} className={`border-r border-slate-200 py-1.5 text-center bg-slate-100 last:border-r-0 cursor-pointer hover:bg-slate-200 transition-colors select-none overflow-hidden ${collapsed?'w-8 px-0':'px-2'}`} title={collapsed?`Expand ${fieldLabel(f)}`:`Collapse ${fieldLabel(f)}`}>
                       {collapsed?(
                         <div className="flex items-center justify-center h-full">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide" style={{writingMode:'vertical-rl',transform:'rotate(180deg)',whiteSpace:'nowrap'}}>{fieldLabel(f)}</span>
                         </div>
                       ):(
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{fieldLabel(f)}</span>
-                          <span className="text-[10px] text-slate-300">▼</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center justify-center gap-1"><span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide truncate">{fieldLabel(f)}</span><span className="text-[9px] text-slate-300">▼</span></div>
+                          <div className="text-[9px] font-medium text-slate-400">{n} game{n===1?'':'s'}</div>
                         </div>
                       )}
                     </th>
@@ -884,25 +1074,35 @@ export default function GridPage({ params }: { params:{id:string} }) {
               {times.map((time,ti)=>{
                 const doubled=getDoubleBookedWorkers(time)
                 const timeCollapsed=collapsedTimes.has(time)
+                const rowGames=dayGames.filter(g=>g.startTime===time&&!g.isCanceled)
+                const staffed=rowGames.filter(g=>crewOf(g,doubled).full).length
                 if(timeCollapsed)return(
-                  <tr key={time} className="border-t border-slate-300">
+                  <tr key={time} className="border-t border-slate-200">
                     <td
-                      className="sticky left-0 z-10 bg-slate-600 text-white border-r border-slate-500 px-4 py-1 font-bold text-[10px] whitespace-nowrap cursor-pointer hover:bg-slate-500 transition-colors select-none"
+                      className="sticky left-0 z-10 bg-slate-500 text-white border-r border-slate-400 px-2 py-0.5 font-bold text-[10px] whitespace-nowrap cursor-pointer hover:bg-slate-400 transition-colors select-none"
                       onClick={()=>toggleTime(time)}
-                      title="Click to expand"
-                    >▶ {formatTime(time)}</td>
-                    {fields.map(field=>(
-                      <td key={field} className={`border-r border-slate-300 last:border-r-0 h-2 ${collapsedFields.has(field)?'w-8':''} ${gameMap.get(`${time}::${field}`)&&!collapsedFields.has(field)?'bg-slate-200':''}`}/>
-                    ))}
+                      title="Click to open this time"
+                    >▸ {formatTime(time)}<span className="block text-[9px] font-medium text-slate-200">{staffed} of {rowGames.length} crewed</span></td>
+                    {fields.map(field=>{
+                      const game=gameMap.get(`${time}::${field}`)
+                      if(collapsedFields.has(field))return<td key={field} className={`border-r border-slate-200 last:border-r-0 w-8 ${game?'bg-slate-200':'bg-slate-50'}`}/>
+                      return(
+                        <td key={field} className="border-r border-slate-200 last:border-r-0 p-0.5 bg-slate-50 align-middle"
+                          onDragOver={e=>{if(game&&dragWorker&&!locked)e.preventDefault()}}
+                          onDrop={e=>{e.preventDefault();if(game)dropWorkerOnGame(e,game)}}>
+                          {game&&renderMini(game,doubled,()=>toggleTime(time),'click to open the row')}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
                 return(
                   <tr key={time} className={ti%2===0?'bg-white':'bg-slate-50/50'}>
                     <td
-                      className="sticky left-0 z-10 bg-slate-700 text-white border-r border-slate-600 border-t border-slate-600 px-4 py-3 font-bold text-[11px] whitespace-nowrap cursor-pointer hover:bg-slate-600 transition-colors select-none"
+                      className="sticky left-0 z-10 bg-slate-700 text-white border-r border-slate-600 border-t border-slate-600 px-2 py-2 font-bold text-[11px] whitespace-nowrap cursor-pointer hover:bg-slate-600 transition-colors select-none align-top"
                       onClick={()=>toggleTime(time)}
-                      title="Click to collapse"
-                    >▼ {formatTime(time)}</td>
+                      title="Click to fold this time"
+                    >▾ {formatTime(time)}{rowGames.length>0&&<span className="block text-[9px] font-medium text-slate-300">{staffed} of {rowGames.length} crewed</span>}</td>
                     {fields.map(field=>{
                       const collapsed=collapsedFields.has(field)
                       const game=gameMap.get(`${time}::${field}`)
@@ -916,25 +1116,31 @@ export default function GridPage({ params }: { params:{id:string} }) {
                       )
                       if(!game)return(
                         <td key={field}
-                          className={`border-r border-t border-slate-300 last:border-r-0 min-h-[80px] transition-colors ${isDragTarget?dropHasConflict?'bg-red-100 ring-2 ring-inset ring-red-400':'bg-emerald-100 ring-2 ring-inset ring-emerald-400':'bg-white'}`}
+                          className={`border-r border-t border-slate-300 last:border-r-0 transition-colors ${density==='mini'?'h-8':'min-h-[80px]'} ${isDragTarget?dropHasConflict?'bg-red-100 ring-2 ring-inset ring-red-400':'bg-emerald-100 ring-2 ring-inset ring-emerald-400':'bg-white'}`}
                           onDragOver={e=>{e.preventDefault();if(dragGame)setDragOver({time,field})}}
                           onDragLeave={()=>setDragOver(null)}
                           onDrop={e=>{e.preventDefault();const gId=e.dataTransfer.getData('gameId');if(gId&&!locked)handleDrop(gId,time,field,activeDay);setDragOver(null)}}
                         />
                       )
-                      const dc=divColorMap.get(game.division)||{bg:'#f8fafc',border:'#e2e8f0',text:'#475569'}
+                      const dc=dcOf(game)
                       const isAssigning=assigningGame===game.id
                       const hasDoubleBooking=game.assignments.some(a=>doubled.has(a.workerId))
-                      const refCount=game.isChampionship?Math.max(game.refCount,3):game.refCount
+                      const refCount=slotsOf(game)
+                      const mode:'full'|'compact'|'mini'=density==='full'?'full':density==='mini'&&!miniOpen.has(game.id)?'mini':'compact'
 
                       return(
                         <td key={field}
-                          className={`border-r border-t border-slate-300 last:border-r-0 p-2 align-top relative group transition-colors ${hasDoubleBooking?'ring-2 ring-inset ring-red-400':''} ${game.isCanceled?'opacity-40':''} ${isDragTarget?dropHasConflict?'ring-2 ring-inset ring-red-400 bg-red-50':'ring-2 ring-inset ring-emerald-400 bg-emerald-50':''}`}
-                          style={isDragTarget?{}:{background:dc.bg}}
+                          className={`border-r border-t border-slate-300 last:border-r-0 align-top relative group transition-colors ${mode==='full'?'p-2':'p-1'} ${hasDoubleBooking&&mode==='full'?'ring-2 ring-inset ring-red-400':''} ${game.isCanceled&&mode==='full'?'opacity-40':''} ${isDragTarget?dropHasConflict?'ring-2 ring-inset ring-red-400 bg-red-50':'ring-2 ring-inset ring-emerald-400 bg-emerald-50':''}`}
+                          style={isDragTarget||mode!=='full'?{}:{background:dc.bg}}
                           onDragOver={e=>{e.preventDefault();if(dragGame&&dragGame.id!==game.id)setDragOver({time,field})}}
                           onDragLeave={()=>setDragOver(null)}
-                          onDrop={e=>{e.preventDefault();const gId=e.dataTransfer.getData('gameId');if(gId&&gId!==game.id&&!locked)handleDrop(gId,time,field,activeDay);setDragOver(null)}}
+                          onDrop={e=>{e.preventDefault();const gId=e.dataTransfer.getData('gameId');if(gId&&gId!==game.id&&!locked)handleDrop(gId,time,field,activeDay);else if(!gId&&mode==='mini')dropWorkerOnGame(e,game);setDragOver(null)}}
                         >
+                          {mode==='mini'&&renderMini(game,doubled,()=>setMiniOpen(s=>{const n=new Set(s);n.has(game.id)?n.delete(game.id):n.add(game.id);return n}),'click to open the card')}
+                          {mode==='compact'&&(
+                            <div onClick={density==='mini'?()=>setMiniOpen(s=>{const n=new Set(s);n.delete(game.id);return n}):undefined}>{renderCompact(game,doubled,isAssigning,hasDoubleBooking)}</div>
+                          )}
+                          {mode==='full'&&<>
                           {hasDoubleBooking&&(()=>{
                             const names=game.assignments.filter(a=>doubled.has(a.workerId)).map(a=>a.worker.name)
                             return(
@@ -987,6 +1193,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                             {/* Scorekeeper */}
                             <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper"/></div>
                           </div>
+                          </>}
                         </td>
                       )
                     })}
@@ -996,19 +1203,27 @@ export default function GridPage({ params }: { params:{id:string} }) {
             </tbody>
           </table>
         </div>
+          )
+        })()
       )}
-      <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
-        <div className="text-xs text-slate-400">R1/R2/R3 = Refs · SK = Scorekeeper · ⚠ = double-booked · ⠿ drag · click column header to collapse</div>
+      <div className="mt-3 flex items-center justify-between flex-wrap gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/> Full crew</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"/> A slot open</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"/> Nobody, or double-booked</span>
+          <span className="text-slate-300">|</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"/> Boys ref</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-pink-500 inline-block"/> Girls ref</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-violet-500 inline-block"/> Boys &amp; girls</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/> Scorekeeper</span>
+          <span className="text-slate-300">|</span>
+          <span>Number after a name = games that day · drag a name onto a slot, or click the slot to pick · ⠿ drag a game · click a field header to collapse it</span>
+        </div>
         <div className="flex gap-3">
-          <span className="text-xs text-slate-400">Columns:</span>
-          <button onClick={()=>setCollapsedFields(new Set(fields))} className="text-xs text-slate-400 hover:text-slate-600">Collapse all</button>
+          <span>Columns:</span>
+          <button onClick={()=>setCollapsedFields(new Set(fields))} className="hover:text-slate-600">Collapse all</button>
           <span className="text-slate-200">|</span>
-          <button onClick={()=>setCollapsedFields(new Set())} className="text-xs text-slate-400 hover:text-slate-600">Expand all</button>
-          <span className="text-slate-200 mx-1">·</span>
-          <span className="text-xs text-slate-400">Rows:</span>
-          <button onClick={()=>setCollapsedTimes(new Set(times))} className="text-xs text-slate-400 hover:text-slate-600">Collapse all</button>
-          <span className="text-slate-200">|</span>
-          <button onClick={()=>setCollapsedTimes(new Set())} className="text-xs text-slate-400 hover:text-slate-600">Expand all</button>
+          <button onClick={()=>setCollapsedFields(new Set())} className="hover:text-slate-600">Expand all</button>
         </div>
       </div>
 
@@ -1101,8 +1316,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
   )
 }
 
-function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,onAssign,getGameCount,doubled,slotType }:{
+function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,onAssign,getGameCount,doubled,slotType,chip,displayName }:{
   roleObj:{value:string;label:string;short:string;color:string};existing?:Assignment;workers:Worker[];avails:Availability[];date:string;time:string;disabled:boolean;division:string;onAssign:(w:string)=>void;getGameCount:(id:string)=>number;doubled:Set<string>;slotType:'ref'|'scorekeeper'
+  /** Compact board chip; displayName is the short (last) name to show on it. */
+  chip?:boolean;displayName?:string
 }){
   const divLower=division.toLowerCase()
   const gameGender=divLower.includes('girl')||divLower.includes('women')?'girls':divLower.includes('boy')||divLower.includes('men')?'boys':'both'
@@ -1143,6 +1360,15 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
   })
 
   const isDoubledAssigned=existing&&doubled.has(existing.workerId)
+
+  if(chip){
+    const count=existing?getGameCount(existing.workerId):undefined
+    const title=existing
+      ?`${roleObj.label}: ${existing.worker?.name??''} · ${count} game${count===1?'':'s'} today${isDoubledAssigned?' · also on another game at this time':''}`
+      :`${roleObj.label}: open — click to pick, or drop a name here`
+    return <SearchSelect value={existing?.workerId??''} onChange={onAssign} options={options} placeholder="open" assigned={!!existing} disabled={disabled}
+      chip={{short:roleObj.short,color:roleObj.color,display:displayName||existing?.worker?.name||'',count,danger:!!isDoubledAssigned,tone:slotType==='scorekeeper'?'sk':'ref',title}}/>
+  }
 
   return(
     <div className="flex items-center gap-0.5">
