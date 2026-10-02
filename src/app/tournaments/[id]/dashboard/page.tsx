@@ -111,16 +111,11 @@ export default function DashboardPage() {
   // has all the money right out there in front." Deliberately NOT remembered --
   // a stored "shown" would be shown to whoever is standing there next, which is
   // the whole thing this is for.
+  // One switch for everything money-shaped on this page: the Collected tile, the
+  // Money section, and the paid marks on the team list. Bo, Oct 2: "I already have
+  // the money hidden tab. Can we just make them work together?" -- a second button
+  // for the marks was one control too many.
   const [showMoney, setShowMoney] = useState(false)
-  // Paid marks on the team list get their OWN switch, placed on the list itself.
-  // The first cut hung them off the Money toggle, which lives in a section at the
-  // bottom of the page: Bo opened a division, saw nothing, and reasonably said it
-  // wasn't working. A check or an X next to a name shows no dollar figure, so it
-  // does not need the money gate; it needs to be where the eye already is.
-  // Remembered per browser -- this is a three-week daily habit, not a one-off.
-  const [showPaid, setShowPaid] = useState(false)
-  useEffect(() => { try { setShowPaid(localStorage.getItem('dash:showPaid') === '1') } catch {} }, [])
-  const togglePaid = () => setShowPaid(v => { const n = !v; try { localStorage.setItem('dash:showPaid', n ? '1' : '0') } catch {}; return n })
   const dragFrom = useRef<number | null>(null)
 
   useEffect(() => {
@@ -339,12 +334,7 @@ export default function DashboardPage() {
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Registered teams</h2>
             <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400">· {divisionTeams} team{divisionTeams === 1 ? '' : 's'} in {divisionRows.length} division{divisionRows.length === 1 ? '' : 's'}{wlTotal > 0 && <> · <span className="text-amber-700">{wlTotal} on waiting list</span></>}</span>{(split.boys > 0 || split.girls > 0) && <span className="text-xs font-normal text-slate-400">· {split.boys} boys · {split.girls} girls{split.other > 0 ? ` · ${split.other} unclassified` : ''}</span>}<span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap one to see teams, drag the grip to reorder</span>{orderErr && <span className="text-xs font-normal text-rose-600">· {orderErr}</span>}
-                <button type="button" onClick={togglePaid}
-                  title={showPaid ? 'Hide the paid marks' : 'Mark each team paid, partial or unpaid'}
-                  className={`ml-auto inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border transition-colors ${showPaid ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}>
-                  <CheckCircle2 size={12} /> {showPaid ? 'Paid marks on' : "Who's paid?"}
-                </button></h3>
+              <h3 className="text-sm font-medium text-slate-700 mb-3 sm:mb-4 flex items-center gap-2"><Trophy size={16} className="text-slate-400 flex-shrink-0" /> Teams by division <span className="text-xs font-normal text-slate-400">· {divisionTeams} team{divisionTeams === 1 ? '' : 's'} in {divisionRows.length} division{divisionRows.length === 1 ? '' : 's'}{wlTotal > 0 && <> · <span className="text-amber-700">{wlTotal} on waiting list</span></>}</span>{(split.boys > 0 || split.girls > 0) && <span className="text-xs font-normal text-slate-400">· {split.boys} boys · {split.girls} girls{split.other > 0 ? ` · ${split.other} unclassified` : ''}</span>}<span className="text-xs font-normal text-slate-400 hidden sm:inline">· tap one to see teams, drag the grip to reorder</span>{orderErr && <span className="text-xs font-normal text-rose-600">· {orderErr}</span>}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {divisionRows.map(([div, count], idx) => {
                   const open = openDiv === div
@@ -417,7 +407,7 @@ export default function DashboardPage() {
                       {/* The decision this page gets used for: is there a team in
                           here that has not paid and may not show, so a waiting-list
                           team can have its spot? Only when money is on screen. */}
-                      {showPaid && (() => {
+                      {showMoney && (() => {
                         const l = (teamsByDiv[openDiv] || []).filter(x => !x.waitlisted)
                         const paidN = l.filter(x => x.balance <= 0).length
                         const noneN = l.filter(x => x.balance > 0 && x.paid <= 0).length
@@ -445,12 +435,12 @@ export default function DashboardPage() {
                               deposit down is coming; a club that has not touched the
                               invoice may not be. The figure is the club's balance, so a
                               three-team club shows it three times -- the tooltip says so. */}
-                          {showPaid && !tm.waitlisted && (
+                          {showMoney && !tm.waitlisted && (
                             tm.balance <= 0
                               ? <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 flex-shrink-0" title="Club paid in full"><CheckCircle2 size={15} className="text-emerald-600" /> Paid</span>
                               : tm.paid > 0
-                                ? <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 flex-shrink-0" title={showMoney ? `Club has paid ${fmt(tm.paid)}; ${fmt(tm.balance)} still owed across all its teams` : 'Club has paid part of its invoice'}><Circle size={15} className="text-amber-500" /> Partial</span>
-                                : <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 flex-shrink-0" title={showMoney ? `Club has paid nothing; ${fmt(tm.balance)} owed across all its teams` : 'Club has paid nothing'}><XCircle size={15} className="text-rose-500" /> Unpaid</span>
+                                ? <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 flex-shrink-0" title={`Club has paid ${fmt(tm.paid)}; ${fmt(tm.balance)} still owed across all its teams`}><Circle size={15} className="text-amber-500" /> Partial</span>
+                                : <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 flex-shrink-0" title={`Club has paid nothing; ${fmt(tm.balance)} owed across all its teams`}><XCircle size={15} className="text-rose-500" /> Unpaid</span>
                           )}
                         </div>
                       ))}
