@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import ChirpAvatar from '@/components/ChirpAvatar'
-import DictateButton from '@/components/DictateButton'
+import ChirpInput from '@/components/ChirpInput'
 import ChirpText from '@/components/ChirpText'
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -21,10 +21,8 @@ export default function PublicChirp({ tournamentId, tournamentName }: { tourname
   const [loading, setLoading] = useState(false)
   const [team, setTeam] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
-  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 100) }, [open])
   useEffect(() => { try { setTeam(localStorage.getItem(`chirp-team-${tournamentId}`) || '') } catch {} }, [tournamentId])
   const saveTeam = (v: string) => { setTeam(v); try { v ? localStorage.setItem(`chirp-team-${tournamentId}`, v) : localStorage.removeItem(`chirp-team-${tournamentId}`) } catch {} }
 
@@ -94,12 +92,8 @@ export default function PublicChirp({ tournamentId, tournamentName }: { tourname
             <div ref={bottomRef} />
           </div>
 
-          <div className="border-t border-slate-100 px-3 py-3 flex gap-2 flex-shrink-0">
-            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-              placeholder="Ask about this event…" disabled={loading}
-              className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
-            <DictateButton value={input} onChange={setInput} disabled={loading} />
-            <button onClick={() => send()} disabled={loading || !input.trim()} className="bg-teal-500 hover:bg-teal-400 disabled:opacity-40 text-white px-3 py-2 rounded-xl text-sm font-medium">→</button>
+          <div className="border-t border-slate-100 px-3 py-3 flex-shrink-0">
+            <ChirpInput value={input} onChange={setInput} onSend={() => send()} disabled={loading} placeholder="Ask about this event…" autoFocus={open} />
           </div>
         </div>
       )}
