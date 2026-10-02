@@ -87,7 +87,10 @@ function GameDayCard({ href, icon: Icon, label, hint, accent }: { href: string; 
   )
 }
 
-type DivTeam = { teamName: string; clubName: string; logoUrl: string; waitlisted: boolean }
+// paid/balance are the CLUB's figures carried onto each of its teams -- payment is
+// per registration, not per team, and splitting one balance across three teams
+// would be an invention.
+type DivTeam = { teamName: string; clubName: string; logoUrl: string; waitlisted: boolean; paid: number; balance: number }
 
 export default function DashboardPage() {
   const { id } = useParams()
@@ -132,10 +135,13 @@ export default function DashboardPage() {
       .then((regs: any[]) => {
         const map: Record<string, DivTeam[]> = {}
         ;(Array.isArray(regs) ? regs : []).forEach(reg => {
+          // Same arithmetic as regBalance on the registrations page.
+          const paid = (reg.payments || []).reduce((n: number, x: any) => n + (Number(x.amount) || 0), 0)
+          const balance = Math.round(((Number(reg.invoiceAmount) || 0) - (Number(reg.discountAmount) || 0) - paid) * 100) / 100
           ;(reg.teams || []).forEach((t: any) => {
             const div = String(t.division || '').trim() || 'Unassigned'   // same key the API counts under
             if (!map[div]) map[div] = []
-            map[div].push({ teamName: t.teamName || t.clubName || 'Team', clubName: t.clubName || reg.clubName || '', logoUrl: t.logoUrl || '', waitlisted: !!t.waitlisted })
+            map[div].push({ teamName: t.teamName || t.clubName || 'Team', clubName: t.clubName || reg.clubName || '', logoUrl: t.logoUrl || '', waitlisted: !!t.waitlisted, paid, balance })
           })
         })
         // waiting-list teams go last, so the confirmed ones read as the division
@@ -393,7 +399,18 @@ export default function DashboardPage() {
                 <div className="mt-4 border-t border-slate-100 pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-slate-700">{openDiv}</span>
-                    <span className="text-xs text-slate-400">{(() => { const l = teamsByDiv[openDiv] || []; const w = l.filter(x => x.waitlisted).length; const n = l.length - w; return `${n} team${n === 1 ? '' : 's'}${w ? ` + ${w} on waiting list` : ''}` })()}</span>
+                    <span className="text-xs text-slate-400">{(() => { const l = teamsByDiv[openDiv] || []; const w = l.filter(x => x.waitlisted).length; const n = l.length - w; return `${n} team${n === 1 ? '' : 's'}${w ? ` + ${w} on waiting list` : ''}` })()}
+                      {/* The decision this page gets used for: is there a team in
+                          here that has not paid and may not show, so a waiting-list
+                          team can have its spot? Only when money is on screen. */}
+                      {showMoney && (() => {
+                        const l = (teamsByDiv[openDiv] || []).filter(x => !x.waitlisted)
+                        const paidN = l.filter(x => x.balance <= 0).length
+                        const noneN = l.filter(x => x.balance > 0 && x.paid <= 0).length
+                        const partN = l.length - paidN - noneN
+                        return <> · <span className="text-emerald-700">{paidN} paid</span>{partN > 0 && <> · <span className="text-amber-700">{partN} partial</span></>}{noneN > 0 && <> · <span className="text-rose-700 font-medium">{noneN} unpaid</span></>}</>
+                      })()}
+                    </span>
                   </div>
                   {(teamsByDiv[openDiv] || []).length === 0 ? (
                     <p className="text-sm text-slate-400">No team details found.</p>
@@ -409,6 +426,18 @@ export default function DashboardPage() {
                             {tm.clubName && tm.clubName !== tm.teamName && <span className="block text-[11px] text-slate-400 truncate">{tm.clubName}</span>}
                           </span>
                           {tm.waitlisted && <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">Waiting list</span>}
+                          {/* Three states on purpose. "Paid something" and "paid nothing"
+                              answer different questions three weeks out: a club with a
+                              deposit down is coming; a club that has not touched the
+                              invoice may not be. The figure is the club's balance, so a
+                              three-team club shows it three times -- the tooltip says so. */}
+                          {showMoney && !tm.waitlisted && (
+                            tm.balance <= 0
+                              ? <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-emerald-800 bg-emerald-100 rounded-full px-2 py-0.5 flex-shrink-0" title="Club paid in full">Paid</span>
+                              : tm.paid > 0
+                                ? <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0" title={`Club has paid ${fmt(tm.paid)}; ${fmt(tm.balance)} still owed across all its teams`}>Owes {fmt(tm.balance)}</span>
+                                : <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-rose-800 bg-rose-100 rounded-full px-2 py-0.5 flex-shrink-0" title={`Club has paid nothing; ${fmt(tm.balance)} owed across all its teams`}>Unpaid</span>
+                          )}
                         </div>
                       ))}
                     </div>
