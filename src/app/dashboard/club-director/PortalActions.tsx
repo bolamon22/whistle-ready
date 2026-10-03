@@ -635,12 +635,12 @@ export function AccountNote({ confirm, staffView, busy, onConfirm }: {
           <AlertTriangle size={18} className="shrink-0 mt-0.5" />
           <span><strong className="font-bold">The office updated your teams.</strong> Check the list below, then confirm it.</span>
         </span>
-        {!staffView && (
-          <button type="button" onClick={onConfirm} disabled={busy}
-            className="min-h-[44px] px-4 rounded-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-bold">
-            {busy ? 'Confirming…' : 'Confirm teams'}
-          </button>
-        )}
+        {/* Greyed out, not hidden, in staff view: the point of that view is to see what the club sees. */}
+        <button type="button" onClick={onConfirm} disabled={busy || staffView}
+          title={staffView ? 'The club confirms here. It is turned off in staff view.' : undefined}
+          className="min-h-[44px] px-4 rounded-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold">
+          {busy ? 'Confirming…' : 'Confirm teams'}
+        </button>
       </section>
     )
   }
@@ -718,12 +718,11 @@ export function OtherEventsCard({ tournamentId, teamCount, staffView, showMoney,
                   <span className="shrink-0 px-2.5 py-1 rounded-full bg-teal-50 border border-teal-100 text-teal-700 text-[13px] font-bold whitespace-nowrap">{money(per)} / team</span>
                 )}
               </div>
-              {!staffView && (
-                <button type="button" onClick={() => onRegister(ev.id)}
-                  className="min-h-[44px] rounded-full border border-teal-600 text-teal-700 hover:bg-teal-50 text-sm font-semibold inline-flex items-center justify-center gap-1.5">
-                  <ArrowRightLeft size={15} /> Register these teams
-                </button>
-              )}
+              <button type="button" onClick={() => onRegister(ev.id)} disabled={staffView}
+                title={staffView ? 'The club registers here. It is turned off in staff view.' : undefined}
+                className="min-h-[44px] rounded-full border border-teal-600 text-teal-700 hover:bg-teal-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent text-sm font-semibold inline-flex items-center justify-center gap-1.5">
+                <ArrowRightLeft size={15} /> Register these teams
+              </button>
             </div>
           )
         })}

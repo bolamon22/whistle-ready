@@ -511,9 +511,14 @@ export default function ClubDirectorDashboard() {
   }
 
   // Changing teams is for the club itself, at an event that isn't over. Staff
-  // viewing the portal make the same changes on the registrations page.
+  // viewing the portal see the same buttons greyed out rather than not at all:
+  // hidden, they read as missing ("I don't see how they can add or request for
+  // a team to be removed", Bo, Oct 3 2026). Staff make the change on the
+  // registrations page instead.
   const portalEvent = data?.event ?? null
-  const canChange = !viewUserId && !!portalEvent && !portalEvent.ended
+  const showChange = !!portalEvent && !portalEvent.ended
+  const canChange = showChange && !viewUserId
+  const staffOnly = viewUserId ? 'The club can use this. It is turned off in staff view; make the change on the registrations page.' : undefined
 
   // WHAT'S LEFT. The questions a director logs in to answer, in the order they
   // matter: is my team list right, do I owe anything, have my players and
@@ -580,7 +585,7 @@ export default function ClubDirectorDashboard() {
           <span>
             <strong className="font-semibold">Staff view.</strong> This is{' '}
             {viewingUser?.name ? `${viewingUser.name}’s` : 'this club director’s'} portal, exactly as they see it
-            {viewingUser?.email ? ` (${viewingUser.email})` : ''}. Buttons that would act on their behalf are hidden.
+            {viewingUser?.email ? ` (${viewingUser.email})` : ''}. Buttons that would act on their behalf are hidden or greyed out.
           </span>
         </div>
       )}
@@ -875,11 +880,11 @@ export default function ClubDirectorDashboard() {
                       {/* Adding a team is the club's own call until the schedule is
                           posted; moving or removing one is always a request (Bo, Oct 3
                           2026). See ./PortalActions and api/club-director/teams. */}
-                      {canChange && (
+                      {showChange && (
                         <div className="px-5 py-2.5 flex items-center justify-between gap-3 border-b border-gray-100">
                           <span className="text-sm font-semibold text-gray-800">Your teams</span>
-                          <button type="button" onClick={() => setAddFor(reg.id)}
-                            className="inline-flex items-center gap-1.5 min-h-[36px] text-sm font-semibold px-3.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white">
+                          <button type="button" onClick={() => setAddFor(reg.id)} disabled={!canChange} title={staffOnly}
+                            className="inline-flex items-center gap-1.5 min-h-[36px] text-sm font-semibold px-3.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-teal-600">
                             <Plus size={15} className="shrink-0" /> Add a team
                           </button>
                         </div>
@@ -889,11 +894,11 @@ export default function ClubDirectorDashboard() {
                           from one set of markup so neither can drift. */}
                       <div className="hidden sm:grid grid-cols-12 gap-x-4 px-5 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         <div className="col-span-3">Team</div>
-                        <div className={canChange ? 'col-span-2' : 'col-span-3'}>Division</div>
+                        <div className={showChange ? 'col-span-2' : 'col-span-3'}>Division</div>
                         <div className="col-span-1 text-center">Waivers</div>
                         <div className="col-span-2">Coach</div>
-                        <div className={canChange ? 'col-span-2' : 'col-span-3'}>Contact</div>
-                        {canChange && <div className="col-span-2 text-right">Changes</div>}
+                        <div className={showChange ? 'col-span-2' : 'col-span-3'}>Contact</div>
+                        {showChange && <div className="col-span-2 text-right">Changes</div>}
                       </div>
                       <div className="divide-y divide-gray-100">
                         {rows.length === 0 && <div className="px-5 py-4 text-sm text-gray-400">No teams on this registration.</div>}
@@ -903,7 +908,7 @@ export default function ClubDirectorDashboard() {
                               {t.logoUrl && <img src={t.logoUrl} alt="" className="h-5 w-5 object-contain rounded flex-shrink-0" />}
                               <span className="font-semibold text-gray-800 truncate">{t.teamName}</span>
                             </div>
-                            <div className={`${canChange ? 'sm:col-span-2' : 'sm:col-span-3'} text-sm text-gray-600 min-w-0`}>
+                            <div className={`${showChange ? 'sm:col-span-2' : 'sm:col-span-3'} text-sm text-gray-600 min-w-0`}>
                               <span className="block truncate">{t.division}</span>
                               {t.waitlisted && (
                                 <span title="This division is full. The team is not billed unless a spot opens."
@@ -921,27 +926,27 @@ export default function ClubDirectorDashboard() {
                                 line a club address breaks mid-word ("kpaglino@laxm
                                 / aniax.com"). Truncated with the full value on
                                 hover; the mailto still carries all of it. */}
-                            <div className={`${canChange ? 'sm:col-span-2' : 'sm:col-span-3'} text-sm text-gray-500 min-w-0 leading-snug`}>
+                            <div className={`${showChange ? 'sm:col-span-2' : 'sm:col-span-3'} text-sm text-gray-500 min-w-0 leading-snug`}>
                               {t.coachPhone && <div><a href={`tel:${t.coachPhone}`} className="hover:text-violet-600">{t.coachPhone}</a></div>}
                               {t.coachEmail && <div className="truncate"><a href={`mailto:${t.coachEmail}`} title={t.coachEmail} className="hover:text-violet-600">{t.coachEmail}</a></div>}
                               {!t.coachPhone && !t.coachEmail && '—'}
                             </div>
-                            {canChange && (
+                            {showChange && (
                               <div className="sm:col-span-2 flex sm:justify-end gap-1.5 pt-1.5 sm:pt-0">
                                 {(portalEvent?.divisions.length ?? 0) > 1 && (
-                                  <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'move' })}
-                                    title="Ask the office to move this team to another division"
-                                    className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800">Move</button>
+                                  <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'move' })} disabled={!canChange}
+                                    title={staffOnly || 'Ask the office to move this team to another division'}
+                                    className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">Move</button>
                                 )}
-                                <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'remove' })}
-                                  title="Ask the office to remove this team"
-                                  className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800">Remove</button>
+                                <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'remove' })} disabled={!canChange}
+                                  title={staffOnly || 'Ask the office to remove this team'}
+                                  className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">Remove</button>
                               </div>
                             )}
                           </div>
                         ))}
                       </div>
-                      {canChange && (
+                      {showChange && (
                         <p className="px-5 py-2.5 border-t border-gray-100 text-xs leading-relaxed text-gray-500">
                           Moving a team to another division or removing one goes to the tournament office as a request.{' '}
                           {portalEvent?.posted ? 'The schedule is posted, so adding a team is a request now too.' : 'You can add a team yourself until the schedule is posted.'}

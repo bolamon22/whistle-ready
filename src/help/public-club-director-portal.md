@@ -28,6 +28,6 @@ After you sign in, the club portal shows everything for your club at one tournam
 **Common problems:**
 - "Your account hasn't been linked to a club yet." Contact your tournament administrator to get linked.
 - **Rosters locked** means players can no longer be moved between teams.
-- No **Add a team**, **Move** or **Remove** buttons? They're hidden once the event is over and in the staff view of your portal.
+- No **Add a team**, **Move** or **Remove** buttons? They're hidden once the event is over. (Tournament staff who open your portal see them greyed out; they make changes from their own registrations page.)
 - An event isn't in **Bring your teams to another event**? It only lists events open for team registration that your club isn't already in.
 - Waivers listed as not matched to a team still count toward your club total; ask tournament staff to correct the team.
