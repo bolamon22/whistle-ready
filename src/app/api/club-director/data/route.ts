@@ -6,6 +6,10 @@ import { viewAs } from '@/lib/clubDirectorView'
 import { rosterLock } from '@/lib/rosterLock'
 import { isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
+import { readConfirmMany } from '@/lib/changeRequest'
+import { eventInfo, divisionFull, addPolicy, addBlock } from '@/lib/clubPortal'
+import { parsePricing } from '@/lib/regPricing'
+import { divisionBadge } from '@/lib/regStatus'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -47,7 +51,7 @@ export async function GET(req: NextRequest) {
       teams: {
         select: {
           id: true, teamName: true, division: true, logoUrl: true,
-          coachName: true, coachPhone: true, coachEmail: true,
+          coachName: true, coachPhone: true, coachEmail: true, waitlisted: true,
         },
       },
       // No payment reference: the Stripe payment-intent id staff use for
@@ -198,5 +202,32 @@ export async function GET(req: NextRequest) {
   // Sent with the data so the portal can say so up front rather than only on a refusal.
   const lock = await rosterLock(tournamentId)
 
-  return NextResponse.json({ clubs: clubNames, registrations, playerRegs, games, teamNames, waivers, coachWaivers, lock, payTo })
+  // Where each registration stands with the office: confirmed, a change
+  // requested (and what it says: the club's own words, nothing from staff), or
+  // waiting for them to confirm a list the office just changed.
+  const confirm = await readConfirmMany(registrations.map(r => r.id)).catch(() => new Map())
+  const regsOut = registrations.map(r => ({ ...r, confirm: confirm.get(r.id) || { status: '', note: '', at: '' } }))
+
+  // What the portal needs to add a team or ask for a move: the divisions, which
+  // are marked full, which still take a team directly (see lib/clubPortal), and
+  // the price list for the invoice preview.
+  let event: unknown = null
+  try {
+    const info = await eventInfo(tournamentId)
+    const policy = await addPolicy(tournamentId)
+    if (info) event = {
+      name: info.name,
+      ended: policy.ended,
+      posted: policy.posted,
+      pricing: parsePricing(info.pricingRaw),
+      divisions: info.divisions.map(name => ({
+        name,
+        full: divisionFull(info, name),
+        label: divisionBadge(name, info.site)?.suffix || '',
+        directAdd: addBlock(policy, name) === null,
+      })),
+    }
+  } catch { /* the portal hides add and move rather than failing */ }
+
+  return NextResponse.json({ clubs: clubNames, registrations: regsOut, playerRegs, games, teamNames, waivers, coachWaivers, lock, payTo, event })
 }
