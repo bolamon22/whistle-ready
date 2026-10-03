@@ -10,7 +10,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { closuresOf, isFieldClosedAt, fieldClosure, closureLabel, withClosure, blockedKeys, isAllDay, type Closure } from '@/lib/fieldClosures'
 import { divisionAbbr, teamRefKey } from '@/lib/names'
-import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban } from 'lucide-react'
+import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban, PanelTop } from 'lucide-react'
 
 interface Game {
   id: string
@@ -159,6 +159,12 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [lotOrder,     setLotOrder]     = useState<string[]>([])
   const [lotDragOver,  setLotDragOver]  = useState<string | null>(null)
   const [sideStage,    setSideStage]    = useState(false)
+  // Board / Timeline: parking lot docked across the top instead of the left rail.
+  // The Grid has had this for a while; Bo flips between the two depending on the
+  // job, so it is remembered per tournament on this device.
+  const [boardLotTop, setBoardLotTopRaw] = useState(false)
+  useEffect(() => { try { setBoardLotTopRaw(localStorage.getItem(`wr-sched-lot-top:${params.id}`) === '1') } catch {} }, [params.id])
+  const setBoardLotTop = (v: boolean) => { setBoardLotTopRaw(v); try { localStorage.setItem(`wr-sched-lot-top:${params.id}`, v ? '1' : '0') } catch {} }
   const [scratchPad,   setScratchPad]   = useState<string[]>([])
 
   const [divColorMap,  setDivColorMap]  = useState<Record<string, string>>({})
@@ -1568,9 +1574,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               <button onClick={() => { renumberAll(); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50">
                 <RotateCw size={13} className="text-slate-400" /> Renumber all games
               </button>
-              <button onClick={() => { setSideStage(v => !v); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50">
-                {sideStage ? <PanelLeft size={13} className="text-slate-400" /> : <PanelRight size={13} className="text-slate-400" />} {sideStage ? 'Parking lot on top' : 'Parking lot as side panel'} <span className="ml-auto text-[10px] text-slate-400">Grid</span>
-              </button>
+              {schedView === 'grid' ? (
+                <button onClick={() => { setSideStage(v => !v); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50">
+                  {sideStage ? <PanelLeft size={13} className="text-slate-400" /> : <PanelRight size={13} className="text-slate-400" />} {sideStage ? 'Parking lot on top' : 'Parking lot as side panel'} <span className="ml-auto text-[10px] text-slate-400">Grid</span>
+                </button>
+              ) : schedView !== 'teams' ? (
+                <button onClick={() => { setBoardLotTop(!boardLotTop); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50">
+                  {boardLotTop ? <PanelLeft size={13} className="text-slate-400" /> : <PanelTop size={13} className="text-slate-400" />} {boardLotTop ? 'Parking lot as side panel' : 'Parking lot on top'} <span className="ml-auto text-[10px] text-slate-400">{schedView === 'board' ? 'Board' : 'Timeline'}</span>
+                </button>
+              ) : null}
               {!checkpoint && (
                 <button onClick={() => { saveCheckpoint(); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50" title="Save a checkpoint of this schedule. Experiment freely, then compare, keep, or revert.">
                   <Bookmark size={13} className="text-slate-400" /> Save a checkpoint
@@ -2120,6 +2132,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             isFieldClosed: closedAt,
             closedLabel: closedLabelFor,
             onToggleClosed: openCloseDialog,
+            lotOnTop: boardLotTop,
+            onLotOnTop: setBoardLotTop,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()

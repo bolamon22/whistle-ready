@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -57,6 +57,9 @@ export interface ViewsProps {
   prefsKey?: string
   /** Timeline/Board: a field header dropped on another takes its place. The page saves the order. */
   onReorderFields?: (fromFullName: string, toFullName: string) => void
+  /** Parking lot docked across the top of the board instead of the left rail (the Grid has had this; Bo flips between the two). */
+  lotOnTop?: boolean
+  onLotOnTop?: (top: boolean) => void
   /** Field closed at this start time on the active day (all day or a window): nothing can be placed there. */
   isFieldClosed?: (fullName: string, time: string) => boolean
   /** Header text when any part of the day is closed ("Closed today", "Closed from 1:00 PM"); null when open. */
@@ -398,7 +401,8 @@ export function TimelineView(p: ViewsProps) {
     setLeftOpen(left); setRightOpen(right)
     try { localStorage.setItem('wr-sched-rails', JSON.stringify({ left, right })) } catch {}
   }
-  const fit = !leftOpen && !rightOpen
+  const lotTop = !!p.lotOnTop
+  const fit = (lotTop || !leftOpen) && !rightOpen
   const [tab, setTab] = useState<'issues' | 'day'>('issues')
   const [openDivs, setOpenDivs] = useState<Record<string, boolean>>({})
   const [q, setQ] = useState('')
@@ -504,6 +508,70 @@ export function TimelineView(p: ViewsProps) {
     onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setLotOver(false) },
     onDrop: (e: React.DragEvent) => { e.preventDefault(); setLotOver(false); const id = dropTarget(e); setDragId(null); if (id && p.dayGames.some(g => g.id === id)) { setSelId(null); p.onUnschedule(id) } },
   }
+  // One unscheduled game, in the rail (full width) or the top strip (fixed width).
+  const lotCard = (g: SGame, c: string, size: string) => {
+    const on = selId === g.id
+    return (
+      <button key={g.id} draggable
+        onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id) }}
+        onDragEnd={() => setDragId(null)}
+        onClick={() => setSelId(on ? null : g.id)}
+        className={`${size} text-left rounded-lg border px-2 py-1.5 transition-all cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-[3px] ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
+        style={{ borderLeft: `4px solid ${c}` }}>
+        <div className={`flex items-center gap-1.5 text-[10px] whitespace-nowrap overflow-hidden ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={`truncate ${on ? 'text-white' : 'text-slate-800'}`}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}</div>
+        <div className={`text-xs font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}</div>
+        <div className={`text-[11px] leading-tight truncate ${on ? 'text-slate-300' : 'text-slate-600'}`}>vs {humanTeam(g.team2)}</div>
+      </button>
+    )
+  }
+  // Parking lot across the top: one scrolling row of cards, each division led by a
+  // narrow colored tab, so the whole board width stays for fields. Same drop target.
+  function renderLotStrip() {
+    return (
+      <div {...lotDrop} className={`relative flex-shrink-0 border-b border-slate-200 transition-colors ${lotOver ? 'bg-orange-50' : 'bg-white'}`}>
+        {draggingPlaced && (
+          <div className={`absolute inset-1.5 z-10 rounded-xl border-2 border-dashed flex items-center justify-center text-xs font-bold pointer-events-none ${lotOver ? 'border-orange-500 bg-orange-100/80 text-orange-800' : 'border-orange-300 bg-white/70 text-orange-600'}`}>
+            Drop here to unschedule
+          </div>
+        )}
+        <div className="px-3 pt-1.5 pb-1 flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Unscheduled</span>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">{p.unscheduled.length}</span>
+          <label className="relative">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Team or game #" aria-label="Search unscheduled games"
+              className="w-40 pl-6 pr-2 py-1 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-400" />
+          </label>
+          <TypeToggle value={typeFilter} onChange={setTypeFilter} counts={lotCounts} />
+          {p.filterDiv !== '__all__' && (
+            <span className="px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.divColor(p.filterDiv) }} />
+              Only <b className="text-slate-800">{p.filterDiv}</b>
+              <button onClick={() => p.setFilterDiv('__all__')} className="font-semibold text-teal-700 hover:underline">Show all</button>
+            </span>
+          )}
+          {p.onLotOnTop && <button onClick={() => p.onLotOnTop!(false)} aria-label="Move the parking lot to the side" title="Parking lot as side panel" className="ml-auto w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><PanelLeft size={14} /></button>}
+        </div>
+        {/* width:0 + min-width:100%: the row's cards must not count toward the column's
+            intrinsic width, or the whole board grows past the viewport instead of scrolling. */}
+        <div className="overflow-x-auto overflow-y-hidden px-3 pb-2 flex items-stretch gap-2.5" style={{ width: 0, minWidth: '100%' }}>
+          {lot.length === 0 && <p className="text-xs text-slate-400 py-3">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : typeFilter !== 'all' || p.filterDiv !== '__all__' ? 'Nothing left to place with these filters.' : 'No games match.'}</p>}
+          {lot.map(grp => {
+            const c = p.divColor(grp.div)
+            return (
+              <div key={grp.div} className="flex items-stretch gap-1.5 flex-shrink-0">
+                <div className="w-5 rounded-md flex flex-col items-center justify-center gap-1 py-1 flex-shrink-0 overflow-hidden" style={{ background: c + '1f' }} title={`${grp.div} · ${grp.items.length} to place${teamsNote(counts[grp.div]) ? ` · ${teamsNote(counts[grp.div])}` : ''}`}>
+                  <span className="w-2 h-2 rounded-full" style={{ background: c }} />
+                  <span className="text-[9px] font-bold text-slate-700 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>{p.divAbbr(grp.div)} · {grp.items.length}</span>
+                </div>
+                {grp.items.map(g => lotCard(g, c, 'w-[172px] flex-shrink-0'))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
   // Header state: any part of the day closed. Cell state: closed at that start time.
   const isClosed = (field: string) => !!p.closedLabel?.(field)
   const closedAt = (field: string, time: string) => !!p.isFieldClosed?.(field, time)
@@ -541,8 +609,8 @@ export function TimelineView(p: ViewsProps) {
 
   return (
     <div className="flex-1 flex min-h-0 relative">
-      {/* Left rail: unscheduled */}
-      {leftOpen ? (
+      {/* Left rail: unscheduled (or docked on top, see renderLotStrip) */}
+      {lotTop ? null : leftOpen ? (
         <div {...lotDrop} className={`relative w-[232px] flex-shrink-0 flex flex-col border-r border-slate-200 min-h-0 transition-colors ${lotOver ? 'bg-orange-50' : 'bg-white'}`}>
           {draggingPlaced && (
             <div className={`absolute inset-1.5 z-10 rounded-xl border-2 border-dashed flex items-center justify-center text-xs font-bold pointer-events-none ${lotOver ? 'border-orange-500 bg-orange-100/80 text-orange-800' : 'border-orange-300 bg-white/70 text-orange-600'}`}>
@@ -552,7 +620,8 @@ export function TimelineView(p: ViewsProps) {
           <div className="pl-3.5 pr-2 pt-2.5 pb-1.5 flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Unscheduled</span>
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">{p.unscheduled.length}</span>
-            <button onClick={() => setRails(false, rightOpen)} aria-label="Collapse the unscheduled list" title="Collapse" className="ml-auto w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronsLeft size={14} /></button>
+            {p.onLotOnTop && <button onClick={() => p.onLotOnTop!(true)} aria-label="Put the parking lot on top" title="Parking lot on top" className="ml-auto w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><PanelTop size={14} /></button>}
+            <button onClick={() => setRails(false, rightOpen)} aria-label="Collapse the unscheduled list" title="Collapse" className={`${p.onLotOnTop ? '' : 'ml-auto '}w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700`}><ChevronsLeft size={14} /></button>
           </div>
           <div className="px-3 pb-2 relative">
             <Search size={12} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 -mt-1" />
@@ -589,19 +658,7 @@ export function TimelineView(p: ViewsProps) {
                   {open && (
                     <div className="space-y-1 mt-0.5">
                       {grp.items.map(g => {
-                        const on = selId === g.id
-                        return (
-                          <button key={g.id} draggable
-                            onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id) }}
-                            onDragEnd={() => setDragId(null)}
-                            onClick={() => setSelId(on ? null : g.id)}
-                            className={`w-full text-left rounded-lg border px-2 py-1.5 transition-all cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-[3px] ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
-                            style={{ borderLeft: `4px solid ${c}` }}>
-                            <div className={`flex items-center gap-1.5 text-[10px] ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={on ? 'text-white' : 'text-slate-800'}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span>{g.pool}</span>}</div>
-                            <div className={`text-xs font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}</div>
-                            <div className={`text-[11px] leading-tight truncate ${on ? 'text-slate-300' : 'text-slate-600'}`}>vs {humanTeam(g.team2)}</div>
-                          </button>
-                        )
+                        return lotCard(g, c, 'w-full')
                       })}
                     </div>
                   )}
@@ -619,6 +676,7 @@ export function TimelineView(p: ViewsProps) {
 
       {/* Center */}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
+        {lotTop && renderLotStrip()}
         <div className="px-3 py-1.5 flex items-start gap-2 bg-white border-b border-slate-200 flex-shrink-0">
           <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} /></div>
         </div>
