@@ -503,6 +503,12 @@ export function TimelineView(p: ViewsProps) {
     p.games.filter(g => g.date && g.startTime).forEach(g => [g.team1, g.team2].forEach(t => { if (isRealTeam(t)) { const k = teamKey(g.division, t); m[k] = (m[k] ?? 0) + 1 } }))
     return m
   }, [p.games])
+  // Small count badge for one-line chips: "3" in a tinted pill ahead of the team name.
+  const cnt = (division: string, team: string, on: boolean) => {
+    const n = teamCount[teamKey(division, team)]
+    if (!n) return null
+    return <span className={`inline-block flex-shrink-0 min-w-[13px] px-[3px] mr-[3px] rounded text-center font-bold tabular-nums ${on ? 'bg-white/20 text-white' : 'bg-slate-900/10 text-slate-600'}`} title={`${humanTeam(team)}: ${n} game${n === 1 ? '' : 's'} placed`}>{n}</span>
+  }
 
   const cellMap = useMemo(() => { const m: Record<string, SGame> = {}; p.dayGames.forEach(g => { m[g.startTime + '|' + g.location] = g }); return m }, [p.dayGames])
   const perSlot = p.slots.map(s => p.dayGames.filter(g => g.startTime === s).length)
@@ -994,10 +1000,13 @@ export function TimelineView(p: ViewsProps) {
         className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none cursor-grab active:cursor-grabbing ${done ? 'opacity-70' : ''}`}
         style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `3px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: on ? `0 0 0 2px ${c}66` : undefined }}>
         <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
-        <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>
-          {humanTeam(g.team1)}{teamCount[teamKey(g.division, g.team1)] ? <span className={on ? 'text-slate-400' : 'text-slate-400'}> ({teamCount[teamKey(g.division, g.team1)]})</span> : null}
-          {' v '}
-          {humanTeam(g.team2)}{teamCount[teamKey(g.division, g.team2)] ? <span className="text-slate-400"> ({teamCount[teamKey(g.division, g.team2)]})</span> : null}
+        {/* Count goes before each name: a long name truncates, and the count is the
+            part Bo is reading for, so it must never be the part that gets cut. */}
+        {/* Each name truncates on its own, so the second team's count survives a long first name. */}
+        <span className={`flex-1 min-w-0 flex items-center ${on ? 'text-slate-200' : 'text-slate-700'}`}>
+          {cnt(g.division, g.team1, on)}<span className="truncate min-w-0">{humanTeam(g.team1)}</span>
+          <span className="text-slate-400 flex-shrink-0 px-[3px]">v</span>
+          {cnt(g.division, g.team2, on)}<span className="truncate min-w-0">{humanTeam(g.team2)}</span>
         </span>
       </div>
     )
