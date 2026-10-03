@@ -1386,5 +1386,82 @@ export const GENERATED_HELP: { id: string; title: string; category: string; keyw
     ],
     "audience": "public",
     "body": "Coaches and parents each have a simple dashboard that opens after signing in.\n\n**Where:** sign in. You're taken to your dashboard automatically.\n\n**Coach Dashboard:**\n1. The first time, pick your **Tournament** and **Your Team**, then tap **Get Started**.\n2. You'll see your number of **Games**, **Wins** and **Losses**, and each game with date, time, opponent, division, location and game number. Played games show the score; others say **Upcoming**.\n3. Tap **Switch Team** to follow a different team or tournament.\n\n**Parent Dashboard:** it has four tabs.\n1. **Discover**: tap **Follow** on any tournament you want to keep an eye on (**Unfollow** to stop).\n2. **Schedule**: pick a followed tournament to see its games.\n3. **My Teams**: teams you're following across tournaments.\n4. **My Players**: linking your child's player registration here is coming soon.\n\n**Common problems:**\n- \"You're not following any tournaments yet.\" Go to **Discover** and tap **Follow**.\n- \"No games yet for this tournament.\" or \"No games scheduled yet.\" means the schedule hasn't been posted.\n- Club directors have their own portal; see \"Use your club portal (club directors)\"."
+  },
+  {
+    "id": "public-faq-registration",
+    "title": "FAQ: registration deadlines, space left and adding teams",
+    "category": "Public pages",
+    "keywords": "deadline, registration deadline, when does registration close, sold out, full, room, space left, spots left, waitlist, waiting list, late registration, add a team, add team late, add more teams, second team, register for us, register on our behalf, help registering",
+    "routes": [
+      "/tournaments/*/register",
+      "/tournaments/*/event",
+      "/register"
+    ],
+    "audience": "public",
+    "body": "Organizer answers to the questions clubs ask most about registering. Event-specific dates are on each event page.\n\n**When is the registration deadline?**\nRegistration closes on the date shown on the event page. Divisions fill early, so register now. You can add or drop teams later.\n\n**Is there still room?**\nIf registration is still open on the event page, there is room, and registering takes under five minutes. If your division is sold out, sign up for the waitlist. Spots can open up, and there's still a good chance we can get your team in.\n\n**Can we add a team late?**\nWe accept late additions as long as open spots remain, but divisions fill up and sell out quickly, so space is limited. If your division is already sold out, join the waitlist; we always do our best to get teams in when a spot opens. Adding a team during tournament week is very difficult and can't be guaranteed. To check availability or ask about the waitlist, email info@sunshinelax.com as soon as possible.\n\n**How do we add more teams after registering?**\nRegister the extra teams with the same registration form and we'll merge them with your club.\n\n**Can you register our teams for us?**\nRegister directly online; it's the fastest way to secure your spot. If you run into problems, email your full team list to info@sunshinelax.com and we'll help."
+  },
+  {
+    "id": "public-faq-payment",
+    "title": "FAQ: when to pay, payment options and a balance that won't clear",
+    "category": "Public pages",
+    "keywords": "pay when register, payment due, deposit, pay at the field, how to pay, payment options, ACH, bank transfer, credit card fee, processing fee, Zelle, check, mail a check, address, paid but balance, still shows balance, paid twice, double charge",
+    "routes": [
+      "/tournaments/*/register",
+      "/pay/*",
+      "/confirm/*"
+    ],
+    "audience": "public",
+    "body": "Organizer answers about paying for your teams.\n\n**Do we pay when we register?**\nYou don't have to pay to register. Full payment before the event confirms your spots, and we can't take payment at the fields.\n\n**How can we pay?**\n- **Online portal:** bank transfer (ACH) is free; credit or debit card has a 3% processing fee.\n- **Zelle:** send to info@sunshinelax.com.\n- **Check:** payable to Sunshine Events Group, mailed to 11830 Wiles Rd, Coral Springs, FL 33076.\n\n**We paid but it still shows a balance.**\nLog out and log back in to refresh your account. Don't submit another payment. If the balance still shows after logging back in, email info@sunshinelax.com."
+  },
+  {
+    "id": "public-faq-divisions",
+    "title": "FAQ: moving divisions, minimum teams and same-club teams",
+    "category": "Public pages",
+    "keywords": "division, move division, lower division, change division, switch division, minimum teams, how many teams, division cancelled, not enough teams, two teams same division, same club play each other, pools, which teams, teams in my division, who is registered",
+    "routes": [
+      "/tournaments/*/register",
+      "/tournaments/*/event",
+      "/tournaments/*/public"
+    ],
+    "audience": "public",
+    "body": "Organizer answers about divisions and team placement.\n\n**Can we move to a lower division?**\nYes. As long as you ask early and there's open space in the lower division, we're happy to move your team. Once the schedule is published, a move can only happen if another team is willing to swap places with you. To keep play fair and competitive, register in the division that fits your team's age and skill level. To request a change, email info@sunshinelax.com as soon as possible.\n\n**How many teams make a division?**\nA division needs at least 4 teams. An A/B split needs at least 4 teams willing to play A.\n\n**What if our division doesn't fill?**\nIf a division doesn't reach 4 teams, we'll tell you well ahead and work out options with you.\n\n**Will our two teams in the same division play each other?**\nWe do everything possible to keep teams from the same club apart in pool play. The rare exception is a very small division where it can't be avoided. In playoffs and brackets, matchups come from seeding, so teams from the same club may meet based on how they play.\n\n**Which teams are in my division?**\nOnce teams are placed, they're listed on the event's schedule page."
+  },
+  {
+    "id": "public-faq-schedule-format",
+    "title": "FAQ: schedule release, start times and the 4-game guarantee",
+    "category": "Public pages",
+    "keywords": "when is the schedule posted, schedule release, later start, traveling, travel, start time, 8 AM, games closer together, game times, Sunday finish, what time does it end, championship time, both days, Saturday and Sunday, how many games, games guaranteed, guarantee, 4 games, format, pool play, reseed, playoffs, B division playoffs",
+    "routes": [
+      "/tournaments/*/public",
+      "/tournaments/*/event",
+      "/tournaments/*/today"
+    ],
+    "audience": "public",
+    "body": "Organizer answers about the schedule and tournament format.\n\n**When is the schedule posted?**\nThe schedule is posted on the event page in the days before the tournament and can change until game day.\n\n**Can our team start later because we're traveling?**\nWe can't move start times for one team, since a whole division plays in the same slots. Games can start at 8:00 AM, so traveling teams usually book Friday and Saturday nights.\n\n**Can our games be closer together?**\nEmail info@sunshinelax.com and we'll look, but we can't promise changes once the schedule is set.\n\n**What time does Sunday end?**\nWe can't give an exact time. Many championships finish by about 2 PM, depending on the division and the weather.\n\n**Do we play both days?**\nYes. Teams play Saturday and Sunday.\n\n**How many games are guaranteed?**\nEvery team is guaranteed at least 4 games. Formats vary with division size: some divisions play two pool games and then reseed, others play three pool games before reseeded playoff rounds.\n\n**Do B divisions have playoffs?**\nYes. Every division has playoffs."
+  },
+  {
+    "id": "public-faq-rules",
+    "title": "FAQ: youngest age group, field size, game length and ties",
+    "category": "Public pages",
+    "keywords": "youngest age, U8, 6U, U10, 7v7, small field, full field, 10v10, 12v12, high school, long poles, long pole limit, game length, halves, running clock, mercy rule, timeouts, ties, overtime, Braveheart, sudden death, girls checking, lower school girls, middle school girls, transitional checking, U14 rules",
+    "routes": [
+      "/tournaments/*/rules",
+      "/tournaments/*/event"
+    ],
+    "audience": "public",
+    "body": "Organizer answers about playing rules. The event's **Rules** page has the full rules and wins if anything here differs.\n\n**What's the youngest age group?**\nU8 is the youngest division, if enough teams sign up. U8 and U10 play 7v7 on a small field with goalies. There's no 6U.\n\n**Is high school full field? Are long poles limited?**\nHigh school plays full field (10v10 boys, 12v12 girls) under standard rules, including long-pole limits. The 7v7 divisions allow at most 2 long poles.\n\n**How long are games? Is there a mercy rule?**\nGames are two 20-minute running halves. Below high school, a 6-goal lead triggers the mercy rule. Each team gets one timeout per half.\n\n**How are ties decided?**\nPool ties go to a 3v3 Braveheart. Championship games go to sudden-death overtime.\n\n**Do lower-school girls check?**\nNo. There's no checking in lower-school girls.\n\n**Do middle-school girls play modified or transitional checking?**\nMiddle-school girls follow USA Lacrosse U14 rules with transitional checking."
+  },
+  {
+    "id": "public-faq-cancel-roster-travel",
+    "title": "FAQ: cancelling a team, refunds, rosters, hotels and vendors",
+    "category": "Public pages",
+    "keywords": "cancel, cancel team, can't come, withdraw, owe anything, refund, refund policy, remove a team, drop a team, change request, roster, send roster, submit roster, team list, hotels, where to stay, housing, Legacy Sports Travel, group booking, room block, vendor, be a vendor, booth, sell at the tournament",
+    "routes": [
+      "/tournaments/*/event",
+      "/confirm/*",
+      "/tournaments/*/player-waiver"
+    ],
+    "audience": "public",
+    "body": "Organizer answers about cancelling, rosters, hotels and vendors.\n\n**If we register and can't come, do we owe anything?**\nIf you cancel far enough in advance, before the cutoff date, you won't owe anything. To check whether your cancellation qualifies, email info@sunshinelax.com with your team details.\n\n**We paid and need to cancel. Can we get a refund?**\nRefunds depend on our refund policy and how far ahead you cancel. To check your eligibility or request a cancellation, email info@sunshinelax.com with your team details.\n\n**How do we remove a team or change divisions?**\nSign in to your Club Director portal and send a change request from **Confirm your teams** (tap **Something changed — send an update**). Division moves depend on open space in the new division. Last-minute removals are subject to division limits and the refund policy.\n\n**Where do we send our roster?**\nYou don't send a roster. Rosters build themselves as players complete the online player waiver and pick their team. Club directors can sign in to their portal any time to see which players have registered for each team.\n\n**Where should traveling families stay?**\nBook discounted rates through our official housing partner, Legacy Sports Travel, with the Hotels link on the event page. Book early: discounted room blocks expire. Group bookings let your whole team reserve rooms at the same hotel.\n\n**Can we be a vendor?**\nYes, as long as space allows. Fill out the vendor request form on our website. Some vendor categories are restricted because of existing exclusivity contracts. After you apply, we'll review it and follow up about availability."
   }
 ]
