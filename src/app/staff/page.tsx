@@ -14,8 +14,8 @@ const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',
 type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'|'appStatus'
 type SortDir = 'asc'|'desc'
 type ExpandMode = 'profile'|'edit'
-type DupeSide={id:string;name:string;email:string|null;phone:string|null;defaultRole:string;roles:string;certLevel:string;payMethod:string;payHandle:string|null;association:string|null;createdAt:string}
-type DupePair={key:string;reasons:string[];a:DupeSide;b:DupeSide}
+type DupeSide={registered?:boolean;id:string;name:string;email:string|null;phone:string|null;defaultRole:string;roles:string;certLevel:string;payMethod:string;payHandle:string|null;association:string|null;createdAt:string}
+type DupePair={key:string;reasons:string[];a:DupeSide;b:DupeSide;keep?:'a'|'b'|null}
 
 // ── Inline edit form (defined OUTSIDE component to prevent remount on render) ──
 function StaffEditForm({
@@ -762,16 +762,18 @@ export default function StaffPage() {
                   <div key={p.key} className="border border-slate-200 rounded-xl p-3">
                     <div className="flex flex-wrap gap-1 mb-2">{p.reasons.map(r=><span key={r} className="badge bg-amber-50 text-amber-700">{r}</span>)}</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {(['a','b'] as const).map(side=>{const w=side==='a'?p.a:p.b;return(
-                        <div key={w.id} className="bg-slate-50 rounded-lg p-3">
-                          <p className="font-semibold text-sm text-slate-800">{w.name}</p>
+                      {(['a','b'] as const).map(side=>{const w=side==='a'?p.a:p.b;const rec=p.keep===side;const other=p.keep&&!rec;return(
+                        <div key={w.id} className={`rounded-lg p-3 ${rec?'bg-emerald-50 border border-emerald-200':'bg-slate-50'}`}>
+                          <p className="font-semibold text-sm text-slate-800 flex items-center gap-1.5 flex-wrap">{w.name}{w.registered&&<span className="badge bg-emerald-100 text-emerald-700" title="This person has an app login (they signed up or claimed an invite)">App login</span>}</p>
                           <p className="text-xs text-slate-500 mt-0.5">{w.email||'no email'} · {w.phone||'no phone'}</p>
                           <p className="text-xs text-slate-400 mt-0.5">{rLabel(w.defaultRole)}{w.association?` · ${w.association}`:''} · added {fmtInviteDate(w.createdAt)||'—'}</p>
-                          <button onClick={()=>mergePair(p,side)} className="mt-2 text-xs font-medium text-teal-600 hover:text-teal-800">Keep this one →</button>
+                          {other
+                            ? <p className="mt-2 text-[11px] text-slate-400">Merges into the record with the app login.</p>
+                            : <button onClick={()=>mergePair(p,side)} className={`mt-2 text-xs font-semibold ${rec?'px-2.5 py-1 rounded-full bg-emerald-600 text-white hover:bg-emerald-700':'text-teal-600 hover:text-teal-800'}`}>{rec?'Keep this one (recommended) →':'Keep this one →'}</button>}
                         </div>
                       )})}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-2">"Keep this one" moves the other record's history onto it and deletes the duplicate.</p>
+                    <p className="text-[11px] text-slate-400 mt-2">"Keep this one" moves the other record's history onto it and deletes the duplicate.{p.a.registered&&p.b.registered?' Both have app logins: keep the one they actually sign in with.':''}</p>
                     <button onClick={()=>dismissPair(p)} className="mt-1 text-xs text-slate-500 hover:text-slate-700 font-medium">These are different people</button>
                   </div>
                 ))}

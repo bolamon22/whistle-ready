@@ -39,6 +39,19 @@ export async function POST(req: Request) {
     }
   }
 
+  // Bo's rule: when one record belongs to someone who signed up themselves, that record
+  // stays. Worker and login are linked by email only, so keeping the other record (with a
+  // different email) would leave the person's login pointing at nothing: their staff
+  // portal, ID card and assignments would vanish for them. Refuse that direction.
+  const remEmail = String(rem.email ?? '').trim().toLowerCase()
+  const keepEmail = String(keep.email ?? '').trim().toLowerCase()
+  if (remEmail && keepEmail && remEmail !== keepEmail) {
+    const u = await client.execute({ sql: `SELECT 1 FROM "User" WHERE lower(email) = ? LIMIT 1`, args: [remEmail] })
+    if (u.rows.length) {
+      return NextResponse.json({ error: `${String(rem.name ?? 'That person')} signed up with their own login (${remEmail}). Keep that record instead; merging this way would disconnect their login.` }, { status: 409 })
+    }
+  }
+
   // Repoint relations, dropping rows that would collide on a unique constraint.
   await client.execute({ sql: `DELETE FROM "RosterEntry" WHERE workerId = ? AND tournamentId IN (SELECT tournamentId FROM "RosterEntry" WHERE workerId = ?)`, args: [removeId, keepId] })
   await client.execute({ sql: `UPDATE "RosterEntry" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
