@@ -22,6 +22,8 @@ The **Website** page edits your organization's public site: logo, hero, about se
 - **Instagram feed**: shows your latest posts. Needs a Business or Creator account.
 - **Contact & social**: **Email**, **Phone**, **Hours**, **Address**, and Facebook, Instagram and website links.
 
+**Log in link:** every page of the site has **Log in** at the top (a person icon on phones) and **Log in to your account** in the footer. Club directors, coaches, parents and staff all use it and land on their own page. Once signed in, the header link reads **My account**. It's always there; there's nothing to turn on.
+
 **Common problems:**
 - Nothing is published until you click **Save**.
 - Each tournament holds up to 100 gallery photos.

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { roleHome } from '@/lib/roleHome'
 
 // Client half of the login page. The server page decides the branding: on an
 // org's custom domain (sunshineeventsgroup.com) the org leads and Whistle
@@ -38,19 +39,10 @@ export default function LoginForm({ brandName, brandLogo }: { brandName?: string
       const sessionRes = await fetch('/api/auth/session')
       const sessionData = await sessionRes.json()
       const role = sessionData?.user?.role ?? 'viewer'
-      const destinations: Record<string, string> = {
-        admin:          '/',
-        director:       '/dashboard/director',
-        club_director:  '/dashboard/club-director',
-        assigner:       '/dashboard/assigner',
-        scheduler:      '/dashboard/scheduler',
-        coach:          '/dashboard/coach',
-        ref:            '/dashboard/ref',
-        scorekeeper:    '/dashboard/scorekeeper',
-        parent:         '/dashboard/parent',
-        viewer:         '/dashboard/viewer',
-      }
-      router.push(destinations[role] ?? '/')
+      // brandName is set only on an org's own domain, where "/" is the org's
+      // website: roleHome sends admins and staff to a real page there instead
+      // of back to the homepage they started from.
+      router.push(roleHome(role, !!brandName))
       router.refresh()
     }
   }

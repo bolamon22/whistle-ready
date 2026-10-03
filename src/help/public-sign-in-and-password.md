@@ -4,11 +4,11 @@ category: Public pages
 order: 963
 audience: public
 routes: /login, /forgot, /reset/*
-keywords: sign in, log in, login, password, forgot password, reset password, can't log in, invalid email or password, locked out, reset link
+keywords: sign in, log in, login, my account, where do I log in, can't find my portal, password, forgot password, reset password, can't log in, invalid email or password, locked out, reset link
 ---
 Club directors, coaches, parents and staff all sign in on the same page. Once you're signed in, you're taken to your own dashboard automatically.
 
-**Where:** whistleready.app/login, or any **Sign in** button in the app or your emails.
+**Where:** **Log in** at the top or bottom of your tournament organizer's website (on a phone, tap the person icon at the top), whistleready.app/login, or any **Sign in** button in the app or your emails.
 
 **Sign in:**
 1. Enter your email and password. Tap the eye icon to show the password while you type.

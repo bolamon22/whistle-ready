@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { headers } from 'next/headers'
 import { isCustomOrgHost } from '@/lib/orgDomains'
-import { Facebook, Instagram, Globe } from 'lucide-react'
+import { Facebook, Instagram, Globe, UserRound } from 'lucide-react'
 import OrgNav from './OrgNav'
 
 export type PageRec = { title: string; slug: string; group?: string; body?: string; heroImage?: string; placement?: 'nav' | 'footer' }
@@ -121,7 +121,13 @@ export function OrgFooter({ org, contact, socials, base = '', pages = [] }: { or
             ))}
           </div>
         )}
-        <span className="text-xs text-slate-500">Powered by Whistle Ready</span>
+        {/* The header has this too; the footer is where people look for it on a long page. */}
+        <div className="flex flex-col items-start sm:items-end gap-2">
+          <Link href="/login" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-200 hover:text-teal-300 transition-colors">
+            <UserRound size={15} /> Log in to your account
+          </Link>
+          <span className="text-xs text-slate-500">Powered by Whistle Ready</span>
+        </div>
       </div>
     </footer>
   )
