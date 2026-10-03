@@ -14,7 +14,11 @@ type PayInfo = {
   tournamentId: string; tournamentName: string; tournamentDates: string; location: string; logoUrl: string
   due: number; paid: number; balance: number; paidInFull: boolean; noInvoice: boolean
   zelleHandle?: string
+  /** A bank transfer they already sent that is still clearing; already taken off balance. */
+  clearing?: { amount: number; startedAt: string } | null
 }
+
+const startedOn = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
 
 export default function PayPage() {
   const params = useParams() as { regId: string }
@@ -70,6 +74,21 @@ export default function PayPage() {
       </div>
     </div>
   )
+
+  // Their bank transfer covers the balance and is still clearing: nothing to pay,
+  // and saying "Paid in full" would be a promise the bank hasn't kept yet.
+  if (status === 'paid' && info?.clearing) return shell(<>
+    {header}
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+      <Clock className="mx-auto text-teal-500 mb-3" size={36} />
+      <h2 className="text-lg font-bold text-slate-800 mb-1">Your bank transfer is on its way</h2>
+      <p className="text-sm text-slate-500 leading-relaxed">
+        {fmt(info.clearing.amount)} for {info.clubName}{startedOn(info.clearing.startedAt) ? `, sent ${startedOn(info.clearing.startedAt)},` : ''} is clearing.
+        Bank transfers take a few business days, and we&apos;ll mark your registration paid automatically once it lands.
+        There&apos;s nothing else to pay.
+      </p>
+    </div>
+  </>)
 
   if (status === 'paid') return shell(<>
     {header}
@@ -135,6 +154,9 @@ export default function PayPage() {
       <div className="space-y-1.5 text-sm">
         <div className="flex justify-between text-gray-600"><span>Invoiced</span><span>{fmt(info?.due || 0)}</span></div>
         <div className="flex justify-between text-gray-600"><span>Paid to date</span><span>{fmt(info?.paid || 0)}</span></div>
+        {info?.clearing && (
+          <div className="flex justify-between text-teal-700"><span>Bank transfer clearing{startedOn(info.clearing.startedAt) ? ` (sent ${startedOn(info.clearing.startedAt)})` : ''}</span><span>{fmt(info.clearing.amount)}</span></div>
+        )}
         <div className="flex justify-between font-semibold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Balance due</span><span>{fmt(balance)}</span></div>
         {method === 'card' && <>
           <div className="flex justify-between text-gray-400 text-xs"><span>Card processing fee (3%)</span><span>+{fmt(cardTotal - balance)}</span></div>

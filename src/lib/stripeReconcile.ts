@@ -40,7 +40,7 @@ export type ReconcileResult = {
   error?: string
 }
 
-function stripeHeaders(): Record<string, string> | null {
+export function stripeHeaders(): Record<string, string> | null {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) return null
   const h: Record<string, string> = {
@@ -64,7 +64,7 @@ function amountsOf(pi: any): { charged: number; amount: number } {
 
 /** Our ACH intents carry ONLY us_bank_account; card intents may list it among
  *  the account defaults, so an includes() check mislabels cards (bug, Aug 27). */
-const isAch = (pi: any) => (pi.payment_method_types || []).join(',') === 'us_bank_account'
+export const isAch = (pi: any) => (pi.payment_method_types || []).join(',') === 'us_bank_account'
 
 /** The first instant the scan covers: MIDNIGHT UTC on the boundary day.
  *

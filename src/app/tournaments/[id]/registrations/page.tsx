@@ -75,7 +75,7 @@ const shortDate = (iso: string) => { const d = new Date(iso); return isNaN(d.get
 
 function calcInvoice(teams: TeamRow[], pricing: Pricing): number { return calcRegFee(teams, pricing) }
 
-type StatTile = { label: string; value: string | number; color: string; title?: string; onClick?: () => void; active?: boolean }
+type StatTile = { label: string; value: string | number; color: string; title?: string; note?: string; onClick?: () => void; active?: boolean }
 
 function downloadCSV(registrations: Registration[]) {
   const headers = [
@@ -417,6 +417,9 @@ export default function RegistrationsPage() {
   const [filterDivision, setFilterDivision] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [filterWaitlist, setFilterWaitlist] = useState(false)
+  // Bank transfers clubs have sent that Stripe is still settling, per
+  // registration (lib/pendingTransfers). Loaded beside the list, never blocking it.
+  const [clearing, setClearing] = useState<Record<string, { amount: number; startedAt: string; count: number }>>({})
 
   // Payment form
   const [payingRegId, setPayingRegId] = useState<string | null>(null)
@@ -477,6 +480,10 @@ export default function RegistrationsPage() {
 
   const load = () => {
     setLoadError('')
+    fetch(`/api/registrations/pending-transfers?tournamentId=${tournamentId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setClearing(d?.clearing || {}))
+      .catch(() => { /* Stripe unreachable: nothing shown as clearing */ })
     const must = async (url: string, what: string) => {
       const r = await fetch(url)
       if (!r.ok) throw new Error(`${what} failed to load (HTTP ${r.status})`)
@@ -536,7 +543,12 @@ export default function RegistrationsPage() {
   const waitlistedClubs = registrations.filter(r => r.teams.some(t => t.waitlisted)).length
   const totalInvoiced = registrations.reduce((s, r) => s + r.invoiceAmount - r.discountAmount, 0)
   const totalReceived = registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0)
-  const totalBalance = totalInvoiced - totalReceived
+  // PAID BUT NOT FUNDED. A bank transfer a club has sent counts as paid on its
+  // card and comes off Balance, but stays out of Received until the money
+  // actually lands (Bo, Oct 3 2026, after Calusa's $2,500 ACH showed nowhere).
+  const inFlightFor = (regId: string) => clearing[regId]?.amount || 0
+  const totalClearing = registrations.reduce((s, r) => s + inFlightFor(r.id), 0)
+  const totalBalance = totalInvoiced - totalReceived - totalClearing
 
   const updateTeam = (i: number, f: keyof TeamRow, v: string) =>
     setTeams(prev => prev.map((t, idx) => idx === i ? { ...t, [f]: v } : t))
@@ -728,7 +740,7 @@ export default function RegistrationsPage() {
   const [payEventName, setPayEventName] = useState('')
   const [payStartDate, setPayStartDate] = useState('')
   const mergePayPreview = (text: string, reg: Registration) => {
-    const paid = reg.payments.reduce((sum, p) => sum + p.amount, 0)
+    const paid = reg.payments.reduce((sum, p) => sum + p.amount, 0) + inFlightFor(reg.id)
     const bal = Math.max(0, reg.invoiceAmount - reg.discountAmount - paid)
     return text
       .replace(/\{contact\}/g, reg.clubContact || reg.clubName)
@@ -819,7 +831,8 @@ export default function RegistrationsPage() {
     if (commKind === 'payment') setPayLetters(l => (l[payVariant] ? { ...l, [payVariant]: { ...l[payVariant]!, ...patch } } : l))
     else setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], ...patch } } : l)
   }
-  const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0))
+  // A club whose bank transfer is still clearing has paid: it is not on the "Owes" list.
+  const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0) - inFlightFor(r.id))
 
   // Payment reminders go out to a field of 30 clubs where most have already paid.
   // Scrolling a 30-row list hunting for amber text is how a club gets missed, so the
@@ -1129,7 +1142,7 @@ export default function RegistrationsPage() {
     }
     if (filterWaitlist && !reg.teams.some(t => t.waitlisted)) return false
     if (filterPayment) {
-      const totalPaid = reg.payments.reduce((s, p) => s + p.amount, 0)
+      const totalPaid = reg.payments.reduce((s, p) => s + p.amount, 0) + inFlightFor(reg.id)
       const balance = reg.invoiceAmount - reg.discountAmount - totalPaid
       if (filterPayment === 'paid' && balance > 0) return false
       if (filterPayment === 'unpaid' && totalPaid > 0) return false
@@ -1194,7 +1207,13 @@ export default function RegistrationsPage() {
                 onClick: () => setFilterWaitlist(v => !v), active: filterWaitlist,
               }] : []),
               { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-slate-800' },
-              { label: 'Received', value: fmt(totalReceived), color: 'text-green-700' },
+              // Clearing rides under Received rather than in a tile of its own: a
+              // seventh tile pushed Balance onto a second row.
+              { label: 'Received', value: fmt(totalReceived), color: 'text-green-700',
+                ...(totalClearing > 0 ? {
+                  note: `+${fmt(totalClearing)} clearing`,
+                  title: `${fmt(totalClearing)} in bank transfers clubs have sent is still settling (a few business days). It counts as paid on each club and is already off Balance, but isn't in Received until the money lands.`,
+                } : {}) },
               { label: 'Balance', value: fmt(totalBalance), color: totalBalance > 0 ? 'text-red-600' : 'text-green-600' },
             ] as StatTile[] : [
               { label: 'Players', value: individualRegs.length, color: 'text-teal-600' },
@@ -1211,6 +1230,7 @@ export default function RegistrationsPage() {
               <div key={s.label} title={s.title} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-center min-w-[70px] last:odd:col-span-2 sm:flex-none">
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-slate-500">{s.label}</div>
+                {s.note && <div className="text-[10.5px] font-semibold text-sky-700 leading-tight">{s.note}</div>}
               </div>
             ))}
           </div>
@@ -2153,8 +2173,9 @@ export default function RegistrationsPage() {
           <div className="space-y-3">
             {filteredRegistrations.map(reg => {
               const totalPaid = reg.payments.reduce((s, p) => s + p.amount, 0)
+              const inFlight = inFlightFor(reg.id)
               const due = reg.invoiceAmount - reg.discountAmount
-              const balance = due - totalPaid
+              const balance = due - totalPaid - inFlight
               const clubLogo = (reg as any).clubLogoUrl || reg.teams.find(t => (t as any).logoUrl)?.logoUrl || ''
               return (
                 <div key={reg.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -2196,6 +2217,13 @@ export default function RegistrationsPage() {
                             </div>
                           )
                         })()}
+                        {inFlight > 0 && (
+                          <div title="Paid by bank transfer through the pay page. Stripe is still settling it (a few business days); it records as a payment automatically when the money lands, and drops off if the bank rejects it."
+                            className="mt-1 ml-1 inline-flex max-w-full items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+                            <Clock size={11} className="shrink-0" />
+                            <span className="truncate">Bank transfer clearing: {fmt(inFlight)}{clearing[reg.id]?.startedAt ? ` · sent ${shortDate(clearing[reg.id].startedAt)}` : ''} · not funded yet</span>
+                          </div>
+                        )}
                         {(() => {
                           // Waiver + schedule sends live here; pay + confirm get their own
                           // stat columns on the right (Bo).
@@ -2217,7 +2245,8 @@ export default function RegistrationsPage() {
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-slate-400">Paid</div>
-                          <div className="font-medium text-green-600">{fmt(totalPaid)}</div>
+                          <div className="font-medium text-green-600">{fmt(totalPaid + inFlight)}</div>
+                          {inFlight > 0 && <div className="text-[10.5px] font-semibold text-sky-700" title="Bank transfer still settling: counted as paid, not in Received yet">{fmt(inFlight)} not funded</div>}
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-slate-400">Balance</div>
@@ -2257,7 +2286,7 @@ export default function RegistrationsPage() {
                   {/* Action row */}
                   <div className="px-4 sm:px-5 pb-4 flex items-center gap-x-1.5 gap-y-2 flex-wrap">
                     <span className="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded-full">{reg.teams.length} team{reg.teams.length !== 1 ? 's' : ''}</span>
-                    <button onClick={() => { setPayingRegId(reg.id); const _bal1=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal1>0?String(_bal1):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
+                    <button onClick={() => { setPayingRegId(reg.id); const _bal1=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0)-inFlight; setPayAmount(_bal1>0?String(_bal1):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
                       className="text-xs text-green-600 border border-green-300 hover:border-green-500 px-2.5 py-1 rounded-lg">+ Payment</button>
                     {balance > 0 && <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/pay/${reg.id}`); toast.success('Payment link copied') }}
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
@@ -2393,10 +2422,12 @@ export default function RegistrationsPage() {
                         <div className="flex items-center justify-between gap-3 mb-3">
                           <h3 className="text-sm font-semibold text-slate-700">Invoice & Payments</h3>
                           {balance > 0 ? (
-                            <button onClick={() => { setPayingRegId(reg.id); const _bal2=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0); setPayAmount(_bal2>0?String(_bal2):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
+                            <button onClick={() => { setPayingRegId(reg.id); const _bal2=reg.invoiceAmount-reg.discountAmount-reg.payments.reduce((s:number,p:any)=>s+p.amount,0)-inFlight; setPayAmount(_bal2>0?String(_bal2):''); setPayCheck(''); setPayDate(today()); setPayNotes(''); setPayMethod(reg.paymentMethod||'check') }}
                               className="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 whitespace-nowrap">+ Record Payment</button>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-lg whitespace-nowrap"><Check size={12} /> Paid in full</span>
+                            inFlight > 0
+                              ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-lg whitespace-nowrap"><Clock size={12} /> Paid · transfer clearing</span>
+                              : <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-lg whitespace-nowrap"><Check size={12} /> Paid in full</span>
                           )}
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
@@ -2405,6 +2436,11 @@ export default function RegistrationsPage() {
                             <div><span className="text-slate-500">Discount: </span><span className="font-medium text-amber-600">-{fmt(reg.discountAmount)}{reg.discountNote ? ` (${reg.discountNote})` : ''}</span></div>
                           )}
                           <div><span className="text-slate-500">Paid: </span><span className="font-medium text-green-700">{fmt(totalPaid)}</span></div>
+                          {inFlight > 0 && (
+                            <div title="Sent by bank transfer, still settling in Stripe. Records itself as a payment when it lands.">
+                              <span className="text-slate-500">Clearing: </span><span className="font-medium text-sky-700">{fmt(inFlight)}</span>
+                            </div>
+                          )}
                           <div><span className="text-slate-500">Balance: </span><span className={`font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(balance)}</span></div>
                         </div>
 

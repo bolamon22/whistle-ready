@@ -10,6 +10,7 @@ import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { ensurePaymentGuard } from './paymentGuard'
 import { clubRecipients, clubDirectorEmailMap } from '@/lib/clubDirectorLinks'
+import { clearingTransfers } from '@/lib/pendingTransfers'
 
 // The club-letter send itself, lifted out of the route so the scheduler can run
 // exactly the same code later (Bo, Sep 10: "schedule when we send the email").
@@ -129,6 +130,10 @@ export async function runCommSend(args: {
   // Directors linked to each club, read once for the whole batch. The account
   // letter never uses it (see below), so it isn't paid for on that send.
   const directors = kind === 'account' ? null : await clubDirectorEmailMap(tournamentId)
+  // Bank transfers still clearing count as paid for a reminder: a club that sent
+  // the money on Friday must not be asked for it again on Monday. Read once for
+  // the whole batch (lib/pendingTransfers).
+  const clearing = kind === 'payment' ? await clearingTransfers(regs.map(r => r.id)) : {}
 
   const results: SendResult[] = []
   // The first email that actually goes out is kept as the receipt's copy.
@@ -153,7 +158,7 @@ export async function runCommSend(args: {
     // Payment reminders ride the same dialog but keep their own machinery:
     // balance math, invoice-table chrome, and the lastPayReminderAt stamp.
     if (kind === 'payment') {
-      const paid = reg.payments.reduce((sum, pmt) => sum + pmt.amount, 0)
+      const paid = reg.payments.reduce((sum, pmt) => sum + pmt.amount, 0) + (clearing[reg.id]?.amount || 0)
       const due = (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
       const balance = Math.round(Math.max(0, due - paid) * 100) / 100
       if (balance <= 0) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_balance' }); continue }

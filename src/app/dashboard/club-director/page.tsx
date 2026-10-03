@@ -33,6 +33,8 @@ interface Registration {
   payments: { amount: number; method: string; receivedAt: string }[]
   /** Where this registration stands with the office (lib/changeRequest). */
   confirm?: ConfirmState
+  /** A bank transfer they sent that is still clearing (lib/pendingTransfers). */
+  clearing?: { amount: number; startedAt: string } | null
 }
 interface PlayerReg {
   id: string; playerName: string; teamClubName: string; grade: string
@@ -453,13 +455,17 @@ export default function ClubDirectorDashboard() {
   const totalTeams = data?.registrations.reduce((s, r) => s + r.teams.length, 0) ?? 0
   const totalInvoiced = data?.registrations.reduce((s, r) => s + r.invoiceAmount - r.discountAmount, 0) ?? 0
   const totalPaid = data?.registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0) ?? 0
-  const balance = totalInvoiced - totalPaid
+  // A bank transfer they already sent counts as paid here, marked as clearing
+  // (lib/pendingTransfers). Showing the full balance while it settled is how
+  // Calusa was left looking unpaid, one click away from paying twice (Oct 2 2026).
+  const totalClearing = data?.registrations.reduce((s, r) => s + (r.clearing?.amount || 0), 0) ?? 0
+  const balance = totalInvoiced - totalPaid - totalClearing
   // The single registration carrying the balance, when there is only one -- which
   // is the ordinary case, one club registering once for one event. That lets the
   // Balance due tile itself become the way in to paying, so a director who never
   // scrolls past the tiles still finds it. With two or more open balances there is
   // no single right destination, so the per-registration buttons below carry it.
-  const unpaidRegs = data?.registrations.filter(r => (r.invoiceAmount - r.discountAmount) - r.payments.reduce((p, x) => p + x.amount, 0) > 0) ?? []
+  const unpaidRegs = data?.registrations.filter(r => (r.invoiceAmount - r.discountAmount) - r.payments.reduce((p, x) => p + x.amount, 0) - (r.clearing?.amount || 0) > 0) ?? []
   const soloUnpaidId = unpaidRegs.length === 1 ? unpaidRegs[0].id : ''
 
   // Billing is gone as a tab — the invoice now sits under the teams it paid for,
@@ -538,7 +544,9 @@ export default function ClubDirectorDashboard() {
     if (showMoney && totalInvoiced > 0) leftItems.push(balance > 0
       ? { key: 'pay', title: 'Balance due', detail: `${fmt(balance)} · bank transfer has no fee, card runs 3%`, done: false,
           action: soloUnpaidId ? { label: `Pay ${fmt(balance)}`, href: `/pay/${soloUnpaidId}` } : undefined }
-      : { key: 'pay', title: 'Paid in full', detail: `${fmt(totalPaid)} received`, done: true })
+      : totalClearing > 0
+        ? { key: 'pay', title: 'Paid · bank transfer clearing', detail: `${fmt(totalClearing)} on its way · nothing more to pay`, done: true }
+        : { key: 'pay', title: 'Paid in full', detail: `${fmt(totalPaid)} received`, done: true })
     const teamsWithNone = teamRows.filter(t => t.players.length === 0).length
     const filedAll = teamRows.reduce((sum, t) => sum + t.players.length, 0)
     leftItems.push({ key: 'waivers', title: 'Player waivers', done: teamRows.length > 0 && teamsWithNone === 0,
@@ -626,17 +634,19 @@ export default function ClubDirectorDashboard() {
       {tab !== 'history' && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {([
-            { label: 'Teams', value: totalTeams as string | number, color: 'text-violet-600', payHref: '' },
-            { label: 'Waivers filed', value: totalPlayers as string | number, color: 'text-blue-600', payHref: '' },
+            { label: 'Teams', value: totalTeams as string | number, color: 'text-violet-600', payHref: '', note: '' },
+            { label: 'Waivers filed', value: totalPlayers as string | number, color: 'text-blue-600', payHref: '', note: '' },
             ...(showMoney ? [
-              { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800', payHref: '' },
+              { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800', payHref: '', note: '' },
               { label: 'Balance due', value: fmt(balance), color: balance > 0 ? 'text-red-600' : 'text-green-600',
-                payHref: balance > 0 && soloUnpaidId && !viewUserId ? `/pay/${soloUnpaidId}` : '' },
+                payHref: balance > 0 && soloUnpaidId && !viewUserId ? `/pay/${soloUnpaidId}` : '',
+                note: totalClearing > 0 ? `${fmt(totalClearing)} bank transfer clearing` : '' },
             ] : []),
           ]).map(s => (
             <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
               <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
               <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+              {s.note && <div className="mt-1 text-[11px] font-semibold text-amber-600">{s.note}</div>}
               {s.payHref ? (
                 <a href={s.payHref} target="_blank" rel="noreferrer"
                   className="mt-2 inline-flex items-center justify-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 hover:underline">
@@ -767,8 +777,9 @@ export default function ClubDirectorDashboard() {
                 <WhatsLeft title={leftTitle} items={leftItems} />
                 {data?.registrations.map(reg => {
                   const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
+                  const inFlight = reg.clearing?.amount || 0
                   const due = reg.invoiceAmount - reg.discountAmount
-                  const bal = due - paid
+                  const bal = due - paid - inFlight
                   const rows = teamRows.filter(t => t.regId === reg.id)
                   const filed = rows.reduce((s, t) => s + t.players.length, 0)
                   const noneYet = rows.filter(t => t.players.length === 0).length
@@ -836,7 +847,8 @@ export default function ClubDirectorDashboard() {
                           </div>
                           <div className="text-right">
                             <div className="text-xs text-gray-400">Paid</div>
-                            <div className="font-medium text-green-600">{fmt(paid)}</div>
+                            <div className="font-medium text-green-600">{fmt(paid + inFlight)}</div>
+                            {inFlight > 0 && <div className="text-[11px] font-semibold text-amber-600">{fmt(inFlight)} clearing</div>}
                           </div>
                           <div className="text-right">
                             <div className="text-xs text-gray-400">Balance</div>
@@ -971,11 +983,16 @@ export default function ClubDirectorDashboard() {
                       <div className="px-5 py-4 border-t border-gray-100 bg-gray-50">
                         <div className="flex items-center justify-between gap-3 mb-3">
                           <h3 className="font-semibold text-gray-800">Invoice &amp; payments</h3>
-                          {bal <= 0 && due > 0 && (
+                          {bal <= 0 && due > 0 && (inFlight > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+                              title="Your bank transfer is on its way. Bank transfers take a few business days to clear.">
+                              <Check size={12} className="shrink-0" /> Paid · transfer clearing
+                            </span>
+                          ) : (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
                               <Check size={12} className="shrink-0" /> Paid in full
                             </span>
-                          )}
+                          ))}
                           {/* WHERE DO I PAY? Directors were logging in, seeing a red
                               balance, and having to email Bo to ask how to settle it --
                               the pay page existed all along but the only way in was the
@@ -1007,8 +1024,17 @@ export default function ClubDirectorDashboard() {
                             <span className="text-gray-500">Discount: <span className="font-medium text-amber-600">-{fmt(reg.discountAmount)}</span>{reg.discountNote ? <span className="text-gray-400"> ({reg.discountNote})</span> : null}</span>
                           )}
                           <span className="text-gray-500">Paid: <span className="font-medium text-green-600">{fmt(paid)}</span></span>
+                          {inFlight > 0 && (
+                            <span className="text-gray-500">Clearing: <span className="font-medium text-amber-600">{fmt(inFlight)}</span></span>
+                          )}
                           <span className="text-gray-500">Balance: <span className={`font-semibold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</span></span>
                         </div>
+                        {inFlight > 0 && reg.clearing && (
+                          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                            Your bank transfer of <span className="font-semibold">{fmt(inFlight)}</span>, sent {shortDate(reg.clearing.startedAt)}, is on its way.
+                            It counts as paid while it clears, which takes a few business days.{bal <= 0 ? ' There\u2019s nothing more to pay.' : ''}
+                          </p>
+                        )}
                         {/* Having changed their method, a director needs to know what
                             it now asks of them. Online methods are settled on the pay
                             page; Zelle and check are settled by hand, and the details
@@ -1027,7 +1053,7 @@ export default function ClubDirectorDashboard() {
                             {data?.payTo?.checkAddress ? <>, to:<br /><span className="text-gray-700">{data.payTo.checkAddress}</span></> : null}
                           </p>
                         )}
-                        {reg.payments.length === 0
+                        {reg.payments.length === 0 && !inFlight
                           ? <p className="text-sm text-gray-400">
                               No payments recorded yet.{bal > 0 ? ' You can switch methods above at any time — the Pay button takes card, bank transfer and PayPal.' : ''}
                             </p>
@@ -1046,6 +1072,13 @@ export default function ClubDirectorDashboard() {
                                     <div className="sm:col-span-3 text-right font-medium text-green-600">{fmt(p.amount)}</div>
                                   </div>
                                 ))}
+                                {inFlight > 0 && reg.clearing && (
+                                  <div className="px-4 py-2 grid grid-cols-2 sm:grid-cols-12 gap-x-4 text-sm bg-amber-50/60">
+                                    <div className="sm:col-span-5 text-gray-700">{shortDate(reg.clearing.startedAt)}</div>
+                                    <div className="sm:col-span-4 text-amber-700 order-last sm:order-none col-span-2 sm:col-auto">Bank transfer (ACH) · clearing</div>
+                                    <div className="sm:col-span-3 text-right font-medium text-amber-700">{fmt(inFlight)}</div>
+                                  </div>
+                                )}
                                 <div className="px-4 py-2 grid grid-cols-2 sm:grid-cols-12 gap-x-4 text-sm bg-gray-50">
                                   <div className="sm:col-span-9 font-semibold text-gray-700">Balance due</div>
                                   <div className={`sm:col-span-3 text-right font-bold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</div>

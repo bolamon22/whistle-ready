@@ -20,6 +20,7 @@ You will see **Payment received — thank you!** when a card or PayPal payment g
 
 **Common problems:**
 - **Bank transfer (ACH) initiated** means the payment is on its way. It usually clears in about 4 business days and is marked paid automatically.
+- Opened the link again while your bank transfer is clearing? It says **Your bank transfer is on its way**, and there's nothing else to pay. If you still owe part of the balance, the transfer shows as **Bank transfer clearing** and **Balance due** is only what's left.
 - **One more step — verify your bank account** means Stripe is sending a small deposit to your bank (1–2 business days). Follow the emailed instructions to finish.
 - **Paid in full** or **No balance due** means there is nothing to pay. If that looks wrong, contact the organizer.
 - **Payment link not found** means the link does not match a registration. Ask the organizer for a new link.

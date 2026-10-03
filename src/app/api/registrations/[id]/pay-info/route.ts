@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { orgForTournament } from '@/lib/org'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
+import { clearingTransfers } from '@/lib/pendingTransfers'
 
 // Public by design: the registration id in the URL is the capability (same model
 // as /claim links). Returns ONLY what the public pay page needs — no contact info.
@@ -32,7 +33,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
     const due = (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
-    const balance = Math.round(Math.max(0, due - paid) * 100) / 100
+    // A bank transfer still clearing counts against the balance here, so a club
+    // that opens this link again while it settles is not asked to pay twice
+    // (lib/pendingTransfers). If the bank rejects it, it stops counting.
+    const clearing = (await clearingTransfers([reg.id]))[reg.id] || null
+    const inFlight = clearing?.amount || 0
+    const balance = Math.round(Math.max(0, due - paid - inFlight) * 100) / 100
 
     return NextResponse.json({
       clubName: reg.clubName,
@@ -49,6 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       logoUrl: tournament?.logoUrl || '',
       zelleHandle: org?.zelleHandle || '',
       due, paid, balance,
+      clearing: clearing ? { amount: clearing.amount, startedAt: clearing.startedAt } : null,
       paidInFull: due > 0 && balance <= 0,
       noInvoice: due <= 0,
     })

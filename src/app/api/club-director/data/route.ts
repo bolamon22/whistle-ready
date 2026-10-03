@@ -10,6 +10,7 @@ import { readConfirmMany } from '@/lib/changeRequest'
 import { eventInfo, divisionFull, addPolicy, addBlock } from '@/lib/clubPortal'
 import { parsePricing } from '@/lib/regPricing'
 import { divisionBadge } from '@/lib/regStatus'
+import { clearingTransfers } from '@/lib/pendingTransfers'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -206,7 +207,14 @@ export async function GET(req: NextRequest) {
   // requested (and what it says: the club's own words, nothing from staff), or
   // waiting for them to confirm a list the office just changed.
   const confirm = await readConfirmMany(registrations.map(r => r.id)).catch(() => new Map())
-  const regsOut = registrations.map(r => ({ ...r, confirm: confirm.get(r.id) || { status: '', note: '', at: '' } }))
+  // A bank transfer they sent that is still clearing (lib/pendingTransfers), so
+  // the portal says "on its way" instead of asking them to pay again.
+  const clearing = await clearingTransfers(registrations.map(r => r.id))
+  const regsOut = registrations.map(r => ({
+    ...r,
+    confirm: confirm.get(r.id) || { status: '', note: '', at: '' },
+    clearing: clearing[r.id] ? { amount: clearing[r.id].amount, startedAt: clearing[r.id].startedAt } : null,
+  }))
 
   // What the portal needs to add a team or ask for a move: the divisions, which
   // are marked full, which still take a team directly (see lib/clubPortal), and
