@@ -95,11 +95,13 @@ export async function GET(req: NextRequest) {
       },
       clubs: clubNames,
       teams: registrations.flatMap(r => r.teams),
+      // No notes: those are the office's own notes about the club (and now
+      // where the portal logs what a club did), never meant for the club.
       registrations: registrations.map(r => ({
         id: r.id, clubName: r.clubName, clubContact: r.clubContact,
         contactEmail: r.contactEmail, contactPhone: r.contactPhone,
         clubBasedIn: r.clubBasedIn, clubWebsite: r.clubWebsite,
-        paymentMethod: r.paymentMethod, notes: r.notes,
+        paymentMethod: r.paymentMethod,
         numTeams: r.numTeams, needsHotel: r.needsHotel,
         teams: r.teams,
       })),
