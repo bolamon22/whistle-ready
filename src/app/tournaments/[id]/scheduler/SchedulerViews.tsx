@@ -362,7 +362,11 @@ const HINT = {
 // Timeline view
 // ───────────────────────────────────────────────────────────────────────────────
 
-const ROW_H = '64px', MIN_W = '34px', MIN_H = '26px'
+const ROW_H = '64px', MIN_W = '34px', MIN_H = '22px'
+// Time label column on the Board: narrow once every time is minimized (Compact), since
+// the labels drop to "8:00a·8" and the width was the next thing eating the screen.
+const TIME_W = '100px', TIME_W_MIN = '64px'
+const ampm = (t: string) => t.replace(/ AM\b/, 'a').replace(/ PM\b/, 'p')
 const fieldShort = (n: string) => n.replace(/^field\s*/i, '') || n
 const timeShort = (t: string) => t.replace(/\s*[AP]M$/i, '')
 
@@ -625,7 +629,7 @@ export function TimelineView(p: ViewsProps) {
         {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /></div>}
         <div ref={boardRef} className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
           {across ? (
-            <div className="grid" style={{ gridTemplateColumns: `100px ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
+            <div className="grid" style={{ gridTemplateColumns: `${allTimesMin ? TIME_W_MIN : TIME_W} ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
               {/* header: fields (drag to reorder, minimize to a strip) */}
               {renderCorner()}
               {p.fields.map(f => {
@@ -770,21 +774,25 @@ export function TimelineView(p: ViewsProps) {
   // The board's top-left corner (otherwise empty) holds Fit and Expand, so the
   // division row above can use the full width.
   function renderCorner() {
+    // In Compact on the Board the corner is 64px wide, so the buttons shrink and
+    // wrap onto two lines inside the 44px header instead of overflowing.
+    const tight = across && allTimesMin
+    const btn = tight ? 'h-5 px-1 text-[10px]' : 'h-7 px-1.5 text-[11px]'
     return (
-      <div className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 flex items-center justify-center gap-0.5 px-0.5">
+      <div className={`sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 flex items-center justify-center gap-0.5 px-0.5 ${tight ? 'flex-wrap content-center gap-y-px' : ''}`}>
         <button onClick={() => (fit ? setRails(true, true) : setRails(false, false))} aria-label={across ? 'Fit fields' : 'Fit day'}
           title={fit ? 'Reopen both side panels' : (across ? 'Fit fields: collapse both side panels so every field fits' : 'Fit day: collapse both side panels so the whole day fits')}
-          className={`h-7 inline-flex items-center gap-1 px-1.5 rounded-full border text-[11px] font-bold ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
-          {fit ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          className={`${btn} inline-flex items-center gap-1 rounded-full border font-bold ${fit ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+          {fit ? <Minimize2 size={tight ? 10 : 12} /> : <Maximize2 size={tight ? 10 : 12} />}
         </button>
         <button onClick={toggleCompact} aria-label={allTimesMin ? 'Show every time at full size' : 'Compact: shrink every time'}
           title={allTimesMin ? 'Show every time at full size' : 'Compact: shrink every time so the whole day fits'}
-          className={`h-7 inline-flex items-center px-1.5 rounded-full border ${allTimesMin ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
-          {across ? (allTimesMin ? <UnfoldVertical size={12} /> : <FoldVertical size={12} />) : (allTimesMin ? <UnfoldHorizontal size={12} /> : <FoldHorizontal size={12} />)}
+          className={`${btn} inline-flex items-center rounded-full border ${allTimesMin ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+          {across ? (allTimesMin ? <UnfoldVertical size={tight ? 10 : 12} /> : <FoldVertical size={tight ? 10 : 12} />) : (allTimesMin ? <UnfoldHorizontal size={12} /> : <FoldHorizontal size={12} />)}
         </button>
         {minCount > 0 && (
           <button onClick={() => saveMin(new Set(), new Set())} aria-label={`Expand ${minCount} minimized`} title={`Expand ${minCount} minimized field${minCount === 1 ? '' : 's'} / time${minCount === 1 ? '' : 's'}`}
-            className="h-7 inline-flex items-center gap-1 px-1.5 rounded-full border text-[11px] font-bold bg-white text-teal-700 border-teal-300 hover:bg-teal-50">
+            className={`${btn} inline-flex items-center gap-1 rounded-full border font-bold bg-white text-teal-700 border-teal-300 hover:bg-teal-50`}>
             +{minCount}
           </button>
         )}
@@ -846,9 +854,9 @@ export function TimelineView(p: ViewsProps) {
     const ms = minSlots.has(s)
     return (
       <Fragment key={s}>
-        <div className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 pl-2.5 pr-0.5 flex items-center gap-0.5 min-w-0">
+        <div className={`sticky left-0 z-10 bg-white border-b border-r border-slate-200 ${allTimesMin ? 'pl-1' : 'pl-2.5'} pr-0.5 flex items-center gap-0.5 min-w-0`}>
           {ms ? (
-            <button onClick={() => toggleMinSlot(s)} title={`Show ${p.fmtTime(s)}`} className="flex-1 text-left text-[10px] font-bold text-slate-500 hover:text-slate-900 truncate">{p.fmtTime(s)} <span className="font-normal text-slate-400">· {n}</span></button>
+            <button onClick={() => toggleMinSlot(s)} title={`${p.fmtTime(s)} · ${n} game${n === 1 ? '' : 's'}. Click to show at full size.`} className="flex-1 text-left text-[10px] font-bold text-slate-500 hover:text-slate-900 truncate whitespace-nowrap">{allTimesMin ? ampm(p.fmtTime(s)) : p.fmtTime(s)}<span className="font-normal text-slate-400">{allTimesMin ? `·${n}` : ` · ${n}`}</span></button>
           ) : (<>
             <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
               <span className="text-xs font-extrabold text-slate-900 truncate">{p.fmtTime(s)}</span>
