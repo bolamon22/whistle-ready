@@ -8,7 +8,7 @@ keywords: schedule, game times, when do we play, standings, scores, results, bra
 ---
 The schedule page shows every division's games, live scores, standings and brackets. Anyone can open it; no login needed.
 
-**Where:** **SCHEDULE** (**View games**) on the event page, or go to /tournaments/<id>/public.
+**Where:** **View schedule** on the event page (**Schedule** on a phone; it says **Live scores** / **Live** during the event and **View results** / **Results** after), or go to /tournaments/<id>/public.
 
 1. Type your team in **Search for a team…** and tap it, or tap your division's card. Each card shows the status (**Pool play**, **Bracket** or **Final**), the number of games, how many are left, and the leader or champion.
 2. Inside a division, switch between **Standings**, **Schedule** and **Bracket**. Tap **All divisions** to go back.
