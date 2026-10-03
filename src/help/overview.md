@@ -2,7 +2,7 @@
 title: How Whistle Ready works
 category: Getting started
 order: 300
-routes: /tournaments/*/dashboard
+routes: 
 keywords: overview start basics workflow first steps how it works menu navigation where is getting started
 ---
 Whistle Ready runs a tournament from setup to the final whistle. Each tournament has its own menu across the top.

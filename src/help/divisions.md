@@ -20,14 +20,14 @@ keywords: divisions teams pools add team edit team delete team move team swap te
 
 An amber "unassigned" count shows how many teams still need a pool.
 
-**To swap two teams:** click one team row, then a second, then click **Swap**. **x Cancel** stops.
+**To swap two teams between pools:** in the list, click one team row, then a second, then click the **Swap** button that names both teams. **x Cancel** stops.
 
-**To add a team by hand:** click **+ Add Team**. Only **Team Name** is required; **Club Name**, **Coach Name**, **Coach Phone** and **Coach Email** can come later. Click a team to edit it or add a **Team Logo**.
+**To add a team by hand:** click **+ Add Team**. Only **Team Name** is required; **Club Name**, **Coach Name**, **Coach Phone** and **Coach Email** can come later. Click **Edit** on a team row to change its details or add a **Team Logo**.
 
-**To move a team to another division:** use the move button on its row, pick the **Destination Division**, and click **Move Team**.
+**To move a team to another division:** click **Move** on its row, pick the **Destination Division**, and click **Move Team**.
 
 **Common problems:**
 - **Waiting list** teams are not in the draw. Clear the waitlist flag in **People → Team registrations** to place them.
-- **Unconfirmed** teams were added without full details. Open them, fill them in and save to confirm.
-- Deleting a team also removes it from registrations (you are asked to confirm).
+- **Unconfirmed** teams were added without full details. Click **Edit**, fill them in and save to confirm.
+- **Delete** on a team row also removes it from registrations (you are asked to confirm).
 - If no divisions show, set them up in **Setup → Tournament setup → Divisions** (**Set up in Builder**).
