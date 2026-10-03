@@ -403,6 +403,12 @@ export function TimelineView(p: ViewsProps) {
   }
   const lotTop = !!p.lotOnTop
   const fit = (lotTop || !leftOpen) && !rightOpen
+  // Docked lot, compact: one-line chips instead of three-line cards, so the strip is
+  // about 60px instead of 115px. Remembered per tournament on this device.
+  const lotMiniKey = 'wr-sched-lot-mini:' + (p.prefsKey ?? '')
+  const [lotMini, setLotMiniRaw] = useState(false)
+  useEffect(() => { try { setLotMiniRaw(localStorage.getItem(lotMiniKey) === '1') } catch {} }, [lotMiniKey])
+  const setLotMini = (v: boolean) => { setLotMiniRaw(v); try { localStorage.setItem(lotMiniKey, v ? '1' : '0') } catch {} }
   const [tab, setTab] = useState<'issues' | 'day'>('issues')
   const [openDivs, setOpenDivs] = useState<Record<string, boolean>>({})
   const [q, setQ] = useState('')
@@ -509,8 +515,20 @@ export function TimelineView(p: ViewsProps) {
     onDrop: (e: React.DragEvent) => { e.preventDefault(); setLotOver(false); const id = dropTarget(e); setDragId(null); if (id && p.dayGames.some(g => g.id === id)) { setSelId(null); p.onUnschedule(id) } },
   }
   // One unscheduled game, in the rail (full width) or the top strip (fixed width).
-  const lotCard = (g: SGame, c: string, size: string) => {
+  const lotCard = (g: SGame, c: string, size: string, mini = false) => {
     const on = selId === g.id
+    if (mini) return (
+      <button key={g.id} draggable
+        onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id) }}
+        onDragEnd={() => setDragId(null)}
+        onClick={() => setSelId(on ? null : g.id)}
+        title={`${gameLabel(g, p.divAbbr)}${g.pool ? ` · ${g.pool}` : ''} — ${humanTeam(g.team1)} vs ${humanTeam(g.team2)}`}
+        className={`${size} h-6 max-w-[200px] text-left rounded-md border pl-1.5 pr-2 inline-flex items-center gap-1 text-[10px] leading-none whitespace-nowrap overflow-hidden cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-2 ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
+        style={{ borderLeft: `3px solid ${c}` }}>
+        <b className={on ? 'text-white' : 'text-slate-800'}>{g.gameNumber}</b>
+        <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>{humanTeam(g.team1)} v {humanTeam(g.team2)}</span>
+      </button>
+    )
     return (
       <button key={g.id} draggable
         onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id) }}
@@ -550,21 +568,28 @@ export function TimelineView(p: ViewsProps) {
               <button onClick={() => p.setFilterDiv('__all__')} className="font-semibold text-teal-700 hover:underline">Show all</button>
             </span>
           )}
-          {p.onLotOnTop && <button onClick={() => p.onLotOnTop!(false)} aria-label="Move the parking lot to the side" title="Parking lot as side panel" className="ml-auto w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><PanelLeft size={14} /></button>}
+          <button onClick={() => setLotMini(!lotMini)} aria-pressed={lotMini} aria-label={lotMini ? 'Show full game cards' : 'Compact: one line per game'} title={lotMini ? 'Show full game cards' : 'Compact: one line per game'} className={`ml-auto w-6 h-6 rounded-md flex items-center justify-center ${lotMini ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}>{lotMini ? <UnfoldVertical size={14} /> : <FoldVertical size={14} />}</button>
+          {p.onLotOnTop && <button onClick={() => p.onLotOnTop!(false)} aria-label="Move the parking lot to the side" title="Parking lot as side panel" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><PanelLeft size={14} /></button>}
         </div>
         {/* width:0 + min-width:100%: the row's cards must not count toward the column's
             intrinsic width, or the whole board grows past the viewport instead of scrolling. */}
-        <div className="overflow-x-auto overflow-y-hidden px-3 pb-2 flex items-stretch gap-2.5" style={{ width: 0, minWidth: '100%' }}>
+        <div className={`overflow-x-auto overflow-y-hidden px-3 flex items-stretch ${lotMini ? 'pb-1.5 gap-2' : 'pb-2 gap-2.5'}`} style={{ width: 0, minWidth: '100%' }}>
           {lot.length === 0 && <p className="text-xs text-slate-400 py-3">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : typeFilter !== 'all' || p.filterDiv !== '__all__' ? 'Nothing left to place with these filters.' : 'No games match.'}</p>}
           {lot.map(grp => {
             const c = p.divColor(grp.div)
             return (
-              <div key={grp.div} className="flex items-stretch gap-1.5 flex-shrink-0">
-                <div className="w-5 rounded-md flex flex-col items-center justify-center gap-1 py-1 flex-shrink-0 overflow-hidden" style={{ background: c + '1f' }} title={`${grp.div} · ${grp.items.length} to place${teamsNote(counts[grp.div]) ? ` · ${teamsNote(counts[grp.div])}` : ''}`}>
-                  <span className="w-2 h-2 rounded-full" style={{ background: c }} />
-                  <span className="text-[9px] font-bold text-slate-700 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>{p.divAbbr(grp.div)} · {grp.items.length}</span>
-                </div>
-                {grp.items.map(g => lotCard(g, c, 'w-[172px] flex-shrink-0'))}
+              <div key={grp.div} className={`flex items-stretch flex-shrink-0 ${lotMini ? 'gap-1 items-center' : 'gap-1.5'}`}>
+                {lotMini ? (
+                  <span className="h-6 px-1.5 rounded-md inline-flex items-center gap-1 text-[9px] font-bold text-slate-700 whitespace-nowrap flex-shrink-0" style={{ background: c + '1f' }} title={`${grp.div} · ${grp.items.length} to place${teamsNote(counts[grp.div]) ? ` · ${teamsNote(counts[grp.div])}` : ''}`}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: c }} />{p.divAbbr(grp.div)} · {grp.items.length}
+                  </span>
+                ) : (
+                  <div className="w-5 rounded-md flex flex-col items-center justify-center gap-1 py-1 flex-shrink-0 overflow-hidden" style={{ background: c + '1f' }} title={`${grp.div} · ${grp.items.length} to place${teamsNote(counts[grp.div]) ? ` · ${teamsNote(counts[grp.div])}` : ''}`}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: c }} />
+                    <span className="text-[9px] font-bold text-slate-700 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>{p.divAbbr(grp.div)} · {grp.items.length}</span>
+                  </div>
+                )}
+                {grp.items.map(g => lotCard(g, c, lotMini ? 'flex-shrink-0' : 'w-[172px] flex-shrink-0', lotMini))}
               </div>
             )
           })}
