@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const orgSlug = cleanId(body.orgSlug)
     const page = cleanPage(body.page)
     const userTeam = typeof body.userTeam === 'string' ? body.userTeam.trim().slice(0, 60) : ''
-    const scope = tournamentId ? await tournamentScope(tournamentId, userTeam) : orgSlug ? await orgScope(orgSlug) : null
+    const scope = tournamentId ? await tournamentScope(tournamentId, userTeam) : orgSlug ? await orgScope(orgSlug, page) : null
     if (!scope) return NextResponse.json({ error: 'Event not found.' }, { status: 404 })
 
     const question = lastQuestion(body.messages)

@@ -61,7 +61,10 @@ ${sched || 'Schedule not posted yet.'}`
 }
 
 /** The org website: upcoming events with links, and the org's own pages. */
-export async function orgScope(slug: string): Promise<PublicScope | null> {
+export async function orgScope(slug: string, page = ''): Promise<PublicScope | null> {
+  // On whistleready.app the site lives under /o/<slug>; on the org's own domain
+  // it is at the root. Links follow whichever the visitor is on.
+  const p = page.startsWith(`/o/${slug}`) ? `/o/${slug}` : ''
   const org = await orgBySlug(slug)
   if (!org) return null
   const today = new Date().toISOString().slice(0, 10)
@@ -73,20 +76,20 @@ export async function orgScope(slug: string): Promise<PublicScope | null> {
       `- ${r.name} | ${r.startDate || 'TBA'}${r.endDate && r.endDate !== r.startDate ? ` to ${r.endDate}` : ''} | ${r.location || 'TBA'} | event page /tournaments/${r.id}/event | schedule /tournaments/${r.id}/public${Number(r.teamRegEnabled) ? ` | register a team /tournaments/${r.id}/register` : ' | team registration closed'}`).join('\n')
   } catch (e) { console.error('public chirp events error:', e) }
   const facts = `ORGANIZATION: ${org.name}${org.contactEmail ? ` | contact ${org.contactEmail}` : ''}
-WEBSITE PAGES: home / | results /results | stats /stats | photos /gallery | work with us /work
+WEBSITE PAGES: home ${p || '/'} | results ${p}/results | stats ${p}/stats | photos ${p}/gallery | book a photographer ${p}/photographers | work with us ${p}/work | register a player ${p}/register/player | vendor booth ${p}/register/vendor
 UPCOMING EVENTS:
-${events || 'None posted yet.'}` + await orgPagesText(org.id)
+${events || 'None posted yet.'}` + await orgPagesText(org.id, p)
   return { key: `org:${org.id}`, title: `${org.name} website`, org, facts }
 }
 
-async function orgPagesText(orgId: string): Promise<string> {
+async function orgPagesText(orgId: string, prefix = ''): Promise<string> {
   try {
     const os = await prisma.appSetting.findUnique({ where: { key: `orgSite:${orgId}` } }).catch(() => null)
     let oc: any = {}
     try { oc = JSON.parse((os as any)?.value || '{}') } catch {}
     const pages = Array.isArray(oc.pages) ? oc.pages : []
     const txt = pages.filter((p: any) => p && p.body).slice(0, 8)
-      .map((p: any) => `### ${p.title || p.slug}${p.slug ? ` (/${p.slug})` : ''}\n${clip(p.body, 1200)}`).join('\n\n').slice(0, 4500)
+      .map((p: any) => `### ${p.title || p.slug}${p.slug ? ` (${prefix}/${p.slug})` : ''}\n${clip(p.body, 1200)}`).join('\n\n').slice(0, 4500)
     return txt ? `\n\nORGANIZER WEBSITE PAGES (policies & info such as refund policy and terms):\n${txt}` : ''
   } catch { return '' }
 }
@@ -100,7 +103,7 @@ THEY ARE ON: ${page || 'unknown page'}
 HOW TO ANSWER
 - Answer only from EVENT INFO and the HOW-TO pages below. Never invent dates, times, fields, prices, policies, buttons or features.
 - How-to questions (register, pay, waivers, schedule, alerts): give short numbered steps with the exact button names in **bold**, from the HOW-TO pages.
-- Link pages as markdown links using the paths given, e.g. [schedule](/tournaments/abc/public).
+- Take them there: when a page answers the question, start with a markdown link to it on its own line using the paths given, e.g. [See the schedule](/tournaments/abc/public), then only the steps they do on that page. Don't describe menus to reach a page you can link.
 - If the answer isn't in EVENT INFO or the HOW-TO pages, start your reply with exactly "${NOT_KNOWN}" and then, in one line, point them to the event page or the organizer${scope.org?.contactEmail ? ` (${scope.org.contactEmail})` : ''}.
 - Never discuss staff, pay, finances, other people's contact details, or whether any team has paid.
 - Plain words, American spelling, no emoji, no headings or lines starting with #.
