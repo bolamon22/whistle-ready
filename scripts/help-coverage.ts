@@ -9,7 +9,7 @@
 import fs from 'fs'
 import path from 'path'
 import { roleCanAccess } from '../src/lib/routeAccess'
-import { ARTICLE_ROUTES } from '../src/lib/helpArticles'
+import { ARTICLE_ROUTES, PUBLIC_ARTICLE_ROUTES } from '../src/lib/helpArticles'
 
 const APP = path.join(__dirname.includes('scripts') ? path.join(__dirname, '..') : process.cwd(), 'src/app')
 const ROLES = ['admin', 'director', 'assigner', 'scheduler', 'staff', 'public']
@@ -33,18 +33,20 @@ function pages(dir = APP, base = ''): string[] {
 const concrete = (r: string) => r.replace(/\[[^\]]+\]/g, 'x')
 const isPublic = (r: string) => { const c = concrete(r); return PUBLIC_ROUTES.some(p => c.startsWith(p)) || PUBLIC_TOURNAMENT_PATH.test(c) }
 
-const patterns = Object.values(ARTICLE_ROUTES).flat().map(r => {
+const compile = (all: Record<string, string[]>) => Object.values(all).flat().map(r => {
   const re = r.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]+')
   // '/tournaments/*' is the Assigner page itself, not everything under it.
   return new RegExp('^' + re + (r.split('/').length > 3 || !r.includes('*') ? '(?=/|$)' : '$'))
 })
-const covered = (r: string) => patterns.some(re => re.test(concrete(r)))
+const staffPatterns = compile(ARTICLE_ROUTES), publicPatterns = compile(PUBLIC_ARTICLE_ROUTES)
+const coveredBy = (pats: RegExp[]) => (r: string) => pats.some(re => re.test(concrete(r)))
 
 const all = pages().sort()
 const list = process.argv.includes('--list')
 console.log(`${all.length} pages in the app\n`)
 for (const role of ROLES) {
   const mine = all.filter(r => (role === 'public' ? isPublic(r) : !isPublic(r) && roleCanAccess(role, concrete(r))))
+  const covered = coveredBy(role === 'public' ? publicPatterns : staffPatterns)
   const yes = mine.filter(covered)
   const pct = mine.length ? Math.round((100 * yes.length) / mine.length) : 0
   console.log(`${role.padEnd(10)} ${String(yes.length).padStart(3)} of ${String(mine.length).padStart(3)} pages have a help article (${pct}%)`)

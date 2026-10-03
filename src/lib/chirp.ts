@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { roleCanAccess } from '@/lib/routeAccess'
 import { canSeeMoney, payStatus } from '@/lib/roleScope'
-import { HELP_ARTICLES, ARTICLE_ROUTES, TOURNAMENT_PAGES, ORG_PAGES, type HelpArticle } from '@/lib/helpArticles'
+import { STAFF_HELP, PUBLIC_HELP, ARTICLE_ROUTES, TOURNAMENT_PAGES, ORG_PAGES, type HelpArticle } from '@/lib/helpArticles'
 
 // One brain for the staff Chirps (floating Chirp and the Help "Ask Chirp" tab).
 // Every prompt is built from four inputs: who is asking (role), the page they
@@ -49,7 +49,7 @@ export function pagesFor(role: string, tournamentId: string): string {
 /** The manual pages this role can use: an article is included when the role can
  *  open at least one page it is about. */
 export function articlesFor(role: string, tournamentId: string): HelpArticle[] {
-  return HELP_ARTICLES.filter(a => {
+  return STAFF_HELP.filter(a => {
     const routes = ARTICLE_ROUTES[a.id] ?? []
     return routes.length === 0 || routes.some(r => canOpen(role, fill(r, tournamentId)))
   })

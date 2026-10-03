@@ -3,9 +3,14 @@
 // exposes them plus the page list Chirp links to.
 import { GENERATED_HELP } from './helpArticles.generated'
 
-export type HelpArticle = { id: string; title: string; category: string; keywords: string; routes: string[]; body: string }
+export type HelpArticle = { id: string; title: string; category: string; keywords: string; routes: string[]; audience: 'staff' | 'public' | 'both'; body: string }
 
 export const HELP_ARTICLES: HelpArticle[] = GENERATED_HELP
+
+/** Pages written for coaches, parents and visitors (the public Chirp). */
+export const PUBLIC_HELP: HelpArticle[] = HELP_ARTICLES.filter(a => a.audience !== 'staff')
+/** Pages for signed-in staff. */
+export const STAFF_HELP: HelpArticle[] = HELP_ARTICLES.filter(a => a.audience !== 'public')
 
 /** Guides tab order. A category not listed here goes last. */
 const CATEGORY_ORDER = ['Getting started', 'Setup', 'Registration & money', 'Teams & players', 'Staff', 'Game day', 'Public pages', 'Organization', 'Admin']
@@ -16,7 +21,9 @@ export const HELP_CATEGORIES: string[] = [
 
 /** The pages each article is about ('*' = tournament id). A role is given an
  *  article when it can open at least one of them; none = everyone. */
-export const ARTICLE_ROUTES: Record<string, string[]> = Object.fromEntries(HELP_ARTICLES.map(a => [a.id, a.routes]))
+export const ARTICLE_ROUTES: Record<string, string[]> = Object.fromEntries(STAFF_HELP.map(a => [a.id, a.routes]))
+/** Same, for the public pages. */
+export const PUBLIC_ARTICLE_ROUTES: Record<string, string[]> = Object.fromEntries(PUBLIC_HELP.map(a => [a.id, a.routes]))
 
 // Where each page lives, so Chirp can link to it. Labels match TournamentNav;
 // paths are relative to /tournaments/{id}. Chirp shows a role only the pages
@@ -52,5 +59,5 @@ export const ORG_PAGES: { label: string; path: string }[] = [
 
 // Flattened text used as grounding context for the AI help assistant.
 export function helpArticlesText(): string {
-  return HELP_ARTICLES.map(a => `## ${a.title} [${a.category}]\n${a.body}`).join('\n\n')
+  return STAFF_HELP.map(a => `## ${a.title} [${a.category}]\n${a.body}`).join('\n\n')
 }
