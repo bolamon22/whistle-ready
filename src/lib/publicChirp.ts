@@ -10,6 +10,7 @@ import { orgBaseUrl } from '@/lib/orgDomains'
 import { AUDIENCES, type AudienceId } from '@/lib/chirpNudges'
 import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
 import { cleanName, nameKey } from '@/lib/names'
+import { resolveRules } from '@/lib/rules'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 
@@ -92,13 +93,18 @@ export async function tournamentScope(tournamentId: string, userTeam?: string): 
   const sched = games.slice(0, 90).map((g: any) =>
     `${g.date} ${g.startTime || 'TBD'} | ${g.location || 'TBD'} | ${g.division}${g.pool ? ' ' + g.pool : ''} | ${g.team1} vs ${g.team2}${g.score1 != null && g.score2 != null ? ` (final ${g.score1}-${g.score2})` : ''}`).join('\n')
   const org = await orgById(await tournamentOrgId(tournamentId))
+  // The rules the public Rules page shows: a linked library set (Settings → Rules)
+  // wins over the event's own text, same as /tournaments/[id]/rules.
+  let sets: any[] = []
+  if (org) try { const rr = await prisma.appSetting.findUnique({ where: { key: `orgRules:${org.id}` } }); const v = JSON.parse(rr?.value || '{}'); sets = Array.isArray(v.sets) ? v.sets : [] } catch {}
+  const rules = resolveRules(c, sets).body
   const base = `/tournaments/${tournamentId}`
   let facts = `EVENT: ${tt.name}${tt.sport ? ` (${tt.sport})` : ''}
 DATES: ${tt.startDate || 'TBA'}${tt.endDate && tt.endDate !== tt.startDate ? ` to ${tt.endDate}` : ''}
 LOCATION: ${tt.location || 'TBA'}
 LINKS: event page ${base}/event | schedule & standings ${base}/public | game day ${base}/today | register a team ${base}/register | player waiver ${base}/player-waiver
 DIVISIONS (${divisions.length}): ${divisions.join(', ') || 'TBA'}
-${fees.length ? `FEES (per team):\n${fees.join('\n')}\n` : ''}${c.hotelsUrl || c.hotels ? `HOTELS: ${c.hotelsUrl ? `book at ${c.hotelsUrl}` : ''}${c.hotels ? ` ${clip(c.hotels, 400)}` : ''}\n` : ''}${locations.length ? `VENUES:\n${locations.map((l: any) => `- ${l.name || 'Venue'}${l.address ? ` — ${l.address}` : ''}`).join('\n')}\n` : ''}${c.overview ? `OVERVIEW:\n${clip(c.overview, 800)}\n` : ''}${c.rules ? `RULES (summary):\n${clip(c.rules, 1500)}\n` : ''}${teams ? `TEAMS BY DIVISION AND POOL (as listed on the schedule page):\n${teams}\n` : ''}${released ? `SCHEDULE (${games.length} games):\n${sched}` : `SCHEDULE: NOT RELEASED YET. The organizer hasn't published game times, fields or opponents. Once it's released, every team's games appear on the schedule page (${base}/public).`}`
+${fees.length ? `FEES (per team):\n${fees.join('\n')}\n` : ''}${c.hotelsUrl || c.hotels ? `HOTELS: ${c.hotelsUrl ? `book at ${c.hotelsUrl}` : ''}${c.hotels ? ` ${clip(c.hotels, 400)}` : ''}\n` : ''}${locations.length ? `VENUES:\n${locations.map((l: any) => `- ${l.name || 'Venue'}${l.address ? ` — ${l.address}` : ''}`).join('\n')}\n` : ''}${c.overview ? `OVERVIEW:\n${clip(c.overview, 800)}\n` : ''}${rules ? `RULES (from the Rules page ${base}/rules):\n${clip(rules, 6000)}\n` : ''}${teams ? `TEAMS BY DIVISION AND POOL (as listed on the schedule page):\n${teams}\n` : ''}${released ? `SCHEDULE (${games.length} games):\n${sched}` : `SCHEDULE: NOT RELEASED YET. The organizer hasn't published game times, fields or opponents. Once it's released, every team's games appear on the schedule page (${base}/public).`}`
   if (org) facts += await orgPagesText(org.id)
   if (userTeam) facts += `\n\nThe person chatting is with team "${clip(userTeam, 60)}". For "my team", their schedule or results, focus on that team's games.`
   return { key: tournamentId, title: tt.name, org, facts, tournamentId }
