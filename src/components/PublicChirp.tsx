@@ -1,10 +1,10 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { CalendarDays, ClipboardCheck, PenLine, CreditCard, Trophy, MapPin } from 'lucide-react'
+import { CalendarDays, ClipboardCheck, PenLine, CreditCard, Trophy, MapPin, Bell, Camera, Store, Megaphone, Hotel, CheckCircle2 } from 'lucide-react'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import ChirpInput from '@/components/ChirpInput'
 import ChirpText from '@/components/ChirpText'
-import { pickNudge, type NudgeEvent } from '@/lib/chirpNudges'
+import { pickNudge, audienceTopics, AUDIENCES, isAudience, type AudienceId, type NudgeEvent, type Topic } from '@/lib/chirpNudges'
 import { ChirpLauncher, ChirpGreeting, ChirpHeader, ChirpWelcome, ChirpNote, useGreeting, useChirpHistory, ChirpHeaderActions, ChirpHistoryList } from '@/components/ChirpLauncher'
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -47,10 +47,18 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
     try { localStorage.setItem('chirp-visitor', JSON.stringify(v)) } catch {}
   }
 
+  // Who they are (parent, coach, club director...), asked once and kept on
+  // this device, so the suggestions and answers fit them.
+  const [audience, setAudienceState] = useState<AudienceId | null>(null)
+  useEffect(() => { try { const v = localStorage.getItem('chirp-audience'); if (isAudience(v)) setAudienceState(v) } catch {} }, [])
+  const setAudience = (a: AudienceId | null) => { setAudienceState(a); try { a ? localStorage.setItem('chirp-audience', a) : localStorage.removeItem('chirp-audience') } catch {} }
+
   // What Chirp opens with depends on the page and the event (see chirpNudges).
   const [path, setPath] = useState('')
   useEffect(() => { setPath(window.location.pathname) }, [])
-  const nudge = pickNudge({ path, event: info.event, orgName: info.orgName, returning: (visitorRef.current?.n || 0) > 0 })
+  const nudge = pickNudge({ path, event: info.event, orgName: info.orgName, returning: (visitorRef.current?.n || 0) > 0, audience })
+  // Not told who they are yet: a general greeting asks that instead.
+  const askWho = !audience && !nudge.pageSpecific
   const greeting = useGreeting(`${scopeKey}-${nudge.id}`, open, info.loaded && !!path, 6000, nudge.pageSpecific ? 0 : 2)
 
   // Keep the chat across pages: a link in an answer moves to that page, and on
@@ -128,7 +136,7 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
     try {
       const res = await fetch('/api/public-chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next, tournamentId, orgSlug, userTeam: team || undefined, page: window.location.pathname, convoId: convoRef.current, visitor: visitorRef.current || undefined }),
+        body: JSON.stringify({ messages: next, tournamentId, orgSlug, userTeam: team || undefined, page: window.location.pathname, convoId: convoRef.current, visitor: visitorRef.current || undefined, audience: audience || undefined }),
       })
       const data = await res.json()
       if (res.ok) unsentRef.current = true
@@ -142,25 +150,30 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
 
   const isOrg = !tournamentId && !!orgSlug
   const place = info.title || (isOrg ? 'our events' : 'this event')
-  const topics = isOrg ? [
-    { label: 'Upcoming events', icon: <CalendarDays size={18} />, q: 'What events are coming up?' },
-    { label: 'Register a team', icon: <ClipboardCheck size={18} />, q: 'How do I register a team?' },
-    { label: 'Sign the player waiver', icon: <PenLine size={18} />, q: 'How do I sign the player waiver?' },
-    { label: 'Past results', icon: <Trophy size={18} />, q: 'Where can I see results?' },
-  ] : [
-    { label: 'When does my team play?', icon: <CalendarDays size={18} />, q: 'What time does my team play?' },
-    { label: 'Fields & parking', icon: <MapPin size={18} />, q: 'Where are the fields and where do we park?' },
-    { label: 'Sign the player waiver', icon: <PenLine size={18} />, q: 'How do I sign the player waiver?' },
-    { label: 'Pay my balance', icon: <CreditCard size={18} />, q: 'How do I pay our team balance?' },
-  ]
+  const soon = (() => { const d = info.event?.startDate; if (!d) return false; const ms = new Date(d + 'T00:00:00').getTime() - Date.now(); return ms > -2 * 86400000 && ms < 14 * 86400000 })()
+  const ICONS: Record<Topic['icon'], JSX.Element> = {
+    calendar: <CalendarDays size={18} />, map: <MapPin size={18} />, pen: <PenLine size={18} />, card: <CreditCard size={18} />,
+    trophy: <Trophy size={18} />, clipboard: <ClipboardCheck size={18} />, bell: <Bell size={18} />, camera: <Camera size={18} />,
+    store: <Store size={18} />, whistle: <Megaphone size={18} />, hotel: <Hotel size={18} />, check: <CheckCircle2 size={18} />,
+  }
+  const base = audienceTopics(audience, soon)
+  // On one tournament's pages without a known visitor type, lead with game-day basics.
+  const topics = (!audience && !isOrg ? [
+    { label: 'When does my team play?', q: 'What time does my team play?', icon: 'calendar' as const },
+    { label: 'Fields & parking', q: 'Where are the fields and where do we park?', icon: 'map' as const },
+    { label: 'Sign the player waiver', q: 'How do I sign the player waiver?', icon: 'pen' as const },
+    { label: 'Pay my balance', q: 'How do I pay our team balance?', icon: 'card' as const },
+  ] : base).map(t => ({ ...t, iconEl: ICONS[t.icon] }))
+  const audienceLabel = AUDIENCES.find(a => a.id === audience)?.label
+  const pickAudience = (a: AudienceId) => { setAudience(a); setOpen(true) }
 
   return (
     <>
       {greeting.show && (
         <ChirpGreeting
-          title={nudge.title}
-          body={nudge.body}
-          chips={nudge.chips.map(c => ({ label: c.label, onPick: () => ask(c.q) }))}
+          title={askWho ? `Hi! I'm Chirp, the ${info.orgName || 'event'} help desk.` : nudge.title}
+          body={askWho ? 'What brings you here today? Pick one and I\'ll show you what people like you usually ask.' : nudge.body}
+          chips={askWho ? AUDIENCES.map(a => ({ label: a.label, onPick: () => pickAudience(a.id) })) : nudge.chips.map(c => ({ label: c.label, onPick: () => ask(c.q) }))}
           onDismiss={greeting.dismiss}
         />
       )}
@@ -180,8 +193,21 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
               <>
                 <ChirpWelcome
                   hello={`Hi! I'm Chirp. I can find your team's games, walk you through registering, waivers and payments for ${place}, or point you to the right page. What can I help with?`}
-                  topics={topics.map(t => ({ label: t.label, icon: t.icon, onPick: () => send(t.q) }))}
+                  topics={topics.map(t => ({ label: t.label, icon: t.iconEl, onPick: () => send(t.q) }))}
                 />
+                {audience ? (
+                  <p className="text-[11px] text-slate-500">Questions for a <b className="font-semibold text-slate-700">{audienceLabel?.toLowerCase()}</b>. <button type="button" onClick={() => setAudience(null)} className="text-teal-700 underline">Change</button></p>
+                ) : (
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500 mb-1.5">I'm a…</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {AUDIENCES.map(a => (
+                        <button key={a.id} type="button" onClick={() => setAudience(a.id)}
+                          className="text-xs font-medium text-teal-800 bg-teal-50 border border-teal-200 hover:bg-teal-100 rounded-full px-3 py-1.5">{a.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="pt-1">
                   <label htmlFor={`chirp-team-${scopeKey}`} className="text-[11px] text-slate-500">Your team (optional), I'll remember it</label>
                   <input id={`chirp-team-${scopeKey}`} value={team} onChange={e => saveTeam(e.target.value)} placeholder="e.g. Lightning U12"

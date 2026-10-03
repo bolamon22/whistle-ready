@@ -7,6 +7,7 @@ import { orgById, orgBySlug, tournamentOrgId, type Org } from '@/lib/org'
 import { sendEmail } from '@/lib/email'
 import { mdToEmailHtml } from '@/lib/emailMd'
 import { orgBaseUrl } from '@/lib/orgDomains'
+import { AUDIENCES, type AudienceId } from '@/lib/chirpNudges'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 
@@ -94,12 +95,13 @@ async function orgPagesText(orgId: string, prefix = ''): Promise<string> {
   } catch { return '' }
 }
 
-export function publicPrompt(scope: PublicScope, page: string, question: string): string {
+export function publicPrompt(scope: PublicScope, page: string, question: string, audience?: AudienceId): string {
+  const who = AUDIENCES.find(a => a.id === audience)
   const picked = pickArticles(PUBLIC_HELP, question, page, scope.tournamentId || '', 4, 12000)
   return `You are Chirp, the friendly assistant for ${scope.title}. You help coaches, parents, players and visitors. If asked your name, you are Chirp. Be warm, welcoming and brief.
 
 THEY ARE ON: ${page || 'unknown page'}
-
+${who ? `WHO IS ASKING: ${who.prompt} (they told us). Answer for them.\n` : ''}
 HOW TO ANSWER
 - Answer only from EVENT INFO and the HOW-TO pages below. Never invent dates, times, fields, prices, policies, rules, buttons or features, and never fill a gap with what seems likely: if the pages don't say (for example whether a player on two teams signs twice), treat it as unknown.
 - How-to questions (register, pay, waivers, schedule, alerts): give short numbered steps with the exact button names in **bold**, from the HOW-TO pages.
@@ -120,7 +122,7 @@ ${picked.length ? picked.map(a => `PAGE: ${a.title}\n${a.body}`).join('\n\n') : 
 
 export type Turn = { q: string; a: string; at: number; covered?: boolean }
 export type Visitor = { id: string; n: number; first: number }
-type Convo = { id: string; page?: string; team?: string; startedAt: number; updatedAt: number; turns: Turn[]; emailed: number; visitor?: Visitor }
+type Convo = { id: string; page?: string; team?: string; startedAt: number; updatedAt: number; turns: Turn[]; emailed: number; visitor?: Visitor; audience?: AudienceId }
 
 /** The anonymous device id the widget sends: a random id, how many chats that
  *  browser has started, and when it first chatted. Never an IP address. */
@@ -145,7 +147,7 @@ async function writeConvos(scope: string, list: Convo[]) {
 export const cleanConvoId = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(v) ? v : '')
 
 /** Add one question and answer to a conversation. Never throws. */
-export async function logPublicTurn(scope: string, convoId: string, turn: { q: string; a: string; page?: string; team?: string; visitor?: Visitor }) {
+export async function logPublicTurn(scope: string, convoId: string, turn: { q: string; a: string; page?: string; team?: string; visitor?: Visitor; audience?: AudienceId }) {
   if (!convoId || !turn.q) return
   try {
     const list = await readConvos(scope)
@@ -156,6 +158,7 @@ export async function logPublicTurn(scope: string, convoId: string, turn: { q: s
     c.page = turn.page || c.page
     c.team = turn.team || c.team
     c.visitor = turn.visitor || c.visitor
+    c.audience = turn.audience || c.audience
     c.updatedAt = Date.now()
     await writeConvos(scope, list)
   } catch (e) { console.error('public chirp convo log error:', e) }
@@ -182,7 +185,7 @@ const MAX_EMAILS_PER_DAY = 100
 
 /** The transcript email: a navy header, then each question with Chirp's answer
  *  rendered (bold, steps, links), unanswered ones flagged. Inline styles only. */
-export function transcriptEmail(scope: { title: string; org: { slug?: string | null } | null; tournamentId?: string }, c: { startedAt: number; page?: string; team?: string; emailed: number; visitor?: Visitor }, fresh: Turn[]) {
+export function transcriptEmail(scope: { title: string; org: { slug?: string | null } | null; tournamentId?: string }, c: { startedAt: number; page?: string; team?: string; emailed: number; visitor?: Visitor; audience?: AudienceId }, fresh: Turn[]) {
   const base = orgBaseUrl(scope.org?.slug, APP_URL)
   const when = (ms: number) => new Date(ms).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
   const first = fresh[0].q.replace(/\s+/g, ' ').slice(0, 60)
@@ -208,7 +211,7 @@ export function transcriptEmail(scope: { title: string; org: { slug?: string | n
   <div style="font-size:13px;color:#99f6e4;margin-top:2px">${fresh.length} question${fresh.length === 1 ? '' : 's'}${missed ? ` · ${missed} Chirp couldn't answer` : ' · all answered'}</div>
 </td></tr>
 <tr><td style="padding:12px 20px;font-size:13px;color:#64748b;border-bottom:1px solid #e2e8f0">
-  ${when(c.startedAt)} ET${pageLink ? ` · on the ${pageLink}` : ''}${c.team ? ` · team: <b style="color:#334155">${esc(c.team)}</b>` : ''} · ${visitorLine(c.visitor)}${c.emailed ? ` · continued chat (${c.emailed} earlier question${c.emailed === 1 ? '' : 's'} already sent)` : ''}
+  ${when(c.startedAt)} ET${pageLink ? ` · on the ${pageLink}` : ''}${c.team ? ` · team: <b style="color:#334155">${esc(c.team)}</b>` : ''} · ${c.audience ? `<b style="color:#334155">${esc(AUDIENCES.find(a => a.id === c.audience)?.label || '')}</b>, ` : ''}${visitorLine(c.visitor)}${c.emailed ? ` · continued chat (${c.emailed} earlier question${c.emailed === 1 ? '' : 's'} already sent)` : ''}
 </td></tr>
 ${turns}
 <tr><td style="padding:14px 20px;font-size:12px;color:#64748b">

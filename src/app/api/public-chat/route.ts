@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { chirpReply, cleanId, cleanPage, lastQuestion, recentQuestions } from '@/lib/chirp'
 import { cleanConvoId, cleanVisitor, logPublicTurn, orgScope, publicCovered, publicPrompt, tournamentScope } from '@/lib/publicChirp'
 import { orgBySlug, orgForTournament } from '@/lib/org'
+import { isAudience } from '@/lib/chirpNudges'
 
 export const runtime = 'nodejs'
 
@@ -23,7 +24,8 @@ export async function POST(req: NextRequest) {
     if (!scope) return NextResponse.json({ error: 'Event not found.' }, { status: 404 })
 
     const question = lastQuestion(body.messages)
-    const message = await chirpReply(publicPrompt(scope, page, recentQuestions(body.messages)), body.messages)
+    const audience = isAudience(body.audience) ? body.audience : undefined
+    const message = await chirpReply(publicPrompt(scope, page, recentQuestions(body.messages), audience), body.messages)
 
     // The question list behind Chirp insights (anonymous).
     try {
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
       await prisma.appSetting.upsert({ where: { key }, create: { key, value: JSON.stringify(log) }, update: { value: JSON.stringify(log) } })
     } catch (e) { console.error('chirp log error:', e) }
     // The whole conversation, emailed to the organizer when the chat closes.
-    await logPublicTurn(scope.key, cleanConvoId(body.convoId), { q: question, a: message, page, team: userTeam, visitor: cleanVisitor(body.visitor) })
+    await logPublicTurn(scope.key, cleanConvoId(body.convoId), { q: question, a: message, page, team: userTeam, visitor: cleanVisitor(body.visitor), audience })
 
     return NextResponse.json({ message })
   } catch (e: unknown) {
