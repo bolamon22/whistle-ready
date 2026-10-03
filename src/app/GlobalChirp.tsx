@@ -36,7 +36,8 @@ export default function GlobalChirp() {
 
   if (status !== 'authenticated' || EXTERNAL.includes(effectiveRole)) return null
   if (tournamentId && PUBLIC_SEGMENTS.includes(segment)) return null
-  if (pathname.startsWith('/login')) return null
+  // The org website has the public Chirp in the same corner.
+  if (pathname.startsWith('/login') || pathname.startsWith('/o/')) return null
 
   // key: a new tournament starts a new conversation.
   return <ChatWidget key={tournamentId || 'app'} tournamentId={tournamentId || undefined} tournamentName={name} liftOnPhones={segment === 'builder'} />

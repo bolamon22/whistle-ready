@@ -12,11 +12,16 @@
 // ~14s the last time it happened. A style tag scoped to this subtree costs
 // nothing, survives both the rewrite and the direct /o/<slug> URL, and needs no
 // hydration to be correct on first paint.
-export default function OrgSiteLayout({ children }: { children: React.ReactNode }) {
+import PublicChirp from '@/components/PublicChirp'
+
+// Chirp on the org's own website (Bo, Oct 3 2026). Only the slug is passed: the
+// answers are built server-side, so this layout stays static.
+export default function OrgSiteLayout({ children, params }: { children: React.ReactNode; params: { slug: string } }) {
   return (
     <>
       <style>{`[data-app-chrome]{display:none!important}[data-app-main]{padding:0!important;max-width:none!important}`}</style>
       {children}
+      <PublicChirp orgSlug={params.slug} />
     </>
   )
 }
