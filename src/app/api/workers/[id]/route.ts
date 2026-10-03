@@ -57,8 +57,22 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.roles!==undefined&&{roles:JSON.stringify(b.roles)}),
   }}), gate.role))
 }
+// Deleting a Worker cascades away their assignments, roster spots, availability, time
+// entries and pay records. The Staff Pool button for this used to say "Unassign ... from
+// this roster?", so a click meant to drop someone from one event erased their whole
+// history. Refuse when anything is attached; duplicates go through Merge, which moves it.
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
+  const [games, roster, pay, time] = await Promise.all([
+    prisma.assignment.count({ where: { workerId: params.id } }),
+    prisma.rosterEntry.count({ where: { workerId: params.id } }),
+    prisma.paymentRecord.count({ where: { workerId: params.id } }),
+    prisma.timeEntry.count({ where: { workerId: params.id } }),
+  ])
+  if (games + roster + pay + time > 0) {
+    const parts = [games && `${games} game${games === 1 ? '' : 's'}`, roster && `${roster} event roster${roster === 1 ? '' : 's'}`, pay && `${pay} pay record${pay === 1 ? '' : 's'}`, time && `${time} time entr${time === 1 ? 'y' : 'ies'}`].filter(Boolean).join(', ')
+    return NextResponse.json({ error: `Not deleted: this person has ${parts}. Deleting would erase that history. If they're a duplicate, merge them instead.` }, { status: 409 })
+  }
   await prisma.worker.delete({where:{id:params.id}}); return NextResponse.json({ok:true})
 }

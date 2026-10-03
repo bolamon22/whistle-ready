@@ -269,6 +269,12 @@ export default function StaffPage() {
   const [letterOpen,setLetterOpen]=useState(false)
   const [dupePairs,setDupePairs]=useState<DupePair[]>([])
   const [showDupes,setShowDupes]=useState(false)
+  // Empty profiles: no email, no phone, no history anywhere (see /api/workers/cleanup).
+  const [emptyProfiles,setEmptyProfiles]=useState<{id:string;name:string;role:string}[]>([])
+  const [keptWithHistory,setKeptWithHistory]=useState(0)
+  const [showEmpty,setShowEmpty]=useState(false)
+  const [emptySel,setEmptySel]=useState<Set<string>>(new Set())
+  const [cleaning,setCleaning]=useState(false)
   const [manualMerge,setManualMerge]=useState<Worker[]|null>(null)   // two rows the organizer picked themselves
   const [search,setSearch]=useState('')
 
@@ -290,7 +296,7 @@ export default function StaffPage() {
     setLoading(false)
   }
   useEffect(()=>{
-    load();loadDupes()
+    load();loadDupes();loadEmpty()
     window.addEventListener('preview-org-changed',load)
     window.addEventListener('preview-org-changed',loadDupes)
     return ()=>{window.removeEventListener('preview-org-changed',load);window.removeEventListener('preview-org-changed',loadDupes)}
@@ -355,10 +361,14 @@ export default function StaffPage() {
     setSaving(false)
   }
 
+  // Deletes the person from the staff pool entirely. It used to read "Unassign ... from this
+  // roster?", which is not what it did; the server now refuses anyone with history.
   async function del(id:string,name:string){
-    if(!confirm(`Unassign ${name} from this roster?`))return
-    await fetch(`/api/workers/${id}`,{method:'DELETE'});toast.success('Unassigned')
-    if(expandedId===id)setExpandedId(null);load()
+    if(!confirm(`Delete ${name} from your staff pool?\n\nThis removes their profile. People with games, event rosters or pay records can't be deleted (merge duplicates instead).`))return
+    const res=await fetch(`/api/workers/${id}`,{method:'DELETE'})
+    if(!res.ok){const d=await res.json().catch(()=>({}));toast.error(d.error||'Not deleted');return}
+    toast.success(`Deleted ${name}`)
+    if(expandedId===id)setExpandedId(null);load();loadEmpty();loadDupes()
   }
 
   // ── App-login onboarding: invite pool members to register (see /api/workers/onboard) ──
@@ -428,6 +438,28 @@ export default function StaffPage() {
       toast.success('Recruiting link copied — paste it into your letter or a text')
     }catch{toast.error('Could not get the link')}
     finally{setRecruitBusy(false)}
+  }
+
+  // ── Empty profiles cleanup (directors; others get a 403 and see nothing) ──
+  async function loadEmpty(){
+    try{
+      const o=previewOrgId()
+      const res=await fetch(o?`/api/workers/cleanup?viewOrgId=${o}`:'/api/workers/cleanup')
+      if(!res.ok){setEmptyProfiles([]);return}
+      const d=await res.json()
+      const list=Array.isArray(d.profiles)?d.profiles:[]
+      setEmptyProfiles(list);setKeptWithHistory(Number(d.keptWithHistory)||0);setEmptySel(new Set(list.map((p:{id:string})=>p.id)))
+    }catch{setEmptyProfiles([])}
+  }
+  async function deleteEmpty(){
+    const ids=Array.from(emptySel); if(!ids.length)return
+    if(!confirm(`Delete ${ids.length} empty profile${ids.length===1?'':'s'}?\n\nThese have no email, no phone, and no games, rosters or pay history. This can't be undone.`))return
+    setCleaning(true)
+    const res=await fetch('/api/workers/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,viewOrgId:previewOrgId()})})
+    const d=await res.json().catch(()=>({}))
+    if(res.ok){toast.success(`Deleted ${d.deleted} profile${d.deleted===1?'':'s'}${d.skipped?` (${d.skipped} skipped: they now have history or contact info)`:''}`);setShowEmpty(false);load();loadEmpty();loadDupes()}
+    else toast.error(d.error||'Cleanup failed')
+    setCleaning(false)
   }
 
   // ── Possible duplicates (see /api/workers/duplicates + /api/workers/merge) ──
@@ -703,6 +735,7 @@ export default function StaffPage() {
             <span className="text-xs text-slate-300">·</span>
             <span className="text-xs text-slate-400"><span className="font-semibold text-emerald-600">{workers.filter(w=>w.appStatus==='registered').length}</span> registered · <span className="font-semibold text-amber-600">{workers.filter(w=>w.appStatus==='invited').length}</span> invited · <span className="font-semibold text-slate-500">{workers.filter(w=>w.appStatus==='none'||w.appStatus==='no_email').length}</span> not on app</span>
             {dupePairs.length>0&&<button onClick={()=>setShowDupes(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">{dupePairs.length} possible duplicate{dupePairs.length===1?'':'s'}</button>}
+            {emptyProfiles.length>0&&<button onClick={()=>setShowEmpty(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors" title="No email, no phone, and no games, rosters or pay history">{emptyProfiles.length} empty profile{emptyProfiles.length===1?'':'s'}</button>}
             {(search||roleFilter!=='all'||appFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all');setAppFilter('all')}}>Clear filters</button>}
           </div>
 
@@ -751,6 +784,27 @@ export default function StaffPage() {
             </div>
           )}
 
+          {showEmpty&&emptyProfiles.length>0&&(
+            <div className="card p-4 mb-3 border border-slate-300">
+              <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+                <h3 className="font-semibold text-slate-800 text-sm">Empty profiles</h3>
+                <div className="flex items-center gap-3">
+                  <button className="text-xs text-slate-500 hover:text-slate-700" onClick={()=>setEmptySel(emptySel.size===emptyProfiles.length?new Set():new Set(emptyProfiles.map(p=>p.id)))}>{emptySel.size===emptyProfiles.length?'Select none':'Select all'}</button>
+                  <button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>setShowEmpty(false)}>Close</button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mb-3">No email, no phone, and nothing attached: no games, event rosters, availability or pay history. Nothing is lost by deleting them.{keptWithHistory>0?` ${keptWithHistory} other profile${keptWithHistory===1?'':'s'} without contact info ${keptWithHistory===1?'is':'are'} not listed because ${keptWithHistory===1?'it has':'they have'} games or pay history (or ${keptWithHistory===1?'is':'are'} the imported half of a duplicate; merge those).`:''}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1 mb-3">
+                {emptyProfiles.map(p=>(
+                  <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer min-w-0">
+                    <input type="checkbox" checked={emptySel.has(p.id)} onChange={()=>setEmptySel(s=>{const n=new Set(s);if(n.has(p.id))n.delete(p.id);else n.add(p.id);return n})}/>
+                    <span className="truncate">{p.name}</span>
+                  </label>
+                ))}
+              </div>
+              <button onClick={deleteEmpty} disabled={cleaning||!emptySel.size} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40">{cleaning?'Deleting…':`Delete ${emptySel.size} profile${emptySel.size===1?'':'s'}`}</button>
+            </div>
+          )}
           {showDupes&&dupePairs.length>0&&(
             <div className="card p-4 mb-3 border border-amber-200">
               <div className="flex items-center justify-between mb-3">
@@ -822,7 +876,7 @@ export default function StaffPage() {
                     <span className="flex-1"/>
                     <button onClick={()=>expand(w,'profile')} className={`font-medium ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-500'}`}>Profile</button>
                     <button onClick={()=>expand(w,'edit')} className={`font-medium ${isExpanded&&expandMode==='edit'?'text-sky-800 underline':'text-sky-600'}`}>Edit</button>
-                    <button onClick={()=>del(w.id,w.name)} className="text-red-400 font-medium">Unassign</button>
+                    <button onClick={()=>del(w.id,w.name)} className="text-red-400 font-medium">Delete</button>
                   </div>
                   {isExpanded&&expandMode==='profile'&&<div className="border-t border-slate-200">{renderProfile(w,wRoles)}</div>}
                   {isExpanded&&expandMode==='edit'&&<div className="px-3 py-4 bg-sky-50/40 border-t border-slate-200">{renderEdit(w)}</div>}
@@ -883,7 +937,7 @@ export default function StaffPage() {
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={()=>expand(w,'profile')} className={`text-xs mr-2 font-medium transition-colors ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-400 hover:text-slate-700'}`}>Profile</button>
                         <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-sky-800 underline':'text-sky-600 hover:text-sky-800'}`}>Edit</button>
-                        <button onClick={()=>del(w.id,w.name)} className="text-red-400 hover:text-red-600 text-xs font-medium">Unassign</button>
+                        <button onClick={()=>del(w.id,w.name)} className="text-red-400 hover:text-red-600 text-xs font-medium">Delete</button>
                       </td>
                     </tr>
 
