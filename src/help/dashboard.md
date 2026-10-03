@@ -1,7 +1,7 @@
 ---
 title: Read the tournament dashboard
 category: Getting started
-order: 302
+order: 3
 routes: /tournaments/*/dashboard
 keywords: dashboard at a glance home overview money hidden show money hide money teams by division registration open closed collected waitlist paid unpaid partial reorder divisions
 ---

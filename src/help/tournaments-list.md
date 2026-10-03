@@ -1,7 +1,7 @@
 ---
 title: Create, copy or delete a tournament
 category: Getting started
-order: 301
+order: 2
 routes: /, /tournaments
 keywords: new tournament create add tournament copy duplicate next year clone delete remove edit tournaments list home past upcoming move to org
 ---

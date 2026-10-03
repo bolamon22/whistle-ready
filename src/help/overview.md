@@ -1,7 +1,7 @@
 ---
 title: How Whistle Ready works
 category: Getting started
-order: 300
+order: 1
 routes: 
 keywords: overview start basics workflow first steps how it works menu navigation where is getting started
 ---
