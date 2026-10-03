@@ -335,16 +335,33 @@ function useCounts(games: SGame[], divisions: string[]) {
   }, [games, divisions])
 }
 
-function SelectionBar({ p, sel, onCancel }: { p: ViewsProps; sel: SGame; onCancel: () => void }) {
+function SelectionBar({ p, sel, teamCount, onCancel }: { p: ViewsProps; sel: SGame; teamCount: Record<string, number>; onCancel: () => void }) {
   const placed = !!(sel.date && sel.startTime && sel.location)
+  // Second line: each team's load, so a compact row never has to be opened to see it.
+  // "3 games · 2 today" counts placed games over the whole event and on this day.
+  const load = (team: string) => {
+    if (!isRealTeam(team)) return null
+    const all = teamCount[teamKey(sel.division, team)] ?? 0
+    const today = p.dayGames.filter(g => g.division === sel.division && (g.team1 === team || g.team2 === team)).length
+    return `${all} game${all === 1 ? '' : 's'}${today ? ` (${today} today)` : ''}`
+  }
+  const l1 = load(sel.team1), l2 = load(sel.team2)
   // Two lines of text and the buttons stacked beside them, so the bar stays short
   // (one row of chips tall) and never clips a long team name.
   return (
-    <div className="flex items-stretch gap-2 pl-3 pr-1.5 py-1 rounded-xl text-white shadow-xl min-w-0 w-[460px] max-w-[92vw]" style={{ background: '#065f46' }}
+    <div className="flex items-stretch gap-2 pl-3 pr-1.5 py-1 rounded-xl text-white shadow-xl min-w-0 w-[520px] max-w-[92vw]" style={{ background: '#065f46' }}
       title={`${humanTeam(sel.team1)} vs ${humanTeam(sel.team2)} — click a green slot. Amber = back-to-back, striped = team busy.`}>
       <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-        <div className="text-xs leading-tight truncate"><span className="text-emerald-200">{placed ? 'Moving' : 'Placing'}</span> <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b></div>
-        <div className="text-[11px] leading-tight text-emerald-100 truncate">Click a green slot · amber = back-to-back · striped = busy</div>
+        <div className="text-xs leading-tight truncate"><span className="text-emerald-200">{placed ? 'Moving' : 'Placing'}</span> <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b>{sel.pool && <span className="text-emerald-200"> · {sel.pool}</span>}</div>
+        {l1 || l2 ? (
+          <div className="text-[11px] leading-tight text-emerald-100">
+            {l1 && <><b className="text-white font-semibold">{humanTeam(sel.team1)}</b> {l1}</>}
+            {l1 && l2 && <span className="text-emerald-300"> · </span>}
+            {l2 && <><b className="text-white font-semibold">{humanTeam(sel.team2)}</b> {l2}</>}
+          </div>
+        ) : (
+          <div className="text-[11px] leading-tight text-emerald-100 truncate">Click a green slot · amber = back-to-back · striped = busy</div>
+        )}
       </div>
       <div className="flex flex-col gap-1 flex-shrink-0 justify-center">
         {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100">Unschedule</button>}
@@ -709,7 +726,7 @@ export function TimelineView(p: ViewsProps) {
         {/* While a game is picked up, its bar floats over the bottom of the board so the
             chips row keeps its width and the bar is always in view. */}
         {/* While dragging, the bar is see-through to the pointer so the slots under it still take the drop. */}
-        {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} onCancel={() => setSelId(null)} /></div>}
+        {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} teamCount={teamCount} onCancel={() => setSelId(null)} /></div>}
         <div ref={boardRef} className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
           {across ? (
             <div className="grid" style={{ gridTemplateColumns: `${allTimesMin ? TIME_W_MIN : TIME_W} ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
@@ -977,7 +994,11 @@ export function TimelineView(p: ViewsProps) {
         className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none cursor-grab active:cursor-grabbing ${done ? 'opacity-70' : ''}`}
         style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `3px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: on ? `0 0 0 2px ${c}66` : undefined }}>
         <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
-        <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>{humanTeam(g.team1)} v {humanTeam(g.team2)}</span>
+        <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>
+          {humanTeam(g.team1)}{teamCount[teamKey(g.division, g.team1)] ? <span className={on ? 'text-slate-400' : 'text-slate-400'}> ({teamCount[teamKey(g.division, g.team1)]})</span> : null}
+          {' v '}
+          {humanTeam(g.team2)}{teamCount[teamKey(g.division, g.team2)] ? <span className="text-slate-400"> ({teamCount[teamKey(g.division, g.team2)]})</span> : null}
+        </span>
       </div>
     )
     return (
