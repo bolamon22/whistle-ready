@@ -8,7 +8,7 @@ keywords: photographer, book a photographer, photo package, player photos, video
 ---
 Photographers credentialed by the organizer list their packages on our website. You send a request, and the photographer contacts you directly to confirm price and details.
 
-**Where:** on the **Gallery** page, tap **Book photo & video**, or tap **Book** on a photographer's card under it.
+**Where:** the **Book photo & video** page (/photographers). You can also reach it from the **Gallery** page with **Book photo & video**.
 
 1. Open **Photo & video** to see every photographer. Tap **Portfolio** to see their work, or **Book** to open their page.
 2. On their page, check **Packages**, then go to **Request a shoot**.
