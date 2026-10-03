@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions } from '@/lib/formSubmissions'
 
 // Staff: "work at our event" applications for THIS tournament (rows in
 // "OrgFormSubmission" tagged with the tournamentId — see src/lib/formSubmissions.ts).
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireStaff()
+  const gate = await requireFeature('staff_applications')
   if (!gate.ok) return gate.res
   const orgId = await tournamentOrgId(params.id)
   if (!orgId) return NextResponse.json({ submissions: [] }, { status: 404 })

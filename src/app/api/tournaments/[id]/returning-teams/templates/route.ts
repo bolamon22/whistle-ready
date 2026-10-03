@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 import { listInviteTemplates, saveInviteTemplate, deleteInviteTemplate } from '@/lib/inviteTemplateStore'
 
 // Bo's saved invite letters. Stored PER ORG, not per tournament — the tournament
@@ -11,14 +11,14 @@ function orgFor(gate: { role?: string; orgId?: string | null }, override?: unkno
 }
 
 export async function GET(req: Request) {
-  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const gate = await requireFeature('tournament_people'); if (!gate.ok) return gate.res
   const orgId = orgFor(gate, new URL(req.url).searchParams.get('viewOrgId'))
   if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 400 })
   return NextResponse.json({ templates: await listInviteTemplates(orgId) })
 }
 
 export async function PUT(req: Request) {
-  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const gate = await requireFeature('tournament_people'); if (!gate.ok) return gate.res
   let payload: { key?: unknown; label?: unknown; subject?: unknown; body?: unknown; viewOrgId?: unknown } = {}
   try { payload = await req.json() } catch { /* validated below */ }
   const orgId = orgFor(gate, payload.viewOrgId)
@@ -35,7 +35,7 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const gate = await requireFeature('tournament_people'); if (!gate.ok) return gate.res
   const url = new URL(req.url)
   const orgId = orgFor(gate, url.searchParams.get('viewOrgId'))
   if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 400 })

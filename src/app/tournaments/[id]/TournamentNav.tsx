@@ -96,6 +96,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/travel`,               label: 'Travel & hotels',        sect: 'Teams & players' },
       { href: `${base}/roster`,               label: 'Staff roster',           sect: 'Staff & officials' },
       { href: `${base}/staff-applications`,   label: 'Staff applications',     sect: 'Staff & officials' },
+      { href: `${base}/pay-summary`,          label: 'Staff pay',              sect: 'Staff & officials' },
       // Vendors sit here rather than alone: a booth application is the same
       // shape as a press pass — an outside party asking for access.
       { href: `${base}/media-requests`,       label: 'Media credentials',      sect: 'Media & vendors' },
@@ -118,6 +119,9 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const { status } = useSession()
   const { effectiveRole } = useRole()
   const canOpen = (href: string) => status !== 'authenticated' || roleCanAccess(effectiveRole, href)
+  // The name and logo go to the first page this role can open: the dashboard for most,
+  // the Assigner for an assigner (who has no tournament dashboard).
+  const home = [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/assignments`].find(canOpen) ?? `${base}/dashboard`
   const groups: NavGroup[] = allGroups
     .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href)) } : g)
     .filter(g => g.href ? canOpen(g.href) : (g.items?.length ?? 0) > 0)
@@ -160,14 +164,14 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       <div className="sm:hidden px-3 pt-3">
         {!collapsed ? (
           <div className="flex items-start gap-2.5">
-            <Link href={`${base}/dashboard`} className="flex-shrink-0">
+            <Link href={home} className="flex-shrink-0">
               {logo
                 ? <img src={logo} alt="logo" className={`h-10 w-10 rounded-lg p-1 ${LOGO_TILE}`} />
                 : <div className="h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
               }
             </Link>
             <div className="min-w-0 flex-1">
-              <Link href={`${base}/dashboard`} className="block text-[15px] font-bold text-white leading-snug line-clamp-2">{name}</Link>
+              <Link href={home} className="block text-[15px] font-bold text-white leading-snug line-clamp-2">{name}</Link>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400 min-w-0">
                 {dateStr && <span className="truncate">{dateStr}</span>}
                 {countdown && <span className={`flex-shrink-0 px-1.5 py-px rounded-full font-semibold ${countdown.color}`}>{countdown.label}</span>}
@@ -183,7 +187,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Link href={`${base}/dashboard`} className="flex items-center gap-2 min-w-0 flex-1">
+            <Link href={home} className="flex items-center gap-2 min-w-0 flex-1">
               {logo && <img src={logo} alt="" className={`h-7 w-7 rounded-lg p-0.5 flex-shrink-0 ${LOGO_TILE}`} />}
               <span className="text-sm font-semibold text-white truncate">{name}</span>
             </Link>
@@ -247,7 +251,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
           <div className="flex items-center gap-3 min-w-0">
 
             {/* Logo */}
-            <Link href={`${base}/dashboard`} className="flex-shrink-0">
+            <Link href={home} className="flex-shrink-0">
               {logo
                 ? <img src={logo} alt="logo" className={`h-12 w-12 rounded-xl p-1.5 hover:border-white/40 transition-colors ${LOGO_TILE}`} />
                 : <div className="h-12 w-12 rounded-xl border border-white/10 bg-white/5 flex-shrink-0" />
@@ -259,7 +263,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
                 <Link href="/" className="hover:text-teal-400 transition-colors">Tournaments</Link>
                 <span className="mx-1 opacity-40">/</span>
               </div>
-              <Link href={`${base}/dashboard`}
+              <Link href={home}
                 className="text-lg font-bold text-white leading-tight hover:text-teal-300 transition-colors block truncate">
                 {name}
               </Link>
@@ -299,7 +303,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         {/* Tab bar */}
         <div className="flex gap-0 flex-wrap items-center">
           {collapsed && (
-            <Link href={`${base}/dashboard`} className="flex items-center gap-2 mr-3 py-2 min-w-0">
+            <Link href={home} className="flex items-center gap-2 mr-3 py-2 min-w-0">
               {logo && <img src={logo} alt="" className={`h-7 w-7 rounded-lg p-0.5 flex-shrink-0 ${LOGO_TILE}`} />}
               <span className="text-xs font-semibold text-white truncate max-w-[160px]">{name}</span>
             </Link>

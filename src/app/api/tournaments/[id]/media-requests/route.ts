@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 import { tournamentOrgId, orgById, orgLogoUrl } from '@/lib/org'
 import { listSubmissions, deleteSubmission, getSubmission, setSubmissionStatus, ensurePassToken } from '@/lib/formSubmissions'
 import { orgBaseUrl } from '@/lib/orgDomains'
@@ -14,7 +14,7 @@ import { prisma } from '@/lib/db'
 // route -- same gate, same status machine, same token -- because a credential is
 // the same review shape as a booth, minus the money.
 async function gateForTournament(id: string) {
-  const gate = await requireStaff()
+  const gate = await requireFeature('tournament_people')
   if (!gate.ok) return { res: gate.res }
   const orgId = await tournamentOrgId(id)
   if (!orgId) return { res: NextResponse.json({ error: 'Tournament not found', submissions: [] }, { status: 404 }) }

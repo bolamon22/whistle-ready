@@ -6,6 +6,7 @@ import { formatDate } from '@/lib/utils'
 import { Users, Calendar, Clock, Wallet, Play, Square } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import { eventDayList } from '@/lib/eventDays'
+import IfCanOpen from '@/components/IfCanOpen'
 
 interface Worker { id:string;name:string;defaultRole:string;hourlyRate:number|null }
 interface TimeEntry { id:string;workerId:string;date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;notes:string|null;isManualEdit:boolean;worker:Worker }
@@ -89,14 +90,18 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
           className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
           <Calendar size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Availability
         </Link>
-        <Link href={`/tournaments/${params.id}/time-entries`}
-          className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-teal-600 text-teal-700 transition-colors whitespace-nowrap">
-          <Clock size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Time Entries
-        </Link>
-        <Link href={`/tournaments/${params.id}/pay-summary`}
-          className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
-          <Wallet size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Pay Summary
-        </Link>
+        <IfCanOpen href={`/tournaments/${params.id}/time-entries`}>
+          <Link href={`/tournaments/${params.id}/time-entries`}
+            className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-teal-600 text-teal-700 transition-colors whitespace-nowrap">
+            <Clock size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Time Entries
+          </Link>
+        </IfCanOpen>
+        <IfCanOpen href={`/tournaments/${params.id}/pay-summary`}>
+          <Link href={`/tournaments/${params.id}/pay-summary`}
+            className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
+            <Wallet size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Pay Summary
+          </Link>
+        </IfCanOpen>
       </div>
       <div className="page-header"><div><h1 className="section-title">Hourly Staff Time</h1><p className="text-sm text-slate-500 mt-1">Athletic Trainers &amp; Field Ops — tap Start/Stop to track hours</p></div></div>
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 import { tournamentOrgId, orgById } from '@/lib/org'
 import { revalidatePath } from 'next/cache'
 import {
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
 // the public can.
 
 async function gate(id: string) {
-  const g = await requireStaff()
+  const g = await requireFeature('tournament_people')
   if (!g.ok) return { res: g.res }
   const orgId = await tournamentOrgId(id)
   if (!orgId) return { res: NextResponse.json({ error: 'Tournament not found' }, { status: 404 }) }

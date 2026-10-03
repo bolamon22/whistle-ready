@@ -40,7 +40,19 @@ async function withPlaced(list: any[]) {
     _count: { _all: true },
   })
   const placed = new Map(rows.map((r: any) => [r.tournamentId as string, r._count._all as number]))
-  return list.map(t => ({ ...t, _count: { ...t._count, placedGames: placed.get(t.id) ?? 0 } }))
+  // _count.reffedGames: games with at least their refCount of officials (ref1/ref2/ref3)
+  // assigned, for the assigner's home ("198 games · 120 reffed"). Scorekeepers don't count.
+  const reffed = new Map<string, number>()
+  try {
+    const ids = list.map(t => t.id)
+    const rr = await prisma.$queryRawUnsafe<{ tournamentId: string; n: number | bigint }[]>(
+      `SELECT g."tournamentId" AS "tournamentId", COUNT(*) AS n FROM "Game" g
+         JOIN (SELECT "gameId", COUNT(*) AS c FROM "Assignment" WHERE "role" LIKE 'ref%' GROUP BY "gameId") a ON a."gameId" = g.id
+        WHERE g."tournamentId" IN (${ids.map(() => '?').join(',')}) AND a.c >= g."refCount"
+        GROUP BY g."tournamentId"`, ...ids)
+    for (const r of rr) reffed.set(r.tournamentId, Number(r.n))
+  } catch (e) { console.error('reffedGames', e) }
+  return list.map(t => ({ ...t, _count: { ...t._count, placedGames: placed.get(t.id) ?? 0, reffedGames: reffed.get(t.id) ?? 0 } }))
 }
 
 export async function GET(req: Request) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, deleteSubmission } from '@/lib/formSubmissions'
 
@@ -10,7 +10,7 @@ import { listSubmissions, deleteSubmission } from '@/lib/formSubmissions'
 // no approve step and nothing to charge; it exists so the organizer can answer
 // "who did we send to your field on Saturday" without asking anyone.
 async function gate(id: string) {
-  const g = await requireStaff()
+  const g = await requireFeature('tournament_people')
   if (!g.ok) return { res: g.res }
   const orgId = await tournamentOrgId(id)
   if (!orgId) return { res: NextResponse.json({ error: 'Tournament not found', submissions: [] }, { status: 404 }) }

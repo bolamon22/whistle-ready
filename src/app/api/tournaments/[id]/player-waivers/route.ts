@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff, requireDirector } from '@/lib/apiAuth'
+import { requireDirector, requireFeature } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, countSubmissions, teamCounts, getSubmission, updateSubmissionData, setCheckIn, clearCheckIns, countCheckedIn, ensurePassToken, setArchived, deleteSubmission } from '@/lib/formSubmissions'
 import { playerPassEnabled } from '@/lib/playerPass'
@@ -28,7 +28,7 @@ const EDITABLE = [
 ] as const
 
 async function gateForTournament(id: string) {
-  const gate = await requireStaff()
+  const gate = await requireFeature('tournament_people')
   if (!gate.ok) return { res: gate.res }
   const orgId = await tournamentOrgId(id)
   if (!orgId) return { res: NextResponse.json({ error: 'Tournament not found' }, { status: 404 }) }

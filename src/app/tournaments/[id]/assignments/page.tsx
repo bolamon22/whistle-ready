@@ -109,7 +109,8 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Link href={`/tournaments/${params.id}/scheduler`} className="text-xs text-teal-600 hover:text-teal-800 hover:underline">← Scheduler</Link>
+              {/* The assigner works from the Assigner board, not the Scheduler (which that role can't open). */}
+              <Link href={`/tournaments/${params.id}`} className="text-xs text-teal-600 hover:text-teal-800 hover:underline">← Assigner</Link>
             </div>
             <h1 className="text-2xl font-bold text-slate-800">Assignments</h1>
             <p className="text-sm text-slate-400 mt-0.5">

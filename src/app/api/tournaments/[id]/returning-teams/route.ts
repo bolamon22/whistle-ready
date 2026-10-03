@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 
 // Who played before and hasn't signed up yet. `from` takes one id or several
 // comma-separated (Bo, Sep 10: invite every past team at once) — clubs are then
@@ -10,7 +10,7 @@ const norm = (x: unknown) => String(x ?? '').trim().toLowerCase()
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
-  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const gate = await requireFeature('tournament_people'); if (!gate.ok) return gate.res
   const { searchParams } = new URL(req.url)
   const fromIds = [...new Set(String(searchParams.get('from') || '').split(',').map(s => s.trim()).filter(Boolean))]
   if (!fromIds.length) return NextResponse.json({ error: 'from param required' }, { status: 400 })

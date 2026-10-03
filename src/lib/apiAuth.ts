@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { cookies } from 'next/headers'
 import { authOptions } from '@/lib/auth'
 import { PREVIEW_ROLES, canSeeMoney, canSeeStaffPay } from '@/lib/roleScope'
+import { roleHasFeature } from './routeAccess'
 
 // Shared authorization for API route handlers.
 //
@@ -97,6 +98,18 @@ export async function requireStaffPay(): Promise<AuthResult> {
   if ('res' in b) return { ok: false, res: b.res }
   if (canSeeStaffPay(b.role)) return ok(b.session, b.role)
   return { ok: false, res: NextResponse.json({ error: 'Pay access required' }, { status: 403 }) }
+}
+
+/** Staff whose role has this feature in role-permissions.json, the same switch that
+ *  decides which pages they can open. A page being hidden is not enough when its
+ *  data is one fetch away: the assigner is staff, but has no business reading
+ *  player waivers (minors' details) or vendor and media applications. */
+export async function requireFeature(feature: string): Promise<AuthResult> {
+  const b = await base()
+  if ('res' in b) return { ok: false, res: b.res }
+  if (b.role === 'admin') return ok(b.session, b.role)
+  if (!EXTERNAL_ROLES.includes(b.role) && b.role && roleHasFeature(b.role, feature)) return ok(b.session, b.role)
+  return { ok: false, res: NextResponse.json({ error: 'Your role does not have access to this' }, { status: 403 }) }
 }
 
 /** Tournament director (or admin) only — for destructive or high-trust actions. */

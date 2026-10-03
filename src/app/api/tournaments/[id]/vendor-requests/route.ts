@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, deleteSubmission, getSubmission, setSubmissionStatus, ensurePassToken } from '@/lib/formSubmissions'
 import { orgById, orgLogoUrl } from '@/lib/org'
@@ -12,7 +12,7 @@ import { prisma } from '@/lib/db'
 // Staff: vendor requests for THIS tournament (rows in "OrgFormSubmission" tagged with
 // the tournamentId — see src/lib/formSubmissions.ts).
 async function gateForTournament(id: string) {
-  const gate = await requireStaff()
+  const gate = await requireFeature('tournament_people')
   if (!gate.ok) return { res: gate.res }
   const orgId = await tournamentOrgId(id)
   if (!orgId) return { res: NextResponse.json({ error: 'Tournament not found', submissions: [] }, { status: 404 }) }

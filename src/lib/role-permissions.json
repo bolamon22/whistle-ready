@@ -18,10 +18,21 @@
     },
     {
       "key": "tournament_schedule",
-      "label": "Schedule & Games",
+      "label": "Assigner & games",
       "group": "Tournaments",
       "routes": [
         "/tournaments/*"
+      ]
+    },
+    {
+      "key": "tournament_setup",
+      "label": "Setup, divisions & scheduler",
+      "group": "Tournaments",
+      "routes": [
+        "/tournaments/*/builder",
+        "/tournaments/*/divisions",
+        "/tournaments/*/scheduler",
+        "/tournaments/*/event-page"
       ]
     },
     {
@@ -91,12 +102,11 @@
     },
     {
       "key": "tournament_people",
-      "label": "Waivers, applications & club contacts",
+      "label": "Waivers, media, vendors & club contacts",
       "group": "Registrations",
       "routes": [
         "/tournaments/*/player-waivers",
         "/tournaments/*/coach-waivers",
-        "/tournaments/*/staff-applications",
         "/tournaments/*/media-requests",
         "/tournaments/*/photo-requests",
         "/tournaments/*/vendor-requests",
@@ -104,6 +114,14 @@
         "/tournaments/*/returning-teams",
         "/tournaments/*/broadcast",
         "/tournaments/*/chirp-insights"
+      ]
+    },
+    {
+      "key": "staff_applications",
+      "label": "Staff applications",
+      "group": "Staff",
+      "routes": [
+        "/tournaments/*/staff-applications"
       ]
     },
     {
@@ -130,6 +148,14 @@
       "group": "Admin",
       "routes": [
         "/admin"
+      ]
+    },
+    {
+      "key": "org_admin",
+      "label": "Organization admin (users, website, forms, rules, assets)",
+      "group": "Admin",
+      "routes": [
+        "/dashboard/org"
       ]
     },
     {
@@ -218,11 +244,14 @@
       "game_scorekeeper": true,
       "social_scheduler": true,
       "staff_gameday": true,
-      "tournament_people": true
+      "tournament_people": true,
+      "tournament_setup": true,
+      "staff_applications": true,
+      "org_admin": true
     },
     "assigner": {
       "tournaments_list": true,
-      "tournament_dashboard": true,
+      "tournament_dashboard": false,
       "tournament_schedule": true,
       "tournament_roster": true,
       "tournament_availability": true,
@@ -239,11 +268,14 @@
       "cd_players": false,
       "cd_schedule": false,
       "cd_billing": false,
-      "tournament_scores": true,
-      "game_scorekeeper": true,
+      "tournament_scores": false,
+      "game_scorekeeper": false,
       "social_scheduler": false,
-      "staff_gameday": true,
-      "tournament_people": true
+      "staff_gameday": false,
+      "tournament_people": false,
+      "tournament_setup": false,
+      "staff_applications": true,
+      "org_admin": false
     },
     "scheduler": {
       "tournaments_list": true,
@@ -267,7 +299,10 @@
       "tournament_scores": true,
       "game_scorekeeper": true,
       "social_scheduler": false,
-      "tournament_people": false
+      "tournament_people": false,
+      "tournament_setup": true,
+      "staff_applications": false,
+      "org_admin": false
     },
     "coach": {
       "tournaments_list": false,
@@ -291,7 +326,10 @@
       "tournament_scores": false,
       "game_scorekeeper": false,
       "social_scheduler": false,
-      "tournament_people": false
+      "tournament_people": false,
+      "tournament_setup": false,
+      "staff_applications": false,
+      "org_admin": false
     },
     "parent": {
       "tournaments_list": false,
@@ -315,7 +353,10 @@
       "tournament_scores": false,
       "game_scorekeeper": false,
       "social_scheduler": false,
-      "tournament_people": false
+      "tournament_people": false,
+      "tournament_setup": false,
+      "staff_applications": false,
+      "org_admin": false
     },
     "club_director": {
       "tournaments_list": false,
@@ -339,7 +380,10 @@
       "tournament_scores": false,
       "game_scorekeeper": false,
       "social_scheduler": false,
-      "tournament_people": false
+      "tournament_people": false,
+      "tournament_setup": false,
+      "staff_applications": false,
+      "org_admin": false
     },
     "staff": {
       "tournaments_list": false,
@@ -364,7 +408,10 @@
       "game_scorekeeper": true,
       "staff_gameday": true,
       "social_scheduler": false,
-      "tournament_people": false
+      "tournament_people": false,
+      "tournament_setup": false,
+      "staff_applications": false,
+      "org_admin": false
     }
   }
 }

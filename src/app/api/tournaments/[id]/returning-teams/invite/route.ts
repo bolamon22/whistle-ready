@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireFeature } from '@/lib/apiAuth'
 import { runReturningInvite, type InviteClub } from '@/lib/returningInvite'
 import { OFFICE_CC } from '@/lib/email'
 import { createScheduled } from '@/lib/commSchedule'
@@ -11,7 +11,7 @@ import { createScheduled } from '@/lib/commSchedule'
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
-  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const gate = await requireFeature('tournament_people'); if (!gate.ok) return gate.res
   const body = await req.json() as {
     clubs: InviteClub[]
     subjectTemplate?: string

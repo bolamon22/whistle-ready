@@ -183,8 +183,10 @@ export async function middleware(req: NextRequest) {
     requestHeaders.set('x-preview-org', previewOrgCookie)
   }
 
-  // All-role routes
-  if (ALL_ROLES_ROUTES.some(r => pathname.startsWith(r))) return NextResponse.next({ request: { headers: requestHeaders } })
+  // All-role routes. /dashboard/ is there so every role reaches its own home, but
+  // /dashboard/org is the org admin hub (users, website, forms, rules, assets), so it
+  // falls through to the role check instead of opening for an assigner or scheduler.
+  if (ALL_ROLES_ROUTES.some(r => pathname.startsWith(r)) && !pathname.startsWith('/dashboard/org')) return NextResponse.next({ request: { headers: requestHeaders } })
 
   // Admin always has access to /admin
   if (realRole === 'admin' && pathname.startsWith('/admin')) return NextResponse.next({ request: { headers: requestHeaders } })
