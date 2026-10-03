@@ -117,6 +117,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [eventDays, setEventDays]       = useState<string[]>([])  // the tournament's own start..end dates
   const [increment, setIncrement]       = useState(30)
   const [storedVenuesRaw, setStoredVenuesRaw] = useState<any[]>([])
+  // Name and logo for the nav bar, which was rendered with neither and showed a blank title.
+  const [tMeta, setTMeta] = useState<{ name: string; logoUrl?: string }>({ name: '' })
   const [dayAvail, setDayAvail] = useState<any[]>([])  // saved per-day field availability (source of truth = venue record)
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
@@ -248,6 +250,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const allGames: Game[] = Array.isArray(gData) ? gData : (gData.games ?? [])
       setGames(allGames)
       if (cData && typeof cData === 'object' && !cData.error) setDivColorMap(cData)
+      if (tData && typeof tData.name === 'string') setTMeta({ name: tData.name, logoUrl: tData.logoUrl || undefined })
       if (tData.scheduleIncrement) setIncrement(Number(tData.scheduleIncrement))
 
       const venueList: any[] = vData.venues ?? []
@@ -584,27 +587,34 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     if (!swapMode) return
     if (!swapSourceId) { setSwapSourceId(gameId); toast('Now click the game to swap with', { icon: <RefreshCw size={16} /> }); return }
     if (swapSourceId === gameId) { setSwapSourceId(null); return }
-    const a = games.find(g => g.id === swapSourceId)
-    const b = games.find(g => g.id === gameId)
-    if (!a || !b) { setSwapSourceId(null); return }
-    Promise.all([
-      fetch(`/api/tournaments/${params.id}/games/${a.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: b.date, startTime: b.startTime, location: b.location }),
-      }),
-      fetch(`/api/tournaments/${params.id}/games/${b.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: a.date, startTime: a.startTime, location: a.location }),
-      }),
-    ]).then(() => {
+    swapGames(swapSourceId, gameId)
+    setSwapSourceId(null)
+  }
+
+  // Two placed games trade date, time and field. Shared by the Grid's swap mode and
+  // the Board (drag a game onto another, or Swap on the moving bar).
+  async function swapGames(aId: string, bId: string) {
+    const a = games.find(g => g.id === aId)
+    const b = games.find(g => g.id === bId)
+    if (!a || !b || a.id === b.id) return
+    setSaving(true)
+    const send = (id: string, to: Game) => fetch(`/api/tournaments/${params.id}/games/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: to.date, startTime: to.startTime, location: to.location }),
+    })
+    const [ra, rb] = await Promise.all([send(a.id, b), send(b.id, a)])
+    if (ra.ok && rb.ok) {
       setGames(prev => prev.map(g => {
         if (g.id === a.id) return { ...g, date: b.date, startTime: b.startTime, location: b.location }
         if (g.id === b.id) return { ...g, date: a.date, startTime: a.startTime, location: a.location }
         return g
       }))
-      toast.success('Games swapped!')
-    })
-    setSwapSourceId(null)
+      toast.success(`Swapped ${a.gameNumber} and ${b.gameNumber}`)
+    } else {
+      toast.error('Swap did not save. Reloading the board.')
+      fetch(`/api/tournaments/${params.id}/games`).then(r => r.ok ? r.json() : null).then(d => { if (d) setGames(Array.isArray(d) ? d : (d.games ?? [])) }).catch(() => {})
+    }
+    setSaving(false)
   }
 
   async function publishSchedule() {
@@ -1192,7 +1202,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50">
-      <TournamentNav id={params.id} />
+      <TournamentNav id={params.id} name={tMeta.name} logoUrl={tMeta.logoUrl} />
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin h-8 w-8 border-2 border-teal-600 border-t-transparent rounded-full" />
       </div>
@@ -1201,7 +1211,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
-      <TournamentNav id={params.id} />
+      <TournamentNav id={params.id} name={tMeta.name} logoUrl={tMeta.logoUrl} />
       <Toaster position="top-right" />
 
       {/* A pool short a team is short of games for everyone it was drawn
@@ -2134,6 +2144,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             onToggleClosed: openCloseDialog,
             lotOnTop: boardLotTop,
             onLotOnTop: setBoardLotTop,
+            onSwap: swapGames,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()

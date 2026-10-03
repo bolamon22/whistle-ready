@@ -60,6 +60,8 @@ export interface ViewsProps {
   /** Parking lot docked across the top of the board instead of the left rail (the Grid has had this; Bo flips between the two). */
   lotOnTop?: boolean
   onLotOnTop?: (top: boolean) => void
+  /** Two placed games trade date, time and field (the Grid's swap, on the Board). */
+  onSwap?: (aId: string, bId: string) => Promise<void> | void
   /** Field closed at this start time on the active day (all day or a window): nothing can be placed there. */
   isFieldClosed?: (fullName: string, time: string) => boolean
   /** Header text when any part of the day is closed ("Closed today", "Closed from 1:00 PM"); null when open. */
@@ -335,7 +337,7 @@ function useCounts(games: SGame[], divisions: string[]) {
   }, [games, divisions])
 }
 
-function SelectionBar({ p, sel, teamCount, onCancel }: { p: ViewsProps; sel: SGame; teamCount: Record<string, number>; onCancel: () => void }) {
+function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle }: { p: ViewsProps; sel: SGame; teamCount: Record<string, number>; onCancel: () => void; swapArmed: boolean; onSwapToggle: () => void }) {
   const placed = !!(sel.date && sel.startTime && sel.location)
   // Second line: each team's load, so a compact row never has to be opened to see it.
   // "3 games · 2 today" counts placed games over the whole event and on this day.
@@ -353,7 +355,9 @@ function SelectionBar({ p, sel, teamCount, onCancel }: { p: ViewsProps; sel: SGa
       title={`${humanTeam(sel.team1)} vs ${humanTeam(sel.team2)} — click a green slot. Amber = back-to-back, striped = team busy.`}>
       <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
         <div className="text-xs leading-tight truncate"><span className="text-emerald-200">{placed ? 'Moving' : 'Placing'}</span> <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b>{sel.pool && <span className="text-emerald-200"> · {sel.pool}</span>}</div>
-        {l1 || l2 ? (
+        {swapArmed ? (
+          <div className="text-[11px] leading-tight text-amber-200 font-semibold">Now click the game to swap with</div>
+        ) : l1 || l2 ? (
           <div className="text-[11px] leading-tight text-emerald-100">
             {l1 && <><b className="text-white font-semibold">{humanTeam(sel.team1)}</b> {l1}</>}
             {l1 && l2 && <span className="text-emerald-300"> · </span>}
@@ -364,6 +368,7 @@ function SelectionBar({ p, sel, teamCount, onCancel }: { p: ViewsProps; sel: SGa
         )}
       </div>
       <div className="flex flex-col gap-1 flex-shrink-0 justify-center">
+        {placed && p.onSwap && <button onClick={onSwapToggle} aria-pressed={swapArmed} title="Swap this game's slot with another game: click Swap, then the other game. Or drag this game onto it." className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${swapArmed ? 'bg-amber-300 text-amber-950 hover:bg-amber-200' : 'bg-emerald-200 text-emerald-950 hover:bg-emerald-100'}`}>{swapArmed ? 'Swapping…' : 'Swap'}</button>}
         {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100">Unschedule</button>}
         <button onClick={onCancel} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800">Cancel</button>
       </div>
@@ -484,6 +489,18 @@ export function TimelineView(p: ViewsProps) {
   const { byGame, list: issueList } = useIssueList(p)
   const counts = useCounts(p.games, p.divisions)
   const sel = useMemo(() => p.games.find(g => g.id === selId) ?? null, [p.games, selId])
+  // Swap: "Swap" on the moving bar arms it, the next game clicked trades places with the
+  // selected one. Dragging a placed game onto another placed game does the same.
+  const [swapArmed, setSwapArmed] = useState(false)
+  useEffect(() => { setSwapArmed(false) }, [selId])
+  const [swapOver, setSwapOver] = useState<string | null>(null)
+  const isPlaced = (g: SGame | null | undefined) => !!(g && g.date && g.startTime && g.location)
+  const doSwap = (aId: string, bId: string) => { if (!p.onSwap || aId === bId) return; setSelId(null); setSwapArmed(false); p.onSwap(aId, bId) }
+  // Board zoom (the Grid's −/+), remembered per tournament on this device.
+  const zoomKey = 'wr-sched-zoom:' + (p.prefsKey ?? '')
+  const [zoom, setZoomRaw] = useState(1)
+  useEffect(() => { try { const z = parseFloat(localStorage.getItem(zoomKey) || ''); if (z >= 0.5 && z <= 1.25) setZoomRaw(z) } catch {} }, [zoomKey])
+  const setZoom = (z: number) => { const v = Math.min(1.25, Math.max(0.5, Math.round(z * 100) / 100)); setZoomRaw(v); try { localStorage.setItem(zoomKey, String(v)) } catch {} }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelId(null); setHover(null) } }
@@ -727,15 +744,20 @@ export function TimelineView(p: ViewsProps) {
         {lotTop && renderLotStrip()}
         <div className="px-3 py-1.5 flex items-start gap-2 bg-white border-b border-slate-200 flex-shrink-0">
           <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} /></div>
+          <div className="flex-shrink-0 flex items-center gap-0.5 pt-1 text-slate-500" title="Zoom the board">
+            <button onClick={() => setZoom(zoom - 0.1)} disabled={zoom <= 0.5} aria-label="Zoom out" className="w-6 h-6 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-sm leading-none">−</button>
+            <button onClick={() => setZoom(1)} aria-label="Reset zoom" title="Back to 100%" className="w-10 text-[11px] font-semibold tabular-nums text-center hover:text-slate-900">{Math.round(zoom * 100)}%</button>
+            <button onClick={() => setZoom(zoom + 0.1)} disabled={zoom >= 1.25} aria-label="Zoom in" className="w-6 h-6 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-sm leading-none">+</button>
+          </div>
         </div>
         <div className="flex-1 min-h-0 relative">
         {/* While a game is picked up, its bar floats over the bottom of the board so the
             chips row keeps its width and the bar is always in view. */}
         {/* While dragging, the bar is see-through to the pointer so the slots under it still take the drop. */}
-        {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} teamCount={teamCount} onCancel={() => setSelId(null)} /></div>}
+        {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} teamCount={teamCount} onCancel={() => setSelId(null)} swapArmed={swapArmed} onSwapToggle={() => setSwapArmed(v => !v)} /></div>}
         <div ref={boardRef} className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
           {across ? (
-            <div className="grid" style={{ gridTemplateColumns: `${allTimesMin ? TIME_W_MIN : TIME_W} ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
+            <div className="grid" style={{ gridTemplateColumns: `${allTimesMin ? TIME_W_MIN : TIME_W} ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content', zoom: zoom !== 1 ? zoom : undefined }}>
               {/* header: fields (drag to reorder, minimize to a strip) */}
               {renderCorner()}
               {p.fields.map(f => {
@@ -765,7 +787,7 @@ export function TimelineView(p: ViewsProps) {
               {p.slots.map((s, si) => renderSlotRow(s, si))}
             </div>
           ) : (
-          <div className="grid" style={{ gridTemplateColumns: `116px ${p.slots.map(x => minSlots.has(x) ? MIN_W : slotCol).join(' ')}`, gridTemplateRows: `36px ${p.fields.map(f => minFields.has(f.fullName) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content' }}>
+          <div className="grid" style={{ gridTemplateColumns: `116px ${p.slots.map(x => minSlots.has(x) ? MIN_W : slotCol).join(' ')}`, gridTemplateRows: `36px ${p.fields.map(f => minFields.has(f.fullName) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content', zoom: zoom !== 1 ? zoom : undefined }}>
             {/* header: times (minimize to a strip) */}
             {renderCorner()}
             {p.slots.map((s, i) => minSlots.has(s) ? (
@@ -800,7 +822,7 @@ export function TimelineView(p: ViewsProps) {
                   ))}
                 </ul>
               )}
-              <div className="text-[10px] text-slate-500 mt-1.5">Click to move · drag to another slot</div>
+              <div className="text-[10px] text-slate-500 mt-1.5">Click to move · drag to another slot · drop on a game to swap</div>
             </div>
           )}
         </div>
@@ -917,8 +939,19 @@ export function TimelineView(p: ViewsProps) {
     return (
       <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
         title={closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : undefined}
-        onDragOver={e => { if (!g && !closed) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
-        onDrop={e => { e.preventDefault(); const id = dropTarget(e); const src = id ? p.games.find(x => x.id === id) : null; if (src && !g) place(src, s, f.fullName); setDragId(null) }}
+        onDragOver={e => {
+          if (!g && !closed) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return }
+          // onto another placed game: the two trade places
+          if (g && p.onSwap && draggingPlaced && dragId !== g.id) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (swapOver !== g.id) setSwapOver(g.id) }
+        }}
+        onDragLeave={e => { if (g && swapOver === g.id && !e.currentTarget.contains(e.relatedTarget as Node | null)) setSwapOver(null) }}
+        onDrop={e => {
+          e.preventDefault(); setSwapOver(null)
+          const id = dropTarget(e); const src = id ? p.games.find(x => x.id === id) : null
+          if (src && !g) place(src, s, f.fullName)
+          else if (src && g && src.id !== g.id && isPlaced(src)) doSwap(src.id, g.id)
+          setDragId(null)
+        }}
         onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
         style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined, background: closed && !g ? 'repeating-linear-gradient(135deg,#ffffff 0 8px,#fef2f2 8px 10px)' : undefined }}>
         {g ? renderGameCard(g, mini) : h ? (
@@ -990,15 +1023,15 @@ export function TimelineView(p: ViewsProps) {
       onDragStart: (e: React.DragEvent) => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id); disarmHover() },
       onMouseDown: () => disarmHover(),
       onDragEnd: () => setDragId(null),
-      onClick: (e: React.MouseEvent) => { e.stopPropagation(); setSelId(on ? null : g.id); disarmHover() },
+      onClick: (e: React.MouseEvent) => { e.stopPropagation(); disarmHover(); if (swapArmed && sel && sel.id !== g.id && isPlaced(g)) { doSwap(sel.id, g.id); return } setSelId(on ? null : g.id) },
       onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => { if (dragId || sel) return; const r = e.currentTarget.getBoundingClientRect(); armHover({ id: g.id, x: r.left + r.width / 2, y: r.bottom, below: window.innerHeight - r.bottom > 170 }) },
       onMouseLeave: () => disarmHover(g.id),
     }
     // In a minimized field or time: one line, game number in the division color.
     if (mini) return (
       <div key={g.id} {...handlers}
-        className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none cursor-grab active:cursor-grabbing ${done ? 'opacity-70' : ''}`}
-        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `3px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: on ? `0 0 0 2px ${c}66` : undefined }}>
+        className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${done ? 'opacity-70' : ''}`}
+        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `3px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
         <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
         {/* Count goes before each name: a long name truncates, and the count is the
             part Bo is reading for, so it must never be the part that gets cut. */}
@@ -1012,10 +1045,10 @@ export function TimelineView(p: ViewsProps) {
     )
     return (
       <div key={g.id} {...handlers}
-        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden cursor-grab active:cursor-grabbing transition-shadow ${on ? '' : 'hover:shadow-md'} ${done ? 'opacity-70' : ''}`}
+        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden transition-shadow ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${on ? '' : 'hover:shadow-md'} ${done ? 'opacity-70' : ''}`}
         // Selected: dark card, but the division still shows: its stripe stays and the
         // selection ring takes the division color instead of a generic teal.
-        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : d ? '#f1f5f9' : '#e2e8f0'}`, borderLeft: `${on ? 5 : 4}px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: on ? `0 0 0 3px ${c}66` : undefined }}>
+        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : d ? '#f1f5f9' : '#e2e8f0'}`, borderLeft: `${on ? 5 : 4}px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: swapOver === g.id ? '0 0 0 3px #f59e0b' : on ? `0 0 0 3px ${c}66` : undefined }}>
         <div className={`flex items-center gap-1 text-[9px] leading-none whitespace-nowrap ${on ? 'text-slate-300' : 'text-slate-500'}`}>
           <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
           <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : d ? '#94a3b8' : c }} title={g.division}>{p.divAbbr(g.division)}</span>
