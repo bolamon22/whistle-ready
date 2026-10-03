@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { chirpReply, cleanId, cleanPage, lastQuestion, recentQuestions } from '@/lib/chirp'
 import { cleanConvoId, logPublicTurn, orgScope, publicPrompt, tournamentScope } from '@/lib/publicChirp'
+import { orgBySlug, orgForTournament } from '@/lib/org'
 
 export const runtime = 'nodejs'
 
@@ -43,4 +44,25 @@ export async function POST(req: NextRequest) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: msg }, { status: 500 })
   }
+}
+
+// Who the widget is for, so its header and "Need a person?" line can name the
+// event and the organizer's address before anyone asks anything. Public data only.
+export async function GET(req: NextRequest) {
+  const tournamentId = cleanId(req.nextUrl.searchParams.get('tournamentId'))
+  const orgSlug = cleanId(req.nextUrl.searchParams.get('orgSlug'))
+  try {
+    if (tournamentId) {
+      const [t, org] = await Promise.all([
+        prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true } }),
+        orgForTournament(tournamentId),
+      ])
+      return NextResponse.json({ title: t?.name || '', orgName: org?.name || '', contactEmail: org?.contactEmail || '' })
+    }
+    if (orgSlug) {
+      const org = await orgBySlug(orgSlug)
+      return NextResponse.json({ title: org?.name || '', orgName: org?.name || '', contactEmail: org?.contactEmail || '' })
+    }
+  } catch (e) { console.error('public-chat info error:', e) }
+  return NextResponse.json({ title: '', orgName: '', contactEmail: '' })
 }
