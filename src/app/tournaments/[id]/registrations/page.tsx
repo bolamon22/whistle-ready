@@ -11,7 +11,7 @@ import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { countdownPhrase } from '@/lib/payLetterText'
 import toast, { Toaster } from 'react-hot-toast'
-import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail } from 'lucide-react'
+import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail, Clock } from 'lucide-react'
 import { nameKey } from '@/lib/names'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
@@ -75,11 +75,13 @@ const shortDate = (iso: string) => { const d = new Date(iso); return isNaN(d.get
 
 function calcInvoice(teams: TeamRow[], pricing: Pricing): number { return calcRegFee(teams, pricing) }
 
+type StatTile = { label: string; value: string | number; color: string; title?: string; onClick?: () => void; active?: boolean }
+
 function downloadCSV(registrations: Registration[]) {
   const headers = [
     'Club Name','Club Contact','Email','Phone','Based In','Hotel','Payment Method',
     'Invoice','Discount','Balance Due','Total Paid','Notes','Submitted',
-    'Team #','Team Club','Team Name','Division','Coach Name','Coach Phone','Coach Email'
+    'Team #','Team Club','Team Name','Division','Coach Name','Coach Phone','Coach Email','Waiting list'
   ]
   const rows: string[][] = []
   for (const reg of registrations) {
@@ -92,9 +94,9 @@ function downloadCSV(registrations: Registration[]) {
       new Date(reg.createdAt).toLocaleDateString(),
     ]
     if (reg.teams.length === 0) {
-      rows.push([...base, '','','','','','',''])
+      rows.push([...base, '','','','','','','',''])
     } else {
-      reg.teams.forEach((t, i) => rows.push([...base, String(i+1), t.clubName, t.teamName, t.division, t.coachName, t.coachPhone, t.coachEmail]))
+      reg.teams.forEach((t, i) => rows.push([...base, String(i+1), t.clubName, t.teamName, t.division, t.coachName, t.coachPhone, t.coachEmail, t.waitlisted ? 'Yes' : '']))
     }
   }
   const esc = (v: string) => `"${(v||'').replace(/"/g,'""')}"`
@@ -414,6 +416,7 @@ export default function RegistrationsPage() {
   const [filterSearch, setFilterSearch] = useState('')
   const [filterDivision, setFilterDivision] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
+  const [filterWaitlist, setFilterWaitlist] = useState(false)
 
   // Payment form
   const [payingRegId, setPayingRegId] = useState<string | null>(null)
@@ -525,6 +528,12 @@ export default function RegistrationsPage() {
   }
 
   const totalTeams = registrations.reduce((s, r) => s + r.teams.length, 0)
+  // WAITING LIST. A team entered in a division marked full is recorded but not
+  // invoiced (lib/regStatus), and the only sign of it was a $0 invoice and a box
+  // inside the edit drawer. Bo wants to see which clubs are waiting at a glance
+  // (Oct 3 2026): a tile and filter up top, and a line on each club's card.
+  const waitlistedTeams = registrations.reduce((s, r) => s + r.teams.filter(t => t.waitlisted).length, 0)
+  const waitlistedClubs = registrations.filter(r => r.teams.some(t => t.waitlisted)).length
   const totalInvoiced = registrations.reduce((s, r) => s + r.invoiceAmount - r.discountAmount, 0)
   const totalReceived = registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0)
   const totalBalance = totalInvoiced - totalReceived
@@ -1118,6 +1127,7 @@ export default function RegistrationsPage() {
     if (filterDivision) {
       if (!reg.teams.some(t => t.division === filterDivision)) return false
     }
+    if (filterWaitlist && !reg.teams.some(t => t.waitlisted)) return false
     if (filterPayment) {
       const totalPaid = reg.payments.reduce((s, p) => s + p.amount, 0)
       const balance = reg.invoiceAmount - reg.discountAmount - totalPaid
@@ -1178,16 +1188,27 @@ export default function RegistrationsPage() {
             {(activeTab === 'team' ? [
               { label: 'Clubs', value: registrations.length, color: 'text-teal-600' },
               { label: 'Teams', value: totalTeams, color: 'text-green-600' },
+              ...(waitlistedTeams > 0 ? [{
+                label: 'Waiting list', value: waitlistedTeams, color: 'text-amber-600',
+                title: `${waitlistedTeams} team${waitlistedTeams === 1 ? '' : 's'} from ${waitlistedClubs} club${waitlistedClubs === 1 ? '' : 's'} on the waiting list (not invoiced). Click to show only those clubs.`,
+                onClick: () => setFilterWaitlist(v => !v), active: filterWaitlist,
+              }] : []),
               { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-slate-800' },
               { label: 'Received', value: fmt(totalReceived), color: 'text-green-700' },
               { label: 'Balance', value: fmt(totalBalance), color: totalBalance > 0 ? 'text-red-600' : 'text-green-600' },
-            ] : [
+            ] as StatTile[] : [
               { label: 'Players', value: individualRegs.length, color: 'text-teal-600' },
               { label: 'Paid', value: individualRegs.filter(r => r.paymentStatus === 'paid').length, color: 'text-green-600' },
               { label: 'Pending', value: individualRegs.filter(r => r.paymentStatus === 'pending').length, color: 'text-amber-500' },
               { label: 'Revenue', value: fmt(individualRegs.filter(r => r.paymentStatus === 'paid').reduce((s, r) => s + r.feeTierAmount, 0)), color: 'text-green-700' },
-            ]).map(s => (
-              <div key={s.label} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-center min-w-[70px] last:odd:col-span-2 sm:flex-none">
+            ] as StatTile[]).map(s => s.onClick ? (
+              <button key={s.label} type="button" onClick={s.onClick} title={s.title} aria-pressed={!!s.active}
+                className={`rounded-xl px-3 py-2 text-center min-w-[70px] last:odd:col-span-2 sm:flex-none border transition-colors ${s.active ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-200' : 'bg-white border-amber-200 hover:bg-amber-50'}`}>
+                <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
+                <div className="text-xs text-slate-500">{s.label}</div>
+              </button>
+            ) : (
+              <div key={s.label} title={s.title} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-center min-w-[70px] last:odd:col-span-2 sm:flex-none">
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-slate-500">{s.label}</div>
               </div>
@@ -2087,9 +2108,16 @@ export default function RegistrationsPage() {
               <option value="partial">Partial Payment</option>
               <option value="unpaid">No Payment</option>
             </select>
-            {(filterSearch || filterDivision || filterPayment) && (
+            {waitlistedTeams > 0 && (
+              <button type="button" onClick={() => setFilterWaitlist(v => !v)} aria-pressed={filterWaitlist}
+                title="Show only clubs with a team on the waiting list"
+                className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${filterWaitlist ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600 hover:border-amber-300 hover:text-amber-800'}`}>
+                <Clock size={14} /> Waiting list ({waitlistedClubs})
+              </button>
+            )}
+            {(filterSearch || filterDivision || filterPayment || filterWaitlist) && (
               <button
-                onClick={() => { setFilterSearch(''); setFilterDivision(''); setFilterPayment('') }}
+                onClick={() => { setFilterSearch(''); setFilterDivision(''); setFilterPayment(''); setFilterWaitlist(false) }}
                 className="text-sm text-slate-500 hover:text-slate-700 underline"
               >
                 Clear filters
@@ -2156,6 +2184,18 @@ export default function RegistrationsPage() {
                         </div>
                         <div className="text-sm text-slate-500 truncate">{reg.contactEmail} · {reg.contactPhone}</div>
                         <div className="text-xs text-slate-400 mt-0.5">Registered {reg.createdAt ? new Date(reg.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+                        {(() => {
+                          const waiting = reg.teams.filter(t => t.waitlisted)
+                          if (!waiting.length) return null
+                          const names = waiting.map(t => `${t.teamName}${t.division ? ` (${t.division})` : ''}`).join(', ')
+                          return (
+                            <div title={`On the waiting list, not invoiced: ${names}`}
+                              className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                              <Clock size={11} className="shrink-0" />
+                              <span className="truncate">Waiting list: {names}</span>
+                            </div>
+                          )
+                        })()}
                         {(() => {
                           // Waiver + schedule sends live here; pay + confirm get their own
                           // stat columns on the right (Bo).
@@ -2264,7 +2304,10 @@ export default function RegistrationsPage() {
                             <div key={t.id} className="bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
                               <div className="flex items-baseline justify-between gap-2">
                                 <div className="font-semibold text-slate-800 min-w-0 truncate">{t.teamName}</div>
-                                {t.division && <span className="text-xs text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full flex-shrink-0">{t.division}</span>}
+                                <span className="flex items-center gap-1 flex-shrink-0">
+                                  {t.waitlisted && <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Waiting list</span>}
+                                  {t.division && <span className="text-xs text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full">{t.division}</span>}
+                                </span>
                               </div>
                               {t.clubName && t.clubName !== reg.clubName && <div className="text-xs text-slate-500">{t.clubName}</div>}
                               <Link href={`/tournaments/${tournamentId}/player-waivers?q=${encodeURIComponent(`${t.clubName || reg.clubName} ${t.teamName}`)}`} className="mt-1 block text-xs">
@@ -2298,7 +2341,10 @@ export default function RegistrationsPage() {
                               <tr key={t.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                                 <td className="px-3 py-2">{t.clubName}</td>
                                 <td className="px-3 py-2 font-medium">{t.teamName}</td>
-                                <td className="px-3 py-2">{t.division}</td>
+                                <td className="px-3 py-2">
+                                  {t.division}
+                                  {t.waitlisted && <span className="ml-1.5 inline-block text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full" title="Division full: not invoiced until you give it a spot">Waiting list</span>}
+                                </td>
                                 <td className="px-3 py-2 text-center">
                                   <Link href={`/tournaments/${tournamentId}/player-waivers?q=${encodeURIComponent(`${t.clubName || reg.clubName} ${t.teamName}`)}`}
                                     title={`See the ${t.teamName} players who completed the waiver`}
