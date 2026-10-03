@@ -21,4 +21,5 @@ The link is unique to your registration and can only be used once.
 **Common problems:**
 - **Already claimed** means the team is already linked to an account. Tap **Sign in**.
 - **Link not valid** means the link is wrong or no longer works. Contact the tournament office.
+- Can't find the email? On the sign-in page, tap **Email my portal link** and enter the email on your registration. You'll get the link again.
 - Forgot the password for your existing account? Use **Forgot password?** on the sign-in page first.

@@ -25,6 +25,25 @@ export default function LoginForm({ brandName, brandLogo }: { brandName?: string
   // Show-password toggle (Bo) — long passwords on a phone keyboard are a guess
   // otherwise, and "Invalid email or password" doesn't say which one was wrong.
   const [showPassword, setShowPassword] = useState(false)
+  // "First time signing in?" A club director who never set a password, and
+  // can't find the registration email with their portal link, asks for it here.
+  // The answer is the same whether or not the address is known.
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkEmail, setLinkEmail] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkSent, setLinkSent] = useState(false)
+  const sendPortalLink = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLinkBusy(true)
+    try {
+      await fetch('/api/club-director/portal-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: linkEmail }),
+      })
+    } catch { /* same message either way */ }
+    setLinkBusy(false)
+    setLinkSent(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -110,6 +129,31 @@ export default function LoginForm({ brandName, brandLogo }: { brandName?: string
         <p className="text-center text-sm mt-4">
           <Link href="/forgot" className="text-gray-400 hover:text-gray-200 hover:underline">Forgot password?</Link>
         </p>
+
+        <div className="mt-5 pt-5 border-t border-gray-800">
+          {linkSent ? (
+            <p className="text-sm text-teal-300 bg-teal-950/40 border border-teal-900/40 rounded-xl px-3 py-2">
+              If {linkEmail} is on a team registration, your link is on its way. It lets you set a password and opens your club portal. Check spam if it isn&rsquo;t there in a few minutes.
+            </p>
+          ) : linkOpen ? (
+            <form onSubmit={sendPortalLink} className="space-y-2.5">
+              <p className="text-sm font-semibold text-white">First time signing in?</p>
+              <p className="text-xs text-gray-400 leading-relaxed">Club directors: enter the email on your team registration. We&rsquo;ll send a link that sets your password and opens your club portal.</p>
+              <input required type="email" value={linkEmail} onChange={e => setLinkEmail(e.target.value)} autoFocus
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Email on your registration" autoComplete="email" />
+              <button type="submit" disabled={linkBusy}
+                className="w-full border border-blue-500 text-blue-300 hover:bg-blue-500/10 disabled:opacity-60 font-semibold rounded-xl py-3 text-sm transition-colors">
+                {linkBusy ? 'Sending…' : 'Email my portal link'}
+              </button>
+            </form>
+          ) : (
+            <p className="text-center text-sm text-gray-500">
+              First time signing in?{' '}
+              <button type="button" onClick={() => { setLinkEmail(email); setLinkOpen(true) }} className="text-blue-400 hover:underline font-medium">Email my portal link</button>
+            </p>
+          )}
+        </div>
         <p className="text-center text-sm text-gray-500 mt-4">
           Don&apos;t have an account?{' '}
           <Link href="/register" className="text-blue-400 hover:underline font-medium">Create one</Link>
