@@ -3,7 +3,7 @@ title: Schedule games on fields (Scheduler and Auto-fill)
 category: Setup
 order: 50
 routes: /tournaments/*/scheduler
-keywords: scheduler schedule games place games drag drop grid board timeline teams view auto-fill autofill parking lot unscheduled swap games conflicts back-to-back issues day start day end zoom compact fields
+keywords: move game reschedule change time change field scheduler schedule games place games drag drop grid board timeline teams view auto-fill autofill parking lot unscheduled swap games conflicts back-to-back issues day start day end zoom compact fields
 ---
 The **Scheduler** puts every pool and bracket game on a field, date and time. Games that are not placed yet wait in the **Parking Lot**.
 
@@ -16,6 +16,8 @@ The **Scheduler** puts every pool and bracket game on a field, date and time. Ga
 2. Drag a game onto a field and time. Drag a placed game back to the Parking Lot to unschedule it.
 3. **Scratch** holds up to 4 games while you rearrange.
 4. To swap two placed games, tick **Swap Games**, then click both games.
+
+**To move a game to another time or field:** drag it from where it sits to the new field and time slot. To take it off the schedule, drag it back to the **Parking Lot**.
 
 Changes save as you go.
 
