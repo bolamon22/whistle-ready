@@ -1,8 +1,8 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { Check, Instagram, Globe, MapPin } from 'lucide-react'
-import type { Photographer, PhotoPackage } from '@/lib/photographers'
-import { packagePrice, displayName } from '@/lib/photographers'
+import type { Photographer, PhotoPackage } from '@/lib/photographerProfiles'
+import { packagePrice, displayName } from '@/lib/photographerProfiles'
 
 type OrgEvent = { id: string; name: string; dates: string }
 type Props = {

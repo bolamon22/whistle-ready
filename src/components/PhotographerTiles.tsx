@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, ExternalLink, Camera } from 'lucide-react'
-import type { Photographer } from '@/lib/photographers'
-import { packagePrice, displayName } from '@/lib/photographers'
+import type { Photographer } from '@/lib/photographerProfiles'
+import { packagePrice, displayName } from '@/lib/photographerProfiles'
 
 // One photographer tile, shared by the /photographers index and the gallery page.
 //

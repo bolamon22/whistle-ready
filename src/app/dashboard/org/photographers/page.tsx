@@ -7,7 +7,7 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, Save, ExternalLink, ImagePlus, Camera } from 'lucide-react'
 import GalleryPicker from '@/components/GalleryPicker'
-import { DEFAULT_PACKAGES, slugify } from '@/lib/photographers'
+import { DEFAULT_PACKAGES, slugify } from '@/lib/photographerProfiles'
 import { mediaConfig, commitmentLines } from '@/lib/mediaForm'
 import { Instagram } from 'lucide-react'
 
