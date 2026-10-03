@@ -31,6 +31,31 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
   const scopeKey = tournamentId || `org-${orgSlug || ''}`
   const greeting = useGreeting(scopeKey, open)
 
+  // Keep the chat across pages: a link in an answer moves to that page, and on
+  // tournament pages that remounts this widget, so the conversation lives in
+  // session storage (this tab only, cleared after a few hours of quiet).
+  const STORE = 'chirp-public-chat'
+  const restored = useRef(false)
+  useEffect(() => {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(STORE) || 'null')
+      if (v && Date.now() - (v.at || 0) < 3 * 3600000 && Array.isArray(v.messages)) {
+        setMessages(v.messages)
+        if (v.open) setOpen(true)
+        if (v.scopeKey === scopeKey && v.convoId) convoRef.current = v.convoId
+      }
+    } catch {}
+    restored.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (!restored.current) return
+    try { sessionStorage.setItem(STORE, JSON.stringify({ messages: messages.slice(-30), open, convoId: convoRef.current, scopeKey, at: Date.now() })) } catch {}
+  }, [messages, open, scopeKey])
+  // On a phone the open chat covers the page, so step aside after following a
+  // link; the conversation is still there when they tap Ask Chirp.
+  const onNavigate = () => { if (window.innerWidth < 640) setOpen(false) }
+
   useEffect(() => {
     const q = tournamentId ? `tournamentId=${encodeURIComponent(tournamentId)}` : orgSlug ? `orgSlug=${encodeURIComponent(orgSlug)}` : ''
     if (!q) return
@@ -133,7 +158,7 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
             ) : messages.map((m, i) => (
               <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {m.role === 'assistant' && <ChirpAvatar size={24} />}
-                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.role === 'assistant' ? <ChirpText text={m.content} /> : m.content}</div>
+                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.role === 'assistant' ? <ChirpText text={m.content} onNavigate={onNavigate} /> : m.content}</div>
               </div>
             ))}
             {loading && <div className="flex gap-1 px-1"><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} /></div>}

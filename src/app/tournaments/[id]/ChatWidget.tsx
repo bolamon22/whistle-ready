@@ -37,6 +37,24 @@ export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones 
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { try { setExpanded(localStorage.getItem(EXPAND_KEY) === '1') } catch {} }, [])
+
+  // Keep the conversation if the page reloads; following a link in an answer
+  // uses the client router, so this widget (in the root layout) stays mounted.
+  const STORE = `chirp-staff-chat:${tournamentId || 'app'}`
+  const restored = useRef(false)
+  useEffect(() => {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(STORE) || 'null')
+      if (v && Date.now() - (v.at || 0) < 3 * 3600000 && Array.isArray(v.messages)) { setMessages(v.messages); if (v.open) setOpen(true) }
+    } catch {}
+    restored.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (!restored.current) return
+    try { sessionStorage.setItem(STORE, JSON.stringify({ messages: messages.slice(-30), open, at: Date.now() })) } catch {}
+  }, [messages, open, STORE])
+  const onNavigate = () => { if (window.innerWidth < 640) setOpen(false) }
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
   function toggleExpanded() {
@@ -107,7 +125,7 @@ export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones 
                   <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
                     m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'
                   }`}>
-                    {m.role === 'assistant' ? <ChirpText text={m.content} /> : m.content}
+                    {m.role === 'assistant' ? <ChirpText text={m.content} onNavigate={onNavigate} /> : m.content}
                   </div>
                 </div>
               ))

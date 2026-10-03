@@ -39,6 +39,32 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
   }, [open, guides, tournamentId])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
+
+  // This drawer lives in each page's nav, so following a link in a Chirp answer
+  // remounts it. Keep the Ask Chirp conversation (and the drawer open) across
+  // that in session storage, so the link doesn't end the chat.
+  // TournamentNav mounts this twice (phone and desktop headers, one hidden by
+  // CSS), so only the visible copy restores or saves.
+  const STORE = 'chirp-help-chat'
+  const restored = useRef(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const visible = () => !!triggerRef.current && triggerRef.current.offsetParent !== null
+  useEffect(() => {
+    if (!visible()) return
+    try {
+      const v = JSON.parse(sessionStorage.getItem(STORE) || 'null')
+      if (v && Date.now() - (v.at || 0) < 3 * 3600000 && Array.isArray(v.messages)) {
+        setMessages(v.messages)
+        if (v.open && v.messages.length) { setOpen(true); setTab('ai') }
+      }
+    } catch {}
+    restored.current = true
+  }, [])
+  useEffect(() => {
+    if (!restored.current || !visible()) return
+    try { sessionStorage.setItem(STORE, JSON.stringify({ messages: messages.slice(-30), open: open && tab === 'ai', at: Date.now() })) } catch {}
+  }, [messages, open, tab])
+  const onNavigate = () => { if (window.innerWidth < 640) setOpen(false) }
   useEffect(() => {
     if (!open) return
     const prev = document.body.style.overflow
@@ -74,7 +100,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} title="Help & support" aria-label="Help & support"
+      <button ref={triggerRef} type="button" onClick={() => setOpen(true)} title="Help & support" aria-label="Help & support"
         className="px-3 py-3 text-slate-400 hover:text-white transition-colors flex items-center">
         <HelpCircle size={16} />
       </button>
@@ -161,7 +187,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                   ) : messages.map((m, i) => (
                     <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       {m.role === 'assistant' && <ChirpAvatar size={26} />}
-                      <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.role === 'assistant' ? <ChirpText text={m.content} /> : m.content}</div>
+                      <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>{m.role === 'assistant' ? <ChirpText text={m.content} onNavigate={onNavigate} /> : m.content}</div>
                     </div>
                   ))}
                   {loading && <div className="flex gap-1 px-1"><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} /><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} /></div>}
