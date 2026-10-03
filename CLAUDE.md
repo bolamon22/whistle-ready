@@ -121,6 +121,21 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Chrome stealing frontmost focus blocks clicks on GitHub Desktop (it's read-tier) — re-open GHD or
   use Ctrl+P. GHD may open on a different monitor — use `switch_display`.
 
+### Help pages (Chirp's manual)
+Any change to what a page does, what its buttons are called, or where it lives
+updates that feature's help page in the same commit. A new feature gets a new
+page, tagged with the roles and routes that can open it. If no page clearly
+covers it, add a line to the closest one and say so in your summary to Bo.
+- Pages live in `src/help/*.md`, one topic each, with front matter `title`,
+  `category`, `order`, `routes` (pages it is about, `*` = tournament id; a role
+  sees the page when it can open one of them) and `keywords`. Bold the exact
+  on-screen labels; never describe a button the code doesn't have.
+- `node scripts/build-help.mjs` regenerates `src/lib/helpArticles.generated.ts`
+  (it also runs automatically as `prebuild` on Vercel). Commit both.
+- Coverage: `npx -y esbuild@0.21.5 scripts/help-coverage.ts --bundle --platform=node --outfile=/tmp/hc.js && node /tmp/hc.js --list`
+  prints, per role, the pages with no help page.
+- Renamed a button or menu? grep `src/help` for the old words.
+
 ## Design standard (UI consistency)
 - Icons: lucide-react only — never emoji.
 - Palette: neutral slate base + teal as the single accent; semantic green / red / amber
