@@ -6,8 +6,9 @@ import { Users, Calendar, Clock, Wallet } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import { eventDayList } from '@/lib/eventDays'
 import IfCanOpen from '@/components/IfCanOpen'
+import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
 
-interface Worker { id:string;name:string;defaultRole:string }
+interface Worker { id:string;name:string;defaultRole:string;roles?:string;gender?:string }
 interface Avail { workerId:string;date:string;timeSlots:string }
 interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;logoUrl:string }
 
@@ -19,6 +20,7 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
   const [activeDay,setActiveDay]=useState('')
   const [loading,setLoading]=useState(true)
   const [saving,setSaving]=useState<string|null>(null)
+  const [gender,setGender]=useRefGender(params.id)
 
   async function load(){
     const[tR,wR,aR,gR,rR]=await Promise.all([
@@ -95,6 +97,7 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
   if(!tournament)return<div className="text-red-500">Not found</div>
   const dates=eventDayList(tournament)
 
+  const shown=workers.filter(w=>matchesRefGender(w,gender))
   return(
     <div className="px-0 sm:px-6">
       <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
@@ -127,6 +130,7 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
           <h1 className="section-title">Unavailability</h1>
           <p className="text-sm text-slate-500 mt-1">All rostered staff are <span className="text-emerald-600 font-medium">available by default</span>. Mark anyone who can't work.</p>
         </div>
+        {workers.length>0&&<div className="flex items-center gap-2 text-xs text-slate-400"><RefGenderSelect value={gender} onChange={setGender}/>{gender!=='all'&&<span>{shown.length} of {workers.length}</span>}</div>}
       </div>
 
       {dates.length>0&&(
@@ -142,7 +146,7 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
       ):(<>
         {/* Phones: one card per person — All-day toggle + tappable time-slot chips (no sideways table) */}
         <div className="sm:hidden space-y-2">
-          {workers.map(w=>{
+          {shown.map(w=>{
             const unavail=getUnavail(w.id,activeDay)
             const isAllDayOut=unavail!==undefined&&unavail.length===0
             const isPartial=unavail!==undefined&&unavail.length>0
@@ -187,7 +191,7 @@ export default function AvailabilityPage({ params }: { params:{id:string} }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {workers.map(w=>{
+              {shown.map(w=>{
                 const unavail=getUnavail(w.id,activeDay)
                 // unavail===undefined → available all day (default)
                 // unavail===[] → unavailable ALL day

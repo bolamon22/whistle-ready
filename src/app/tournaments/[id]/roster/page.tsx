@@ -6,6 +6,7 @@ import { certLabel, WORKER_ROLES, isHourlyRole, PAY_METHODS, CERT_LEVELS } from 
 import { Users, Calendar, Clock, Wallet, Link2, Mail, UserPlus, ShieldCheck } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
+import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
 interface RosterEntry { id:string;workerId:string;gameTarget:number;notes:string|null }
@@ -14,7 +15,7 @@ interface InviteForm { email: string; name: string }
 
 const GENDERS = [{ value:'both',label:'Boys & Girls' },{ value:'boys',label:'Boys only' },{ value:'girls',label:'Girls only' }]
 
-type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'
+type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'|'games'
 type SortDir = 'asc'|'desc'
 type ExpandMode = 'profile'|'edit'
 
@@ -102,7 +103,18 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const [addSearch, setAddSearch] = useState('')
   const [addRole, setAddRole] = useState('all')
   const [addCert, setAddCert] = useState('all')
-  const [addGender, setAddGender] = useState('all')
+  // Can ref (boys / girls / both): one value shared with Availability and Pay summary.
+  const [gender, setGender] = useRefGender(params.id)
+  // Confirmed and Available are tabs, not one long page (Oct 2026: Monster Mash has 43
+  // confirmed and a long pool below them, and it was all one scroll).
+  const [tab, setTabRaw] = useState<'confirmed'|'available'>('confirmed')
+  const setTab = (t:'confirmed'|'available') => { setTabRaw(t); setSelected(new Set()); try { localStorage.setItem('wr-roster-tab:'+params.id, t) } catch {} }
+  useEffect(()=>{ try { const t=localStorage.getItem('wr-roster-tab:'+params.id); if(t==='available'||t==='confirmed') setTabRaw(t) } catch {} },[params.id])
+  const [certFilter, setCertFilter] = useState('all')
+  const [gamesFilter, setGamesFilter] = useState<'all'|'none'|'some'>('all')
+  const [infoFilter, setInfoFilter] = useState<'all'|'contact'|'pay'>('all')
+  // games each person is assigned at this tournament (Assigner board), for the Games column and filter
+  const [gameCount, setGameCount] = useState<Record<string,number>>({})
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkField, setBulkField] = useState('')
@@ -114,13 +126,20 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const [editForm, setEditForm] = useState<Record<string,unknown>>({})
 
   async function load() {
-    const [tR,wR,rR] = await Promise.all([
+    const [tR,wR,rR,gR] = await Promise.all([
       fetch(`/api/tournaments/${params.id}`),
       fetch('/api/workers'),
       fetch(`/api/tournaments/${params.id}/roster`),
+      fetch(`/api/tournaments/${params.id}/games`),
     ])
     const t=await tR.json(); const w=await wR.json(); const r=await rR.json()
     setTournament(t); setAllWorkers(w); setRoster(r)
+    try {
+      const g=await gR.json(); const list=Array.isArray(g)?g:(g?.games??[])
+      const c:Record<string,number>={}
+      for (const game of list) for (const a of (game.assignments??[])) if (a?.workerId) c[a.workerId]=(c[a.workerId]??0)+1
+      setGameCount(c)
+    } catch {}
     const t2:Record<string,string>={}
     for (const e of r) t2[e.workerId]=String(e.gameTarget)
     setTargets(t2)
@@ -235,17 +254,26 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const filteredNotOnRoster = notOnRoster
     .filter(w=>addRole==='all'||parseRoles(w).includes(addRole))
     .filter(w=>addCert==='all'||w.certLevel===addCert)
-    .filter(w=>addGender==='all'||!parseRoles(w).includes('ref')||(addGender==='both'?w.gender==='both':(w.gender===addGender||w.gender==='both')))
+    .filter(w=>matchesRefGender(w,gender))
     .filter(w=>!addSearch||w.name.toLowerCase().includes(addSearch.toLowerCase()))
     .sort((a,b)=>a.name.localeCompare(b.name))
 
+  const needsHandleFor = (m:string) => m==='venmo'||m==='zelle'
   const filteredOnRoster = onRoster
     .filter(w=>roleFilter==='all'||parseRoles(w).includes(roleFilter))
+    .filter(w=>certFilter==='all'||(parseRoles(w).includes('ref')&&w.certLevel===certFilter))
+    .filter(w=>matchesRefGender(w,gender))
+    .filter(w=>gamesFilter==='all'||(gamesFilter==='none'?!gameCount[w.id]:!!gameCount[w.id]))
+    .filter(w=>infoFilter==='all'||(infoFilter==='contact'?(!w.phone||!w.email):(!w.payMethod||(needsHandleFor(w.payMethod)&&!w.payHandle))))
     .filter(w=>!search||w.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
+      if(sortKey==='games'){const d=(gameCount[a.id]??0)-(gameCount[b.id]??0);return (sortDir==='asc'?d:-d)||a.name.localeCompare(b.name)}
       const av=String(a[sortKey as keyof Worker]??''), bv=String(b[sortKey as keyof Worker]??'')
       return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av)
     })
+  const confirmedFiltered = !!(search||roleFilter!=='all'||certFilter!=='all'||gender!=='all'||gamesFilter!=='all'||infoFilter!=='all')
+  const clearConfirmed = () => { setSearch('');setRoleFilter('all');setCertFilter('all');setGender('all');setGamesFilter('all');setInfoFilter('all') }
+  const gamesLabel = (id:string) => { const n=gameCount[id]??0; const t=parseInt(targets[id]??'0')||0; return t?`${n} of ${t}`:String(n) }
 
   if (loading) return <div className="text-slate-400 text-center py-12">Loading…</div>
   if (!tournament) return <div className="text-red-500">Not found</div>
@@ -393,26 +421,49 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       </div>
 
       {/* ── On Roster ── */}
-      {onRoster.length > 0 && (
+      {/* Confirmed | Available to add */}
+      <div className="flex items-center gap-1 mb-4 p-1 rounded-xl bg-slate-100 border border-slate-200 w-fit">
+        {([['confirmed',`Confirmed`,onRoster.length,'bg-emerald-500'],['available','Available to add',notOnRoster.length,'bg-slate-400']] as const).map(([k,label,n,dot])=>(
+          <button key={k} onClick={()=>setTab(k)} aria-pressed={tab===k}
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${tab===k?'bg-white shadow-sm text-slate-900':'text-slate-500 hover:text-slate-800'}`}>
+            <span className={`w-2 h-2 rounded-full ${dot}`}/>{label}<span className={`text-xs font-bold px-1.5 rounded-full ${tab===k?'bg-slate-100 text-slate-600':'text-slate-400'}`}>{n}</span>
+          </button>
+        ))}
+      </div>
+
+      {tab==='confirmed' && onRoster.length===0 && (
+        <div className="card px-5 py-10 text-center text-sm text-slate-500">No one is confirmed for this tournament yet. <button onClick={()=>setTab('available')} className="text-teal-700 font-semibold hover:underline">Add staff from the pool</button></div>
+      )}
+      {tab==='confirmed' && onRoster.length > 0 && (
         <div className="mb-6">
           <div className="mb-3 space-y-2">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"/>
-                <span className="font-semibold text-emerald-800 text-sm">Confirmed ({onRoster.length})</span>
+              <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                <input className="input text-sm flex-1 min-w-[160px] sm:flex-none sm:!w-52" placeholder="Search by name…" value={search} onChange={e=>setSearch(e.target.value)}/>
+                <select aria-label="Role" className={`select !w-auto text-sm flex-shrink-0 ${roleFilter!=='all'?'!border-teal-400 !text-teal-800':''}`} value={roleFilter} onChange={e=>{setRoleFilter(e.target.value);setSelected(new Set())}}>
+                  <option value="all">All roles</option>
+                  {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+                <RefGenderSelect value={gender} onChange={v=>{setGender(v);setSelected(new Set())}}/>
+                <select aria-label="Level" className={`select !w-auto text-sm flex-shrink-0 ${certFilter!=='all'?'!border-teal-400 !text-teal-800':''}`} value={certFilter} onChange={e=>setCertFilter(e.target.value)}>
+                  <option value="all">All levels</option>
+                  {CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                <select aria-label="Games" className={`select !w-auto text-sm flex-shrink-0 ${gamesFilter!=='all'?'!border-teal-400 !text-teal-800':''}`} value={gamesFilter} onChange={e=>setGamesFilter(e.target.value as 'all'|'none'|'some')}>
+                  <option value="all">Any games</option>
+                  <option value="none">No games yet</option>
+                  <option value="some">Has games</option>
+                </select>
+                <select aria-label="Missing info" className={`select !w-auto text-sm flex-shrink-0 ${infoFilter!=='all'?'!border-amber-400 !text-amber-800':''}`} value={infoFilter} onChange={e=>setInfoFilter(e.target.value as 'all'|'contact'|'pay')}>
+                  <option value="all">Any info</option>
+                  <option value="contact">No phone/email</option>
+                  <option value="pay">No pay details</option>
+                </select>
               </div>
               <div className="flex items-center gap-3 text-xs text-slate-400">
-                <span>{filteredOnRoster.length} shown</span>
-                {(search||roleFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setSearch('');setRoleFilter('all')}}>Clear filters</button>}
+                <span>{filteredOnRoster.length} of {onRoster.length} shown</span>
+                {confirmedFiltered&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={clearConfirmed}>Clear filters</button>}
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input className="input text-sm flex-1 min-w-0 sm:flex-none sm:!w-56" placeholder="Search by name…" value={search} onChange={e=>setSearch(e.target.value)}/>
-              <label className="text-sm text-slate-500 hidden sm:inline">Role:</label>
-              <select className="select !w-auto text-sm flex-shrink-0" value={roleFilter} onChange={e=>{setRoleFilter(e.target.value);setSelected(new Set())}}>
-                <option value="all">All roles</option>
-                {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
             </div>
           </div>
 
@@ -455,6 +506,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                           <span className="badge bg-white border border-slate-200 text-slate-500">{gLabel(w.gender)}</span>
                         </>}
                         <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</span>
+                        <span className={`badge ${gameCount[w.id]?'bg-sky-50 text-sky-700':'bg-amber-50 text-amber-700'}`}>{gamesLabel(w.id)} game{(gameCount[w.id]??0)===1?'':'s'}</span>
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                         {w.phone&&<a href={`tel:${w.phone}`} className="text-teal-700">{w.phone}</a>}
@@ -487,6 +539,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('name')}>Name {sortArrow('name')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('defaultRole')}>Roles {sortArrow('defaultRole')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('certLevel')}>Cert {sortArrow('certLevel')}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('games')} title="Games assigned at this tournament (of the target, when one is set)">Games {sortArrow('games')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Contact</th>
                   <th className="px-4 py-3"/>
@@ -499,16 +552,16 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   return(
                   <>
                     <tr key={w.id} className={`border-b border-slate-100 ${selected.has(w.id)?'bg-teal-50':isExpanded?'bg-slate-50 border-b-0':'hover:bg-slate-50'}`}>
-                      <td className="px-4 py-3"><input type="checkbox" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/></td>
-                      <td className="px-4 py-3 font-semibold text-slate-900 cursor-pointer hover:text-teal-600 transition-colors" onClick={()=>expand(w,'profile')}>
+                      <td className="px-4 py-2"><input type="checkbox" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/></td>
+                      <td className="px-4 py-2 font-semibold text-slate-900 cursor-pointer hover:text-teal-600 transition-colors" onClick={()=>expand(w,'profile')}>
                         {w.name}{!!w.isAssigner&&<span className="ml-2 badge bg-amber-100 text-amber-700">Assigner</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2">
                         <div className="flex flex-wrap gap-1">
                           {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2">
                         {wRoles.includes('ref')
                           ? <div className="flex flex-col gap-0.5">
                               <span className={`badge w-fit ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
@@ -516,16 +569,19 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                             </div>
                           : <span className="text-slate-400">—</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2">
+                        <span className={`text-sm font-bold tabular-nums ${gameCount[w.id]?'text-slate-800':'text-amber-600'}`}>{gamesLabel(w.id)}</span>
+                      </td>
+                      <td className="px-4 py-2">
                         <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}</span>
                         {w.payHandle && <div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">
+                      <td className="px-4 py-2 text-xs text-slate-500">
                         {w.phone&&<div>{w.phone}</div>}
                         {w.email&&<div>{w.email}</div>}
                         {!w.phone&&!w.email&&'—'}
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
                         <button onClick={()=>expand(w,'profile')} className={`text-xs mr-2 font-medium transition-colors ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-400 hover:text-slate-700'}`}>Profile</button>
                         <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-teal-800 underline':'text-teal-600 hover:text-teal-800'}`}>Edit</button>
                         <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="text-xs text-red-400 hover:text-red-600 transition-colors">Remove</button>
@@ -556,7 +612,10 @@ export default function RosterPage({ params }: { params:{id:string} }) {
       )}
 
       {/* ── Not on roster ── */}
-      {notOnRoster.length > 0 && (
+      {tab==='available' && notOnRoster.length===0 && (
+        <div className="card px-5 py-10 text-center text-sm text-slate-500">Everyone in your staff pool is already on this roster.</div>
+      )}
+      {tab==='available' && notOnRoster.length > 0 && (
         <div className="card overflow-hidden">
           <div className="px-3 sm:px-5 py-3 bg-slate-50 border-b border-slate-100 space-y-2">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -566,7 +625,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               </div>
               <div className="flex items-center gap-3 text-xs text-slate-400">
                 <span>{filteredNotOnRoster.length} shown</span>
-                {(addSearch||addRole!=='all'||addCert!=='all'||addGender!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setAddSearch('');setAddRole('all');setAddCert('all');setAddGender('all')}}>Clear</button>}
+                {(addSearch||addRole!=='all'||addCert!=='all'||gender!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setAddSearch('');setAddRole('all');setAddCert('all');setGender('all')}}>Clear</button>}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -582,13 +641,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   <option value="all">All levels</option>
                   {CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
-                <label className="text-sm text-slate-500 hidden sm:inline">Can ref:</label>
-                <select className="select !w-auto min-w-0 text-sm" value={addGender} onChange={e=>setAddGender(e.target.value)}>
-                  <option value="all">Any</option>
-                  <option value="boys">Boys</option>
-                  <option value="girls">Girls</option>
-                  <option value="both">Both only</option>
-                </select>
+                <RefGenderSelect value={gender} onChange={setGender}/>
               </div>
             </div>
           </div>

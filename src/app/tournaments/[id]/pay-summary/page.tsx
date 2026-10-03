@@ -5,10 +5,11 @@ import { certLabel, formatDate, formatTime, PAY_METHODS, WORKER_ROLES, ALL_ROLES
 import { Users, Calendar, Clock, Wallet, Download, ChevronUp, ChevronDown } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
+import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
 
 interface GameEntry{gameNumber:string;date:string;startTime:string;division:string;location:string;role:string;pay:number}
 interface TERow{date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;hours:number;pay:number}
-interface WS{worker:{id:string;name:string;certLevel:string;defaultRole:string;hourlyRate:number|null;payMethod:string;payHandle:string|null;photoUrl:string|null};games:GameEntry[];timeEntries:TERow[];totalPay:number}
+interface WS{worker:{id:string;name:string;certLevel:string;defaultRole:string;roles?:string;gender?:string;hourlyRate:number|null;payMethod:string;payHandle:string|null;photoUrl:string|null};games:GameEntry[];timeEntries:TERow[];totalPay:number}
 interface Data{summary:WS[];tournamentName:string;tournamentLogo:string}
 interface PayRecord{id:string;workerId:string;amount:number;method:string;paidAt:string;notes:string|null}
 
@@ -23,6 +24,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   const [paying,setPaying]=useState<string|null>(null)
   const [search,setSearch]=useState('')
   const [roleFilter,setRoleFilter]=useState('all')
+  const [gender,setGender]=useRefGender(params.id)
   const [payNote,setPayNote]=useState('')
 
   async function load(){
@@ -71,6 +73,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   const outstanding=total-totalPaid
   const filtered=data.summary
     .filter(ws=>roleFilter==='all'||ws.worker.defaultRole===roleFilter)
+    .filter(ws=>matchesRefGender(ws.worker,gender))
     .filter(ws=>!search||ws.worker.name.toLowerCase().includes(search.toLowerCase()))
 
   return(
@@ -123,10 +126,11 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                 <option value="all">All roles</option>
                 {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
+              <RefGenderSelect value={gender} onChange={setGender}/>
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400">
               <span>{filtered.length} shown</span>
-              {(search||roleFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setSearch('');setRoleFilter('all')}}>Clear filters</button>}
+              {(search||roleFilter!=='all'||gender!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setSearch('');setRoleFilter('all');setGender('all')}}>Clear filters</button>}
             </div>
           </div>
 
