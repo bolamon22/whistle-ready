@@ -773,7 +773,7 @@ export default function StaffPage() {
                         </div>
                       )})}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-2">"Keep this one" moves the other record's history onto it and deletes the duplicate.{p.a.registered&&p.b.registered?' Both have app logins: keep the one they actually sign in with.':''}</p>
+                    <p className="text-[11px] text-slate-400 mt-2">"Keep this one" moves the other record's history onto it and deletes the duplicate.{p.a.registered&&p.b.registered?' Both have app logins: keep the one they signed up with most recently (the one they use now). Afterwards only that email signs in.':''}</p>
                     <button onClick={()=>dismissPair(p)} className="mt-1 text-xs text-slate-500 hover:text-slate-700 font-medium">These are different people</button>
                   </div>
                 ))}

@@ -45,9 +45,13 @@ export async function POST(req: Request) {
   // portal, ID card and assignments would vanish for them. Refuse that direction.
   const remEmail = String(rem.email ?? '').trim().toLowerCase()
   const keepEmail = String(keep.email ?? '').trim().toLowerCase()
+  // When BOTH have logins (Derwin Moore claimed the imported record's invite, then signed
+  // up again under a work email), the organizer picks the one the person uses now; the
+  // other login is left with no staff record, so only the kept email works afterwards.
   if (remEmail && keepEmail && remEmail !== keepEmail) {
     const u = await client.execute({ sql: `SELECT 1 FROM "User" WHERE lower(email) = ? LIMIT 1`, args: [remEmail] })
-    if (u.rows.length) {
+    const k = await client.execute({ sql: `SELECT 1 FROM "User" WHERE lower(email) = ? LIMIT 1`, args: [keepEmail] })
+    if (u.rows.length && !k.rows.length) {
       return NextResponse.json({ error: `${String(rem.name ?? 'That person')} signed up with their own login (${remEmail}). Keep that record instead; merging this way would disconnect their login.` }, { status: 409 })
     }
   }
