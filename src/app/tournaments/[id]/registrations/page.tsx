@@ -2253,7 +2253,8 @@ export default function RegistrationsPage() {
                         {reg.clubBasedIn && <div><span className="text-slate-500">Based In: </span>{reg.clubBasedIn}</div>}
                         <div><span className="text-slate-500">Hotel: </span>{reg.needsHotel}</div>
                         <div><span className="text-slate-500">Pay Method: </span>{payLabel(reg.paymentMethod)}</div>
-                        {reg.notes && <div className="col-span-full"><span className="text-slate-500">Notes: </span>{reg.notes}</div>}
+                        {/* pre-line: "Change made" and the club portal each add a line here, and run together they read as one sentence. */}
+                        {reg.notes && <div className="col-span-full whitespace-pre-line"><span className="text-slate-500">Notes: </span>{reg.notes}</div>}
                       </div>
 
                       {/* Teams — one card per team on phones, table on desktop */}

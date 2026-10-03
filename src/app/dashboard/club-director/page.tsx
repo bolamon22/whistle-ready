@@ -3,9 +3,13 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Copy, CreditCard, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Copy, CreditCard, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, Plus, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { compressImageFile } from '@/lib/imageCompress'
+import {
+  RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, AccountNote, WhatsLeft, OtherEventsCard, dayLabel,
+  type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource,
+} from './PortalActions'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
 interface Waiver {
@@ -24,9 +28,11 @@ interface Registration {
   invoiceAmount: number; discountAmount: number; discountNote: string; createdAt: string
   teams: {
     id: string; teamName: string; division: string; logoUrl?: string
-    coachName: string; coachPhone: string; coachEmail: string
+    coachName: string; coachPhone: string; coachEmail: string; waitlisted?: boolean
   }[]
   payments: { amount: number; method: string; receivedAt: string }[]
+  /** Where this registration stands with the office (lib/changeRequest). */
+  confirm?: ConfirmState
 }
 interface PlayerReg {
   id: string; playerName: string; teamClubName: string; grade: string
@@ -43,8 +49,8 @@ interface HistoryEntry {
   teams: { id: string; teamName: string; division: string; logoUrl?: string }[]
   registrations: {
     id: string; clubName: string; clubContact: string; contactEmail: string
-    contactPhone: string; clubBasedIn: string; paymentMethod: string; notes: string
-    numTeams: number; needsHotel: string; teams: { teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string }[]
+    contactPhone: string; clubBasedIn: string; paymentMethod: string
+    numTeams: number; needsHotel: string; teams: { id: string; teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string }[]
   }[]
   record: { wins: number; losses: number; ties: number; gamesPlayed: number }
   championshipWins: string[]
@@ -140,116 +146,12 @@ const avatarTone = (n: string) => {
   return TONES[h % TONES.length]
 }
 
-// Re-register modal
-function ReregisterModal({ entry, tournaments, onClose }: {
-  entry: HistoryEntry
-  tournaments: Tournament[]
-  onClose: () => void
-}) {
-  const reg = entry.registrations[0]
-  const [targetTournament, setTargetTournament] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-
-  const submit = async () => {
-    if (!targetTournament || !reg) return
-    setSubmitting(true)
-    try {
-      const res = await fetch('/api/registrations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tournamentId: targetTournament,
-          clubName: reg.clubName,
-          clubContact: reg.clubContact,
-          contactEmail: reg.contactEmail,
-          contactPhone: reg.contactPhone,
-          clubBasedIn: reg.clubBasedIn,
-          paymentMethod: reg.paymentMethod,
-          notes: reg.notes,
-          numTeams: reg.numTeams,
-          needsHotel: reg.needsHotel,
-          teams: reg.teams.map(t => ({
-            clubName: reg.clubName,
-            teamName: t.teamName,
-            division: t.division,
-            coachName: t.coachName,
-            coachPhone: t.coachPhone,
-            coachEmail: t.coachEmail,
-          })),
-          invoiceAmount: 0,
-          discountAmount: 0,
-          discountNote: '',
-        }),
-      })
-      if (res.ok) {
-        toast.success('Re-registered successfully! The tournament admin will confirm your invoice.')
-        onClose()
-      } else {
-        toast.error('Registration failed — please contact the tournament office.')
-      }
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const targetName = tournaments.find(t => t.id === targetTournament)?.name
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md z-10">
-        <h2 className="text-lg font-semibold text-gray-800 mb-1">Re-Register</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Pre-filled from <span className="font-medium text-violet-700">{entry.tournament.name}</span> — pick the tournament you want to register for.
-        </p>
-
-        <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 mb-4">
-          <p className="text-xs font-semibold text-violet-600 uppercase mb-2">What will be copied</p>
-          <p className="text-sm text-gray-700 font-medium">{reg?.clubName}</p>
-          <p className="text-sm text-gray-500">{reg?.clubContact} · {reg?.contactEmail}</p>
-          <div className="flex flex-wrap gap-1 mt-2">
-            {reg?.teams.map((t, i) => (
-              <span key={i} className="text-xs bg-white border border-violet-200 text-violet-700 px-2 py-0.5 rounded-full">{t.teamName} · {t.division}</span>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Register for Tournament</label>
-          <select value={targetTournament} onChange={e => setTargetTournament(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-            <option value="">Select tournament…</option>
-            {tournaments.filter(t => t.id !== entry.tournament.id).map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {targetTournament && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4 text-sm text-yellow-800 flex items-start gap-2">
-            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-            <span>Invoice amount will be set to $0 — the tournament admin will confirm your pricing.</span>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <button onClick={submit} disabled={!targetTournament || submitting}
-            className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold rounded-xl py-2 text-sm">
-            {submitting ? 'Submitting…' : `Register for ${targetName ?? '…'}`}
-          </button>
-          <button onClick={onClose} className="px-4 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function ClubDirectorDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selTournament, setSelTournament] = useState('')
-  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string }; payTo?: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null } | null>(null)
+  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string }; payTo?: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null; event?: PortalEvent | null } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
   const [playerView, setPlayerView] = useState<'cards' | 'list'>('cards')
   const [openPlayer, setOpenPlayer] = useState<string | null>(null)
@@ -261,7 +163,6 @@ export default function ClubDirectorDashboard() {
   const [perms, setPerms] = useState<Record<string, boolean>>({ cd_overview: true, cd_players: true, cd_schedule: true, cd_billing: true })
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [reregEntry, setReregEntry] = useState<HistoryEntry | null>(null)
   // Staff (admin/director) can open a club director's own portal with ?userId=,
   // so a report like "my Overview shows no teams" is seen rather than guessed
   // (Bo, Sep 15 2026). Read from location instead of useSearchParams so the page
@@ -288,6 +189,13 @@ export default function ClubDirectorDashboard() {
   const [payMethodSaving, setPayMethodSaving] = useState('')
   const [logoSaving, setLogoSaving] = useState('')
   const [coachForm, setCoachForm] = useState({ coachName: '', coachEmail: '', coachPhone: '' })
+  // The portal's own dialogs (./PortalActions): a change request for one team,
+  // adding a team, and registering for another event. Up here with the other
+  // hooks for the same #310 reason as above.
+  const [requestFor, setRequestFor] = useState<null | { regId: string; teamId: string; kind: RequestKind }>(null)
+  const [addFor, setAddFor] = useState('')
+  const [againFor, setAgainFor] = useState<null | { tournamentId: string; eventName: string; reg: AgainSource; eventId?: string }>(null)
+  const [confirming, setConfirming] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -376,6 +284,7 @@ export default function ClubDirectorDashboard() {
       coachName: t.coachName,
       coachPhone: t.coachPhone,
       coachEmail: t.coachEmail,
+      waitlisted: !!t.waitlisted,
       players: waivers.filter(w => normName(w.team) === normName(t.teamName)),
     }))
   )
@@ -569,10 +478,100 @@ export default function ClubDirectorDashboard() {
     { key: 'history',   label: 'History',            Icon: Trophy                             },
   ]
 
+  // CONFIRMING THE TEAM LIST from the portal: the same one click as the
+  // confirm-your-teams email, through the same endpoint (the registration id is
+  // the key there, as on /pay).
+  async function confirmTeams(regId: string) {
+    if (!regId || viewUserId) return
+    setConfirming(regId)
+    try {
+      const res = await fetch(`/api/registrations/${regId}/confirm`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm' }),
+      })
+      if (!res.ok) { toast.error('Could not confirm your teams'); return }
+      toast.success('Teams confirmed. Thank you!')
+      await loadData(selTournament)
+    } catch { toast.error('Could not confirm your teams') } finally { setConfirming('') }
+  }
+
+  // After registering for another event: pick up the new event in the picker
+  // (the register-again route links it) and open it.
+  async function openNewEvent(nextId: string) {
+    try {
+      const linkRes = await fetch(`/api/club-director/links${viewUserId ? `?userId=${encodeURIComponent(viewUserId)}` : ''}`).then(r => r.json())
+      const linked: Tournament[] = Array.isArray(linkRes) ? [] : (linkRes?.tournaments ?? [])
+      if (linked.length) setTournaments(linked)
+    } catch { /* keep the list we have */ }
+    setAgainFor(null)
+    setHistory([])      // History rebuilds with the new event next time it opens
+    setTab('overview')
+    setSelTournament(nextId)
+    loadData(nextId)
+  }
+
+  // Changing teams is for the club itself, at an event that isn't over. Staff
+  // viewing the portal make the same changes on the registrations page.
+  const portalEvent = data?.event ?? null
+  const canChange = !viewUserId && !!portalEvent && !portalEvent.ended
+
+  // WHAT'S LEFT. The questions a director logs in to answer, in the order they
+  // matter: is my team list right, do I owe anything, have my players and
+  // coaches signed. All from data this page already has.
+  const regs = data?.registrations ?? []
+  const leftItems: LeftItem[] = []
+  if (regs.length && !portalEvent?.ended) {
+    const requested = regs.some(r => r.confirm?.status === 'change_requested')
+    const toConfirm = regs.find(r => r.confirm?.status !== 'confirmed' && r.confirm?.status !== 'change_requested')
+    const lastConfirmed = regs.map(r => r.confirm?.status === 'confirmed' ? r.confirm.at : '').sort().pop() || ''
+    leftItems.push(regs.every(r => r.confirm?.status === 'confirmed')
+      ? { key: 'confirm', title: 'Teams confirmed', detail: lastConfirmed ? `Confirmed ${shortDate(lastConfirmed)}` : 'Your team list is confirmed', done: true }
+      : requested && !toConfirm
+        ? { key: 'confirm', title: 'Teams confirmed', detail: 'Change requested · the office is on it, then you confirm the new list', done: false }
+        : { key: 'confirm', title: 'Confirm your team list', detail: `${totalTeams} team${totalTeams === 1 ? '' : 's'} · check the names and divisions below`, done: false,
+            action: viewUserId || !toConfirm ? undefined : { label: confirming ? 'Confirming…' : 'Confirm teams', onClick: () => confirmTeams(toConfirm.id) } })
+    if (showMoney && totalInvoiced > 0) leftItems.push(balance > 0
+      ? { key: 'pay', title: 'Balance due', detail: `${fmt(balance)} · bank transfer has no fee, card runs 3%`, done: false,
+          action: soloUnpaidId ? { label: `Pay ${fmt(balance)}`, href: `/pay/${soloUnpaidId}` } : undefined }
+      : { key: 'pay', title: 'Paid in full', detail: `${fmt(totalPaid)} received`, done: true })
+    const teamsWithNone = teamRows.filter(t => t.players.length === 0).length
+    const filedAll = teamRows.reduce((sum, t) => sum + t.players.length, 0)
+    leftItems.push({ key: 'waivers', title: 'Player waivers', done: teamRows.length > 0 && teamsWithNone === 0,
+      detail: teamsWithNone ? `${filedAll} filed · ${teamsWithNone} team${teamsWithNone === 1 ? '' : 's'} with none yet` : `${filedAll} filed · every team has started`,
+      action: perms.cd_players !== false ? { label: 'See who has filed', onClick: () => switchTab('players') } : undefined })
+    leftItems.push({ key: 'coaches', title: 'Coach waivers', done: coachRows.length > 0 && coachesSigned === coachRows.length,
+      detail: `${coachesSigned} of ${coachRows.length} coach${coachRows.length === 1 ? '' : 'es'} filed`,
+      action: perms.cd_players !== false ? { label: 'See which coaches', onClick: () => switchTab('coaches') } : undefined })
+    const hasLogo = regs.some(r => !!r.clubLogoUrl)
+    leftItems.push({ key: 'logo', title: 'Club logo', optional: true, done: hasLogo,
+      detail: hasLogo ? 'On your teams' : 'Optional · shows on schedules and brackets' })
+  }
+  const leftTitle = selTournamentRow?.startDate && (selTournamentRow.startDate >= todayLocal())
+    ? `What's left before ${dayLabel(selTournamentRow.startDate)}` : "What's left"
+
   return (
     <div className="max-w-5xl mx-auto py-8">
-      {reregEntry && (
-        <ReregisterModal entry={reregEntry} tournaments={tournaments} onClose={() => setReregEntry(null)} />
+      {requestFor && (() => {
+        const r = regs.find(x => x.id === requestFor.regId)
+        if (!r) return null
+        return (
+          <RequestChangeDialog tournamentId={selTournament} eventName={selTournamentName} reg={r}
+            team={r.teams.find(x => x.id === requestFor.teamId) || null} event={portalEvent}
+            initialKind={requestFor.kind} onClose={() => setRequestFor(null)} onDone={() => loadData(selTournament)} />
+        )
+      })()}
+      {addFor && portalEvent && (() => {
+        const r = regs.find(x => x.id === addFor)
+        if (!r) return null
+        return (
+          <AddTeamDialog tournamentId={selTournament} eventName={selTournamentName} reg={r} event={portalEvent}
+            showMoney={showMoney} onClose={() => setAddFor('')} onDone={() => loadData(selTournament)} />
+        )
+      })()}
+      {againFor && (
+        <RegisterAgainDialog tournamentId={againFor.tournamentId} eventName={againFor.eventName} reg={againFor.reg}
+          initialEventId={againFor.eventId} showMoney={showMoney}
+          onClose={() => setAgainFor(null)} onRegistered={openNewEvent} />
       )}
 
       {viewUserId && (
@@ -682,8 +681,8 @@ export default function ClubDirectorDashboard() {
                         <div className="font-bold text-gray-800">{tournament.name}</div>
                         <div className="text-xs text-gray-500">{tournament.startDate}{tournament.endDate && tournament.endDate !== tournament.startDate ? ` – ${tournament.endDate}` : ''} · {tournament.location}</div>
                       </div>
-                      {!viewUserId && (
-                        <button onClick={() => setReregEntry(entry)}
+                      {!viewUserId && entry.registrations[0] && (
+                        <button onClick={() => setAgainFor({ tournamentId: tournament.id, eventName: tournament.name, reg: entry.registrations[0] })}
                           className="shrink-0 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                           <RefreshCw size={12} className="shrink-0" /> Register again
                         </button>
@@ -760,6 +759,7 @@ export default function ClubDirectorDashboard() {
                 {data?.registrations.length === 0 && (
                   <div className="text-center py-12 text-gray-400">No registration on file for this event yet.</div>
                 )}
+                <WhatsLeft title={leftTitle} items={leftItems} />
                 {data?.registrations.map(reg => {
                   const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
                   const due = reg.invoiceAmount - reg.discountAmount
@@ -841,6 +841,9 @@ export default function ClubDirectorDashboard() {
                         )}
                       </div>
 
+                      {/* A request the office has, or a changed list to confirm. */}
+                      <AccountNote confirm={reg.confirm} staffView={!!viewUserId} busy={confirming === reg.id} onConfirm={() => confirmTeams(reg.id)} />
+
                       {/* Registration facts */}
                       <div className="px-5 py-2.5 bg-gray-50 border-y border-gray-100 flex flex-wrap gap-x-8 gap-y-1 text-sm">
                         {reg.clubBasedIn && <span className="text-gray-500">Based in: <span className="text-gray-700 font-medium">{reg.clubBasedIn}</span></span>}
@@ -869,14 +872,28 @@ export default function ClubDirectorDashboard() {
                         </span>
                       </div>
 
+                      {/* Adding a team is the club's own call until the schedule is
+                          posted; moving or removing one is always a request (Bo, Oct 3
+                          2026). See ./PortalActions and api/club-director/teams. */}
+                      {canChange && (
+                        <div className="px-5 py-2.5 flex items-center justify-between gap-3 border-b border-gray-100">
+                          <span className="text-sm font-semibold text-gray-800">Your teams</span>
+                          <button type="button" onClick={() => setAddFor(reg.id)}
+                            className="inline-flex items-center gap-1.5 min-h-[36px] text-sm font-semibold px-3.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white">
+                            <Plus size={15} className="shrink-0" /> Add a team
+                          </button>
+                        </div>
+                      )}
+
                       {/* Teams — a real table on desktop, stacked rows on a phone,
                           from one set of markup so neither can drift. */}
                       <div className="hidden sm:grid grid-cols-12 gap-x-4 px-5 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         <div className="col-span-3">Team</div>
-                        <div className="col-span-3">Division</div>
+                        <div className={canChange ? 'col-span-2' : 'col-span-3'}>Division</div>
                         <div className="col-span-1 text-center">Waivers</div>
                         <div className="col-span-2">Coach</div>
-                        <div className="col-span-3">Contact</div>
+                        <div className={canChange ? 'col-span-2' : 'col-span-3'}>Contact</div>
+                        {canChange && <div className="col-span-2 text-right">Changes</div>}
                       </div>
                       <div className="divide-y divide-gray-100">
                         {rows.length === 0 && <div className="px-5 py-4 text-sm text-gray-400">No teams on this registration.</div>}
@@ -886,7 +903,13 @@ export default function ClubDirectorDashboard() {
                               {t.logoUrl && <img src={t.logoUrl} alt="" className="h-5 w-5 object-contain rounded flex-shrink-0" />}
                               <span className="font-semibold text-gray-800 truncate">{t.teamName}</span>
                             </div>
-                            <div className="sm:col-span-3 text-sm text-gray-600 truncate">{t.division}</div>
+                            <div className={`${canChange ? 'sm:col-span-2' : 'sm:col-span-3'} text-sm text-gray-600 min-w-0`}>
+                              <span className="block truncate">{t.division}</span>
+                              {t.waitlisted && (
+                                <span title="This division is full. The team is not billed unless a spot opens."
+                                  className="inline-block mt-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Waiting list</span>
+                              )}
+                            </div>
                             <div className="sm:col-span-1 sm:text-center">
                               <span className={`inline-flex items-center justify-center min-w-[1.75rem] text-xs font-semibold px-2 py-0.5 rounded-full ${t.players.length > 0 ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
                                 {t.players.length}
@@ -898,14 +921,32 @@ export default function ClubDirectorDashboard() {
                                 line a club address breaks mid-word ("kpaglino@laxm
                                 / aniax.com"). Truncated with the full value on
                                 hover; the mailto still carries all of it. */}
-                            <div className="sm:col-span-3 text-sm text-gray-500 min-w-0 leading-snug">
+                            <div className={`${canChange ? 'sm:col-span-2' : 'sm:col-span-3'} text-sm text-gray-500 min-w-0 leading-snug`}>
                               {t.coachPhone && <div><a href={`tel:${t.coachPhone}`} className="hover:text-violet-600">{t.coachPhone}</a></div>}
                               {t.coachEmail && <div className="truncate"><a href={`mailto:${t.coachEmail}`} title={t.coachEmail} className="hover:text-violet-600">{t.coachEmail}</a></div>}
                               {!t.coachPhone && !t.coachEmail && '—'}
                             </div>
+                            {canChange && (
+                              <div className="sm:col-span-2 flex sm:justify-end gap-1.5 pt-1.5 sm:pt-0">
+                                {(portalEvent?.divisions.length ?? 0) > 1 && (
+                                  <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'move' })}
+                                    title="Ask the office to move this team to another division"
+                                    className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800">Move</button>
+                                )}
+                                <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'remove' })}
+                                  title="Ask the office to remove this team"
+                                  className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800">Remove</button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
+                      {canChange && (
+                        <p className="px-5 py-2.5 border-t border-gray-100 text-xs leading-relaxed text-gray-500">
+                          Moving a team to another division or removing one goes to the tournament office as a request.{' '}
+                          {portalEvent?.posted ? 'The schedule is posted, so adding a team is a request now too.' : 'You can add a team yourself until the schedule is posted.'}
+                        </p>
+                      )}
 
                       {/* Waiver standing — the same numbers the tournament staff see */}
                       <div className="px-5 py-3 border-t border-gray-100 text-sm flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -1027,6 +1068,11 @@ export default function ClubDirectorDashboard() {
                       {unassignedWaivers.length > 3 ? ', …' : ''}). They still count toward your club total — ask the tournament staff to correct the team on them.
                     </span>
                   </div>
+                )}
+
+                {regs[0] && selTournament && (
+                  <OtherEventsCard tournamentId={selTournament} teamCount={totalTeams} staffView={!!viewUserId} showMoney={showMoney}
+                    onRegister={eventId => setAgainFor({ tournamentId: selTournament, eventName: selTournamentName, reg: regs[0], eventId })} />
                 )}
               </div>
             )}

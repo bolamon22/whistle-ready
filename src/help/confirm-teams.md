@@ -16,7 +16,7 @@ Before you build the schedule, you can ask each club to check its team list and 
 **What the Teams confirmed column means:**
 - A check mark and date: the club confirmed.
 - **Waiting**: the letter went out and they haven't answered.
-- **Change**: the club asked for a change. Their note shows on the row.
+- **Change**: the club asked for a change, from the confirm email or their club portal. Their note shows on the row; requests from the portal start with "From the club portal" and the time. A second request while one is open is added under it.
 - **Re-confirm**: you made their change and they still need to confirm the new list.
 - A dash: no confirmation letter sent yet.
 
@@ -25,5 +25,8 @@ Before you build the schedule, you can ask each club to check its team list and 
 2. Click **Change made**. Their request is filed into the registration's notes and the status becomes **Re-confirm**.
 3. Click **Re-confirm** to email them again so they confirm the updated list.
 
+**Teams a club added itself:** a club can add a team from its portal until the schedule is posted (or that division has games). The team appears on the registration, the invoice is recalculated when it still matched the price list, and a "[Club portal …] Added …" line goes into the registration's notes. You also get an email. After that, an add arrives as a change request instead.
+
 **Common problems:**
 - **Re-confirm** opens the Email clubs dialog for that club; nothing is sent until you click send.
+- A club confirmed while a request was still open: the request is filed into the registration's notes ("still open when the club confirmed"), so check it there.

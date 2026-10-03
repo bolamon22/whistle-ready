@@ -20,3 +20,4 @@ Before the schedule is built, the organizer may ask each club to check its team 
 - If the page says the organizer made the change you asked for, look over the list again and confirm.
 - If the page says **No teams on file yet**, use the change box to tell the organizer which teams you should have.
 - Questions: reply to the email that brought you to this page.
+- Signed in to your club portal? You can confirm there too, and ask to move or remove a team from your team list.
