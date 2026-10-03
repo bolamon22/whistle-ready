@@ -19,7 +19,7 @@ The scorekeeper screen runs the game clock and the score on your phone. Goals sh
 1. Tap **+** under a team for a goal, or **–** to take one off.
 2. If your event asks for the scorer, type the player number under **Who scored?** and tap **Add goal** (the number is optional).
 
-**To save as you go:** tap **Save** at the top. This keeps the score if your phone drops or the page reloads. It does not post a final.
+**To save as you go:** tap **Save** at the top. This keeps the score if your phone drops or the page reloads. Teams following the game aren't alerted until you tap **End Game & Post Score**, but a saved score already shows on **Post scores** and counts in the standings, so save mid-game only when you need to.
 
 **To finish the game:**
 1. Tap **End Game & Post Score**.
