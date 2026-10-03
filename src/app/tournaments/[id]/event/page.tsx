@@ -6,6 +6,7 @@ import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventHero from '../_eventHero'
 import { buildHeroProps, eventIsOver, fmtRangeShort, shortLocation } from '@/lib/eventHero'
+import { getPublicVisibility } from '@/lib/publicView'
 import PublicChirp from '@/components/PublicChirp'
 import EventSection from '@/components/EventSection'
 import CountdownBlock from '@/components/CountdownBlock'
@@ -403,9 +404,13 @@ export default async function TournamentEventPage({ params }: { params: { id: st
 
   // The hero carries ONE dominant action (Register) plus the Event info menu.
   // Worked out by lib/eventHero, the same as on every other page of this event.
+  // Whether the public can see the schedule picks the phone's featured cell.
+  let scheduleLive = false
+  try { scheduleLive = (await getPublicVisibility(params.id)).schedule === 'live' } catch {}
   const hero = buildHeroProps({
     t, c, base, divisions, infoItems,
     sectionHref: (sid: string) => (panelIds.has(sid) ? `#${sid}` : undefined),
+    scheduleLive,
   })
 
   // All in-page sections, stacked in order. Previously these were tab panels, which

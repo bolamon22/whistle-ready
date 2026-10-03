@@ -22,6 +22,26 @@ export function fmtRangeShort(s: string, e: string) {
   return `${fmtDayShort(s)}, ${s.split('-')[0]}`
 }
 
+/** "Oct 24–25" / "Oct 31 – Nov 1": the phone's fact line, where the year is
+ *  already in the eyebrow and the width is not there to say it twice. */
+export function fmtRangeNoYear(s: string, e: string) {
+  if (!s) return 'TBA'
+  if (e && e !== s) {
+    const [sy, sm] = s.split('-'); const [ey, em] = e.split('-')
+    if (sy === ey && sm === em) return `${fmtDayShort(s)}–${parseInt(e.split('-')[2])}`
+    return `${fmtDayShort(s)} – ${fmtDayShort(e)}`
+  }
+  return fmtDayShort(s)
+}
+
+/** Inside the event's days, in Eastern time (see eventIsOver for the string compare). */
+export function eventIsOn(startDate?: string, endDate?: string): boolean {
+  const first = String(startDate || '').slice(0, 10), last = String(endDate || startDate || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !/^\d{4}-\d{2}-\d{2}$/.test(last)) return false
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  return today >= first && today <= last
+}
+
 /** "11700 Pierson Rd, Wellington, FL 33414" -> "Wellington, FL". */
 export function shortLocation(loc: string) {
   if (!loc) return ''
@@ -53,6 +73,21 @@ export interface HeroInput {
   logoUrl?: string
   active?: string
   homeHref?: string
+  /** The public can see the schedule (lib/publicView). Decides whether the
+   *  Schedule cell is the thing to feature on a phone. */
+  scheduleLive?: boolean
+}
+
+/** One cell of the fact strip. `short` is the phone's word for it; `kind`
+ *  says which phone row it sits in -- facts read as a line, actions as tabs. */
+export type HeroFact = {
+  key: string
+  label: string
+  value: string
+  short: string
+  kind: 'fact' | 'action'
+  icon: 'calendar' | 'map-pin' | 'layers' | 'ticket' | 'bed-double' | 'clipboard-list' | 'calendar-days' | 'activity' | 'trophy'
+  href?: string
 }
 
 export function buildHeroProps(o: HeroInput) {
@@ -67,20 +102,35 @@ export function buildHeroProps(o: HeroInput) {
     shortLocation(t.location || ''),
   ].filter(Boolean).join(' · ')
   const fee = Number(t.teamRegEnabled) ? baseFee(parsePricing(t.registrationPricing)) : 0
-  const minFee = fee > 0 ? `from $${fee.toLocaleString()}` : ''
+  const minFee = fee > 0 ? `$${fee.toLocaleString()}` : ''
   const n = o.divisions.length
+  const on = !over && eventIsOn(t.startDate, t.endDate)
 
-  // Label short, words in the value: "PLAYER WAIVER" as a label wrapped to two
-  // lines in a six-across bar at tablet width (measured at 820px, 128px cells).
+  // One line per cell, no label row: a date reads as a date and a place as a
+  // place (Bo, Oct 3). The one value that needed its label -- "from $1,495" --
+  // carries it in the words. The Schedule cell says what it opens and follows
+  // the calendar: the schedule before the event, live scores during it, the
+  // results after.
   const facts = ([
-    t.startDate && { key: 'dates', label: 'DATES', value: fmtRangeShort(t.startDate, t.endDate) },
-    t.location && { key: 'location', label: 'LOCATION', value: shortLocation(t.location), href: o.sectionHref('locations') },
-    n > 0 && { key: 'divisions', label: 'DIVISIONS', value: `${n} division${n > 1 ? 's' : ''}`, href: o.sectionHref('divisions') },
-    minFee && { key: 'fee', label: 'TEAM FEE', value: minFee, href: registerHref || o.sectionHref('fees') },
-    (c.hotelsUrl || c.hotels) && { key: 'hotels', label: 'HOTELS', value: 'Book hotels', href: c.hotelsUrl || o.sectionHref('hotels') },
-    { key: 'waiver', label: 'WAIVER', value: 'Player waiver', href: `${o.base}/player-waiver` },
-    { key: 'schedule', label: 'SCHEDULE', value: 'View games', href: `${o.base}/public` },
-  ].filter(Boolean)) as { key: string; label: string; value: string; href?: string }[]
+    t.startDate && { key: 'dates', kind: 'fact', icon: 'calendar', label: 'Dates', value: fmtRangeShort(t.startDate, t.endDate), short: fmtRangeNoYear(t.startDate, t.endDate) },
+    t.location && { key: 'location', kind: 'fact', icon: 'map-pin', label: 'Location', value: shortLocation(t.location), short: shortLocation(t.location), href: o.sectionHref('locations') },
+    n > 0 && { key: 'divisions', kind: 'fact', icon: 'layers', label: 'Divisions', value: `${n} division${n > 1 ? 's' : ''}`, short: `${n} division${n > 1 ? 's' : ''}`, href: o.sectionHref('divisions') },
+    minFee && { key: 'fee', kind: 'action', icon: 'ticket', label: 'Team fee', value: `Team fee from ${minFee}`, short: 'Team fee', href: registerHref || o.sectionHref('fees') },
+    (c.hotelsUrl || c.hotels) && { key: 'hotels', kind: 'action', icon: 'bed-double', label: 'Hotels', value: 'Book hotels', short: 'Hotels', href: c.hotelsUrl || o.sectionHref('hotels') },
+    { key: 'waiver', kind: 'action', icon: 'clipboard-list', label: 'Waiver', value: 'Player waiver', short: 'Waiver', href: `${o.base}/player-waiver` },
+    {
+      key: 'schedule', kind: 'action', label: 'Schedule', href: `${o.base}/public`,
+      icon: over ? 'trophy' : on ? 'activity' : 'calendar-days',
+      value: over ? 'View results' : on ? 'Live scores' : 'View schedule',
+      short: over ? 'Results' : on ? 'Live' : 'Schedule',
+    },
+  ].filter(Boolean)) as HeroFact[]
+
+  // What a phone should push: once the schedule is out there is nothing a
+  // spectator wants more, and that stays true through the finals and the
+  // results. Before that the hero's Register button is the one call to action,
+  // and a second filled cell would compete with it.
+  const featured = o.scheduleLive ? 'schedule' : undefined
 
   // A finished event is past registration status: "Waiting list only" on last
   // year's results reads as a mistake.
@@ -96,6 +146,7 @@ export function buildHeroProps(o: HeroInput) {
     infoItems: o.infoItems,
     facts,
     active: o.active,
+    featured,
     homeHref: o.homeHref,
   }
 }

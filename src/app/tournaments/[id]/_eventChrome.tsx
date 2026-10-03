@@ -2,6 +2,7 @@ import { createClient } from '@libsql/client'
 import { sponsorList, sponsorsForEvent } from '@/lib/sponsors'
 import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
 import { buildHeroProps } from '@/lib/eventHero'
+import { getPublicVisibility } from '@/lib/publicView'
 import EventHero from './_eventHero'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
@@ -57,9 +58,12 @@ export default async function EventChrome({ tournamentId, active, children }: { 
   // The facts link into the event page's sections; the menu above already
   // knows which of those exist, so it is the one source for both.
   const sectionHref = (sid: string) => infoItems.find(i => i.href === `${base}/event#${sid}`)?.href
+  // Whether the public can see the schedule picks the phone's featured cell.
+  let scheduleLive = false
+  try { scheduleLive = (await getPublicVisibility(tournamentId)).schedule === 'live' } catch {}
   const hero = buildHeroProps({
     t, c: cs, base, divisions: divs, infoItems, sectionHref,
-    logoUrl: heroLogo, active, homeHref: `${base}/event`,
+    logoUrl: heroLogo, active, homeHref: `${base}/event`, scheduleLive,
   })
 
   return (
