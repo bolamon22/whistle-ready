@@ -1,10 +1,10 @@
 ---
-title: FAQ: weather, guest players, tiebreakers, admission, media and vendor fees
+title: FAQ: weather, guest players, tiebreakers, admission, parking, media and vendor fees
 category: Public pages
 order: 976
 audience: public
 routes: /tournaments/*/event, /tournaments/*/rules, /tournaments/*/today, /register/vendor, /o/*/gallery/shoot
-keywords: weather, rain, lightning, thunder, storm, delay, cancelled, weather refund, guest player, borrow players, play on two teams, double roster, A player on B team, playing down, age exemption, grad year, roster switching, tiebreaker, tie breaker, standings, seeding, head to head, goal differential, admission, entry fee, gate fee, spectator fee, dogs, pets, service dog, coolers, tents, chairs, USA Lacrosse membership, member number, media pass, photographer, videographer, credential, film, vendor fee, booth cost, vendor price, showcase, set up, load-in, food truck, food vendor
+keywords: parking, parking fee, park, RV, motorhome, camper, weather, rain, lightning, thunder, storm, delay, cancelled, weather refund, guest player, borrow players, play on two teams, double roster, A player on B team, playing down, age exemption, grad year, roster switching, tiebreaker, tie breaker, standings, seeding, head to head, goal differential, admission, entry fee, gate fee, spectator fee, dogs, pets, service dog, coolers, tents, chairs, USA Lacrosse membership, member number, media pass, photographer, videographer, credential, film, vendor fee, booth cost, vendor price, showcase, set up, load-in, food truck, food vendor
 ---
 Organizer answers about event-day policies. The event's **Rules** page and the weather policy page have the full text.
 
@@ -19,6 +19,9 @@ In order: overall record, head-to-head result, fewest goals against, goal differ
 
 **Is there an admission fee? Can we bring dogs, coolers or tents?**
 There's no admission fee. Only service dogs are allowed. Pop-up tents, folding chairs and coolers are welcome.
+
+**Is there a parking fee? Can we bring an RV?**
+Parking is free. At our Wellington events, the Village of Wellington can't accommodate RVs in the parking lot.
 
 **Do players need a USA Lacrosse membership?**
 Yes.
