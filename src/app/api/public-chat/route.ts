@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { chirpReply, cleanId, cleanPage, lastQuestion, recentQuestions } from '@/lib/chirp'
-import { cleanConvoId, logPublicTurn, orgScope, publicCovered, publicPrompt, tournamentScope } from '@/lib/publicChirp'
+import { cleanConvoId, cleanVisitor, logPublicTurn, orgScope, publicCovered, publicPrompt, tournamentScope } from '@/lib/publicChirp'
 import { orgBySlug, orgForTournament } from '@/lib/org'
 
 export const runtime = 'nodejs'
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       await prisma.appSetting.upsert({ where: { key }, create: { key, value: JSON.stringify(log) }, update: { value: JSON.stringify(log) } })
     } catch (e) { console.error('chirp log error:', e) }
     // The whole conversation, emailed to the organizer when the chat closes.
-    await logPublicTurn(scope.key, cleanConvoId(body.convoId), { q: question, a: message, page, team: userTeam })
+    await logPublicTurn(scope.key, cleanConvoId(body.convoId), { q: question, a: message, page, team: userTeam, visitor: cleanVisitor(body.visitor) })
 
     return NextResponse.json({ message })
   } catch (e: unknown) {
@@ -47,22 +47,35 @@ export async function POST(req: NextRequest) {
 }
 
 // Who the widget is for, so its header and "Need a person?" line can name the
-// event and the organizer's address before anyone asks anything. Public data only.
+// event and the organizer's address before anyone asks anything, and so the
+// greeting can fit the moment (registration open, event this week). Public
+// data only.
+type EventInfo = { id: string; name: string; startDate: string; endDate: string; regOpen: boolean }
+const toEvent = (r: any): EventInfo => ({ id: String(r.id), name: String(r.name || ''), startDate: String(r.startDate || ''), endDate: String(r.endDate || ''), regOpen: Number(r.teamRegEnabled ?? 1) === 1 })
+
 export async function GET(req: NextRequest) {
   const tournamentId = cleanId(req.nextUrl.searchParams.get('tournamentId'))
   const orgSlug = cleanId(req.nextUrl.searchParams.get('orgSlug'))
   try {
     if (tournamentId) {
-      const [t, org] = await Promise.all([
-        prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true } }),
+      const [rows, org] = await Promise.all([
+        prisma.$queryRawUnsafe<any[]>('SELECT id, name, startDate, endDate, teamRegEnabled FROM "Tournament" WHERE id = ?', tournamentId).catch(() => []),
         orgForTournament(tournamentId),
       ])
-      return NextResponse.json({ title: t?.name || '', orgName: org?.name || '', contactEmail: org?.contactEmail || '' })
+      const event = rows[0] ? toEvent(rows[0]) : null
+      return NextResponse.json({ title: event?.name || '', orgName: org?.name || '', contactEmail: org?.contactEmail || '', event })
     }
     if (orgSlug) {
       const org = await orgBySlug(orgSlug)
-      return NextResponse.json({ title: org?.name || '', orgName: org?.name || '', contactEmail: org?.contactEmail || '' })
+      let event: EventInfo | null = null
+      if (org) {
+        const today = new Date().toISOString().slice(0, 10)
+        const rows = await prisma.$queryRawUnsafe<any[]>('SELECT id, name, startDate, endDate, teamRegEnabled FROM "Tournament" WHERE orgId = ? ORDER BY startDate', org.id).catch(() => [])
+        const next = rows.find(r => String(r.endDate || r.startDate || '') >= today)
+        if (next) event = toEvent(next)
+      }
+      return NextResponse.json({ title: org?.name || '', orgName: org?.name || '', contactEmail: org?.contactEmail || '', event })
     }
   } catch (e) { console.error('public-chat info error:', e) }
-  return NextResponse.json({ title: '', orgName: '', contactEmail: '' })
+  return NextResponse.json({ title: '', orgName: '', contactEmail: '', event: null })
 }

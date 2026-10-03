@@ -119,7 +119,17 @@ ${picked.length ? picked.map(a => `PAGE: ${a.title}\n${a.body}`).join('\n\n') : 
 // ---- Conversations: kept for the organizer, emailed when the visitor closes the chat ----
 
 export type Turn = { q: string; a: string; at: number; covered?: boolean }
-type Convo = { id: string; page?: string; team?: string; startedAt: number; updatedAt: number; turns: Turn[]; emailed: number }
+export type Visitor = { id: string; n: number; first: number }
+type Convo = { id: string; page?: string; team?: string; startedAt: number; updatedAt: number; turns: Turn[]; emailed: number; visitor?: Visitor }
+
+/** The anonymous device id the widget sends: a random id, how many chats that
+ *  browser has started, and when it first chatted. Never an IP address. */
+export function cleanVisitor(v: any): Visitor | undefined {
+  if (!v || typeof v !== 'object' || !cleanConvoId(v.id)) return undefined
+  const n = Math.max(0, Math.min(9999, Math.floor(Number(v.n) || 0)))
+  const first = Number(v.first) || 0
+  return { id: v.id, n, first: first > 1.6e12 && first <= Date.now() + 86400000 ? first : 0 }
+}
 const convoKey = (scope: string) => `chirpConvos:${scope}`
 
 async function readConvos(scope: string): Promise<Convo[]> {
@@ -135,7 +145,7 @@ async function writeConvos(scope: string, list: Convo[]) {
 export const cleanConvoId = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(v) ? v : '')
 
 /** Add one question and answer to a conversation. Never throws. */
-export async function logPublicTurn(scope: string, convoId: string, turn: { q: string; a: string; page?: string; team?: string }) {
+export async function logPublicTurn(scope: string, convoId: string, turn: { q: string; a: string; page?: string; team?: string; visitor?: Visitor }) {
   if (!convoId || !turn.q) return
   try {
     const list = await readConvos(scope)
@@ -145,12 +155,21 @@ export async function logPublicTurn(scope: string, convoId: string, turn: { q: s
     if (c.turns.length > 40) c.turns = c.turns.slice(-40)
     c.page = turn.page || c.page
     c.team = turn.team || c.team
+    c.visitor = turn.visitor || c.visitor
     c.updatedAt = Date.now()
     await writeConvos(scope, list)
   } catch (e) { console.error('public chirp convo log error:', e) }
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** "returning visitor, chat #3, first chatted Sep 28" / "new visitor". The
+ *  widget counts the chat it is starting, so n is 1 on a first chat. */
+function visitorLine(v?: Visitor): string {
+  if (!v || v.n <= 1) return 'new visitor'
+  const first = v.first ? new Date(v.first).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' }) : ''
+  return `<b style="color:#334155">returning visitor</b>, chat #${v.n}${first ? `, first chatted ${first}` : ''}`
+}
 
 /** "event page", "schedule page"... from a public path, for the email's header line. */
 function pageName(path: string): string {
@@ -163,7 +182,7 @@ const MAX_EMAILS_PER_DAY = 100
 
 /** The transcript email: a navy header, then each question with Chirp's answer
  *  rendered (bold, steps, links), unanswered ones flagged. Inline styles only. */
-export function transcriptEmail(scope: { title: string; org: { slug?: string | null } | null; tournamentId?: string }, c: { startedAt: number; page?: string; team?: string; emailed: number }, fresh: Turn[]) {
+export function transcriptEmail(scope: { title: string; org: { slug?: string | null } | null; tournamentId?: string }, c: { startedAt: number; page?: string; team?: string; emailed: number; visitor?: Visitor }, fresh: Turn[]) {
   const base = orgBaseUrl(scope.org?.slug, APP_URL)
   const when = (ms: number) => new Date(ms).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
   const first = fresh[0].q.replace(/\s+/g, ' ').slice(0, 60)
@@ -189,7 +208,7 @@ export function transcriptEmail(scope: { title: string; org: { slug?: string | n
   <div style="font-size:13px;color:#99f6e4;margin-top:2px">${fresh.length} question${fresh.length === 1 ? '' : 's'}${missed ? ` · ${missed} Chirp couldn't answer` : ' · all answered'}</div>
 </td></tr>
 <tr><td style="padding:12px 20px;font-size:13px;color:#64748b;border-bottom:1px solid #e2e8f0">
-  ${when(c.startedAt)} ET${pageLink ? ` · on the ${pageLink}` : ''}${c.team ? ` · team: <b style="color:#334155">${esc(c.team)}</b>` : ''} · anonymous visitor${c.emailed ? ` · continued chat (${c.emailed} earlier question${c.emailed === 1 ? '' : 's'} already sent)` : ''}
+  ${when(c.startedAt)} ET${pageLink ? ` · on the ${pageLink}` : ''}${c.team ? ` · team: <b style="color:#334155">${esc(c.team)}</b>` : ''} · ${visitorLine(c.visitor)}${c.emailed ? ` · continued chat (${c.emailed} earlier question${c.emailed === 1 ? '' : 's'} already sent)` : ''}
 </td></tr>
 ${turns}
 <tr><td style="padding:14px 20px;font-size:12px;color:#64748b">

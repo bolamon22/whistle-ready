@@ -41,18 +41,26 @@ export function ChirpLauncher({ open, onToggle, sub = 'Help desk · answers 24/7
 }
 
 /** Show the greeting a few seconds after the page loads, once per browser
- *  session, and never again once dismissed or once the chat is opened. */
-export function useGreeting(key: string, open: boolean, enabled = true, delayMs = 4000) {
+ *  session per `key`, and never again that session once dismissed or once the
+ *  chat is opened. With `capDays`, also at most once every that many days on
+ *  this device, so regular visitors aren't greeted every time. */
+export function useGreeting(key: string, open: boolean, enabled = true, delayMs = 4000, capDays = 0) {
   const storeKey = `chirp-greeted-${key}`
   const [show, setShow] = useState(false)
   useEffect(() => {
     if (!enabled) return
-    let seen = false
-    try { seen = sessionStorage.getItem(storeKey) === '1' } catch {}
-    if (seen) return
-    const t = setTimeout(() => setShow(true), delayMs)
+    let skip = false
+    try {
+      skip = sessionStorage.getItem(storeKey) === '1'
+      if (!skip && capDays > 0) skip = Date.now() - Number(localStorage.getItem('chirp-greeted-last') || 0) < capDays * 86400000
+    } catch {}
+    if (skip) return
+    const t = setTimeout(() => {
+      setShow(true)
+      try { if (capDays > 0) localStorage.setItem('chirp-greeted-last', String(Date.now())) } catch {}
+    }, delayMs)
     return () => clearTimeout(t)
-  }, [enabled, storeKey, delayMs])
+  }, [enabled, storeKey, delayMs, capDays])
   const dismiss = () => { setShow(false); try { sessionStorage.setItem(storeKey, '1') } catch {} }
   useEffect(() => { if (open && show) dismiss() })   // opening the chat counts as seen
   return { show: show && !open, dismiss }

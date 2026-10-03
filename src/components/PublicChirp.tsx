@@ -4,6 +4,7 @@ import { CalendarDays, ClipboardCheck, PenLine, CreditCard, Trophy, MapPin } fro
 import ChirpAvatar from '@/components/ChirpAvatar'
 import ChirpInput from '@/components/ChirpInput'
 import ChirpText from '@/components/ChirpText'
+import { pickNudge, type NudgeEvent } from '@/lib/chirpNudges'
 import { ChirpLauncher, ChirpGreeting, ChirpHeader, ChirpWelcome, ChirpNote, useGreeting, useChirpHistory, ChirpHeaderActions, ChirpHistoryList } from '@/components/ChirpLauncher'
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -24,12 +25,33 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [team, setTeam] = useState('')
-  const [info, setInfo] = useState<{ title: string; orgName: string; contactEmail: string }>({ title: tournamentName || '', orgName: '', contactEmail: '' })
+  const [info, setInfo] = useState<{ title: string; orgName: string; contactEmail: string; event: NudgeEvent; loaded: boolean }>({ title: tournamentName || '', orgName: '', contactEmail: '', event: null, loaded: false })
   const bottomRef = useRef<HTMLDivElement>(null)
   const convoRef = useRef('')
   const unsentRef = useRef(false)
   const scopeKey = tournamentId || `org-${orgSlug || ''}`
-  const greeting = useGreeting(scopeKey, open)
+  // A returning visitor is a browser that chatted before: a random id kept on
+  // the device, never an IP address or anything that names the person.
+  const visitorRef = useRef<{ id: string; n: number; first: number } | null>(null)
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem('chirp-visitor') || 'null')
+      visitorRef.current = v && typeof v.id === 'string' ? v : { id: newId(), n: 0, first: Date.now() }
+      localStorage.setItem('chirp-visitor', JSON.stringify(visitorRef.current))
+    } catch { visitorRef.current = { id: newId(), n: 0, first: Date.now() } }
+  }, [])
+  function countChat() {
+    const v = visitorRef.current
+    if (!v) return
+    v.n += 1
+    try { localStorage.setItem('chirp-visitor', JSON.stringify(v)) } catch {}
+  }
+
+  // What Chirp opens with depends on the page and the event (see chirpNudges).
+  const [path, setPath] = useState('')
+  useEffect(() => { setPath(window.location.pathname) }, [])
+  const nudge = pickNudge({ path, event: info.event, orgName: info.orgName, returning: (visitorRef.current?.n || 0) > 0 })
+  const greeting = useGreeting(`${scopeKey}-${nudge.id}`, open, info.loaded && !!path, 6000, nudge.pageSpecific ? 0 : 2)
 
   // Keep the chat across pages: a link in an answer moves to that page, and on
   // tournament pages that remounts this widget, so the conversation lives in
@@ -60,7 +82,7 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
     const q = tournamentId ? `tournamentId=${encodeURIComponent(tournamentId)}` : orgSlug ? `orgSlug=${encodeURIComponent(orgSlug)}` : ''
     if (!q) return
     fetch(`/api/public-chat?${q}`).then(r => (r.ok ? r.json() : null)).then(d => {
-      if (d) setInfo(i => ({ title: i.title || d.title || '', orgName: d.orgName || '', contactEmail: d.contactEmail || '' }))
+      setInfo(i => d ? ({ title: i.title || d.title || '', orgName: d.orgName || '', contactEmail: d.contactEmail || '', event: d.event || null, loaded: true }) : { ...i, loaded: true })
     }).catch(() => {})
   }, [tournamentId, orgSlug])
 
@@ -102,11 +124,11 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
     const next: Message[] = [...messages, { role: 'user', content }]
     setMessages(next)
     setLoading(true)
-    if (!convoRef.current) convoRef.current = newId()
+    if (!convoRef.current) { convoRef.current = newId(); countChat() }
     try {
       const res = await fetch('/api/public-chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next, tournamentId, orgSlug, userTeam: team || undefined, page: window.location.pathname, convoId: convoRef.current }),
+        body: JSON.stringify({ messages: next, tournamentId, orgSlug, userTeam: team || undefined, page: window.location.pathname, convoId: convoRef.current, visitor: visitorRef.current || undefined }),
       })
       const data = await res.json()
       if (res.ok) unsentRef.current = true
@@ -136,9 +158,9 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
     <>
       {greeting.show && (
         <ChirpGreeting
-          title={`Hi! I'm Chirp, the ${info.orgName || 'event'} help desk.`}
-          body="Ask me about schedules, registration, waivers or payments. Type or tap the mic and talk."
-          chips={topics.slice(0, 3).map(t => ({ label: t.label, onPick: () => ask(t.q) }))}
+          title={nudge.title}
+          body={nudge.body}
+          chips={nudge.chips.map(c => ({ label: c.label, onPick: () => ask(c.q) }))}
           onDismiss={greeting.dismiss}
         />
       )}
