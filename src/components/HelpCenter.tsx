@@ -1,7 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { HelpCircle, X, ArrowLeft, Search, Mail, BookOpen, Sparkles } from 'lucide-react'
-import { HELP_ARTICLES, HELP_CATEGORIES } from '@/lib/helpArticles'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import ChirpInput from '@/components/ChirpInput'
@@ -15,6 +14,7 @@ const SUGGESTIONS = [
   'How do I edit the public event page?',
 ]
 type Msg = { role: 'user' | 'assistant'; content: string }
+type Guide = { id: string; title: string; category: string; keywords: string; body: string }
 const proseCls =
   'text-sm text-slate-600 leading-relaxed [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-slate-900 [&_h1]:mb-1 [&_h2]:font-semibold [&_h2]:text-slate-900 [&_h2]:mt-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mt-2 [&_li]:mt-1 [&_p]:mt-2 [&_a]:text-teal-700 [&_a]:underline'
 
@@ -27,6 +27,16 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Guides load when the panel first opens: only the pages this role can use.
+  const [guides, setGuides] = useState<Guide[] | null>(null)
+  const [categories, setCategories] = useState<string[]>([])
+  useEffect(() => {
+    if (!open || guides) return
+    fetch(`/api/help/articles${tournamentId ? `?tournamentId=${encodeURIComponent(tournamentId)}` : ''}`)
+      .then(r => (r.ok ? r.json() : { articles: [], categories: [] }))
+      .then(d => { setGuides(d.articles || []); setCategories(d.categories || []) })
+      .catch(() => setGuides([]))
+  }, [open, guides, tournamentId])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
   useEffect(() => {
@@ -37,8 +47,8 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
   }, [open])
 
   const q = query.trim().toLowerCase()
-  const matches = HELP_ARTICLES.filter(a => !q || (a.title + ' ' + a.keywords + ' ' + a.body).toLowerCase().includes(q))
-  const active = activeId ? HELP_ARTICLES.find(a => a.id === activeId) : null
+  const matches = (guides || []).filter(a => !q || (a.title + ' ' + a.keywords + ' ' + a.body).toLowerCase().includes(q))
+  const active = activeId ? (guides || []).find(a => a.id === activeId) : null
 
   async function send(text?: string) {
     const content = (text ?? input).trim()
@@ -100,7 +110,8 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                     <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search help…"
                       className="w-full text-sm border border-slate-300 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                   </div>
-                  {HELP_CATEGORIES.map(cat => {
+                  {guides === null && <p className="text-sm text-slate-400 text-center py-6">Loading guides…</p>}
+                  {categories.map(cat => {
                     const items = matches.filter(a => a.category === cat)
                     if (!items.length) return null
                     return (
@@ -117,7 +128,7 @@ export default function HelpCenter({ tournamentId }: { tournamentId?: string }) 
                       </div>
                     )
                   })}
-                  {matches.length === 0 && <p className="text-sm text-slate-400 text-center py-6">No articles match “{query}”. Try the Ask AI tab.</p>}
+                  {guides !== null && matches.length === 0 && <p className="text-sm text-slate-400 text-center py-6">No articles match “{query}”. Try the Ask Chirp tab.</p>}
                 </div>
               )}
 
