@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { chirpReply, cleanId, cleanPage, lastQuestion, recentQuestions } from '@/lib/chirp'
-import { cleanConvoId, logPublicTurn, orgScope, publicPrompt, tournamentScope } from '@/lib/publicChirp'
+import { cleanConvoId, logPublicTurn, orgScope, publicCovered, publicPrompt, tournamentScope } from '@/lib/publicChirp'
 import { orgBySlug, orgForTournament } from '@/lib/org'
 
 export const runtime = 'nodejs'
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       const row = await prisma.appSetting.findUnique({ where: { key } }).catch(() => null)
       let log: any[] = []
       try { log = JSON.parse((row as any)?.value || '[]'); if (!Array.isArray(log)) log = [] } catch {}
-      if (question) log.push({ q: question, at: Date.now(), team: userTeam || undefined, page: page || undefined })
+      if (question) log.push({ q: question, at: Date.now(), team: userTeam || undefined, page: page || undefined, covered: publicCovered(message) })
       if (log.length > 500) log = log.slice(-500)
       await prisma.appSetting.upsert({ where: { key }, create: { key, value: JSON.stringify(log) }, update: { value: JSON.stringify(log) } })
     } catch (e) { console.error('chirp log error:', e) }
