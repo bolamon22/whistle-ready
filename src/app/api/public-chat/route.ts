@@ -1,3 +1,4 @@
+import { getPublicVisibility } from '@/lib/publicView'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { chirpReply, cleanId, cleanPage, lastQuestion, recentQuestions } from '@/lib/chirp'
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
 // event and the organizer's address before anyone asks anything, and so the
 // greeting can fit the moment (registration open, event this week). Public
 // data only.
-type EventInfo = { id: string; name: string; startDate: string; endDate: string; regOpen: boolean }
+type EventInfo = { id: string; name: string; startDate: string; endDate: string; regOpen: boolean; scheduleOut?: boolean }
 const toEvent = (r: any): EventInfo => ({ id: String(r.id), name: String(r.name || ''), startDate: String(r.startDate || ''), endDate: String(r.endDate || ''), regOpen: Number(r.teamRegEnabled ?? 1) === 1 })
 
 export async function GET(req: NextRequest) {
@@ -65,6 +66,9 @@ export async function GET(req: NextRequest) {
         orgForTournament(tournamentId),
       ])
       const event = rows[0] ? toEvent(rows[0]) : null
+      // Same switch the public schedule page obeys, so the greeting never offers
+      // "when does my team play?" before there are games to see.
+      if (event) event.scheduleOut = await getPublicVisibility(tournamentId).then(v => v.schedule === 'live').catch(() => true)
       return NextResponse.json({ title: event?.name || '', orgName: org?.name || '', contactEmail: org?.contactEmail || '', event })
     }
     if (orgSlug) {

@@ -4,7 +4,7 @@
 // browser. `pageSpecific` nudges (register, waiver, pay, schedule) show on
 // their page once per visit; general ones at most every couple of days.
 
-export type NudgeEvent = { id: string; name: string; startDate: string; endDate: string; regOpen: boolean } | null
+export type NudgeEvent = { id: string; name: string; startDate: string; endDate: string; regOpen: boolean; scheduleOut?: boolean } | null
 export type Nudge = { id: string; title: string; body: string; chips: { label: string; q: string }[]; pageSpecific: boolean }
 
 function daysUntil(date: string): number | null {
@@ -32,6 +32,13 @@ export function pickNudge(o: { path: string; event: NudgeEvent; orgName: string;
     id: 'register', pageSpecific: true, title: `Registering for ${name}?`,
     body: 'I can help you pick divisions, explain the fees and the payment options.',
     chips: [{ label: 'How much does it cost?', q: 'How much does it cost to register a team?' }, { label: 'Which division do we pick?', q: 'Which division should our team register in?' }, { label: 'How do we pay?', q: 'How do we pay for our registration?' }],
+  }
+  // The schedule page before game times are published: don't offer "when does
+  // my team play?" -- there's nothing to show yet.
+  if (/\/tournaments\/[^/]+\/(public|today)(\/|$)/.test(p) && o.event?.scheduleOut === false) return {
+    id: 'schedule-pending', pageSpecific: true, title: 'The schedule isn\'t out yet',
+    body: "Your team's games will show here once it's released. Meanwhile I can check your team is listed, or help with waivers and fields.",
+    chips: [{ label: 'Is my team listed?', q: 'Is my team listed, and what pool are we in?' }, { label: 'Sign the player waiver', q: 'How do I sign the player waiver?' }, { label: 'Where are the fields?', q: 'Where are the fields and where do we park?' }],
   }
   if (/\/tournaments\/[^/]+\/(public|today)(\/|$)/.test(p)) return {
     id: 'schedule', pageSpecific: true, title: 'Looking for your team?',

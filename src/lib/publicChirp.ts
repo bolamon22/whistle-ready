@@ -8,6 +8,8 @@ import { sendEmail } from '@/lib/email'
 import { mdToEmailHtml } from '@/lib/emailMd'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { AUDIENCES, type AudienceId } from '@/lib/chirpNudges'
+import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
+import { cleanName, nameKey } from '@/lib/names'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 
@@ -29,6 +31,44 @@ const clip = (s: unknown, n: number) => String(s ?? '').slice(0, n)
 const NOT_KNOWN = "I don't have that information yet."
 export const publicCovered = (answer: string) => !/don.?t have that information yet/i.test(answer)
 
+/** Teams by division and pool, as the public schedule page lists them before
+ *  and after the schedule is out (same rule as /api/tournaments/[id]/pools):
+ *  pool rosters filtered to registered teams, plus registered teams in no pool
+ *  yet while the schedule is unpublished, waitlist left out. Lets Chirp answer "is my team in?" and "what pool are
+ *  we in?" while game times are still unpublished. */
+async function publicTeams(tournamentId: string, withUnpooled: boolean): Promise<string> {
+  try {
+    const [pools, byDiv, reg] = await Promise.all([
+      prisma.pool.findMany({ where: { tournamentId }, orderBy: [{ division: 'asc' }, { name: 'asc' }] }),
+      registeredKeys(tournamentId),
+      prisma.registeredTeam.findMany({
+        where: { registration: { tournamentId, deletedAt: null }, waitlisted: false },
+        select: { division: true, teamName: true },
+      }),
+    ])
+    const lines: string[] = []
+    const pooled = new Map<string, Set<string>>()
+    for (const p of pools as { division: string; name: string; teamNames: string }[]) {
+      let teams: string[] = []
+      try { const t = JSON.parse(p.teamNames || '[]'); if (Array.isArray(t)) teams = t.filter((x: unknown) => typeof x === 'string' && x.trim()).map((x: string) => x.trim()) } catch {}
+      teams = keepRegistered(teams, p.division, byDiv)
+      const d = nameKey(p.division)
+      if (!pooled.has(d)) pooled.set(d, new Set())
+      teams.forEach(t => pooled.get(d)!.add(nameKey(t)))
+      if (teams.length) lines.push(`${p.division} ${p.name}: ${[...teams].sort((a, b) => a.localeCompare(b)).join(', ')}`)
+    }
+    const loose = new Map<string, { division: string; teams: Set<string> }>()
+    for (const t of reg as { division: string; teamName: string }[]) {
+      const name = cleanName(t.teamName), d = nameKey(t.division)
+      if (!name || pooled.get(d)?.has(nameKey(name))) continue
+      if (!loose.has(d)) loose.set(d, { division: cleanName(t.division), teams: new Set() })
+      loose.get(d)!.teams.add(name)
+    }
+    if (withUnpooled) for (const g of loose.values()) lines.push(`${g.division}${pooled.has(nameKey(g.division)) ? ' (not in a pool yet)' : ''}: ${[...g.teams].sort((a, b) => a.localeCompare(b)).join(', ')}`)
+    return clip(lines.join('\n'), 6000)
+  } catch { return '' }
+}
+
 /** One tournament's public facts. */
 export async function tournamentScope(tournamentId: string, userTeam?: string): Promise<PublicScope | null> {
   const [t, allGames, site, vis] = await Promise.all([
@@ -40,6 +80,10 @@ export async function tournamentScope(tournamentId: string, userTeam?: string): 
   if (!t) return null
   const tt: any = t
   const games = applyPublicView(allGames, vis)   // only what the public schedule shows
+  // Not released = staff are still building it. Say so plainly, so Chirp doesn't
+  // hand out "search for your team" steps for games nobody can see yet.
+  const released = vis.schedule === 'live' && games.length > 0
+  const teams = vis.pools === 'live' ? await publicTeams(tournamentId, !released) : ''
   let c: any = {}
   try { c = JSON.parse((site as any)?.value || '{}') } catch {}
   const divisions: string[] = (() => { try { const d = JSON.parse(tt.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
@@ -54,8 +98,7 @@ DATES: ${tt.startDate || 'TBA'}${tt.endDate && tt.endDate !== tt.startDate ? ` t
 LOCATION: ${tt.location || 'TBA'}
 LINKS: event page ${base}/event | schedule & standings ${base}/public | game day ${base}/today | register a team ${base}/register | player waiver ${base}/player-waiver
 DIVISIONS (${divisions.length}): ${divisions.join(', ') || 'TBA'}
-${fees.length ? `FEES (per team):\n${fees.join('\n')}\n` : ''}${c.hotelsUrl || c.hotels ? `HOTELS: ${c.hotelsUrl ? `book at ${c.hotelsUrl}` : ''}${c.hotels ? ` ${clip(c.hotels, 400)}` : ''}\n` : ''}${locations.length ? `VENUES:\n${locations.map((l: any) => `- ${l.name || 'Venue'}${l.address ? ` — ${l.address}` : ''}`).join('\n')}\n` : ''}${c.overview ? `OVERVIEW:\n${clip(c.overview, 800)}\n` : ''}${c.rules ? `RULES (summary):\n${clip(c.rules, 1500)}\n` : ''}SCHEDULE (${games.length} games):
-${sched || 'Schedule not posted yet.'}`
+${fees.length ? `FEES (per team):\n${fees.join('\n')}\n` : ''}${c.hotelsUrl || c.hotels ? `HOTELS: ${c.hotelsUrl ? `book at ${c.hotelsUrl}` : ''}${c.hotels ? ` ${clip(c.hotels, 400)}` : ''}\n` : ''}${locations.length ? `VENUES:\n${locations.map((l: any) => `- ${l.name || 'Venue'}${l.address ? ` — ${l.address}` : ''}`).join('\n')}\n` : ''}${c.overview ? `OVERVIEW:\n${clip(c.overview, 800)}\n` : ''}${c.rules ? `RULES (summary):\n${clip(c.rules, 1500)}\n` : ''}${teams ? `TEAMS BY DIVISION AND POOL (as listed on the schedule page):\n${teams}\n` : ''}${released ? `SCHEDULE (${games.length} games):\n${sched}` : `SCHEDULE: NOT RELEASED YET. The organizer hasn't published game times, fields or opponents. Once it's released, every team's games appear on the schedule page (${base}/public).`}`
   if (org) facts += await orgPagesText(org.id)
   if (userTeam) facts += `\n\nThe person chatting is with team "${clip(userTeam, 60)}". For "my team", their schedule or results, focus on that team's games.`
   return { key: tournamentId, title: tt.name, org, facts, tournamentId }
@@ -104,6 +147,8 @@ THEY ARE ON: ${page || 'unknown page'}
 ${who ? `WHO IS ASKING: ${who.prompt} (they told us). Answer for them.\n` : ''}
 HOW TO ANSWER
 - Answer only from EVENT INFO and the HOW-TO pages below. Never invent dates, times, fields, prices, policies, rules, buttons or features, and never fill a gap with what seems likely: if the pages don't say (for example whether a player on two teams signs twice), treat it as unknown.
+- If SCHEDULE says NOT RELEASED YET and they ask when, where or who their team plays: say first that the schedule hasn't been released yet and that their games will show on the schedule page once it is (link it). Don't give steps for finding games, and don't guess a release date. If their team is in TEAMS BY DIVISION AND POOL, confirm its division and pool. Don't start with "${NOT_KNOWN}" for this.
+- A message that is just a team name means they're telling you their team: answer about that team.
 - How-to questions (register, pay, waivers, schedule, alerts): give short numbered steps with the exact button names in **bold**, from the HOW-TO pages.
 - Take them there: when a page answers the question, start with a markdown link to it on its own line using the paths given, e.g. [See the schedule](/tournaments/abc/public), then only the steps they do on that page. Don't describe menus to reach a page you can link.
 - If the answer isn't in EVENT INFO or the HOW-TO pages, start your reply with exactly "${NOT_KNOWN}" and then, in one line, point them to the event page or the organizer${scope.org?.contactEmail ? ` (${scope.org.contactEmail})` : ''}.
