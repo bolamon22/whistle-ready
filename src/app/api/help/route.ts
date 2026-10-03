@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { askerName, chirpReply, cleanId, cleanPage, lastQuestion, logStaffQuestion, staffPrompt } from '@/lib/chirp'
+import { askerName, chirpReply, cleanId, cleanPage, lastQuestion, logStaffQuestion, recentQuestions, staffPrompt } from '@/lib/chirp'
 
 export const runtime = 'nodejs'
 
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const tournamentId = cleanId(body.tournamentId)
     const page = cleanPage(body.page)
-    const system = staffPrompt({ role: gate.role, page, tournamentId })
+    const system = staffPrompt({ role: gate.role, page, tournamentId, question: recentQuestions(body.messages) })
     const message = await chirpReply(system, body.messages)
     await logStaffQuestion({ tournamentId, role: gate.role, name: askerName(gate.session, gate.role), page, question: lastQuestion(body.messages), answer: message })
     return NextResponse.json({ message })

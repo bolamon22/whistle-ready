@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { roleCanAccess } from '@/lib/routeAccess'
 import { canSeeMoney } from '@/lib/roleScope'
-import { HELP_ARTICLES, ARTICLE_ROUTES, TOURNAMENT_PAGES, ORG_PAGES } from '@/lib/helpArticles'
+import { HELP_ARTICLES, ARTICLE_ROUTES, TOURNAMENT_PAGES, ORG_PAGES, type HelpArticle } from '@/lib/helpArticles'
 
 // One brain for the staff Chirps (floating Chirp and the Help "Ask Chirp" tab).
 // Every prompt is built from four inputs: who is asking (role), the page they
@@ -48,14 +48,42 @@ export function pagesFor(role: string, tournamentId: string): string {
 
 /** The manual pages this role can use: an article is included when the role can
  *  open at least one page it is about. */
-export function manualFor(role: string, tournamentId: string): string {
-  return HELP_ARTICLES
-    .filter(a => {
-      const routes = ARTICLE_ROUTES[a.id] ?? []
-      return routes.length === 0 || routes.some(r => roleCanAccess(role, fill(r, tournamentId)))
+export function articlesFor(role: string, tournamentId: string): HelpArticle[] {
+  return HELP_ARTICLES.filter(a => {
+    const routes = ARTICLE_ROUTES[a.id] ?? []
+    return routes.length === 0 || routes.some(r => roleCanAccess(role, fill(r, tournamentId)))
+  })
+}
+
+const STOP = new Set('the and for you your how what where when who why can does did with from this that have has into are was get got not but out our use any all its it\'s there their them then than just want need like make do i a an to of in on at is be my me we us or if so as by'.split(' '))
+const words = (t: string) => (t.toLowerCase().match(/[a-z0-9]+/g) || []).filter(w => w.length > 2 && !STOP.has(w))
+const stem = (w: string) => w.replace(/(ings|ing|ies|es|s|ed)$/, '')
+
+/** Pick the manual pages for this question: the pages about the screen they are
+ *  on, then the best keyword matches. The whole manual is far too long to send
+ *  with every question (about 35k tokens), and a short, relevant prompt answers
+ *  better. Chirp also gets the list of every page title it could have used. */
+export function pickArticles(list: HelpArticle[], question: string, page: string, tournamentId: string, max = 6, budget = 24000): HelpArticle[] {
+  const q = Array.from(new Set(words(question).map(stem)))
+  const scored = list.map(a => {
+    let score = 0
+    const onPage = page && a.routes.some(r => {
+      const re = new RegExp('^' + fill(r, tournamentId).replace(/[.+?^${}()|[\]\\]/g, '\\$&') + '(?=/|$)')
+      return r.split('/').length > 3 ? re.test(page) : fill(r, tournamentId) === page
     })
-    .map(a => `## ${a.title}\n${a.body}`)
-    .join('\n\n')
+    if (onPage) score += 4
+    const title = new Set(words(a.title).map(stem)), kw = new Set(words(a.keywords).map(stem)), body = new Set(words(a.body).map(stem))
+    for (const w of q) score += (title.has(w) ? 3 : 0) + (kw.has(w) ? 2 : 0) + (body.has(w) ? 1 : 0)
+    return { a, score }
+  }).filter(x => x.score > 0).sort((x, y) => y.score - x.score)
+  const out: HelpArticle[] = []
+  let size = 0
+  for (const { a } of scored) {
+    if (out.length >= max) break
+    if (size + a.body.length > budget && out.length) continue
+    out.push(a); size += a.body.length
+  }
+  return out
 }
 
 /** Live numbers for one tournament, already cut to what this role may see. */
@@ -97,8 +125,10 @@ INDIVIDUAL PLAYERS: ${indivRegs.length} registered | ${paidPlayers.length} paid 
 }
 
 /** The system prompt for a staff Chirp. */
-export function staffPrompt(opts: { role: string; page: string; tournamentId: string; facts?: string }): string {
-  const { role, page, tournamentId, facts } = opts
+export function staffPrompt(opts: { role: string; page: string; tournamentId: string; facts?: string; question?: string }): string {
+  const { role, page, tournamentId, facts, question = '' } = opts
+  const mine = articlesFor(role, tournamentId)
+  const picked = pickArticles(mine, question, page, tournamentId)
   const money = canSeeMoney(role)
   return `You are Chirp, the in-app assistant and help desk for Whistle Ready, a tournament-management app. If asked your name, you are Chirp. Be warm and brief.
 
@@ -106,7 +136,7 @@ WHO IS ASKING: ${roleLabel(role)}. Answer for that role.
 THEY ARE ON: ${page || 'unknown page'}
 
 HOW TO ANSWER
-- How-to questions: answer only from MANUAL. Give short numbered steps and use menu and button names exactly as written in MANUAL or PAGES.
+- How-to questions: answer only from the MANUAL pages below. If a title in the list fits better than the pages shown, tell them to open that page in **Help → Guides** (the ? in the top bar) rather than guessing its steps. Give short numbered steps and use menu and button names exactly as written in MANUAL or PAGES.
 - Link pages from PAGES as markdown links, for example [Scheduler](${tournamentId ? `/tournaments/${tournamentId}/scheduler` : '/path'}). Only send people to pages listed in PAGES. If a task needs a page that is not in PAGES, say in one line that their tournament director handles that, without naming the page and without the not-covered sentence below.
 - Never invent a feature, menu, page or button. If MANUAL doesn't cover a task this person can do, start your reply with exactly "${NOT_COVERED}" and then point to the closest page in PAGES in one line.
 ${facts ? `- Questions about this tournament: answer from LIVE DATA only.${money ? '' : ' LIVE DATA has no dollar amounts for this role; if asked about money, say the tournament director can see that.'}\n` : ''}- Plain words, American spelling, bold for menu names, no headings.
@@ -115,8 +145,11 @@ ${facts ? `\n=== LIVE DATA ===\n${facts}\n` : ''}
 === PAGES ===
 ${pagesFor(role, tournamentId)}
 
-=== MANUAL ===
-${manualFor(role, tournamentId)}`
+=== MANUAL: EVERY PAGE THIS PERSON CAN USE (titles only) ===
+${mine.map(a => `- ${a.title}`).join('\n')}
+
+=== MANUAL: THE PAGES THAT FIT THIS QUESTION ===
+${picked.length ? picked.map(a => `## ${a.title}\n${a.body}`).join('\n\n') : '(no page matched)'}`
 }
 
 type Msg = { role: string; content: string }
@@ -128,6 +161,12 @@ function cleanMessages(messages: unknown): { role: 'user' | 'assistant'; content
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .slice(-20)
     .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content.slice(0, 4000) }))
+}
+
+/** The last two questions, for picking manual pages (follow-ups like "and for one
+ *  tournament?" need the question before them). */
+export function recentQuestions(messages: unknown): string {
+  return cleanMessages(messages).filter(m => m.role === 'user').slice(-2).map(m => m.content).join(' ')
 }
 
 export function lastQuestion(messages: unknown): string {
