@@ -5,6 +5,13 @@
 // clean up after an event is over. `seriesLabelOf` is the single source of truth
 // for mapping a tournament name -> event label: it is used both to build the
 // checkbox options in the editor AND to match at send time, so they can't drift.
+//
+// The track record groups differently: `seriesOf` returns one of the known
+// series or ONE_OFF and never invents a series from a tournament's name, so
+// /stats, the front page and the Website admin all count the same events.
+// lib/orgHistory (server) and the Website admin page (client) import those two,
+// which is also why this file has no database import. Keep both exports when
+// editing this file: without them computeOrgHistory throws and /stats is a 500.
 
 const KNOWN: [RegExp, string][] = [
   [/monster mash/i, 'Monster Mash'],
@@ -34,4 +41,14 @@ export function seriesLabelsFromNames(names: string[]): string[] {
   const seen = new Set<string>(); const out: string[] = []
   for (const n of names || []) { const l = seriesLabelOf(n); if (l && !seen.has(l)) { seen.add(l); out.push(l) } }
   return out.sort((a, b) => a.localeCompare(b))
+}
+
+/** The catch-all heading. Exported so a caller can sort it last rather than test the string. */
+export const ONE_OFF = 'One-off events'
+
+/** The track record's grouping: one of the known series, or ONE_OFF. */
+export function seriesOf(name: unknown): string {
+  const s = String(name ?? '')
+  for (const [re, label] of KNOWN) if (re.test(s)) return label
+  return ONE_OFF
 }
