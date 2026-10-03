@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Maximize2, Minimize2, X } from 'lucide-react'
+import { Maximize2, Minimize2, CalendarDays, Users, Mail, ClipboardList, BookOpen, UserPlus } from 'lucide-react'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import ChirpText from '@/components/ChirpText'
 import ChirpInput from '@/components/ChirpInput'
+import { ChirpLauncher, ChirpHeader, ChirpWelcome, ChirpNote } from '@/components/ChirpLauncher'
 
 // The floating staff Chirp. Mounted once for the whole app by GlobalChirp, so it
 // follows staff from page to page and keeps the conversation while they move
@@ -13,16 +14,17 @@ import ChirpInput from '@/components/ChirpInput'
 interface Message { role: 'user' | 'assistant'; content: string }
 interface Props { tournamentId?: string; tournamentName?: string; liftOnPhones?: boolean }
 
-const TOURNAMENT_SUGGESTIONS = [
-  'How many games are unscheduled?',
-  'How many refs are on the roster?',
-  'Who gets the new-registration emails?',
-  'How do I assign refs to games?',
+const TOURNAMENT_TOPICS = [
+  { label: 'Unscheduled games', q: 'How many games are unscheduled?', icon: <CalendarDays size={18} /> },
+  { label: 'Refs on the roster', q: 'How many refs are on the roster?', icon: <Users size={18} /> },
+  { label: 'New-registration emails', q: 'Who gets the new-registration emails?', icon: <Mail size={18} /> },
+  { label: 'Assign refs to games', q: 'How do I assign refs to games?', icon: <ClipboardList size={18} /> },
 ]
-const APP_SUGGESTIONS = [
-  'How does Whistle Ready work?',
-  'Who gets the new-registration emails?',
-  'How do I set up a tournament?',
+const APP_TOPICS = [
+  { label: 'How Whistle Ready works', q: 'How does Whistle Ready work?', icon: <BookOpen size={18} /> },
+  { label: 'Set up a tournament', q: 'How do I set up a tournament?', icon: <CalendarDays size={18} /> },
+  { label: 'New-registration emails', q: 'Who gets the new-registration emails?', icon: <Mail size={18} /> },
+  { label: 'Add a user', q: 'How do I add a user and set their role?', icon: <UserPlus size={18} /> },
 ]
 const EXPAND_KEY = 'chirp-expanded'
 
@@ -66,64 +68,42 @@ export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones 
     setLoading(false)
   }
 
-  const suggestions = tournamentId ? TOURNAMENT_SUGGESTIONS : APP_SUGGESTIONS
-  const subtitle = tournamentId ? (tournamentName || 'This tournament') : 'Whistle Ready help'
-  const lift = liftOnPhones ? 'bottom-20' : 'bottom-4'
+  const topics = tournamentId ? TOURNAMENT_TOPICS : APP_TOPICS
+  const subtitle = `${tournamentId ? (tournamentName || 'This tournament') : 'Whistle Ready'} · ask how to do anything`
 
   return (
     <>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`fixed ${lift} right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-all ${open ? 'bg-slate-600' : 'bg-[#0f1f3d] hover:bg-slate-700'}`}
-        aria-label="Chirp assistant"
-      >
-        {open ? <X size={22} /> : <ChirpAvatar size={40} />}
-      </button>
+      <ChirpLauncher open={open} onToggle={() => setOpen(o => !o)} sub="Help desk · ask anything" lift={liftOnPhones} />
 
       {open && (
         <div
           className={`fixed ${liftOnPhones ? 'bottom-36' : 'bottom-20'} sm:bottom-24 left-3 right-3 sm:left-auto sm:right-6 z-50 w-auto ${expanded ? 'sm:w-[36rem]' : 'sm:w-96'} bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden`}
-          style={{ maxHeight: expanded ? '85vh' : '70vh', height: expanded ? '85vh' : undefined }}>
+          style={{ maxHeight: expanded ? '85vh' : '75vh', height: expanded ? '85vh' : undefined }}>
 
-          <div className="bg-[#0f1f3d] px-4 py-3 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <ChirpAvatar size={28} />
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-white">Chirp</p>
-                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{subtitle}</p>
-              </div>
-            </div>
+          <ChirpHeader subtitle={subtitle} actions={
             <div className="flex items-center gap-3">
               {messages.length > 0 && (
-                <button onClick={() => setMessages([])} className="text-[10px] text-slate-400 hover:text-white transition-colors">Clear</button>
+                <button type="button" onClick={() => setMessages([])} className="text-[11px] text-slate-300 hover:text-white transition-colors">Clear</button>
               )}
-              <button onClick={toggleExpanded} aria-label={expanded ? 'Make Chirp smaller' : 'Make Chirp bigger'} title={expanded ? 'Smaller' : 'Bigger'}
-                className="hidden sm:inline-flex text-slate-400 hover:text-white transition-colors">
+              <button type="button" onClick={toggleExpanded} aria-label={expanded ? 'Make Chirp smaller' : 'Make Chirp bigger'} title={expanded ? 'Smaller' : 'Bigger'}
+                className="hidden sm:inline-flex text-slate-300 hover:text-white transition-colors">
                 {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
               </button>
             </div>
-          </div>
+          } />
 
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
             {messages.length === 0 ? (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-500 text-center pt-2">
-                  {tournamentId
-                    ? <>Ask about <strong>{tournamentName || 'this tournament'}</strong>, or how to do something in Whistle Ready</>
-                    : <>Ask me how to do anything in Whistle Ready</>}
-                </p>
-                <div className="space-y-1.5">
-                  {suggestions.map(s => (
-                    <button key={s} onClick={() => send(s)}
-                      className="w-full text-left text-xs text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 transition-colors">
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <ChirpWelcome
+                hello={tournamentId
+                  ? `Hi! Ask me about ${tournamentName || 'this tournament'}'s numbers, or how to do anything in Whistle Ready. I'll give you the steps and the page.`
+                  : 'Hi! Ask me how to do anything in Whistle Ready. I\'ll give you the steps and the page.'}
+                topics={topics.map(t => ({ label: t.label, icon: t.icon, onPick: () => send(t.q) }))}
+              />
             ) : (
               messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {m.role === 'assistant' && <ChirpAvatar size={24} />}
                   <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
                     m.role === 'user' ? 'bg-[#0f1f3d] text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'
                   }`}>
@@ -146,6 +126,7 @@ export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones 
 
           <div className="border-t border-slate-100 px-3 py-3 flex-shrink-0">
             <ChirpInput value={input} onChange={setInput} onSend={() => send()} disabled={loading} autoFocus={open} />
+            <ChirpNote />
           </div>
         </div>
       )}
