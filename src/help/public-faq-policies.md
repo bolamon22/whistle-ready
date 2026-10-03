@@ -12,7 +12,7 @@ Organizer answers about event-day policies. The event's **Rules** page and the w
 Play stops as soon as thunder or lightning is seen, and players and spectators leave the fields for their vehicles. Play resumes 20 minutes after the last lightning. Games may be shortened, or the event may switch to a festival format, to stay on schedule. Changes are posted in the tournament app. Weather-related cancellations, rescheduling and format changes are non-refundable.
 
 **Can a player guest on another team?**
-Teams sometimes need to share or borrow players to field a full roster, so guest playing across different divisions is allowed. Please limit double-rostering when you can, to avoid player fatigue and schedule conflicts. To keep competition fair, A-roster players should not guest on B teams. Roster switching is not allowed in playoff games, and all divisions follow USA Lacrosse age guidelines, with no age or grad-year exemptions without Director approval.
+Teams sometimes need to share or borrow players to field a full roster, so guest playing across different divisions is allowed. Please limit double-rostering when you can, to avoid player fatigue and schedule conflicts. To keep competition fair, A-roster players should not guest on B teams. Roster switching is not allowed in playoff games, and all divisions follow USA Lacrosse age guidelines, with no age or grad-year exemptions.
 
 **How are ties in the standings broken?**
 In order: overall record, head-to-head result, fewest goals against, goal differential (capped at plus or minus 7 a game), then a coin flip.
