@@ -4,7 +4,7 @@ import { CalendarDays, ClipboardCheck, PenLine, CreditCard, Trophy, MapPin } fro
 import ChirpAvatar from '@/components/ChirpAvatar'
 import ChirpInput from '@/components/ChirpInput'
 import ChirpText from '@/components/ChirpText'
-import { ChirpLauncher, ChirpGreeting, ChirpHeader, ChirpWelcome, ChirpNote, useGreeting } from '@/components/ChirpLauncher'
+import { ChirpLauncher, ChirpGreeting, ChirpHeader, ChirpWelcome, ChirpNote, useGreeting, useChirpHistory, ChirpHeaderActions, ChirpHistoryList } from '@/components/ChirpLauncher'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -80,7 +80,16 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => { if (!open) flush() }, [open])
-  function clearChat() { flush(); convoRef.current = ''; setMessages([]) }
+  const hist = useChirpHistory('public')
+  const [showHistory, setShowHistory] = useState(false)
+  // New chat files the current one under History instead of deleting it.
+  function newChat() { flush(); hist.archive(messages); convoRef.current = ''; setMessages([]) }
+  function openPast(id: string) {
+    const past = hist.take(id)
+    if (!past) return
+    flush(); hist.archive(messages); convoRef.current = ''
+    setMessages(past); setShowHistory(false)
+  }
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
   useEffect(() => { try { setTeam(localStorage.getItem(`chirp-team-${scopeKey}`) || '') } catch {} }, [scopeKey])
@@ -139,11 +148,13 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
         <div className="fixed bottom-20 sm:bottom-24 left-3 right-3 sm:left-auto sm:right-6 z-50 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden" style={{ maxHeight: '75vh' }}>
           <ChirpHeader
             subtitle={`${info.title || info.orgName || 'Events'} · answers in seconds, 24/7`}
-            actions={messages.length > 0 ? <button type="button" onClick={clearChat} className="text-[11px] text-slate-300 hover:text-white">Clear</button> : undefined}
+            actions={<ChirpHeaderActions hasMessages={messages.length > 0} historyCount={hist.items.length} showingHistory={showHistory} onHistory={() => setShowHistory(v => !v)} onNew={newChat} />}
           />
 
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
-            {messages.length === 0 ? (
+            {showHistory ? (
+              <ChirpHistoryList items={hist.items} onPick={openPast} onBack={() => setShowHistory(false)} />
+            ) : messages.length === 0 ? (
               <>
                 <ChirpWelcome
                   hello={`Hi! I'm Chirp. I can find your team's games, walk you through registering, waivers and payments for ${place}, or point you to the right page. What can I help with?`}

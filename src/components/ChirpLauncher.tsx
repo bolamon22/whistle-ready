@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, type ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { X, History, SquarePen } from 'lucide-react'
 import ChirpAvatar from '@/components/ChirpAvatar'
 
 // The pieces that make Chirp read as a help desk rather than a mystery bubble
@@ -135,5 +135,89 @@ export function ChirpNote({ contact }: { contact?: string }) {
     <p className="text-[11px] text-slate-500 text-center mt-2">
       AI assistant, can make mistakes.{contact ? <> Need a person? <a href={`mailto:${contact}`} className="text-teal-700 underline">{contact}</a></> : null}
     </p>
+  )
+}
+
+// ---- Earlier chats ----
+// "New chat" no longer throws a conversation away: it is filed under History
+// on this device (last 10, kept 14 days), and any of them can be reopened and
+// continued. Bo, Oct 3 2026: "if I hit clear, how do I retrieve my conversation?"
+
+export type ChirpMsg = { role: 'user' | 'assistant'; content: string }
+type Archived = { id: string; at: number; messages: ChirpMsg[] }
+const KEEP_DAYS = 14, KEEP_MAX = 10
+
+export function useChirpHistory(key: string) {
+  const storeKey = `chirp-history:${key}`
+  const [items, setItems] = useState<Archived[]>([])
+  const read = (): Archived[] => {
+    try {
+      const v = JSON.parse(localStorage.getItem(storeKey) || '[]')
+      return Array.isArray(v) ? v.filter((x: Archived) => x && Array.isArray(x.messages) && Date.now() - x.at < KEEP_DAYS * 86400000) : []
+    } catch { return [] }
+  }
+  const write = (list: Archived[]) => { try { localStorage.setItem(storeKey, JSON.stringify(list)) } catch {} setItems(list) }
+  useEffect(() => { setItems(read()) }, [storeKey])   // eslint-disable-line react-hooks/exhaustive-deps
+  /** File a conversation (no-op when it has no question in it). */
+  const archive = (messages: ChirpMsg[]) => {
+    if (!messages.some(m => m.role === 'user')) return
+    const id = Math.random().toString(36).slice(2)
+    write([{ id, at: Date.now(), messages: messages.slice(-30) }, ...read()].slice(0, KEEP_MAX))
+  }
+  /** Take one out of History (it becomes the open chat again). */
+  const take = (id: string): ChirpMsg[] | null => {
+    const list = read(), hit = list.find(x => x.id === id)
+    if (!hit) return null
+    write(list.filter(x => x.id !== id))
+    return hit.messages
+  }
+  return { items, archive, take }
+}
+
+/** Header buttons: History and New chat. */
+export function ChirpHeaderActions({ hasMessages, historyCount, showingHistory, onHistory, onNew, extra }: {
+  hasMessages: boolean; historyCount: number; showingHistory: boolean; onHistory: () => void; onNew: () => void; extra?: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {(historyCount > 0 || showingHistory) && (
+        <button type="button" onClick={onHistory} aria-pressed={showingHistory} title="Earlier chats"
+          className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md transition-colors ${showingHistory ? 'bg-white/15 text-white' : 'text-slate-300 hover:text-white'}`}>
+          <History size={13} /> History
+        </button>
+      )}
+      {hasMessages && !showingHistory && (
+        <button type="button" onClick={onNew} title="Start a new chat (this one moves to History)"
+          className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md text-slate-300 hover:text-white transition-colors">
+          <SquarePen size={13} /> New chat
+        </button>
+      )}
+      {extra}
+    </div>
+  )
+}
+
+/** The list of earlier chats on this device. */
+export function ChirpHistoryList({ items, onPick, onBack }: { items: { id: string; at: number; messages: ChirpMsg[] }[]; onPick: (id: string) => void; onBack: () => void }) {
+  const when = (ms: number) => new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-slate-500">Earlier chats on this device</p>
+        <button type="button" onClick={onBack} className="text-xs text-teal-700 hover:text-teal-900 font-medium">Back to chat</button>
+      </div>
+      {items.length === 0 && <p className="text-sm text-slate-400 py-4 text-center">No earlier chats yet.</p>}
+      {items.map(it => {
+        const first = it.messages.find(m => m.role === 'user')?.content || 'Chat'
+        const n = it.messages.filter(m => m.role === 'user').length
+        return (
+          <button key={it.id} type="button" onClick={() => onPick(it.id)}
+            className="w-full text-left bg-white border border-slate-200 hover:border-teal-300 hover:bg-teal-50/40 rounded-xl px-3 py-2.5 transition-colors">
+            <span className="block text-sm font-medium text-slate-800 truncate">{first}</span>
+            <span className="block text-[11px] text-slate-500 mt-0.5">{when(it.at)} · {n} question{n === 1 ? '' : 's'}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }

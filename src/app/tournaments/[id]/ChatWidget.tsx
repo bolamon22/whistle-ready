@@ -5,7 +5,7 @@ import { Maximize2, Minimize2, CalendarDays, Users, Mail, ClipboardList, BookOpe
 import ChirpAvatar from '@/components/ChirpAvatar'
 import ChirpText from '@/components/ChirpText'
 import ChirpInput from '@/components/ChirpInput'
-import { ChirpLauncher, ChirpHeader, ChirpWelcome, ChirpNote } from '@/components/ChirpLauncher'
+import { ChirpLauncher, ChirpHeader, ChirpWelcome, ChirpNote, useChirpHistory, ChirpHeaderActions, ChirpHistoryList } from '@/components/ChirpLauncher'
 
 // The floating staff Chirp. Mounted once for the whole app by GlobalChirp, so it
 // follows staff from page to page and keeps the conversation while they move
@@ -55,6 +55,16 @@ export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones 
     try { sessionStorage.setItem(STORE, JSON.stringify({ messages: messages.slice(-30), open, at: Date.now() })) } catch {}
   }, [messages, open, STORE])
   const onNavigate = () => { if (window.innerWidth < 640) setOpen(false) }
+
+  // New chat files the current one under History (this device) instead of deleting it.
+  const hist = useChirpHistory(`staff:${tournamentId || 'app'}`)
+  const [showHistory, setShowHistory] = useState(false)
+  function newChat() { hist.archive(messages); setMessages([]) }
+  function openPast(id: string) {
+    const past = hist.take(id)
+    if (!past) return
+    hist.archive(messages); setMessages(past); setShowHistory(false)
+  }
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
   function toggleExpanded() {
@@ -99,19 +109,19 @@ export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones 
           style={{ maxHeight: expanded ? '85vh' : '75vh', height: expanded ? '85vh' : undefined }}>
 
           <ChirpHeader subtitle={subtitle} actions={
-            <div className="flex items-center gap-3">
-              {messages.length > 0 && (
-                <button type="button" onClick={() => setMessages([])} className="text-[11px] text-slate-300 hover:text-white transition-colors">Clear</button>
-              )}
+            <ChirpHeaderActions hasMessages={messages.length > 0} historyCount={hist.items.length} showingHistory={showHistory}
+              onHistory={() => setShowHistory(v => !v)} onNew={newChat} extra={
               <button type="button" onClick={toggleExpanded} aria-label={expanded ? 'Make Chirp smaller' : 'Make Chirp bigger'} title={expanded ? 'Smaller' : 'Bigger'}
                 className="hidden sm:inline-flex text-slate-300 hover:text-white transition-colors">
                 {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
               </button>
-            </div>
+            } />
           } />
 
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
-            {messages.length === 0 ? (
+            {showHistory ? (
+              <ChirpHistoryList items={hist.items} onPick={openPast} onBack={() => setShowHistory(false)} />
+            ) : messages.length === 0 ? (
               <ChirpWelcome
                 hello={tournamentId
                   ? `Hi! Ask me about ${tournamentName || 'this tournament'}'s numbers, or how to do anything in Whistle Ready. I'll give you the steps and the page.`
