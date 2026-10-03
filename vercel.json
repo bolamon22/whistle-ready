@@ -19,6 +19,10 @@
     {
       "path": "/api/social/insights-cron",
       "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/chirp/weekly-digest",
+      "schedule": "0 13 * * 1"
     }
   ]
 }

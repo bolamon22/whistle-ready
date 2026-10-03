@@ -23,7 +23,7 @@ export default async function ChirpInsightsPage({ params, searchParams }: { para
     prisma.appSetting.findUnique({ where: { key: `chirpLog:${params.id}` } }).catch(() => null),
     prisma.appSetting.findUnique({ where: { key: staffLogKey(params.id) } }).catch(() => null),
   ])
-  let log: { q: string; at: number; team?: string }[] = []
+  let log: { q: string; at: number; team?: string; covered?: boolean }[] = []
   try { const v = JSON.parse((row as any)?.value || '[]'); if (Array.isArray(v)) log = v } catch {}
   // Staff questions from the floating Chirp and Help → Ask Chirp. The ones the
   // manual could not answer are the to-do list for the help pages.
@@ -78,7 +78,7 @@ export default async function ChirpInsightsPage({ params, searchParams }: { para
         </div>
 
         <h2 className="font-semibold text-slate-900 mb-1">Public questions</h2>
-        <p className="text-sm text-slate-500 mb-3">What attendees ask Chirp on your public pages, without names. {log.length} question{log.length === 1 ? '' : 's'} so far.</p>
+        <p className="text-sm text-slate-500 mb-3">What attendees ask Chirp on your public pages, without names. {log.length} question{log.length === 1 ? '' : 's'} so far{log.some(e => e.covered === false) ? `, ${log.filter(e => e.covered === false).length} Chirp couldn't answer` : ''}.</p>
 
         {log.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500">
@@ -109,7 +109,7 @@ export default async function ChirpInsightsPage({ params, searchParams }: { para
               <div className="space-y-2">
                 {recent.map((e, i) => (
                   <div key={i} className="flex items-start justify-between gap-3 text-sm py-1.5 border-b border-slate-100 last:border-0">
-                    <span className="text-slate-700">{e.q}{e.team ? <span className="ml-2 text-[11px] text-slate-400">· {e.team}</span> : null}</span>
+                    <span className="text-slate-700">{e.q}{e.covered === false && <span className="ml-2 text-[11px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">Not answered</span>}{e.team ? <span className="ml-2 text-[11px] text-slate-400">· {e.team}</span> : null}</span>
                     <span className="shrink-0 text-xs text-slate-400">{ago(e.at)}</span>
                   </div>
                 ))}
