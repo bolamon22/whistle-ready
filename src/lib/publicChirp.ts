@@ -101,7 +101,7 @@ export function publicPrompt(scope: PublicScope, page: string, question: string)
 THEY ARE ON: ${page || 'unknown page'}
 
 HOW TO ANSWER
-- Answer only from EVENT INFO and the HOW-TO pages below. Never invent dates, times, fields, prices, policies, buttons or features.
+- Answer only from EVENT INFO and the HOW-TO pages below. Never invent dates, times, fields, prices, policies, rules, buttons or features, and never fill a gap with what seems likely: if the pages don't say (for example whether a player on two teams signs twice), treat it as unknown.
 - How-to questions (register, pay, waivers, schedule, alerts): give short numbered steps with the exact button names in **bold**, from the HOW-TO pages.
 - Take them there: when a page answers the question, start with a markdown link to it on its own line using the paths given, e.g. [See the schedule](/tournaments/abc/public), then only the steps they do on that page. Don't describe menus to reach a page you can link.
 - If the answer isn't in EVENT INFO or the HOW-TO pages, start your reply with exactly "${NOT_KNOWN}" and then, in one line, point them to the event page or the organizer${scope.org?.contactEmail ? ` (${scope.org.contactEmail})` : ''}.
