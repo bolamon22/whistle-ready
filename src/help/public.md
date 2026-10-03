@@ -1,13 +1,24 @@
 ---
-title: Public page & event page
+title: The public schedule page and event page
 category: Public pages
-order: 130
-routes: /tournaments/*/builder
-keywords: public page event page schedule standings bracket builder blocks tabs
+order: 300
+routes: /tournaments/*/public, /tournaments/*/event
+keywords: public page event page share link schedule standings brackets parents spectators follow team alerts add to calendar what the public sees public link
 ---
-Two public‑facing pages share your tournament with teams and families.
+Each tournament has two public pages for teams and families. Neither needs a login.
 
-- The **Public page** has division standings, a grouped schedule (filters, add‑to‑calendar), and full bracket trees.
-- The **Event page** is a builder‑driven landing page: drag blocks (overview, fees, locations, hotels, rules, FAQ, countdown, schedule, standings) and arrange them, with an **Event info** menu and a tabbed layout.
+**The event page** is the landing page: dates, fees, divisions, location, hotels, rules, contacts and a **Register a team** button. You build it in **Setup → Tournament setup → Page builder**.
 
-Edit the event page under **Setup → Event page → Page builder**. Use **Generate with AI** to draft section copy.
+**The public schedule page** is the game-day page with **Standings**, **Schedule** and **Bracket**. Visitors can filter by division, team and field, add games to their calendar, and **Follow** a team to get alerts on their phone. The **Info** button shows what you entered in **Tournament setup → Tournament info**.
+
+**Where:** click **Public** in the tournament header (the globe icon on a phone) to open the public schedule page in a new tab.
+
+**What the public schedule page shows:**
+- **Teams & pools** (pool lists and standings) and **Schedule & brackets** can each be turned on or off. Use the **Public:** pill on the Scheduler, or the **Public page** card on **Divisions & teams**.
+- The schedule shows times and fields as of your last **Publish** on the Scheduler. Moving games stays private until you publish again.
+- Scores always update live.
+
+**Common problems:**
+- "The public page still shows the old times" — click **Publish** on the Scheduler.
+- Followed teams show **Schedule coming soon** until **Schedule & brackets** is made public.
+- Bracket games appear once pool play concludes.
