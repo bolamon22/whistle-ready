@@ -19,6 +19,7 @@ export const revalidate = 30
 import type { Metadata } from 'next'
 import { tournamentAbs, clip, stripMd } from '@/lib/seo'
 import { resolveRules } from '@/lib/rules'
+import PublicChirp from '@/components/PublicChirp'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 
@@ -50,6 +51,7 @@ export default async function TournamentRulesPage({ params }: { params: { id: st
       {rulesBody
         ? <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(rulesBody) }} />
         : <p className="text-slate-500">Rules haven&apos;t been posted yet.</p>}
+      <PublicChirp tournamentId={params.id} tournamentName={String((tRes.rows[0] as any).name || '')} />
     </main>
   )
 }

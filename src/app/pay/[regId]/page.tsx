@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { Toaster } from 'react-hot-toast'
 import { CheckCircle2, AlertCircle, Clock } from 'lucide-react'
 import StripePayPanel, { type PayMethod } from '@/components/StripePayPanel'
+import PublicChirp from '@/components/PublicChirp'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -44,6 +45,7 @@ export default function PayPage() {
     <div className="min-h-screen bg-gray-50">
       <Toaster />
       <div className="max-w-2xl mx-auto px-4 py-10 space-y-4">{children}</div>
+      {info?.tournamentId && <PublicChirp tournamentId={info.tournamentId} tournamentName={info.tournamentName} />}
     </div>
   )
 

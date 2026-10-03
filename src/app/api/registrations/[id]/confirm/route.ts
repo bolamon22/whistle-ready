@@ -28,6 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     `SELECT "confirmStatus", "confirmNote", "confirmAt" FROM "TeamRegistration" WHERE id = ?`, params.id)
   return NextResponse.json({
     clubName: reg.clubName,
+    tournamentId: reg.tournamentId,   // for the public Chirp on the confirm page
     eventName: t?.name || 'the tournament',
     startDate: t?.startDate || '', endDate: t?.endDate || '',
     teams: reg.teams.map(tm => ({ teamName: tm.teamName, division: tm.division })),

@@ -5,11 +5,12 @@
 // to confirm, or a change request that flags the registration on the org side.
 
 import { useEffect, useState } from 'react'
+import PublicChirp from '@/components/PublicChirp'
 
 type Data = {
   clubName: string; eventName: string; startDate: string; endDate: string
   teams: { teamName: string; division: string }[]
-  confirmStatus: string; confirmAt: string
+  confirmStatus: string; confirmAt: string; tournamentId?: string
 }
 
 const fmtDates = (a: string, b: string) => {
@@ -135,6 +136,7 @@ export default function ConfirmTeamsPage({ params }: { params: { regId: string }
         </div>
         <p className="text-center text-xs text-slate-400 mt-4">Questions? Just reply to the email that brought you here.</p>
       </div>
+      {data?.tournamentId && <PublicChirp tournamentId={data.tournamentId} tournamentName={data.eventName} />}
     </div>
   )
 }

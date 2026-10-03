@@ -15,7 +15,7 @@ import ChatWidget from './tournaments/[id]/ChatWidget'
 // have the public Chirp in the same corner.
 
 const EXTERNAL = ['coach', 'parent', 'club_director', 'viewer', '']
-const PUBLIC_SEGMENTS = ['event', 'public', 'register', 'today']
+const PUBLIC_SEGMENTS = ['event', 'public', 'register', 'today', 'player-waiver', 'coach-waiver', 'rules']
 
 export default function GlobalChirp() {
   const pathname = usePathname() || ''
@@ -37,7 +37,7 @@ export default function GlobalChirp() {
   if (status !== 'authenticated' || EXTERNAL.includes(effectiveRole)) return null
   if (tournamentId && PUBLIC_SEGMENTS.includes(segment)) return null
   // The org website has the public Chirp in the same corner.
-  if (pathname.startsWith('/login') || pathname.startsWith('/o/')) return null
+  if (pathname.startsWith('/login') || pathname.startsWith('/o/') || pathname.startsWith('/pay/') || pathname.startsWith('/confirm/')) return null
 
   // key: a new tournament starts a new conversation.
   return <ChatWidget key={tournamentId || 'app'} tournamentId={tournamentId || undefined} tournamentName={name} liftOnPhones={segment === 'builder'} />

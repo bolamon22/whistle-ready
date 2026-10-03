@@ -5,6 +5,7 @@ import PlayerRegForm, { type ClubOption, type CardContext, type SampleCard } fro
 import { fmtRange, playerPassConfig, orgSiteConfig, eventQrFor, appBaseUrl } from '@/lib/playerPass'
 import { headers } from 'next/headers'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
+import PublicChirp from '@/components/PublicChirp'
 
 // Cache policy for published pages.
 //
@@ -160,6 +161,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
       <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name} sampleCard={sampleCard}
         header={{ logoUrl: String(t.logoUrl || org.logoUrl || ''), title: String(t.name || '') }}
         cardContext={cardContext} />
+      <PublicChirp tournamentId={String(t.id)} tournamentName={String(t.name || '')} />
     </div>
   )
 }

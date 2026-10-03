@@ -6,6 +6,7 @@ import { appBaseUrl, fmtRange, orgSiteConfig } from '@/lib/playerPass'
 import { coachConfig, coachWaiverFor } from '@/lib/coachForm'
 import type { ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
 import CoachRegForm from './CoachRegForm'
+import PublicChirp from '@/components/PublicChirp'
 
 // Public coach waiver for one tournament. Mirrors the player waiver page — same
 // club/team query, same cache policy — so the two forms can never drift on which
@@ -114,6 +115,7 @@ export default async function TournamentCoachWaiver({ params }: { params: { id: 
           passBase: appBaseUrl(headers()),
         }}
       />
+      <PublicChirp tournamentId={String(t.id)} tournamentName={String(t.name || '')} />
     </div>
   )
 }
