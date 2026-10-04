@@ -83,8 +83,6 @@ Tap the button below to confirm in one click — takes ten seconds. If anything 
 
 {checklist}
 
-Telling your families is the part nobody has time to write, so we wrote it for you — the player waiver note, the coach one and the hotel one are all ready to send from your own email here: {shareLink}
-
 Pools and divisions go up first, with the full schedule to follow — we'll email you the moment each one is posted. On game day everything lives on your team page: fields, times, scores and updates, live as they happen.
 
 Questions? Just reply to this email and we'll take care of you.`,

@@ -332,6 +332,7 @@ export async function runCommSend(args: {
         coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
         payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         hotelLink: bookingUrl || eventHome,
+        shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
       })
     }
     // Confirm + account links are per club: their registration id (confirm) or a

@@ -58,6 +58,8 @@ export type ChecklistLinks = {
   payLink: string
   /** The org's housing bookingUrl — where families actually book. */
   hotelLink: string
+  /** /share/<regId> — the ready-written messages. Anchored per row. */
+  shareLink: string
 }
 
 export type ChecklistItem = {
@@ -67,8 +69,11 @@ export type ChecklistItem = {
   detail: string
   ctaLabel?: string
   ctaUrl?: string
-  /** Ready-to-forward wording the director can paste to their families. */
-  forwardText?: string
+  /** A second, quieter action beside the main one — always the ready-written
+   *  message for this row. Bo, Oct 4 2026: one link at the foot of the letter
+   *  "is going to get missed", and it should sit next to the thing it is for. */
+  altLabel?: string
+  altUrl?: string
   /** A quieter aside under the detail — for the director, not the families. */
   note?: string
 }
@@ -147,7 +152,8 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
     : { key: 'waivers', title: 'Player waivers', done: false,
         detail: [got + '.', zeros, short ? range : '', 'Every player needs one before their first game.']
           .filter(Boolean).join(' '),
-        ctaLabel: 'Share the waiver link', ctaUrl: links.waiverLink })
+        ctaLabel: 'Share the waiver link', ctaUrl: links.waiverLink,
+        altLabel: 'Send to my families', altUrl: `${links.shareLink}#waivers` })
 
   // Coaches sign their own form, and a team on the field without one is a
   // problem at check-in, so it gets its own line rather than hiding in the
@@ -160,7 +166,8 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
         detail: f.teamsWithNoCoach.length
           ? `${f.coachTotal} registered so far. ${list(f.teamsWithNoCoach)} ${f.teamsWithNoCoach.length === 1 ? 'has' : 'have'} no coach signed up yet \u2014 every team needs at least one on the sideline.`
           : 'Every coach on your sideline needs to register, same as the players.',
-        ctaLabel: 'Coach registration', ctaUrl: links.coachLink })
+        ctaLabel: 'Coach registration', ctaUrl: links.coachLink,
+        altLabel: 'Send to my coaches', altUrl: `${links.shareLink}#coaches` })
 
   // A $0 invoice has nothing to chase, so the row does not appear at all.
   if (f.invoiced > 0) {
@@ -204,17 +211,17 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
     const note = mail
       ? `Want your families all in the same hotel? ${who ? `Email ${who} at ${mail}` : `Email our housing coordinator at ${mail}`} and they can book your club together — and ask whether your coaches qualify for comp rooms.`
       : ''
-    const forward = 'Hotel rooms for ' + f.eventName + ': ' + links.hotelLink
-      + '\nPlease book through this link so our rooms are counted with the team.'
     items.push(booked
       ? { key: 'hotel', title: 'Send your families the hotel link', done: true,
           detail: `${f.hotelRooms} room${f.hotelRooms === 1 ? '' : 's'} logged${f.hotelName ? ` at ${f.hotelName}` : ''}. Thank you — pass it on to anyone still booking.`,
-          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward, note }
+          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, note,
+          altLabel: 'Send to my families', altUrl: `${links.shareLink}#hotel` }
       : { key: 'hotel', title: 'Send your families the hotel link', done: false,
           detail: f.hotelName
-            ? `We have ${f.hotelName} down for you but no rooms logged yet. Forward the note below to your families — they book their own rooms, you just pass the link along.`
-            : 'Your families book their own rooms, so all you have to do is pass the link along. Copy the note below straight into your team email or group chat.',
-          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward, note })
+            ? `We have ${f.hotelName} down for you but no rooms logged yet. Your families book their own rooms — you just pass the link along, and the message is already written.`
+            : 'Your families book their own rooms, so all you have to do is pass the link along. The message is already written — open it, make it sound like you, and send.',
+          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, note,
+          altLabel: 'Send to my families', altUrl: `${links.shareLink}#hotel` })
   }
 
   return items
@@ -235,10 +242,8 @@ export function checklistText(items: ChecklistItem[]): string {
   return items.map(it => {
     const head = `${it.done ? '[x]' : '[ ]'} ${it.title} — ${it.detail}`
     const withNote = it.note ? head + '\n    ' + it.note : head
-    const line = it.ctaUrl ? withNote + '\n    ' + it.ctaLabel + ': ' + it.ctaUrl : withNote
-    if (!it.forwardText) return line
-    const quoted = it.forwardText.split('\n').map(l => '    ' + l).join('\n')
-    return line + '\n    ---- copy and send to your families ----\n' + quoted
+    const withCta = it.ctaUrl ? withNote + '\n    ' + it.ctaLabel + ': ' + it.ctaUrl : withNote
+    return it.altUrl ? withCta + '\n    ' + it.altLabel + ': ' + it.altUrl : withCta
   }).join('\n\n')
 }
 
@@ -260,13 +265,15 @@ export function checklistHtml(items: ChecklistItem[]): string {
     // A box the director can select and paste into a team email. The URL is
     // spelled out rather than hidden behind a button, because a forwarded
     // button is a link nobody can see.
-    const fwd = it.forwardText
-      ? '<div style="margin:10px 0 2px;border:1px dashed #cbd5e1;border-radius:8px;padding:10px 12px;background:#f8fafc">'
-        + '<div style="font-size:11px;font-weight:bold;letter-spacing:0.6px;color:#94a3b8;margin:0 0 5px">COPY AND SEND TO YOUR FAMILIES</div>'
-        + '<div style="font-size:14px;line-height:1.6;color:#334155">' + esc(it.forwardText).split('\n').join('<br>') + '</div></div>'
+    // The ready-written message sits beside the action it belongs to, outlined
+    // rather than filled so the primary step still reads first.
+    const alt = it.altUrl
+      ? `<a href="${it.altUrl}" style="border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;padding:8px 17px;border-radius:6px;font-size:14px;font-weight:bold;display:inline-block">${esc(it.altLabel || 'Send to my families')}</a>`
       : ''
-    const cta = it.ctaUrl
-      ? `<div style="margin:9px 0 2px"><a href="${it.ctaUrl}" style="background:#0b1f3a;color:#ffffff;text-decoration:none;padding:9px 18px;border-radius:6px;font-size:14px;font-weight:bold;display:inline-block">${esc(it.ctaLabel || 'Open')}</a></div>`
+    const cta = (it.ctaUrl || it.altUrl)
+      ? `<div style="margin:9px 0 2px">`
+        + (it.ctaUrl ? `<a href="${it.ctaUrl}" style="background:#0b1f3a;color:#ffffff;text-decoration:none;padding:9px 18px;border-radius:6px;font-size:14px;font-weight:bold;display:inline-block;margin:0 8px 6px 0">${esc(it.ctaLabel || 'Open')}</a>` : '')
+        + alt + `</div>`
       : ''
     return `<tr><td style="padding:11px 0;border-bottom:1px solid #e2e8f0">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
@@ -275,7 +282,6 @@ export function checklistHtml(items: ChecklistItem[]): string {
 <div style="font-size:15px;font-weight:bold;color:${it.done ? '#64748b' : '#0f172a'}">${esc(it.title)}</div>
 <div style="font-size:14px;line-height:1.55;color:#475569;margin:3px 0 0">${esc(it.detail)}</div>
 ${noteHtml}
-${fwd}
 ${cta}
 </td></tr></table></td></tr>`
   }).join('')
