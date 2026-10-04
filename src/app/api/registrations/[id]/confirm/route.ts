@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
-import { ensureConfirmCols, fileChangeRequest, readConfirmMany } from '@/lib/changeRequest'
+import { ensureConfirmCols, fileChangeRequest, confirmTeamList } from '@/lib/changeRequest'
 
 // Public confirm/change-request endpoint for a registration — the regId in the
 // link IS the secret, same trust model as the public /pay/[regId] page. Clubs
@@ -68,15 +68,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   if (action === 'confirm') {
-    // A request still open when the club confirms is filed into the notes, not
-    // wiped. Requests now come from the club portal too, so a click on an old
-    // confirm email could otherwise erase one the office never saw.
-    const open = (await readConfirmMany([params.id])).get(params.id)
-    if (open?.status === 'change_requested' && open.note.trim()) {
-      await appendNote(params.id, reg.notes ?? null, `[Change request${open.at ? ` ${day(open.at)}` : ''} — still open when the club confirmed ${day(now)}] ${open.note.trim()}`)
-    }
-    await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "confirmStatus" = 'confirmed', "confirmNote" = '', "confirmAt" = ? WHERE id = ?`, now, params.id)
-    return NextResponse.json({ ok: true, status: 'confirmed', at: now })
+    // Shared with the club portal's confirm (lib/changeRequest), which also
+    // files an open request into the notes rather than wiping it.
+    const done = await confirmTeamList(reg)
+    return NextResponse.json({ ok: true, ...done })
   }
 
   if (action === 'change') {

@@ -2,7 +2,8 @@ import { prisma } from '@/lib/db'
 import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 
-// A club asking the tournament office to change something on its registration.
+// A club asking the tournament office to change something on its registration,
+// or telling it the team list is right (confirmTeamList, at the bottom).
 //
 // Two doors lead here: "Something changed" in the confirm-your-teams email
 // (api/registrations/[id]/confirm) and Request a change in the club portal
@@ -98,4 +99,38 @@ export async function fileChangeRequest(
   } catch { /* the flag on the page is the record; the email is a bonus */ }
 
   return { status: 'change_requested', at, note }
+}
+
+const dayOf = (iso: string) => { const x = new Date(iso); return isNaN(x.getTime()) ? '' : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
+
+/**
+ * The club says its team list is right.
+ *
+ * Two doors, like requests: "Everything's right" in the confirm-your-teams email
+ * (api/registrations/[id]/confirm) and the team-list check in the club portal
+ * (api/club-director/confirm). Both set the same Teams confirmed status.
+ *
+ * A request still open when the club confirms is filed into the staff notes, not
+ * wiped: requests come from the portal too, so a click on an old confirm email
+ * could otherwise erase one the office never saw. `record` is one more notes line
+ * from the caller; the portal knows who is signed in and says who confirmed what.
+ */
+export async function confirmTeamList(
+  reg: { id: string; notes?: string | null },
+  record?: string,
+): Promise<{ status: 'confirmed'; at: string }> {
+  const now = new Date().toISOString()
+  const open = (await readConfirmMany([reg.id])).get(reg.id)
+  const lines: string[] = []
+  if (open?.status === 'change_requested' && open.note.trim()) {
+    lines.push(`[Change request${open.at ? ` ${dayOf(open.at)}` : ''} — still open when the club confirmed ${dayOf(now)}] ${open.note.trim()}`)
+  }
+  if (record && record.trim()) lines.push(record.trim())
+  if (lines.length) {
+    const notes = [String(reg.notes ?? '').trim(), ...lines].filter(Boolean).join('\n')
+    await prisma.teamRegistration.update({ where: { id: reg.id }, data: { notes } })
+  }
+  await prisma.$executeRawUnsafe(
+    `UPDATE "TeamRegistration" SET "confirmStatus" = 'confirmed', "confirmNote" = '', "confirmAt" = ? WHERE id = ?`, now, reg.id)
+  return { status: 'confirmed', at: now }
 }
