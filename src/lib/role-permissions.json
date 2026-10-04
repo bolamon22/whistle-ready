@@ -212,6 +212,15 @@
       ]
     },
     {
+      "key": "tasks",
+      "label": "Tasks & checklists",
+      "group": "Tournaments",
+      "routes": [
+        "/tasks",
+        "/tournaments/*/tasks"
+      ]
+    },
+    {
       "key": "social_scheduler",
       "label": "Social Scheduler",
       "group": "Admin",
@@ -247,7 +256,8 @@
       "tournament_people": true,
       "tournament_setup": true,
       "staff_applications": true,
-      "org_admin": true
+      "org_admin": true,
+      "tasks": true
     },
     "assigner": {
       "tournaments_list": true,
@@ -275,7 +285,8 @@
       "tournament_people": false,
       "tournament_setup": false,
       "staff_applications": true,
-      "org_admin": false
+      "org_admin": false,
+      "tasks": false
     },
     "scheduler": {
       "tournaments_list": true,
@@ -302,7 +313,8 @@
       "tournament_people": false,
       "tournament_setup": true,
       "staff_applications": false,
-      "org_admin": false
+      "org_admin": false,
+      "tasks": false
     },
     "coach": {
       "tournaments_list": false,
@@ -329,7 +341,8 @@
       "tournament_people": false,
       "tournament_setup": false,
       "staff_applications": false,
-      "org_admin": false
+      "org_admin": false,
+      "tasks": false
     },
     "parent": {
       "tournaments_list": false,
@@ -356,7 +369,8 @@
       "tournament_people": false,
       "tournament_setup": false,
       "staff_applications": false,
-      "org_admin": false
+      "org_admin": false,
+      "tasks": false
     },
     "club_director": {
       "tournaments_list": false,
@@ -383,7 +397,8 @@
       "tournament_people": false,
       "tournament_setup": false,
       "staff_applications": false,
-      "org_admin": false
+      "org_admin": false,
+      "tasks": false
     },
     "staff": {
       "tournaments_list": false,
@@ -411,7 +426,8 @@
       "tournament_people": false,
       "tournament_setup": false,
       "staff_applications": false,
-      "org_admin": false
+      "org_admin": false,
+      "tasks": false
     }
   }
 }

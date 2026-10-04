@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { DEFAULT_SETUP_ITEMS, type ChecklistItem } from '@/lib/setupChecklist'
 
 // Shared tournament-setup checklist. One list per tournament that any staff
 // member can check off and add to. Stored as JSON in AppSetting key
@@ -17,20 +18,9 @@ const key = (id: string) => `checklists:${id}`
 const EXTERNAL_ROLES = ['coach', 'parent', 'club_director']
 const isStaff = (role?: string) => !!role && !EXTERNAL_ROLES.includes(role)
 
-type Item = { id: string; text: string; done: boolean; doneBy?: string; doneAt?: string }
+type Item = ChecklistItem
 
-const DEFAULT_ITEMS: Item[] = [
-  { id: 'd1', text: 'Fields lined & marked', done: false },
-  { id: 'd2', text: 'Goals & nets secured', done: false },
-  { id: 'd3', text: 'Team tents / benches placed', done: false },
-  { id: 'd4', text: 'Registration & check-in table set', done: false },
-  { id: 'd5', text: 'Signage & directions posted', done: false },
-  { id: 'd6', text: 'Scoreboards / clocks working', done: false },
-  { id: 'd7', text: 'Water stations stocked', done: false },
-  { id: 'd8', text: 'First-aid / medical station ready', done: false },
-  { id: 'd9', text: 'Trash & recycling bins out', done: false },
-  { id: 'd10', text: 'Parking & traffic plan set', done: false },
-]
+const DEFAULT_ITEMS: Item[] = DEFAULT_SETUP_ITEMS
 
 async function readRaw(id: string): Promise<Item[] | null> {
   const row = await prisma.appSetting.findUnique({ where: { key: key(id) } })
