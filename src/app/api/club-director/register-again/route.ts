@@ -1,8 +1,10 @@
 // REGISTER THESE TEAMS FOR ANOTHER EVENT, from the club portal.
 //
 // A club already in one event was signing up for the next through the public
-// form and typing every team again (Bo, Oct 3 2026). Here they tick the teams
-// that are coming, pick each one's division at the new event, and register.
+// form and typing every team again (Bo, Oct 3 2026). Here their teams are filled
+// in to start: they keep, rename or leave out each one, add new ones, pick each
+// team's division at the new event, and register. Bo, Oct 4 2026: it doesn't have
+// to be the same teams; it is registering from the portal, pre-filled.
 //
 // The registration itself is made by the same POST the public form uses
 // (api/registrations), so pricing, the waiting list, the confirmation letter
@@ -46,18 +48,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `${reg.clubName} is already registered for ${target.name}` }, { status: 409 })
   }
 
-  // The teams that are coming, each with a division the new event offers.
-  const picks: { teamId?: unknown; division?: unknown }[] = Array.isArray(body.teams) ? body.teams : []
+  // The teams that are coming, each with a division the new event offers. A row
+  // with a teamId starts from that team: its logo comes along, and so does its
+  // coach's phone while the coach is the same person. Name and coach are what the
+  // club typed (the old values when a row leaves them out). A row without a
+  // teamId is a new team.
+  type Pick = { teamId?: unknown; teamName?: unknown; division?: unknown; coachName?: unknown; coachEmail?: unknown }
+  const picks: Pick[] = Array.isArray(body.teams) ? body.teams.slice(0, 40) : []
   const teams = []
+  const changes: string[] = []
+  const names = new Set<string>()
   for (const p of picks) {
-    const t = reg.teams.find(x => x.id === String(p.teamId || ''))
-    if (!t) return NextResponse.json({ error: 'One of those teams is not on your registration' }, { status: 400 })
+    const id = String(p.teamId || '')
+    const base = id ? reg.teams.find(x => x.id === id) || null : null
+    if (id && !base) return NextResponse.json({ error: 'One of those teams is not on your registration' }, { status: 400 })
+    const teamName = cleanName(p.teamName ?? base?.teamName, 120)
+    if (!teamName) return NextResponse.json({ error: 'Give every team a name' }, { status: 400 })
+    if (names.has(nameKey(teamName))) {
+      return NextResponse.json({ error: `Two teams are named ${teamName}. Give each team its own name.` }, { status: 400 })
+    }
+    names.add(nameKey(teamName))
     const division = offeredDivision(target, p.division)
-    if (!division) return NextResponse.json({ error: `Pick a ${target.name} division for ${t.teamName}` }, { status: 400 })
+    if (!division) return NextResponse.json({ error: `Pick a ${target.name} division for ${teamName}` }, { status: 400 })
+    const coachName = p.coachName !== undefined ? cleanName(p.coachName, 120) : (base?.coachName || '')
+    const coachEmail = (p.coachEmail !== undefined ? cleanName(p.coachEmail, 160) : (base?.coachEmail || '')).toLowerCase()
+    if (coachEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(coachEmail)) {
+      return NextResponse.json({ error: `Check the coach email for ${teamName}` }, { status: 400 })
+    }
+    const sameCoach = !!base && nameKey(coachName) === nameKey(base.coachName)
     teams.push({
-      clubName: reg.clubName, teamName: t.teamName, division,
-      coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail, logoUrl: t.logoUrl,
+      clubName: reg.clubName, teamName, division,
+      coachName, coachEmail, coachPhone: base && sameCoach ? base.coachPhone : '',
+      logoUrl: base?.logoUrl || '',
     })
+    if (!base) changes.push(`${teamName} is new`)
+    else if (nameKey(teamName) !== nameKey(base.teamName)) changes.push(`${base.teamName} is now ${teamName}`)
   }
   if (!teams.length) return NextResponse.json({ error: 'Pick at least one team' }, { status: 400 })
 
@@ -91,7 +116,7 @@ export async function POST(req: NextRequest) {
       needsHotel: reg.needsHotel,
       paymentMethod: reg.paymentMethod,
       // Staff notes are not copied: they are about the old event.
-      notes: `[Club portal ${officeStamp()}${who ? `, ${who}` : ''}] Registered from the club portal, copied from ${source.name}. Priced at the standard rate per team, no multi-team discount.`,
+      notes: `[Club portal ${officeStamp()}${who ? `, ${who}` : ''}] Registered from the club portal, starting from its ${source.name} teams${changes.length ? ` (${changes.join('; ')})` : ''}. Priced at the standard rate per team, no multi-team discount.`,
       ...(invoiceAmount > 0 ? { invoiceAmount } : {}),
       clubLogoUrl: reg.clubLogoUrl,
       teams,

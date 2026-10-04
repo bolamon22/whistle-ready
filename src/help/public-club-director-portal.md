@@ -4,7 +4,7 @@ category: Public pages
 order: 967
 audience: public
 routes: /dashboard/club-director
-keywords: club director, club portal, team dashboard, invoice, balance, pay, payment method, waivers, roster, coach, change coach, schedule, register again, history, club logo, add a team, move a team, change division, remove a team, drop a team, request a change, confirm teams, confirm team list, verify teams, tick box, what's left, register for another event, waiting list
+keywords: club director, club portal, register teams, rename a team, new team, team dashboard, invoice, balance, pay, payment method, waivers, roster, coach, change coach, schedule, register again, history, club logo, add a team, move a team, change division, remove a team, drop a team, request a change, confirm teams, confirm team list, verify teams, tick box, what's left, register for another event, waiting list
 ---
 After you sign in, the club portal shows everything for your club at one tournament: teams, waivers, invoice and payments, coaches and the schedule.
 
@@ -15,7 +15,7 @@ After you sign in, the club portal shows everything for your club at one tournam
 3. **Player waivers**: every player who has filed, as **Cards** or a **List**. Use **Put on a team…** or **Move to…** to place a player on the right team.
 4. **Coach waivers**: shows which coaches have a **Waiver on file**. Use **Change coach** to update a team's coach.
 5. **Schedule**: your games, once the schedule is posted.
-6. **History**: your past tournaments and records. Tap **Register again** to bring those teams to another event.
+6. **History**: your past tournaments and records. Tap **Register again** to register for another event, starting from those teams.
 7. **Public view** opens the tournament's public page.
 
 **Change your teams:**
@@ -23,7 +23,7 @@ After you sign in, the club portal shows everything for your club at one tournam
 - **Move a team to another division** or **remove a team**: tap **Move** or **Remove** on the team's row, fill in the form and tap **Send request**. Nothing changes until the tournament office does it, so a team can't disappear by accident. For anything else (a name change, say), choose **Something else**.
 - Your request shows at the top of your registration as **Change requested**, and the office gets an email. When they've made the change you'll see **The office updated your teams**; tap **Confirm teams**, check the list and tap **Everything's right — confirm**.
 
-**Register for another event:** at the bottom of Overview, **Bring your teams to another event** lists the organizer's upcoming events your club isn't in yet. Tap **Register these teams**, untick any team that isn't coming, pick each team's division and tap **Register**. Your contact, coaches and team names carry over (tap **Change contact** to update the contact). Teams are priced at the event's standard rate per team. The total shows before you register, and your confirmation and payment link arrive by email. The new event then appears in your portal.
+**Register for another event:** at the bottom of Overview, **Bring your teams to another event** lists the organizer's upcoming events your club isn't in yet. Tap **Register teams**. Your teams are filled in to start: keep them as they are, rename one, tap **Change coach**, untick a team that isn't coming, or tap **Add a team** for a new one. Pick each team's division and tap **Register**. Your contact carries over (tap **Change contact** to update it). Teams are priced at the event's standard rate per team. The total shows before you register, and your confirmation and payment link arrive by email. The new event then appears in your portal.
 
 **Common problems:**
 - "Your account hasn't been linked to a club yet." Contact your tournament administrator to get linked.

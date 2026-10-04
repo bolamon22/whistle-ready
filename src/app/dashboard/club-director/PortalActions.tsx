@@ -13,7 +13,7 @@
 // a client graph took every photographer page down on Oct 3 2026. The pricing,
 // status and name helpers used here have no imports of their own.
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowRightLeft, CalendarPlus, CheckCircle2, Circle, Clock, Square, X } from 'lucide-react'
+import { AlertTriangle, ArrowRightLeft, CalendarPlus, CheckCircle2, Circle, Clock, Plus, Square, X } from 'lucide-react'
 import { calcFee, type RegPricing } from '@/lib/regPricing'
 import { nameKey } from '@/lib/names'
 
@@ -29,10 +29,10 @@ export type PortalReg = {
   teams: PortalTeam[]; payments: { amount: number }[]
 }
 export type ConfirmState = { status: string; note: string; at: string }
-/** What "register again" copies from: one registration and its teams. */
+/** What "register again" starts from: one registration and its teams. */
 export type AgainSource = {
   id: string; clubName: string; clubContact: string; contactEmail: string; contactPhone: string
-  teams: { id: string; teamName: string; division: string; coachName: string }[]
+  teams: { id: string; teamName: string; division: string; coachName: string; coachEmail?: string }[]
 }
 export type OtherEvent = {
   id: string; name: string; startDate: string; endDate: string; location: string
@@ -63,6 +63,7 @@ const stamp = (iso: string) => {
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 const divisionHint = (d: { full: boolean; label: string }) => d.full ? 'full, waiting list' : d.label ? d.label.toLowerCase() : ''
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; status: number; data: any }> {
   try {
@@ -420,8 +421,11 @@ export function AddTeamDialog({ tournamentId, eventName, reg, event, showMoney, 
 }
 
 // ---------------------------------------------------------------------------
-// Register these teams for another event
+// Register teams for another event
 // ---------------------------------------------------------------------------
+
+/** One team on the form. `teamId` is the team it started from ('' for a new one). */
+type AgainRow = { key: string; teamId: string; on: boolean; teamName: string; division: string; coachName: string; coachEmail: string; editCoach: boolean }
 
 export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEventId, showMoney, onClose, onRegistered }: {
   tournamentId: string; eventName: string; reg: AgainSource; initialEventId?: string; showMoney: boolean
@@ -429,8 +433,16 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
 }) {
   const [events, setEvents] = useState<OtherEvent[] | null>(null)
   const [targetId, setTargetId] = useState(initialEventId || '')
-  const [on, setOn] = useState<Record<string, boolean>>(() => Object.fromEntries(reg.teams.map(t => [t.id, true])))
-  const [to, setTo] = useState<Record<string, string>>({})
+  // Their current teams to start, each one renamable, plus any they add. Bo, Oct 4
+  // 2026: it doesn't have to be the same teams; it is registering, pre-filled.
+  const [rows, setRows] = useState<AgainRow[]>(() => reg.teams.map(t => ({
+    key: t.id, teamId: t.id, on: true, teamName: t.teamName, division: '',
+    coachName: t.coachName || '', coachEmail: t.coachEmail || '', editCoach: false,
+  })))
+  const setRow = (key: string, patch: Partial<AgainRow>) => setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r))
+  const addRow = () => setRows(rs => [...rs, {
+    key: `new-${Date.now()}-${rs.length}`, teamId: '', on: true, teamName: '', division: '', coachName: '', coachEmail: '', editCoach: true,
+  }])
   const [editContact, setEditContact] = useState(false)
   const [contact, setContact] = useState({ clubContact: reg.clubContact || '', contactEmail: reg.contactEmail || '', contactPhone: reg.contactPhone || '' })
   const [busy, setBusy] = useState(false)
@@ -446,23 +458,31 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
   }, [tournamentId])
 
   const target = events?.find(e => e.id === targetId) || null
-  // A team's division carries over when the new event offers one by the same name.
+  // A team's division carries over when the new event offers one by the same
+  // name; a new team keeps the one picked for it if the event offers that too.
   useEffect(() => {
     if (!target) return
-    setTo(Object.fromEntries(reg.teams.map(t => {
-      const same = target.divisions.find(d => nameKey(d.name) === nameKey(t.division))
-      return [t.id, same?.name || '']
-    })))
+    setRows(rs => rs.map(r => {
+      const was = r.teamId ? reg.teams.find(t => t.id === r.teamId)?.division : r.division
+      const same = target.divisions.find(d => nameKey(d.name) === nameKey(was))
+      return { ...r, division: same?.name || '' }
+    }))
   }, [target, reg.teams])
 
-  const picked = reg.teams.filter(t => on[t.id])
-  const missing = picked.filter(t => !to[t.id])
+  const picked = rows.filter(r => r.on)
+  const unnamed = picked.some(r => !r.teamName.trim())
+  const missing = picked.filter(r => r.teamName.trim() && !r.division)
+  const dupe = picked.find((r, i) => picked.findIndex(x => nameKey(x.teamName) === nameKey(r.teamName)) !== i)
+  const badEmail = picked.find(r => r.coachEmail.trim() && !EMAIL.test(r.coachEmail.trim()))
   const fullAt = (div: string) => !!target?.divisions.find(d => d.name === div)?.full
-  const total = target ? calcFee(picked.map(t => ({ division: to[t.id] || '', waitlisted: fullAt(to[t.id] || '') })), target.pricing) : 0
-  const contactOk = contact.clubContact.trim() && contact.contactPhone.trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact.contactEmail.trim())
+  const total = target ? calcFee(picked.map(r => ({ division: r.division, waitlisted: fullAt(r.division) })), target.pricing) : 0
+  const contactOk = contact.clubContact.trim() && contact.contactPhone.trim() && EMAIL.test(contact.contactEmail.trim())
   const blockedWhy = !target ? 'Pick the event first.'
-    : !picked.length ? 'Check at least one team.'
-    : missing.length ? `Pick a ${target.name} division for ${missing.map(t => t.teamName).join(' and ')} first.`
+    : !picked.length ? 'Add at least one team.'
+    : unnamed ? 'Give every team a name.'
+    : missing.length ? `Pick a ${target.name} division for ${missing.map(r => r.teamName.trim()).join(' and ')} first.`
+    : dupe ? `Two teams are named ${dupe.teamName.trim()}. Give each team its own name.`
+    : badEmail ? `Check the coach email for ${badEmail.teamName.trim()}.`
     : !contactOk ? 'Add a contact name, email and phone.' : ''
 
   async function submit() {
@@ -470,7 +490,10 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
     setBusy(true); setError('')
     const r = await postJson('/api/club-director/register-again', {
       tournamentId, registrationId: reg.id, targetId: target.id,
-      teams: picked.map(t => ({ teamId: t.id, division: to[t.id] })),
+      teams: picked.map(r => ({
+        ...(r.teamId ? { teamId: r.teamId } : {}),
+        teamName: r.teamName, division: r.division, coachName: r.coachName, coachEmail: r.coachEmail,
+      })),
       contact,
     })
     setBusy(false)
@@ -506,12 +529,12 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
   }
 
   return (
-    <Dialog title="Register these teams for another event" onClose={onClose} wide>
+    <Dialog title="Register teams for another event" onClose={onClose} wide>
       <div className="flex flex-col gap-5">
         <div className="pr-8">
-          <Eyebrow>Register again</Eyebrow>
-          <h2 className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-900">{target ? `Bring your teams to ${target.name}` : 'Bring your teams to another event'}</h2>
-          <p className="mt-1 text-[15px] leading-relaxed text-slate-500">Copied from your {eventName} registration. Uncheck any team that isn&rsquo;t coming, and check each division.</p>
+          <Eyebrow>Register teams</Eyebrow>
+          <h2 className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-900">{target ? `Register for ${target.name}` : 'Register for another event'}</h2>
+          <p className="mt-1 text-[15px] leading-relaxed text-slate-500">Your {eventName} teams are filled in to start. Keep them as they are, rename one, change a coach, leave one out or add a new team.</p>
         </div>
 
         {events === null ? (
@@ -529,39 +552,73 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
                   </select>
                 </label>
               )}
-              <h3 className="text-base font-bold text-slate-900">Which teams are coming?</h3>
+              <h3 className="text-base font-bold text-slate-900">Your teams</h3>
               <div className="mt-2 divide-y divide-slate-200 border-t border-slate-200">
-                {reg.teams.map(t => {
-                  const checked = !!on[t.id]
-                  const flag = !!target && checked && !to[t.id]
+                {rows.map(r => {
+                  const src = r.teamId ? reg.teams.find(t => t.id === r.teamId) || null : null
+                  const flag = !!target && r.on && !!r.teamName.trim() && !r.division
+                  const offered = !!src && !!target?.divisions.some(d => nameKey(d.name) === nameKey(src.division))
+                  const renamed = !!src && !!r.teamName.trim() && nameKey(r.teamName) !== nameKey(src.teamName)
                   return (
-                    <div key={t.id} className="py-3 flex flex-col gap-2">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <label className="flex items-center gap-3 min-h-[44px] flex-1 basis-56 cursor-pointer">
-                          <input type="checkbox" checked={checked} onChange={() => setOn(o => ({ ...o, [t.id]: !checked }))} className="h-5 w-5 accent-teal-500" />
-                          <span className="min-w-0">
-                            <span className="block text-[15px] font-semibold text-slate-900">{t.teamName}</span>
-                            <span className="block text-[13px] text-slate-500">{t.coachName ? `Coach ${t.coachName} · ` : ''}at {eventName}: {t.division || 'no division'}</span>
-                          </span>
-                        </label>
-                        <label className="flex flex-col gap-1 basis-60 grow sm:grow-0 text-[13px] font-medium text-slate-700">{target ? `${target.name} division` : 'Division'}
-                          <select value={to[t.id] || ''} disabled={!checked || !target} onChange={e => setTo(m => ({ ...m, [t.id]: e.target.value }))}
-                            className={`${fieldClass} ${flag ? 'border-2 border-amber-500' : ''}`}>
-                            <option value="">Pick a division</option>
-                            {(target?.divisions ?? []).map(d => <option key={d.name} value={d.name}>{d.name}{divisionHint(d) ? ` · ${divisionHint(d)}` : ''}</option>)}
-                          </select>
-                        </label>
+                    <div key={r.key} className="py-3 flex gap-3 items-start">
+                      <div className={`w-5 shrink-0 ${r.on ? 'pt-[35px]' : 'pt-0.5'}`}>
+                        {src && (
+                          <input type="checkbox" checked={r.on} onChange={() => setRow(r.key, { on: !r.on })}
+                            aria-label={`Bring ${src.teamName}`} className="h-5 w-5 accent-teal-500" />
+                        )}
                       </div>
-                      {flag && (
-                        <span className="self-start text-[13px] leading-snug px-3 py-1.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
-                          {t.division ? `${t.division} isn’t offered at ${target?.name}. ` : ''}Pick the division this team will play in.
-                        </span>
+                      {!r.on ? (
+                        <p className="flex-1 min-w-0 text-[15px] text-slate-400"><span className="font-semibold">{src?.teamName}</span> · not coming</p>
+                      ) : (
+                        <div className="flex-1 min-w-0 flex flex-col gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <label className="flex flex-col gap-1 text-[13px] font-medium text-slate-700">Team name
+                              <input value={r.teamName} onChange={e => setRow(r.key, { teamName: e.target.value })} maxLength={120} autoFocus={!src}
+                                placeholder={`For example: ${reg.clubName.split(' ')[0] || 'Club'} 2032`} className={fieldClass} />
+                            </label>
+                            <label className="flex flex-col gap-1 text-[13px] font-medium text-slate-700">{target ? `${target.name} division` : 'Division'}
+                              <select value={r.division} disabled={!target} onChange={e => setRow(r.key, { division: e.target.value })}
+                                className={`${fieldClass} ${flag ? 'border-2 border-amber-500' : ''}`}>
+                                <option value="">Pick a division</option>
+                                {(target?.divisions ?? []).map(d => <option key={d.name} value={d.name}>{d.name}{divisionHint(d) ? ` · ${divisionHint(d)}` : ''}</option>)}
+                              </select>
+                            </label>
+                          </div>
+                          {renamed && src && <span className="text-[12px] text-slate-500">Was {src.teamName} at {eventName}</span>}
+                          {r.editCoach ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <label className="flex flex-col gap-1 text-[13px] font-medium text-slate-700">Head coach
+                                <input value={r.coachName} onChange={e => setRow(r.key, { coachName: e.target.value })} maxLength={120} placeholder="Full name" className={fieldClass} />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[13px] font-medium text-slate-700">Coach email
+                                <input type="email" value={r.coachEmail} onChange={e => setRow(r.key, { coachEmail: e.target.value })} maxLength={160} placeholder="coach@yourclub.com" className={fieldClass} />
+                              </label>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-x-2 text-[13px] text-slate-500">
+                              <span className="min-w-0 break-words">{r.coachName ? `Coach ${r.coachName}` : 'No coach listed'}{r.coachEmail ? ` · ${r.coachEmail}` : ''}</span>
+                              <button type="button" onClick={() => setRow(r.key, { editCoach: true })} className="min-h-[36px] font-semibold text-teal-700 hover:text-teal-800">Change coach</button>
+                            </div>
+                          )}
+                          {!src && (
+                            <button type="button" onClick={() => setRows(rs => rs.filter(x => x.key !== r.key))}
+                              className="self-start min-h-[36px] text-[13px] font-semibold text-slate-500 hover:text-red-700">Remove this team</button>
+                          )}
+                          {flag && (
+                            <span className="self-start text-[13px] leading-snug px-3 py-1.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
+                              {src?.division && !offered ? `${src.division} isn’t offered at ${target?.name}. ` : ''}Pick the division this team will play in.
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   )
                 })}
               </div>
-              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">Coaches and team names carry over. You can change either from your portal after you register.</p>
+              <button type="button" onClick={addRow}
+                className="mt-1 inline-flex items-center gap-1.5 min-h-[44px] text-sm font-semibold text-teal-700 hover:text-teal-800">
+                <Plus size={16} className="shrink-0" /> Add a team
+              </button>
             </section>
 
             <aside className="w-full lg:w-80 flex flex-col gap-4">
@@ -791,7 +848,7 @@ export function OtherEventsCard({ tournamentId, teamCount, staffView, showMoney,
   return (
     <section className="bg-white border border-gray-200 rounded-xl px-5 py-4">
       <h2 className="font-bold text-gray-800 flex items-center gap-2"><CalendarPlus size={17} className="text-teal-600" /> Bring your teams to another event</h2>
-      <p className="mt-1 text-sm text-gray-500">Same club, contact and coaches. Pick the teams and their divisions, and your club is registered.</p>
+      <p className="mt-1 text-sm text-gray-500">Your teams are filled in to start. Keep them, rename them or add new ones, pick the divisions, and your club is registered.</p>
       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
         {events.map(ev => {
           const per = calcFee(Array.from({ length: n }, () => ({ division: '' })), ev.pricing) / n
@@ -809,7 +866,7 @@ export function OtherEventsCard({ tournamentId, teamCount, staffView, showMoney,
               <button type="button" onClick={() => onRegister(ev.id)} disabled={staffView}
                 title={staffView ? 'The club registers here. It is turned off in staff view.' : undefined}
                 className="min-h-[44px] rounded-full border border-teal-600 text-teal-700 hover:bg-teal-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent text-sm font-semibold inline-flex items-center justify-center gap-1.5">
-                <ArrowRightLeft size={15} /> Register these teams
+                <ArrowRightLeft size={15} /> Register teams
               </button>
             </div>
           )
