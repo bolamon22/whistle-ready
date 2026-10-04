@@ -7,9 +7,10 @@ import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardLi
 import toast from 'react-hot-toast'
 import { compressImageFile } from '@/lib/imageCompress'
 import {
-  RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, ConfirmTeamsDialog, AccountNote, WhatsLeft, OtherEventsCard, dayLabel,
-  type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource,
+  RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, ConfirmTeamsDialog, AccountNote, WhatsLeft, OtherEventsCard, PortalPools, dayLabel, poolLabel,
+  type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource, type PortalPool,
 } from './PortalActions'
+import { nameKey } from '@/lib/names'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
 interface Waiver {
@@ -153,7 +154,7 @@ export default function ClubDirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selTournament, setSelTournament] = useState('')
-  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string }; payTo?: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null; event?: PortalEvent | null } | null>(null)
+  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; pools?: PortalPool[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string }; payTo?: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null; event?: PortalEvent | null } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
   const [playerView, setPlayerView] = useState<'cards' | 'list'>('cards')
   const [openPlayer, setOpenPlayer] = useState<string | null>(null)
@@ -472,6 +473,15 @@ export default function ClubDirectorDashboard() {
   // on Overview. Schedule only appears once there is one: an empty tab during
   // the weeks before the draw just reads as broken (Bo, Sep 15 2026).
   const hasSchedule = (data?.games?.length ?? 0) > 0
+  // Pools come before the schedule: once Teams & pools is public the tab shows
+  // the club's pools, and its games join them with Schedule & brackets (Bo, Oct
+  // 4 2026). Both follow the public switches; see api/club-director/data.
+  const portalPools = data?.pools ?? []
+  const hasPools = portalPools.length > 0
+  const poolOf = (division: string, team: string) => {
+    const p = portalPools.find(x => nameKey(x.division) === nameKey(division) && x.teams.some(n => nameKey(n) === nameKey(team)))
+    return p ? poolLabel(p.name) : ''
+  }
   // cd_billing used to decide whether the Billing TAB appeared. With the invoice
   // folded into Overview it has to gate the money itself, or removing the tab
   // would quietly grant billing visibility to clubs that had it switched off.
@@ -480,7 +490,7 @@ export default function ClubDirectorDashboard() {
     { key: 'overview',  label: 'Overview',           Icon: ClipboardList, perm: 'cd_overview' },
     { key: 'players',   label: 'Player waivers',     Icon: Users,         perm: 'cd_players'  },
     { key: 'coaches',   label: 'Coach waivers',      Icon: ShieldCheck,   perm: 'cd_players'  },
-    { key: 'schedule',  label: 'Schedule',           Icon: CalendarDays,  perm: 'cd_schedule', when: hasSchedule },
+    { key: 'schedule',  label: hasSchedule ? 'Schedule' : 'Pools', Icon: hasSchedule ? CalendarDays : LayoutGrid, perm: 'cd_schedule', when: hasSchedule || hasPools },
     { key: 'history',   label: 'History',            Icon: Trophy                             },
   ]
 
@@ -923,6 +933,9 @@ export default function ClubDirectorDashboard() {
                             </div>
                             <div className={`${showChange ? 'sm:col-span-2' : 'sm:col-span-3'} text-sm text-gray-600 min-w-0`}>
                               <span className="block truncate">{t.division}</span>
+                              {poolOf(t.division, t.teamName) && (
+                                <span className="inline-block mt-0.5 mr-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">{poolOf(t.division, t.teamName)}</span>
+                              )}
                               {t.waitlisted && (
                                 <span title="This division is full. The team is not billed unless a spot opens."
                                   className="inline-block mt-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Waiting list</span>
@@ -1440,8 +1453,9 @@ export default function ClubDirectorDashboard() {
 
             {/* Schedule */}
             {tab === 'schedule' && (
+              <div className="space-y-6">
+              {hasSchedule && (
               <div className="space-y-2">
-                {data?.games.length === 0 && <div className="text-center py-12 text-gray-400">No games scheduled yet.</div>}
                 {data?.games.map(g => {
                   const myTeam = data.teamNames.includes(g.team1) ? g.team1 : g.team2
                   const opponent = myTeam === g.team1 ? g.team2 : g.team1
@@ -1478,6 +1492,11 @@ export default function ClubDirectorDashboard() {
                     </div>
                   )
                 })}
+              </div>
+              )}
+              {hasPools && data && (
+                <PortalPools pools={portalPools} myTeams={data.registrations.flatMap(r => r.teams)} scheduleLive={hasSchedule} />
+              )}
               </div>
             )}
 

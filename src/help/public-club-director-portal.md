@@ -14,7 +14,7 @@ After you sign in, the club portal shows everything for your club at one tournam
 2. **Overview** opens with **What's left before** the event: confirming your team list, your balance, player and coach waivers, and your club logo. Tap a link there to do the step. To confirm your team list, tick its box (or tap **Confirm teams**), check each team's name and division, and tap **Everything's right — confirm**. If something is off, tap **Something's wrong — ask for a change** instead. Below it: your teams, divisions, coaches and waiver counts. **Waiver form to send parents** opens the player waiver link to share. Under **Invoice & payments**, tap **Pay** to pay online, or change the **Pay method** (credit card, bank transfer, PayPal / Venmo, Zelle or check). For Zelle or check, the instructions appear right there. You can also add or change your club logo here.
 3. **Player waivers**: every player who has filed, as **Cards** or a **List**. Use **Put on a team…** or **Move to…** to place a player on the right team.
 4. **Coach waivers**: shows which coaches have a **Waiver on file**. Use **Change coach** to update a team's coach.
-5. **Schedule**: your games, once the schedule is posted.
+5. **Pools** and **Schedule**: once the organizer posts the pools, a **Pools** tab shows each pool your teams are in, with every team in it, and your team list shows each team's pool. Your games, with times and fields, join them (the tab becomes **Schedule**) once the organizer posts the schedule.
 6. **History**: your past tournaments and records. Tap **Register again** to register for another event, starting from those teams.
 7. **Public view** opens the tournament's public page.
 

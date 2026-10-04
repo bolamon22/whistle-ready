@@ -13,7 +13,7 @@
 // a client graph took every photographer page down on Oct 3 2026. The pricing,
 // status and name helpers used here have no imports of their own.
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowRightLeft, CalendarPlus, CheckCircle2, Circle, Clock, Plus, Square, X } from 'lucide-react'
+import { AlertTriangle, ArrowRightLeft, CalendarDays, CalendarPlus, CheckCircle2, Circle, Clock, Plus, Square, X } from 'lucide-react'
 import { calcFee, type RegPricing } from '@/lib/regPricing'
 import { nameKey } from '@/lib/names'
 
@@ -837,6 +837,57 @@ export function WhatsLeft({ title, items }: { title: string; items: LeftItem[] }
           </li>
         ))}
       </ul>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Pools, once Teams & pools is public
+// ---------------------------------------------------------------------------
+
+export type PortalPool = { division: string; name: string; teams: string[] }
+
+/** "Pool A" from a stored "A"; a name that already says Pool or Group stays. Same as the public page. */
+export const poolLabel = (p: string) => { const t = (p || '').trim(); return /^(pool|group)\b/i.test(t) ? t : `Pool ${t}` }
+
+/** The pools a club's teams are in, with everyone in them: the lists the public
+ *  page shows once Teams & pools is on (Bo, Oct 4 2026). Their own teams are
+ *  picked out. Games wait for Schedule & brackets. */
+export function PortalPools({ pools, myTeams, scheduleLive }: {
+  pools: PortalPool[]; myTeams: { teamName: string; division: string; waitlisted?: boolean }[]; scheduleLive: boolean
+}) {
+  const key = (division: string, team: string) => `${nameKey(division)}|${nameKey(team)}`
+  const mine = new Set(myTeams.map(t => key(t.division, t.teamName)))
+  const placed = new Set(pools.flatMap(p => p.teams.map(t => key(p.division, t))))
+  const unplaced = myTeams.filter(t => !t.waitlisted && !placed.has(key(t.division, t.teamName)))
+  return (
+    <section className="flex flex-col gap-3">
+      {!scheduleLive && (
+        <div className="rounded-xl px-4 py-3 border bg-sky-50 border-sky-200 text-sm text-sky-800 flex items-center gap-2">
+          <CalendarDays size={15} className="shrink-0" /> Pools are posted. Game times and fields are coming soon.
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+        {pools.map(p => (
+          <div key={`${p.division}|${p.name}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-end justify-between gap-3">
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 truncate">{p.division}</span>
+                <span className="block font-bold text-gray-800">{poolLabel(p.name)}</span>
+              </span>
+              <span className="shrink-0 text-xs text-gray-500">{p.teams.length} team{p.teams.length === 1 ? '' : 's'}</span>
+            </div>
+            <ul className="divide-y divide-gray-100">
+              {[...p.teams].sort((a, b) => a.localeCompare(b)).map(t => (
+                <li key={t} className={`px-4 py-2 text-sm break-words ${mine.has(key(p.division, t)) ? 'font-semibold text-violet-700' : 'text-gray-700'}`}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      {unplaced.length > 0 && (
+        <p className="text-sm text-gray-500">Not in a pool yet: {unplaced.map(t => t.teamName).join(', ')}.</p>
+      )}
     </section>
   )
 }

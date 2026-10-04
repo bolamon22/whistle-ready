@@ -11,6 +11,8 @@ import { eventInfo, divisionFull, addPolicy, addBlock } from '@/lib/clubPortal'
 import { parsePricing } from '@/lib/regPricing'
 import { divisionBadge } from '@/lib/regStatus'
 import { clearingTransfers } from '@/lib/pendingTransfers'
+import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
+import { nameKey } from '@/lib/names'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -242,5 +244,31 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* the portal hides add and move rather than failing */ }
 
-  return NextResponse.json({ clubs: clubNames, registrations: regsOut, playerRegs, games, teamNames, waivers, coachWaivers, lock, payTo, event })
+  // Pools, once Teams & pools is public (Bo, Oct 4 2026: "when we do check teams
+  // and pools, maybe that can show up in their director portal too, but just not
+  // the actual schedule"). Each pool one of their teams is in, with everyone in
+  // it, from the same Pool rows the public page reads (/api/tournaments/[id]/pools)
+  // so the two can't disagree. Games stay behind Schedule & brackets, above.
+  const pools: { division: string; name: string; teams: string[] }[] = []
+  if (!clubView || vis.pools === 'live') {
+    try {
+      const [rows, byDiv] = await Promise.all([
+        prisma.pool.findMany({ where: { tournamentId }, orderBy: [{ division: 'asc' }, { name: 'asc' }] }),
+        registeredKeys(tournamentId),
+      ])
+      const key = (division: unknown, team: unknown) => `${nameKey(division)}|${nameKey(team)}`
+      const mine = new Set(registrations.flatMap(r => r.teams.map(t => key(t.division, t.teamName))))
+      for (const p of rows) {
+        let names: string[] = []
+        try {
+          const parsed = JSON.parse(p.teamNames || '[]')
+          if (Array.isArray(parsed)) names = parsed.filter((n: unknown): n is string => typeof n === 'string' && !!n.trim()).map(n => n.trim())
+        } catch { /* a malformed row is an empty pool */ }
+        const teams = keepRegistered(names, p.division, byDiv)
+        if (teams.some(t => mine.has(key(p.division, t)))) pools.push({ division: p.division, name: p.name, teams })
+      }
+    } catch { /* no pools shown rather than a failed portal */ }
+  }
+
+  return NextResponse.json({ clubs: clubNames, registrations: regsOut, playerRegs, games, pools, teamNames, waivers, coachWaivers, lock, payTo, event })
 }
