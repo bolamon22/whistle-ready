@@ -21,13 +21,25 @@ export default function ShareWithFamiliesPage({ params }: { params: { regId: str
   // Edited copy per message, so a director can make it sound like them.
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [copied, setCopied] = useState('')
+  // Which message the checklist email sent them here for (#waivers, #coaches,
+  // #hotel). The browser cannot honour the anchor itself: the cards do not
+  // exist until the fetch lands, so without this the link just drops you at the
+  // top and the per-row buttons may as well not be anchored at all.
+  const [target, setTarget] = useState('')
 
   useEffect(() => {
     fetch(`/api/registrations/${params.regId}/share`)
       .then(async r => { if (!r.ok) throw new Error((await r.json()).error || 'Failed to load'); return r.json() })
       .then(setData)
       .catch(e => setError(e.message))
+    setTarget((typeof window !== 'undefined' ? window.location.hash : '').replace('#', ''))
   }, [params.regId])
+
+  useEffect(() => {
+    if (!data || !target) return
+    const el = document.getElementById(target)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [data, target])
 
   const bodyOf = (m: FamilyMessage) => (edits[m.key] ?? m.body)
 
@@ -63,7 +75,8 @@ export default function ShareWithFamiliesPage({ params }: { params: { regId: str
         {data?.messages.map(m => {
           const urls = composeUrls(m.subject, bodyOf(m))
           return (
-            <div key={m.key} id={m.key} className="mt-5 bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+            <div key={m.key} id={m.key}
+              className={`mt-5 bg-white rounded-2xl shadow-sm p-5 scroll-mt-6 border ${target === m.key ? 'border-teal-500 ring-2 ring-teal-100' : 'border-slate-200'}`}>
               <h2 className="text-lg font-bold text-slate-900">{m.title}</h2>
               <p className="text-xs text-slate-500 mt-0.5">{m.blurb}</p>
 
