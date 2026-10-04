@@ -15,6 +15,8 @@ Each tournament has two public pages for teams and families. Neither needs a log
 
 **What the public schedule page shows:**
 - **Teams & pools** (pool lists and standings) and **Schedule & brackets** can each be turned on or off. Use the **Public:** pill on the Scheduler, or the **Public page** card on **Divisions & teams**.
+- Until **Schedule & brackets** is on, no games show anywhere: not the times, and not who plays whom. With only **Teams & pools** on, the page lists each pool's teams.
+- Club directors' portals follow the same switches, including when you open a club's portal yourself.
 - The schedule shows times and fields as of your last **Publish** on the Scheduler. Moving games stays private until you publish again.
 - Scores always update live.
 

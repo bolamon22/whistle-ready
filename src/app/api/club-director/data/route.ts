@@ -79,8 +79,13 @@ export async function GET(req: NextRequest) {
     },
     orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
   })
-  // Club directors see the schedule when the public does, not while it's being built.
-  const games = (await isStaffRequest()) ? rawGames : applyPublicView(rawGames, await getPublicVisibility(tournamentId))
+  // Club directors see the schedule when the public does, not while it's being
+  // built. Staff opening a club's portal (?userId=) get the club's view too: that
+  // view is for seeing exactly what the club sees, and showing staff the draft
+  // made it look as if clubs could read it (Bo, Oct 4 2026).
+  const clubView = as.viewingOther || !(await isStaffRequest())
+  const vis = await getPublicVisibility(tournamentId)
+  const games = clubView ? applyPublicView(rawGames, vis) : rawGames
 
   // The actual signed waivers.
   //

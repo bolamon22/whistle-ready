@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 //
 // Two switches, stored on Tournament as raw columns (like the publish snapshot):
 //   publicPools    -- teams, pool lists and standings
-//   publicSchedule -- game times, fields and brackets
+//   publicSchedule -- the games: matchups, times, fields and brackets
 // Each is 'live' | 'hidden' | '' (never set). Staff always see everything.
 //
 // Once the schedule is live, the public sees the times and fields from the last
@@ -111,9 +111,10 @@ export function applyPublicView<T extends GameLike>(games: T[], vis: PublicVisib
     if (!snap) return games
     return games.filter(g => snap[g.id]).map(g => ({ ...g, ...snap[g.id] }))
   }
-  if (vis.pools === 'live') {
-    // Pools/standings only: the pool matchups, with no times, fields or brackets.
-    return games.filter(g => g.pool && !isBracketGame(g)).map(g => ({ ...g, date: '', startTime: '', location: '' }))
-  }
+  // Schedule & brackets off: no games at all, not even the pool matchups. Who
+  // plays whom is the schedule too. With only Teams & pools on, this used to
+  // hand out every pool game minus its time and field, and clubs read their
+  // draft matchups in the club portal (Bo, Oct 4 2026). Pool lists come from
+  // the Pool rows instead (/api/tournaments/[id]/pools), not from games.
   return []
 }
