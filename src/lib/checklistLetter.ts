@@ -43,6 +43,11 @@ export type ChecklistFacts = {
   withinLocalRadius: boolean
   hotelName: string
   hotelRooms: number
+  /** The org's housing coordinator, from housingSettings — the person who can
+   *  put a whole club in one hotel. Blank until the org fills it in, and the
+   *  line is dropped rather than guessed at. */
+  housingContactName: string
+  housingContactEmail: string
 }
 
 export type ChecklistLinks = {
@@ -64,6 +69,8 @@ export type ChecklistItem = {
   ctaUrl?: string
   /** Ready-to-forward wording the director can paste to their families. */
   forwardText?: string
+  /** A quieter aside under the detail — for the director, not the families. */
+  note?: string
 }
 
 /** Placeholder the {checklist} token merges to, swapped for the real block once
@@ -187,17 +194,27 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
   const showHotel = !f.staffMarkedLocal && (hotelAlreadyInPlay || !f.withinLocalRadius)
   if (showHotel) {
     const booked = f.housingStatus === 'booked'
+    // Two things only the coordinator can do: put a whole club under one roof,
+    // and say whether the coaches' rooms are comped (Bo, Oct 4 2026). "Ask" is
+    // deliberate — eligibility is theirs to decide, and this letter must not
+    // promise anyone a free room on their behalf. Dropped entirely when the org
+    // has no coordinator on file rather than inventing one.
+    const who = f.housingContactName.trim()
+    const mail = f.housingContactEmail.trim()
+    const note = mail
+      ? `Want your families all in the same hotel? ${who ? `Email ${who} at ${mail}` : `Email our housing coordinator at ${mail}`} and they can book your club together — and ask whether your coaches qualify for comp rooms.`
+      : ''
     const forward = 'Hotel rooms for ' + f.eventName + ': ' + links.hotelLink
       + '\nPlease book through this link so our rooms are counted with the team.'
     items.push(booked
       ? { key: 'hotel', title: 'Send your families the hotel link', done: true,
           detail: `${f.hotelRooms} room${f.hotelRooms === 1 ? '' : 's'} logged${f.hotelName ? ` at ${f.hotelName}` : ''}. Thank you — pass it on to anyone still booking.`,
-          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward }
+          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward, note }
       : { key: 'hotel', title: 'Send your families the hotel link', done: false,
           detail: f.hotelName
             ? `We have ${f.hotelName} down for you but no rooms logged yet. Forward the note below to your families — they book their own rooms, you just pass the link along.`
             : 'Your families book their own rooms, so all you have to do is pass the link along. Copy the note below straight into your team email or group chat.',
-          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward })
+          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward, note })
   }
 
   return items
@@ -217,7 +234,8 @@ export function whatsLeftPhrase(items: ChecklistItem[]): string {
 export function checklistText(items: ChecklistItem[]): string {
   return items.map(it => {
     const head = `${it.done ? '[x]' : '[ ]'} ${it.title} — ${it.detail}`
-    const line = it.ctaUrl ? head + '\n    ' + it.ctaLabel + ': ' + it.ctaUrl : head
+    const withNote = it.note ? head + '\n    ' + it.note : head
+    const line = it.ctaUrl ? withNote + '\n    ' + it.ctaLabel + ': ' + it.ctaUrl : withNote
     if (!it.forwardText) return line
     const quoted = it.forwardText.split('\n').map(l => '    ' + l).join('\n')
     return line + '\n    ---- copy and send to your families ----\n' + quoted
@@ -234,6 +252,11 @@ export function checklistHtml(items: ChecklistItem[]): string {
     const mark = it.done
       ? `<div style="width:22px;height:22px;line-height:22px;border-radius:11px;background:#0d9488;color:#ffffff;text-align:center;font-size:13px;font-weight:bold">&#10003;</div>`
       : `<div style="width:18px;height:18px;border-radius:11px;border:2px solid #cbd5e1">&nbsp;</div>`
+    const noteHtml = it.note
+      ? '<div style="font-size:13px;line-height:1.55;color:#64748b;margin:6px 0 0">'
+        + esc(it.note).replace(/([\w.+-]+@[\w-]+\.[\w.]+)/, '<a href="mailto:$1" style="color:#0f766e">$1</a>')
+        + '</div>'
+      : ''
     // A box the director can select and paste into a team email. The URL is
     // spelled out rather than hidden behind a button, because a forwarded
     // button is a link nobody can see.
@@ -251,6 +274,7 @@ export function checklistHtml(items: ChecklistItem[]): string {
 <td valign="top">
 <div style="font-size:15px;font-weight:bold;color:${it.done ? '#64748b' : '#0f172a'}">${esc(it.title)}</div>
 <div style="font-size:14px;line-height:1.55;color:#475569;margin:3px 0 0">${esc(it.detail)}</div>
+${noteHtml}
 ${fwd}
 ${cta}
 </td></tr></table></td></tr>`

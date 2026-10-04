@@ -201,7 +201,8 @@ export async function runCommSend(args: {
   }
   // Where families actually book. Blank until the org sets one, in which case
   // the hotel line points at the event page, which carries the travel info.
-  const bookingUrl = kind === 'checklist' && orgId ? (await housingSettings(orgId)).bookingUrl : ''
+  const housing = kind === 'checklist' && orgId ? await housingSettings(orgId) : null
+  const bookingUrl = housing?.bookingUrl || ''
 
   const kindMeta = kind === 'payment' ? null : COMM_KINDS[kind]
   const cta = kindMeta?.cta ?? null
@@ -321,6 +322,8 @@ export async function runCommSend(args: {
         withinLocalRadius: miles !== null && miles < HOTEL_RADIUS_MILES,
         hotelName: String(hotel.hotelName || ''),
         hotelRooms: Number(hotel.hotelRooms || 0),
+        housingContactName: housing?.contactName || '',
+        housingContactEmail: housing?.contactEmail || '',
       }, {
         confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
         // Already has a login? Send them to sign in rather than to a claim page.
