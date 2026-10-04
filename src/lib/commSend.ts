@@ -7,6 +7,8 @@ import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
+import { readConfirmMany } from '@/lib/changeRequest'
+import { buildChecklist, checklistHtml, checklistText, openCount, whatsLeftPhrase, CHECKLIST_SENTINEL } from '@/lib/checklistLetter'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { ensurePaymentGuard } from './paymentGuard'
 import { registrationRecipients, directorEmailsByRegistration } from '@/lib/clubDirectorLinks'
@@ -30,6 +32,26 @@ const fmtDates = (a?: string | null, b?: string | null) => {
 
 export function isSendKind(k: string): k is SendKind {
   return k === 'payment' || !!COMM_KINDS[k as CommKind]
+}
+
+/** Put `replacement` where the {checklist} token was; append it if the org
+ *  edited the token out, so the letter can never go out with no checklist. */
+function splitOnSentinel(body: string, replacement: string): string {
+  return body.includes(CHECKLIST_SENTINEL)
+    ? body.split(CHECKLIST_SENTINEL).join(replacement)
+    : `${body}\n\n${replacement}`
+}
+
+/** letterBodyHtml escapes and wraps each blank-line-separated block in a <p>, so
+ *  the checklist table is spliced BETWEEN rendered halves rather than inside a
+ *  paragraph, which would nest a table in a <p> and break Outlook. */
+function checklistBodyHtml(body: string, items: ReturnType<typeof buildChecklist> | null): string {
+  if (!items) return letterBodyHtml(body)
+  const block = checklistHtml(items)
+  if (!body.includes(CHECKLIST_SENTINEL)) return letterBodyHtml(body) + block
+  return body.split(CHECKLIST_SENTINEL)
+    .map(part => part.trim() ? letterBodyHtml(part.trim()) : '')
+    .join(block)
 }
 
 export async function runCommSend(args: {
@@ -75,7 +97,7 @@ export async function runCommSend(args: {
 
   // Registered-player counts per team, from completed waivers (Bo: directors should
   // see "you have 7 registered" and per-team splits so they know who's light).
-  const counts = kind === 'waiver' ? await waiverCounts(tournamentId) : null
+  const counts = kind === 'waiver' || kind === 'checklist' ? await waiverCounts(tournamentId) : null
   const playerCountsFor = (reg: { clubName: string; teams: { teamName: string; division: string; clubName?: string | null }[] }) => {
     if (!counts) return { text: '', total: 0 }
     const sum = summarizeClub(counts, reg.clubName, reg.teams)
@@ -110,16 +132,37 @@ export async function runCommSend(args: {
   const waiverLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/player-waiver`)
   const scheduleLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
   const eventDates = fmtDates(t.startDate as unknown as string, t.endDate as unknown as string)
+  const daysToEvent = (() => {
+    const d = new Date(String(t.startDate || ''))
+    if (isNaN(d.getTime())) return ''
+    const n = Math.ceil((d.getTime() - Date.now()) / 86400000)
+    return n > 0 ? String(n) : ''
+  })()
   // The account letter is for registrations nobody has set up in the portal yet.
   // It used to skip any contact who had a login, but access is per registration
   // now (lib/clubAccess): a contact with a login whose new registration isn't on
   // it (one the office entered, say) still needs the link, and the claim page
   // asks them for their existing password.
   const alreadyOpen = new Set<string>()
-  if (kind === 'account') {
+  if (kind === 'account' || kind === 'checklist') {
     try {
       for (const id of (await directorsOf(regs.map(r => r.id))).keys()) alreadyOpen.add(id)
     } catch { /* can't tell — send anyway; the claim page handles an existing account */ }
+  }
+
+  // Checklist facts the other letters don't need: who has confirmed their teams,
+  // and the hotel answers (raw columns, not in the Prisma schema).
+  const confirmStates = kind === 'checklist' ? await readConfirmMany(regs.map(r => r.id)) : null
+  const hotelById = new Map<string, { name: string; rooms: number; needs: string }>()
+  if (kind === 'checklist' && regs.length) {
+    try {
+      const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+        `SELECT id, "hotelName", "hotelRooms" FROM "TeamRegistration" WHERE id IN (${regs.map(() => '?').join(',')})`,
+        ...regs.map(r => r.id))
+      for (const row of rows) {
+        hotelById.set(String(row.id), { name: String(row.hotelName || ''), rooms: Number(row.hotelRooms || 0), needs: '' })
+      }
+    } catch { /* columns missing — the hotel row just won't claim to be booked */ }
   }
 
   const kindMeta = kind === 'payment' ? null : COMM_KINDS[kind]
@@ -133,7 +176,7 @@ export async function runCommSend(args: {
   // Bank transfers still clearing count as paid for a reminder: a club that sent
   // the money on Friday must not be asked for it again on Monday. Read once for
   // the whole batch (lib/pendingTransfers).
-  const clearing = kind === 'payment' ? await clearingTransfers(regs.map(r => r.id)) : {}
+  const clearing = kind === 'payment' || kind === 'checklist' ? await clearingTransfers(regs.map(r => r.id)) : {}
 
   const results: SendResult[] = []
   // The first email that actually goes out is kept as the receipt's copy.
@@ -184,6 +227,43 @@ export async function runCommSend(args: {
     }
 
     const pc = kind === 'waiver' ? playerCountsFor(reg) : null
+
+    // The checklist's own items, from status this club already has on the
+    // registrations page — nothing here is ticked by hand.
+    let checkItems: ReturnType<typeof buildChecklist> | null = null
+    if (kind === 'checklist') {
+      const sum = counts ? summarizeClub(counts, reg.clubName, reg.teams) : { perTeam: [] as number[], matched: 0, unassigned: 0, total: 0 }
+      const paidSoFar = reg.payments.reduce((acc, pmt) => acc + pmt.amount, 0) + (clearing[reg.id]?.amount || 0)
+      const invoiced = Math.round(Math.max(0, (reg.invoiceAmount || 0) - (reg.discountAmount || 0)) * 100) / 100
+      const hotel = hotelById.get(reg.id)
+      const confirmedAt = confirmStates?.get(reg.id)?.at || ''
+      let claimLink = ''
+      if (!alreadyOpen.has(reg.id)) {
+        const tk = await issueClaimToken(reg.id)
+        if (tk) claimLink = claimUrl(tournamentAbs(org?.slug, ''), tk)
+      }
+      checkItems = buildChecklist({
+        teamCount: reg.teams.length,
+        teamsConfirmed: (confirmStates?.get(reg.id)?.status || '') === 'confirmed',
+        confirmedOn: confirmedAt ? new Date(confirmedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '',
+        hasLogin: alreadyOpen.has(reg.id),
+        loginEmail: String(reg.contactEmail || ''),
+        waiverTotal: sum.total,
+        teamsWithNoWaivers: reg.teams.filter((_tm, i) => (sum.perTeam[i] ?? 0) === 0).map(tm => tm.teamName),
+        invoiced,
+        balance: Math.round(Math.max(0, invoiced - paidSoFar) * 100) / 100,
+        needsHotel: /^y/i.test(String(reg.needsHotel || '')),
+        hotelName: hotel?.name || '',
+        hotelRooms: hotel?.rooms || 0,
+      }, {
+        confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
+        // Already has a login? Send them to sign in rather than to a claim page.
+        accountLink: claimLink || tournamentAbs(org?.slug, '/login'),
+        waiverLink,
+        payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
+        hotelLink: eventHome,
+      })
+    }
     // Confirm + account links are per club: their registration id (confirm) or a
     // freshly minted single-use claim token (account) is the key.
     let ctaUrl = sharedCtaUrl
@@ -207,6 +287,11 @@ export async function runCommSend(args: {
       playerCount: pc ? String(pc.total) : '',
       confirmLink: cta === 'confirm' ? ctaUrl : tournamentAbs(org?.slug, `/confirm/${reg.id}`),
       accountLink: cta === 'account' ? ctaUrl : '',
+      payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
+      checklist: checkItems ? CHECKLIST_SENTINEL : '',
+      openCount: checkItems ? String(openCount(checkItems)) : '',
+      whatsLeft: checkItems ? whatsLeftPhrase(checkItems) : '',
+      daysToEvent: daysToEvent,
     }
     const subject = mergeCommLetter(subjectTpl, vals)
     const bodyText = mergeCommLetter(bodyTpl, vals)
@@ -215,12 +300,12 @@ export async function runCommSend(args: {
       eyebrow: t.name || org?.name || '',
       logoUrl: eventLogo, logoHref: eventHome, logoAlt: t.name || 'Tournament', logoBox,
       footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
-      body: `${letterBodyHtml(bodyText)}
+      body: `${checklistBodyHtml(bodyText, checkItems)}
   ${ctaUrl ? `<p style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">${kindMeta?.ctaLabel ?? ''}</a></p>
   <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${ctaUrl}</p>` : ''}`,
       footerNote: 'Questions? Just reply to this email.',
     })
-    const text = `${bodyText}${ctaUrl ? `\n\n${kindMeta?.ctaLabel ?? ''}: ${ctaUrl}` : ''}`
+    const text = `${checkItems ? splitOnSentinel(bodyText, checklistText(checkItems)) : bodyText}${ctaUrl ? `\n\n${kindMeta?.ctaLabel ?? ''}: ${ctaUrl}` : ''}`
     const r = await sendEmail({ to: recipients, subject, html, text, ...orgSender(org) })
     if (r.ok) {
       let log: Record<string, string> = {}
