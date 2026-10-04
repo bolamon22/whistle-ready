@@ -24,6 +24,7 @@ import { cleanName, nameKey } from '@/lib/names'
 import { todayET } from '@/lib/publicView'
 import { officeStamp } from '@/lib/changeRequest'
 import { ownRegistration, eventInfo, offeredDivision, divisionFull } from '@/lib/clubPortal'
+import { grantAccess } from '@/lib/clubAccess'
 import { parsePricing, calcFee, withoutVolumeDiscount } from '@/lib/regPricing'
 import { POST as createRegistration } from '@/app/api/registrations/route'
 
@@ -128,15 +129,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: made?.error || 'Registration failed. Please contact the tournament office.' }, { status: res.status >= 400 ? res.status : 500 })
   }
 
-  // The new event in their portal now, not only when the club name matches a
-  // prior link exactly (carryDirectorLinks, inside the POST above).
-  try {
-    await prisma.clubDirectorLink.upsert({
-      where: { userId_tournamentId_clubName: { userId, tournamentId: target.id, clubName: made.clubName } },
-      update: {},
-      create: { userId, tournamentId: target.id, clubName: made.clubName },
-    })
-  } catch { /* carryDirectorLinks usually has it; staff can link by hand */ }
+  // The new event in their portal now (lib/clubAccess). The POST above only does
+  // that when the contact on the form is their own email; they may have changed it.
+  await grantAccess(userId, made.id, 'registered again')
 
   return NextResponse.json({
     ok: true,

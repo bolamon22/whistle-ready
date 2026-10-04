@@ -7,7 +7,7 @@ import { orgSlugForHost } from '@/lib/orgDomains'
 import { orgForTournament, orgBySlug, orgLogoUrl } from '@/lib/org'
 import { issueClaimToken, claimUrl, ensureClaimColumns } from '@/lib/claim'
 import { renderEmail, button, panel, absUrl, esc, imageSize, fitBox } from '@/lib/emailLayout'
-import { nameKey } from '@/lib/names'
+import { canOpen } from '@/lib/clubAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,15 +71,8 @@ export async function POST(req: NextRequest) {
     const club = esc(reg?.clubName || 'your club')
     const event = esc(reg?.tournamentName || 'the tournament')
 
-    // Does this account already open this registration's portal?
-    let linked = false
-    if (user && reg) {
-      if (reg.claimedBy && reg.claimedBy === user.id) linked = true
-      else {
-        const links = await prisma.clubDirectorLink.findMany({ where: { userId: user.id, tournamentId: reg.tournamentId } })
-        linked = links.some(l => nameKey(l.clubName) === nameKey(reg.clubName))
-      }
-    }
+    // Does this account already open this registration? (lib/clubAccess)
+    const linked = !!(user && reg && await canOpen(user.id, reg.id))
 
     // A claim link, when this registration can still be claimed. Reuse the one
     // already on it, so the link in their original email keeps working.
@@ -102,7 +95,7 @@ export async function POST(req: NextRequest) {
       : ''
     const claimedElsewhere = !!(reg && reg.claimedAt && !linked)
     const elsewhereNote = claimedElsewhere
-      ? panel('Your club portal', `${club}&rsquo;s portal for ${event} was set up with a different email. Ask the person who set it up, or reply to this email and the tournament office will add you.`)
+      ? panel('Your club portal', `${club}&rsquo;s portal for ${event} was set up with a different email. Ask the person who set it up to add you (in the portal, under Club directors), or reply to this email and the tournament office will add you.`)
       : ''
 
     let subject: string, title: string, html: string
@@ -130,7 +123,7 @@ export async function POST(req: NextRequest) {
       if (!claimedElsewhere) return NextResponse.json(OK)
       subject = `Your club portal: ${reg.clubName}`
       title = 'Your club portal is already set up'
-      html = `<p style="margin:0">${club}&rsquo;s club portal for ${event} was set up with a different email. Ask the person who set it up to sign in, or reply to this email and the tournament office will add you.</p>`
+      html = `<p style="margin:0">${club}&rsquo;s club portal for ${event} was set up with a different email. Ask the person who set it up to add you (in the portal, under Club directors), or reply to this email and the tournament office will add you.</p>`
     }
 
     await sendEmail({

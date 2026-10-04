@@ -5,7 +5,7 @@ import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
-import { clubRecipients, clubDirectorEmailMap } from '@/lib/clubDirectorLinks'
+import { registrationRecipients, directorEmailsByRegistration } from '@/lib/clubDirectorLinks'
 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // pay link at both addresses, not just whichever contact the registration happens
     // to hold. See clubDirectorLinks for why. A blank contactEmail is no longer fatal
     // on its own -- a linked director is still a reachable address.
-    const recipients = clubRecipients(reg.clubName, reg.contactEmail, await clubDirectorEmailMap(reg.tournamentId))
+    const recipients = registrationRecipients(reg.id, reg.contactEmail, await directorEmailsByRegistration(reg.tournamentId))
     if (!recipients.length) return NextResponse.json({ error: 'No contact email on this registration' }, { status: 400 })
 
     const paid = reg.payments.reduce((s, p) => s + p.amount, 0)

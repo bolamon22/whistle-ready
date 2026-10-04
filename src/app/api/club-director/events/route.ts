@@ -20,6 +20,7 @@ import { todayET } from '@/lib/publicView'
 import { parsePricing, withoutVolumeDiscount } from '@/lib/regPricing'
 import { divisionBadge } from '@/lib/regStatus'
 import { eventInfo, divisionFull } from '@/lib/clubPortal'
+import { openableRegistrations } from '@/lib/clubAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,9 +32,10 @@ export async function GET(req: NextRequest) {
   const tournamentId = String(req.nextUrl.searchParams.get('tournamentId') || '')
   if (!tournamentId) return NextResponse.json({ error: 'tournamentId is required' }, { status: 400 })
 
-  const links = await prisma.clubDirectorLink.findMany({ where: { userId: as.userId, tournamentId } })
-  if (!links.length) return NextResponse.json({ events: [] })
-  const clubs = new Set(links.map(l => nameKey(l.clubName)))
+  // The club(s) on the registrations this login can open here (lib/clubAccess).
+  const mine = await openableRegistrations(as.userId, tournamentId)
+  if (!mine.length) return NextResponse.json({ events: [] })
+  const clubs = new Set(mine.map(r => nameKey(r.clubName)))
   const orgId = await tournamentOrgId(tournamentId)
   if (!orgId) return NextResponse.json({ events: [] })
 

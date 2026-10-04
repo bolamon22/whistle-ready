@@ -270,6 +270,9 @@ export type RegNotifyData = RegLetterData & {
   notes?: string
   instagram?: string   // club's IG handle (no @) — for the follow/collab play
   adminUrl?: string    // staff registrations page for this tournament
+  /** Other live registrations at this event with the same club name (Oct 4 2026):
+      a duplicate, a new director, or a different club that shares the name. */
+  sameNameAs?: { contactName: string; contactEmail: string; teams: number }[]
 }
 
 export function organizerEmailSubject(d: RegNotifyData): string {
@@ -292,6 +295,12 @@ export function organizerEmailHtml(d: RegNotifyData): string {
       <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#0f766e">New team registration</div>
       <h1 style="margin:4px 0 0;font-size:20px;color:#0f172a">${escHtml(d.clubName || 'Unknown club')} → ${escHtml(d.tournamentName)}</h1>
     </div>
+    ${(d.sameNameAs || []).length ? `<div style="margin:0 0 14px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#92400e;font-size:14px;line-height:1.55">
+      <strong>Same club name as ${(d.sameNameAs || []).length === 1 ? 'another registration' : `${(d.sameNameAs || []).length} other registrations`} for this event.</strong>
+      ${escHtml(d.clubName || 'This club')} is also registered by ${(d.sameNameAs || []).map(o => `${escHtml(o.contactName || 'someone')}${o.contactEmail ? ` (${escHtml(o.contactEmail)})` : ''}, ${o.teams} team${o.teams === 1 ? '' : 's'}`).join('; ')}.
+      If it&rsquo;s the same club (a duplicate, or a new director), merge the registrations. If it&rsquo;s a different club with the same name, rename one.
+      Until then, a club portal that doesn&rsquo;t hold both won&rsquo;t show player waivers under this name.
+    </div>` : ''}
     <p style="margin:0 0 12px;color:#475569;font-size:14px;line-height:1.6">A new club just registered. Give <strong style="color:#0f172a">${escHtml(d.contactName || 'the club director')}</strong> a call to welcome them and confirm details.</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
       ${row('Contact', d.contactName)}

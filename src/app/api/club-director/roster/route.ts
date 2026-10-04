@@ -6,7 +6,8 @@
 // the kid plays for.
 //
 // WHAT MAKES THIS SAFE IS WHAT THE DIRECTOR CAN SEE. /api/club-director/data returns
-// waivers whose CLUB matches one of their ClubDirectorLink rows and nothing else --
+// waivers whose CLUB matches a registration they can open (and no other registration
+// at the event shares the name: lib/clubAccess sharedClubKeys) and nothing else --
 // deliberately, because team names like "HS Select" collide across clubs and a bare
 // team match would hand one club another club's minors. The same rule gates this: the
 // waiver must already be attributed to their club, and the destination must be a team
@@ -30,6 +31,8 @@ import { viewAs } from '@/lib/clubDirectorView'
 import { orgForTournament } from '@/lib/org'
 import { getSubmission, updateSubmissionData } from '@/lib/formSubmissions'
 import { rosterLock } from '@/lib/rosterLock'
+import { openableRegistrations, sharedClubKeys } from '@/lib/clubAccess'
+import { nameKey } from '@/lib/names'
 
 const norm = (x: unknown) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
 const SEP = /\s+[—–]\s+|\s+-\s+/
@@ -56,18 +59,22 @@ export async function POST(req: NextRequest) {
   const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
   if (!as.ok) return as.res
 
-  // Which clubs is this person the director of, for THIS event?
-  const links = await prisma.clubDirectorLink.findMany({ where: { userId: as.userId, tournamentId } })
-  if (!links.length) return NextResponse.json({ error: 'You are not linked to a club for this event' }, { status: 403 })
-  const clubNames = links.map(l => l.clubName)
+  // Which registrations can this login open for THIS event? (lib/clubAccess)
+  const openable = await openableRegistrations(as.userId, tournamentId)
+  if (!openable.length) return NextResponse.json({ error: 'You are not linked to a club for this event' }, { status: 403 })
+  // A club name another registration here also carries is off limits: a waiver
+  // under it could belong to either one (sharedClubKeys), same rule as the
+  // Players tab, so this can't reach a player the portal doesn't show.
+  const shared = await sharedClubKeys(tournamentId, openable)
+  const clubNames = [...new Set(openable.map(r => r.clubName))].filter(c => !shared.has(nameKey(c)))
   const mine = new Set(clubNames.map(norm))
 
   // Their registered teams are the only legal destinations.
   const regs = await prisma.teamRegistration.findMany({
-    where: { tournamentId, clubName: { in: clubNames }, deletedAt: null },
+    where: { id: { in: openable.map(r => r.id) }, deletedAt: null },
     select: { clubName: true, teams: { select: { teamName: true, division: true } } },
   })
-  const targets = regs.flatMap(r => r.teams.map(t => ({
+  const targets = regs.filter(r => !shared.has(nameKey(r.clubName))).flatMap(r => r.teams.map(t => ({
     club: String(r.clubName || ''),
     team: String(t.teamName || ''),
     division: String(t.division || ''),

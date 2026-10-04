@@ -6,9 +6,8 @@
 // Warriors teams on Sep 28 2026 with no logo on any of the three (Bo, Sep 29).
 //
 // Same ownership rule as the coach and pay-method routes: the registration is
-// fetched by id and its club checked against the caller's ClubDirectorLink rows
-// for this tournament, so guessing an id reaches nothing and a soft-deleted
-// registration is refused.
+// fetched by id and the caller must be able to open it (lib/clubAccess), so
+// guessing an id reaches nothing and a soft-deleted registration is refused.
 //
 // APPLYING TO TEAMS ONLY FILLS BLANKS, which is what the staff page already does
 // (uploadClubLogo there maps `t.logoUrl ? t : {...t, logoUrl: url}`). A club that
@@ -20,7 +19,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
-import { nameKey } from '@/lib/names'
+import { canOpen } from '@/lib/clubAccess'
 
 // Only an inline image, never an arbitrary URL from the client. These strings are
 // rendered back into <img src> for everyone who sees the club -- staff, the public
@@ -53,10 +52,6 @@ export async function POST(req: NextRequest) {
   const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
   if (!as.ok) return as.res
 
-  const links = await prisma.clubDirectorLink.findMany({ where: { userId: as.userId, tournamentId } })
-  if (!links.length) return NextResponse.json({ error: 'You are not linked to a club for this event' }, { status: 403 })
-  const mine = new Set(links.map(l => nameKey(l.clubName)))
-
   const reg = await prisma.teamRegistration.findUnique({
     where: { id: registrationId },
     select: { id: true, clubName: true, tournamentId: true, deletedAt: true, teams: { select: { id: true, logoUrl: true } } },
@@ -64,7 +59,7 @@ export async function POST(req: NextRequest) {
   if (!reg || reg.tournamentId !== tournamentId || reg.deletedAt) {
     return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
   }
-  if (!mine.has(nameKey(reg.clubName))) {
+  if (!(await canOpen(as.userId, reg.id))) {
     return NextResponse.json({ error: 'That is not one of your registrations' }, { status: 403 })
   }
 

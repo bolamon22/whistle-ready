@@ -18,6 +18,8 @@ type Info = {
   accountExists: boolean
   orgName?: string
   orgLogoUrl?: string
+  /** Set when this is a director's invite (lib/clubInvites), not the registration's own link. */
+  invitedBy?: string
 }
 
 export default function ClaimPage() {
@@ -126,8 +128,8 @@ export default function ClaimPage() {
           </div>
         )}
         <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-300">{info.tournamentName}</p>
-        <h1 className="text-lg font-bold text-white mt-1">Set up your team account</h1>
-        <p className="text-xs text-slate-300 mt-1">for {info.clubName}</p>
+        <h1 className="text-lg font-bold text-white mt-1">{info.invitedBy ? `Join ${info.clubName}'s club portal` : 'Set up your team account'}</h1>
+        <p className="text-xs text-slate-300 mt-1">{info.invitedBy ? `${info.invitedBy} added you as a club director` : `for ${info.clubName}`}</p>
       </div>
 
       <div className="px-6 pt-5">
@@ -151,7 +153,7 @@ export default function ClaimPage() {
           <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
           <input value={info.contactEmail} readOnly
             className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg px-3 py-2 text-sm" />
-          <p className="text-[11px] text-slate-400 mt-1">The address used to register {info.clubName}.</p>
+          <p className="text-[11px] text-slate-400 mt-1">{info.invitedBy ? `The address ${info.invitedBy} invited.` : `The address used to register ${info.clubName}.`}</p>
         </div>
 
         {!info.accountExists && (
@@ -185,7 +187,7 @@ export default function ClaimPage() {
 
         <p className="flex items-start gap-1.5 text-[11px] text-slate-400 pt-1">
           <ShieldCheck size={13} className="mt-px flex-shrink-0" />
-          This link is unique to your registration and can only be used once.
+          {info.invitedBy ? 'This invite is for this email address and works once.' : 'This link is unique to your registration and can only be used once.'}
         </p>
       </form>
     </div>

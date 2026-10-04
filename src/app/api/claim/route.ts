@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { lookupClaimToken, markClaimed } from '@/lib/claim'
+import { grantAccess } from '@/lib/clubAccess'
+import { consumeInvite } from '@/lib/clubInvites'
 import { orgForTournament, orgLogoUrl as orgLogoUrl2 } from '@/lib/org'
 
 /**
@@ -18,7 +20,11 @@ import { orgForTournament, orgLogoUrl as orgLogoUrl2 } from '@/lib/org'
  * - The token IS the authorization. It's 256-bit random and single-use.
  * - We never reveal whether an email already has an account beyond what the coach
  *   needs to proceed (they were emailed this link, so they own that inbox).
- * - Claiming only ever grants access to the ONE club on this registration.
+ * - Claiming only ever grants access to the ONE registration (lib/clubAccess).
+ * - The same page takes a director's invite to another address (lib/clubInvites):
+ *   that link went to the invited inbox, it opens the same one registration, it
+ *   doesn't mark the registration claimed, and a session only counts when it is
+ *   the invited address (a forwarded invite must not land on whoever is signed in).
  */
 
 // Consistent vague failure so a caller can't probe for valid tokens.
@@ -52,6 +58,7 @@ export async function GET(req: NextRequest) {
     accountExists,
     orgName,
     orgLogoUrl,
+    invitedBy: info.invite ? (info.invite.by || 'A club director') : '',
   })
 }
 
@@ -69,6 +76,11 @@ export async function POST(req: NextRequest) {
     // (verified by password), or a brand-new account we create now.
     const session = await getServerSession(authOptions)
     let userId: string | null = (session?.user as any)?.id ?? null
+    const sessionEmail = String((session?.user as any)?.email || '').trim().toLowerCase()
+    if (info.invite && sessionEmail !== info.contactEmail) userId = null
+    // Whether the login doing the claiming is the signed-in one (the page re-signs
+    // in otherwise). Not merely "someone was signed in": see the invite rule above.
+    const usedSession = !!userId
 
     if (!userId) {
       const existing = await prisma.user.findUnique({ where: { email: info.contactEmail } })
@@ -124,21 +136,19 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* the link still stands; staff can set the role by hand */ }
 
-    // Link this user to THIS club for THIS tournament (idempotent).
-    await prisma.clubDirectorLink.upsert({
-      where: { userId_tournamentId_clubName: { userId, tournamentId: info.tournamentId, clubName: info.clubName } },
-      update: {},
-      create: { userId, tournamentId: info.tournamentId, clubName: info.clubName },
-    })
+    // Open THIS registration to this login (idempotent).
+    const granted = await grantAccess(userId, info.registrationId, info.invite ? `invited by ${info.invite.by || 'a director'}` : 'claim link')
+    if (!granted) return NextResponse.json({ error: 'Something went wrong linking this team. Please try again.' }, { status: 500 })
 
-    await markClaimed(info.registrationId, userId)
+    if (info.invite) await consumeInvite({ token: info.invite.token, registrationId: info.registrationId })
+    else await markClaimed(info.registrationId, userId)
 
     // The role lives in the NextAuth JWT and is only written at sign-in, so a
     // promoted user keeps the stale one until they authenticate again. The page
     // uses this to decide whether its own re-sign-in is enough.
     return NextResponse.json({
       ok: true, clubName: info.clubName, tournamentName: info.tournamentName,
-      rolePromoted, wasSignedIn: !!(session?.user as any)?.id,
+      rolePromoted, wasSignedIn: usedSession,
     })
   } catch (e: any) {
     console.error('[claim] redeem failed:', e)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { copyAccess } from '@/lib/clubAccess'
 import { requireStaff } from '@/lib/apiAuth'
 import { cleanName, nameKey } from '@/lib/names'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
@@ -123,6 +124,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     console.error('merge failed:', e)
     return NextResponse.json({ error: e?.message || 'Merge failed — nothing was changed' }, { status: 500 })
   }
+  // Every director of the merged-in registration keeps the club, on the one that
+  // survives: access is per registration now (lib/clubAccess), and Bo wants both
+  // directors of a club kept involved (Jupiter Revolution, Sep 30).
+  await copyAccess(source.id, target.id)
   // Raw columns (not in the Prisma schema): where the source went, and any hotel /
   // instagram details the target was missing. Best-effort — the merge itself is done.
   try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "mergedIntoId" = ? WHERE id = ?`, target.id, source.id) } catch {}

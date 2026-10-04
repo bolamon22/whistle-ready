@@ -1,10 +1,10 @@
 // SERVER HELPERS FOR WHAT A CLUB DIRECTOR DOES TO THEIR OWN REGISTRATION from
 // the club portal: request a change, add a team, register for the next event.
 //
-// The ownership rule is the one the coach and roster routes already use: the
-// registration has to belong to a club this user is linked to for THIS
-// tournament. It is fetched by id and its club checked against their
-// ClubDirectorLink rows, so guessing an id reaches nothing.
+// The ownership rule is the one every portal route uses (lib/clubAccess): this
+// login has to be able to open this registration. Access is per registration, not
+// per club name, so guessing an id, or registering under another club's name,
+// reaches nothing.
 //
 // Staff viewing a club's portal (?userId=) get a read-only view for these. A
 // change made there would be filed as the club's own, and staff already make
@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
+import { canOpen } from '@/lib/clubAccess'
 import { cleanName, nameKey } from '@/lib/names'
 import { getPublicVisibility } from '@/lib/publicView'
 import { isDivisionFull, type RegStatusFields } from '@/lib/regStatus'
@@ -36,14 +37,10 @@ export async function ownRegistration(
   if (!as.ok) return { ok: false, res: as.res }
   if (as.viewingOther) return fail('This is the staff view of the portal. Make the change on the registrations page instead.', 403)
 
-  const links = await prisma.clubDirectorLink.findMany({ where: { userId: as.userId, tournamentId } })
-  if (!links.length) return fail('You are not linked to a club for this event', 403)
-  const mine = new Set(links.map(l => nameKey(l.clubName)))
-
   const reg = await prisma.teamRegistration.findUnique({ where: { id: registrationId }, include: { teams: true } })
   // A registration staff soft-deleted is not editable either: it is on its way out.
   if (!reg || reg.tournamentId !== tournamentId || reg.deletedAt) return fail('Registration not found', 404)
-  if (!mine.has(nameKey(reg.clubName))) return fail('That is not your club', 403)
+  if (!(await canOpen(as.userId, reg.id))) return fail('That is not your club', 403)
   return { ok: true, reg, userId: as.userId, who: cleanName(session?.user?.name, 80) }
 }
 

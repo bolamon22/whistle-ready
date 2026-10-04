@@ -149,6 +149,19 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Club portal access is per registration, by email (Oct 4).** `src/lib/clubAccess.ts`: raw-SQL
+  table `ClubRegAccess (userId, registrationId)`, created lazily; the first call carried every old
+  `ClubDirectorLink` over as the registrations its club name had at that moment. Every
+  club-director route asks `canOpen` / `openableRegistrations`; **never grant or check by club
+  name**. Grants come only from registering (the password on the public form,
+  `lib/claim setUpPortalLogin`), the claim link, register-again, a director's invite
+  (`lib/clubInvites`, `/api/club-director/directors`, opened on `/claim/<token>`), staff on the
+  Users page (`grantByClubName`), and merges (`copyAccess`). `ClubDirectorLink` rows are still
+  written next to each grant (rollback safety, listings) but grant nothing. Waivers are filed by
+  club name, so `sharedClubKeys` hides a name's waivers from a login that can't open every live
+  registration of that name at the event. Club mail (`lib/clubDirectorLinks`) is keyed by
+  registration id. The public form also offers a returning director's login on file
+  (`lib/loginHint`, masked email only) and their past teams (`/api/registrations/my-teams`).
 - **Follow your team + schedule alerts (Sep 30) — all 5 steps built.** Instagram-style Follow on
   every team on `/public` (grid, names, standings, game rows, search, My Teams) with follower counts;
   a device can follow up to 40 teams per event. Follows are **anonymous and device-keyed**

@@ -9,7 +9,8 @@ import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { ensurePaymentGuard } from './paymentGuard'
-import { clubRecipients, clubDirectorEmailMap } from '@/lib/clubDirectorLinks'
+import { registrationRecipients, directorEmailsByRegistration } from '@/lib/clubDirectorLinks'
+import { directorsOf } from '@/lib/clubAccess'
 import { clearingTransfers } from '@/lib/pendingTransfers'
 
 // The club-letter send itself, lifted out of the route so the scheduler can run
@@ -109,16 +110,15 @@ export async function runCommSend(args: {
   const waiverLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/player-waiver`)
   const scheduleLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
   const eventDates = fmtDates(t.startDate as unknown as string, t.endDate as unknown as string)
-  // The account letter only makes sense for contacts without a login yet.
-  const hasAccount = new Set<string>()
+  // The account letter is for registrations nobody has set up in the portal yet.
+  // It used to skip any contact who had a login, but access is per registration
+  // now (lib/clubAccess): a contact with a login whose new registration isn't on
+  // it (one the office entered, say) still needs the link, and the claim page
+  // asks them for their existing password.
+  const alreadyOpen = new Set<string>()
   if (kind === 'account') {
     try {
-      const emails = [...new Set(regs.map(r => String(r.contactEmail || '').trim().toLowerCase()).filter(Boolean))]
-      if (emails.length) {
-        const us: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
-          `SELECT lower(email) AS email FROM "User" WHERE lower(email) IN (${emails.map(() => '?').join(',')})`, ...emails)
-        for (const u of us) hasAccount.add(String(u.email))
-      }
+      for (const id of (await directorsOf(regs.map(r => r.id))).keys()) alreadyOpen.add(id)
     } catch { /* can't tell — send anyway; the claim page handles an existing account */ }
   }
 
@@ -129,7 +129,7 @@ export async function runCommSend(args: {
 
   // Directors linked to each club, read once for the whole batch. The account
   // letter never uses it (see below), so it isn't paid for on that send.
-  const directors = kind === 'account' ? null : await clubDirectorEmailMap(tournamentId)
+  const directors = kind === 'account' ? null : await directorEmailsByRegistration(tournamentId)
   // Bank transfers still clearing count as paid for a reminder: a club that sent
   // the money on Friday must not be asked for it again on Monday. Read once for
   // the whole batch (lib/pendingTransfers).
@@ -143,8 +143,8 @@ export async function runCommSend(args: {
     // and schedules for the same club (Bo, Sep 30: "I would like to keep them both
     // involved"). A registration still carries ONE contactEmail, so the letter went
     // to whichever contact survived a merge and the other man silently dropped off.
-    // Club letters now go to the registration contact PLUS every director linked to
-    // that club name.
+    // Club letters now go to the registration contact PLUS every director who can
+    // open that registration in the portal (lib/clubAccess).
     //
     // The account letter is the one exception: it carries a claim token stored on the
     // registration, so whoever clicks first consumes it and the second person lands on
@@ -152,7 +152,7 @@ export async function runCommSend(args: {
     // and anyone already holding a ClubDirectorLink has an account by definition.
     const recipients = kind === 'account'
       ? (reg.contactEmail ? [String(reg.contactEmail).trim().toLowerCase()] : [])
-      : clubRecipients(reg.clubName, reg.contactEmail, directors)
+      : registrationRecipients(reg.id, reg.contactEmail, directors)
     if (!recipients.length) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_email' }); continue }
 
     // Payment reminders ride the same dialog but keep their own machinery:
@@ -179,7 +179,7 @@ export async function runCommSend(args: {
       continue
     }
 
-    if (kind === 'account' && hasAccount.has(String(reg.contactEmail).trim().toLowerCase())) {
+    if (kind === 'account' && alreadyOpen.has(reg.id)) {
       results.push({ regId: reg.id, club: reg.clubName, status: 'has_account' }); continue
     }
 

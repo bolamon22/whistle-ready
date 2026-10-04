@@ -1,6 +1,8 @@
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
+import { grantAccess } from '@/lib/clubAccess'
+import { lookupInvite } from '@/lib/clubInvites'
 
 /**
  * "Claim your team" tokens.
@@ -56,6 +58,9 @@ export type ClaimInfo = {
   contactEmail: string
   contactName: string
   alreadyClaimed: boolean
+  /** A director's invite (lib/clubInvites) rather than the registration's own claim
+      link: contactEmail is then the invited address, and who sent it. */
+  invite?: { token: string; by: string }
 }
 
 /**
@@ -76,7 +81,7 @@ export async function lookupClaimToken(token: string): Promise<ClaimInfo | null>
       t,
     )
     const r = rows?.[0]
-    if (!r) return null
+    if (!r) return lookupInviteToken(t)
     return {
       registrationId: r.id,
       tournamentId: r.tournamentId,
@@ -89,6 +94,28 @@ export async function lookupClaimToken(token: string): Promise<ClaimInfo | null>
   } catch (e) {
     console.error('[claim] lookup failed:', e)
     return null
+  }
+}
+
+/** The same shape for a director's invite to an address (lib/clubInvites). */
+async function lookupInviteToken(token: string): Promise<ClaimInfo | null> {
+  const inv = await lookupInvite(token)
+  if (!inv) return null
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT r.id, r.tournamentId, r.clubName, t.name AS tournamentName
+       FROM "TeamRegistration" r JOIN "Tournament" t ON t.id = r.tournamentId
+      WHERE r.id = ? AND r."deletedAt" IS NULL LIMIT 1`, inv.registrationId)
+  const r = rows?.[0]
+  if (!r) return null
+  return {
+    registrationId: r.id,
+    tournamentId: r.tournamentId,
+    tournamentName: r.tournamentName || 'the tournament',
+    clubName: r.clubName || 'your club',
+    contactEmail: inv.email,
+    contactName: inv.name || '',
+    alreadyClaimed: false,
+    invite: { token: inv.token, by: inv.by || '' },
   }
 }
 
@@ -120,8 +147,9 @@ export function claimUrl(baseUrl: string, token: string): string {
 //     it. Never overwritten: a registration form must not be a way to take over
 //     someone's login. A mismatch leaves the claim link in their letter.
 //
-// Access is the same ClubDirectorLink the claim makes, and the registration is
-// marked claimed. Never throws: a registration must not fail over its login.
+// Access is the same per-registration grant the claim makes (lib/clubAccess), and
+// the registration is marked claimed. Never throws: a registration must not fail
+// over its login.
 // ---------------------------------------------------------------------------
 
 export type PortalLogin = {
@@ -184,11 +212,7 @@ export async function setUpPortalLogin(
         rolePromoted = true
       }
     } catch { /* the link still stands; staff can set the role by hand */ }
-    await prisma.clubDirectorLink.upsert({
-      where: { userId_tournamentId_clubName: { userId, tournamentId: reg.tournamentId, clubName: reg.clubName } },
-      update: {},
-      create: { userId, tournamentId: reg.tournamentId, clubName: reg.clubName },
-    })
+    if (!(await grantAccess(userId, reg.id, status === 'created' ? 'registered (new login)' : 'registered'))) return none
     await markClaimed(reg.id, userId)
     return { status, email, rolePromoted }
   } catch (e) {

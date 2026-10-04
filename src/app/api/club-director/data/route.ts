@@ -13,6 +13,8 @@ import { divisionBadge } from '@/lib/regStatus'
 import { clearingTransfers } from '@/lib/pendingTransfers'
 import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
 import { nameKey } from '@/lib/names'
+import { openableRegistrations, sharedClubKeys, directorsOf } from '@/lib/clubAccess'
+import { pendingInvites } from '@/lib/clubInvites'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -24,13 +26,19 @@ export async function GET(req: NextRequest) {
   const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
   if (!as.ok) return as.res
 
-  // Get clubs this user is linked to for this tournament
-  const links = await prisma.clubDirectorLink.findMany({
-    where: { userId: as.userId, tournamentId },
-  })
-  if (links.length === 0) return NextResponse.json({ clubs: [] })
+  // The registrations this login can open at this event: per registration, not per
+  // club name (lib/clubAccess, Oct 4 2026).
+  const openable = await openableRegistrations(as.userId, tournamentId)
+  if (openable.length === 0) return NextResponse.json({ clubs: [] })
 
-  const clubNames = links.map(l => l.clubName)
+  const clubNames = [...new Set(openable.map(r => r.clubName))]
+  // Waivers and player registrations are filed by club name. A name another
+  // registration here also carries could be either one's, so nothing under it is
+  // shown until the office merges the two or renames one (sharedClubKeys). The
+  // portal says so instead of showing an empty list with no reason.
+  const shared = await sharedClubKeys(tournamentId, openable)
+  const waiverClubs = clubNames.filter(c => !shared.has(nameKey(c)))
+  const sharedClubs = clubNames.filter(c => shared.has(nameKey(c)))
 
   // Get registrations for their clubs only.
   //
@@ -46,7 +54,7 @@ export async function GET(req: NextRequest) {
     // the club. LaxManiax saw $8,970 owing on an account paid in full,
     // because deleted duplicates kept their invoice while only the live
     // registration's payments were credited (Sep 15 2026).
-    where: { tournamentId, clubName: { in: clubNames }, deletedAt: null },
+    where: { id: { in: openable.map(r => r.id) }, deletedAt: null },
     select: {
       id: true, clubName: true, clubContact: true, contactEmail: true, contactPhone: true,
       clubBasedIn: true, needsHotel: true, paymentMethod: true, clubLogoUrl: true,
@@ -65,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   // Get player registrations for their clubs
   const playerRegs = await prisma.playerRegistration.findMany({
-    where: { tournamentId, teamClubName: { in: clubNames } },
+    where: { tournamentId, teamClubName: { in: waiverClubs } },
     orderBy: { playerName: 'asc' },
   })
 
@@ -109,7 +117,7 @@ export async function GET(req: NextRequest) {
        ORDER BY "playerName" ASC`, tournamentId)
     const norm = (x: unknown) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
     const SEP = /\s+[\u2014\u2013]\s+|\s+-\s+/
-    const mine = new Set(clubNames.map(norm))
+    const mine = new Set(waiverClubs.map(norm))
     waivers = (rows || []).map(r => {
       const tag = String(r.teamName ?? '').trim()
       const m = SEP.exec(tag)
@@ -161,7 +169,7 @@ export async function GET(req: NextRequest) {
         ORDER BY "submittedAt" DESC`, tournamentId)
     const norm = (x: unknown) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
     const SEP = /\s+[\u2014\u2013]\s+|\s+-\s+/
-    const mine = new Set(clubNames.map(norm))
+    const mine = new Set(waiverClubs.map(norm))
     coachWaivers = (rows || []).map(r => {
       let d: any = {}
       try { d = JSON.parse(String(r.data || '{}')) } catch { /* keep the row */ }
@@ -217,10 +225,19 @@ export async function GET(req: NextRequest) {
   // A bank transfer they sent that is still clearing (lib/pendingTransfers), so
   // the portal says "on its way" instead of asking them to pay again.
   const clearing = await clearingTransfers(registrations.map(r => r.id))
+  // Who else runs each registration, and who has been invited (lib/clubInvites),
+  // for the portal's Club directors line. Names and emails of the other directors
+  // only: they run the club together.
+  const [directors, invites] = await Promise.all([
+    directorsOf(registrations.map(r => r.id)),
+    pendingInvites(registrations.map(r => r.id)),
+  ])
   const regsOut = registrations.map(r => ({
     ...r,
     confirm: confirm.get(r.id) || { status: '', note: '', at: '' },
     clearing: clearing[r.id] ? { amount: clearing[r.id].amount, startedAt: clearing[r.id].startedAt } : null,
+    directors: (directors.get(r.id) || []).map(d => ({ name: d.name, email: d.email, you: d.userId === as.userId })),
+    invites: invites.get(r.id) || [],
   }))
 
   // What the portal needs to add a team or ask for a move: the divisions, which
@@ -270,5 +287,5 @@ export async function GET(req: NextRequest) {
     } catch { /* no pools shown rather than a failed portal */ }
   }
 
-  return NextResponse.json({ clubs: clubNames, registrations: regsOut, playerRegs, games, pools, teamNames, waivers, coachWaivers, lock, payTo, event })
+  return NextResponse.json({ clubs: clubNames, sharedClubs, registrations: regsOut, playerRegs, games, pools, teamNames, waivers, coachWaivers, lock, payTo, event })
 }

@@ -8,10 +8,10 @@
 // could see the problem and had no way to fix it.
 //
 // WHAT MAKES THIS SAFE is the rule the roster route already uses: the team has
-// to be one their own club registered for THIS tournament. The team is fetched
-// by id and its registration's club checked against their ClubDirectorLink rows,
-// so guessing an id reaches nothing -- team names like "HS Select" collide
-// across clubs, and the id is never the thing trusted.
+// to be on a registration this login can open (lib/clubAccess), for THIS
+// tournament. The team is fetched by id and its registration checked, so guessing
+// an id reaches nothing -- team names like "HS Select" collide across clubs, and
+// neither a name nor the id is the thing trusted.
 //
 // NO ROSTER LOCK HERE, unlike moving a player. That lock exists for competitive
 // integrity: shifting a strong player between your own teams once results exist
@@ -24,7 +24,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
-import { cleanName, nameKey } from '@/lib/names'
+import { cleanName } from '@/lib/names'
+import { canOpen } from '@/lib/clubAccess'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -54,14 +55,10 @@ export async function POST(req: NextRequest) {
   const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
   if (!as.ok) return as.res
 
-  const links = await prisma.clubDirectorLink.findMany({ where: { userId: as.userId, tournamentId } })
-  if (!links.length) return NextResponse.json({ error: 'You are not linked to a club for this event' }, { status: 403 })
-  const mine = new Set(links.map(l => nameKey(l.clubName)))
-
   const team = await prisma.registeredTeam.findUnique({
     where: { id: teamId },
     select: {
-      id: true, teamName: true,
+      id: true, teamName: true, registrationId: true,
       registration: { select: { clubName: true, tournamentId: true, deletedAt: true } },
     },
   })
@@ -70,7 +67,8 @@ export async function POST(req: NextRequest) {
   if (!team || team.registration.tournamentId !== tournamentId || team.registration.deletedAt) {
     return NextResponse.json({ error: 'Team not found' }, { status: 404 })
   }
-  if (!mine.has(nameKey(team.registration.clubName))) {
+  // The team's own registration, not its club name (lib/clubAccess).
+  if (!(await canOpen(as.userId, team.registrationId))) {
     return NextResponse.json({ error: 'That is not one of your teams' }, { status: 403 })
   }
 

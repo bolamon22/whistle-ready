@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
+import { openableRegistrations } from '@/lib/clubAccess'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -12,18 +13,19 @@ export async function GET(req: NextRequest) {
   const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
   if (!as.ok) return as.res
 
-  // Get all club links for this user across all tournaments
-  const links = await prisma.clubDirectorLink.findMany({
-    where: { userId: as.userId },
-  })
-  if (links.length === 0) return NextResponse.json([])
+  // Every registration this login can open, at every event (lib/clubAccess):
+  // per registration, not per club name.
+  const openable = await openableRegistrations(as.userId)
+  if (openable.length === 0) return NextResponse.json([])
 
   // Group by tournament
-  const tournamentIds = Array.from(new Set(links.map(l => l.tournamentId)))
+  const tournamentIds = Array.from(new Set(openable.map(r => r.tournamentId)))
   const clubsByTournament: Record<string, string[]> = {}
-  for (const l of links) {
-    if (!clubsByTournament[l.tournamentId]) clubsByTournament[l.tournamentId] = []
-    clubsByTournament[l.tournamentId].push(l.clubName)
+  const regIdsByTournament: Record<string, string[]> = {}
+  for (const r of openable) {
+    if (!clubsByTournament[r.tournamentId]) clubsByTournament[r.tournamentId] = []
+    if (!clubsByTournament[r.tournamentId].includes(r.clubName)) clubsByTournament[r.tournamentId].push(r.clubName)
+    regIdsByTournament[r.tournamentId] = [...(regIdsByTournament[r.tournamentId] || []), r.id]
   }
 
   const tournaments = await prisma.tournament.findMany({
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest) {
       // the club. LaxManiax saw $8,970 owing on an account paid in full,
       // because deleted duplicates kept their invoice while only the live
       // registration's payments were credited (Sep 15 2026).
-      where: { tournamentId: t.id, clubName: { in: clubNames }, deletedAt: null },
+      where: { id: { in: regIdsByTournament[t.id] ?? [] }, deletedAt: null },
       include: {
         teams: true,
         payments: { orderBy: { receivedAt: 'asc' } },

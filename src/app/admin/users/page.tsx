@@ -127,8 +127,10 @@ export default function AdminUsersPage() {
       fetch(`/api/club-director/links?userId=${user.id}`).then(r => r.json()),
       fetch('/api/tournaments').then(r => r.json()),
     ])
-    setUserLinks(links)
-    setTournaments(ts)
+    // The links route answers { links, tournaments, viewing } (since Sep 15), not a
+    // bare array, which left this list empty or broken.
+    setUserLinks(Array.isArray(links) ? links : (links?.links ?? []))
+    setTournaments(Array.isArray(ts) ? ts : [])
   }
 
   const loadClubsForTournament = async (tournamentId: string) => {
@@ -148,7 +150,10 @@ export default function AdminUsersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: linkingUser.id, tournamentId: linkTournament, clubName }),
     })
-    const link = await res.json()
+    const link = await res.json().catch(() => ({}))
+    // Access is per registration now (lib/clubAccess): a club with no registration
+    // at this event yet can't be linked, and the route says so.
+    if (!res.ok) { toast.error(link?.error || 'Could not link that club'); return }
     setUserLinks(prev => [...prev, link])
     setLinkClub('')
     setLinkClubCustom('')

@@ -3,8 +3,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
+import { openableRegistrations, grantByClubName, revokeByClubName } from '@/lib/clubAccess'
 
-// GET - fetch club director's linked clubs
+// GET - the clubs and events this login can open, one entry per registration.
+//
+// Built from the per-registration grants (lib/clubAccess), not ClubDirectorLink:
+// a link no longer opens anything by itself. Same shape as before (userId,
+// tournamentId, clubName), plus registrationId.
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -13,10 +18,9 @@ export async function GET(req: NextRequest) {
   if (!as.ok) return as.res
   const userId = as.userId
 
-  const links = await prisma.clubDirectorLink.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-  })
+  const links = (await openableRegistrations(userId)).reverse().map(r => ({
+    id: r.id, userId, tournamentId: r.tournamentId, clubName: r.clubName, registrationId: r.id,
+  }))
 
   // Who the portal belongs to, so staff viewing it can see whose screen this is
   // rather than mistaking it for their own.
@@ -51,26 +55,29 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ links, tournaments, viewing })
 }
 
-// POST - create a link (admin only)
+// POST - link a login to a club at an event (admin only): every registration of
+// that club name there now. A person deciding, so matching the name is fine here.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || session.user.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { userId, tournamentId, clubName } = await req.json()
-  const link = await prisma.clubDirectorLink.upsert({
-    where: { userId_tournamentId_clubName: { userId, tournamentId, clubName } },
-    update: {},
-    create: { userId, tournamentId, clubName },
-  })
-  return NextResponse.json(link)
+  if (!userId || !tournamentId || !String(clubName || '').trim()) {
+    return NextResponse.json({ error: 'userId, tournamentId and clubName are required' }, { status: 400 })
+  }
+  // Only registrations open anything now, so a club that hasn't registered for the
+  // event yet can't be linked ahead of time: the director gets in when they register.
+  const n = await grantByClubName(String(userId), String(tournamentId), String(clubName))
+  if (!n) return NextResponse.json({ error: 'No registration with that club name at this event yet.' }, { status: 404 })
+  return NextResponse.json({ id: `${tournamentId}:${clubName}`, userId, tournamentId, clubName, registrations: n })
 }
 
-// DELETE - remove a link (admin only)
+// DELETE - unlink a login from a club at an event (admin only).
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || session.user.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { userId, tournamentId, clubName } = await req.json()
-  await prisma.clubDirectorLink.deleteMany({ where: { userId, tournamentId, clubName } })
+  await revokeByClubName(String(userId || ''), String(tournamentId || ''), String(clubName || ''))
   return NextResponse.json({ ok: true })
 }

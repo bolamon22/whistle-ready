@@ -8,7 +8,8 @@ import toast from 'react-hot-toast'
 import { compressImageFile } from '@/lib/imageCompress'
 import {
   RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, ConfirmTeamsDialog, AccountNote, WhatsLeft, OtherEventsCard, PortalPools, dayLabel, poolLabel,
-  type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource, type PortalPool,
+  DirectorsLine, AddDirectorDialog, SharedNameNote,
+  type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource, type PortalPool, type PortalDirector, type PortalInvite,
 } from './PortalActions'
 import { nameKey } from '@/lib/names'
 
@@ -36,6 +37,9 @@ interface Registration {
   confirm?: ConfirmState
   /** A bank transfer they sent that is still clearing (lib/pendingTransfers). */
   clearing?: { amount: number; startedAt: string } | null
+  /** Who can open it in the portal, and open invites (lib/clubAccess, lib/clubInvites). */
+  directors?: PortalDirector[]
+  invites?: PortalInvite[]
 }
 interface PlayerReg {
   id: string; playerName: string; teamClubName: string; grade: string
@@ -154,7 +158,7 @@ export default function ClubDirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selTournament, setSelTournament] = useState('')
-  const [data, setData] = useState<{ clubs: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; pools?: PortalPool[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string }; payTo?: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null; event?: PortalEvent | null } | null>(null)
+  const [data, setData] = useState<{ clubs: string[]; sharedClubs?: string[]; registrations: Registration[]; playerRegs: PlayerReg[]; games: Game[]; pools?: PortalPool[]; teamNames: string[]; waivers?: Waiver[]; coachWaivers?: CoachWaiver[]; lock?: { locked: boolean; at: string; why: string }; payTo?: { zelleHandle: string; checkPayableTo: string; checkAddress: string } | null; event?: PortalEvent | null } | null>(null)
   const [openTeam, setOpenTeam] = useState<string | null>(null)
   const [playerView, setPlayerView] = useState<'cards' | 'list'>('cards')
   const [openPlayer, setOpenPlayer] = useState<string | null>(null)
@@ -199,6 +203,7 @@ export default function ClubDirectorDashboard() {
   const [addFor, setAddFor] = useState('')
   const [againFor, setAgainFor] = useState<null | { tournamentId: string; eventName: string; reg: AgainSource; eventId?: string }>(null)
   const [confirmFor, setConfirmFor] = useState('')
+  const [directorFor, setDirectorFor] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -529,6 +534,17 @@ export default function ClubDirectorDashboard() {
   // matter: is my team list right, do I owe anything, have my players and
   // coaches signed. All from data this page already has.
   const regs = data?.registrations ?? []
+
+  // Take back an invite that hasn't been used (a typo, or the wrong person).
+  const cancelInvite = async (registrationId: string, email: string) => {
+    if (staffView) return
+    const res = await fetch('/api/club-director/directors', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tournamentId: selTournament, registrationId, email }),
+    }).catch(() => null)
+    if (res?.ok) { toast.success(`Invite to ${email} taken back`); loadData(selTournament) }
+    else toast.error('Could not take that invite back. Try again.')
+  }
   const leftItems: LeftItem[] = []
   if (regs.length && !portalEvent?.ended) {
     const requested = regs.some(r => r.confirm?.status === 'change_requested')
@@ -590,6 +606,14 @@ export default function ClubDirectorDashboard() {
           <ConfirmTeamsDialog tournamentId={selTournament} eventName={selTournamentName} reg={r} staffView={staffView}
             onClose={() => setConfirmFor('')} onDone={() => loadData(selTournament)}
             onRequestChange={() => { setConfirmFor(''); setRequestFor({ regId: r.id, teamId: '', kind: 'other' }) }} />
+        )
+      })()}
+      {directorFor && (() => {
+        const r = regs.find(x => x.id === directorFor)
+        if (!r) return null
+        return (
+          <AddDirectorDialog tournamentId={selTournament} eventName={selTournamentName} reg={r} staffView={staffView}
+            onClose={() => setDirectorFor('')} onDone={() => loadData(selTournament)} />
         )
       })()}
       {againFor && (
@@ -785,6 +809,7 @@ export default function ClubDirectorDashboard() {
                 {data?.registrations.length === 0 && (
                   <div className="text-center py-12 text-gray-400">No registration on file for this event yet.</div>
                 )}
+                <SharedNameNote clubs={data?.sharedClubs || []} />
                 <WhatsLeft title={leftTitle} items={leftItems} />
                 {data?.registrations.map(reg => {
                   const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
@@ -899,6 +924,11 @@ export default function ClubDirectorDashboard() {
                           {payMethodSaving === reg.id && <span className="text-xs text-gray-400">Saving…</span>}
                         </span>
                       </div>
+
+                      {/* Who runs this registration in the portal, and adding another
+                          director by email (lib/clubAccess; Bo, Oct 4 2026). */}
+                      <DirectorsLine directors={reg.directors || []} invites={reg.invites || []} staffView={staffView}
+                        onAdd={() => setDirectorFor(reg.id)} onCancel={email => cancelInvite(reg.id, email)} />
 
                       {/* Adding a team is the club's own call until the schedule is
                           posted; moving or removing one is always a request (Bo, Oct 3
@@ -1131,6 +1161,7 @@ export default function ClubDirectorDashboard() {
 
             {tab === 'coaches' && (
               <div className="space-y-3">
+                <SharedNameNote clubs={data?.sharedClubs || []} />
                 <p className="text-sm text-gray-500">
                   {coachesSigned} of {coachRows.length} team coach{coachRows.length === 1 ? '' : 'es'} {coachesSigned === 1 ? 'has' : 'have'} filed a waiver.
                   {coachesSigned < coachRows.length && ' The ones still outstanding are marked below.'}
@@ -1260,6 +1291,7 @@ export default function ClubDirectorDashboard() {
                 the same submissions. */}
             {tab === 'players' && (
               <div className="space-y-3">
+                <SharedNameNote clubs={data?.sharedClubs || []} />
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-gray-500">
                     {waivers.length} waiver{waivers.length === 1 ? '' : 's'} filed across your {teamRows.length} team{teamRows.length === 1 ? '' : 's'}.

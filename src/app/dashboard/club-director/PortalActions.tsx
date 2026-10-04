@@ -939,3 +939,123 @@ export function OtherEventsCard({ tournamentId, teamCount, showMoney, onRegister
     </section>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Club directors: who can open a registration, and adding another one
+//
+// Access is per registration, by email (lib/clubAccess; Bo, Oct 4 2026). A club
+// with two directors, or a new director taking over, gets the next person in
+// here: the invite goes to their email and opens this registration in their own
+// login (lib/clubInvites, api/club-director/directors).
+// ---------------------------------------------------------------------------
+
+export type PortalDirector = { name: string; email: string; you: boolean }
+export type PortalInvite = { email: string; name: string; by: string; at: string }
+
+/** The line on each registration card: its directors, open invites, Add a director. */
+export function DirectorsLine({ directors, invites, onAdd, onCancel, staffView = false }: {
+  directors: PortalDirector[]; invites: PortalInvite[]; onAdd: () => void; onCancel: (email: string) => void; staffView?: boolean
+}) {
+  return (
+    <div className="px-5 py-2.5 border-b border-gray-100 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
+      <span className="text-gray-500 mr-1">Club directors:</span>
+      {directors.length === 0 && <span className="text-xs text-gray-400">none yet</span>}
+      {directors.map(d => (
+        <span key={d.email} title={d.email}
+          className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 max-w-full truncate">
+          {d.name || d.email}{d.you ? ' (you)' : ''}
+        </span>
+      ))}
+      {invites.map(i => (
+        <span key={i.email} title={`Invited by ${i.by}`}
+          className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-medium text-amber-800 max-w-full">
+          <span className="truncate">{i.name || i.email}</span> · invited
+          {!staffView && (
+            <button type="button" onClick={() => onCancel(i.email)} aria-label={`Take back the invite to ${i.email}`}
+              className="ml-0.5 -mr-1 p-0.5 rounded-full text-amber-700 hover:text-amber-900 hover:bg-amber-100">
+              <X size={12} />
+            </button>
+          )}
+        </span>
+      ))}
+      <button type="button" onClick={onAdd}
+        className="inline-flex items-center gap-1 min-h-[28px] text-xs font-semibold text-teal-700 hover:text-teal-800 hover:underline">
+        <Plus size={13} className="shrink-0" /> Add a director
+      </button>
+    </div>
+  )
+}
+
+export function AddDirectorDialog({ tournamentId, eventName, reg, staffView = false, onClose, onDone }: {
+  tournamentId: string; eventName: string; reg: { id: string; clubName: string }; staffView?: boolean
+  onClose: () => void; onDone: () => void
+}) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [sentTo, setSentTo] = useState('')
+  const ok = EMAIL.test(email.trim())
+
+  async function send() {
+    if (busy || staffView || !ok) return
+    setBusy(true); setError('')
+    const r = await postJson('/api/club-director/directors', { tournamentId, registrationId: reg.id, email: email.trim(), name: name.trim() })
+    setBusy(false)
+    if (!r.ok) { setError(r.data?.error || 'Could not send the invite'); return }
+    setSentTo(email.trim().toLowerCase())
+    onDone()
+  }
+
+  return (
+    <Dialog title="Add a club director" onClose={onClose}>
+      {sentTo ? (
+        <Done title="Invite sent" onClose={onClose} body={
+          <>We emailed <strong>{sentTo}</strong> a link to join {reg.clubName}&rsquo;s portal. It works once and expires in 14 days. Until then they show as <strong>invited</strong> on your Club directors line.</>
+        } />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="pr-8">
+            <Eyebrow>{eventName}</Eyebrow>
+            <h2 className="mt-1 text-2xl font-extrabold text-slate-900">Add a club director</h2>
+            <p className="mt-0.5 text-sm text-slate-500">They get their own login for {reg.clubName} and see what you see here: teams, player waivers, invoice and schedule.</p>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold text-slate-700">Their name <span className="font-normal text-slate-400">(optional)</span></span>
+            <input value={name} onChange={e => setName(e.target.value)} autoComplete="off" className={fieldClass} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold text-slate-700">Their email</span>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="off" placeholder="name@example.com" className={fieldClass} />
+          </label>
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          {staffView && <StaffNote />}
+          <NextSteps steps={[
+            'They get an email with a link that works once.',
+            'They choose a password, or sign in with the one they already have for that email.',
+            `${reg.clubName} at ${eventName} opens in their portal.`,
+          ]} />
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={send} disabled={busy || staffView || !ok} className={primaryBtn}>
+              {busy ? 'Sending…' : 'Send invite'}
+            </button>
+            <button type="button" onClick={onClose} className={quietBtn}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </Dialog>
+  )
+}
+
+/** Why a club's waivers are missing: another registration at the event has the
+ *  same club name, so a waiver under it could be either one's (lib/clubAccess). */
+export function SharedNameNote({ clubs }: { clubs: string[] }) {
+  if (!clubs.length) return null
+  return (
+    <p className="text-[13px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5">
+      <strong className="font-semibold">Waivers under {clubs.join(', ')} are hidden for now.</strong>{' '}
+      Another registration for this event uses the same club name, so a waiver filed under it could be theirs or yours.
+      The tournament office has been told and will sort it out.
+    </p>
+  )
+}

@@ -16,7 +16,7 @@ import { tournamentAbs } from '@/lib/seo'
 import { renderEmail } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { buildPayReminderEmail, mergePayLetter, countdownPhrase } from '@/lib/payLetter'
-import { clubRecipients, clubDirectorEmailMap } from '@/lib/clubDirectorLinks'
+import { registrationRecipients, directorEmailsByRegistration } from '@/lib/clubDirectorLinks'
 
 export type PromotedTeam = { teamName: string; division: string }
 
@@ -51,7 +51,7 @@ export async function sendSpotOpened(registrationId: string, promoted: PromotedT
   })
   if (!reg || reg.deletedAt) return { ok: false, to: [], error: 'Registration not found' }
 
-  const recipients = clubRecipients(reg.clubName, reg.contactEmail, await clubDirectorEmailMap(reg.tournamentId))
+  const recipients = registrationRecipients(reg.id, reg.contactEmail, await directorEmailsByRegistration(reg.tournamentId))
   if (!recipients.length) return { ok: false, to: [], error: 'No contact email on this registration' }
 
   const t = await prisma.tournament.findUnique({ where: { id: reg.tournamentId }, select: { name: true, startDate: true } })

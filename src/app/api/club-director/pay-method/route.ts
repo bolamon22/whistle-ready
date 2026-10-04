@@ -14,14 +14,14 @@
 // the staff page's "how is this club paying" column worth reading.
 //
 // WHAT MAKES THIS SAFE is the rule the coach and roster routes already use: the
-// registration is fetched by id and its club checked against the caller's
-// ClubDirectorLink rows for this tournament, so guessing an id reaches nothing.
+// registration is fetched by id and the caller must be able to open it
+// (lib/clubAccess), so guessing an id reaches nothing.
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
-import { nameKey } from '@/lib/names'
+import { canOpen } from '@/lib/clubAccess'
 
 // Exactly what the public registration form offers, and nothing else. A method
 // is a slug the staff page, the CSV export and the pay letters all switch on, so
@@ -46,10 +46,6 @@ export async function POST(req: NextRequest) {
   const as = viewAs(session, req.nextUrl.searchParams.get('userId'))
   if (!as.ok) return as.res
 
-  const links = await prisma.clubDirectorLink.findMany({ where: { userId: as.userId, tournamentId } })
-  if (!links.length) return NextResponse.json({ error: 'You are not linked to a club for this event' }, { status: 403 })
-  const mine = new Set(links.map(l => nameKey(l.clubName)))
-
   const reg = await prisma.teamRegistration.findUnique({
     where: { id: registrationId },
     select: { id: true, clubName: true, tournamentId: true, deletedAt: true, paymentMethod: true },
@@ -60,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (!reg || reg.tournamentId !== tournamentId || reg.deletedAt) {
     return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
   }
-  if (!mine.has(nameKey(reg.clubName))) {
+  if (!(await canOpen(as.userId, reg.id))) {
     return NextResponse.json({ error: 'That is not one of your registrations' }, { status: 403 })
   }
 

@@ -12,9 +12,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
-import { cleanName } from '@/lib/names'
+import { cleanName, nameKey } from '@/lib/names'
 import { isDivisionFull } from '@/lib/regStatus'
-import { carryDirectorLinks } from '@/lib/clubDirectorLinks'
+import { canOpen } from '@/lib/clubAccess'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { viewerRole } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
@@ -181,7 +181,7 @@ function fmtDates(s?: string, e?: string) {
 const jget = async (key: string) => { try { const r = await prisma.appSetting.findUnique({ where: { key } }); return r ? JSON.parse(r.value || '{}') : {} } catch { return {} } }
 
 // Build the confirmation "response letter" and (optionally) email it to the club contact.
-async function buildAndSendConfirmation(reg: any, portal?: PortalLogin) {
+async function buildAndSendConfirmation(reg: any, portal?: PortalLogin, sameNameAs: RegNotifyData['sameNameAs'] = []) {
   try {
     const t: any = await prisma.tournament.findUnique({ where: { id: reg.tournamentId } })
     if (!t) return null
@@ -246,10 +246,7 @@ async function buildAndSendConfirmation(reg: any, portal?: PortalLogin) {
             ? await prisma.user.findUnique({ where: { email: String(reg.contactEmail).toLowerCase() } })
             : null
           if (existing) {
-            const linked = await prisma.clubDirectorLink.findFirst({
-              where: { userId: existing.id, tournamentId: reg.tournamentId, clubName: reg.clubName },
-            })
-            if (linked) return { hasAccount: true, loginUrl: `${SITE_URL}/login` }
+            if (await canOpen(existing.id, reg.id)) return { hasAccount: true, loginUrl: `${SITE_URL}/login` }
             const token = await issueClaimToken(reg.id)
             return token ? { claimUrl: claimUrl(SITE_URL, token), claimForExisting: true } : { hasAccount: true, loginUrl: `${SITE_URL}/login` }
           }
@@ -300,6 +297,7 @@ async function buildAndSendConfirmation(reg: any, portal?: PortalLogin) {
           instagram: reg.instagramHandle || '',
           // Staff console link stays on whistleready.app — that's where staff log in.
           adminUrl: `${SITE_URL}/tournaments/${reg.tournamentId}/registrations`,
+          sameNameAs,
         }
         await sendEmail({
           to: recipients.join(','),
@@ -408,10 +406,27 @@ export async function POST(req: NextRequest) {
     include: { teams: true, payments: true },
   })
 
-  // A director who already holds this club for one of this org's events gets the new
-  // one too -- see lib/clubDirectorLinks. Without it their portal's event picker keeps
-  // showing only the event whose letter they claimed.
-  await carryDirectorLinks(tournamentId, club)
+  // No access by club name any more (lib/clubAccess, Oct 4 2026): a club's past
+  // directors used to be handed every new registration of its name here. Now the
+  // person registering gets it (setUpPortalLogin below), as do the claim link and
+  // anyone a director on it invites.
+  //
+  // Another live registration at this event under the same name is allowed (a new
+  // director, or a different club that shares the name), but the office hears
+  // about it. Waivers are filed by club name, so a portal that doesn't hold both
+  // shows none under that name until the two are merged or one is renamed.
+  let sameNameAs: NonNullable<RegNotifyData['sameNameAs']> = []
+  if (!isImport) {
+    try {
+      const others = await prisma.teamRegistration.findMany({
+        where: { tournamentId, deletedAt: null, id: { not: registration.id } },
+        select: { clubName: true, clubContact: true, contactEmail: true, teams: { select: { id: true } } },
+      })
+      sameNameAs = others
+        .filter(o => nameKey(o.clubName) === nameKey(club))
+        .map(o => ({ contactName: o.clubContact || '', contactEmail: o.contactEmail || '', teams: o.teams.length }))
+    } catch { /* the heads-up is a nicety; the registration stands */ }
+  }
 
   // instagramHandle is a raw column (not in the Prisma schema) — write it separately.
   const ig = normalizeInstagram(instagram)
@@ -436,7 +451,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Public form registrations get a confirmation letter (on-screen + email); imports don't.
-  const confirmation = isImport ? null : await buildAndSendConfirmation({ ...registration, instagramHandle: ig }, portal)
+  const confirmation = isImport ? null : await buildAndSendConfirmation({ ...registration, instagramHandle: ig }, portal, sameNameAs)
 
   return NextResponse.json({ ...registration, confirmation, portal }, { status: 201 })
 }
