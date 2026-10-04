@@ -25,6 +25,8 @@ keywords: user management users add user create account role change role reset p
 3. Click **+ Add Link**. Repeat for more clubs, then click **Done**.
 Use **Remove** to unlink.
 
+A link opens that club's registrations at that tournament as they are when you add it. A registration made later isn't added by name, so the person who registers it, and anyone they add from their portal, can open it. A club with no registration at the tournament yet can't be linked.
+
 **To view a user's details:** click **Profile**.
 
 **To delete a user:** click **Delete** and confirm.

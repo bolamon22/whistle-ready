@@ -20,3 +20,4 @@ If a club registered twice for the same tournament, merge the two entries into o
 - The **Merge** button only shows when there are at least two registrations.
 - **Merge these two** stays disabled until the preview has loaded.
 - The merged-away entry shows under **Recently Deleted** as merged and can't be restored; its teams and payments now live on the kept entry.
+- Club directors on either entry can open the merged one in their portal afterwards. Merging is also how you clear "Waivers under … are hidden" when the same club registered twice under two directors.

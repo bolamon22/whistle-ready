@@ -29,5 +29,5 @@ The **Email clubs** dialog sends a letter to each club's contact (the team direc
 
 **Common problems:**
 - These emails go to clubs right away when you click **Send**.
-- Clubs already paid are skipped by payment reminders, and clubs that already have a login are skipped by **Set up your account**.
+- Clubs already paid are skipped by payment reminders. **Set up your account** skips registrations someone can already open in the club portal; a contact who has a login but whose registration isn't on it yet still gets it, and links it with their existing password.
 - The **Pay reminder** column on each row shows the last reminder date.

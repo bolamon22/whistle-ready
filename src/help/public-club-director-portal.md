@@ -4,7 +4,7 @@ category: Public pages
 order: 967
 audience: public
 routes: /dashboard/club-director
-keywords: club director, club portal, register teams, rename a team, new team, team dashboard, invoice, balance, pay, payment method, waivers, roster, coach, change coach, schedule, register again, history, club logo, add a team, move a team, change division, remove a team, drop a team, request a change, confirm teams, confirm team list, verify teams, tick box, what's left, register for another event, waiting list
+keywords: club director, club portal, add a director, add director, second director, co-director, invite director, new director, club directors, register teams, rename a team, new team, team dashboard, invoice, balance, pay, payment method, waivers, roster, coach, change coach, schedule, register again, history, club logo, add a team, move a team, change division, remove a team, drop a team, request a change, confirm teams, confirm team list, verify teams, tick box, what's left, register for another event, waiting list
 ---
 After you sign in, the club portal shows everything for your club at one tournament: teams, waivers, invoice and payments, coaches and the schedule.
 
@@ -23,10 +23,16 @@ After you sign in, the club portal shows everything for your club at one tournam
 - **Move a team to another division** or **remove a team**: tap **Move** or **Remove** on the team's row, fill in the form and tap **Send request**. Nothing changes until the tournament office does it, so a team can't disappear by accident. For anything else (a name change, say), choose **Something else**.
 - Your request shows at the top of your registration as **Change requested**, and the office gets an email. When they've made the change you'll see **The office updated your teams**; tap **Confirm teams**, check the list and tap **Everything's right — confirm**.
 
+**Club directors:** each registration shows **Club directors**, the people who can open it in their own portal. Your portal holds the registrations you registered, set up from your registration email, or were added to. Someone else registering under your club's name doesn't put their registration in your portal, and yours isn't in theirs.
+- To add someone (a second director, or the person taking over): tap **Add a director**, enter their email (their name is optional) and tap **Send invite**. They get an email with a link that works once and expires in 14 days. It lets them choose a password, or sign in with the one they already have for that email.
+- Until they use the link they show as **invited**. Tap the **×** on their name to take the invite back (a typo, say).
+- Only the tournament office can remove a director.
+
 **Register for another event:** at the bottom of Overview, **Bring your teams to another event** lists the organizer's upcoming events your club isn't in yet. Tap **Register teams**. Your teams are filled in to start: keep them as they are, rename one, tap **Change coach**, untick a team that isn't coming, or tap **Add a team** for a new one. Pick each team's division and tap **Register**. Your contact carries over (tap **Change contact** to update it). Teams are priced at the event's standard rate per team. The total shows before you register, and your confirmation and payment link arrive by email. The new event then appears in your portal.
 
 **Common problems:**
-- "Your account hasn't been linked to a club yet." Contact your tournament administrator to get linked.
+- "Your account hasn't been linked to a club yet." Ask a director already on the registration to add you (**Add a director**), or contact your tournament administrator.
+- **Waivers under your club are hidden for now**: another registration for the same event uses your exact club name, so a waiver filed under it could be theirs or yours. The tournament office is told when it happens, and merges the two registrations or renames one.
 - **Rosters locked** means players can no longer be moved between teams.
 - Paid by bank transfer and it still shows? A transfer takes a few business days to land. While it does, it counts as paid, marked **clearing**, and you won't be asked to pay it again.
 - No **Add a team**, **Move** or **Remove** buttons? They're hidden once the event is over. (Tournament staff who open your portal can open these forms to see what you see, but only you can send them.)
