@@ -7,7 +7,9 @@ import { parsePricing, calcFee } from '@/lib/regPricing'
 import { resolveRegConfirmation, buildRegLetter, letterToEmailHtml, organizerEmailHtml, organizerEmailSubject, type RegLetterData, type RegNotifyData } from '@/lib/regConfirmation'
 import { scopedEmailsForSeries } from '@/lib/scopedNotify'
 import { seriesLabelOf } from '@/lib/eventSeries'
-import { issueClaimToken, claimUrl } from '@/lib/claim'
+import { issueClaimToken, claimUrl, setUpPortalLogin, type PortalLogin } from '@/lib/claim'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { cleanName } from '@/lib/names'
@@ -179,7 +181,7 @@ function fmtDates(s?: string, e?: string) {
 const jget = async (key: string) => { try { const r = await prisma.appSetting.findUnique({ where: { key } }); return r ? JSON.parse(r.value || '{}') : {} } catch { return {} } }
 
 // Build the confirmation "response letter" and (optionally) email it to the club contact.
-async function buildAndSendConfirmation(reg: any) {
+async function buildAndSendConfirmation(reg: any, portal?: PortalLogin) {
   try {
     const t: any = await prisma.tournament.findUnique({ where: { id: reg.tournamentId } })
     if (!t) return null
@@ -229,15 +231,28 @@ async function buildAndSendConfirmation(reg: any) {
       gameDayUrl: base(`/tournaments/${reg.tournamentId}/today`),
       // Waivers are in-app now — point families at the tournament's online form.
       waiverUrl: base(`/tournaments/${reg.tournamentId}/player-waiver`),
-      // Returning contact? Say "welcome back, sign in" — never ask an existing
-      // account holder to sign up again. Otherwise issue the single-use claim
+      // The account box. Made or linked on the form just now: the portal is
+      // ready, so no set-up link. A returning contact already linked to this
+      // club here (lib/clubDirectorLinks): welcome back. A contact with an
+      // account that is NOT linked to it gets the claim link to add the event
+      // (the claim page asks for their existing password): saying "this is tied
+      // to your login" there was not true. Anyone else gets the single-use claim
       // link that creates their login (best-effort; omit the CTA on failure).
       ...(await (async () => {
+        if (portal?.status === 'created') return { hasAccount: true, accountCreated: true, loginUrl: `${SITE_URL}/login` }
+        if (portal?.status === 'linked') return { hasAccount: true, loginUrl: `${SITE_URL}/login` }
         try {
           const existing = reg.contactEmail
             ? await prisma.user.findUnique({ where: { email: String(reg.contactEmail).toLowerCase() } })
             : null
-          if (existing) return { hasAccount: true, loginUrl: `${SITE_URL}/login` }
+          if (existing) {
+            const linked = await prisma.clubDirectorLink.findFirst({
+              where: { userId: existing.id, tournamentId: reg.tournamentId, clubName: reg.clubName },
+            })
+            if (linked) return { hasAccount: true, loginUrl: `${SITE_URL}/login` }
+            const token = await issueClaimToken(reg.id)
+            return token ? { claimUrl: claimUrl(SITE_URL, token), claimForExisting: true } : { hasAccount: true, loginUrl: `${SITE_URL}/login` }
+          }
         } catch {}
         const token = await issueClaimToken(reg.id)
         return token ? { claimUrl: claimUrl(SITE_URL, token) } : {}
@@ -316,7 +331,7 @@ export async function POST(req: NextRequest) {
     tournamentId, clubName, clubContact, contactEmail, contactPhone,
     clubBasedIn, clubWebsite, numTeams, needsHotel, paymentMethod, notes, teams,
     invoiceAmount, discountAmount, discountNote, clubLogoUrl, source, instagram,
-    hotelName, hotelRooms, hotelNights,
+    hotelName, hotelRooms, hotelNights, portalPassword,
   } = body
 
   const isImport = source === 'import'
@@ -407,8 +422,21 @@ export async function POST(req: NextRequest) {
       String(hotelName || '').slice(0, 120), Number(hotelRooms) || 0, Number(hotelNights) || 0, registration.id) } catch {}
   }
 
-  // Public form registrations get a confirmation letter (on-screen + email); imports don't.
-  const confirmation = isImport ? null : await buildAndSendConfirmation({ ...registration, instagramHandle: ig })
+  // The club's portal login, made with the password on the form (lib/claim
+  // setUpPortalLogin), or the session's account when the contact is signed in.
+  // Before the letter, so the letter can say the portal is ready instead of
+  // sending a set-up link.
+  let portal: PortalLogin = { status: 'none', email: '' }
+  if (!isImport) {
+    const session = await getServerSession(authOptions).catch(() => null)
+    portal = await setUpPortalLogin(registration, {
+      password: typeof portalPassword === 'string' ? portalPassword : '',
+      sessionUser: (session?.user as { id?: string; email?: string | null } | undefined) ?? null,
+    })
+  }
 
-  return NextResponse.json({ ...registration, confirmation }, { status: 201 })
+  // Public form registrations get a confirmation letter (on-screen + email); imports don't.
+  const confirmation = isImport ? null : await buildAndSendConfirmation({ ...registration, instagramHandle: ig }, portal)
+
+  return NextResponse.json({ ...registration, confirmation, portal }, { status: 201 })
 }

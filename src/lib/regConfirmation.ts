@@ -79,6 +79,12 @@ export type RegLetterData = {
       letter then says "welcome back, sign in" instead of "create an account". */
   hasAccount?: boolean
   loginUrl?: string
+  /** They made their login on the registration form just now: "your portal is
+      ready", not "welcome back". */
+  accountCreated?: boolean
+  /** They have an account, but this registration is not on it yet: the claim
+      link adds it (with their existing password) instead of creating a login. */
+  claimForExisting?: boolean
 }
 
 function tokens(s: string, d: RegLetterData): string {
@@ -204,11 +210,22 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
   // New contact → the claim link creates their Whistle Ready login.
   // Returning contact → welcome back + sign in + the pre-tournament checklist
   // (don't ask people who already have accounts to sign up again).
-  const claim = d.hasAccount ? `
+  const claim = d.hasAccount && d.accountCreated ? `
+    <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+      <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Your club portal is ready</p>
+      <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">You set up your Whistle Ready login when you registered. Sign in with this email and the password you chose to manage your roster and <strong style="color:#0f172a">online player waivers</strong>, keep an eye on your balance, and see the schedule the moment it posts.</p>
+      <a href="${d.loginUrl || '#'}" style="display:inline-block;background:#0f766e;color:#ffffff;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px;text-decoration:none">Open my club portal →</a>
+    </div>` : d.hasAccount ? `
     <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
       <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Welcome back — you already have an account</p>
       <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">This registration is tied to your Whistle Ready login. Once you're signed in: confirm your players are registered, make sure each one has completed the <strong style="color:#0f172a">online player waiver</strong>, keep an eye on your balance, and watch for the schedule the moment it posts.</p>
       <a href="${d.loginUrl || '#'}" style="display:inline-block;background:#0f766e;color:#ffffff;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px;text-decoration:none">Sign in to my account →</a>
+    </div>` : d.claimUrl && d.claimForExisting ? `
+    <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+      <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Add this event to your club portal</p>
+      <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5">You already have a Whistle Ready login with this email. Use this link and your password to add this registration to it, so your roster, player waivers and balance for it are in your portal.</p>
+      <a href="${d.claimUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px;text-decoration:none">Add it to my portal →</a>
+      <p style="margin:10px 0 0;font-size:11px;color:#94a3b8">This link is unique to your registration.</p>
     </div>` : d.claimUrl ? `
     <div style="margin:18px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
       <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a">Set up your Whistle Ready account</p>

@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 
 /**
@@ -103,4 +104,95 @@ export async function markClaimed(registrationId: string, userId: string): Promi
 /** Absolute URL for the claim link that goes in the confirmation letter/email. */
 export function claimUrl(baseUrl: string, token: string): string {
   return `${baseUrl.replace(/\/$/, '')}/claim/${token}`
+}
+
+// ---------------------------------------------------------------------------
+// A LOGIN AT THE SAME TIME AS THE REGISTRATION
+//
+// Bo, Oct 4 2026: "when club directors register their teams, it just kind of
+// automatically makes them have a login ... have them create a password at the
+// time of registration." The form asks for a password; this does what the claim
+// link does, without the trip back through email:
+//
+//   - signed in as the contact email already: linked to that account.
+//   - a new email: an account with the password they chose, role club_director.
+//   - an email that already has an account: linked only if the password matches
+//     it. Never overwritten: a registration form must not be a way to take over
+//     someone's login. A mismatch leaves the claim link in their letter.
+//
+// Access is the same ClubDirectorLink the claim makes, and the registration is
+// marked claimed. Never throws: a registration must not fail over its login.
+// ---------------------------------------------------------------------------
+
+export type PortalLogin = {
+  status: 'created' | 'linked' | 'existing_account' | 'none'
+  email: string
+  /** Raised to club_director just now. The role lives in the sign-in token, so
+      someone already signed in has to sign in once more to see the portal. */
+  rolePromoted?: boolean
+}
+
+/** Roles a club login may be raised from (same rule as the claim route). */
+const PROMOTABLE = new Set(['', 'parent', 'coach', 'viewer'])
+
+export async function setUpPortalLogin(
+  reg: { id: string; tournamentId: string; clubName: string; clubContact?: string | null; contactEmail?: string | null },
+  opts: { password?: string; sessionUser?: { id?: string; email?: string | null } | null },
+): Promise<PortalLogin> {
+  const email = String(reg.contactEmail || '').trim().toLowerCase()
+  const none: PortalLogin = { status: 'none', email }
+  if (!email || !reg.clubName) return none
+  try {
+    let userId = ''
+    let status: PortalLogin['status'] = 'linked'
+    const sessionEmail = String(opts.sessionUser?.email || '').trim().toLowerCase()
+    if (opts.sessionUser?.id && sessionEmail === email) {
+      userId = String(opts.sessionUser.id)
+    } else {
+      const password = String(opts.password || '')
+      if (!password) return none
+      // Emails are stored lowercase (auth.ts signs in on the lowercased address),
+      // but match without case anyway so an older mixed-case row is still found.
+      const rows: { id: string; password: string | null }[] = await prisma.$queryRawUnsafe(
+        `SELECT id, password FROM "User" WHERE lower(email) = ? LIMIT 1`, email)
+      const existing = rows?.[0]
+      if (existing) {
+        if (!existing.password || !(await bcrypt.compare(password, existing.password))) {
+          return { status: 'existing_account', email }
+        }
+        userId = existing.id
+      } else {
+        if (password.length < 8) return none
+        const created = await prisma.user.create({
+          data: {
+            name: String(reg.clubContact || reg.clubName).trim().slice(0, 120),
+            email,
+            password: await bcrypt.hash(password, 12),
+            role: 'club_director',
+          },
+        })
+        userId = created.id
+        status = 'created'
+      }
+    }
+
+    let rolePromoted = false
+    try {
+      const who = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+      if (PROMOTABLE.has(String(who?.role || ''))) {
+        await prisma.user.update({ where: { id: userId }, data: { role: 'club_director' } })
+        rolePromoted = true
+      }
+    } catch { /* the link still stands; staff can set the role by hand */ }
+    await prisma.clubDirectorLink.upsert({
+      where: { userId_tournamentId_clubName: { userId, tournamentId: reg.tournamentId, clubName: reg.clubName } },
+      update: {},
+      create: { userId, tournamentId: reg.tournamentId, clubName: reg.clubName },
+    })
+    await markClaimed(reg.id, userId)
+    return { status, email, rolePromoted }
+  } catch (e) {
+    console.error('[claim] login at registration failed:', e)
+    return none
+  }
 }
