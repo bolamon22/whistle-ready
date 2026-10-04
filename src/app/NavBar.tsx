@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
@@ -8,6 +8,7 @@ import { Menu, X, Sun, Moon } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { useOrg } from '@/lib/org-context'
 import { isStaffThemeRoute } from './ThemeShell'
+import { roleCanAccess } from '@/lib/routeAccess'
 
 interface Tournament {
   id: string
@@ -83,6 +84,34 @@ export default function NavBar() {
     return () => window.removeEventListener('gd-theme', onTheme)
   }, [])
 
+  // Overdue tasks, as a red count on Tasks (and a dot on the phone menu button).
+  // Overdue only: a badge that also counted "due this week" was always lit.
+  // Reloaded when a task changes, when the admin switches org, and on page
+  // changes at most once a minute (a new day makes more tasks overdue).
+  const canTasks = !!session && roleCanAccess(role, '/tasks')
+  const [overdue, setOverdue] = useState(0)
+  const tasksAt = useRef(0)
+  const loadOverdue = useCallback(() => {
+    tasksAt.current = Date.now()
+    fetch('/api/tasks/overview?counts=1')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.counts) setOverdue(Number(d.counts.overdue) || 0) })
+      .catch(() => {})
+  }, [])
+  useEffect(() => {
+    if (!canTasks) { setOverdue(0); return }
+    loadOverdue()
+    window.addEventListener('tasks-changed', loadOverdue)
+    window.addEventListener('preview-org-changed', loadOverdue)
+    return () => {
+      window.removeEventListener('tasks-changed', loadOverdue)
+      window.removeEventListener('preview-org-changed', loadOverdue)
+    }
+  }, [canTasks, loadOverdue])
+  useEffect(() => {
+    if (canTasks && Date.now() - tasksAt.current > 60000) loadOverdue()
+  }, [pathname, canTasks, loadOverdue])
+
   function toggleTheme() {
     const next = !dark
     setDark(next)
@@ -141,6 +170,12 @@ export default function NavBar() {
 
         {/* Nav links */}
         <a href="/" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Tournaments</a>
+        {canTasks && (
+          <Link href="/tasks" className="hidden xl:flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">
+            Tasks
+            {overdue > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold leading-[18px] text-center">{overdue}<span className="sr-only"> overdue</span></span>}
+          </Link>
+        )}
 
         {/* Tournament quick-links */}
         {tournaments.length > 0 && (
@@ -244,9 +279,10 @@ export default function NavBar() {
 
               {/* Below 1280px (phones AND tablets — the full admin bar needs ~1,250px): hamburger replaces the links, role badge, View-as and Sign out */}
               <button type="button" onClick={() => setMenuOpen(o => !o)}
-                aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}
-                className="xl:hidden w-9 h-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center">
+                aria-label={menuOpen ? 'Close menu' : overdue > 0 ? `Open menu (${overdue} overdue ${overdue === 1 ? 'task' : 'tasks'})` : 'Open menu'} aria-expanded={menuOpen}
+                className="xl:hidden relative w-9 h-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center">
                 {menuOpen ? <X size={18} /> : <Menu size={18} />}
+                {overdue > 0 && !menuOpen && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-600 ring-2 ring-white" aria-hidden />}
               </button>
             </>
           ) : (
@@ -282,6 +318,12 @@ export default function NavBar() {
 
               <div className="py-1.5">
                 <a href="/" className={MOBILE_LINK}>Tournaments</a>
+                {canTasks && (
+                  <Link href="/tasks" className={MOBILE_LINK}>
+                    Tasks
+                    {overdue > 0 && <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold">{overdue} overdue</span>}
+                  </Link>
+                )}
                 {tournaments.slice(0, 4).map(t => (
                   <Link key={t.id} href={`/tournaments/${t.id}/dashboard`} className={MOBILE_LINK}>
                     {t.logoUrl ? (

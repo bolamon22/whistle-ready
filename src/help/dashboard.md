@@ -3,7 +3,7 @@ title: Read the tournament dashboard
 category: Getting started
 order: 3
 routes: /tournaments/*/dashboard
-keywords: dashboard at a glance home overview money hidden show money hide money teams by division registration open closed collected waitlist paid unpaid partial reorder divisions
+keywords: dashboard at a glance home overview tasks overdue up next money hidden show money hide money teams by division registration open closed collected waitlist paid unpaid partial reorder divisions
 ---
 The **Dashboard** is the tournament at a glance: teams registered, games, staff coverage and money.
 
@@ -11,6 +11,7 @@ The **Dashboard** is the tournament at a glance: teams registered, games, staff 
 
 **What is on it:**
 - **At a glance** tiles: **Teams**, **Games**, **Staff assigned** and **Collected**. Click a tile to jump to that page.
+- **Tasks** (directors and admins): open and overdue tasks for this event, what's up next, and the setup checklist's progress. Click the circle to check a task off, or **Open tasks** for the full list.
 - **Live**: shortcuts to **Post scores**, **Assignments** and **Communications**.
 - **Registered teams**: **Teams by division**. Tap a division to see its teams. Teams on the waiting list show a **Waiting list** tag.
 - **Money**: **Revenue**, **Staff expenses**, **Gross profit**, **Balance due** and **Collection progress**, with a link to **View full financials**.

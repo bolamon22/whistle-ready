@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { eventStatus } from '@/lib/eventDays'
-import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp, LayoutDashboard, Settings, Users, Zap, DollarSign, type LucideIcon } from 'lucide-react'
+import { ClipboardList, Globe, MapPin, ChevronDown, ChevronUp, LayoutDashboard, ListChecks, Settings, Users, Zap, DollarSign, type LucideIcon } from 'lucide-react'
 import HelpCenter from '@/components/HelpCenter'
 import { useSession } from 'next-auth/react'
 import { useRole } from '@/lib/role-context'
@@ -33,7 +33,7 @@ type NavItem = { href: string; label: string; sect?: string }
 type NavGroup = { label: string; href?: string; items?: NavItem[] }
 
 // Icons for the phone tab bar (desktop tabs are text-only).
-const GROUP_ICONS: Record<string, LucideIcon> = { Dashboard: LayoutDashboard, Setup: Settings, People: Users, Live: Zap, Financials: DollarSign }
+const GROUP_ICONS: Record<string, LucideIcon> = { Dashboard: LayoutDashboard, Setup: Settings, People: Users, Live: Zap, Financials: DollarSign, Tasks: ListChecks }
 
 function fmtDate(d: string) {
   if (!d) return ''
@@ -111,6 +111,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/chirp-insights`, label: 'Chirp insights' },
     ]},
     { label: 'Financials', href: `${base}/financials` },
+    { label: 'Tasks', href: `${base}/tasks` },
   ]
 
   // Only the tabs this role can open (the same rule middleware enforces), so a
@@ -125,6 +126,25 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const groups: NavGroup[] = allGroups
     .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href)) } : g)
     .filter(g => g.href ? canOpen(g.href) : (g.items?.length ?? 0) > 0)
+
+  // This event's overdue tasks, as a red count on the Tasks tab (overdue only,
+  // like the top bar). Refreshed when a task is checked off anywhere on the page.
+  const [overdue, setOverdue] = useState(0)
+  const tasksOpen = status === 'authenticated' && roleCanAccess(effectiveRole, `${base}/tasks`)
+  useEffect(() => {
+    if (!tasksOpen) return
+    let live = true
+    const load = () => {
+      fetch(`/api/tasks/overview?tournamentId=${encodeURIComponent(id)}&counts=1`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (live && d?.counts) setOverdue(Number(d.counts.overdue) || 0) })
+        .catch(() => {})
+    }
+    load()
+    window.addEventListener('tasks-changed', load)
+    return () => { live = false; window.removeEventListener('tasks-changed', load) }
+  }, [tasksOpen, id])
+  const badge = (g: NavGroup) => g.label === 'Tasks' && overdue > 0 ? overdue : 0
 
   const hrefActive = (href: string) => href === base ? pathname === base : pathname.startsWith(href)
   const groupActive = (g: NavGroup) => g.href ? hrefActive(g.href) : !!g.items?.some(i => hrefActive(i.href))
@@ -199,7 +219,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         )}
 
         {/* Tab bar */}
-        <div className="mt-2 -mx-3 px-1 border-t border-white/10 grid grid-cols-5">
+        <div className={`mt-2 -mx-3 px-1 border-t border-white/10 grid ${groups.length > 5 ? 'grid-cols-6' : 'grid-cols-5'}`}>
           {groups.map(g => {
             const Icon = GROUP_ICONS[g.label]
             const active = groupActive(g)
@@ -211,7 +231,12 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
               </button>
             ) : (
               <Link key={g.label} href={g.href!} className={cls}>
-                {Icon && <Icon size={18} />}
+                {Icon && (
+                  <span className="relative">
+                    <Icon size={18} />
+                    {badge(g) > 0 && <span className="absolute -top-1.5 left-3 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold leading-4 text-center">{badge(g)}<span className="sr-only"> overdue</span></span>}
+                  </span>
+                )}
                 <span>{g.label}</span>
               </Link>
             )
@@ -341,6 +366,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
               <Link key={g.label} href={g.href!}
                 className={`${tabBase} ${groupActive(g) ? tabOn : tabOff}`}>
                 {g.label}
+                {badge(g) > 0 && <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold leading-[18px] text-center">{badge(g)}<span className="sr-only"> overdue</span></span>}
               </Link>
             )
           )}

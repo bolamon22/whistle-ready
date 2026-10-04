@@ -11,6 +11,7 @@ import CopyTournamentButton from '@/components/CopyTournamentButton'
 import { genderOf, genderLabel, splitByGender, type DivisionGender } from '@/lib/divisionGender'
 import { useRole } from '@/lib/role-context'
 import { roleCanAccess } from '@/lib/routeAccess'
+import { TournamentTasksBox } from '@/components/tasks/TasksOverview'
 
 interface DashData {
   /** False for staff without money access (the scheduler): dollar figures come back 0. */
@@ -337,6 +338,9 @@ export default function DashboardPage() {
             )}
           </div>
         </section>
+
+        {/* ── Tasks (directors; hidden from roles without the Tasks tab) ── */}
+        {roleCanAccess(effectiveRole, `/tournaments/${id}/tasks`) && <TournamentTasksBox tournamentId={String(id)} />}
 
         {/* ── Game Day console ──────────────────────────────────────────── */}
         <section>

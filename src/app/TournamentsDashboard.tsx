@@ -1,12 +1,15 @@
 'use client'
 import OrgLogoMark from '@/app/OrgLogoMark'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatDate } from '@/lib/utils'
 import { daysUntil } from '@/lib/eventDays'
 import { useSession } from 'next-auth/react'
 import GalleryPicker from '@/components/GalleryPicker'
+import { HomeTasksCard, TaskStrip, type OverviewEvent } from '@/components/tasks/TasksOverview'
+import { useRole } from '@/lib/role-context'
+import { roleCanAccess } from '@/lib/routeAccess'
 
 interface Tournament {
   id:string; name:string; sport:string; startDate:string; endDate:string
@@ -49,6 +52,14 @@ const ADMIN_LINKS = [
 export default function TournamentsDashboard() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
+  // Tasks: the card above the list and a strip on each event's card, for the
+  // roles that have the Tasks page (directors; admins always).
+  const { effectiveRole } = useRole()
+  const showTasks = !!session && roleCanAccess(effectiveRole, '/tasks')
+  const [taskEvents, setTaskEvents] = useState<{ today: string; byId: Record<string, OverviewEvent> }>({ today: '', byId: {} })
+  const onTaskEvents = useCallback((events: OverviewEvent[], today: string) => {
+    setTaskEvents({ today, byId: Object.fromEntries(events.map(e => [e.id, e])) })
+  }, [])
   const orgId = (session?.user as any)?.orgId as string | null
   const [orgs, setOrgs] = useState<{id:string;name:string}[]>([])
   const [viewOrgId, setViewOrgId] = useState(() => {
@@ -334,6 +345,7 @@ export default function TournamentsDashboard() {
                     </div>
                   </div>
                 </Link>
+                {showTasks && taskEvents.byId[t.id] && <TaskStrip ev={taskEvents.byId[t.id]} today={taskEvents.today} />}
                 <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
                   <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm justify-center whitespace-nowrap">Schedule</Link>
                   <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>
@@ -589,6 +601,8 @@ export default function TournamentsDashboard() {
           </div>
         </div>
       )}
+
+      {showTasks && <HomeTasksCard viewOrgId={viewOrgId} onEvents={onTaskEvents} />}
 
       {loading ? <div className="text-slate-400 text-center py-16">Loading…</div> :
        tournaments.length === 0 ? (

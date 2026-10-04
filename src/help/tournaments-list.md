@@ -3,7 +3,7 @@ title: Create, copy or delete a tournament
 category: Getting started
 order: 2
 routes: /, /tournaments
-keywords: new tournament create add tournament copy duplicate next year clone delete remove edit tournaments list home past upcoming move to org
+keywords: tasks overdue new tournament create add tournament copy duplicate next year clone delete remove edit tournaments list home past upcoming move to org
 ---
 The **Tournaments** page is your home page. It lists every tournament, with the next one first.
 
@@ -24,6 +24,8 @@ The **Tournaments** page is your home page. It lists every tournament, with the 
 Copied: venues and fields, divisions, pay rates, ref rules, staff roster and registration settings. Left behind: games, schedule, registrations, assignments and availability.
 
 **Other card buttons:** **Edit** changes name, sport, dates, location and logo. **Schedule**, **Staff**, **Registrations**, **Pay Report** and **Builder** jump straight to those pages. Click the tournament name to open its **Dashboard**.
+
+**Tasks:** directors and admins see a **Tasks** box above the list, with what's up next across every event, and a line on each tournament card with its open and overdue tasks. Click it to open that event's tasks.
 
 **Finding older events:** use the **Upcoming**, **Past** and **All** filters.
 
