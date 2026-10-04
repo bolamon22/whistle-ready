@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
+import { requireMoney } from '@/lib/apiAuth'
+
+// Every club's contact, email, phone, invoice, payments and staff notes, as CSV.
+// It had no sign-in check: anyone with a tournament id (it is in every public
+// link) could download it signed out. Found Oct 4 2026 while checking how a club
+// knew Fall Classic's division counts. Director/admin only now, the same people
+// who see money on the registrations page. Nothing in the app links here.
+export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  const gate = await requireMoney()
+  if (!gate.ok) return gate.res
   const { searchParams } = new URL(req.url)
   const tournamentId = searchParams.get('tournamentId')
   if (!tournamentId) return NextResponse.json({ error: 'tournamentId required' }, { status: 400 })
