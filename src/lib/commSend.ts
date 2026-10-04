@@ -8,6 +8,7 @@ import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { deriveStatus, housingSettings } from '@/lib/housing'
+import { hotelDistance, HOTEL_RADIUS_MILES } from '@/lib/geoDistance'
 import { readConfirmMany } from '@/lib/changeRequest'
 import { buildChecklist, checklistHtml, checklistText, openCount, whatsLeftPhrase, expectedPlayers, CHECKLIST_SENTINEL } from '@/lib/checklistLetter'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
@@ -76,7 +77,7 @@ export async function runCommSend(args: {
   if (!regIds.length) return { ok: false, error: 'Pick at least one club', status: 400 }
   if (regIds.length > 100) return { ok: false, error: 'Max 100 clubs per send', status: 400 }
 
-  const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, startDate: true, endDate: true, logoUrl: true } })
+  const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, startDate: true, endDate: true, logoUrl: true, location: true } })
   if (!t) return { ok: false, error: 'Tournament not found', status: 404 }
   // Read once, not per registration: the {eventTeams} token is the whole field's
   // team count and is identical for every letter in the batch.
@@ -239,6 +240,9 @@ export async function runCommSend(args: {
       const paidSoFar = reg.payments.reduce((acc, pmt) => acc + pmt.amount, 0) + (clearing[reg.id]?.amount || 0)
       const invoiced = Math.round(Math.max(0, (reg.invoiceAmount || 0) - (reg.discountAmount || 0)) * 100) / 100
       const hotel = hotelById.get(reg.id) || {}
+      // Free-text town vs free-text venue; null when either can't be placed,
+      // and null must not read as local (lib/geoDistance).
+      const miles = hotelDistance(reg.clubBasedIn, t.location as unknown as string)
       const expect = expectedPlayers(reg.teams.map(tm => tm.division || ''))
       const confirmedAt = confirmStates?.get(reg.id)?.at || ''
       let claimLink = ''
@@ -269,6 +273,8 @@ export async function runCommSend(args: {
         // returns 'local' for a club that answered "No" on the form, and Bo
         // does not want a shrugged No to kill the hotel ask (checklistLetter).
         staffMarkedLocal: String(hotel.housingStatus || '') === 'local',
+        saidNeedsHotel: /^(y|maybe)/i.test(String(reg.needsHotel || '')),
+        withinLocalRadius: miles !== null && miles < HOTEL_RADIUS_MILES,
         hotelName: String(hotel.hotelName || ''),
         hotelRooms: Number(hotel.hotelRooms || 0),
       }, {

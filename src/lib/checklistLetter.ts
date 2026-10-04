@@ -32,6 +32,11 @@ export type ChecklistFacts = {
   /** Staff ticked this club local on the housing board. NOT the same as the
    *  club answering "No" on the registration form — see the hotel row. */
   staffMarkedLocal: boolean
+  /** They ticked Yes or Maybe for rooms on the registration form. */
+  saidNeedsHotel: boolean
+  /** Club's home town is inside the local radius (lib/geoDistance). False when
+   *  we could not place them — unknown must never read as "local". */
+  withinLocalRadius: boolean
   hotelName: string
   hotelRooms: number
 }
@@ -146,18 +151,28 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
           ctaLabel: 'Pay the balance', ctaUrl: links.payLink })
   }
 
-  // WHO GETS THE HOTEL ROW. Only an explicit staff "local" tick on the housing
-  // board hides it — deliberately NOT the club's own form answer. Bo, Oct 4
-  // 2026: "some people still type no when they're registering just because they
-  // don't want to be bothered with dealing with it." Those clubs still have
-  // families who need rooms, and room nights are what pay for the event, so a
-  // shrugged No must not silence the ask: Yes, Maybe, blank and No all get the
-  // line, and staff override it per club with one tick on the board.
+  // WHO GETS THE HOTEL ROW, in order:
+  //   1. Staff ticked "Local — not needed" on the housing board → never shown.
+  //      A human decision always wins, and it is one dropdown per club.
+  //   2. They said Yes or Maybe for rooms, or we already have a hotel or rooms
+  //      against them → shown.
+  //   3. Their home town is inside the radius → hidden.
+  //   4. Anything else, including a town we could not place and every
+  //      out-of-state club → shown.
+  //
+  // What is deliberately NOT a reason to hide it: the club answering "No" on
+  // the form. Bo, Oct 4 2026 — "some people still type no when they're
+  // registering just because they don't want to be bothered with dealing with
+  // it." Those clubs still have families who need rooms, and room nights are
+  // what pay for the event, so a shrugged No from 200 miles away must not
+  // silence the ask. Within the radius it does, because then it is probably true.
   //
   // The club's only job is forwarding the link — families book their own rooms
   // (Bo, Oct 4 2026) — so the row carries a ready-to-paste note for them, and
   // the only evidence we get that it worked is rooms logged against the club.
-  if (!f.staffMarkedLocal) {
+  const hotelAlreadyInPlay = f.saidNeedsHotel || f.housingStatus === 'booked' || f.housingStatus === 'progress'
+  const showHotel = !f.staffMarkedLocal && (hotelAlreadyInPlay || !f.withinLocalRadius)
+  if (showHotel) {
     const booked = f.housingStatus === 'booked'
     const forward = 'Hotel rooms for ' + f.eventName + ': ' + links.hotelLink
       + '\nPlease book through this link so our rooms are counted with the team.'
