@@ -4,9 +4,9 @@ category: Public pages
 order: 965
 audience: public
 routes: /claim/*
-keywords: claim team, team account, club director account, set up account, account setup email, link team, club portal access, create account after registering
+keywords: claim team, team account, club director account, set up account, account setup email, link team, club portal access, create account after registering, add it to my portal, add this event to your club portal
 ---
-After you register a team, you get an email with a link to set up your team account. That account is how you manage rosters and waivers, see your invoice and balance, and view the schedule.
+Most clubs choose their portal password on the registration form and are signed in straight away (see "Register your team for a tournament"). If your registration went in without one, for example because the tournament office entered it, or because your email already has a login and the password you typed didn't match it, your registration email has a link to set up your team account or add the event to it. That account is how you manage rosters and waivers, see your invoice and balance, and view the schedule.
 
 **Where:** the account setup link in your registration email.
 

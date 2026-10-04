@@ -8,7 +8,7 @@ keywords: club director, club portal, register teams, rename a team, new team, t
 ---
 After you sign in, the club portal shows everything for your club at one tournament: teams, waivers, invoice and payments, coaches and the schedule.
 
-**Where:** sign in (on your organizer's website, tap **Log in** at the top). Club director accounts open the portal automatically. Never set a password? Tap **Email my portal link** on the sign-in page.
+**Where:** sign in (on your organizer's website, tap **Log in** at the top) with your contact email and the password you chose when you registered your teams. Club director accounts open the portal automatically. Never set a password? Tap **Email my portal link** on the sign-in page.
 
 1. Pick the tournament from the drop-down at the top right. The boxes show **Teams**, **Waivers filed**, **Invoiced** and **Balance due** (with **Pay now** when you owe a balance).
 2. **Overview** opens with **What's left before** the event: confirming your team list, your balance, player and coach waivers, and your club logo. Tap a link there to do the step. To confirm your team list, tick its box (or tap **Confirm teams**), check each team's name and division, and tap **Everything's right — confirm**. If something is off, tap **Something's wrong — ask for a change** instead. Below it: your teams, divisions, coaches and waiver counts. **Waiver form to send parents** opens the player waiver link to share. Under **Invoice & payments**, tap **Pay** to pay online, or change the **Pay method** (credit card, bank transfer, PayPal / Venmo, Zelle or check). For Zelle or check, the instructions appear right there. You can also add or change your club logo here.

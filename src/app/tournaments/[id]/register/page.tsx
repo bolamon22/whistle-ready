@@ -9,6 +9,8 @@ import { isDivisionFull, type RegStatusFields } from '@/lib/regStatus'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import StripePayPanel, { type PayMethod } from '@/components/StripePayPanel'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
+import PasswordInput from '@/components/PasswordInput'
+import { useSession, signIn, signOut } from 'next-auth/react'
 
 interface TeamRow {
   clubName: string
@@ -19,6 +21,11 @@ interface TeamRow {
   coachEmail: string
   logoUrl: string
 }
+
+// What the server did about the club's portal login (lib/claim PortalLogin).
+// Typed here rather than imported: lib/claim imports the database, and a client
+// page must never pull that in.
+type PortalResult = { status: 'created' | 'linked' | 'existing_account' | 'none'; email: string; rolePromoted?: boolean }
 
 const emptyTeam = (): TeamRow => ({
   clubName: '', teamName: '', division: '', coachName: '', coachPhone: '', coachEmail: '', logoUrl: '',
@@ -104,6 +111,22 @@ export default function RegisterPage() {
   const [clubLogoUploading, setClubLogoUploading] = useState(false)
   const [teamLogoUploading, setTeamLogoUploading] = useState<Record<number, boolean>>({})
 
+  // The club portal login, made right on this form (Bo, Oct 4 2026: "have them
+  // create a password at the time of registration"). The contact email is the
+  // login, so a password is all that was missing; the server does the rest (lib/
+  // claim setUpPortalLogin). Only someone signed out is asked. Signed in as the
+  // contact, the registration goes onto that account. Signed in as anyone else
+  // (staff entering a club, say), the contact still gets the set-up link by
+  // email, so nobody chooses another person's password.
+  const { data: session, status: sessionStatus } = useSession()
+  const [portalPassword, setPortalPassword] = useState('')
+  const [portal, setPortal] = useState<PortalResult | null>(null)
+  const [portalSignedIn, setPortalSignedIn] = useState(false)
+  const askPassword = sessionStatus === 'unauthenticated'
+  const sessionEmail = String(session?.user?.email || '').trim().toLowerCase()
+  const signedInAsContact = !!sessionEmail && sessionEmail === contactEmail.trim().toLowerCase()
+  const staffSession = !!session && !['', 'club_director', 'coach', 'parent', 'viewer'].includes(String((session.user as { role?: string } | undefined)?.role || ''))
+
   useEffect(() => {
     fetch(`/api/tournaments/${tournamentId}`)
       .then(r => r.json())
@@ -171,6 +194,7 @@ export default function RegisterPage() {
     e.preventDefault()
     if (!paymentMethod) { toast.error('Please select a payment option'); return }
     if (!needsHotel) { toast.error('Please select hotel preference'); return }
+    if (askPassword && portalPassword.length < 8) { toast.error('Choose a club portal password of at least 8 characters'); return }
     setLoading(true)
     try {
       const res = await fetch('/api/registrations', {
@@ -188,11 +212,25 @@ export default function RegisterPage() {
           // Safety net: any team row left without a club name gets the club's.
           teams: teams.map(t => ({ ...t, clubName: t.clubName || clubName })),
           clubLogoUrl,
+          // Signed out only: see askPassword.
+          portalPassword: askPassword ? portalPassword : undefined,
         }),
       })
       if (!res.ok) throw new Error('Registration failed')
       const registration = await res.json()
       setConf(registration.confirmation || null)
+
+      // The login is ready: sign them in now, before any payment step, so "Open
+      // my club portal" lands inside it instead of on the sign-in page.
+      const P: PortalResult | null = registration.portal || null
+      setPortal(P)
+      if (askPassword && P && (P.status === 'created' || P.status === 'linked')) {
+        try {
+          const r = await signIn('credentials', { email: P.email || contactEmail.trim().toLowerCase(), password: portalPassword, redirect: false })
+          setPortalSignedIn(!!r?.ok && !r?.error)
+        } catch { /* the portal button falls back to the sign-in page */ }
+      }
+      setPortalPassword('')
 
       if (paymentMethod === 'credit_card' || paymentMethod === 'ach' || (paymentMethod === 'paypal' && paypalLive)) {
         setInvoiceBase(calcInvoice(teams, pricing, site))
@@ -213,6 +251,9 @@ export default function RegisterPage() {
     const L = conf?.letter
     const D = conf?.data
     const donePaid = paid || step === 'success'
+    // Signed in already and their role was just raised to club director: the old
+    // role is in their sign-in token until they sign in again (same as /claim).
+    const resignIn = !!portal?.rolePromoted && !portalSignedIn && sessionStatus === 'authenticated'
     return (
       <div className="min-h-screen bg-gray-50 py-10 px-4">
         <div className="bg-white rounded-2xl shadow border border-slate-100 p-8 max-w-xl mx-auto">
@@ -238,19 +279,60 @@ export default function RegisterPage() {
               {!achNote && (donePaid || L.payment) && <p className="mt-3 text-sm bg-teal-50 border border-teal-100 text-teal-800 rounded-lg px-3 py-2">{donePaid ? "Payment received — you're all set." : L.payment}</p>}
 
               {/* Account CTA — the main next step. Shown here (not just in the email)
-                  because this is the moment the coach is actually paying attention. */}
-              {D?.claimUrl && (
+                  because this is the moment the coach is actually paying attention.
+                  Made or linked on the form just now: the portal is ready. A password
+                  that isn't the email's existing login changed nothing, so they add
+                  the event with the real one. Anyone else: the claim link sets it up. */}
+              {portal && (portal.status === 'created' || portal.status === 'linked') ? (
+                <div className="mt-4 border border-teal-200 bg-teal-50 rounded-xl px-4 py-4">
+                  <p className="text-sm font-semibold text-slate-800">{portal.status === 'created' ? 'Your club portal is ready' : 'Added to your club portal'}</p>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    {portal.status === 'created'
+                      ? <>Sign in any time with <strong className="text-slate-800">{portal.email}</strong> and the password you chose. </>
+                      : <>This registration is on your login, <strong className="text-slate-800">{portal.email}</strong>. </>}
+                    Manage your roster and player waivers, track your balance, and see your schedule as soon as it&apos;s posted.{resignIn ? ' Sign in once more and it opens with your club access.' : ''}
+                  </p>
+                  {resignIn ? (
+                    <button type="button" onClick={async () => { await signOut({ redirect: false }).catch(() => {}); window.location.href = '/login?claimed=1' }}
+                      className="inline-block mt-3 text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-5 py-2.5">
+                      Sign in to open my portal →
+                    </button>
+                  ) : (
+                    <a href={sessionStatus === 'authenticated' && signedInAsContact ? '/dashboard/club-director' : '/login'}
+                      className="inline-block mt-3 text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-5 py-2.5">
+                      Open my club portal →
+                    </a>
+                  )}
+                </div>
+              ) : portal?.status === 'existing_account' ? (
+                <div className="mt-4 border border-amber-200 bg-amber-50 rounded-xl px-4 py-4">
+                  <p className="text-sm font-semibold text-amber-900">That email already has a login</p>
+                  <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                    Your registration is in. <strong>{portal.email}</strong> already has a Whistle Ready login, and the password you typed doesn&apos;t match it, so nothing on that login was changed. Add this registration to it with your existing password{D?.claimUrl ? '' : ', using the link in your confirmation email'}.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {D?.claimUrl && (
+                      <a href={D.claimUrl} className="inline-block text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-5 py-2.5">Add it to my portal →</a>
+                    )}
+                    <a href="/forgot" target="_blank" rel="noreferrer" className="text-xs font-medium text-amber-900 underline">Forgot your password?</a>
+                  </div>
+                </div>
+              ) : D?.claimUrl && session && !signedInAsContact ? (
+                <p className="mt-4 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+                  <strong className="text-slate-800">{contactEmail.trim()}</strong> gets an email link to set up the club portal login for this registration.
+                </p>
+              ) : D?.claimUrl ? (
                 <div className="mt-4 border border-slate-200 bg-slate-50 rounded-xl px-4 py-4">
-                  <p className="text-sm font-semibold text-slate-800">Set up your team account</p>
+                  <p className="text-sm font-semibold text-slate-800">{D.claimForExisting ? 'Add this event to your club portal' : 'Set up your team account'}</p>
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Manage your roster and player waivers, track your balance, and see your schedule as soon as it&apos;s posted.
+                    {D.claimForExisting ? 'You already have a Whistle Ready login with this email. Add this registration to it with your password. ' : ''}Manage your roster and player waivers, track your balance, and see your schedule as soon as it&apos;s posted.
                   </p>
                   <a href={D.claimUrl}
                     className="inline-block mt-3 text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-5 py-2.5">
-                    Set up my account →
+                    {D.claimForExisting ? 'Add it to my portal →' : 'Set up my account →'}
                   </a>
                 </div>
-              )}
+              ) : null}
               <div className="text-slate-600 text-sm mt-4 leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(L.nextSteps) }} />
               <div className="text-slate-600 text-sm mt-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(L.signoff) }} />
               <div className="mt-5 flex flex-wrap gap-2 justify-center">
@@ -359,6 +441,25 @@ export default function RegisterPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Contact Mobile Phone <span className="text-red-500">*</span></label>
                   <input required type="tel" name="tel" autoComplete="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} className={inputCls} />
                 </div>
+                {/* The club portal login, right under the email it belongs to. */}
+                {askPassword ? (
+                  <div className="sm:col-span-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+                    <label htmlFor="portal-password" className="block text-sm font-semibold text-slate-800">Create a password for your club <span className="whitespace-nowrap">portal <span className="text-red-500">*</span></span></label>
+                    <p className="text-xs text-slate-600 mt-0.5 mb-2 leading-relaxed">Your contact email is your login. With a password, your portal is ready the moment you register: teams, player waivers, your balance, and the schedule once it&apos;s posted.</p>
+                    {/* Tells password managers which account this password is for. Without
+                        it they guess from the field just above it: the phone number. */}
+                    <input type="text" name="username" autoComplete="username" value={contactEmail} readOnly hidden />
+                    <PasswordInput id="portal-password" name="new-password" value={portalPassword} onChange={setPortalPassword}
+                      required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" className={`${inputCls} bg-white`} />
+                    <p className="text-xs text-slate-500 mt-1.5">Already have a Whistle Ready login with this email? Use that password. <a href="/forgot" target="_blank" rel="noreferrer" className="underline hover:text-slate-700">Forgot it?</a></p>
+                  </div>
+                ) : session ? (
+                  <p className="sm:col-span-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+                    {signedInAsContact
+                      ? <>Signed in as <strong className="text-slate-800">{sessionEmail}</strong>: this registration goes straight into your club portal.</>
+                      : <>Signed in as <strong className="text-slate-800">{sessionEmail}</strong>. {contactEmail.trim() ? <><strong className="text-slate-800">{contactEmail.trim()}</strong> gets</> : 'The club contact gets'} an email link to set up their own club portal login.{staffSession ? '' : ' To add this registration to your own portal, use your email as the contact email.'}</>}
+                  </p>
+                ) : null}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Based In</label>
                   <input placeholder="City and State" name="address-level2" autoComplete="address-level2" value={clubBasedIn} onChange={e => setClubBasedIn(e.target.value)} className={inputCls} />

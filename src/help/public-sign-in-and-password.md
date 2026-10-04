@@ -15,6 +15,7 @@ Club directors, coaches, parents and staff all sign in on the same page. Once yo
 2. Tap **Sign In**. You'll land on the page for your account type (for example, your club portal or parent dashboard).
 
 **First time signing in (club directors):**
+Chose a password on your team registration form? Sign in with your contact email and that password. The steps below are for a registration that went in without one.
 1. Can't find the account setup email from your registration? On the sign-in page, tap **Email my portal link**.
 2. Enter the email you used on your team registration and tap **Email my portal link**.
 3. Open the email. **Open my club portal** lets you choose a password and takes you into your club portal. If you already have an account, the email has a **Sign in** button and a link to choose a new password instead.
