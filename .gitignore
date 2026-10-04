@@ -11,3 +11,15 @@ node_modules
 
 # scratch folder for files Claude could not delete on the mount
 _to_delete/
+
+# One-off seed and setup scripts from June 2026, taken out of the repo Oct 4
+# 2026: they held real Jingle Brawl club contacts, staff names and pay, and
+# the admin login defaults. They stay on this computer; never commit them.
+/seed-admin.js
+/seed-auth.js
+/seed-jingle-*.js
+/reset-admin-turso.js
+/setup-turso.js
+/link-club-director.js
+/clear-staff-turso.js
+/remove-duplicate-staff.js
