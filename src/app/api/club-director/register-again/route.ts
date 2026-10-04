@@ -21,7 +21,8 @@ import { prisma } from '@/lib/db'
 import { cleanName, nameKey } from '@/lib/names'
 import { todayET } from '@/lib/publicView'
 import { officeStamp } from '@/lib/changeRequest'
-import { ownRegistration, eventInfo, offeredDivision } from '@/lib/clubPortal'
+import { ownRegistration, eventInfo, offeredDivision, divisionFull } from '@/lib/clubPortal'
+import { parsePricing, calcFee, withoutVolumeDiscount } from '@/lib/regPricing'
 import { POST as createRegistration } from '@/app/api/registrations/route'
 
 export const dynamic = 'force-dynamic'
@@ -69,6 +70,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Add a contact name, email and phone for this registration' }, { status: 400 })
   }
 
+  // Standard rate per team, without the event's multi-team discount (Bo, Oct 4
+  // 2026: he'll offer that as a special, not hand it out because a club brought
+  // a lot of teams somewhere else). Teams in a full division are left off the
+  // bill exactly as the registration POST would leave them. Zero means every
+  // team is waitlisted, and the POST then works out the same zero itself.
+  const invoiceAmount = calcFee(
+    teams.map(t => ({ division: t.division, waitlisted: divisionFull(target, t.division) })),
+    withoutVolumeDiscount(parsePricing(target.pricingRaw)))
+
   const res = await createRegistration(new NextRequest(new URL('/api/registrations', req.url), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -81,7 +91,8 @@ export async function POST(req: NextRequest) {
       needsHotel: reg.needsHotel,
       paymentMethod: reg.paymentMethod,
       // Staff notes are not copied: they are about the old event.
-      notes: `[Club portal ${officeStamp()}${who ? `, ${who}` : ''}] Registered from the club portal, copied from ${source.name}.`,
+      notes: `[Club portal ${officeStamp()}${who ? `, ${who}` : ''}] Registered from the club portal, copied from ${source.name}. Priced at the standard rate per team, no multi-team discount.`,
+      ...(invoiceAmount > 0 ? { invoiceAmount } : {}),
       clubLogoUrl: reg.clubLogoUrl,
       teams,
       source: 'portal',

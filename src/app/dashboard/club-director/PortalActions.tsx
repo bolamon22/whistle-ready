@@ -589,7 +589,7 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
                 </div>
                 {showMoney && target && (
                   <div className="flex items-baseline justify-between gap-3 pt-3.5 border-t border-slate-200">
-                    <span className="text-sm text-slate-600">{plural(picked.length, 'team')}</span>
+                    <span className="text-sm text-slate-600">{plural(picked.length, 'team')} at the standard rate</span>
                     <span className="text-2xl font-extrabold text-teal-700">{money(total)}</span>
                   </div>
                 )}

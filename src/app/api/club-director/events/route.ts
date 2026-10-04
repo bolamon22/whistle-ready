@@ -17,7 +17,7 @@ import { viewAs } from '@/lib/clubDirectorView'
 import { nameKey } from '@/lib/names'
 import { tournamentOrgId } from '@/lib/org'
 import { todayET } from '@/lib/publicView'
-import { parsePricing } from '@/lib/regPricing'
+import { parsePricing, withoutVolumeDiscount } from '@/lib/regPricing'
 import { divisionBadge } from '@/lib/regStatus'
 import { eventInfo, divisionFull } from '@/lib/clubPortal'
 
@@ -57,7 +57,9 @@ export async function GET(req: NextRequest) {
         const badge = divisionBadge(name, info.site)
         return { name, full: divisionFull(info, name), label: badge?.suffix || '' }
       }),
-      pricing: parsePricing(info.pricingRaw),
+      // The rate this flow charges: standard per team, no multi-team discount
+      // (see register-again). The card and the dialog total both read it.
+      pricing: withoutVolumeDiscount(parsePricing(info.pricingRaw)),
     })
   }
   return NextResponse.json({ events })

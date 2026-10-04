@@ -82,6 +82,18 @@ export function serializePricing(p: RegPricing): string { return JSON.stringify(
 
 export function baseFee(p: RegPricing): number { return p.tiers[0]?.price || 0 }
 
+/** The same price list with the multi-team (volume) discount taken out: every
+ *  regular team at the first tier's rate. Flat-rate divisions (7v7) and
+ *  early-bird dates are untouched; neither is a reward for team count.
+ *
+ *  Used when a club brings its teams to another event from the portal. Bo,
+ *  Oct 4 2026: the multi-team rate at a future event is his to offer as a
+ *  special, not something a club gets automatically for having many teams at
+ *  this one. */
+export function withoutVolumeDiscount(p: RegPricing): RegPricing {
+  return { ...p, tiers: [{ max: null, price: baseFee(p) }] }
+}
+
 function rateForCount(tiers: Bracket[], n: number): number {
   for (const t of tiers) { if (t.max === null || n <= t.max) return t.price }
   return tiers[tiers.length - 1]?.price || 0
