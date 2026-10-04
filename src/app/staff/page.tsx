@@ -269,12 +269,17 @@ export default function StaffPage() {
   const [letterOpen,setLetterOpen]=useState(false)
   const [dupePairs,setDupePairs]=useState<DupePair[]>([])
   const [showDupes,setShowDupes]=useState(false)
-  // Empty profiles: no email, no phone, no history anywhere (see /api/workers/cleanup).
-  const [emptyProfiles,setEmptyProfiles]=useState<{id:string;name:string;role:string}[]>([])
-  const [keptWithHistory,setKeptWithHistory]=useState(0)
+  // Profiles with no email and no phone (see /api/workers/cleanup). History on past events
+  // the organizer ticks as samples doesn't protect a profile; anything else does.
+  const [noContact,setNoContact]=useState<{id:string;name:string;role:string;history:Record<string,number>}[]>([])
+  const [ncEvents,setNcEvents]=useState<{id:string;name:string;startDate:string;endDate:string;past:boolean}[]>([])
+  const [sampleSel,setSampleSel]=useState<Set<string>>(new Set())
   const [showEmpty,setShowEmpty]=useState(false)
   const [emptySel,setEmptySel]=useState<Set<string>>(new Set())
   const [cleaning,setCleaning]=useState(false)
+  const eligible=noContact.filter(p=>Object.keys(p.history).every(t=>sampleSel.has(t)))
+  const protectedNc=noContact.filter(p=>!Object.keys(p.history).every(t=>sampleSel.has(t)))
+  const emptyProfiles=eligible
   const [manualMerge,setManualMerge]=useState<Worker[]|null>(null)   // two rows the organizer picked themselves
   const [search,setSearch]=useState('')
 
@@ -445,17 +450,22 @@ export default function StaffPage() {
     try{
       const o=previewOrgId()
       const res=await fetch(o?`/api/workers/cleanup?viewOrgId=${o}`:'/api/workers/cleanup')
-      if(!res.ok){setEmptyProfiles([]);return}
+      if(!res.ok){setNoContact([]);return}
       const d=await res.json()
       const list=Array.isArray(d.profiles)?d.profiles:[]
-      setEmptyProfiles(list);setKeptWithHistory(Number(d.keptWithHistory)||0);setEmptySel(new Set(list.map((p:{id:string})=>p.id)))
-    }catch{setEmptyProfiles([])}
+      const evs=Array.isArray(d.tournaments)?d.tournaments:[]
+      const past=new Set<string>(evs.filter((t:{past:boolean})=>t.past).map((t:{id:string})=>t.id))
+      setNoContact(list);setNcEvents(evs);setSampleSel(past)
+      setEmptySel(new Set(list.filter((p:{history:Record<string,number>})=>Object.keys(p.history).every(t=>past.has(t))).map((p:{id:string})=>p.id)))
+    }catch{setNoContact([])}
   }
   async function deleteEmpty(){
-    const ids=Array.from(emptySel); if(!ids.length)return
-    if(!confirm(`Delete ${ids.length} empty profile${ids.length===1?'':'s'}?\n\nThese have no email, no phone, and no games, rosters or pay history. This can't be undone.`))return
+    const okIds=new Set(eligible.map(p=>p.id))
+    const ids=Array.from(emptySel).filter(id=>okIds.has(id)); if(!ids.length)return
+    const withSample=eligible.filter(p=>ids.includes(p.id)&&Object.keys(p.history).length).length
+    if(!confirm(`Delete ${ids.length} profile${ids.length===1?'':'s'} with no email or phone?${withSample?`\n\n${withSample} of them have assignments or pay marks on the sample events you ticked; those go too.`:''}\n\nThis can't be undone.`))return
     setCleaning(true)
-    const res=await fetch('/api/workers/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,viewOrgId:previewOrgId()})})
+    const res=await fetch('/api/workers/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,sampleTournamentIds:Array.from(sampleSel),viewOrgId:previewOrgId()})})
     const d=await res.json().catch(()=>({}))
     if(res.ok){toast.success(`Deleted ${d.deleted} profile${d.deleted===1?'':'s'}${d.skipped?` (${d.skipped} skipped: they now have history or contact info)`:''}`);setShowEmpty(false);load();loadEmpty();loadDupes()}
     else toast.error(d.error||'Cleanup failed')
@@ -735,7 +745,7 @@ export default function StaffPage() {
             <span className="text-xs text-slate-300">·</span>
             <span className="text-xs text-slate-400"><span className="font-semibold text-emerald-600">{workers.filter(w=>w.appStatus==='registered').length}</span> registered · <span className="font-semibold text-amber-600">{workers.filter(w=>w.appStatus==='invited').length}</span> invited · <span className="font-semibold text-slate-500">{workers.filter(w=>w.appStatus==='none'||w.appStatus==='no_email').length}</span> not on app</span>
             {dupePairs.length>0&&<button onClick={()=>setShowDupes(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">{dupePairs.length} possible duplicate{dupePairs.length===1?'':'s'}</button>}
-            {emptyProfiles.length>0&&<button onClick={()=>setShowEmpty(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors" title="No email, no phone, and no games, rosters or pay history">{emptyProfiles.length} empty profile{emptyProfiles.length===1?'':'s'}</button>}
+            {emptyProfiles.length>0&&<button onClick={()=>setShowEmpty(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors" title="Profiles with no email and no phone that can be removed">{emptyProfiles.length} without email or phone</button>}
             {(search||roleFilter!=='all'||appFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all');setAppFilter('all')}}>Clear filters</button>}
           </div>
 
@@ -784,27 +794,55 @@ export default function StaffPage() {
             </div>
           )}
 
-          {showEmpty&&emptyProfiles.length>0&&(
+          {showEmpty&&noContact.length>0&&(()=>{
+            const evName=(id:string)=>ncEvents.find(t=>t.id===id)?.name??'an event'
+            const pastEvents=ncEvents.filter(t=>t.past)
+            const groups=[
+              {title:'No history at all',list:eligible.filter(p=>!Object.keys(p.history).length)},
+              {title:'History only on sample events',list:eligible.filter(p=>Object.keys(p.history).length)},
+            ]
+            return(
             <div className="card p-4 mb-3 border border-slate-300">
               <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
-                <h3 className="font-semibold text-slate-800 text-sm">Empty profiles</h3>
-                <div className="flex items-center gap-3">
-                  <button className="text-xs text-slate-500 hover:text-slate-700" onClick={()=>setEmptySel(emptySel.size===emptyProfiles.length?new Set():new Set(emptyProfiles.map(p=>p.id)))}>{emptySel.size===emptyProfiles.length?'Select none':'Select all'}</button>
-                  <button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>setShowEmpty(false)}>Close</button>
+                <h3 className="font-semibold text-slate-800 text-sm">Profiles with no email or phone</h3>
+                <button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>setShowEmpty(false)}>Close</button>
+              </div>
+              {pastEvents.length>0&&(
+                <div className="mb-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                  <p className="text-xs font-semibold text-slate-600 mb-1.5">Past events to treat as samples <span className="font-normal text-slate-400">(their assignments and pay marks are test data and are deleted with the profile)</span></p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {pastEvents.map(t=>(
+                      <label key={t.id} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                        <input type="checkbox" checked={sampleSel.has(t.id)} onChange={()=>setSampleSel(s=>{const n=new Set(s);if(n.has(t.id))n.delete(t.id);else n.add(t.id);return n})}/>
+                        {t.name}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">Upcoming events (Monster Mash and later) can't be marked as samples, so anyone on them is kept.</p>
                 </div>
-              </div>
-              <p className="text-xs text-slate-500 mb-3">No email, no phone, and nothing attached: no games, event rosters, availability or pay history. Nothing is lost by deleting them.{keptWithHistory>0?` ${keptWithHistory} other profile${keptWithHistory===1?'':'s'} without contact info ${keptWithHistory===1?'is':'are'} not listed because ${keptWithHistory===1?'it has':'they have'} games or pay history (or ${keptWithHistory===1?'is':'are'} the imported half of a duplicate; merge those).`:''}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1 mb-3">
-                {emptyProfiles.map(p=>(
-                  <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer min-w-0">
-                    <input type="checkbox" checked={emptySel.has(p.id)} onChange={()=>setEmptySel(s=>{const n=new Set(s);if(n.has(p.id))n.delete(p.id);else n.add(p.id);return n})}/>
-                    <span className="truncate">{p.name}</span>
-                  </label>
-                ))}
-              </div>
-              <button onClick={deleteEmpty} disabled={cleaning||!emptySel.size} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40">{cleaning?'Deleting…':`Delete ${emptySel.size} profile${emptySel.size===1?'':'s'}`}</button>
+              )}
+              {groups.filter(g=>g.list.length).map(g=>(
+                <div key={g.title} className="mb-3">
+                  <div className="flex items-center gap-3 mb-1">
+                    <p className="text-xs font-semibold text-slate-600">{g.title} ({g.list.length})</p>
+                    <button className="text-[11px] text-slate-400 hover:text-slate-600" onClick={()=>setEmptySel(s=>{const n=new Set(s);const all=g.list.every(p=>n.has(p.id));g.list.forEach(p=>all?n.delete(p.id):n.add(p.id));return n})}>{g.list.every(p=>emptySel.has(p.id))?'Select none':'Select all'}</button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1">
+                    {g.list.map(p=>(
+                      <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer min-w-0" title={Object.keys(p.history).length?`On: ${Object.keys(p.history).map(evName).join(', ')}`:'No history'}>
+                        <input type="checkbox" checked={emptySel.has(p.id)} onChange={()=>setEmptySel(s=>{const n=new Set(s);if(n.has(p.id))n.delete(p.id);else n.add(p.id);return n})}/>
+                        <span className="truncate">{p.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {protectedNc.length>0&&(
+                <p className="text-xs text-slate-500 mb-3"><b className="text-slate-700">Kept ({protectedNc.length}):</b> {protectedNc.map(p=>`${p.name} (${Object.keys(p.history).filter(t=>!sampleSel.has(t)).map(evName).join(', ')})`).join('; ')}. They're on an event that isn't marked as a sample. Add their email or phone, or merge them if they're a duplicate.</p>
+              )}
+              <button onClick={deleteEmpty} disabled={cleaning||!eligible.some(p=>emptySel.has(p.id))} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40">{cleaning?'Deleting…':`Delete ${eligible.filter(p=>emptySel.has(p.id)).length} profile${eligible.filter(p=>emptySel.has(p.id)).length===1?'':'s'}`}</button>
             </div>
-          )}
+          )})()}
           {showDupes&&dupePairs.length>0&&(
             <div className="card p-4 mb-3 border border-amber-200">
               <div className="flex items-center justify-between mb-3">

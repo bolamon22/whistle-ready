@@ -72,7 +72,7 @@ export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   ])
   if (games + roster + pay + time > 0) {
     const parts = [games && `${games} game${games === 1 ? '' : 's'}`, roster && `${roster} event roster${roster === 1 ? '' : 's'}`, pay && `${pay} pay record${pay === 1 ? '' : 's'}`, time && `${time} time entr${time === 1 ? 'y' : 'ies'}`].filter(Boolean).join(', ')
-    return NextResponse.json({ error: `Not deleted: this person has ${parts}. Deleting would erase that history. If they're a duplicate, merge them instead.` }, { status: 409 })
+    return NextResponse.json({ error: `Not deleted: this person has ${parts}. Deleting would erase that history. If they're a duplicate, merge them instead; if that history is only on sample events, use the "without email or phone" cleanup in the Staff Pool.` }, { status: 409 })
   }
   await prisma.worker.delete({where:{id:params.id}}); return NextResponse.json({ok:true})
 }
