@@ -16,7 +16,11 @@ export type ChecklistFacts = {
   teamCount: number
   teamsConfirmed: boolean
   confirmedOn: string          // "September 28", or '' when unknown
+  /** This login can open THIS registration in the portal (ClubRegAccess). */
   hasLogin: boolean
+  /** Their email already has a Whistle Ready account, it just isn't attached to
+   *  this registration yet — a different sentence from having no account. */
+  hasAccountElsewhere: boolean
   loginEmail: string
   waiverTotal: number
   teamsWithNoWaivers: string[] // registered team names still on zero
@@ -106,12 +110,21 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
           : `We have ${teams} down for you. Tell us that is right, or send a correction, before the schedule locks.`,
         ctaLabel: f.teamCount === 0 ? 'Send us your teams' : 'Review and confirm', ctaUrl: links.confirmLink })
 
+  // Two different misses here, and they need different sentences. No account at
+  // all means sign up. An account that exists but is not attached to this
+  // registration means claim it with the password they already have — telling
+  // that person to "set up a login" sends them hunting for a second one. The
+  // claim page handles both; only the wording changes.
   items.push(f.hasLogin
     ? { key: 'login', title: 'Club portal login', done: true,
         detail: f.loginEmail ? `${f.loginEmail} can sign in.` : 'Your login is set up.' }
-    : { key: 'login', title: 'Set up your club login', done: false,
-        detail: 'It is where your roster, waivers, balance and the schedule all live. Takes about a minute.',
-        ctaLabel: 'Set up my login', ctaUrl: links.accountLink })
+    : f.hasAccountElsewhere
+      ? { key: 'login', title: 'Link this event to your login', done: false,
+          detail: `You already have a Whistle Ready login${f.loginEmail ? ` for ${f.loginEmail}` : ''} — this registration just is not attached to it yet. One click, using the password you already have.`,
+          ctaLabel: 'Add this event to my login', ctaUrl: links.accountLink }
+      : { key: 'login', title: 'Set up your club login', done: false,
+          detail: 'It is where your roster, waivers, balance and the schedule all live. Takes about a minute.',
+          ctaLabel: 'Set up my login', ctaUrl: links.accountLink })
 
   // Done only when there is something to measure AND no team is sitting on zero.
   const waiversDone = f.teamCount > 0 && f.waiverTotal > 0 && f.teamsWithNoWaivers.length === 0

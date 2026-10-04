@@ -156,6 +156,21 @@ export async function runCommSend(args: {
   // Checklist facts the other letters don't need: who has confirmed their teams,
   // and the hotel answers (raw columns, not in the Prisma schema).
   const confirmStates = kind === 'checklist' ? await readConfirmMany(regs.map(r => r.id)) : null
+  // Whether the contact has a Whistle Ready login AT ALL, which is a different
+  // question from whether that login can open this registration (alreadyOpen,
+  // above). The registrations page badge uses this one; the checklist needs
+  // both so it can tell "sign up" from "claim the one you have".
+  const accountEmails = new Set<string>()
+  if (kind === 'checklist') {
+    const emails = [...new Set(regs.map(r => String(r.contactEmail || '').trim().toLowerCase()).filter(Boolean))]
+    if (emails.length) {
+      try {
+        for (const u of await prisma.user.findMany({ where: { email: { in: emails } }, select: { email: true } })) {
+          accountEmails.add(String(u.email || '').trim().toLowerCase())
+        }
+      } catch { /* can't tell — the letter falls back to "set up a login" */ }
+    }
+  }
   const hotelById = new Map<string, Record<string, unknown>>()
   if (kind === 'checklist' && regs.length) {
     try {
@@ -256,6 +271,7 @@ export async function runCommSend(args: {
         teamsConfirmed: (confirmStates?.get(reg.id)?.status || '') === 'confirmed',
         confirmedOn: confirmedAt ? new Date(confirmedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '',
         hasLogin: alreadyOpen.has(reg.id),
+        hasAccountElsewhere: accountEmails.has(String(reg.contactEmail || '').trim().toLowerCase()),
         loginEmail: String(reg.contactEmail || ''),
         waiverTotal: sum.total,
         teamsWithNoWaivers: reg.teams.filter((_tm, i) => (sum.perTeam[i] ?? 0) === 0).map(tm => tm.teamName),
