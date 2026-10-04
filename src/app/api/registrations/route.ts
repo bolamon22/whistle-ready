@@ -15,6 +15,7 @@ import { isDivisionFull } from '@/lib/regStatus'
 import { carryDirectorLinks } from '@/lib/clubDirectorLinks'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { viewerRole } from '@/lib/apiAuth'
+import { getPublicVisibility } from '@/lib/publicView'
 import { canSeeMoney, canSeeContacts, payStatus } from '@/lib/roleScope'
 
 async function ensureRegistrationColumns() {
@@ -52,7 +53,7 @@ function normalizeInstagram(raw?: string): string {
 //    counts, and whether the club has paid (paid / partial / unpaid) but no
 //    amounts. Contacts only for roles that work with clubs and staff (assigner).
 //  - signed out or external (coach, parent, club director): team names and
-//    divisions, which the public page shows anyway.
+//    divisions, and only once Teams & pools is public (see GET).
 const EXTERNAL = ['coach', 'parent', 'club_director']
 function shapeForRole(list: any[], role: string): any[] {
   if (canSeeMoney(role)) return list
@@ -88,6 +89,15 @@ export async function GET(req: NextRequest) {
   await ensureRegistrationColumns()
   await ensurePaymentGuard()
   const role = await viewerRole()
+  // Signed out or external (coach, parent, club director): the team list is the
+  // Teams & pools switch's to give. It went out regardless, on the grounds that
+  // the public page showed it anyway, but the public page no longer shows teams
+  // before that switch, and anyone can make a coach or parent account. Found
+  // Oct 4 2026, after a club knew Fall Classic's middle-school count.
+  if (!role || EXTERNAL.includes(role)) {
+    const vis = await getPublicVisibility(tournamentId).catch(() => null)
+    if (vis?.pools !== 'live') return NextResponse.json([])
+  }
   const registrations = await prisma.teamRegistration.findMany({
     where: { tournamentId, deletedAt: null },
     include: { teams: true, payments: { orderBy: { receivedAt: 'asc' } } },

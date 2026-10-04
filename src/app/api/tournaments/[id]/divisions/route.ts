@@ -1,8 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { getPublicVisibility } from '@/lib/publicView'
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+// Every division with its team, waiting-list, pool and game counts.
+//
+// Staff get it all. Everyone else gets it once Teams & pools is public, and no
+// game counts before Schedule & brackets: this had no sign-in check, so a
+// signed-out visitor could read how many teams each upcoming division had (a
+// club asked about Fall Classic's thin middle-school field with neither switch
+// on, Oct 4 2026).
+//
+//   ?view=public -> the public shape, shared-cacheable (the public schedule page)
+//   (no param)   -> staff the full list, anyone else the public shape, never
+//                   shared-cached: the CDN keys on URL only and would hand one
+//                   audience's copy to the other.
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const publicView = new URL(req.url).searchParams.get('view') === 'public'
+  const staff = publicView ? false : await isStaffRequest()
+  const cache = publicView ? 'public, s-maxage=5, stale-while-revalidate=30' : 'private, no-store'
+  let scheduleLive = staff
+  if (!staff) {
+    const vis = await getPublicVisibility(params.id).catch(() => null)
+    if (vis?.pools !== 'live') return NextResponse.json([], { headers: { 'Cache-Control': cache } })
+    scheduleLive = vis.schedule === 'live'
+  }
   try {
     const [teams, tournament, games] = await Promise.all([
       // deletedAt: null, or the counts here disagree with the dashboard, which has
@@ -67,9 +89,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         waitlistCount: data.waitlisted,
         poolCount: data.pools,
         unassignedTeams: Math.max(0, data.teams - data.assignedTeams),
-        gameCount: data.gameCount,
-        poolGameCount: data.gameCount,
-        bracketGameCount: bracketCount.get(name) ?? 0,
+        gameCount: scheduleLive ? data.gameCount : 0,
+        poolGameCount: scheduleLive ? data.gameCount : 0,
+        bracketGameCount: scheduleLive ? (bracketCount.get(name) ?? 0) : 0,
       }))
       .sort((a, b) => {
         // Curated order from registrationDivisions; names not in it (legacy) go last, A\u2192Z.
@@ -77,11 +99,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         return ((ai === -1 ? 1e9 : ai) - (bi === -1 ? 1e9 : bi)) || a.name.localeCompare(b.name)
       })
 
-    // Short shared cache -- multi-query aggregation hit on every public
-    // schedule page load; event-weekend load-readiness pass, Sep 2026.
-    return NextResponse.json(divisions, {
-      headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=30' },
-    })
+    // Short shared cache on the public URL only -- multi-query aggregation hit
+    // on every public schedule page load; event-weekend load-readiness pass, Sep 2026.
+    return NextResponse.json(divisions, { headers: { 'Cache-Control': cache } })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to load divisions' }, { status: 500 })

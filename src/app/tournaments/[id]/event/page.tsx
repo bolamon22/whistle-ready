@@ -139,10 +139,18 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   const spons = sponsorsForEvent(sponsorList(sponsors), params.id)
   const pitch = sponsorPitch(pitchRaw)
   const sponsorHref = `/tournaments/${params.id}/vendor-request#sponsor`
-  // Counted stats first (we can stand behind those), then whatever the org typed in.
+  // What the public may see of this event (lib/publicView). Read once: the counted
+  // stats below and the hero's featured cell both depend on it.
+  let pubVis = { pools: 'hidden', schedule: 'hidden' }
+  try { const v = await getPublicVisibility(params.id); pubVis = { pools: v.pools, schedule: v.schedule } } catch {}
+  // Counted stats first (we can stand behind those), then whatever the org typed
+  // in. The team and club counts wait for Teams & pools, like the team lists:
+  // before that, an upcoming event's numbers tell other clubs how full it is
+  // (Bo, Oct 4 2026, after a club asked about Fall Classic's numbers).
+  const countsLive = pubVis.pools === 'live'
   const pitchStats = [
-    ...(regTeams > 0 ? [{ value: statNum(regTeams), label: regTeams === 1 ? 'Team' : 'Teams' }] : []),
-    ...(regClubs > 0 ? [{ value: statNum(regClubs), label: regClubs === 1 ? 'Club' : 'Clubs' }] : []),
+    ...(countsLive && regTeams > 0 ? [{ value: statNum(regTeams), label: regTeams === 1 ? 'Team' : 'Teams' }] : []),
+    ...(countsLive && regClubs > 0 ? [{ value: statNum(regClubs), label: regClubs === 1 ? 'Club' : 'Clubs' }] : []),
     ...pitch.stats,
   ]
 
@@ -405,8 +413,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   // The hero carries ONE dominant action (Register) plus the Event info menu.
   // Worked out by lib/eventHero, the same as on every other page of this event.
   // Whether the public can see the schedule picks the phone's featured cell.
-  let scheduleLive = false
-  try { scheduleLive = (await getPublicVisibility(params.id)).schedule === 'live' } catch {}
+  const scheduleLive = pubVis.schedule === 'live'
   const hero = buildHeroProps({
     t, c, base, divisions, infoItems,
     sectionHref: (sid: string) => (panelIds.has(sid) ? `#${sid}` : undefined),
