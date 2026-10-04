@@ -6,9 +6,10 @@ import { renderEmail, absUrl, imageSize, fitBox } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
-import { waiverCounts, summarizeClub } from '@/lib/waiverCounts'
+import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
+import { deriveStatus, housingSettings } from '@/lib/housing'
 import { readConfirmMany } from '@/lib/changeRequest'
-import { buildChecklist, checklistHtml, checklistText, openCount, whatsLeftPhrase, CHECKLIST_SENTINEL } from '@/lib/checklistLetter'
+import { buildChecklist, checklistHtml, checklistText, openCount, whatsLeftPhrase, expectedPlayers, CHECKLIST_SENTINEL } from '@/lib/checklistLetter'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { ensurePaymentGuard } from './paymentGuard'
 import { registrationRecipients, directorEmailsByRegistration } from '@/lib/clubDirectorLinks'
@@ -98,6 +99,7 @@ export async function runCommSend(args: {
   // Registered-player counts per team, from completed waivers (Bo: directors should
   // see "you have 7 registered" and per-team splits so they know who's light).
   const counts = kind === 'waiver' || kind === 'checklist' ? await waiverCounts(tournamentId) : null
+  const coaches = kind === 'checklist' ? await coachSignatures(tournamentId) : null
   const playerCountsFor = (reg: { clubName: string; teams: { teamName: string; division: string; clubName?: string | null }[] }) => {
     if (!counts) return { text: '', total: 0 }
     const sum = summarizeClub(counts, reg.clubName, reg.teams)
@@ -153,17 +155,18 @@ export async function runCommSend(args: {
   // Checklist facts the other letters don't need: who has confirmed their teams,
   // and the hotel answers (raw columns, not in the Prisma schema).
   const confirmStates = kind === 'checklist' ? await readConfirmMany(regs.map(r => r.id)) : null
-  const hotelById = new Map<string, { name: string; rooms: number; needs: string }>()
+  const hotelById = new Map<string, Record<string, unknown>>()
   if (kind === 'checklist' && regs.length) {
     try {
       const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
-        `SELECT id, "hotelName", "hotelRooms" FROM "TeamRegistration" WHERE id IN (${regs.map(() => '?').join(',')})`,
+        `SELECT id, "hotelName", "hotelRooms", "hotelNights", "housingStatus" FROM "TeamRegistration" WHERE id IN (${regs.map(() => '?').join(',')})`,
         ...regs.map(r => r.id))
-      for (const row of rows) {
-        hotelById.set(String(row.id), { name: String(row.hotelName || ''), rooms: Number(row.hotelRooms || 0), needs: '' })
-      }
-    } catch { /* columns missing — the hotel row just won't claim to be booked */ }
+      for (const row of rows) hotelById.set(String(row.id), row)
+    } catch { /* columns missing — deriveStatus falls back to the form answer */ }
   }
+  // Where families actually book. Blank until the org sets one, in which case
+  // the hotel line points at the event page, which carries the travel info.
+  const bookingUrl = kind === 'checklist' && orgId ? (await housingSettings(orgId)).bookingUrl : ''
 
   const kindMeta = kind === 'payment' ? null : COMM_KINDS[kind]
   const cta = kindMeta?.cta ?? null
@@ -235,7 +238,8 @@ export async function runCommSend(args: {
       const sum = counts ? summarizeClub(counts, reg.clubName, reg.teams) : { perTeam: [] as number[], matched: 0, unassigned: 0, total: 0 }
       const paidSoFar = reg.payments.reduce((acc, pmt) => acc + pmt.amount, 0) + (clearing[reg.id]?.amount || 0)
       const invoiced = Math.round(Math.max(0, (reg.invoiceAmount || 0) - (reg.discountAmount || 0)) * 100) / 100
-      const hotel = hotelById.get(reg.id)
+      const hotel = hotelById.get(reg.id) || {}
+      const expect = expectedPlayers(reg.teams.map(tm => tm.division || ''))
       const confirmedAt = confirmStates?.get(reg.id)?.at || ''
       let claimLink = ''
       if (!alreadyOpen.has(reg.id)) {
@@ -250,18 +254,26 @@ export async function runCommSend(args: {
         loginEmail: String(reg.contactEmail || ''),
         waiverTotal: sum.total,
         teamsWithNoWaivers: reg.teams.filter((_tm, i) => (sum.perTeam[i] ?? 0) === 0).map(tm => tm.teamName),
+        expectedLow: expect.low,
+        expectedHigh: expect.high,
+        coachTotal: coaches ? coaches.forClub(reg.clubName).length : 0,
+        teamsWithNoCoach: coaches
+          ? reg.teams.filter(tm => coaches.forTeam(tm.clubName || reg.clubName, tm.teamName).length === 0).map(tm => tm.teamName)
+          : [],
         invoiced,
         balance: Math.round(Math.max(0, invoiced - paidSoFar) * 100) / 100,
-        needsHotel: /^y/i.test(String(reg.needsHotel || '')),
-        hotelName: hotel?.name || '',
-        hotelRooms: hotel?.rooms || 0,
+        // The housing board's own call, so the email and the board agree.
+        housingStatus: deriveStatus({ ...hotel, needsHotel: reg.needsHotel }),
+        hotelName: String(hotel.hotelName || ''),
+        hotelRooms: Number(hotel.hotelRooms || 0),
       }, {
         confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
         // Already has a login? Send them to sign in rather than to a claim page.
         accountLink: claimLink || tournamentAbs(org?.slug, '/login'),
         waiverLink,
+        coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
         payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
-        hotelLink: eventHome,
+        hotelLink: bookingUrl || eventHome,
       })
     }
     // Confirm + account links are per club: their registration id (confirm) or a
