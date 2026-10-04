@@ -8,7 +8,7 @@ import { prisma } from '@/lib/db'
 // Same pattern as the pay/invite letters: AppSetting commLetter:{kind}:{orgId},
 // tokens merged at send time, fixed CTA button below the editable note.
 
-export type CommKind = 'waiver' | 'schedule' | 'confirm' | 'account'
+export type CommKind = 'waiver' | 'schedule' | 'confirm' | 'account' | 'checklist'
 
 export const COMM_KINDS: Record<CommKind, { label: string; cta: 'waiver' | 'schedule' | 'confirm' | 'account' | null; ctaLabel: string; defaults: { subject: string; body: string } }> = {
   waiver: {
@@ -70,6 +70,24 @@ Questions? Just reply to this email and we'll take care of you.`,
 Tap the button below to confirm in one click — takes ten seconds. If anything changed (a team added, dropped, or moved divisions), you can send us the correction right there instead, and we'll fix it before the schedule locks.`,
     },
   },
+  // One letter to the whole field that reads as a personal one: {checklist} merges
+  // to THIS club's outstanding items, already ticked off where they're done, each
+  // open one carrying its own button. No shared CTA — hence cta: null.
+  checklist: {
+    label: 'Pre-event checklist',
+    cta: null,
+    ctaLabel: '',
+    defaults: {
+      subject: '{event} — {whatsLeft} for {club}',
+      body: `Hi {contact} — {event} ({eventDates}) is almost here. Here is exactly where {club} stands. Anything you've already taken care of is checked off, and anything still open has a button next to it.
+
+{checklist}
+
+Pools and divisions go up first, with the full schedule to follow — we'll email you the moment each one is posted. On game day everything lives on your team page: fields, times, scores and updates, live as they happen.
+
+Questions? Just reply to this email and we'll take care of you.`,
+    },
+  },
 }
 
 export async function commLetterFor(orgId: string | null, kind: CommKind): Promise<{ subject: string; body: string; custom: boolean }> {
@@ -88,5 +106,5 @@ export async function commLetterFor(orgId: string | null, kind: CommKind): Promi
 }
 
 export function mergeCommLetter(text: string, vals: Record<string, string>): string {
-  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount|confirmLink|accountLink)\}/g, (_m, k: string) => vals[k] ?? '')
+  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount|confirmLink|accountLink|checklist|openCount|whatsLeft|daysToEvent|payLink)\}/g, (_m, k: string) => vals[k] ?? '')
 }
