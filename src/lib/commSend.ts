@@ -362,6 +362,7 @@ export async function runCommSend(args: {
       accountLink: cta === 'account' ? ctaUrl : '',
       payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
       checklist: checkItems ? CHECKLIST_SENTINEL : '',
+      shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
       openCount: checkItems ? String(openCount(checkItems)) : '',
       whatsLeft: checkItems ? whatsLeftPhrase(checkItems) : '',
       daysToEvent: daysToEvent,

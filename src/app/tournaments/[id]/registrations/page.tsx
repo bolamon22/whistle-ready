@@ -828,6 +828,7 @@ export default function RegistrationsPage() {
       .replace(/\{confirmLink\}/g, `${origin}/confirm/${reg.id}`)
       .replace(/\{accountLink\}/g, `${origin}/claim/…`)
       .replace(/\{payLink\}/g, `${origin}/pay/${reg.id}`)
+      .replace(/\{shareLink\}/g, `${origin}/share/${reg.id}`)
       .replace(/\{daysToEvent\}/g, '(days)')
       .replace(/\{openCount\}/g, '(count)')
       .replace(/\{whatsLeft\}/g, 'what this club still has open')
