@@ -487,9 +487,7 @@ export default function ClubDirectorDashboard() {
   // CONFIRMING THE TEAM LIST from the portal (Bo, Oct 4 2026): the club ticks
   // the box on What's left, checks its teams in ConfirmTeamsDialog and confirms.
   // Same Teams confirmed status as the confirm-your-teams email; the portal's
-  // route also notes who confirmed and the list they saw. Greyed out, not
-  // hidden, in staff view: hidden, it read as missing.
-  const staffConfirm = viewUserId ? 'The club confirms here. It is turned off in staff view.' : undefined
+  // route also notes who confirmed and the list they saw.
 
   // After registering for another event: pick up the new event in the picker
   // (the register-again route links it) and open it.
@@ -507,14 +505,15 @@ export default function ClubDirectorDashboard() {
   }
 
   // Changing teams is for the club itself, at an event that isn't over. Staff
-  // viewing the portal see the same buttons greyed out rather than not at all:
-  // hidden, they read as missing ("I don't see how they can add or request for
-  // a team to be removed", Bo, Oct 3 2026). Staff make the change on the
-  // registrations page instead.
+  // viewing the portal get the same buttons, and every form opens, so they see
+  // exactly what the club sees. Hidden, the buttons read as missing (Bo, Oct 3
+  // 2026); greyed out, they still raised "why can't they click register teams
+  // here?" (Oct 4). Only each form's last step is off in staff view (the
+  // dialogs' staffView, and the routes refuse it too); staff make real changes
+  // on the registrations page.
   const portalEvent = data?.event ?? null
   const showChange = !!portalEvent && !portalEvent.ended
-  const canChange = showChange && !viewUserId
-  const staffOnly = viewUserId ? 'The club can use this. It is turned off in staff view; make the change on the registrations page.' : undefined
+  const staffView = !!viewUserId
 
   // WHAT'S LEFT. The questions a director logs in to answer, in the order they
   // matter: is my team list right, do I owe anything, have my players and
@@ -531,8 +530,8 @@ export default function ClubDirectorDashboard() {
         ? { key: 'confirm', title: 'Teams confirmed', detail: 'Change requested · the office is on it, then you confirm the new list', done: false }
         : { key: 'confirm', title: 'Confirm your team list', detail: `${totalTeams} team${totalTeams === 1 ? '' : 's'} · tick the box to check the names and divisions`, done: false,
             ...(toConfirm ? {
-              check: { onClick: () => setConfirmFor(toConfirm.id), disabled: !!viewUserId, title: staffConfirm || 'Check your teams and confirm them' },
-              action: { label: 'Confirm teams', onClick: () => setConfirmFor(toConfirm.id), disabled: !!viewUserId, title: staffConfirm },
+              check: { onClick: () => setConfirmFor(toConfirm.id), title: 'Check your teams and confirm them' },
+              action: { label: 'Confirm teams', onClick: () => setConfirmFor(toConfirm.id) },
             } : {}) })
     if (showMoney && totalInvoiced > 0) leftItems.push(balance > 0
       ? { key: 'pay', title: 'Balance due', detail: `${fmt(balance)} · bank transfer has no fee, card runs 3%`, done: false,
@@ -563,7 +562,7 @@ export default function ClubDirectorDashboard() {
         return (
           <RequestChangeDialog tournamentId={selTournament} eventName={selTournamentName} reg={r}
             team={r.teams.find(x => x.id === requestFor.teamId) || null} event={portalEvent}
-            initialKind={requestFor.kind} onClose={() => setRequestFor(null)} onDone={() => loadData(selTournament)} />
+            initialKind={requestFor.kind} staffView={staffView} onClose={() => setRequestFor(null)} onDone={() => loadData(selTournament)} />
         )
       })()}
       {addFor && portalEvent && (() => {
@@ -571,21 +570,21 @@ export default function ClubDirectorDashboard() {
         if (!r) return null
         return (
           <AddTeamDialog tournamentId={selTournament} eventName={selTournamentName} reg={r} event={portalEvent}
-            showMoney={showMoney} onClose={() => setAddFor('')} onDone={() => loadData(selTournament)} />
+            showMoney={showMoney} staffView={staffView} onClose={() => setAddFor('')} onDone={() => loadData(selTournament)} />
         )
       })()}
       {confirmFor && (() => {
         const r = regs.find(x => x.id === confirmFor)
         if (!r) return null
         return (
-          <ConfirmTeamsDialog tournamentId={selTournament} eventName={selTournamentName} reg={r}
+          <ConfirmTeamsDialog tournamentId={selTournament} eventName={selTournamentName} reg={r} staffView={staffView}
             onClose={() => setConfirmFor('')} onDone={() => loadData(selTournament)}
             onRequestChange={() => { setConfirmFor(''); setRequestFor({ regId: r.id, teamId: '', kind: 'other' }) }} />
         )
       })()}
       {againFor && (
         <RegisterAgainDialog tournamentId={againFor.tournamentId} eventName={againFor.eventName} reg={againFor.reg}
-          initialEventId={againFor.eventId} showMoney={showMoney}
+          initialEventId={againFor.eventId} showMoney={showMoney} staffView={staffView}
           onClose={() => setAgainFor(null)} onRegistered={openNewEvent} />
       )}
 
@@ -595,7 +594,7 @@ export default function ClubDirectorDashboard() {
           <span>
             <strong className="font-semibold">Staff view.</strong> This is{' '}
             {viewingUser?.name ? `${viewingUser.name}’s` : 'this club director’s'} portal, exactly as they see it
-            {viewingUser?.email ? ` (${viewingUser.email})` : ''}. Buttons that would act on their behalf are hidden or greyed out.
+            {viewingUser?.email ? ` (${viewingUser.email})` : ''}. Their buttons open the same forms they see, so you can try them; the last step (send, register, confirm) is off here.
           </span>
         </div>
       )}
@@ -698,7 +697,7 @@ export default function ClubDirectorDashboard() {
                         <div className="font-bold text-gray-800">{tournament.name}</div>
                         <div className="text-xs text-gray-500">{tournament.startDate}{tournament.endDate && tournament.endDate !== tournament.startDate ? ` – ${tournament.endDate}` : ''} · {tournament.location}</div>
                       </div>
-                      {!viewUserId && entry.registrations[0] && (
+                      {entry.registrations[0] && (
                         <button onClick={() => setAgainFor({ tournamentId: tournament.id, eventName: tournament.name, reg: entry.registrations[0] })}
                           className="shrink-0 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                           <RefreshCw size={12} className="shrink-0" /> Register again
@@ -861,7 +860,7 @@ export default function ClubDirectorDashboard() {
                       </div>
 
                       {/* A request the office has, or a changed list to confirm. */}
-                      <AccountNote confirm={reg.confirm} staffView={!!viewUserId} onConfirm={() => setConfirmFor(reg.id)} />
+                      <AccountNote confirm={reg.confirm} onConfirm={() => setConfirmFor(reg.id)} />
 
                       {/* Registration facts */}
                       <div className="px-5 py-2.5 bg-gray-50 border-y border-gray-100 flex flex-wrap gap-x-8 gap-y-1 text-sm">
@@ -897,8 +896,8 @@ export default function ClubDirectorDashboard() {
                       {showChange && (
                         <div className="px-5 py-2.5 flex items-center justify-between gap-3 border-b border-gray-100">
                           <span className="text-sm font-semibold text-gray-800">Your teams</span>
-                          <button type="button" onClick={() => setAddFor(reg.id)} disabled={!canChange} title={staffOnly}
-                            className="inline-flex items-center gap-1.5 min-h-[36px] text-sm font-semibold px-3.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-teal-600">
+                          <button type="button" onClick={() => setAddFor(reg.id)}
+                            className="inline-flex items-center gap-1.5 min-h-[36px] text-sm font-semibold px-3.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white">
                             <Plus size={15} className="shrink-0" /> Add a team
                           </button>
                         </div>
@@ -948,13 +947,13 @@ export default function ClubDirectorDashboard() {
                             {showChange && (
                               <div className="sm:col-span-2 flex sm:justify-end gap-1.5 pt-1.5 sm:pt-0">
                                 {(portalEvent?.divisions.length ?? 0) > 1 && (
-                                  <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'move' })} disabled={!canChange}
-                                    title={staffOnly || 'Ask the office to move this team to another division'}
-                                    className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">Move</button>
+                                  <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'move' })}
+                                    title="Ask the office to move this team to another division"
+                                    className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800">Move</button>
                                 )}
-                                <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'remove' })} disabled={!canChange}
-                                  title={staffOnly || 'Ask the office to remove this team'}
-                                  className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">Remove</button>
+                                <button type="button" onClick={() => setRequestFor({ regId: reg.id, teamId: t.key, kind: 'remove' })}
+                                  title="Ask the office to remove this team"
+                                  className="min-h-[32px] px-3 rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800">Remove</button>
                               </div>
                             )}
                           </div>
@@ -1111,7 +1110,7 @@ export default function ClubDirectorDashboard() {
                 )}
 
                 {regs[0] && selTournament && (
-                  <OtherEventsCard tournamentId={selTournament} teamCount={totalTeams} staffView={!!viewUserId} showMoney={showMoney}
+                  <OtherEventsCard tournamentId={selTournament} teamCount={totalTeams} showMoney={showMoney}
                     onRegister={eventId => setAgainFor({ tournamentId: selTournament, eventName: selTournamentName, reg: regs[0], eventId })} />
                 )}
               </div>

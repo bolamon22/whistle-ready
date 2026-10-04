@@ -124,6 +124,17 @@ function Done({ title, body, onClose, tone = 'teal' }: { title: string; body: Re
   )
 }
 
+/** In staff view every form opens, so staff see exactly what the club sees, but
+ *  the last step is the club's own (Bo, Oct 4 2026: "why can't they click
+ *  register teams here?"). The routes refuse staff view as well. */
+function StaffNote() {
+  return (
+    <p className="text-[13px] leading-snug text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+      <strong className="font-semibold">Staff view.</strong> You can fill this in to see how it works, but only the club can send it, from its own login. Nothing here is saved.
+    </p>
+  )
+}
+
 function NextSteps({ steps }: { steps: string[] }) {
   return (
     <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5">
@@ -141,9 +152,9 @@ function NextSteps({ steps }: { steps: string[] }) {
 
 export type RequestKind = 'move' | 'remove' | 'other'
 
-export function RequestChangeDialog({ tournamentId, eventName, reg, team, event, initialKind = 'move', onClose, onDone }: {
+export function RequestChangeDialog({ tournamentId, eventName, reg, team, event, initialKind = 'move', staffView = false, onClose, onDone }: {
   tournamentId: string; eventName: string; reg: PortalReg; team: PortalTeam | null; event: PortalEvent | null
-  initialKind?: RequestKind; onClose: () => void; onDone: () => void
+  initialKind?: RequestKind; staffView?: boolean; onClose: () => void; onDone: () => void
 }) {
   const moveTargets = (event?.divisions ?? []).filter(d => team && nameKey(d.name) !== nameKey(team.division))
   const [kind, setKind] = useState<RequestKind>(team ? (initialKind === 'move' && !moveTargets.length ? 'other' : initialKind) : 'other')
@@ -160,7 +171,7 @@ export function RequestChangeDialog({ tournamentId, eventName, reg, team, event,
     { id: 'other', title: 'Something else', sub: 'A name change, a coach change, anything we should fix.' },
   ] : []
 
-  const blocked = busy || (kind === 'move' && !toDivision) || (kind === 'other' && !note.trim())
+  const blocked = busy || staffView || (kind === 'move' && !toDivision) || (kind === 'other' && !note.trim())
   async function send() {
     if (blocked) return
     setBusy(true); setError('')
@@ -246,10 +257,11 @@ export function RequestChangeDialog({ tournamentId, eventName, reg, team, event,
           <NextSteps steps={[
             'Your request shows on your registration, and the tournament office gets an email.',
             'The office makes the change and updates your invoice.',
-            'You confirm your teams again in one click.',
+            'You check the updated list and confirm it.',
           ]} />
 
           {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
+          {staffView && <StaffNote />}
           <div className="flex items-center gap-3">
             <button type="button" onClick={send} disabled={blocked} className={primaryBtn}>{busy ? 'Sending…' : 'Send request'}</button>
             <button type="button" onClick={onClose} className={quietBtn}>Cancel</button>
@@ -264,9 +276,9 @@ export function RequestChangeDialog({ tournamentId, eventName, reg, team, event,
 // Add a team
 // ---------------------------------------------------------------------------
 
-export function AddTeamDialog({ tournamentId, eventName, reg, event, showMoney, onClose, onDone }: {
+export function AddTeamDialog({ tournamentId, eventName, reg, event, showMoney, staffView = false, onClose, onDone }: {
   tournamentId: string; eventName: string; reg: PortalReg; event: PortalEvent
-  showMoney: boolean; onClose: () => void; onDone: () => void
+  showMoney: boolean; staffView?: boolean; onClose: () => void; onDone: () => void
 }) {
   const [teamName, setTeamName] = useState('')
   const [division, setDivision] = useState('')
@@ -294,7 +306,7 @@ export function AddTeamDialog({ tournamentId, eventName, reg, event, showMoney, 
     return { unedited, after, delta: after - reg.invoiceAmount }
   }, [div, asRequest, reg, event.pricing])
 
-  const blocked = busy || !teamName.trim() || !division
+  const blocked = busy || staffView || !teamName.trim() || !division
   async function submit() {
     if (blocked) return
     setBusy(true); setError('')
@@ -408,6 +420,7 @@ export function AddTeamDialog({ tournamentId, eventName, reg, event, showMoney, 
         <p className="text-[13px] leading-relaxed text-slate-500">You can add teams yourself until the schedule is posted. After that, adding a team becomes a request to the office.</p>
 
         {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
+        {staffView && <StaffNote />}
         <div className="flex items-center gap-3">
           <button type="button" onClick={submit} disabled={blocked} className={primaryBtn}>
             {busy ? 'Saving…' : asRequest ? 'Send request' : div?.full ? 'Join the waiting list'
@@ -427,8 +440,8 @@ export function AddTeamDialog({ tournamentId, eventName, reg, event, showMoney, 
 /** One team on the form. `teamId` is the team it started from ('' for a new one). */
 type AgainRow = { key: string; teamId: string; on: boolean; teamName: string; division: string; coachName: string; coachEmail: string; editCoach: boolean }
 
-export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEventId, showMoney, onClose, onRegistered }: {
-  tournamentId: string; eventName: string; reg: AgainSource; initialEventId?: string; showMoney: boolean
+export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEventId, showMoney, staffView = false, onClose, onRegistered }: {
+  tournamentId: string; eventName: string; reg: AgainSource; initialEventId?: string; showMoney: boolean; staffView?: boolean
   onClose: () => void; onRegistered: (newTournamentId: string) => void
 }) {
   const [events, setEvents] = useState<OtherEvent[] | null>(null)
@@ -486,7 +499,7 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
     : !contactOk ? 'Add a contact name, email and phone.' : ''
 
   async function submit() {
-    if (blockedWhy || busy || !target) return
+    if (blockedWhy || busy || staffView || !target) return
     setBusy(true); setError('')
     const r = await postJson('/api/club-director/register-again', {
       tournamentId, registrationId: reg.id, targetId: target.id,
@@ -653,7 +666,8 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
                 )}
                 <span className="text-[13px] leading-relaxed text-slate-500">Your confirmation and payment link arrive by email.{target?.divisions.some(d => d.full) ? ' Teams in a full division go on its waiting list and aren’t billed unless a spot opens.' : ''}</span>
                 {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
-                <button type="button" onClick={submit} disabled={!!blockedWhy || busy} className={primaryBtn}>
+                {staffView && <StaffNote />}
+                <button type="button" onClick={submit} disabled={!!blockedWhy || busy || staffView} className={primaryBtn}>
                   {busy ? 'Registering…' : picked.length ? `Register ${plural(picked.length, 'team')}${showMoney && target && !blockedWhy ? ` · ${money(total)}` : ''}` : 'Register'}
                 </button>
                 {blockedWhy && <span className="text-[13px] text-amber-800">{blockedWhy}</span>}
@@ -670,8 +684,8 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
 // The note on a registration: a request the office has, or a list to confirm
 // ---------------------------------------------------------------------------
 
-export function AccountNote({ confirm, staffView, onConfirm }: {
-  confirm: ConfirmState | undefined; staffView: boolean; onConfirm: () => void
+export function AccountNote({ confirm, onConfirm }: {
+  confirm: ConfirmState | undefined; onConfirm: () => void
 }) {
   if (!confirm) return null
   if (confirm.status === 'change_requested') {
@@ -693,10 +707,9 @@ export function AccountNote({ confirm, staffView, onConfirm }: {
           <AlertTriangle size={18} className="shrink-0 mt-0.5" />
           <span><strong className="font-bold">The office updated your teams.</strong> Check the list below, then confirm it.</span>
         </span>
-        {/* Greyed out, not hidden, in staff view: the point of that view is to see what the club sees. */}
-        <button type="button" onClick={onConfirm} disabled={staffView}
-          title={staffView ? 'The club confirms here. It is turned off in staff view.' : undefined}
-          className="min-h-[44px] px-4 rounded-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold">
+        {/* Opens the team check, in staff view too; only its last step is the club's. */}
+        <button type="button" onClick={onConfirm}
+          className="min-h-[44px] px-4 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold">
           Confirm teams
         </button>
       </section>
@@ -712,8 +725,8 @@ export function AccountNote({ confirm, staffView, onConfirm }: {
 /** The club's sign-off that every team name and division is right. Bo, Oct 4
  *  2026: tick the box on the team list, check the teams, and that is the club's
  *  verification. The route notes who confirmed and the list they saw. */
-export function ConfirmTeamsDialog({ tournamentId, eventName, reg, onClose, onDone, onRequestChange }: {
-  tournamentId: string; eventName: string; reg: PortalReg
+export function ConfirmTeamsDialog({ tournamentId, eventName, reg, staffView = false, onClose, onDone, onRequestChange }: {
+  tournamentId: string; eventName: string; reg: PortalReg; staffView?: boolean
   onClose: () => void; onDone: () => void; onRequestChange: () => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -721,7 +734,7 @@ export function ConfirmTeamsDialog({ tournamentId, eventName, reg, onClose, onDo
   const [done, setDone] = useState(false)
 
   async function confirm() {
-    if (busy) return
+    if (busy || staffView) return
     setBusy(true); setError('')
     const r = await postJson('/api/club-director/confirm', {
       tournamentId, registrationId: reg.id,
@@ -765,8 +778,9 @@ export function ConfirmTeamsDialog({ tournamentId, eventName, reg, onClose, onDo
             ))}
           </ul>
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          {staffView && <StaffNote />}
           <div className="flex flex-col gap-1">
-            <button type="button" onClick={confirm} disabled={busy || !reg.teams.length} className={primaryBtn}>
+            <button type="button" onClick={confirm} disabled={busy || staffView || !reg.teams.length} className={primaryBtn}>
               {busy ? 'Confirming…' : 'Everything’s right — confirm'}
             </button>
             <button type="button" onClick={onRequestChange} disabled={busy} className={`${quietBtn} self-center`}>
@@ -831,8 +845,8 @@ export function WhatsLeft({ title, items }: { title: string; items: LeftItem[] }
 // The organizer's other events, on Overview
 // ---------------------------------------------------------------------------
 
-export function OtherEventsCard({ tournamentId, teamCount, staffView, showMoney, onRegister }: {
-  tournamentId: string; teamCount: number; staffView: boolean; showMoney: boolean; onRegister: (eventId: string) => void
+export function OtherEventsCard({ tournamentId, teamCount, showMoney, onRegister }: {
+  tournamentId: string; teamCount: number; showMoney: boolean; onRegister: (eventId: string) => void
 }) {
   const [events, setEvents] = useState<OtherEvent[] | null>(null)
   useEffect(() => {
@@ -863,9 +877,8 @@ export function OtherEventsCard({ tournamentId, teamCount, staffView, showMoney,
                   <span className="shrink-0 px-2.5 py-1 rounded-full bg-teal-50 border border-teal-100 text-teal-700 text-[13px] font-bold whitespace-nowrap">{money(per)} / team</span>
                 )}
               </div>
-              <button type="button" onClick={() => onRegister(ev.id)} disabled={staffView}
-                title={staffView ? 'The club registers here. It is turned off in staff view.' : undefined}
-                className="min-h-[44px] rounded-full border border-teal-600 text-teal-700 hover:bg-teal-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent text-sm font-semibold inline-flex items-center justify-center gap-1.5">
+              <button type="button" onClick={() => onRegister(ev.id)}
+                className="min-h-[44px] rounded-full border border-teal-600 text-teal-700 hover:bg-teal-50 text-sm font-semibold inline-flex items-center justify-center gap-1.5">
                 <ArrowRightLeft size={15} /> Register teams
               </button>
             </div>

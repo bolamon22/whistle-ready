@@ -32,4 +32,4 @@ Before you build the schedule, you can ask each club to check its team list and 
 **Common problems:**
 - **Re-confirm** opens the Email clubs dialog for that club; nothing is sent until you click send.
 - A club confirmed while a request was still open: the request is filed into the registration's notes ("still open when the club confirmed"), so check it there.
-- In a club's portal (staff view), the team-list box and **Confirm teams** are greyed out. Only the club can confirm its own list.
+- In a club's portal (staff view) you can open the team check and every other form to see what the club sees, but the last step (confirm, send, register) is off. Only the club can do those, from its own login.

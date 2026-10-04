@@ -26,7 +26,7 @@ The Team registrations page lists every club that registered, its teams, what it
 1. Click **Del** and confirm. The club moves to **Recently Deleted** at the bottom of the page.
 2. Open **Recently Deleted** and click **Restore** to bring it back.
 
-**Other tools:** **CSV** downloads the list, **Public form** opens your registration page, and **Returning teams** helps invite last year's clubs back. The chip under each contact shows **Account** if they have a Whistle Ready login or **No account** if not.
+**Other tools:** **CSV** downloads the list, **Public form** opens your registration page, and **Returning teams** helps invite last year's clubs back. The chip under each contact shows **Account** if they have a Whistle Ready login or **No account** if not. For a club director, click **Account** to open their club portal exactly as they see it. Every button there opens its form so you can try it, but the last step (send, register, confirm) is left to the club.
 
 If individual player registration is turned on, an **Individual Players** tab lists those players, with **Add entry**, **Edit** and **Del** for each.
 
