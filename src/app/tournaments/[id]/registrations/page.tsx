@@ -758,8 +758,11 @@ export default function RegistrationsPage() {
 
   // Pre-tournament club emails (Bo): waiver push, schedule announcement, team
   // confirmation — to the whole field or hand-picked clubs, same preview-first flow.
-  type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment' | 'account'
-  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder', account: 'Set up your account' }
+  // Keep this list in step with COMM_KINDS in src/lib/commLetters.ts. It is a
+  // second, hand-written copy: when `account` was added there and not here, its
+  // letter simply never appeared in this dialog.
+  type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment' | 'account' | 'checklist'
+  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder', account: 'Set up your account', checklist: 'Pre-event checklist' }
   const [commOpen, setCommOpen] = useState(false)
   const [commKind, setCommKind] = useState<CommKind>('waiver')
   const [commLetters, setCommLetters] = useState<Record<CommKind, { subject: string; body: string }> | null>(null)
@@ -823,6 +826,13 @@ export default function RegistrationsPage() {
       .replace(/\{playerCount\}/g, '(count)')
       .replace(/\{confirmLink\}/g, `${origin}/confirm/${reg.id}`)
       .replace(/\{accountLink\}/g, `${origin}/claim/…`)
+      .replace(/\{payLink\}/g, `${origin}/pay/${reg.id}`)
+      .replace(/\{daysToEvent\}/g, '(days)')
+      .replace(/\{openCount\}/g, '(count)')
+      .replace(/\{whatsLeft\}/g, 'what this club still has open')
+      // The real block is built per club at send time (lib/checklistLetter) from
+      // confirm status, login, waiver counts, balance and hotel.
+      .replace(/\{checklist\}/g, '[x] Teams and divisions confirmed — …\n[ ] Player waivers — …\n[ ] Balance due — …\n(ticked off per club, with a button on each open item)')
   }
   // The payment kind edits the SAME letter the per-club modal uses; the other
   // three edit their commLetters entry.
@@ -1397,7 +1407,7 @@ export default function RegistrationsPage() {
               <h3 className="font-bold text-slate-800 mb-1">Email clubs</h3>
               <p className="text-sm text-slate-500 mb-3">Goes to each club's team director — they pass it on to their families. {'{contact}'} {'{club}'} {'{event}'} {'{teamsList}'} and the links fill in per club.</p>
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {(['waiver', 'schedule', 'confirm', 'payment', 'account'] as const).map(k => (
+                {(['waiver', 'schedule', 'confirm', 'payment', 'account', 'checklist'] as const).map(k => (
                   <button key={k} onClick={() => { setCommKind(k)
                     if (k === 'account') setCommSel(sel => new Set([...sel].filter(id => !registrations.find(r => r.id === id)?.hasAccount)))
                     // A paid club left ticked from another letter is a send that does
@@ -1502,6 +1512,7 @@ export default function RegistrationsPage() {
                             schedule: '"View the schedule" button appears here automatically',
                             confirm: '"Review + confirm your teams" button appears here automatically — their own private link',
                             account: '"Set up my account" button appears here automatically — a single-use link tied to this registration',
+                            checklist: 'Each open item carries its own button — confirm teams, set up a login, share the waiver link, pay the balance',
                           } as Record<CommKind, string>)[commKind]}</div>
                         </div>
                       </div>
