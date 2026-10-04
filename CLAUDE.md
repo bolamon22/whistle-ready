@@ -149,6 +149,18 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Tasks (Oct 4).** Bo's to-do list per event: `/tasks` (every event + General), each tournament's
+  **Tasks** tab (`/tournaments/[id]/tasks`), a card on the tournaments page and a box on the tournament
+  dashboard. Red badges (top bar, Tasks tab) count OVERDUE only (Bo: overdue+this-week was always lit).
+  Raw-SQL table `OrgTask`, created lazily in `lib/tasks.ts` (not in schema.prisma), org-scoped like
+  follows; `lib/tasksGate.ts` = feature `tasks` (director yes, everyone else no) + admin preview org.
+  The template is `STARTER_TEMPLATE` in `lib/taskTemplate.ts` (pure, client-safe): due dates are offsets
+  from the first game day, `only`/`suggest` decide what's ticked per event. Tracked items read live data
+  (`lib/taskSignals.ts`); publish/payrem/unpaid/refs check themselves off ONCE (`autoDoneAt`), so a
+  reopen sticks. The shared setup checklist is NOT copied into OrgTask: it stays AppSetting
+  `checklists:{id}` (staff check it off), shown as one virtual row `setup:<id>` due the day before.
+  No assignees on purpose ("just me for now").
+
 - **Club portal access is per registration, by email (Oct 4).** `src/lib/clubAccess.ts`: raw-SQL
   table `ClubRegAccess (userId, registrationId)`, created lazily; the first call carried every old
   `ClubDirectorLink` over as the registrations its club name had at that moment. Every
@@ -572,6 +584,9 @@ scores → public. Highlights shipped to live:
 - **Double-elim / 3rd flight (B2)**: data model already supports >2 flights via the `flight` column.
 
 ## Known cruft / cleanup
+- The admin **Perms** page saves to AppSetting `role_permissions`, but middleware, `requireFeature` and
+  the nav read the bundled `role-permissions.json` only, so saved toggles change nothing, and once a row
+  is saved the page stops showing features added to the JSON later (found Oct 4 while adding `tasks`).
 - `next.config.js` sets `typescript.ignoreBuildErrors` + `eslint.ignoreDuringBuilds`; ~40 pre-existing
   TS errors exist (e.g. Prisma model types not in schema) and are non-blocking.
 - Some per-user settings (Assigner lock, games-per-ref, Divisions Smart-Defaults plan) persist in
