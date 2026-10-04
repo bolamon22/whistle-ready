@@ -7,7 +7,7 @@ import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardLi
 import toast from 'react-hot-toast'
 import { compressImageFile } from '@/lib/imageCompress'
 import {
-  RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, AccountNote, WhatsLeft, OtherEventsCard, dayLabel,
+  RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, ConfirmTeamsDialog, AccountNote, WhatsLeft, OtherEventsCard, dayLabel,
   type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource,
 } from './PortalActions'
 
@@ -197,7 +197,7 @@ export default function ClubDirectorDashboard() {
   const [requestFor, setRequestFor] = useState<null | { regId: string; teamId: string; kind: RequestKind }>(null)
   const [addFor, setAddFor] = useState('')
   const [againFor, setAgainFor] = useState<null | { tournamentId: string; eventName: string; reg: AgainSource; eventId?: string }>(null)
-  const [confirming, setConfirming] = useState('')
+  const [confirmFor, setConfirmFor] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -484,22 +484,12 @@ export default function ClubDirectorDashboard() {
     { key: 'history',   label: 'History',            Icon: Trophy                             },
   ]
 
-  // CONFIRMING THE TEAM LIST from the portal: the same one click as the
-  // confirm-your-teams email, through the same endpoint (the registration id is
-  // the key there, as on /pay).
-  async function confirmTeams(regId: string) {
-    if (!regId || viewUserId) return
-    setConfirming(regId)
-    try {
-      const res = await fetch(`/api/registrations/${regId}/confirm`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'confirm' }),
-      })
-      if (!res.ok) { toast.error('Could not confirm your teams'); return }
-      toast.success('Teams confirmed. Thank you!')
-      await loadData(selTournament)
-    } catch { toast.error('Could not confirm your teams') } finally { setConfirming('') }
-  }
+  // CONFIRMING THE TEAM LIST from the portal (Bo, Oct 4 2026): the club ticks
+  // the box on What's left, checks its teams in ConfirmTeamsDialog and confirms.
+  // Same Teams confirmed status as the confirm-your-teams email; the portal's
+  // route also notes who confirmed and the list they saw. Greyed out, not
+  // hidden, in staff view: hidden, it read as missing.
+  const staffConfirm = viewUserId ? 'The club confirms here. It is turned off in staff view.' : undefined
 
   // After registering for another event: pick up the new event in the picker
   // (the register-again route links it) and open it.
@@ -539,8 +529,11 @@ export default function ClubDirectorDashboard() {
       ? { key: 'confirm', title: 'Teams confirmed', detail: lastConfirmed ? `Confirmed ${shortDate(lastConfirmed)}` : 'Your team list is confirmed', done: true }
       : requested && !toConfirm
         ? { key: 'confirm', title: 'Teams confirmed', detail: 'Change requested · the office is on it, then you confirm the new list', done: false }
-        : { key: 'confirm', title: 'Confirm your team list', detail: `${totalTeams} team${totalTeams === 1 ? '' : 's'} · check the names and divisions below`, done: false,
-            action: viewUserId || !toConfirm ? undefined : { label: confirming ? 'Confirming…' : 'Confirm teams', onClick: () => confirmTeams(toConfirm.id) } })
+        : { key: 'confirm', title: 'Confirm your team list', detail: `${totalTeams} team${totalTeams === 1 ? '' : 's'} · tick the box to check the names and divisions`, done: false,
+            ...(toConfirm ? {
+              check: { onClick: () => setConfirmFor(toConfirm.id), disabled: !!viewUserId, title: staffConfirm || 'Check your teams and confirm them' },
+              action: { label: 'Confirm teams', onClick: () => setConfirmFor(toConfirm.id), disabled: !!viewUserId, title: staffConfirm },
+            } : {}) })
     if (showMoney && totalInvoiced > 0) leftItems.push(balance > 0
       ? { key: 'pay', title: 'Balance due', detail: `${fmt(balance)} · bank transfer has no fee, card runs 3%`, done: false,
           action: soloUnpaidId ? { label: `Pay ${fmt(balance)}`, href: `/pay/${soloUnpaidId}` } : undefined }
@@ -579,6 +572,15 @@ export default function ClubDirectorDashboard() {
         return (
           <AddTeamDialog tournamentId={selTournament} eventName={selTournamentName} reg={r} event={portalEvent}
             showMoney={showMoney} onClose={() => setAddFor('')} onDone={() => loadData(selTournament)} />
+        )
+      })()}
+      {confirmFor && (() => {
+        const r = regs.find(x => x.id === confirmFor)
+        if (!r) return null
+        return (
+          <ConfirmTeamsDialog tournamentId={selTournament} eventName={selTournamentName} reg={r}
+            onClose={() => setConfirmFor('')} onDone={() => loadData(selTournament)}
+            onRequestChange={() => { setConfirmFor(''); setRequestFor({ regId: r.id, teamId: '', kind: 'other' }) }} />
         )
       })()}
       {againFor && (
@@ -859,7 +861,7 @@ export default function ClubDirectorDashboard() {
                       </div>
 
                       {/* A request the office has, or a changed list to confirm. */}
-                      <AccountNote confirm={reg.confirm} staffView={!!viewUserId} busy={confirming === reg.id} onConfirm={() => confirmTeams(reg.id)} />
+                      <AccountNote confirm={reg.confirm} staffView={!!viewUserId} onConfirm={() => setConfirmFor(reg.id)} />
 
                       {/* Registration facts */}
                       <div className="px-5 py-2.5 bg-gray-50 border-y border-gray-100 flex flex-wrap gap-x-8 gap-y-1 text-sm">

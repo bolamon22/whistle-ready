@@ -6,13 +6,14 @@
 // never a delete), add a team themselves until the schedule is posted, and
 // bring their teams to the organizer's next event without retyping them. Plus a
 // "What's left" list so a director can see at a glance what the event still
-// needs from them.
+// needs from them, starting with a box to tick once their team list is right
+// (Oct 4).
 //
 // Client only. Nothing here may import a file that imports @/lib/db -- Prisma in
 // a client graph took every photographer page down on Oct 3 2026. The pricing,
 // status and name helpers used here have no imports of their own.
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowRightLeft, CalendarPlus, CheckCircle2, Circle, Clock, X } from 'lucide-react'
+import { AlertTriangle, ArrowRightLeft, CalendarPlus, CheckCircle2, Circle, Clock, Square, X } from 'lucide-react'
 import { calcFee, type RegPricing } from '@/lib/regPricing'
 import { nameKey } from '@/lib/names'
 
@@ -612,8 +613,8 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
 // The note on a registration: a request the office has, or a list to confirm
 // ---------------------------------------------------------------------------
 
-export function AccountNote({ confirm, staffView, busy, onConfirm }: {
-  confirm: ConfirmState | undefined; staffView: boolean; busy: boolean; onConfirm: () => void
+export function AccountNote({ confirm, staffView, onConfirm }: {
+  confirm: ConfirmState | undefined; staffView: boolean; onConfirm: () => void
 }) {
   if (!confirm) return null
   if (confirm.status === 'change_requested') {
@@ -623,7 +624,7 @@ export function AccountNote({ confirm, staffView, busy, onConfirm }: {
         <div className="min-w-0">
           <strong className="font-bold">Change requested{confirm.at ? ` · ${stamp(confirm.at)}` : ''}</strong>
           <p className="whitespace-pre-line break-words">{confirm.note}</p>
-          <p className="mt-1 text-amber-800">The tournament office will update your registration. Then you confirm your teams again in one click.</p>
+          <p className="mt-1 text-amber-800">The tournament office will update your registration. Then you check the new list and confirm it.</p>
         </div>
       </section>
     )
@@ -636,10 +637,10 @@ export function AccountNote({ confirm, staffView, busy, onConfirm }: {
           <span><strong className="font-bold">The office updated your teams.</strong> Check the list below, then confirm it.</span>
         </span>
         {/* Greyed out, not hidden, in staff view: the point of that view is to see what the club sees. */}
-        <button type="button" onClick={onConfirm} disabled={busy || staffView}
+        <button type="button" onClick={onConfirm} disabled={staffView}
           title={staffView ? 'The club confirms here. It is turned off in staff view.' : undefined}
           className="min-h-[44px] px-4 rounded-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold">
-          {busy ? 'Confirming…' : 'Confirm teams'}
+          Confirm teams
         </button>
       </section>
     )
@@ -648,10 +649,89 @@ export function AccountNote({ confirm, staffView, busy, onConfirm }: {
 }
 
 // ---------------------------------------------------------------------------
+// Confirm the team list
+// ---------------------------------------------------------------------------
+
+/** The club's sign-off that every team name and division is right. Bo, Oct 4
+ *  2026: tick the box on the team list, check the teams, and that is the club's
+ *  verification. The route notes who confirmed and the list they saw. */
+export function ConfirmTeamsDialog({ tournamentId, eventName, reg, onClose, onDone, onRequestChange }: {
+  tournamentId: string; eventName: string; reg: PortalReg
+  onClose: () => void; onDone: () => void; onRequestChange: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
+
+  async function confirm() {
+    if (busy) return
+    setBusy(true); setError('')
+    const r = await postJson('/api/club-director/confirm', {
+      tournamentId, registrationId: reg.id,
+      seen: reg.teams.map(t => ({ id: t.id, teamName: t.teamName, division: t.division })),
+    })
+    setBusy(false)
+    if (!r.ok) {
+      setError(r.data?.error || 'Could not confirm your teams')
+      if (r.status === 409) onDone()   // the list changed under them: show the new one
+      return
+    }
+    setDone(true)
+    onDone()
+  }
+
+  return (
+    <Dialog title="Confirm your team list" onClose={onClose}>
+      {done ? (
+        <Done title="Teams confirmed" onClose={onClose} body={
+          <>Thank you. The tournament office can see {reg.clubName}&rsquo;s team list is right. If something changes, use <strong>Move</strong> or <strong>Remove</strong> on that team.</>
+        } />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="pr-8">
+            <Eyebrow>{eventName}</Eyebrow>
+            <h2 className="mt-1 text-2xl font-extrabold text-slate-900">Are these your teams?</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Check each team&rsquo;s name and division. The office builds the schedule from this list.</p>
+          </div>
+          <ul className="rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {reg.teams.map(t => (
+              <li key={t.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                <span className="min-w-0">
+                  <span className="block text-[15px] font-semibold text-slate-900 break-words">{t.teamName}</span>
+                  {t.coachName && <span className="block text-[13px] text-slate-500">Coach {t.coachName}</span>}
+                </span>
+                <span className="shrink-0 flex flex-col items-end gap-1">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-[13px] font-semibold text-slate-700">{t.division || 'No division'}</span>
+                  {t.waitlisted && <span className="text-[12px] font-semibold text-amber-700">Waiting list</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          <div className="flex flex-col gap-1">
+            <button type="button" onClick={confirm} disabled={busy || !reg.teams.length} className={primaryBtn}>
+              {busy ? 'Confirming…' : 'Everything’s right — confirm'}
+            </button>
+            <button type="button" onClick={onRequestChange} disabled={busy} className={`${quietBtn} self-center`}>
+              Something&rsquo;s wrong — ask for a change
+            </button>
+          </div>
+        </div>
+      )}
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // What's left
 // ---------------------------------------------------------------------------
 
-export type LeftItem = { key: string; title: string; detail: string; done: boolean; optional?: boolean; action?: { label: string; onClick?: () => void; href?: string } }
+export type LeftItem = {
+  key: string; title: string; detail: string; done: boolean; optional?: boolean
+  /** A box the director ticks to do this step (confirming the team list). */
+  check?: { onClick: () => void; disabled?: boolean; title?: string }
+  action?: { label: string; onClick?: () => void; href?: string; disabled?: boolean; title?: string }
+}
 
 export function WhatsLeft({ title, items }: { title: string; items: LeftItem[] }) {
   if (!items.length) return null
@@ -667,13 +747,21 @@ export function WhatsLeft({ title, items }: { title: string; items: LeftItem[] }
           <li key={i.key} className="flex gap-2.5 items-start text-sm leading-snug">
             {i.done
               ? <CheckCircle2 size={18} aria-label="Done" className="shrink-0 mt-px text-teal-600" />
-              : <Circle size={18} aria-label="Still to do" className="shrink-0 mt-px text-gray-300" />}
+              : i.check
+                // A real box to tick: 18px to see, 44px to tap.
+                ? <button type="button" role="checkbox" aria-checked="false" aria-label={i.title}
+                    onClick={i.check.onClick} disabled={i.check.disabled} title={i.check.title}
+                    className="shrink-0 -m-[13px] p-[13px] rounded-full text-teal-600 hover:text-teal-800 disabled:text-gray-300 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                    <Square size={18} strokeWidth={2.25} className="mt-px" />
+                  </button>
+                : <Circle size={18} aria-label="Still to do" className="shrink-0 mt-px text-gray-300" />}
             <span className="min-w-0">
               <span className="font-semibold text-gray-800">{i.title}</span>
               <span className="block text-[13px] text-gray-500">{i.detail}</span>
               {i.action && !i.done && (i.action.href
                 ? <a href={i.action.href} target="_blank" rel="noreferrer" className="inline-block mt-0.5 text-[13px] font-semibold text-teal-700 hover:text-teal-800 hover:underline">{i.action.label}</a>
-                : <button type="button" onClick={i.action.onClick} className="mt-0.5 text-[13px] font-semibold text-teal-700 hover:text-teal-800 hover:underline">{i.action.label}</button>)}
+                : <button type="button" onClick={i.action.onClick} disabled={i.action.disabled} title={i.action.title}
+                    className="mt-0.5 text-[13px] font-semibold text-teal-700 hover:text-teal-800 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed">{i.action.label}</button>)}
             </span>
           </li>
         ))}
