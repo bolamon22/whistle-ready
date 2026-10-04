@@ -12,6 +12,8 @@ import {
   type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource, type PortalPool, type PortalDirector, type PortalInvite,
 } from './PortalActions'
 import { nameKey } from '@/lib/names'
+import FamilyMessages from '@/components/FamilyMessages'
+import type { FamilyMessage } from '@/lib/familyMessages'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
 interface Waiver {
@@ -166,6 +168,10 @@ export default function ClubDirectorDashboard() {
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [tab, setTab] = useState<'overview' | 'players' | 'coaches' | 'schedule' | 'history'>('overview')
+  // The same ready-written messages the checklist email links to, so a director
+  // already in the portal doesn't have to go back to an email to find them
+  // (Bo, Oct 4 2026). One source: /api/registrations/[id]/share.
+  const [familyMsgs, setFamilyMsgs] = useState<FamilyMessage[]>([])
   const [noLinks, setNoLinks] = useState(false)
   const [perms, setPerms] = useState<Record<string, boolean>>({ cd_overview: true, cd_players: true, cd_schedule: true, cd_billing: true })
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -242,6 +248,16 @@ export default function ClubDirectorDashboard() {
     const d = await res.json()
     setData(d)
     setDataLoading(false)
+    // Best-effort: the portal is perfectly usable without the drafts, so a
+    // failure here just leaves those blocks out rather than erroring the page.
+    const regId = d?.registrations?.[0]?.id
+    setFamilyMsgs([])
+    if (regId) {
+      try {
+        const fm = await fetch(`/api/registrations/${regId}/share`).then(r => (r.ok ? r.json() : null))
+        if (Array.isArray(fm?.messages)) setFamilyMsgs(fm.messages)
+      } catch { /* no drafts this load */ }
+    }
   }
 
   const loadHistory = async () => {
@@ -251,6 +267,18 @@ export default function ClubDirectorDashboard() {
     const h = await res.json()
     setHistory(Array.isArray(h) ? h : [])
     setHistoryLoading(false)
+  }
+
+  // One message, under the tab that is already about that thing.
+  const draftsFor = (key: 'waivers' | 'coaches' | 'hotel', heading: string) => {
+    const picked = familyMsgs.filter(m => m.key === key)
+    if (!picked.length) return null
+    return (
+      <div className="pt-1">
+        <p className="text-[11px] font-bold tracking-wide text-slate-400 mb-2">{heading}</p>
+        <FamilyMessages messages={picked} />
+      </div>
+    )
   }
 
   const switchTab = (key: typeof tab) => {
@@ -811,6 +839,7 @@ export default function ClubDirectorDashboard() {
                 )}
                 <SharedNameNote clubs={data?.sharedClubs || []} />
                 <WhatsLeft title={leftTitle} items={leftItems} />
+                {draftsFor('hotel', 'READY TO SEND YOUR FAMILIES ABOUT HOTELS')}
                 {data?.registrations.map(reg => {
                   const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
                   const inFlight = reg.clearing?.amount || 0
@@ -1162,6 +1191,7 @@ export default function ClubDirectorDashboard() {
             {tab === 'coaches' && (
               <div className="space-y-3">
                 <SharedNameNote clubs={data?.sharedClubs || []} />
+                {draftsFor('coaches', 'READY TO SEND YOUR COACHES')}
                 <p className="text-sm text-gray-500">
                   {coachesSigned} of {coachRows.length} team coach{coachRows.length === 1 ? '' : 'es'} {coachesSigned === 1 ? 'has' : 'have'} filed a waiver.
                   {coachesSigned < coachRows.length && ' The ones still outstanding are marked below.'}
@@ -1292,6 +1322,7 @@ export default function ClubDirectorDashboard() {
             {tab === 'players' && (
               <div className="space-y-3">
                 <SharedNameNote clubs={data?.sharedClubs || []} />
+                {draftsFor('waivers', 'READY TO SEND YOUR FAMILIES')}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-gray-500">
                     {waivers.length} waiver{waivers.length === 1 ? '' : 's'} filed across your {teamRows.length} team{teamRows.length === 1 ? '' : 's'}.
