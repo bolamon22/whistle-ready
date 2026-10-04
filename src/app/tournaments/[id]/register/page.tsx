@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
 import toast, { Toaster } from 'react-hot-toast'
@@ -11,6 +11,7 @@ import StripePayPanel, { type PayMethod } from '@/components/StripePayPanel'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import PasswordInput from '@/components/PasswordInput'
 import { useSession, signIn, signOut } from 'next-auth/react'
+import { nameKey } from '@/lib/names'
 
 interface TeamRow {
   clubName: string
@@ -26,6 +27,14 @@ interface TeamRow {
 // Typed here rather than imported: lib/claim imports the database, and a client
 // page must never pull that in.
 type PortalResult = { status: 'created' | 'linked' | 'existing_account' | 'none'; email: string; rolePromoted?: boolean }
+
+// A signed-in director's clubs and past teams at this organizer (api/registrations/my-teams).
+type MyTeam = { teamName: string; division: string; coachName: string; coachPhone: string; coachEmail: string; logoUrl: string; lastEvent: string }
+type MyClub = {
+  clubName: string; clubBasedIn: string; clubWebsite: string; clubLogoUrl: string
+  contact: { name: string; email: string; phone: string }
+  registeredHere: boolean; teams: MyTeam[]
+}
 
 const emptyTeam = (): TeamRow => ({
   clubName: '', teamName: '', division: '', coachName: '', coachPhone: '', coachEmail: '', logoUrl: '',
@@ -127,6 +136,140 @@ export default function RegisterPage() {
   const signedInAsContact = !!sessionEmail && sessionEmail === contactEmail.trim().toLowerCase()
   const staffSession = !!session && !['', 'club_director', 'coach', 'parent', 'viewer'].includes(String((session.user as { role?: string } | undefined)?.role || ''))
 
+  // Same person, same club, another email (Bo, Oct 4 2026: "ask if they want to log
+  // in with the email we have on file but allow them to say no"). lib/loginHint finds
+  // their login on file; it comes back masked (j•••@g•••.com) with a token naming it.
+  // Yes = sign in with it here, and the registration uses that email. No = keep the
+  // typed email and set up a new login with the password box as usual.
+  const [hint, setHint] = useState<null | { masked: string; token: string }>(null)
+  const [hintChoice, setHintChoice] = useState<'' | 'yes' | 'no'>('')
+  const [hintPassword, setHintPassword] = useState('')
+  const [hintBusy, setHintBusy] = useState(false)
+  const [hintErr, setHintErr] = useState('')
+  // The on-file login's credentials, kept only until the registration is in, to
+  // refresh the sign-in if registering raised their role (it lives in the token).
+  const hintCreds = useRef<{ email: string; password: string } | null>(null)
+  const hintKey = askPassword && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim()) && nameKey(clubName).length >= 3 && nameKey(clubContact).length >= 4
+    ? `${nameKey(clubName)}|${nameKey(clubContact)}|${contactEmail.trim().toLowerCase()}` : ''
+  useEffect(() => {
+    setHint(null); setHintChoice(''); setHintErr('')
+    if (!hintKey) return
+    const ctl = new AbortController()
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch('/api/registrations/login-hint', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
+          body: JSON.stringify({ tournamentId, clubName, clubContact, contactEmail }),
+        })
+        const d = await r.json().catch(() => ({}))
+        if (d?.match && d.masked && d.hint) setHint({ masked: String(d.masked), token: String(d.hint) })
+      } catch { /* no prompt: they set up a login as usual */ }
+    }, 700)
+    return () => { clearTimeout(t); ctl.abort() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hintKey])
+
+  // Returning directors first (Bo, Oct 4 2026: "log in for easy registration ...
+  // see teams they've done in the past and maybe check them off"). Signed out: a
+  // sign-in bar at the top of the form, signed in right there so nothing typed is
+  // lost. Signed in: their past teams here, ticked to fill in the form.
+  const [signInOpen, setSignInOpen] = useState(false)
+  const [siEmail, setSiEmail] = useState('')
+  const [siPassword, setSiPassword] = useState('')
+  const [siBusy, setSiBusy] = useState(false)
+  const [siErr, setSiErr] = useState('')
+  const [myClubs, setMyClubs] = useState<MyClub[]>([])
+  const [myClubIdx, setMyClubIdx] = useState(0)
+  const [picked, setPicked] = useState<Record<string, boolean>>({})
+  const [pickerDone, setPickerDone] = useState<'' | 'filled' | 'skipped'>('')
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated' || staffSession) { setMyClubs([]); return }
+    let live = true
+    fetch(`/api/registrations/my-teams?tournamentId=${tournamentId}`)
+      .then(r => r.ok ? r.json() : { clubs: [] })
+      .then(d => { if (live) { setMyClubs(Array.isArray(d?.clubs) ? d.clubs : []); setMyClubIdx(0); setPicked({}) } })
+      .catch(() => { /* no picker: they fill in the form as usual */ })
+    return () => { live = false }
+  }, [sessionStatus, staffSession, tournamentId])
+
+  const signInAtTop = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (siBusy) return
+    setSiBusy(true); setSiErr('')
+    try {
+      const addr = siEmail.trim().toLowerCase()
+      const r = await signIn('credentials', { email: addr, password: siPassword, redirect: false })
+      if (!r?.ok || r?.error) { setSiErr("That email and password don't match. Try again, or reset your password."); return }
+      setSiPassword(''); setSignInOpen(false)
+      if (!contactEmail.trim()) setContactEmail(addr)
+      toast.success('Signed in')
+    } catch {
+      setSiErr('Could not reach the server. Try again.')
+    } finally {
+      setSiBusy(false)
+    }
+  }
+
+  // Tick past teams, fill in the club and those teams. Divisions carry over only
+  // where this event has the same one; otherwise they pick it below.
+  const fillFromPast = () => {
+    const c = myClubs[myClubIdx]
+    if (!c) return
+    const chosen = c.teams.filter(t => picked[`${myClubIdx}|${t.teamName}`])
+    const matchDiv = (d: string) => divisions.find(x => nameKey(x) === nameKey(d)) || ''
+    const rows: TeamRow[] = chosen.map(t => ({
+      clubName: c.clubName, teamName: t.teamName, division: matchDiv(t.division),
+      coachName: t.coachName, coachPhone: t.coachPhone, coachEmail: t.coachEmail, logoUrl: t.logoUrl || c.clubLogoUrl || '',
+    }))
+    const oldClub = clubName
+    setClubName(c.clubName)
+    if (c.contact.name) setClubContact(c.contact.name)
+    if (c.contact.email) setContactEmail(c.contact.email)
+    if (c.contact.phone) setContactPhone(c.contact.phone)
+    if (c.clubBasedIn) setClubBasedIn(c.clubBasedIn)
+    if (c.clubWebsite) setClubWebsite(c.clubWebsite)
+    if (c.clubLogoUrl) setClubLogoUrl(c.clubLogoUrl)
+    setTeams(prev => {
+      // Rows they already started stay; the empty starter row goes.
+      const kept = prev.filter(t => t.teamName.trim() || t.coachName.trim() || t.division)
+        .map(t => (!t.clubName || t.clubName === oldClub) ? { ...t, clubName: c.clubName } : t)
+      for (const r of rows) if (!kept.some(k => nameKey(k.teamName) === nameKey(r.teamName))) kept.push(r)
+      return kept.length ? kept : [{ ...emptyTeam(), clubName: c.clubName, logoUrl: c.clubLogoUrl || '' }]
+    })
+    setPickerDone('filled')
+    toast.success(`Filled in ${c.clubName}${rows.length ? ` and ${rows.length} team${rows.length === 1 ? '' : 's'}` : ''}. Pick each team's division below.`)
+    setTimeout(() => document.getElementById('team-info')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
+  const myClub = myClubs[myClubIdx] || null
+  const pickedCount = myClub ? myClub.teams.filter(t => picked[`${myClubIdx}|${t.teamName}`]).length : 0
+  const firstName = String(session?.user?.name || '').trim().split(' ')[0]
+
+  const signInOnFile = async () => {
+    if (!hint || !hintPassword || hintBusy) return
+    setHintBusy(true); setHintErr('')
+    try {
+      const r = await fetch('/api/registrations/login-hint/verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hint: hint.token, password: hintPassword }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d?.email) {
+        setHintErr(r.status === 429 ? 'Too many tries. Wait a few minutes, or reset the password.' : `That isn't the password for ${hint.masked}.`)
+        return
+      }
+      const res = await signIn('credentials', { email: d.email, password: hintPassword, redirect: false })
+      if (!res?.ok || res?.error) { setHintErr('Could not sign you in. Try again.'); return }
+      hintCreds.current = { email: d.email, password: hintPassword }
+      setContactEmail(d.email)
+      setHint(null); setHintChoice(''); setHintPassword('')
+      toast.success('Signed in. This registration goes into your club portal.')
+    } catch {
+      setHintErr('Could not reach the server. Try again.')
+    } finally {
+      setHintBusy(false)
+    }
+  }
+
   useEffect(() => {
     fetch(`/api/tournaments/${tournamentId}`)
       .then(r => r.json())
@@ -194,6 +337,13 @@ export default function RegisterPage() {
     e.preventDefault()
     if (!paymentMethod) { toast.error('Please select a payment option'); return }
     if (!needsHotel) { toast.error('Please select hotel preference'); return }
+    if (askPassword && hint && hintChoice !== 'no') {
+      toast.error(hintChoice === 'yes'
+        ? 'Sign in with your login on file first, or choose to set up a new login.'
+        : 'You have a login on file. Choose whether to sign in with it or set up a new one.')
+      document.getElementById('login-on-file')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
     if (askPassword && portalPassword.length < 8) { toast.error('Choose a club portal password of at least 8 characters'); return }
     setLoading(true)
     try {
@@ -230,6 +380,15 @@ export default function RegisterPage() {
           setPortalSignedIn(!!r?.ok && !r?.error)
         } catch { /* the portal button falls back to the sign-in page */ }
       }
+      // Signed in with their login on file just now and registering raised its role:
+      // sign in once more so the portal sees the new role (it lives in the token).
+      if (!askPassword && P?.rolePromoted && hintCreds.current) {
+        try {
+          const r = await signIn('credentials', { ...hintCreds.current, redirect: false })
+          setPortalSignedIn(!!r?.ok && !r?.error)
+        } catch { /* the Sign in to open my portal button covers it */ }
+      }
+      hintCreds.current = null
       setPortalPassword('')
 
       if (paymentMethod === 'credit_card' || paymentMethod === 'ach' || (paymentMethod === 'paypal' && paypalLive)) {
@@ -416,6 +575,100 @@ export default function RegisterPage() {
       <div className="py-8 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-2xl shadow p-8">
+          {/* Returning directors first: sign in here (its own small form, so Enter
+              signs in rather than submitting the registration). */}
+          {askPassword && (
+            <div className="mb-6 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">Registered a team with us before?</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Sign in to fill in your club and pick the teams you&apos;re bringing.</p>
+                </div>
+                {!signInOpen && (
+                  <button type="button" onClick={() => setSignInOpen(true)}
+                    className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2">
+                    Sign in
+                  </button>
+                )}
+              </div>
+              {signInOpen && (
+                <form onSubmit={signInAtTop} className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-start">
+                  <input type="email" required autoComplete="username" placeholder="Email" value={siEmail} onChange={e => setSiEmail(e.target.value)}
+                    aria-label="Email" className={`${inputCls} bg-white`} />
+                  <PasswordInput value={siPassword} onChange={setSiPassword} required autoComplete="current-password" placeholder="Password"
+                    className={`${inputCls} bg-white`} />
+                  <button type="submit" disabled={siBusy}
+                    className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg px-4 py-2">
+                    {siBusy ? 'Signing in…' : 'Sign in'}
+                  </button>
+                  {siErr && <p role="alert" className="sm:col-span-3 text-xs text-red-600">{siErr}</p>}
+                  <p className="sm:col-span-3 text-xs text-slate-500">
+                    <a href="/forgot" target="_blank" rel="noreferrer" className="underline hover:text-slate-700">Forgot your password?</a>
+                    {' · '}New here? Just fill in the form below.
+                  </p>
+                </form>
+              )}
+            </div>
+          )}
+          {/* Signed in with past teams: tick the ones coming (api/registrations/my-teams). */}
+          {!askPassword && !staffSession && myClub && !pickerDone && (
+            <div className="mb-6 rounded-xl border border-teal-200 bg-white px-4 py-4">
+              <p className="text-sm font-semibold text-slate-800">Welcome back{firstName ? `, ${firstName}` : ''}.</p>
+              <p className="text-xs text-slate-600 mt-0.5">Pick the teams you&apos;re bringing to {tournamentName || 'this event'}. We&apos;ll fill in your club, and you choose each team&apos;s division below.</p>
+              {myClubs.length > 1 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {myClubs.map((c, i) => (
+                    <button key={c.clubName} type="button" onClick={() => { setMyClubIdx(i); setPicked({}) }}
+                      className={`text-xs font-semibold rounded-full px-3 py-1 border ${i === myClubIdx ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                      {c.clubName}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {myClub.registeredHere && (
+                <p className="mt-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                  You&apos;ve already registered {myClub.clubName} for {tournamentName || 'this event'}. To add teams to it, use{' '}
+                  <a href="/dashboard/club-director" className="underline font-semibold">your club portal</a>. Registering again here starts a second registration with its own invoice.
+                </p>
+              )}
+              {myClub.teams.length > 0 ? (
+                <ul className="mt-3 divide-y divide-slate-100 border border-slate-200 rounded-lg">
+                  {myClub.teams.map(t => {
+                    const k = `${myClubIdx}|${t.teamName}`
+                    return (
+                      <li key={k}>
+                        <label className="flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                          <input type="checkbox" checked={!!picked[k]} onChange={e => setPicked(p => ({ ...p, [k]: e.target.checked }))}
+                            className="mt-0.5 h-4 w-4 accent-teal-600 shrink-0" />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-slate-800">{t.teamName}</span>
+                            <span className="block text-xs text-slate-500">{[t.division, t.coachName ? `Coach ${t.coachName}` : '', t.lastEvent ? `last at ${t.lastEvent}` : ''].filter(Boolean).join(' · ')}</span>
+                          </span>
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-slate-500">No past teams on file for {myClub.clubName}.</p>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <button type="button" onClick={fillFromPast}
+                  className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2">
+                  {pickedCount ? `Fill in ${myClub.clubName} and ${pickedCount} team${pickedCount === 1 ? '' : 's'}` : `Fill in ${myClub.clubName}`}
+                </button>
+                <button type="button" onClick={() => setPickerDone('skipped')} className="text-xs font-semibold text-slate-500 hover:text-slate-700">
+                  Start from a blank form
+                </button>
+              </div>
+            </div>
+          )}
+          {!askPassword && !staffSession && myClub && pickerDone && (
+            <p className="mb-6 text-xs text-slate-500">
+              {pickerDone === 'filled' ? 'Filled in from your past registrations. ' : ''}
+              <button type="button" onClick={() => setPickerDone('')} className="underline hover:text-slate-700">Pick from your past teams</button>
+            </p>
+          )}
           <form onSubmit={handleSubmit} className="space-y-8" autoComplete="on">
               {/* Honeypot (spam bots): offscreen, name/autocomplete chosen so real
                   browser autofill ignores it -- same pattern as the signup form. */}
@@ -441,8 +694,51 @@ export default function RegisterPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club Contact Mobile Phone <span className="text-red-500">*</span></label>
                   <input required type="tel" name="tel" autoComplete="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} className={inputCls} />
                 </div>
+                {/* Their login on file under another email (lib/loginHint). */}
+                {askPassword && hint && hintChoice !== 'no' && (
+                  <div id="login-on-file" className="sm:col-span-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-800">Have you registered before?</p>
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                      {clubContact.trim()} at {clubName.trim()} already has a Whistle Ready login with <strong className="text-slate-800">{hint.masked}</strong>.
+                      Sign in with it to keep your clubs in one portal, or keep <strong className="text-slate-800">{contactEmail.trim()}</strong> and set up a new login.
+                    </p>
+                    {hintChoice === '' ? (
+                      <div className="mt-2.5 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => { setHintChoice('yes'); setHintErr('') }}
+                          className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">
+                          Yes, sign in with {hint.masked}
+                        </button>
+                        <button type="button" onClick={() => setHintChoice('no')}
+                          className="text-sm font-semibold border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 rounded-lg px-3.5 py-2">
+                          No, set up a new login
+                        </button>
+                      </div>
+                    ) : (
+                      // Enter here signs in; it must not submit the whole registration.
+                      <div className="mt-2.5" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); signInOnFile() } }}>
+                        <label htmlFor="hint-password" className="block text-xs font-medium text-slate-700 mb-1">Password for {hint.masked}</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <div className="flex-1">
+                            <PasswordInput id="hint-password" value={hintPassword} onChange={setHintPassword} autoComplete="current-password" autoFocus
+                              className={`${inputCls} bg-white`} />
+                          </div>
+                          <button type="button" onClick={signInOnFile} disabled={hintBusy || !hintPassword}
+                            className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg px-4 py-2">
+                            {hintBusy ? 'Signing in…' : 'Sign in'}
+                          </button>
+                        </div>
+                        {hintErr && <p role="alert" className="text-xs text-red-600 mt-1">{hintErr}</p>}
+                        <p className="text-xs text-slate-500 mt-1.5">
+                          <a href="/forgot" target="_blank" rel="noreferrer" className="underline hover:text-slate-700">Forgot it?</a>
+                          {' · '}
+                          <button type="button" onClick={() => setHintChoice('no')} className="underline hover:text-slate-700">Use {contactEmail.trim()} instead</button>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* The club portal login, right under the email it belongs to. */}
-                {askPassword ? (
+                {askPassword ? ((!hint || hintChoice === 'no') && (
                   <div className="sm:col-span-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
                     <label htmlFor="portal-password" className="block text-sm font-semibold text-slate-800">Create a password for your club <span className="whitespace-nowrap">portal <span className="text-red-500">*</span></span></label>
                     <p className="text-xs text-slate-600 mt-0.5 mb-2 leading-relaxed">Your contact email is your login. With a password, your portal is ready the moment you register: teams, player waivers, your balance, and the schedule once it&apos;s posted.</p>
@@ -453,7 +749,7 @@ export default function RegisterPage() {
                       required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" className={`${inputCls} bg-white`} />
                     <p className="text-xs text-slate-500 mt-1.5">Already have a Whistle Ready login with this email? Use that password. <a href="/forgot" target="_blank" rel="noreferrer" className="underline hover:text-slate-700">Forgot it?</a></p>
                   </div>
-                ) : session ? (
+                )) : session ? (
                   <p className="sm:col-span-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
                     {signedInAsContact
                       ? <>Signed in as <strong className="text-slate-800">{sessionEmail}</strong>: this registration goes straight into your club portal.</>
@@ -520,7 +816,7 @@ export default function RegisterPage() {
               </div>
             </section>
 
-            <section>
+            <section id="team-info" className="scroll-mt-4">
               <h2 className="text-lg font-semibold text-gray-800 mb-3">Team Information</h2>
               <div className="space-y-3">
                 {teams.map((team, i) => (
