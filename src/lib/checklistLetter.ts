@@ -12,6 +12,7 @@
 // expected-player-count field on the registration form.
 
 export type ChecklistFacts = {
+  eventName: string
   teamCount: number
   teamsConfirmed: boolean
   confirmedOn: string          // "September 28", or '' when unknown
@@ -28,6 +29,9 @@ export type ChecklistFacts = {
   balance: number              // remaining, already rounded, never below 0
   /** lib/housing deriveStatus — the same call the housing board makes. */
   housingStatus: 'needs' | 'progress' | 'booked' | 'local'
+  /** Staff ticked this club local on the housing board. NOT the same as the
+   *  club answering "No" on the registration form — see the hotel row. */
+  staffMarkedLocal: boolean
   hotelName: string
   hotelRooms: number
 }
@@ -49,6 +53,8 @@ export type ChecklistItem = {
   detail: string
   ctaLabel?: string
   ctaUrl?: string
+  /** Ready-to-forward wording the director can paste to their families. */
+  forwardText?: string
 }
 
 /** Placeholder the {checklist} token merges to, swapped for the real block once
@@ -140,22 +146,30 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
           ctaLabel: 'Pay the balance', ctaUrl: links.payLink })
   }
 
-  // Local clubs are not asked about hotels at all. Everyone else gets the line,
-  // because the job is forwarding the booking link to families -- families book
-  // their own rooms, the club does not book a block (Bo, Oct 4 2026). The only
-  // evidence we have that it happened is rooms logged on the housing board, so
-  // that is what ticks it.
-  if (f.housingStatus !== 'local') {
+  // WHO GETS THE HOTEL ROW. Only an explicit staff "local" tick on the housing
+  // board hides it — deliberately NOT the club's own form answer. Bo, Oct 4
+  // 2026: "some people still type no when they're registering just because they
+  // don't want to be bothered with dealing with it." Those clubs still have
+  // families who need rooms, and room nights are what pay for the event, so a
+  // shrugged No must not silence the ask: Yes, Maybe, blank and No all get the
+  // line, and staff override it per club with one tick on the board.
+  //
+  // The club's only job is forwarding the link — families book their own rooms
+  // (Bo, Oct 4 2026) — so the row carries a ready-to-paste note for them, and
+  // the only evidence we get that it worked is rooms logged against the club.
+  if (!f.staffMarkedLocal) {
     const booked = f.housingStatus === 'booked'
+    const forward = 'Hotel rooms for ' + f.eventName + ': ' + links.hotelLink
+      + '\nPlease book through this link so our rooms are counted with the team.'
     items.push(booked
-      ? { key: 'hotel', title: 'Hotel rooms for your families', done: true,
-          detail: `${f.hotelRooms} room${f.hotelRooms === 1 ? '' : 's'} logged${f.hotelName ? ` at ${f.hotelName}` : ''}. Thank you \u2014 send the link on to anyone still booking.`,
-          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink }
-      : { key: 'hotel', title: 'Hotel rooms for your families', done: false,
+      ? { key: 'hotel', title: 'Send your families the hotel link', done: true,
+          detail: `${f.hotelRooms} room${f.hotelRooms === 1 ? '' : 's'} logged${f.hotelName ? ` at ${f.hotelName}` : ''}. Thank you — pass it on to anyone still booking.`,
+          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward }
+      : { key: 'hotel', title: 'Send your families the hotel link', done: false,
           detail: f.hotelName
-            ? `We have ${f.hotelName} down for you but no rooms logged yet. Please pass the booking link below to your families so their rooms land in our block.`
-            : 'Please pass the booking link below to your families. Rooms booked in our block are what let us keep coming back to this venue, so it helps even when families book on their own.',
-          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink })
+            ? `We have ${f.hotelName} down for you but no rooms logged yet. Forward the note below to your families — they book their own rooms, you just pass the link along.`
+            : 'Your families book their own rooms, so all you have to do is pass the link along. Copy the note below straight into your team email or group chat.',
+          ctaLabel: 'Hotel booking link', ctaUrl: links.hotelLink, forwardText: forward })
   }
 
   return items
@@ -175,7 +189,10 @@ export function whatsLeftPhrase(items: ChecklistItem[]): string {
 export function checklistText(items: ChecklistItem[]): string {
   return items.map(it => {
     const head = `${it.done ? '[x]' : '[ ]'} ${it.title} — ${it.detail}`
-    return it.ctaUrl ? `${head}\n    ${it.ctaLabel}: ${it.ctaUrl}` : head
+    const line = it.ctaUrl ? head + '\n    ' + it.ctaLabel + ': ' + it.ctaUrl : head
+    if (!it.forwardText) return line
+    const quoted = it.forwardText.split('\n').map(l => '    ' + l).join('\n')
+    return line + '\n    ---- copy and send to your families ----\n' + quoted
   }).join('\n\n')
 }
 
@@ -189,6 +206,14 @@ export function checklistHtml(items: ChecklistItem[]): string {
     const mark = it.done
       ? `<div style="width:22px;height:22px;line-height:22px;border-radius:11px;background:#0d9488;color:#ffffff;text-align:center;font-size:13px;font-weight:bold">&#10003;</div>`
       : `<div style="width:18px;height:18px;border-radius:11px;border:2px solid #cbd5e1">&nbsp;</div>`
+    // A box the director can select and paste into a team email. The URL is
+    // spelled out rather than hidden behind a button, because a forwarded
+    // button is a link nobody can see.
+    const fwd = it.forwardText
+      ? '<div style="margin:10px 0 2px;border:1px dashed #cbd5e1;border-radius:8px;padding:10px 12px;background:#f8fafc">'
+        + '<div style="font-size:11px;font-weight:bold;letter-spacing:0.6px;color:#94a3b8;margin:0 0 5px">COPY AND SEND TO YOUR FAMILIES</div>'
+        + '<div style="font-size:14px;line-height:1.6;color:#334155">' + esc(it.forwardText).split('\n').join('<br>') + '</div></div>'
+      : ''
     const cta = it.ctaUrl
       ? `<div style="margin:9px 0 2px"><a href="${it.ctaUrl}" style="background:#0b1f3a;color:#ffffff;text-decoration:none;padding:9px 18px;border-radius:6px;font-size:14px;font-weight:bold;display:inline-block">${esc(it.ctaLabel || 'Open')}</a></div>`
       : ''
@@ -198,6 +223,7 @@ export function checklistHtml(items: ChecklistItem[]): string {
 <td valign="top">
 <div style="font-size:15px;font-weight:bold;color:${it.done ? '#64748b' : '#0f172a'}">${esc(it.title)}</div>
 <div style="font-size:14px;line-height:1.55;color:#475569;margin:3px 0 0">${esc(it.detail)}</div>
+${fwd}
 ${cta}
 </td></tr></table></td></tr>`
   }).join('')

@@ -247,6 +247,7 @@ export async function runCommSend(args: {
         if (tk) claimLink = claimUrl(tournamentAbs(org?.slug, ''), tk)
       }
       checkItems = buildChecklist({
+        eventName: t.name || 'the tournament',
         teamCount: reg.teams.length,
         teamsConfirmed: (confirmStates?.get(reg.id)?.status || '') === 'confirmed',
         confirmedOn: confirmedAt ? new Date(confirmedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '',
@@ -264,6 +265,10 @@ export async function runCommSend(args: {
         balance: Math.round(Math.max(0, invoiced - paidSoFar) * 100) / 100,
         // The housing board's own call, so the email and the board agree.
         housingStatus: deriveStatus({ ...hotel, needsHotel: reg.needsHotel }),
+        // Only a staff tick on the board counts as local. deriveStatus also
+        // returns 'local' for a club that answered "No" on the form, and Bo
+        // does not want a shrugged No to kill the hotel ask (checklistLetter).
+        staffMarkedLocal: String(hotel.housingStatus || '') === 'local',
         hotelName: String(hotel.hotelName || ''),
         hotelRooms: Number(hotel.hotelRooms || 0),
       }, {
