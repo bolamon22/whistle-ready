@@ -768,6 +768,7 @@ export default function RegistrationsPage() {
   const [commLetters, setCommLetters] = useState<Record<CommKind, { subject: string; body: string }> | null>(null)
   const [commSel, setCommSel] = useState<Set<string>>(new Set())
   const [commSending, setCommSending] = useState(false)
+  const [commTesting, setCommTesting] = useState(false)
   const [commSaving, setCommSaving] = useState(false)
   // Send now, or queue it — the cron runs the identical send later (Bo)
   const [commWhen, setCommWhen] = useState<'now' | 'later'>('now')
@@ -852,6 +853,38 @@ export default function RegistrationsPage() {
   const commVisible = commKind !== 'payment' || commPayFilter === 'all'
     ? registrations
     : registrations.filter(r => commPayFilter === 'owes' ? regBalance(r) > 0 : regBalance(r) <= 0)
+  // Send myself one copy, merged from a real club, before letting it loose on
+  // the field. SendGrid fails silently, so a letter nobody has ever seen land
+  // is a letter nobody has tested.
+  const sendCommTest = async () => {
+    if (!commCur) return
+    const sampleId = [...commSel][0] || registrations[0]?.id
+    if (!sampleId) { toast.error('No clubs here to build a test from'); return }
+    setCommTesting(true)
+    try {
+      const res = await fetch('/api/registrations/comm-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [sampleId], ...commCur, test: true }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.ok) throw new Error(d.error || 'Test send failed')
+      const r = (d.results || [])[0]
+      if (r && r.status !== 'sent') {
+        const why = r.status === 'no_balance' ? 'that club owes nothing, so this letter skips them'
+          : r.status === 'has_account' ? 'that club already has a login, so this letter skips them'
+          : r.status === 'no_email' ? 'that club has no email on file'
+          : 'the send failed — check the SendGrid Activity feed'
+        toast.error(`Nothing sent: ${why}. Tick a different club and try again.`, { duration: 7000 })
+        return
+      }
+      toast.success(`Test copy sent to ${d.to}. If it does not arrive, check the SendGrid Activity feed — sends fail silently.`, { duration: 7000 })
+    } catch (e: any) {
+      toast.error(e?.message || 'Test send failed')
+    } finally {
+      setCommTesting(false)
+    }
+  }
+
   const sendComm = async () => {
     if (!commCur || commSel.size === 0) return
     if (commWhen === 'later' && !commAt) { toast.error('Pick a date and time'); return }
@@ -1537,6 +1570,8 @@ export default function RegistrationsPage() {
                       className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{commSending ? (commWhen === 'later' ? 'Scheduling…' : 'Sending…') : commWhen === 'later' ? `Schedule for ${commSel.size} club${commSel.size !== 1 ? 's' : ''}` : `Send to ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`}</button>
                     <button onClick={saveCommLetter} disabled={commSaving}
                       className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{commSaving ? 'Saving…' : 'Save as default'}</button>
+                    <button onClick={sendCommTest} disabled={commTesting || commSending} title="One copy to your own inbox, merged from a real club. Nothing is recorded against them."
+                      className="text-sm text-slate-600 border border-slate-300 hover:border-slate-400 px-3 py-2 rounded-lg disabled:opacity-50">{commTesting ? 'Sending test…' : 'Send a test to me'}</button>
                     <button onClick={() => setCommOpen(false)} className="text-sm text-slate-500 px-3 py-2">Cancel</button>
                   </div>
                   {scheduled.length > 0 && (

@@ -12,7 +12,7 @@ import { createScheduled } from '@/lib/commSchedule'
 export async function POST(req: NextRequest) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
-  let body: { tournamentId?: unknown; kind?: unknown; regIds?: unknown; subject?: unknown; body?: unknown; sendAt?: unknown } = {}
+  let body: { tournamentId?: unknown; kind?: unknown; regIds?: unknown; subject?: unknown; body?: unknown; sendAt?: unknown; test?: unknown } = {}
   try { body = await req.json() } catch { /* validated below */ }
 
   const tournamentId = String(body.tournamentId ?? '')
@@ -20,6 +20,25 @@ export async function POST(req: NextRequest) {
   const regIds = (Array.isArray(body.regIds) ? body.regIds : []).map(x => String(x)).filter(Boolean)
   const subject = String(body.subject ?? '')
   const letterBody = String(body.body ?? '')
+
+  // A test copy to the signed-in staffer. Same runCommSend the real send and the
+  // cron use -- a test down a second code path proves nothing -- but it writes
+  // no tracking, mints no claim token and sends no receipt. The address comes
+  // from the session, never the request body: a typo here would mean a club
+  // letter landing on a stranger.
+  if (body.test === true) {
+    const me = String((gate.session?.user as { email?: string } | undefined)?.email || '').trim().toLowerCase()
+    if (!me) return NextResponse.json({ error: 'Your account has no email address to send to' }, { status: 400 })
+    if (!tournamentId) return NextResponse.json({ error: 'tournamentId required' }, { status: 400 })
+    if (!isSendKind(kind)) return NextResponse.json({ error: 'Unknown letter kind' }, { status: 400 })
+    if (!regIds.length) return NextResponse.json({ error: 'Pick a club for the test to be built from' }, { status: 400 })
+    const t = await runCommSend({
+      tournamentId, kind: kind as SendKind, regIds: regIds.slice(0, 1),
+      subject, body: letterBody, testTo: me,
+    })
+    if (!t.ok) return NextResponse.json({ error: t.error }, { status: t.status })
+    return NextResponse.json({ ok: true, test: true, to: me, results: t.results })
+  }
 
   // Queued for later: store what was on screen, exactly as a Send-now would use it.
   const sendAt = String(body.sendAt ?? '').trim()

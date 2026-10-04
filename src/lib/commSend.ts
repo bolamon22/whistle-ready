@@ -32,6 +32,17 @@ const fmtDates = (a?: string | null, b?: string | null) => {
   return s && e && s !== e ? `${s}–${e}` : s || e || 'soon'
 }
 
+/** Stands in for a real claim token in a test, so nothing live is overwritten.
+ *  It will not open the claim page — that is the point, and the banner says so. */
+const TEST_CLAIM_TOKEN = 'test-copy-not-a-real-link'
+
+/** Header on a test copy, so it can never be mistaken for the real thing. */
+function testBanner(clubName: string): string {
+  return `<div style="background:#0b1f3a;color:#ffffff;border-radius:8px;padding:11px 14px;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55">`
+    + `<strong>TEST COPY</strong> — sent to you, not to ${esc(clubName)}. Everything below is ${esc(clubName)}'s real, current data, and nothing was recorded against them. `
+    + `The login/claim button is a dead placeholder in a test; every other link is live.</div>`
+}
+
 export function isSendKind(k: string): k is SendKind {
   return k === 'payment' || !!COMM_KINDS[k as CommKind]
 }
@@ -69,9 +80,17 @@ export async function runCommSend(args: {
   notifyTo?: string
   /** True only for a run the scheduler fired, so the receipt can say which it was. */
   scheduled?: boolean
+  /** Send ONE club's merged letter to this staff address instead of to the
+   *  clubs, and write NOTHING on the way through: no tracking stamp, and above
+   *  all no claim token — minting one overwrites the registration's stored
+   *  token and would dead-link whatever is already sitting in that director's
+   *  inbox. A test must not be able to damage a real send. */
+  testTo?: string
 }): Promise<{ ok: true; sentAt: string; results: SendResult[] } | { ok: false; error: string; status: number }> {
   const { tournamentId, kind } = args
-  const regIds = args.regIds.map(x => String(x)).filter(Boolean)
+  const testMode = !!String(args.testTo || '').trim()
+  // One club is all a test needs, and it caps the blast radius of a bad call.
+  const regIds = args.regIds.map(x => String(x)).filter(Boolean).slice(0, testMode ? 1 : undefined)
   if (!tournamentId) return { ok: false, error: 'tournamentId required', status: 400 }
   if (!isSendKind(kind)) return { ok: false, error: 'Unknown letter kind', status: 400 }
   if (!regIds.length) return { ok: false, error: 'Pick at least one club', status: 400 }
@@ -212,9 +231,11 @@ export async function runCommSend(args: {
     // registration, so whoever clicks first consumes it and the second person lands on
     // an already-claimed page. That one stays pointed at the registration contact --
     // and anyone already holding a ClubDirectorLink has an account by definition.
-    const recipients = kind === 'account'
-      ? (reg.contactEmail ? [String(reg.contactEmail).trim().toLowerCase()] : [])
-      : registrationRecipients(reg.id, reg.contactEmail, directors)
+    const recipients = testMode
+      ? [String(args.testTo).trim().toLowerCase()]
+      : kind === 'account'
+        ? (reg.contactEmail ? [String(reg.contactEmail).trim().toLowerCase()] : [])
+        : registrationRecipients(reg.id, reg.contactEmail, directors)
     if (!recipients.length) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_email' }); continue }
 
     // Payment reminders ride the same dialog but keep their own machinery:
@@ -232,9 +253,13 @@ export async function runCommSend(args: {
         eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome, logoBox, footerLogoBox,
         subjectTpl, bodyTpl,
       })
-      const rr = await sendEmail({ to: recipients, subject, html, text, ...orgSender(org) })
+      const rr = await sendEmail({
+        to: recipients, text, ...orgSender(org),
+        subject: testMode ? `[TEST] ${subject}` : subject,
+        html: testMode ? testBanner(reg.clubName) + html : html,
+      })
       if (rr.ok) {
-        try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "lastPayReminderAt" = ? WHERE id = ?`, now, reg.id) } catch { /* best effort */ }
+        if (!testMode) try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "lastPayReminderAt" = ? WHERE id = ?`, now, reg.id) } catch { /* best effort */ }
         if (!sample) sample = { subject, html, to: recipients.join(', ') }
         results.push({ regId: reg.id, club: reg.clubName, status: 'sent' })
       } else results.push({ regId: reg.id, club: reg.clubName, status: 'failed' })
@@ -262,8 +287,11 @@ export async function runCommSend(args: {
       const confirmedAt = confirmStates?.get(reg.id)?.at || ''
       let claimLink = ''
       if (!alreadyOpen.has(reg.id)) {
-        const tk = await issueClaimToken(reg.id)
-        if (tk) claimLink = claimUrl(tournamentAbs(org?.slug, ''), tk)
+        if (testMode) claimLink = claimUrl(tournamentAbs(org?.slug, ''), TEST_CLAIM_TOKEN)
+        else {
+          const tk = await issueClaimToken(reg.id)
+          if (tk) claimLink = claimUrl(tournamentAbs(org?.slug, ''), tk)
+        }
       }
       checkItems = buildChecklist({
         eventName: t.name || 'the tournament',
@@ -308,9 +336,12 @@ export async function runCommSend(args: {
     let ctaUrl = sharedCtaUrl
     if (cta === 'confirm') ctaUrl = tournamentAbs(org?.slug, `/confirm/${reg.id}`)
     else if (cta === 'account') {
-      const token = await issueClaimToken(reg.id)
-      if (!token) { results.push({ regId: reg.id, club: reg.clubName, status: 'failed' }); continue }
-      ctaUrl = claimUrl(tournamentAbs(org?.slug, ''), token)
+      if (testMode) ctaUrl = claimUrl(tournamentAbs(org?.slug, ''), TEST_CLAIM_TOKEN)
+      else {
+        const token = await issueClaimToken(reg.id)
+        if (!token) { results.push({ regId: reg.id, club: reg.clubName, status: 'failed' }); continue }
+        ctaUrl = claimUrl(tournamentAbs(org?.slug, ''), token)
+      }
     }
     const vals = {
       contact: reg.clubContact || reg.clubName,
@@ -345,12 +376,18 @@ export async function runCommSend(args: {
       footerNote: 'Questions? Just reply to this email.',
     })
     const text = `${checkItems ? splitOnSentinel(bodyText, checklistText(checkItems)) : bodyText}${ctaUrl ? `\n\n${kindMeta?.ctaLabel ?? ''}: ${ctaUrl}` : ''}`
-    const r = await sendEmail({ to: recipients, subject, html, text, ...orgSender(org) })
+    const r = await sendEmail({
+      to: recipients, text, ...orgSender(org),
+      subject: testMode ? `[TEST] ${subject}` : subject,
+      html: testMode ? testBanner(reg.clubName) + html : html,
+    })
     if (r.ok) {
-      let log: Record<string, string> = {}
-      try { const raw = logById.get(reg.id); if (raw) log = JSON.parse(raw) } catch { /* fresh log */ }
-      log[kind] = now
-      try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "commEmailLog" = ? WHERE id = ?`, JSON.stringify(log), reg.id) } catch { /* best effort */ }
+      if (!testMode) {
+        let log: Record<string, string> = {}
+        try { const raw = logById.get(reg.id); if (raw) log = JSON.parse(raw) } catch { /* fresh log */ }
+        log[kind] = now
+        try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "commEmailLog" = ? WHERE id = ?`, JSON.stringify(log), reg.id) } catch { /* best effort */ }
+      }
       if (!sample) sample = { subject, html, to: recipients.join(', ') }
       results.push({ regId: reg.id, club: reg.clubName, status: 'sent' })
     } else {
