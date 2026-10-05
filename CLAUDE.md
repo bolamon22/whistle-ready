@@ -173,6 +173,20 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   NAMES (matched to the org's next tournament with that name), skips duplicates, and turns its
   open items into linked Tasks. Contact details never go in the repo (it is public): the Gmail-scan
   seed lives outside it. Nothing here emails a contact; the pages only open Bo's mail app.
+- **Event costs + vendor emails (Oct 5).** Each vendor's quote, item by item, per event, so a budget
+  starts from last year's real prices and a rise shows on the line that rose (Bo thought Sunrise's
+  tent prices climbed every year; item by item 2023→2026 only chairs did, $1.99→$3). Raw-SQL
+  `EventCost` (lazy, soft delete) in `lib/eventCosts.ts`; `lib/costTypes.ts` is the client-safe half
+  (`priceHistory`, `itemKey`, `lastOrder`, `costTotal`). Same switch/scope as Tasks (`tasksGate`).
+  A line for a past event not in Whistle Ready has `tournamentId ''` + `eventLabel`/`eventDate`
+  (history only). **A Paid line on a tournament IS one `TournamentTransaction` expense**
+  (`syncExpense` creates/updates it, any other status or a delete removes it): never also add
+  it by hand on Financials > Other. UI: Financials **Budget** tab (`components/costs/EventBudget`:
+  this event's lines vs the same vendor last time, "Budget from last time"), and a **Costs**
+  section on every contact card (`VendorCosts`, price history table). **Write an email** on a
+  contact (`VendorEmailDialog`, `lib/vendorEmails.ts`): ask for a quote (lists the last order's
+  non-fee items), approve, confirm delivery, ask for the invoice; opens a Gmail compose window or
+  copies — it never sends.
 
 - **Club portal access is per registration, by email (Oct 4).** `src/lib/clubAccess.ts`: raw-SQL
   table `ClubRegAccess (userId, registrationId)`, created lazily; the first call carried every old
