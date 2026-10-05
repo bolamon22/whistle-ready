@@ -27,6 +27,22 @@ interface RegistrationPayment {
   id: string; amount: number; method: string; checkNumber: string
   receivedAt: string; notes: string
 }
+// QuickBooks sync (api/qbo, lib/qboSync).
+type QboRegState = {
+  id: string; club: string; deleted: boolean; state: 'in' | 'changed' | 'payments' | 'queued' | 'out' | 'none' | 'error'
+  docNumber: string; syncedAt: string; error: string; paymentsWaiting: number
+  refunds: { id: string; amount: number; date: string }[]
+}
+type QboStatus = {
+  connection: { ok: boolean; company?: string; reason?: string; message?: string }
+  settings: { enabled: boolean; startedAt: string; lastRunAt: string; lastProblem: string }
+  regs: QboRegState[]
+}
+type QboPreviewRow = {
+  id: string; club: string; contact: string; teams: number; total: number; paid: number; payments: number; refunds: number; registered: string
+  customer: { id: string; name: string; how: 'saved' | 'name' | 'email' | 'new' } | null
+}
+type QboResult = { regId: string; club: string; status: 'created' | 'updated' | 'paid' | 'unchanged' | 'skipped' | 'error'; docNumber?: string; payments?: number; message?: string }
 interface Registration {
   id: string; clubName: string; clubContact: string; contactEmail: string; contactPhone: string
   clubBasedIn: string; clubWebsite: string; numTeams: number
@@ -1014,23 +1030,110 @@ export default function RegistrationsPage() {
     finally { setRefunding(false) }
   }
 
-  const handleQboSync = async (registrationId: string) => {
-    toast.loading('Syncing to QuickBooks…', { id: 'qbo-sync' })
+  // QUICKBOOKS (lib/qboSync). Bo, Oct 5 2026: "I don't want to be working in both
+  // systems." Each registration's place in QuickBooks, the panel to turn the sync
+  // on, send the registrations from before it (after reviewing them), and fix
+  // what didn't go. Staff who can't see money get a 403 and none of it shows.
+  const [qbo, setQbo] = useState<QboStatus | null>(null)
+  const [qboOpen, setQboOpen] = useState(false)
+  const [qboPreview, setQboPreview] = useState<QboPreviewRow[] | null>(null)
+  const [qboPick, setQboPick] = useState<Set<string>>(new Set())
+  const [qboBusy, setQboBusy] = useState('')
+  const [qboProgress, setQboProgress] = useState('')
+  const [qboLink, setQboLink] = useState({ regId: '', docNumber: '' })
+  const loadQbo = async () => {
     try {
-      const res = await fetch('/api/qbo/sync-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registrationId }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Sync failed')
-      if (data.alreadySynced) {
-        toast.success(`Already synced — Invoice #${data.invoiceId}`, { id: 'qbo-sync', duration: 5000 })
-      } else {
-        toast.success(`Synced! Invoice #${data.docNumber}`, { id: 'qbo-sync', duration: 5000 })
+      const r = await fetch(`/api/qbo?tournamentId=${tournamentId}`)
+      setQbo(r.ok ? await r.json() : null)
+    } catch { setQbo(null) }
+  }
+  useEffect(() => { if (tournamentId) loadQbo() }, [tournamentId])
+  const qboById = new Map((qbo?.regs || []).map(q => [q.id, q]))
+  const qboPost = async (body: Record<string, unknown>) => {
+    const r = await fetch('/api/qbo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tournamentId, ...body }) })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(d.error || 'QuickBooks did not answer')
+    return d
+  }
+  const qboResultText = (q: QboResult) =>
+    q.status === 'created' ? `In QuickBooks as invoice ${q.docNumber}${q.payments ? `, with ${q.payments} payment${q.payments === 1 ? '' : 's'}` : ''}`
+      : q.status === 'updated' ? `Invoice ${q.docNumber} updated in QuickBooks${q.payments ? `, ${q.payments} payment${q.payments === 1 ? '' : 's'} sent` : ''}`
+      : q.status === 'paid' ? `${q.payments} payment${q.payments === 1 ? '' : 's'} sent to invoice ${q.docNumber}`
+      : q.status === 'unchanged' ? `Invoice ${q.docNumber} is up to date in QuickBooks`
+      : q.message || 'Not sent'
+  const handleQboSync = async (registrationId: string) => {
+    setQboBusy(`sync:${registrationId}`)
+    try {
+      const d = await qboPost({ action: 'sync', registrationId })
+      const one: QboResult | undefined = d.results?.[0]
+      if (!one) throw new Error('QuickBooks did not answer')
+      if (one.status === 'error') toast.error(one.message || 'QuickBooks sync failed', { duration: 6000 })
+      else toast.success(qboResultText(one), { duration: 5000 })
+    } catch (err: any) { toast.error(err.message, { duration: 6000 }) }
+    finally { setQboBusy(''); loadQbo() }
+  }
+  const qboToggle = async (enable: boolean) => {
+    setQboBusy('enable')
+    try { await qboPost({ action: enable ? 'enable' : 'disable' }); toast.success(enable ? 'QuickBooks sync is on' : 'QuickBooks sync is off') }
+    catch (err: any) { toast.error(err.message, { duration: 6000 }) }
+    finally { setQboBusy(''); loadQbo() }
+  }
+  const qboRun = async () => {
+    setQboBusy('run')
+    try {
+      const d = await qboPost({ action: 'run' })
+      const res: QboResult[] = d.results || []
+      const bad = res.filter(x => x.status === 'error').length
+      toast.success(res.length ? `${res.length - bad} brought up to date${bad ? ` · ${bad} with a problem` : ''}` : 'Nothing waiting for QuickBooks', { duration: 5000 })
+    } catch (err: any) { toast.error(err.message, { duration: 6000 }) }
+    finally { setQboBusy(''); loadQbo() }
+  }
+  const qboLoadPreview = async () => {
+    setQboBusy('preview')
+    try {
+      const r = await fetch(`/api/qbo?tournamentId=${tournamentId}&preview=1`)
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Could not load the list')
+      setQbo(d)
+      const rows: QboPreviewRow[] = d.preview?.rows || []
+      setQboPreview(rows)
+      setQboPick(new Set(rows.map(x => x.id)))
+      if (d.preview && !d.preview.ok && d.preview.message) toast.error(d.preview.message, { duration: 6000 })
+    } catch (err: any) { toast.error(err.message) }
+    finally { setQboBusy('') }
+  }
+  const qboSend = async () => {
+    let ids = [...qboPick]
+    const total = ids.length
+    let done = 0, made = 0, failed = 0
+    setQboBusy('send')
+    try {
+      while (ids.length) {
+        setQboProgress(`Sending ${Math.min(done + 1, total)} of ${total}…`)
+        const d = await qboPost({ action: 'backfill', regIds: ids.slice(0, 100) })
+        const res: QboResult[] = d.results || []
+        done += res.length
+        made += res.filter(x => x.status === 'created').length
+        failed += res.filter(x => x.status === 'error').length
+        ids = [...(d.remaining || []), ...ids.slice(100)]
+        if (!res.length) break
       }
-      load()
-    } catch (err: any) { toast.error(err.message, { id: 'qbo-sync', duration: 5000 }) }
+      toast.success(`${made} invoice${made === 1 ? '' : 's'} made in QuickBooks${failed ? ` · ${failed} with a problem (listed below)` : ''}`, { duration: 6000 })
+    } catch (err: any) { toast.error(err.message, { duration: 6000 }) }
+    finally { setQboBusy(''); setQboProgress(''); setQboPreview(null); setQboPick(new Set()); loadQbo() }
+  }
+  const qboLinkSave = async () => {
+    setQboBusy('link')
+    try {
+      const d = await qboPost({ action: 'link', registrationId: qboLink.regId, docNumber: qboLink.docNumber.trim() })
+      toast.success(d.message || 'Linked')
+      setQboLink({ regId: '', docNumber: '' })
+    } catch (err: any) { toast.error(err.message, { duration: 6000 }) }
+    finally { setQboBusy(''); loadQbo() }
+  }
+  const qboRefundEntered = async (paymentId: string) => {
+    try { await qboPost({ action: 'refundEntered', paymentId }); loadQbo() }
+    catch (err: any) { toast.error(err.message) }
   }
 
   // ── Import handlers ──
@@ -1344,6 +1447,13 @@ export default function RegistrationsPage() {
           {activeTab === 'team' && <button onClick={() => openComm()} disabled={!registrations.length}
             className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-40"><Mail size={15} /> Email clubs
             {scheduled.length > 0 && <span className="ml-0.5 text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-1.5 py-0.5">{scheduled.length} queued</span>}</button>}
+          {activeTab === 'team' && qbo && (() => {
+            const problems = qbo.regs.filter(q => q.state === 'error').length + (qbo.connection.ok ? 0 : 1)
+            return <button onClick={() => { setQboOpen(true); setQboPreview(null) }}
+              className="inline-flex items-center justify-center sm:justify-start gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><Landmark size={15} /> QuickBooks
+              {problems > 0 ? <span className="ml-0.5 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-full px-1.5 py-0.5">{problems}</span>
+                : qbo.settings.enabled ? <span className="ml-0.5 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">On</span> : null}</button>
+          })()}
         </div>
 
         {/* Import panel */}
@@ -1648,6 +1758,164 @@ export default function RegistrationsPage() {
             </div>
           </div>
         )}
+        {qboOpen && qbo && (() => {
+          const byId = new Map(registrations.map(r => [r.id, r]))
+          const count = (k: QboRegState['state'][]) => qbo.regs.filter(q => k.includes(q.state)).length
+          const out = qbo.regs.filter(q => q.state === 'out')
+          const errors = qbo.regs.filter(q => q.state === 'error')
+          const refunds = qbo.regs.flatMap(q => q.refunds.map(f => ({ ...f, regId: q.id })))
+          const picked = (qboPreview || []).filter(x => qboPick.has(x.id))
+          const since = qbo.settings.startedAt ? new Date(qbo.settings.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+          const lastRun = qbo.settings.lastRunAt ? new Date(qbo.settings.lastRunAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
+          const custText = (c: QboPreviewRow['customer']) => !c ? '' : c.how === 'new' ? 'New customer' : c.how === 'email' ? `${c.name} (same email)` : c.name
+          return (
+            <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={() => !qboBusy && setQboOpen(false)}>
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><Landmark size={17} className="text-slate-500" /> QuickBooks</h3>
+                    {qbo.connection.ok
+                      ? <p className="text-sm text-slate-500">Connected to {qbo.connection.company || 'QuickBooks'}</p>
+                      : null}
+                  </div>
+                  <button onClick={() => !qboBusy && setQboOpen(false)} className="text-slate-400 hover:text-slate-600" aria-label="Close"><X size={18} /></button>
+                </div>
+
+                {!qbo.connection.ok && (
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {qbo.connection.message}
+                    <a href="/api/oauth/quickbooks" className="ml-1 font-semibold underline">Connect QuickBooks</a>
+                  </div>
+                )}
+
+                <div className="mb-4 rounded-xl border border-slate-200 px-4 py-3">
+                  {qbo.settings.enabled ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <p className="flex-1 text-sm text-slate-600">
+                        <span className="font-semibold text-green-700">On{since ? ` since ${since}` : ''}.</span> New registrations get the next QuickBooks invoice number, and changes and payments follow every 15 minutes.{lastRun ? ` Last run ${lastRun}.` : ''}
+                      </p>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={qboRun} disabled={!!qboBusy || !qbo.connection.ok} className="text-sm border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={14} /> {qboBusy === 'run' ? 'Syncing…' : 'Sync now'}</button>
+                        <button onClick={() => qboToggle(false)} disabled={!!qboBusy} className="text-sm border border-slate-300 text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-50 disabled:opacity-50">Turn off</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <p className="flex-1 text-sm text-slate-600">
+                        <span className="font-semibold text-slate-800">Off.</span> Turn it on and each new registration goes to QuickBooks with the next invoice number, and every payment recorded here follows it. Registrations from before stay out until you send them below.
+                      </p>
+                      <button onClick={() => qboToggle(true)} disabled={!!qboBusy || !qbo.connection.ok} className="shrink-0 text-sm bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg">{qboBusy === 'enable' ? 'Turning on…' : 'Turn on'}</button>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-sm text-slate-600 mb-4">
+                  <span className="font-semibold text-slate-800">This event:</span> {count(['in', 'changed', 'payments'])} in QuickBooks · {out.length} not sent{count(['queued']) ? ` · ${count(['queued'])} waiting for the next sync` : ''}{errors.length ? ` · ${errors.length} with a problem` : ''}
+                </p>
+
+                {out.length > 0 && (
+                  <div className="mb-5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Not in QuickBooks yet</div>
+                    {!qboPreview ? (
+                      <button onClick={qboLoadPreview} disabled={!!qboBusy} className="text-sm border border-teal-300 text-teal-700 px-3 py-1.5 rounded-lg hover:bg-teal-50 disabled:opacity-50">
+                        {qboBusy === 'preview' ? 'Checking QuickBooks customers…' : `Review the ${out.length} registration${out.length === 1 ? '' : 's'} before sending`}
+                      </button>
+                    ) : (
+                      <>
+                        <div className="border border-slate-200 rounded-xl overflow-hidden">
+                          <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            <div className="col-span-5 flex items-center gap-2">
+                              <input type="checkbox" aria-label="Pick all" checked={qboPick.size === qboPreview.length && qboPreview.length > 0}
+                                onChange={e => setQboPick(e.target.checked ? new Set(qboPreview.map(x => x.id)) : new Set())} className="accent-teal-600" /> Club
+                            </div>
+                            <div className="col-span-2 text-right">Total</div>
+                            <div className="col-span-2 text-right">Paid</div>
+                            <div className="col-span-3 pl-2">QuickBooks customer</div>
+                          </div>
+                          <div className="divide-y divide-slate-100 max-h-[40vh] overflow-y-auto">
+                            {qboPreview.map(x => (
+                              <label key={x.id} className="grid grid-cols-12 gap-x-2 gap-y-0.5 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">
+                                <div className="col-span-12 sm:col-span-5 flex items-start gap-2 min-w-0">
+                                  <input type="checkbox" checked={qboPick.has(x.id)} className="accent-teal-600 shrink-0 mt-1"
+                                    onChange={e => setQboPick(p => { const n = new Set(p); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} />
+                                  <div className="min-w-0">
+                                    <div className="font-medium text-slate-800 truncate">{x.club}</div>
+                                    <div className="text-xs text-slate-400">{x.teams} team{x.teams === 1 ? '' : 's'}{x.registered ? ` · registered ${shortDate(`${x.registered}T12:00:00`)}` : ''}</div>
+                                  </div>
+                                </div>
+                                <div className="col-span-6 sm:col-span-2 pl-6 sm:pl-0 sm:text-right text-slate-700"><span className="sm:hidden text-xs text-slate-400">Total </span>{fmt(x.total)}</div>
+                                <div className="col-span-6 sm:col-span-2 sm:text-right text-green-700"><span className="sm:hidden text-xs text-slate-400">Paid </span>{x.paid ? fmt(x.paid) : '—'}</div>
+                                <div className={`col-span-12 sm:col-span-3 pl-6 sm:pl-2 text-xs truncate ${x.customer?.how === 'new' ? 'text-slate-400' : 'text-slate-600'}`} title={custText(x.customer)}>
+                                  <span className="sm:hidden text-slate-400">QuickBooks: </span>{custText(x.customer)}{x.refunds ? <span className="text-amber-700"> · refund to enter by hand</span> : null}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-3">
+                          <p className="flex-1 text-xs text-slate-500">
+                            {picked.length} picked · {fmt(picked.reduce((a, x) => a + x.total, 0))} invoiced · {fmt(picked.reduce((a, x) => a + x.paid, 0))} in payments, which go with them. Numbers continue from the last QuickBooks invoice.
+                          </p>
+                          <button onClick={qboSend} disabled={!!qboBusy || !picked.length || !qbo.connection.ok}
+                            className="shrink-0 text-sm bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg">
+                            {qboBusy === 'send' ? (qboProgress || 'Sending…') : `Send ${picked.length} to QuickBooks`}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {errors.length > 0 && (
+                  <div className="mb-5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Problems</div>
+                    <div className="space-y-2">
+                      {errors.map(q => (
+                        <div key={q.id} className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-red-900">{byId.get(q.id)?.clubName || q.club || 'Registration'}{q.docNumber ? ` · invoice ${q.docNumber}` : ''}</div>
+                            <div className="text-xs text-red-800 break-words">{q.error}</div>
+                          </div>
+                          {!q.deleted && <button onClick={() => handleQboSync(q.id)} disabled={!!qboBusy} className="shrink-0 text-xs font-semibold text-red-700 border border-red-300 rounded-md px-2 py-1 disabled:opacity-50">Try again</button>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {refunds.length > 0 && (
+                  <div className="mb-5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Refunds to enter in QuickBooks</div>
+                    <p className="text-xs text-slate-500 mb-2">QuickBooks records a refund differently from a payment, so these don't go on their own. Enter each one there, then mark it.</p>
+                    <div className="space-y-1.5">
+                      {refunds.map(f => (
+                        <div key={f.id} className="flex items-center gap-3 text-sm">
+                          <span className="flex-1 text-slate-700">{byId.get(f.regId)?.clubName || qboById.get(f.regId)?.club || 'Registration'} · {fmt(f.amount)}{f.date ? ` · ${fmtPayDate(f.date)}` : ''}</span>
+                          <button onClick={() => qboRefundEntered(f.id)} className="text-xs border border-slate-300 rounded-md px-2 py-1 text-slate-600 hover:bg-slate-50">Entered</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {out.length > 0 && (
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-slate-500 hover:text-slate-700">Already made one in QuickBooks by hand? Link it</summary>
+                    <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                      <select value={qboLink.regId} onChange={e => setQboLink(l => ({ ...l, regId: e.target.value }))} className={`${smallInputCls} sm:flex-1`}>
+                        <option value="">Registration…</option>
+                        {out.map(q => <option key={q.id} value={q.id}>{byId.get(q.id)?.clubName || q.id}</option>)}
+                      </select>
+                      <input value={qboLink.docNumber} onChange={e => setQboLink(l => ({ ...l, docNumber: e.target.value.replace(/\D/g, '') }))} placeholder="Invoice #" inputMode="numeric" className={`${smallInputCls} sm:w-28`} />
+                      <button onClick={qboLinkSave} disabled={!!qboBusy || !qboLink.regId || !qboLink.docNumber} className="text-sm border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 disabled:opacity-50">Link</button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">The next sync brings that invoice in line with Whistle Ready and sends its payments.</p>
+                  </details>
+                )}
+              </div>
+            </div>
+          )
+        })()}
         {invFor && (() => {
           const pdf = `/api/registrations/${encodeURIComponent(invFor.id)}/invoice`
           const sentOn = commLog(invFor).invoice
@@ -2463,11 +2731,28 @@ export default function RegistrationsPage() {
                           className="text-[11px] font-bold text-amber-700 hover:text-amber-900 shrink-0 border border-amber-300 rounded-md px-2 py-0.5 whitespace-nowrap">Change made</button>
                       </div>
                     )}
-                    {reg.qboInvoiceId ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-600 border border-green-200 bg-green-50 px-2.5 py-1 rounded-lg"><Check size={12} /> QB synced</span>
-                    ) : (
-                      <button onClick={() => handleQboSync(reg.id)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">QB Sync</button>
-                    )}
+                    {(() => {
+                      // Where this registration stands in QuickBooks (lib/qboSync). Click to sync it now.
+                      const q = qboById.get(reg.id)
+                      if (!q || q.state === 'none') return null
+                      const look = q.state === 'in' ? 'text-green-700 border-green-200 bg-green-50'
+                        : q.state === 'error' ? 'text-red-700 border-red-200 bg-red-50'
+                        : q.state === 'out' ? 'text-teal-600 border-teal-200 hover:border-teal-400'
+                        : 'text-amber-800 border-amber-200 bg-amber-50'
+                      const label = q.state === 'in' ? `QB #${q.docNumber}`
+                        : q.state === 'changed' ? `QB #${q.docNumber} · update waiting`
+                        : q.state === 'payments' ? `QB #${q.docNumber} · ${q.paymentsWaiting} payment${q.paymentsWaiting === 1 ? '' : 's'} to send`
+                        : q.state === 'queued' ? 'QB · next sync'
+                        : q.state === 'error' ? `QB${q.docNumber ? ` #${q.docNumber}` : ''} · problem`
+                        : 'Send to QB'
+                      const title = q.state === 'error' ? `${q.error} Click to try again.`
+                        : q.state === 'out' ? 'Not in QuickBooks yet. Click to send it now, with the next invoice number.'
+                        : q.state === 'queued' ? 'Goes to QuickBooks on the next sync (every 15 minutes). Click to send it now.'
+                        : `QuickBooks invoice ${q.docNumber}${q.syncedAt ? `, last synced ${shortDate(q.syncedAt)}` : ''}. Click to sync now.`
+                      return <button onClick={() => handleQboSync(reg.id)} disabled={!!qboBusy} title={title}
+                        className={`text-xs border px-2.5 py-1 rounded-lg inline-flex items-center gap-1 disabled:opacity-60 ${look}`}>
+                        {q.state === 'in' && <Check size={12} />}{qboBusy === `sync:${reg.id}` ? 'Syncing…' : label}</button>
+                    })()}
                     <button onClick={() => openEdit(reg)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Edit</button>
                     {registrations.length > 1 && (
                       <button onClick={() => openMerge(reg)} title="Combine with a duplicate registration of the same club"
