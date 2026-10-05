@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { encryptConfig } from '@/lib/encrypt'
+import { readState } from '@/lib/qboState'
 
 const QBO_CLIENT_ID = process.env.QBO_CLIENT_ID || ''
 const QBO_CLIENT_SECRET = process.env.QBO_CLIENT_SECRET || ''
@@ -20,11 +23,11 @@ export async function GET(req: Request) {
 
   if (!code || !state) return NextResponse.redirect(`${APP_URL}/admin/payment-providers?error=qbo_cancelled`)
 
-  let userId = ''
-  try {
-    const decoded = JSON.parse(Buffer.from(state, 'base64').toString())
-    userId = decoded.userId
-  } catch {
+  // Only a login Whistle Ready started (signed state, lib/qboState), finished by
+  // the same signed-in person, can store a QuickBooks connection.
+  const userId = readState(state)
+  const session = await getServerSession(authOptions)
+  if (!userId || (session?.user as any)?.id !== userId) {
     return NextResponse.redirect(`${APP_URL}/admin/payment-providers?error=invalid_state`)
   }
 
