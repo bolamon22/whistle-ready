@@ -60,6 +60,10 @@ export type ChecklistLinks = {
   hotelLink: string
   /** /share/<regId> — the ready-written messages. Anchored per row. */
   shareLink: string
+  /** The club director portal. Signed in, it opens; signed out, login sends
+   *  club_director straight here afterwards (lib/roleHome), so one link covers
+   *  both. */
+  portalLink: string
 }
 
 export type ChecklistItem = {
@@ -129,7 +133,9 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
   // claim page handles both; only the wording changes.
   items.push(f.hasLogin
     ? { key: 'login', title: 'Club portal login', done: true,
-        detail: f.loginEmail ? `${f.loginEmail} can sign in.` : 'Your login is set up.' }
+        detail: (f.loginEmail ? `${f.loginEmail} can sign in. ` : '')
+          + 'Everything on this list is in there too — your teams, waivers, coaches, balance, and the messages to send your families.',
+        ctaLabel: 'Open my club portal', ctaUrl: links.portalLink }
     : f.hasAccountElsewhere
       ? { key: 'login', title: 'Link this event to your login', done: false,
           detail: `You already have a Whistle Ready login${f.loginEmail ? ` for ${f.loginEmail}` : ''} — this registration just is not attached to it yet. One click, using the password you already have.`,

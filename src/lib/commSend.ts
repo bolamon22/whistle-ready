@@ -333,6 +333,7 @@ export async function runCommSend(args: {
         payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         hotelLink: bookingUrl || eventHome,
         shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
+        portalLink: tournamentAbs(org?.slug, '/dashboard/club-director'),
       })
     }
     // Confirm + account links are per club: their registration id (confirm) or a
