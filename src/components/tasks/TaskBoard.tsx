@@ -5,7 +5,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import {
   AlertCircle, ArrowRight, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, LayoutTemplate,
-  ListChecks, Plus, RefreshCw, Trash2, X, Landmark, Tent, Users, Mail, Banknote, Trophy, Archive, Shapes,
+  ListChecks, Plus, RefreshCw, Trash2, X, Landmark, Tent, Users, Mail, Banknote, Trophy, Archive, Shapes, UserRound,
   type LucideIcon,
 } from 'lucide-react'
 import {
@@ -28,6 +28,8 @@ const CAT_ICONS: Record<string, LucideIcon> = {
 }
 
 type Data = { tasks: TaskView[]; tournaments: TaskTournament[]; today: string }
+/** An event contact a task can depend on (from /api/contacts). */
+type ContactOption = { id: string; name: string; company: string; events: string[]; everyEvent: boolean }
 type Mode = 'due' | 'category' | 'event'
 type GroupState = 'open' | 'closed' | 'all'
 type Group = { key: string; label: string; icon: LucideIcon; tone?: 'red' | 'green'; hint?: string; items: TaskView[]; closed?: boolean }
@@ -65,6 +67,14 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
     } catch { setFailed('Could not load tasks') }
   }, [tournamentId])
   useEffect(() => { load() }, [load])
+
+  // Event contacts a task can be linked to. Best-effort: no contacts, no picker.
+  const [contacts, setContacts] = useState<ContactOption[]>([])
+  useEffect(() => {
+    fetch('/api/contacts').then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.contacts) setContacts(d.contacts.map((c: ContactOption) => ({ id: c.id, name: c.name, company: c.company, events: c.events || [], everyEvent: !!c.everyEvent }))) })
+      .catch(() => {})
+  }, [])
 
   // The tab page's setup checklist reports its progress; keep its row in step.
   useEffect(() => {
@@ -247,7 +257,7 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
 
   const pct = counts.total ? Math.round((counts.done / counts.total) * 100) : 0
   const detail = (t: TaskView) => (
-    <TaskDetail task={t} today={today} eventName={nameOf(t.tournamentId)}
+    <TaskDetail task={t} today={today} eventName={nameOf(t.tournamentId)} contacts={contacts}
       onPatch={(body, local) => patch(t, body, local)} onToggle={() => toggle(t)} onDelete={() => remove(t)} onClose={() => setSelId(null)} />
   )
 
@@ -423,6 +433,7 @@ function TaskRow({ task: t, today, selected, eventName, onToggle, onSelect }: {
       {t.tracked && !t.done && (
         <span className={`inline-flex items-center gap-1 px-2 py-px rounded-md font-semibold ${t.tracked.done ? 'bg-emerald-50 text-emerald-700' : 'bg-teal-50 text-teal-800'}`}><RefreshCw size={11} className="flex-shrink-0" /> {t.tracked.label}</span>
       )}
+      {t.contactName && <span className="inline-flex items-center gap-1 text-slate-600"><UserRound size={12} className="flex-shrink-0" /> {t.contactName}</span>}
       {t.notes && !t.done && <span className="truncate max-w-[18rem]">{t.notes}</span>}
     </span>
   )
@@ -463,8 +474,8 @@ function TaskRow({ task: t, today, selected, eventName, onToggle, onSelect }: {
   )
 }
 
-function TaskDetail({ task, today, eventName, onPatch, onToggle, onDelete, onClose }: {
-  task: TaskView; today: string; eventName: string
+function TaskDetail({ task, today, eventName, contacts, onPatch, onToggle, onDelete, onClose }: {
+  task: TaskView; today: string; eventName: string; contacts: ContactOption[]
   onPatch: (body: Record<string, unknown>, local: Partial<TaskView>) => void
   onToggle: () => void; onDelete: () => void; onClose: () => void
 }) {
@@ -531,6 +542,36 @@ function TaskDetail({ task, today, eventName, onPatch, onToggle, onDelete, onClo
           </select>
         </label>
       </div>
+
+      {(contacts.length > 0 || task.contactId) && (() => {
+        // This event's contacts first, then everyone else in the directory.
+        const mine = contacts.filter(c => c.everyEvent || (task.tournamentId && c.events.includes(task.tournamentId)))
+        const rest = contacts.filter(c => !mine.includes(c))
+        const missing = task.contactId && !contacts.some(c => c.id === task.contactId)
+        const opt = (c: ContactOption) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` · ${c.company}` : ''}</option>
+        return (
+          <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+            <span className="flex items-baseline justify-between">Contact
+              {task.contactId && !missing && <Link href={`/contacts?c=${encodeURIComponent(task.contactId)}`} className="font-semibold text-teal-700 hover:underline">Open contact</Link>}
+            </span>
+            <select value={task.contactId || ''} aria-label="Contact"
+              onChange={e => {
+                const c = contacts.find(x => x.id === e.target.value)
+                onPatch({ contactId: e.target.value }, { contactId: e.target.value, contactName: c?.name || '' })
+              }}
+              className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-normal text-slate-800 bg-white">
+              <option value="">No contact</option>
+              {missing && <option value={task.contactId}>{task.contactName || 'Deleted contact'}</option>}
+              {mine.length > 0 && rest.length > 0 ? (
+                <>
+                  <optgroup label="This event">{mine.map(opt)}</optgroup>
+                  <optgroup label="Everyone else">{rest.map(opt)}</optgroup>
+                </>
+              ) : contacts.map(opt)}
+            </select>
+          </label>
+        )
+      })()}
 
       {task.tracked && (
         <div className={`rounded-xl border p-3 ${task.tracked.done ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'}`}>

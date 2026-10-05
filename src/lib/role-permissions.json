@@ -213,11 +213,13 @@
     },
     {
       "key": "tasks",
-      "label": "Tasks & checklists",
+      "label": "Tasks, checklists & event contacts",
       "group": "Tournaments",
       "routes": [
         "/tasks",
-        "/tournaments/*/tasks"
+        "/tournaments/*/tasks",
+        "/contacts",
+        "/tournaments/*/contacts"
       ]
     },
     {

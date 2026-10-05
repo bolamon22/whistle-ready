@@ -30,7 +30,8 @@ interface TournamentMeta {
 // no nested menu, no second thing to tap. People has eleven pages heading for
 // it; a flat list of eleven is a wall, and on a phone it is a wall you scroll.
 type NavItem = { href: string; label: string; sect?: string }
-type NavGroup = { label: string; href?: string; items?: NavItem[] }
+/** wide: a tab only on wider screens; the phone tab bar has room for six. */
+type NavGroup = { label: string; href?: string; items?: NavItem[]; wide?: boolean }
 
 // Icons for the phone tab bar (desktop tabs are text-only).
 const GROUP_ICONS: Record<string, LucideIcon> = { Dashboard: LayoutDashboard, Setup: Settings, People: Users, Live: Zap, Financials: DollarSign, Tasks: ListChecks }
@@ -112,6 +113,8 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     ]},
     { label: 'Financials', href: `${base}/financials` },
     { label: 'Tasks', href: `${base}/tasks` },
+    // On phones this event's contacts sit at the bottom of the Tasks tab.
+    { label: 'Contacts', href: `${base}/contacts`, wide: true },
   ]
 
   // Only the tabs this role can open (the same rule middleware enforces), so a
@@ -126,6 +129,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const groups: NavGroup[] = allGroups
     .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href)) } : g)
     .filter(g => g.href ? canOpen(g.href) : (g.items?.length ?? 0) > 0)
+  const phoneGroups = groups.filter(g => !g.wide)
 
   // This event's overdue tasks, as a red count on the Tasks tab (overdue only,
   // like the top bar). Refreshed when a task is checked off anywhere on the page.
@@ -219,8 +223,8 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
         )}
 
         {/* Tab bar */}
-        <div className={`mt-2 -mx-3 px-1 border-t border-white/10 grid ${groups.length > 5 ? 'grid-cols-6' : 'grid-cols-5'}`}>
-          {groups.map(g => {
+        <div className={`mt-2 -mx-3 px-1 border-t border-white/10 grid ${phoneGroups.length > 5 ? 'grid-cols-6' : 'grid-cols-5'}`}>
+          {phoneGroups.map(g => {
             const Icon = GROUP_ICONS[g.label]
             const active = groupActive(g)
             const cls = `flex flex-col items-center justify-center gap-1 py-2 text-[10.5px] font-medium leading-none transition-colors ${active ? 'text-teal-300' : 'text-slate-400'}`

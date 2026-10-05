@@ -6,6 +6,7 @@ import { ClipboardCheck } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import TaskBoard from '@/components/tasks/TaskBoard'
 import SetupChecklist from '@/components/SetupChecklist'
+import EventContacts from '@/components/contacts/EventContacts'
 import { announceTasksChanged } from '@/lib/taskTemplate'
 
 // A tournament's Tasks tab: its task list, and under it the shared setup
@@ -49,6 +50,10 @@ export default function TournamentTasksPage() {
             Due the day before. Shared with staff: anyone working the event can check items off on their phone and add their own.
           </p>
           <SetupChecklist tournamentId={id} onProgress={onProgress} />
+        </section>
+        {/* Phones: the tab bar has no room for a Contacts tab, so this event's contacts live here. */}
+        <section className="sm:hidden mt-8">
+          <EventContacts tournamentId={id} withChecklist={false} />
         </section>
       </div>
     </div>

@@ -176,6 +176,9 @@ export default function NavBar() {
             {overdue > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold leading-[18px] text-center">{overdue}<span className="sr-only"> overdue</span></span>}
           </Link>
         )}
+        {canTasks && (
+          <Link href="/contacts" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Contacts</Link>
+        )}
 
         {/* Tournament quick-links */}
         {tournaments.length > 0 && (
@@ -324,6 +327,7 @@ export default function NavBar() {
                     {overdue > 0 && <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold">{overdue} overdue</span>}
                   </Link>
                 )}
+                {canTasks && <Link href="/contacts" className={MOBILE_LINK}>Event contacts</Link>}
                 {tournaments.slice(0, 4).map(t => (
                   <Link key={t.id} href={`/tournaments/${t.id}/dashboard`} className={MOBILE_LINK}>
                     {t.logoUrl ? (
