@@ -10,7 +10,13 @@ const QBO_CLIENT_ID = process.env.QBO_CLIENT_ID || ''
 // on the app's production keys; QBO_REDIRECT_BASE overrides it if ever needed.
 const APP_URL = (process.env.QBO_REDIRECT_BASE || 'https://whistleready.app').replace(/\/+$/, '')
 const REDIRECT_URI = `${APP_URL}/api/oauth/quickbooks/callback`
-const SCOPE = 'com.intuit.quickbooks.payment com.intuit.quickbooks.accounting openid profile email'
+// Accounting only: the sync writes customers, invoices and payments, which is all
+// Whistle Ready does in QuickBooks. It used to ask for QuickBooks Payments too, for
+// a Record payment option that charged a club's bank account through QuickBooks;
+// that never worked (the app had only development keys) and was removed Oct 5 2026,
+// so the production review is for an accounting app, and SEG's books grant no more
+// than the sync needs. openid/profile/email were never read either.
+const SCOPE = 'com.intuit.quickbooks.accounting'
 
 export async function GET() {
   const session = await getServerSession(authOptions)

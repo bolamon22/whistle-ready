@@ -465,12 +465,6 @@ export default function RegistrationsPage() {
   const [payNotes, setPayNotes] = useState('')
   const [addingPay, setAddingPay] = useState(false)
   const [stripePromise, setStripePromise] = useState<any>(null)
-  // ACH fields
-  const [achRouting, setAchRouting] = useState('')
-  const [achAccount, setAchAccount] = useState('')
-  const [achAccountType, setAchAccountType] = useState('PERSONAL_CHECKING')
-  const [achAccountName, setAchAccountName] = useState('')
-  const [achLoading, setAchLoading] = useState(false)
 
   // Load Stripe when credit_card selected
   useEffect(() => {
@@ -741,24 +735,6 @@ export default function RegistrationsPage() {
       load()
     } catch { toast.error('Failed to record payment.') }
     finally { setAddingPay(false) }
-  }
-
-  const handleAchPayment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!achRouting || !achAccount || !achAccountName) { toast.error('Please fill in all bank fields'); return }
-    setAchLoading(true)
-    try {
-      const res = await fetch('/api/payments/qbo-ach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registrationId: payingRegId, amount: parseFloat(payAmount), bankRoutingNumber: achRouting, bankAccountNumber: achAccount, accountType: achAccountType, accountName: achAccountName, notes: payNotes }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'ACH payment failed')
-      toast.success(`ACH payment submitted! Status: ${data.status || 'processing'}`)
-      setPayingRegId(null); setPayAmount(''); setAchRouting(''); setAchAccount(''); setAchAccountName(''); load()
-    } catch (err: any) { toast.error(err.message || 'ACH payment failed') }
-    finally { setAchLoading(false) }
   }
 
   // The payment letter is org-editable with tokens; the invoice table + Pay
@@ -2086,7 +2062,7 @@ export default function RegistrationsPage() {
                     <option value="check">Check</option>
                     <option value="zelle">Zelle</option>
                     <option value="credit_card">Credit Card</option>
-                    <option value="ach">ACH Bank Transfer (QBO)</option>
+                    <option value="ach">ACH / bank transfer</option>
                     <option value="paypal">PayPal</option>
                     <option value="venmo">Venmo</option>
                     <option value="cash">Cash</option>
@@ -2098,31 +2074,7 @@ export default function RegistrationsPage() {
                     <input value={payCheck} onChange={e => setPayCheck(e.target.value)} className={inputCls} />
                   </div>
                 )}
-                {payMethod === 'ach' && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Account Holder Name *</label>
-                      <input value={achAccountName} onChange={e => setAchAccountName(e.target.value)} placeholder="Full name on account" className={inputCls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Routing Number *</label>
-                      <input value={achRouting} onChange={e => setAchRouting(e.target.value)} placeholder="9-digit routing number" maxLength={9} className={inputCls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Account Number *</label>
-                      <input value={achAccount} onChange={e => setAchAccount(e.target.value)} placeholder="Account number" className={inputCls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Account Type</label>
-                      <select value={achAccountType} onChange={e => setAchAccountType(e.target.value)} className={inputCls}>
-                        <option value="PERSONAL_CHECKING">Personal Checking</option>
-                        <option value="PERSONAL_SAVINGS">Personal Savings</option>
-                        <option value="BUSINESS_CHECKING">Business Checking</option>
-                      </select>
-                    </div>
-                  </>
-                )}
-                {payMethod !== 'credit_card' && payMethod !== 'ach' && (
+                {payMethod !== 'credit_card' && (
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
                     <input value={payNotes} onChange={e => setPayNotes(e.target.value)} className={inputCls} />
@@ -2155,18 +2107,6 @@ export default function RegistrationsPage() {
                   onSuccess={() => { setPayingRegId(null); setPayAmount(''); load() }}
                   onCancel={() => setPayingRegId(null)}
                 />
-              ) : payMethod === 'ach' ? (
-                <form onSubmit={handleAchPayment}>
-                  <p className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                    <Landmark size={14} className="flex-shrink-0 mt-0.5" /> ACH eCheck via QuickBooks Payments. Funds typically settle in 3–5 business days.
-                  </p>
-                  <div className="flex gap-3 pt-1">
-                    <button type="submit" disabled={achLoading} className="flex-1 bg-teal-600 text-white rounded-xl py-2 text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">
-                      {achLoading ? 'Processing…' : 'Submit ACH Payment'}
-                    </button>
-                    <button type="button" onClick={() => setPayingRegId(null)} className="px-4 border border-slate-300 rounded-xl text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-                  </div>
-                </form>
               ) : (
                 <form onSubmit={handleAddPayment}>
                   <div className="flex gap-3 pt-1">

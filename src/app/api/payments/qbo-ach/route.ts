@@ -1,73 +1,13 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getQBOAccessToken } from '@/lib/paymentProviders'
-import { prisma } from '@/lib/db'
 
-// POST: charge a bank account via QBO ACH
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const userId = (session.user as any).id
-
-  const { registrationId, amount, bankAccountNumber, bankRoutingNumber, accountType, accountName, notes } = await req.json()
-  if (!registrationId || !amount || !bankAccountNumber || !bankRoutingNumber)
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-
-  const tokens = await getQBOAccessToken(userId)
-  if (!tokens) return NextResponse.json({ error: 'QuickBooks not connected. Please connect in Admin → Payment Providers.' }, { status: 503 })
-
-  try {
-    // Create QBO bank account token
-    const tokenRes = await fetch(`https://api.intuit.com/quickbooks/v4/payments/tokens`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${tokens.accessToken}`,
-        'Content-Type': 'application/json',
-        'Request-Id': crypto.randomUUID(),
-      },
-      body: JSON.stringify({
-        bankAccount: {
-          routingNumber: bankRoutingNumber,
-          accountNumber: bankAccountNumber,
-          accountType: accountType || 'PERSONAL_CHECKING',
-          name: accountName || 'Account Holder',
-          phone: '0000000000',
-        }
-      }),
-    })
-    const tokenData = await tokenRes.json()
-    if (!tokenRes.ok) throw new Error(tokenData?.errors?.[0]?.message || 'Bank token creation failed')
-
-    // Charge the bank account
-    const chargeRes = await fetch(`https://api.intuit.com/quickbooks/v4/payments/echecks`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${tokens.accessToken}`,
-        'Content-Type': 'application/json',
-        'Request-Id': crypto.randomUUID(),
-      },
-      body: JSON.stringify({
-        amount: amount.toFixed(2),
-        token: tokenData.value,
-        description: `Tournament registration payment`,
-      }),
-    })
-    const chargeData = await chargeRes.json()
-    if (!chargeRes.ok) throw new Error(chargeData?.errors?.[0]?.message || 'ACH charge failed')
-
-    // Record payment in app
-    const today = new Date().toISOString().slice(0, 10)
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO RegistrationPayment (id, registrationId, amount, method, checkNumber, receivedAt, notes, createdAt)
-       VALUES (?, ?, ?, 'ach', '', ?, ?, ?)`,
-      crypto.randomUUID(), registrationId, amount,
-      today, notes || `ACH eCheck — QBO ID: ${chargeData.id}`, new Date().toISOString()
-    )
-
-    return NextResponse.json({ ok: true, chargeId: chargeData.id, status: chargeData.status })
-  } catch (err: any) {
-    console.error('QBO ACH error:', err)
-    return NextResponse.json({ error: err.message || 'ACH payment failed' }, { status: 500 })
-  }
+// Charging a club's bank account through QuickBooks Payments (ACH eCheck) was
+// removed Oct 5 2026. It never worked: Whistle Ready's Intuit app only had
+// development keys. With production keys it would have charged for real, and the
+// same Record payment dialog is where the office logs a transfer that already
+// came in, so one wrong pick would have charged a club twice. Clubs pay by card
+// or bank account on their pay page (Stripe), or by check or Zelle; Record
+// payment's "ACH / bank transfer" now just logs one. The app asks QuickBooks for
+// accounting access only (api/oauth/quickbooks).
+export async function POST() {
+  return NextResponse.json({ error: 'Charging a bank account through QuickBooks was removed. Record the transfer instead.' }, { status: 410 })
 }
