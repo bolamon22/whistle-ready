@@ -9,6 +9,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/qbo/cron",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/payments/reconcile-cron",
       "schedule": "0 13 * * *"
     },

@@ -1,88 +1,33 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getQBOAccessToken } from '@/lib/paymentProviders'
 import { prisma } from '@/lib/db'
+import { requireMoney } from '@/lib/apiAuth'
+import { tournamentOrgId } from '@/lib/org'
+import { syncNow } from '@/lib/qboSync'
+
+// One registration to QuickBooks now (the card's QuickBooks chip). The work is
+// lib/qboSync's: it used to be done here, and left the invoice number blank
+// (the company numbers its own invoices, so QuickBooks won't), used an item
+// the company doesn't have, and let any signed-in user run it.
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const userId = (session.user as any).id
-
-  const { registrationId } = await req.json()
-  const tokens = await getQBOAccessToken(userId)
-  if (!tokens) return NextResponse.json({ error: 'QuickBooks not connected' }, { status: 503 })
-
-  const regsRaw = await prisma.$queryRawUnsafe<any[]>('SELECT * FROM TeamRegistration WHERE id = ?', registrationId)
-  if (!regsRaw.length) return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
-  const reg = regsRaw[0]
-
-  // If already synced, return existing invoice ID — no duplicate
-  if (reg.qboInvoiceId) {
-    return NextResponse.json({ ok: true, alreadySynced: true, invoiceId: reg.qboInvoiceId, docNumber: reg.qboInvoiceId })
-  }
-
-  const baseUrl = `https://quickbooks.api.intuit.com/v3/company/${tokens.companyId}`
-  const headers = {
-    'Authorization': `Bearer ${tokens.accessToken}`,
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  }
-
-  try {
-    // Find or create customer
-    let customerId = reg.qboCustomerId || null
-
-    if (!customerId) {
-      const custSearch = await fetch(
-        `${baseUrl}/query?query=${encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName = '${String(reg.clubName).replace(/'/g, "\\'")}'`)}&minorversion=65`,
-        { headers }
-      )
-      const custData = await custSearch.json()
-      customerId = custData?.QueryResponse?.Customer?.[0]?.Id
-
-      if (!customerId) {
-        const createCust = await fetch(`${baseUrl}/customer?minorversion=65`, {
-          method: 'POST', headers,
-          body: JSON.stringify({
-            DisplayName: reg.clubName,
-            PrimaryEmailAddr: { Address: reg.contactEmail },
-            PrimaryPhone: { FreeFormNumber: reg.contactPhone },
-          }),
-        })
-        const newCust = await createCust.json()
-        customerId = newCust?.Customer?.Id
-      }
-
-      // Save customer ID so we don't search again next time
-      await prisma.$executeRawUnsafe('UPDATE TeamRegistration SET qboCustomerId = ? WHERE id = ?', customerId, registrationId)
-    }
-
-    const due = (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
-    const invoiceRes = await fetch(`${baseUrl}/invoice?minorversion=65`, {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        CustomerRef: { value: customerId },
-        Line: [{
-          Amount: due,
-          DetailType: 'SalesItemLineDetail',
-          Description: `Tournament Registration — ${reg.clubName}`,
-          SalesItemLineDetail: { ItemRef: { value: '1', name: 'Services' }, UnitPrice: due, Qty: 1 },
-        }],
-        CustomerMemo: { value: `Registration ID: ${reg.id}` },
-      }),
-    })
-    const invoiceData = await invoiceRes.json()
-    const invoiceId = invoiceData?.Invoice?.Id
-    const docNumber = invoiceData?.Invoice?.DocNumber
-
-    if (!invoiceId) throw new Error(invoiceData?.Fault?.Error?.[0]?.Message || 'Invoice creation failed')
-
-    // Save invoice ID — prevents any future duplicates
-    await prisma.$executeRawUnsafe('UPDATE TeamRegistration SET qboInvoiceId = ? WHERE id = ?', invoiceId, registrationId)
-
-    return NextResponse.json({ ok: true, customerId, invoiceId, docNumber })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
-  }
+  const g = await requireMoney()
+  if (!g.ok) return g.res
+  let registrationId = ''
+  try { registrationId = String((await req.json())?.registrationId || '') } catch { /* checked below */ }
+  const rows: { tournamentId: string }[] = registrationId
+    ? await prisma.$queryRawUnsafe(`SELECT tournamentId FROM "TeamRegistration" WHERE id = ?`, registrationId)
+    : []
+  if (!rows.length) return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
+  const orgId = await tournamentOrgId(rows[0].tournamentId)
+  if (!orgId) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+  if (g.role !== 'admin' && g.orgId !== orgId) return NextResponse.json({ error: 'Not your event' }, { status: 403 })
+  const r = await syncNow(orgId, [registrationId], { userId: g.userId })
+  if (!r.ok) return NextResponse.json({ error: r.message }, { status: r.busy ? 409 : 503 })
+  const one = r.results[0]
+  if (one?.status === 'error') return NextResponse.json({ error: one.message, result: one }, { status: 502 })
+  return NextResponse.json({ ok: true, result: one, docNumber: one?.docNumber || '' })
 }
