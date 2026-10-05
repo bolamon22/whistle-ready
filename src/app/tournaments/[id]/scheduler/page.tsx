@@ -143,6 +143,26 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [tMeta, setTMeta] = useState<{ name: string; logoUrl?: string }>({ name: '' })
   const [dayAvail, setDayAvail] = useState<any[]>([])  // saved per-day field availability (source of truth = venue record)
   const [loading, setLoading]           = useState(true)
+  // The page sits inside the app shell (top bar + padded <main>), so "h-screen"
+  // ran past the bottom of the window by the shell's height: the placing bar,
+  // the bracket pop-over and the board's last rows were below the fold (Bo,
+  // Oct 5 2026: "the green placing bar isn't showing up"). Size it to what is
+  // actually left of the window instead, and keep it right on resize.
+  const pageRef = useRef<HTMLDivElement>(null)
+  const [pageH, setPageH] = useState<number | null>(null)
+  useEffect(() => {
+    if (loading) return
+    const fit = () => {
+      const el = pageRef.current
+      if (!el) return
+      const top = el.getBoundingClientRect().top + window.scrollY
+      const padBottom = parseFloat(getComputedStyle(el.parentElement ?? el).paddingBottom) || 0
+      setPageH(Math.max(420, Math.floor(window.innerHeight - top - padBottom)))
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [loading])
   const [saving, setSaving]             = useState(false)
   const [unscheduling, setUnscheduling] = useState(false)
   const [dragId, setDragId]             = useState<string | null>(null)
@@ -1362,7 +1382,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   )
 
   return (
-    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+    <div ref={pageRef} className="h-screen bg-slate-50 flex flex-col overflow-hidden" style={pageH ? { height: pageH } : undefined}>
       <TournamentNav id={params.id} name={tMeta.name} logoUrl={tMeta.logoUrl} />
       <Toaster position="top-right" />
 
