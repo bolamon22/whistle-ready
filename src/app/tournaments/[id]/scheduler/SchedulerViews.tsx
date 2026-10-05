@@ -171,6 +171,23 @@ function placementStatus(g: SGame, slotIdx: number, dayGames: SGame[], slots: st
   }
   return worst
 }
+// A bracket game can't start until the games feeding it ("W-B3", "L-B4") have
+// started earlier; right after one is a back-to-back for whoever advances. Only
+// placed feeders count: an unplaced one says nothing about this slot yet.
+// Same rule as the "Bracket order" issue (page.tsx), checked before placing.
+function bracketTiming(g: SGame, time: string, date: string, games: SGame[], increment: number): { early: string | null; b2b: boolean } {
+  let early: string | null = null, b2b = false
+  const tMin = hm(time)
+  for (const t of [g.team1, g.team2]) {
+    const m = (t || '').match(/^[WL]-(B\d+)$/i)
+    if (!m) continue
+    const f = games.find(x => x.division === g.division && x.gameNumber.toUpperCase() === m[1].toUpperCase())
+    if (!f || !f.date || !f.startTime) continue
+    if (f.date > date || (f.date === date && hm(f.startTime) >= tMin)) { early = early ?? f.gameNumber; continue }
+    if (f.date === date && tMin - hm(f.startTime) === increment) b2b = true
+  }
+  return { early, b2b }
+}
 function hm(s: string) { const p = String(s || '').split(':'); return (parseInt(p[0]) || 0) * 60 + (parseInt(p[1] || '0') || 0) }
 
 function useIssueList(p: ViewsProps) {
@@ -412,6 +429,8 @@ const HINT = {
   valid:   { border: '#a7f3d0', bg: '#f0fdf4', text: '#34d399', label: 'Place here' },
   risk:    { border: '#f59e0b', bg: '#fffbeb', text: '#b45309', label: 'Back-to-back' },
   blocked: { border: '#ef4444', bg: 'repeating-linear-gradient(135deg,#fef2f2 0 6px,#fecaca 6px 8px)', text: '#b91c1c', label: 'Team busy' },
+  // A bracket game whose feeder isn't over yet. Placeable with a confirm; label is set per cell.
+  early:   { border: '#ea580c', bg: '#fff7ed', text: '#c2410c', label: 'Too early' },
   // Setup limits this field to other divisions. Still placeable (with a confirm), so not striped like blocked.
   field:   { border: '#c026d3', bg: '#fdf4ff', text: '#a21caf', label: 'Not for this division' },
 }
@@ -725,6 +744,12 @@ export function TimelineView(p: ViewsProps) {
   const place = async (g: SGame, time: string, field: string) => {
     if (closedAt(field, time)) return
     if (placementStatus(g, p.slots.indexOf(time), p.dayGames, p.slots, p.increment) === 'blocked') return
+    const bt = isBracket(g) ? bracketTiming(g, time, p.activeDate, p.games, p.increment) : null
+    if (bt?.early) {
+      const f = p.games.find(x => x.division === g.division && x.gameNumber === bt.early)
+      const when = f ? (f.date === p.activeDate ? `at ${p.fmtTime(f.startTime)}` : 'on a later day') : ''
+      if (!window.confirm(`${g.gameNumber} waits on ${bt.early}, which plays ${when}. Put ${g.gameNumber} before it anyway?`)) return
+    }
     // Placing from the parking lot hands the pick to the next game in it, in the
     // order shown (same filters), so a run of games is click slot, click slot...
     // (Bo, Oct 5 2026). Moving a game that was already placed does not.
@@ -1030,7 +1055,8 @@ export function TimelineView(p: ViewsProps) {
     const closed = closedAt(f.fullName, s)
     const status = sel && !g && !closed ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
     const wrongField = !!(status && status !== 'blocked' && p.fieldAllows && !p.fieldAllows(f.fullName, sel!.division))
-    const h = wrongField ? HINT.field : status ? HINT[status] : null
+    const bt = status && status !== 'blocked' && isBracket(sel!) ? bracketTiming(sel!, s, p.activeDate, p.games, p.increment) : null
+    const h = bt?.early ? { ...HINT.early, label: `Before ${bt.early}` } : wrongField ? HINT.field : status === 'valid' && bt?.b2b ? HINT.risk : status ? HINT[status] : null
     return (
       <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
         title={closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : undefined}
