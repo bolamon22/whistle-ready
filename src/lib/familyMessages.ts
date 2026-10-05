@@ -114,18 +114,36 @@ const escHtml = (x: string) => x.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
  * Works off the body the director may have edited: a paragraph that is just a
  * URL becomes the button, and any other URL is left as a normal link.
  */
+export type MessageBlock =
+  | { kind: 'link'; url: string }
+  | { kind: 'text'; text: string }
+
+/**
+ * Split a message body into the blocks it is made of: a paragraph that is
+ * nothing but a URL is THE link, everything else is text.
+ *
+ * One parser, two renderers. messageHtml() below turns these into the rich
+ * text that goes on the clipboard, and the share page / portal card renders the
+ * same blocks on screen, so what a director sees is what their families get.
+ */
+export function messageBlocks(body: string): MessageBlock[] {
+  return String(body || '')
+    .split(/\n{2,}/)
+    .map(b => b.trim())
+    .filter(Boolean)
+    .map(t => (/^https?:\/\/\S+$/.test(t) ? { kind: 'link' as const, url: t } : { kind: 'text' as const, text: t }))
+}
+
 export function messageHtml(body: string, linkLabel = 'Open the link'): string {
   // Single quotes inside the stack on purpose: this string lands inside a
   // double-quoted style="..." attribute, and a double quote here closes it
   // early and strips the formatting straight back off the paste.
   const font = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"
-  return String(body || '').split(/\n{2,}/).map(block => {
-    const t = block.trim()
-    if (!t) return ''
-    if (/^https?:\/\/\S+$/.test(t)) {
-      return `<p style="${font};font-size:15px;line-height:1.6;margin:0 0 14px"><a href="${t}" style="color:#0f766e;font-weight:bold">${escHtml(linkLabel)}</a></p>`
+  return messageBlocks(body).map(b => {
+    if (b.kind === 'link') {
+      return `<p style="${font};font-size:15px;line-height:1.6;margin:0 0 14px"><a href="${b.url}" style="color:#0f766e;font-weight:bold">${escHtml(linkLabel)}</a></p>`
     }
-    const withLinks = escHtml(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
+    const withLinks = escHtml(b.text).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
     return `<p style="${font};font-size:15px;line-height:1.6;color:#111111;margin:0 0 14px">${withLinks.replace(/\n/g, '<br>')}</p>`
   }).join('')
 }
