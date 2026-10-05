@@ -8,6 +8,7 @@ import { announceTasksChanged } from '@/lib/taskTemplate'
 import { useContacts } from './useContacts'
 import ContactForm from './ContactForm'
 import SendDocumentDialog from './SendDocumentDialog'
+import VendorEmailDialog from './VendorEmailDialog'
 import { CatDot, ContactDetail, ContactListRow, shortName } from './ContactParts'
 
 // The org's Event contacts directory (/contacts): everyone we get something
@@ -26,6 +27,7 @@ export default function ContactDirectory() {
   const [editing, setEditing] = useState<ContactRow | 'new' | null>(null)
   const [importing, setImporting] = useState(false)
   const [sending, setSending] = useState<{ contactId?: string } | null>(null)
+  const [writing, setWriting] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // A link can open one contact (?c=<id>).
@@ -92,9 +94,10 @@ export default function ContactDirectory() {
   )
   const detail = (c: ContactRow, close?: () => void) => (
     <ContactDetail c={c} tournaments={tournaments} today={today}
+      tournamentId={event !== 'all' && event !== 'every' ? event : undefined}
       onPatch={body => patch(c, body)} onEdit={() => setEditing(c)}
       onDelete={() => { setSelId(null); remove(c) }} onClose={close}
-      onSend={() => setSending({ contactId: c.id })} />
+      onSend={() => setSending({ contactId: c.id })} onWrite={() => setWriting(c.id)} />
   )
 
   return (
@@ -208,6 +211,12 @@ export default function ContactDirectory() {
         <SendDocumentDialog contacts={all} tournaments={tournaments} today={today} contactId={sending.contactId}
           tournamentId={event !== 'all' && event !== 'every' ? event : undefined}
           onClose={() => setSending(null)} onSent={() => { setSending(null); load() }} />
+      )}
+
+      {writing && all.some(c => c.id === writing) && (
+        <VendorEmailDialog contact={all.find(c => c.id === writing)!} tournaments={tournaments} today={today}
+          tournamentId={event !== 'all' && event !== 'every' ? event : undefined}
+          onClose={() => setWriting(null)} onPatch={body => patch(all.find(c => c.id === writing)!, body)} />
       )}
 
       {editing && (

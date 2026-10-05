@@ -10,6 +10,7 @@ import { CheckButton, dueTone } from '@/components/tasks/CheckButton'
 import { useContacts } from './useContacts'
 import ContactForm from './ContactForm'
 import SendDocumentDialog from './SendDocumentDialog'
+import VendorEmailDialog from './VendorEmailDialog'
 import { CatDot, ContactDetail, WaitFlag } from './ContactParts'
 
 // One tournament's setup: its checklist (this event's Tasks, each showing the
@@ -21,6 +22,7 @@ import { CatDot, ContactDetail, WaitFlag } from './ContactParts'
 export default function EventContacts({ tournamentId, withChecklist = true }: { tournamentId: string; withChecklist?: boolean }) {
   const { data, failed, load, upsert, patch, remove } = useContacts(tournamentId)
   const [sending, setSending] = useState<{ contactId?: string } | null>(null)
+  const [writing, setWriting] = useState<string | null>(null)
   const [selId, setSelId] = useState<string | null>(null)
   const [editing, setEditing] = useState<ContactRow | 'new' | null>(null)
   const [picking, setPicking] = useState(false)
@@ -88,16 +90,21 @@ export default function EventContacts({ tournamentId, withChecklist = true }: { 
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setSelId(null)} />
           <div role="dialog" aria-modal="true" aria-label={selected.name} className="relative w-full sm:max-w-lg max-h-[88vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-4">
-            <ContactDetail c={selected} tournaments={tournaments} today={today}
+            <ContactDetail c={selected} tournaments={tournaments} today={today} tournamentId={tournamentId}
               onPatch={body => patch(selected, body)} onEdit={() => setEditing(selected)}
               onDelete={() => { setSelId(null); remove(selected) }} onClose={() => setSelId(null)}
-              onSend={() => { setSelId(null); setSending({ contactId: selected.id }) }} />
+              onSend={() => { setSelId(null); setSending({ contactId: selected.id }) }}
+              onWrite={() => { setSelId(null); setWriting(selected.id) }} />
           </div>
         </div>
       )}
       {sending && (
         <SendDocumentDialog contacts={contacts} tournaments={tournaments} today={today} tournamentId={tournamentId} contactId={sending.contactId}
           onClose={() => setSending(null)} onSent={() => { setSending(null); load() }} />
+      )}
+      {writing && contacts.some(c => c.id === writing) && (
+        <VendorEmailDialog contact={contacts.find(c => c.id === writing)!} tournaments={tournaments} today={today} tournamentId={tournamentId}
+          onClose={() => setWriting(null)} onPatch={body => patch(contacts.find(c => c.id === writing)!, body)} />
       )}
       {editing && (
         <ContactForm contact={editing === 'new' ? null : editing} tournaments={tournaments} today={today} defaultEvent={tournamentId}
