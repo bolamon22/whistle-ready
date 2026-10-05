@@ -32,6 +32,8 @@ export type SendEmailArgs = {
   /** Per-org sender. Only use a domain authenticated in SendGrid, or delivery fails. */
   fromEmail?: string
   fromName?: string
+  /** Files to attach (base64 content). Keep the total well under SendGrid's 30 MB. */
+  attachments?: { filename: string; content: string; type?: string }[]
 }
 
 export type SendEmailResult = { ok: boolean; error?: string }
@@ -81,6 +83,9 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       ...(args.text ? { text: args.text } : {}),
       ...(ccList.length ? { cc: ccList } : {}),
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
+      ...(args.attachments?.length ? {
+        attachments: args.attachments.map(a => ({ filename: a.filename, content: a.content, type: a.type || 'application/octet-stream', disposition: 'attachment' })),
+      } : {}),
     })
     return { ok: true }
   } catch (e: any) {

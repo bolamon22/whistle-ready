@@ -10,7 +10,7 @@ import { taskScope, type Scope } from '@/lib/tasks'
 // tournaments page), else their own, else every org's.
 
 export type TasksGate =
-  | { ok: true; scope: Scope; orgId: string; by: string }
+  | { ok: true; scope: Scope; orgId: string; by: string; email: string }
   | { ok: false; res: NextResponse }
 
 export async function tasksGate(viewOrgId?: string | null): Promise<TasksGate> {
@@ -23,5 +23,5 @@ export async function tasksGate(viewOrgId?: string | null): Promise<TasksGate> {
   const scope = taskScope(gate.role, gate.orgId, preview)
   if (!scope) return { ok: false, res: NextResponse.json({ error: 'Your login is not part of an organization yet' }, { status: 403 }) }
   const user = (gate.session?.user || {}) as { name?: string; email?: string }
-  return { ok: true, scope, orgId: 'orgId' in scope ? scope.orgId : '', by: user.name || user.email || 'Staff' }
+  return { ok: true, scope, orgId: 'orgId' in scope ? scope.orgId : '', by: user.name || user.email || 'Staff', email: user.email || '' }
 }
