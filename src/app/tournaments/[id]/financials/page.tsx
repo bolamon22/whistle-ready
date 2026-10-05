@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { BarChart3, Wallet, ClipboardList, Store, Users, Plus, Pencil, Trash2 } from 'lucide-react'
+import { BarChart3, Wallet, ClipboardList, Store, Users, Plus, Pencil, Trash2, Calculator } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import { Card } from '@/components/ui'
+import EventBudget from '@/components/costs/EventBudget'
 
 interface Transaction {
   id: string; type: 'income' | 'expense'; category: string
@@ -83,7 +84,7 @@ export default function FinancialsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'summary' | 'other'>('summary')
+  const [activeTab, setActiveTab] = useState<'summary' | 'budget' | 'other'>('summary')
 
   const load = () => {
     Promise.all([
@@ -110,6 +111,13 @@ export default function FinancialsPage() {
   }
 
   useEffect(() => { load() }, [tournamentId])
+  // A Budget line marked Paid adds (or changes) an expense here.
+  useEffect(() => {
+    const again = () => load()
+    window.addEventListener('costs-changed', again)
+    return () => window.removeEventListener('costs-changed', again)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentId])
   function setF(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
 
   function openNew(type: 'income' | 'expense') {
@@ -178,6 +186,7 @@ export default function FinancialsPage() {
 
   const tabs = [
     { key: 'summary', label: 'P&L Summary', Icon: BarChart3 },
+    { key: 'budget',  label: 'Budget', Icon: Calculator },
     { key: 'other',   label: `Other (${transactions.length})`, Icon: Wallet },
   ] as const
 
@@ -339,6 +348,9 @@ export default function FinancialsPage() {
             </Card>
           </div>
         )}
+
+        {/* ── BUDGET TAB: vendor quotes, last time vs this time ── */}
+        {activeTab === 'budget' && <EventBudget tournamentId={tournamentId as string} />}
 
         {/* ── OTHER INCOME & EXPENSES TAB ── */}
         {activeTab === 'other' && (
