@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireMoney } from '@/lib/apiAuth'
-import { tournamentOrgId } from '@/lib/org'
+import { tournamentOrgId, orgById } from '@/lib/org'
 import {
-  connectionFor, qboSettings, saveQboSettings, qboStates, backfillPreview, syncNow, syncPending, linkExisting, markRefundEntered,
+  verifiedConnection, qboSettings, saveQboSettings, qboStates, backfillPreview, syncNow, syncPending, setInvoiceNumber, markRefundEntered,
 } from '@/lib/qboSync'
+
+// "Sunshine Events Group, LLC" and "Sunshine Events Group" are the same company.
+const sameName = (a: string, b: string) => {
+  const n = (x: string) => x.toLowerCase().replace(/\b(llc|inc|co|corp|ltd)\b/g, '').replace(/[^a-z0-9]/g, '')
+  const x = n(a), y = n(b)
+  return !!x && !!y && (x.includes(y) || y.includes(x))
+}
 
 // The registrations page's QuickBooks panel (lib/qboSync): where the sync
 // stands for an event, turning it on, the backfill list and sending it, "Sync
@@ -28,11 +35,14 @@ export async function GET(req: NextRequest) {
   const tournamentId = req.nextUrl.searchParams.get('tournamentId') || ''
   const g = await gate(tournamentId)
   if (!g.ok) return g.res
-  const conn = await connectionFor(g.orgId, [g.userId])
+  const conn = await verifiedConnection(g.orgId, [g.userId])
   const { settings, regs } = await qboStates(g.orgId, tournamentId)
   const preview = req.nextUrl.searchParams.get('preview') ? await backfillPreview(g.orgId, tournamentId, g.userId) : null
+  const org = await orgById(g.orgId)
   return NextResponse.json({
-    connection: conn.ok ? { ok: true, company: conn.companyName } : { ok: false, reason: conn.reason, message: conn.message },
+    connection: conn.ok
+      ? { ok: true, company: conn.companyName, org: org?.name || '', sameCompany: sameName(conn.companyName, org?.name || '') }
+      : { ok: false, reason: conn.reason, message: conn.message },
     settings: { enabled: settings.enabled, startedAt: settings.startedAt, lastRunAt: settings.lastRunAt || '', lastProblem: settings.lastProblem || '' },
     regs,
     preview,
@@ -55,10 +65,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'enable') {
-    const conn = await connectionFor(g.orgId, [g.userId])
-    if (!conn.ok) return NextResponse.json({ error: conn.message }, { status: 503 })
+    // Turning it on fixes the company: the sync never writes to any other.
     const cur = await qboSettings(g.orgId)
-    const s = await saveQboSettings(g.orgId, { enabled: true, startedAt: cur.startedAt || new Date().toISOString(), userId: g.userId })
+    if (cur.realmId) await saveQboSettings(g.orgId, { realmId: '' })
+    const conn = await verifiedConnection(g.orgId, [g.userId])
+    if (!conn.ok) {
+      if (cur.realmId) await saveQboSettings(g.orgId, { realmId: cur.realmId })
+      return NextResponse.json({ error: conn.message }, { status: 503 })
+    }
+    const s = await saveQboSettings(g.orgId, { enabled: true, startedAt: cur.startedAt || new Date().toISOString(), userId: g.userId, realmId: conn.realmId, companyName: conn.companyName })
     return NextResponse.json({ ok: true, settings: { enabled: s.enabled, startedAt: s.startedAt } })
   }
   if (action === 'disable') {
@@ -78,10 +93,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(r)
   }
   if (action === 'link') {
+    // Give a registration its QuickBooks invoice number: linked now if QuickBooks
+    // answers, otherwise saved for the PDF and linked by the sync later.
     const docNumber = String(body.docNumber || '').trim()
     if (regIds.length !== 1 || !/^\d{1,21}$/.test(docNumber)) return NextResponse.json({ error: 'Pick a registration and an invoice number' }, { status: 400 })
-    const r = await linkExisting(g.orgId, regIds[0], docNumber, g.userId)
-    return NextResponse.json(r.ok ? { ok: true, message: r.message } : { error: r.message }, { status: r.ok ? 200 : 400 })
+    const r = await setInvoiceNumber(g.orgId, regIds[0], docNumber, { userId: g.userId, date: String(body.date || '') })
+    return NextResponse.json(r.ok ? { ok: true, linked: !!r.linked, message: r.message } : { error: r.message }, { status: r.ok ? 200 : 400 })
   }
   if (action === 'refundEntered') {
     const paymentId = String(body.paymentId || '')

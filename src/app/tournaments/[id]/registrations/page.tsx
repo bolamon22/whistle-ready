@@ -29,12 +29,12 @@ interface RegistrationPayment {
 }
 // QuickBooks sync (api/qbo, lib/qboSync).
 type QboRegState = {
-  id: string; club: string; deleted: boolean; state: 'in' | 'changed' | 'payments' | 'queued' | 'out' | 'none' | 'error'
+  id: string; club: string; deleted: boolean; state: 'in' | 'changed' | 'payments' | 'queued' | 'out' | 'numbered' | 'none' | 'error'
   docNumber: string; syncedAt: string; error: string; paymentsWaiting: number
   refunds: { id: string; amount: number; date: string }[]
 }
 type QboStatus = {
-  connection: { ok: boolean; company?: string; reason?: string; message?: string }
+  connection: { ok: boolean; company?: string; org?: string; sameCompany?: boolean; reason?: string; message?: string }
   settings: { enabled: boolean; startedAt: string; lastRunAt: string; lastProblem: string }
   regs: QboRegState[]
 }
@@ -1776,7 +1776,7 @@ export default function RegistrationsPage() {
                     <h3 className="font-bold text-slate-800 flex items-center gap-2"><Landmark size={17} className="text-slate-500" /> QuickBooks</h3>
                     {qbo.connection.ok
                       ? <p className="text-sm text-slate-500">Connected to {qbo.connection.company || 'QuickBooks'}</p>
-                      : null}
+                      : <p className="text-sm text-slate-500">Not connected</p>}
                   </div>
                   <button onClick={() => !qboBusy && setQboOpen(false)} className="text-slate-400 hover:text-slate-600" aria-label="Close"><X size={18} /></button>
                 </div>
@@ -1784,7 +1784,13 @@ export default function RegistrationsPage() {
                 {!qbo.connection.ok && (
                   <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     {qbo.connection.message}
-                    <a href="/api/oauth/quickbooks" className="ml-1 font-semibold underline">Connect QuickBooks</a>
+                    {qbo.connection.reason !== 'unverified' && qbo.connection.reason !== 'no_credentials' &&
+                      <a href="/api/oauth/quickbooks" className="ml-1 font-semibold underline">Connect QuickBooks</a>}
+                  </div>
+                )}
+                {qbo.connection.ok && qbo.connection.sameCompany === false && (
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    This is {qbo.connection.company ? `"${qbo.connection.company}"` : 'a QuickBooks company'}, not {qbo.connection.org || 'this organization'}. Check it's the right books before turning the sync on.
                   </div>
                 )}
 
@@ -1810,7 +1816,7 @@ export default function RegistrationsPage() {
                 </div>
 
                 <p className="text-sm text-slate-600 mb-4">
-                  <span className="font-semibold text-slate-800">This event:</span> {count(['in', 'changed', 'payments'])} in QuickBooks · {out.length} not sent{count(['queued']) ? ` · ${count(['queued'])} waiting for the next sync` : ''}{errors.length ? ` · ${errors.length} with a problem` : ''}
+                  <span className="font-semibold text-slate-800">This event:</span> {count(['in', 'changed', 'payments'])} in QuickBooks · {out.length} not sent{count(['queued', 'numbered']) ? ` · ${count(['queued', 'numbered'])} waiting for the next sync` : ''}{errors.length ? ` · ${errors.length} with a problem` : ''}
                 </p>
 
                 {out.length > 0 && (
@@ -1900,16 +1906,16 @@ export default function RegistrationsPage() {
 
                 {out.length > 0 && (
                   <details className="text-sm">
-                    <summary className="cursor-pointer text-slate-500 hover:text-slate-700">Already made one in QuickBooks by hand? Link it</summary>
+                    <summary className="cursor-pointer text-slate-500 hover:text-slate-700">Already have a QuickBooks invoice number for one? Enter it</summary>
                     <div className="mt-2 flex flex-col sm:flex-row gap-2">
-                      <select value={qboLink.regId} onChange={e => setQboLink(l => ({ ...l, regId: e.target.value }))} className={`${smallInputCls} sm:flex-1`}>
+                      <select aria-label="Registration" value={qboLink.regId} onChange={e => setQboLink(l => ({ ...l, regId: e.target.value }))} className={`${smallInputCls} sm:flex-1`}>
                         <option value="">Registration…</option>
                         {out.map(q => <option key={q.id} value={q.id}>{byId.get(q.id)?.clubName || q.id}</option>)}
                       </select>
                       <input value={qboLink.docNumber} onChange={e => setQboLink(l => ({ ...l, docNumber: e.target.value.replace(/\D/g, '') }))} placeholder="Invoice #" inputMode="numeric" className={`${smallInputCls} sm:w-28`} />
-                      <button onClick={qboLinkSave} disabled={!!qboBusy || !qboLink.regId || !qboLink.docNumber} className="text-sm border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 disabled:opacity-50">Link</button>
+                      <button onClick={qboLinkSave} disabled={!!qboBusy || !qboLink.regId || !qboLink.docNumber} className="text-sm border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 disabled:opacity-50">Save</button>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">The next sync brings that invoice in line with Whistle Ready and sends its payments.</p>
+                    <p className="text-xs text-slate-400 mt-1">Its invoice PDF shows that number right away. The sync links it to the QuickBooks invoice with that number (or makes it with that number), then keeps it in line with Whistle Ready.</p>
                   </details>
                 )}
               </div>
@@ -2743,11 +2749,13 @@ export default function RegistrationsPage() {
                         : q.state === 'changed' ? `QB #${q.docNumber} · update waiting`
                         : q.state === 'payments' ? `QB #${q.docNumber} · ${q.paymentsWaiting} payment${q.paymentsWaiting === 1 ? '' : 's'} to send`
                         : q.state === 'queued' ? 'QB · next sync'
+                        : q.state === 'numbered' ? `QB #${q.docNumber} · not linked yet`
                         : q.state === 'error' ? `QB${q.docNumber ? ` #${q.docNumber}` : ''} · problem`
                         : 'Send to QB'
                       const title = q.state === 'error' ? `${q.error} Click to try again.`
                         : q.state === 'out' ? 'Not in QuickBooks yet. Click to send it now, with the next invoice number.'
                         : q.state === 'queued' ? 'Goes to QuickBooks on the next sync (every 15 minutes). Click to send it now.'
+                        : q.state === 'numbered' ? `Invoice number ${q.docNumber} was given by hand and is on the PDF. It links to QuickBooks invoice ${q.docNumber} once QuickBooks is connected and the sync runs. Click to try now.`
                         : `QuickBooks invoice ${q.docNumber}${q.syncedAt ? `, last synced ${shortDate(q.syncedAt)}` : ''}. Click to sync now.`
                       return <button onClick={() => handleQboSync(reg.id)} disabled={!!qboBusy} title={title}
                         className={`text-xs border px-2.5 py-1 rounded-lg inline-flex items-center gap-1 disabled:opacity-60 ${look}`}>

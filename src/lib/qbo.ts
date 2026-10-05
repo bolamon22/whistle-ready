@@ -21,7 +21,7 @@ const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
 const MINOR = '75'
 
 export type QboConnection = { ok: true; accessToken: string; realmId: string; companyName: string; rowId: string }
-export type QboProblem = { ok: false; reason: 'not_connected' | 'expired' | 'no_credentials'; message: string }
+export type QboProblem = { ok: false; reason: 'not_connected' | 'expired' | 'no_credentials' | 'unverified' | 'other_company'; message: string }
 
 export class QboError extends Error {
   status: number
@@ -111,6 +111,23 @@ export async function qboFetch<T = any>(conn: QboConnection, path: string, init:
     throw new QboError(msg, res.status, String(fault?.code || ''))
   }
   return j as T
+}
+
+const companies = new Map<string, { name: string; at: number }>()
+/**
+ * The connected company's name. Asking is also the proof that QuickBooks answers
+ * for this login's company: an app with only development keys can connect to a
+ * QuickBooks test (sandbox) company, whose tokens look fine but which the
+ * production API refuses. (Whistle Ready's login was one of those until Oct 5,
+ * 2026.) Cached ten minutes per company.
+ */
+export async function qboCompanyName(conn: QboConnection): Promise<string> {
+  const hit = companies.get(conn.realmId)
+  if (hit && Date.now() - hit.at < 600_000) return hit.name
+  const j: any = await qboFetch(conn, `companyinfo/${encodeURIComponent(conn.realmId)}`)
+  const name = String(j?.CompanyInfo?.CompanyName || '').trim()
+  companies.set(conn.realmId, { name, at: Date.now() })
+  return name
 }
 
 /** A query (QuickBooks' SQL-ish language); the rows of `entity`. */

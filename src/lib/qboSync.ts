@@ -26,7 +26,7 @@
 // same number. Runs from the cron (every 15 minutes), the card's Sync and the
 // backfill. Server only.
 import { prisma } from '@/lib/db'
-import { qboConnection, qboFetch, qboQuery, qq, QboError, type QboConnection, type QboProblem } from '@/lib/qbo'
+import { qboConnection, qboFetch, qboQuery, qboCompanyName, qq, QboError, type QboConnection, type QboProblem } from '@/lib/qbo'
 import { orgForTournament, type Org } from '@/lib/org'
 import { tournamentAbs } from '@/lib/seo'
 import { parsePricing, type RegPricing } from '@/lib/regPricing'
@@ -50,6 +50,9 @@ export type QboSettings = {
   methodsAt?: string
   lastRunAt?: string
   lastProblem?: string
+  /** The QuickBooks company the sync was turned on with. It never writes to another. */
+  realmId?: string
+  companyName?: string
 }
 
 const KEY = (orgId: string) => `qbo:${orgId}`
@@ -348,20 +351,41 @@ export async function syncRegistration(ctx: Ctx, regId: string, create: boolean)
     if (!ev) return out({ status: 'skipped', message: 'Event not found' })
     const teams: TeamRow[] = await prisma.$queryRawUnsafe(`SELECT registrationId, teamName, division, waitlisted FROM "RegisteredTeam" WHERE registrationId = ? ORDER BY rowid`, regId)
     const due = round2(reg.invoiceAmount - reg.discountAmount)
-    if (!linked && (!create || due <= 0)) return out({ status: 'skipped', message: due <= 0 ? 'Nothing invoiced' : 'Not sent to QuickBooks' })
+    // A number given by hand (setInvoiceNumber) counts as a request to send.
+    if (!linked && ((!create && !reg.qboDocNumber) || due <= 0)) return out({ status: 'skipped', message: due <= 0 ? 'Nothing invoiced' : 'Not sent to QuickBooks' })
 
-    const customer: CustomerMatch = reg.qboCustomerId ? { id: reg.qboCustomerId, name: reg.clubName, how: 'saved' } : (await findCustomer(ctx.conn, reg.clubName, reg.contactEmail)) || await createCustomer(ctx.conn, reg)
-    if (!reg.qboCustomerId) await saveReg(regId, { qboCustomerId: customer.id })
+    let linkedNow = linked
+    let invoiceId = reg.qboInvoiceId
+    let customerId = reg.qboCustomerId
+    let syncedHash = reg.qboSyncedHash
+    if (!linked && reg.qboDocNumber) {
+      // Numbered by hand: the invoice may already be in QuickBooks (made there by
+      // hand, like M&D Orlando's 1392). Link it rather than make a second one.
+      const found = await qboQuery<any>(ctx.conn, `SELECT * FROM Invoice WHERE DocNumber = '${qq(reg.qboDocNumber)}'`, 'Invoice')
+      if (found.length > 1) throw new QboError(`More than one QuickBooks invoice is numbered ${reg.qboDocNumber}.`)
+      if (found.length === 1) {
+        const other: Record<string, unknown>[] = await prisma.$queryRawUnsafe(`SELECT id FROM "TeamRegistration" WHERE "qboInvoiceId" = ? AND id != ?`, String(found[0].Id), regId)
+        if (other.length) throw new QboError(`QuickBooks invoice ${reg.qboDocNumber} is already linked to another registration.`)
+        invoiceId = String(found[0].Id)
+        customerId = String(found[0].CustomerRef?.value || '')
+        syncedHash = ''
+        await saveReg(regId, { qboInvoiceId: invoiceId, qboCustomerId: customerId, qboTxnDate: String(found[0].TxnDate || ''), qboSyncedHash: '' })
+        linkedNow = true
+      }
+    }
+
+    const customer: CustomerMatch = customerId ? { id: customerId, name: reg.clubName, how: 'saved' } : (await findCustomer(ctx.conn, reg.clubName, reg.contactEmail)) || await createCustomer(ctx.conn, reg)
+    if (!customerId) await saveReg(regId, { qboCustomerId: customer.id })
     const itemId = await eventItem(ctx, ev)
 
     let status: SyncResult['status'] = 'unchanged'
     let docNumber = reg.qboDocNumber
-    let invoiceId = reg.qboInvoiceId
     let balance: number | null = null
     const now = new Date().toISOString()
 
-    if (!linked) {
-      docNumber = await nextDocNumber(ctx)
+    if (!linkedNow) {
+      // A number given by hand is used as it is; otherwise the next free one.
+      docNumber = reg.qboDocNumber || await nextDocNumber(ctx)
       const doc = docFor(ev, reg, teams, docNumber)
       const b = bodyFor(ev, reg, doc, customer.id, itemId, docNumber)
       const j: any = await qboFetch(ctx.conn, 'invoice', { method: 'POST', body: qboInvoiceBody({ ...b, docNumber, txnDate: txnDateOf(reg) }) })
@@ -375,7 +399,7 @@ export async function syncRegistration(ctx: Ctx, regId: string, create: boolean)
       const doc = docFor(ev, reg, teams, docNumber)
       const b = bodyFor(ev, reg, doc, customer.id, itemId, docNumber)
       const fp = syncFingerprint(b)
-      if (fp !== reg.qboSyncedHash) {
+      if (fp !== syncedHash) {
         const cur: any = await qboFetch(ctx.conn, `invoice/${encodeURIComponent(invoiceId)}`)
         const body = qboInvoiceBody(b)
         const j: any = await qboFetch(ctx.conn, 'invoice', { method: 'POST', body: { Id: invoiceId, SyncToken: cur.Invoice.SyncToken, sparse: true, ...body } })
@@ -429,10 +453,36 @@ export async function syncRegistration(ctx: Ctx, regId: string, create: boolean)
 
 // ── Whole org ────────────────────────────────────────────────────────────────
 
-/** The connection for an org's sync, or why there isn't one. */
+/** The connection for an org's sync, or why there isn't one (tokens only). */
 export async function connectionFor(orgId: string, extraUserIds: string[] = []): Promise<QboConnection | QboProblem> {
   const settings = await qboSettings(orgId)
   return qboConnection(orgId, { userIds: [settings.userId, ...extraUserIds] })
+}
+
+/**
+ * A connection QuickBooks actually answers for, and to the company the sync was
+ * turned on with. Tokens alone proved nothing: Whistle Ready's login turned out
+ * to be for a QuickBooks test company (Oct 5 2026), which refreshes fine and
+ * refuses everything else. Every look-up and write goes through this.
+ */
+export async function verifiedConnection(orgId: string, extraUserIds: string[] = []): Promise<QboConnection | QboProblem> {
+  const settings = await qboSettings(orgId)
+  const conn = await qboConnection(orgId, { userIds: [settings.userId, ...extraUserIds] })
+  if (!conn.ok) return conn
+  let name = ''
+  try { name = await qboCompanyName(conn) } catch {
+    return {
+      ok: false, reason: 'unverified',
+      message: `Whistle Ready's QuickBooks login is for company ${conn.realmId}, and QuickBooks won't answer for it. That is usually a QuickBooks test (sandbox) company, the only kind an app with development keys can reach. Sunshine Events Group's books need the app's production keys.`,
+    }
+  }
+  if (settings.realmId && settings.realmId !== conn.realmId) {
+    return {
+      ok: false, reason: 'other_company',
+      message: `QuickBooks is now connected to ${name || `company ${conn.realmId}`}, not ${settings.companyName || 'the company the sync was turned on with'}. Nothing will be sent until it's connected to that company again, or the sync is turned off and on with the new one.`,
+    }
+  }
+  return { ...conn, companyName: name }
 }
 
 /** Sync a list of registrations now (the card's Sync, the backfill), creating invoices
@@ -440,7 +490,7 @@ export async function connectionFor(orgId: string, extraUserIds: string[] = []):
 export async function syncNow(orgId: string, regIds: string[], opts: { userId?: string; budgetMs?: number } = {}):
   Promise<{ ok: true; results: SyncResult[]; remaining: string[] } | { ok: false; busy?: boolean; message: string }> {
   await ensureQboColumns()
-  const conn = await connectionFor(orgId, opts.userId ? [opts.userId] : [])
+  const conn = await verifiedConnection(orgId, opts.userId ? [opts.userId] : [])
   if (!conn.ok) return { ok: false, message: conn.message }
   const started = Date.now()
   const budget = opts.budgetMs ?? 40_000
@@ -465,7 +515,7 @@ export async function syncPending(orgId: string, opts: { budgetMs?: number } = {
   const settings = await qboSettings(orgId)
   if (!settings.enabled) return { ran: 0, results: [] }
   await ensureQboColumns()
-  const conn = await connectionFor(orgId)
+  const conn = await verifiedConnection(orgId)
   if (!conn.ok) {
     await saveQboSettings(orgId, { lastProblem: conn.message, lastRunAt: new Date().toISOString() })
     return { ran: 0, results: [], problem: conn.message }
@@ -528,6 +578,11 @@ export async function pendingFor(orgId: string, settings: QboSettings): Promise<
       if ((changed.has(r.id) || payWaiting.has(r.id)) && retryOk(r)) out.push({ id: r.id, create: false, why: changed.has(r.id) ? 'changed' : 'payments' })
       continue
     }
+    // Numbered by hand: link it (or make it with that number), whenever it was made.
+    if (r.qboDocNumber && !asDate(r.deletedAt)) {
+      if (retryOk(r) && round2(r.invoiceAmount - r.discountAmount) > 0) out.push({ id: r.id, create: true, why: 'numbered' })
+      continue
+    }
     const created = asDate(r.createdAt)
     if (asDate(r.deletedAt) || !started || !created || created < started) continue
     if (round2(r.invoiceAmount - r.discountAmount) <= 0 || !retryOk(r)) continue
@@ -545,8 +600,9 @@ export type RegQboState = {
   deleted: boolean
   /** in = linked and current; changed / payments = linked, an update is waiting;
    *  queued = new since the sync was turned on, not sent yet; out = from before, not sent;
+   *  numbered = given its QuickBooks number by hand, not linked yet;
    *  none = nothing invoiced; error = the last attempt failed. */
-  state: 'in' | 'changed' | 'payments' | 'queued' | 'out' | 'none' | 'error'
+  state: 'in' | 'changed' | 'payments' | 'queued' | 'out' | 'numbered' | 'none' | 'error'
   docNumber: string
   syncedAt: string
   error: string
@@ -576,6 +632,7 @@ export async function qboStates(orgId: string, tournamentId: string): Promise<{ 
       const state: RegQboState['state'] = r.qboSyncError ? 'error'
         : r.qboInvoiceId ? (pending.has(`${r.id}:changed`) ? 'changed' : waiting ? 'payments' : 'in')
         : round2(r.invoiceAmount - r.discountAmount) <= 0 ? 'none'
+        : r.qboDocNumber ? 'numbered'
         : settings.enabled && started && created && created >= started ? 'queued' : 'out'
       const deleted = !!asDate(r.deletedAt)
       return {
@@ -594,7 +651,7 @@ export async function backfillPreview(orgId: string, tournamentId: string, userI
   rows: { id: string; club: string; contact: string; teams: number; total: number; paid: number; payments: number; refunds: number; registered: string; customer: CustomerMatch | null }[]
 }> {
   await ensureQboColumns()
-  const conn = await connectionFor(orgId, userId ? [userId] : [])
+  const conn = await verifiedConnection(orgId, userId ? [userId] : [])
   const regs = (await prisma.$queryRawUnsafe(
     `SELECT * FROM "TeamRegistration" WHERE tournamentId = ? AND "deletedAt" IS NULL AND ("qboInvoiceId" = '' OR "qboInvoiceId" IS NULL) ORDER BY createdAt`, tournamentId) as Record<string, unknown>[])
     .map(normReg).filter(r => round2(r.invoiceAmount - r.discountAmount) > 0)
@@ -630,7 +687,7 @@ export async function backfillPreview(orgId: string, tournamentId: string, userI
  *  number), so the sync keeps it up to date instead of making a second one. */
 export async function linkExisting(orgId: string, regId: string, docNumber: string, userId?: string): Promise<{ ok: boolean; message: string }> {
   await ensureQboColumns()
-  const conn = await connectionFor(orgId, userId ? [userId] : [])
+  const conn = await verifiedConnection(orgId, userId ? [userId] : [])
   if (!conn.ok) return { ok: false, message: conn.message }
   const inv = await qboQuery<any>(conn, `SELECT * FROM Invoice WHERE DocNumber = '${qq(docNumber)}'`, 'Invoice')
   if (inv.length !== 1) return { ok: false, message: inv.length ? `More than one invoice is numbered ${docNumber}.` : `No invoice ${docNumber} in QuickBooks.` }
@@ -639,6 +696,33 @@ export async function linkExisting(orgId: string, regId: string, docNumber: stri
   // An empty fingerprint makes the next sync bring it in line with Whistle Ready.
   await saveReg(regId, { qboInvoiceId: String(inv[0].Id), qboDocNumber: String(inv[0].DocNumber), qboTxnDate: String(inv[0].TxnDate || ''), qboCustomerId: String(inv[0].CustomerRef?.value || ''), qboSyncedHash: '', qboSyncError: '' })
   return { ok: true, message: `Linked to invoice ${docNumber}.` }
+}
+
+/**
+ * Give a registration its QuickBooks invoice number by hand: one made in
+ * QuickBooks already, or one the office has given the club. The PDF shows it at
+ * once, even before QuickBooks is connected; the sync then links the invoice with
+ * that number, or makes it with that number if QuickBooks has none.
+ * `date` (YYYY-MM-DD) is the invoice date to show until it's linked.
+ */
+export async function setInvoiceNumber(orgId: string, regId: string, docNumber: string, opts: { userId?: string; date?: string } = {}): Promise<{ ok: boolean; message: string; linked?: boolean }> {
+  await ensureQboColumns()
+  const n = String(docNumber || '').trim()
+  if (!/^\d{1,21}$/.test(n)) return { ok: false, message: 'An invoice number is digits only.' }
+  const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(`SELECT * FROM "TeamRegistration" WHERE id = ?`, regId)
+  if (!rows?.[0]) return { ok: false, message: 'Registration not found' }
+  const reg = normReg(rows[0])
+  if (reg.qboInvoiceId) return { ok: false, message: `Already linked to QuickBooks invoice ${reg.qboDocNumber}.` }
+  const taken: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+    `SELECT "clubName" FROM "TeamRegistration" WHERE "qboDocNumber" = ? AND id != ? AND "deletedAt" IS NULL`, n, regId)
+  if (taken.length) return { ok: false, message: `Invoice ${n} is already on ${s(taken[0].clubName)}'s registration.` }
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(opts.date || '') ? String(opts.date) : ''
+  await saveReg(regId, { qboDocNumber: n, qboTxnDate: date, qboSyncError: '' })
+  const conn = await verifiedConnection(orgId, opts.userId ? [opts.userId] : [])
+  if (!conn.ok) return { ok: true, message: `Saved: the invoice PDF shows ${n} now. It links to QuickBooks invoice ${n} once QuickBooks is connected and the sync runs.` }
+  const linked = await linkExisting(orgId, regId, n, opts.userId)
+  if (linked.ok) return { ok: true, linked: true, message: linked.message }
+  return { ok: true, message: `Saved: the invoice PDF shows ${n}. ${linked.message} The sync will make it in QuickBooks with that number.` }
 }
 
 /** The office entered a refund in QuickBooks by hand: stop listing it. */
