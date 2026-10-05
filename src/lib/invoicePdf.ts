@@ -86,6 +86,11 @@ export type InvoiceSource = {
   payUrl: string
   now?: Date
   logo?: InvoiceDoc['logo']
+  /** The invoice's number in QuickBooks, once it has one (lib/qboSync). Without it
+   *  the number is made from the org and the registration id. */
+  number?: string | null
+  /** QuickBooks' invoice date (YYYY-MM-DD), once it has one. Without it, today. */
+  issuedOn?: string | null
 }
 
 // The office is in Florida. An invoice dated by the server's UTC clock read as
@@ -153,7 +158,7 @@ export function invoiceDocFor(src: InvoiceSource): InvoiceDoc {
   const now = src.now || new Date()
   const { reg, tournament: t } = src
   const orgName = String(src.org?.name || '').trim() || t.name || 'Tournament registration'
-  const number = invoiceNumber(src.org?.name || t.name, reg.id)
+  const number = String(src.number || '').trim() || invoiceNumber(src.org?.name || t.name, reg.id)
   const invoiced = round2(Number(reg.invoiceAmount) || 0)
   const discount = round2(Number(reg.discountAmount) || 0)
   const net = round2(invoiced - discount)
@@ -201,7 +206,7 @@ export function invoiceDocFor(src: InvoiceSource): InvoiceDoc {
 
   return {
     number,
-    issuedOn: invoiceDate(now),
+    issuedOn: invoiceDate(src.issuedOn || now),
     dueText,
     org: {
       name: orgName,

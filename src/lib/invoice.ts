@@ -65,6 +65,13 @@ export async function loadInvoice(registrationId: string, now = new Date()): Pro
 
   let pricing: RegPricing | null = null
   try { pricing = parsePricing(t.registrationPricing) } catch { /* one total, not itemized */ }
+  // Once the registration is in QuickBooks, its invoice carries QuickBooks' number
+  // (lib/qboSync), so the PDF, the email and the books all say the same thing.
+  let qbo = { number: '', date: '' }
+  try {
+    const q: { qboDocNumber?: string | null; qboTxnDate?: string | null }[] = await prisma.$queryRawUnsafe(`SELECT "qboDocNumber", "qboTxnDate" FROM "TeamRegistration" WHERE id = ?`, reg.id)
+    qbo = { number: String(q?.[0]?.qboDocNumber || ''), date: String(q?.[0]?.qboTxnDate || '') }
+  } catch { /* columns not made yet: not in QuickBooks */ }
   const clearing = (await clearingTransfers([reg.id]))[reg.id] || null
   const orgBase = tournamentAbs(org?.slug, '')
 
@@ -82,6 +89,8 @@ export async function loadInvoice(registrationId: string, now = new Date()): Pro
     payUrl: tournamentAbs(org?.slug, `/pay/${reg.id}`),
     now,
     logo: await logoFor(String(t.logoUrl || ''), orgBase),
+    number: qbo.number || null,
+    issuedOn: qbo.number ? qbo.date || null : null,
   })
 
   return {
