@@ -794,49 +794,91 @@ export function ConfirmTeamsDialog({ tournamentId, eventName, reg, staffView = f
 }
 
 // ---------------------------------------------------------------------------
-// What's left
+// What's left: the status bar across the top of the portal
 // ---------------------------------------------------------------------------
 
 export type LeftItem = {
   key: string; title: string; detail: string; done: boolean; optional?: boolean
   /** A box the director ticks to do this step (confirming the team list). */
   check?: { onClick: () => void; disabled?: boolean; title?: string }
-  action?: { label: string; onClick?: () => void; href?: string; disabled?: boolean; title?: string }
+  /** primary: a filled button (confirm, pay) rather than a text link. */
+  action?: { label: string; onClick?: () => void; href?: string; disabled?: boolean; title?: string; primary?: boolean }
 }
 
-export function WhatsLeft({ title, items }: { title: string; items: LeftItem[] }) {
-  if (!items.length) return null
-  const open = items.filter(i => !i.done && !i.optional).length
+// Tailwind only ships class names it can see written out in full.
+const LG_COLS = ['lg:grid-cols-1', 'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4']
+
+function StepMark({ item: i }: { item: LeftItem }) {
+  if (i.done) return <CheckCircle2 size={20} aria-label="Done" className="shrink-0 text-teal-600" />
+  if (i.check) {
+    // A real box to tick: 20px to see, 44px to tap.
+    return (
+      <button type="button" role="checkbox" aria-checked="false" aria-label={i.title}
+        onClick={i.check.onClick} disabled={i.check.disabled} title={i.check.title}
+        className="shrink-0 -m-3 p-3 rounded-full text-teal-600 hover:text-teal-800 disabled:text-gray-300 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+        <Square size={20} strokeWidth={2.25} />
+      </button>
+    )
+  }
+  return <Circle size={20} aria-label="Still to do" className="shrink-0 text-gray-300" />
+}
+
+function StepAction({ a, inline = false }: { a: NonNullable<LeftItem['action']>; inline?: boolean }) {
+  const cls = a.primary
+    ? 'mt-2 inline-flex items-center min-h-[36px] px-3.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-bold disabled:bg-gray-300 disabled:cursor-not-allowed'
+    : `${inline ? '' : 'mt-1 '}inline-flex items-center text-[13px] font-semibold text-teal-700 hover:text-teal-800 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed`
+  return a.href
+    ? <a href={a.href} target="_blank" rel="noreferrer" title={a.title} className={cls}>{a.label}</a>
+    : <button type="button" onClick={a.onClick} disabled={a.disabled} title={a.title} className={cls}>{a.label}</button>
+}
+
+/** The questions a director logs in to answer, as a progress bar across the top
+ *  of the portal: one segment per step, filled as each is done (Bo, Oct 5 2026:
+ *  "a status bar across the top where they have what's left before October
+ *  24th"). Optional steps sit under the bar and never hold it back. */
+export function StatusBar({ title, readyTitle, items }: { title: string; readyTitle?: string; items: LeftItem[] }) {
+  const steps = items.filter(i => !i.optional)
+  if (!steps.length) return null
+  const extras = items.filter(i => i.optional && !i.done)
+  const done = steps.filter(i => i.done).length
+  const ready = done === steps.length
+  const bar = (i: LeftItem) => (i.done ? 'bg-teal-500' : 'bg-gray-200')
   return (
-    <section className="bg-white border border-gray-200 rounded-xl px-5 py-4">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h2 className="font-bold text-gray-800">{title}</h2>
-        <span className={`text-xs font-semibold ${open ? 'text-amber-700' : 'text-teal-700'}`}>{open ? `${open} to do` : 'All set'}</span>
+    <section aria-label={title} className="px-5 sm:px-6 py-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-[15px] font-bold text-gray-900">{ready ? (readyTitle || 'All set') : title}</h2>
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${ready ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-800'}`}>
+          {done} of {steps.length} done
+        </span>
       </div>
-      <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-        {items.map(i => (
-          <li key={i.key} className="flex gap-2.5 items-start text-sm leading-snug">
-            {i.done
-              ? <CheckCircle2 size={18} aria-label="Done" className="shrink-0 mt-px text-teal-600" />
-              : i.check
-                // A real box to tick: 18px to see, 44px to tap.
-                ? <button type="button" role="checkbox" aria-checked="false" aria-label={i.title}
-                    onClick={i.check.onClick} disabled={i.check.disabled} title={i.check.title}
-                    className="shrink-0 -m-[13px] p-[13px] rounded-full text-teal-600 hover:text-teal-800 disabled:text-gray-300 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
-                    <Square size={18} strokeWidth={2.25} className="mt-px" />
-                  </button>
-                : <Circle size={18} aria-label="Still to do" className="shrink-0 mt-px text-gray-300" />}
-            <span className="min-w-0">
-              <span className="font-semibold text-gray-800">{i.title}</span>
-              <span className="block text-[13px] text-gray-500">{i.detail}</span>
-              {i.action && !i.done && (i.action.href
-                ? <a href={i.action.href} target="_blank" rel="noreferrer" className="inline-block mt-0.5 text-[13px] font-semibold text-teal-700 hover:text-teal-800 hover:underline">{i.action.label}</a>
-                : <button type="button" onClick={i.action.onClick} disabled={i.action.disabled} title={i.action.title}
-                    className="mt-0.5 text-[13px] font-semibold text-teal-700 hover:text-teal-800 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed">{i.action.label}</button>)}
-            </span>
+      {/* On a phone the steps stack, so the bar is drawn on its own. On a wide
+          screen each step carries its own segment and the bar lines up with them. */}
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done}
+        aria-label={`${done} of ${steps.length} done`} className="lg:hidden mt-3 flex gap-1.5">
+        {steps.map(i => <span key={i.key} className={`h-2 flex-1 rounded-full ${bar(i)}`} />)}
+      </div>
+      <ol className={`mt-4 grid grid-cols-1 sm:grid-cols-2 ${LG_COLS[Math.min(steps.length, 4)]} gap-x-5 gap-y-4`}>
+        {steps.map(i => (
+          <li key={i.key} className="min-w-0">
+            <span aria-hidden="true" className={`hidden lg:block h-2 rounded-full mb-3.5 ${bar(i)}`} />
+            <div className="flex gap-2.5 items-start">
+              <StepMark item={i} />
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-gray-900 leading-5">{i.title}</div>
+                <div className="text-[13px] leading-snug text-gray-500">{i.detail}</div>
+                {i.action && !i.done && <StepAction a={i.action} />}
+              </div>
+            </div>
           </li>
         ))}
-      </ul>
+      </ol>
+      {extras.map(e => (
+        <div key={e.key} className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-gray-500">
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Optional</span>
+          <span><span className="font-semibold text-gray-700">{e.title}</span> · {e.detail}</span>
+          {e.action && <StepAction a={{ ...e.action, primary: false }} inline />}
+        </div>
+      ))}
     </section>
   )
 }

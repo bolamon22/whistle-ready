@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Copy, CreditCard, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, Plus, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
+import { AlertTriangle, BedDouble, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Clock, Copy, CreditCard, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, Plus, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { compressImageFile } from '@/lib/imageCompress'
 import {
-  RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, ConfirmTeamsDialog, AccountNote, WhatsLeft, OtherEventsCard, PortalPools, dayLabel, poolLabel,
+  RequestChangeDialog, AddTeamDialog, RegisterAgainDialog, ConfirmTeamsDialog, AccountNote, StatusBar, OtherEventsCard, PortalPools, dayLabel, eventDates, poolLabel,
   DirectorsLine, AddDirectorDialog, SharedNameNote,
   type PortalEvent, type ConfirmState, type RequestKind, type LeftItem, type AgainSource, type PortalPool, type PortalDirector, type PortalInvite,
 } from './PortalActions'
@@ -72,6 +72,22 @@ const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigi
 const todayLocal = () => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// "19 days to go" beside the event name. Both ends are bare dates turned into day
+// numbers, so the count is calendar days in the viewer's own zone and a daylight
+// saving change can't make it 18.96. Nothing once the event is over.
+const dayNum = (d?: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''))
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : NaN
+}
+const countdownLabel = (start?: string, end?: string) => {
+  const s = dayNum(start), t = dayNum(todayLocal())
+  if (isNaN(s) || isNaN(t)) return ''
+  const e = isNaN(dayNum(end)) ? s : Math.max(s, dayNum(end))
+  if (s - t > 1) return `${s - t} days to go`
+  if (s - t === 1) return 'Tomorrow'
+  return t <= e ? 'Game day' : ''
 }
 
 // WHICH EVENT THE PORTAL OPENS ON.
@@ -574,26 +590,31 @@ export default function ClubDirectorDashboard() {
     if (res?.ok) { toast.success(`Invite to ${email} taken back`); loadData(selTournament) }
     else toast.error('Could not take that invite back. Try again.')
   }
+  // The money step, built once: it is also the one step left after an event is
+  // over, when a director with an unpaid invoice still needs the way to pay.
+  const payItem: LeftItem | null = !(showMoney && totalInvoiced > 0) ? null : balance > 0
+    ? { key: 'pay', title: 'Balance due', detail: `${fmt(balance)} · bank transfer has no fee, card runs 3%`, done: false,
+        action: soloUnpaidId ? { label: `Pay ${fmt(balance)}`, href: `/pay/${soloUnpaidId}`, primary: true } : undefined }
+    : totalClearing > 0
+      ? { key: 'pay', title: 'Paid · bank transfer clearing', detail: `${fmt(totalClearing)} on its way · nothing more to pay`, done: true }
+      : { key: 'pay', title: 'Paid in full', detail: `${fmt(totalPaid)} received`, done: true }
   const leftItems: LeftItem[] = []
-  if (regs.length && !portalEvent?.ended) {
+  if (regs.length && portalEvent?.ended) {
+    if (payItem && !payItem.done) leftItems.push(payItem)
+  } else if (regs.length) {
     const requested = regs.some(r => r.confirm?.status === 'change_requested')
     const toConfirm = regs.find(r => r.confirm?.status !== 'confirmed' && r.confirm?.status !== 'change_requested')
     const lastConfirmed = regs.map(r => r.confirm?.status === 'confirmed' ? r.confirm.at : '').sort().pop() || ''
     leftItems.push(regs.every(r => r.confirm?.status === 'confirmed')
       ? { key: 'confirm', title: 'Teams confirmed', detail: lastConfirmed ? `Confirmed ${shortDate(lastConfirmed)}` : 'Your team list is confirmed', done: true }
       : requested && !toConfirm
-        ? { key: 'confirm', title: 'Teams confirmed', detail: 'Change requested · the office is on it, then you confirm the new list', done: false }
+        ? { key: 'confirm', title: 'Confirm your team list', detail: 'Change requested · the office is on it, then you confirm the new list', done: false }
         : { key: 'confirm', title: 'Confirm your team list', detail: `${totalTeams} team${totalTeams === 1 ? '' : 's'} · tick the box to check the names and divisions`, done: false,
             ...(toConfirm ? {
               check: { onClick: () => setConfirmFor(toConfirm.id), title: 'Check your teams and confirm them' },
-              action: { label: 'Confirm teams', onClick: () => setConfirmFor(toConfirm.id) },
+              action: { label: 'Confirm teams', onClick: () => setConfirmFor(toConfirm.id), primary: true },
             } : {}) })
-    if (showMoney && totalInvoiced > 0) leftItems.push(balance > 0
-      ? { key: 'pay', title: 'Balance due', detail: `${fmt(balance)} · bank transfer has no fee, card runs 3%`, done: false,
-          action: soloUnpaidId ? { label: `Pay ${fmt(balance)}`, href: `/pay/${soloUnpaidId}` } : undefined }
-      : totalClearing > 0
-        ? { key: 'pay', title: 'Paid · bank transfer clearing', detail: `${fmt(totalClearing)} on its way · nothing more to pay`, done: true }
-        : { key: 'pay', title: 'Paid in full', detail: `${fmt(totalPaid)} received`, done: true })
+    if (payItem) leftItems.push(payItem)
     const teamsWithNone = teamRows.filter(t => t.players.length === 0).length
     const filedAll = teamRows.reduce((sum, t) => sum + t.players.length, 0)
     leftItems.push({ key: 'waivers', title: 'Player waivers', done: teamRows.length > 0 && teamsWithNone === 0,
@@ -604,10 +625,17 @@ export default function ClubDirectorDashboard() {
       action: perms.cd_players !== false ? { label: 'See which coaches', onClick: () => switchTab('coaches') } : undefined })
     const hasLogo = regs.some(r => !!r.clubLogoUrl)
     leftItems.push({ key: 'logo', title: 'Club logo', optional: true, done: hasLogo,
-      detail: hasLogo ? 'On your teams' : 'Optional · shows on schedules and brackets' })
+      detail: hasLogo ? 'On your teams' : 'Shows on your schedules and brackets',
+      // The same file picker as the club card below; staff view has no picker.
+      action: !hasLogo && !viewUserId ? { label: 'Add your logo', onClick: () => document.getElementById(`club-logo-${regs[0].id}`)?.click() } : undefined })
   }
-  const leftTitle = selTournamentRow?.startDate && (selTournamentRow.startDate >= todayLocal())
-    ? `What's left before ${dayLabel(selTournamentRow.startDate)}` : "What's left"
+  const upcoming = !!selTournamentRow?.startDate && selTournamentRow.startDate >= todayLocal()
+  const leftTitle = upcoming ? `What's left before ${dayLabel(selTournamentRow!.startDate)}` : "What's left"
+  const readyTitle = upcoming ? `You're all set for ${dayLabel(selTournamentRow!.startDate)}` : "You're all set"
+  const showStatus = tab !== 'history' && leftItems.some(i => !i.optional)
+  const clubTitle = (data?.clubs?.length ? data.clubs : linkClubs).join(', ') || 'Your club'
+  const heroLogo = regs.find(r => r.clubLogoUrl)?.clubLogoUrl || ''
+  const countdown = selTournamentRow ? countdownLabel(selTournamentRow.startDate, selTournamentRow.endDate) : ''
 
   return (
     <div className="max-w-5xl mx-auto py-8">
@@ -662,65 +690,59 @@ export default function ClubDirectorDashboard() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-600">Club director</p>
-          <h1 className="text-2xl font-bold text-gray-800 mt-0.5">
-            {(data?.clubs?.length ? data.clubs : linkClubs).join(', ') || 'Your club'}
-          </h1>
-          {selTournamentName && (
-            <div className="flex items-center gap-2 mt-1">
-              {/* h-6 with w-auto, not a square box: these marks are wordmarks as often
-                  as badges, and Monster Mash is 453x180 -- squaring it shrinks it to
-                  nothing. */}
-              {selTournamentRow?.logoUrl && (
-                <img src={selTournamentRow.logoUrl} alt="" className="h-6 w-auto max-w-[110px] object-contain" />
+      {/* THE TOP OF THE PAGE: who, which event, how long until it starts, and a
+          status bar of what is left before then (Bo, Oct 5 2026: "a status bar
+          across the top where they have what's left before October 24th"). It
+          replaces the four number tiles, which showed the same numbers without
+          saying what to do about them; the balance and its Pay button are a step
+          on the bar now. */}
+      <section className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mb-6">
+        <div className="px-5 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
+            {heroLogo
+              ? <img src={heroLogo} alt="" className="h-14 w-14 rounded-xl object-contain bg-white border border-gray-200 shrink-0" />
+              : <span aria-hidden="true" className="h-14 w-14 rounded-xl bg-violet-600 text-white text-lg font-bold flex items-center justify-center shrink-0">{initials(clubTitle)}</span>}
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-600">Club director</p>
+              <h1 className="text-2xl font-extrabold text-gray-900 leading-tight break-words">{clubTitle}</h1>
+              {selTournamentName && tab !== 'history' && (
+                <div className="mt-1.5 flex items-center gap-x-2 gap-y-1 flex-wrap text-sm">
+                  {/* h-6 with w-auto, not a square box: these marks are wordmarks as often
+                      as badges, and Monster Mash is 453x180 -- squaring it shrinks it to
+                      nothing. */}
+                  {selTournamentRow?.logoUrl && (
+                    <img src={selTournamentRow.logoUrl} alt="" className="h-6 w-auto max-w-[110px] object-contain" />
+                  )}
+                  <span className="font-medium text-gray-700">{selTournamentName}</span>
+                  {selTournamentRow?.startDate && (
+                    <span className="text-gray-400">· {eventDates(selTournamentRow.startDate, selTournamentRow.endDate)}</span>
+                  )}
+                  {countdown && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 text-xs font-bold whitespace-nowrap">
+                      <Clock size={12} className="shrink-0" /> {countdown}
+                    </span>
+                  )}
+                </div>
               )}
-              <p className="text-sm text-gray-500">
-                {selTournamentName}
-                {selTournamentRow?.startDate && <span className="text-gray-400"> · {shortDate(selTournamentRow.startDate)}</span>}
-              </p>
             </div>
+          </div>
+          {/* Only when there is a choice: one event in a dropdown is just a box. */}
+          {tab !== 'history' && tournaments.length > 1 && (
+            <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadData(e.target.value) }}
+              aria-label="Event"
+              className="w-full sm:w-auto border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              {tournaments.map(t => (
+                <option key={t.id} value={t.id}>{t.name}{t.startDate ? ` — ${shortDate(t.startDate)}` : ''}</option>
+              ))}
+            </select>
           )}
         </div>
-        {tab !== 'history' && (
-          <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadData(e.target.value) }}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-            {tournaments.map(t => (
-              <option key={t.id} value={t.id}>{t.name}{t.startDate ? ` — ${shortDate(t.startDate)}` : ''}</option>
-            ))}
-          </select>
+        {showStatus && (
+          <div className="border-t border-gray-100 bg-gray-50/70">
+            <StatusBar title={leftTitle} readyTitle={readyTitle} items={leftItems} />
+          </div>
         )}
-      </div>
-
-      {/* Stats — hide on History tab */}
-      {tab !== 'history' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          {([
-            { label: 'Teams', value: totalTeams as string | number, color: 'text-violet-600', payHref: '', note: '' },
-            { label: 'Waivers filed', value: totalPlayers as string | number, color: 'text-blue-600', payHref: '', note: '' },
-            ...(showMoney ? [
-              { label: 'Invoiced', value: fmt(totalInvoiced), color: 'text-gray-800', payHref: '', note: '' },
-              { label: 'Balance due', value: fmt(balance), color: balance > 0 ? 'text-red-600' : 'text-green-600',
-                payHref: balance > 0 && soloUnpaidId && !viewUserId ? `/pay/${soloUnpaidId}` : '',
-                note: totalClearing > 0 ? `${fmt(totalClearing)} bank transfer clearing` : '' },
-            ] : []),
-          ]).map(s => (
-            <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-              <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
-              {s.note && <div className="mt-1 text-[11px] font-semibold text-amber-600">{s.note}</div>}
-              {s.payHref ? (
-                <a href={s.payHref} target="_blank" rel="noreferrer"
-                  className="mt-2 inline-flex items-center justify-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 hover:underline">
-                  <CreditCard size={12} className="shrink-0" /> Pay now
-                </a>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      )}
+      </section>
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5 border-b border-gray-200 overflow-x-auto items-end">
@@ -839,7 +861,6 @@ export default function ClubDirectorDashboard() {
                   <div className="text-center py-12 text-gray-400">No registration on file for this event yet.</div>
                 )}
                 <SharedNameNote clubs={data?.sharedClubs || []} />
-                <WhatsLeft title={leftTitle} items={leftItems} />
                 {data?.registrations.map(reg => {
                   const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
                   const inFlight = reg.clearing?.amount || 0
@@ -888,7 +909,7 @@ export default function ClubDirectorDashboard() {
                             {!viewUserId && (
                               <div className="mt-1 flex items-center gap-2 text-xs">
                                 <label className={`inline-flex items-center gap-1 font-semibold ${logoSaving === reg.id ? 'text-gray-400' : 'text-teal-700 hover:text-teal-800 cursor-pointer hover:underline'}`}>
-                                  <input type="file" accept="image/*" className="hidden" disabled={logoSaving === reg.id}
+                                  <input id={`club-logo-${reg.id}`} type="file" accept="image/*" className="hidden" disabled={logoSaving === reg.id}
                                     onChange={e => { const f = e.target.files?.[0]; e.currentTarget.value = ''; if (f) saveClubLogo(reg.id, f) }} />
                                   <ImagePlus size={12} className="shrink-0" />
                                   {logoSaving === reg.id ? 'Saving\u2026' : reg.clubLogoUrl ? 'Change club logo' : 'Add your club logo'}
@@ -904,7 +925,10 @@ export default function ClubDirectorDashboard() {
                             )}
                           </div>
                         </div>
-                        {showMoney && (
+                        {/* With one registration the status bar and the invoice below
+                            already say all of this. A club with two keeps it, so each
+                            card shows its own. */}
+                        {showMoney && regs.length > 1 && (
                         <div className="flex items-center gap-5 text-sm flex-shrink-0 justify-between sm:justify-end border-t border-gray-100 pt-3 sm:border-0 sm:pt-0">
                           <div className="text-right">
                             <div className="text-xs text-gray-400">Invoiced</div>
@@ -1183,8 +1207,32 @@ export default function ClubDirectorDashboard() {
 
                 {/* Hotels last: an add-on, not every club stays over, and it sat above
                     the club's own teams and invoice (Bo, Oct 5 2026: "definitely put
-                    the hotel information below all the club information"). */}
-                {draftsFor('hotel', 'READY TO SEND YOUR FAMILIES ABOUT HOTELS')}
+                    the hotel information below all the club information"). Folded to
+                    one line, and opened to start only for a club that answered Yes or
+                    Maybe to the hotel question when it registered. */}
+                {(() => {
+                  const hotel = familyMsgs.filter(m => m.key === 'hotel')
+                  if (!hotel.length) return null
+                  const wantsRooms = regs.some(r => /^(yes|maybe)$/i.test(String(r.needsHotel || '').trim()))
+                  return (
+                    <details className="group" open={wantsRooms || undefined}>
+                      <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none bg-white border border-gray-200 rounded-2xl px-5 py-4 flex items-center gap-3 hover:border-gray-300 group-open:mb-3">
+                        <span className="h-10 w-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+                          <BedDouble size={19} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-gray-800">Hotel rooms for your families</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Optional</span>
+                          </span>
+                          <span className="block text-[13px] text-gray-500">Only if your club is staying over. A message with the booking link, ready to send.</span>
+                        </span>
+                        <ChevronDown size={18} className="shrink-0 text-gray-400 transition-transform group-open:rotate-180" />
+                      </summary>
+                      <FamilyMessages messages={hotel} />
+                    </details>
+                  )
+                })()}
 
                 {regs[0] && selTournament && (
                   <OtherEventsCard tournamentId={selTournament} teamCount={totalTeams} showMoney={showMoney}
