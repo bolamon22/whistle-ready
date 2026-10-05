@@ -20,6 +20,9 @@ export type FamilyMessage = {
   /** What the one link in this message is for — the button's words when the
    *  message is copied as rich text. */
   linkLabel: string
+  /** Why a director should bother with this one. Shown on the card, never in
+   *  the message itself — it is for them, not for their families. */
+  why?: string[]
 }
 
 export type FamilyMessageInput = {
@@ -89,7 +92,18 @@ ${sign(i.contactName)}`,
     {
       key: 'hotel',
       title: 'Hotel rooms',
-      blurb: 'To your player families. They book their own rooms; this keeps them together.',
+      blurb: 'To your player families. They book their own rooms — this is what keeps them in one place.',
+      // Why this is worth sending, in the director's terms (Bo, Oct 5 2026:
+      // "that word optional really stands out... we should actually have some
+      // sort of paragraph telling the benefits of booking through us"). Every
+      // line is something we can stand behind: no savings claim, and the comped
+      // rooms stay a "may", because they depend on the block.
+      why: i.hasBookingUrl ? [
+        'Your whole club lands in the same hotel instead of scattered across town — one breakfast, one parking lot, one 6am departure.',
+        "Rooms are held at the tournament's negotiated rate for our dates, so nobody is hunting for a room on event weekend.",
+        'Rooms booked through the link count toward your club\'s block, which is what can put comped coach rooms in reach.',
+        ...(i.hasHousingContact ? ['Changes, late additions and extra rooms go through the tournament\'s housing coordinator rather than a hotel call center.'] : []),
+      ] : undefined,
       linkLabel: i.hasBookingUrl ? 'Click here to book your rooms' : 'Hotel and travel details',
       subject: `${i.eventName} — hotel rooms for ${i.clubName} families`,
       body: `Hi everyone,

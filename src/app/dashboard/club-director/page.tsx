@@ -1232,9 +1232,8 @@ export default function ClubDirectorDashboard() {
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-gray-800">Hotel rooms for your families</span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Optional</span>
                           </span>
-                          <span className="block text-[13px] text-gray-500">Only if your club is staying over. A message with the booking link, ready to send.</span>
+                          <span className="block text-[13px] text-gray-500">Keeps your whole club in one hotel at the tournament&rsquo;s rate, and is what can put comped coach rooms in reach. A message with the booking link, ready to send.</span>
                         </span>
                         <ChevronDown size={18} className="shrink-0 text-gray-400 transition-transform group-open:rotate-180" />
                       </summary>

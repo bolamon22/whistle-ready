@@ -90,6 +90,20 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
             <h2 className="text-lg font-bold text-slate-900">{m.title}</h2>
             <p className="text-xs text-slate-500 mt-0.5">{m.blurb}</p>
 
+            {/* For the director, not the families: this never goes in the
+                message. It is the answer to "why not just let them book
+                wherever?" */}
+            {!!m.why?.length && (
+              <ul className="mt-3 rounded-xl bg-sky-50 border border-sky-100 px-4 py-3 space-y-1.5">
+                {m.why.map((w, n) => (
+                  <li key={n} className="flex gap-2 text-[13px] leading-snug text-sky-900">
+                    <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0" />
+                    <span>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <div className="text-[11px] font-bold tracking-wide text-slate-400 mt-4 mb-1">SUBJECT</div>
             <div className="text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{m.subject}</div>
 
