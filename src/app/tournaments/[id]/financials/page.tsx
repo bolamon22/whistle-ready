@@ -1,13 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { BarChart3, Wallet, ClipboardList, Store, Users, Plus, Pencil, Trash2, Calculator } from 'lucide-react'
+import type { CostView } from '@/lib/costTypes'
+import type { ContactRow } from '@/lib/contactTypes'
+import type { TaskTournament } from '@/lib/taskTemplate'
+import { buildFinance, type FinDoc, type PlanLine } from '@/lib/finance'
+import { costLabel, type CostEvent } from '@/components/costs/useCosts'
+import OverviewTab from '@/components/financials/OverviewTab'
+import BudgetTab from '@/components/financials/BudgetTab'
 import TournamentNav from '../TournamentNav'
 import { Card } from '@/components/ui'
-import EventBudget from '@/components/costs/EventBudget'
 
 interface Transaction {
   id: string; type: 'income' | 'expense'; category: string
@@ -88,6 +94,15 @@ export default function FinancialsPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'summary' | 'budget' | 'other'>('summary')
+  // The redesign's data (Oct 5 2026): vendor bills (cost lines), the event's
+  // documents, its budget plan and its contacts (for the vendor emails).
+  const [costs, setCosts] = useState<CostView[]>([])
+  const [costEvents, setCostEvents] = useState<CostEvent[]>([])
+  const [docs, setDocs] = useState<FinDoc[]>([])
+  const [plan, setPlan] = useState<PlanLine[]>([])
+  const [contacts, setContacts] = useState<ContactRow[]>([])
+  const [taskTournaments, setTaskTournaments] = useState<TaskTournament[]>([])
+  const [contactsToday, setContactsToday] = useState('')
 
   const load = () => {
     Promise.all([
@@ -101,6 +116,7 @@ export default function FinancialsPage() {
       // a P&L, and this page failing whole because of it would be the worse bug.
       fetch(`/api/tournaments/${tournamentId}/vendor-requests`).then(r => r.ok ? r.json() : { submissions: [] }).catch(() => ({ submissions: [] })),
     ]).then(([txs, regs, paySummary, payRecords, t, indivRegs, vend]) => {
+      loadExtras()
       setTransactions(txs)
       setRegistrations(regs)
       setIndividualRegs(Array.isArray(indivRegs) ? indivRegs : [])
@@ -111,6 +127,43 @@ export default function FinancialsPage() {
       setVendors(Array.isArray(vend?.submissions) ? vend.submissions : [])
       setLoading(false)
     })
+  }
+
+  // Each tolerated on its own: the P&L still shows if one of these fails.
+  const loadExtras = useCallback(() => {
+    const q = encodeURIComponent(String(tournamentId))
+    fetch(`/api/costs?tournamentId=${q}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setCosts(d.costs || []); setCostEvents(d.tournaments || []) } }).catch(() => {})
+    fetch(`/api/tournaments/${tournamentId}/documents`).then(r => r.ok ? r.json() : []).then(d => setDocs(Array.isArray(d) ? d : [])).catch(() => {})
+    fetch(`/api/plan?tournamentId=${q}`).then(r => r.ok ? r.json() : null).then(d => { if (d) setPlan(d.lines || []) }).catch(() => {})
+    fetch(`/api/contacts?tournamentId=${q}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setContacts(d.contacts || []); setTaskTournaments(d.tournaments || []); setContactsToday(d.today || '') } }).catch(() => {})
+  }, [tournamentId])
+
+  async function saveCost(id: string | null, body: Record<string, unknown>): Promise<boolean> {
+    try {
+      const r = await fetch(id ? `/api/costs/${encodeURIComponent(id)}` : '/api/costs', { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Could not save')
+      load()
+      return true
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save'); return false }
+  }
+  async function removeCost(id: string) {
+    const r = await fetch(`/api/costs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (!r.ok) toast.error('Could not delete it'); else toast.success('Deleted')
+    load()
+  }
+  async function savePlan(lines: PlanLine[]): Promise<boolean> {
+    setPlan(lines)
+    try {
+      const r = await fetch('/api/plan', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tournamentId, lines }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error()
+      setPlan(d.lines || lines)
+      return true
+    } catch { return false }
+  }
+  async function patchContact(c: ContactRow, body: Record<string, unknown>) {
+    await fetch(`/api/contacts/${encodeURIComponent(c.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {})
   }
 
   useEffect(() => { load() }, [tournamentId])
@@ -152,45 +205,23 @@ export default function FinancialsPage() {
     toast.success('Deleted'); load()
   }
 
-  // ── Computed totals ──
-  const teamInvoiced  = registrations.reduce((s, r) => s + r.invoiceAmount - r.discountAmount, 0)
-  const teamReceived  = registrations.reduce((s, r) => s + r.payments.reduce((p, x) => p + x.amount, 0), 0)
-  const indivInvoiced = individualRegs.reduce((s, r) => s + r.feeTierAmount, 0)
-  const indivReceived = individualRegs.filter(r => r.paymentStatus === 'paid').reduce((s, r) => s + r.feeTierAmount, 0)
-  const regInvoiced   = teamInvoiced + indivInvoiced
-  const regReceived   = teamReceived + indivReceived
-  const regBalance    = regInvoiced - regReceived
-
-  const staffOwed    = staffSummary.reduce((s, w) => s + w.totalPay, 0)
-  const staffPaid    = staffSummary.filter(w => staffPaidIds.has(w.worker.id)).reduce((s, w) => s + w.totalPay, 0)
-  const staffUnpaid  = staffOwed - staffPaid
-
-  // VENDOR BOOTH FEES, split the same way team fees are: what is owed counts as
-  // revenue, what has landed counts as cash.
-  //
-  // Only APPROVED applications count. An application sitting unreviewed has no
-  // agreed price -- Bo's own Lacrossewear and Custom Tent Covers rows are on the
-  // Monster Mash list at $0 because nobody has priced them, and booking those as
-  // revenue would be inventing income. Approval is the moment the number becomes
-  // real, which is also when the vendor gets the link to pay.
-  const vendorApproved = vendors.filter(v => v.status === 'approved').reduce((s, v) => s + (Number(v.amountDue) || 0), 0)
-  const vendorPaid     = vendors.filter(v => v.paymentStatus === 'paid').reduce((s, v) => s + (Number(v.amountDue) || 0), 0)
-  const vendorBalance  = vendorApproved - vendorPaid
-  const vendorCount    = vendors.filter(v => v.status === 'approved').length
-
-  const otherIncome  = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const otherExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-
-  const totalRevenue = regInvoiced + vendorApproved + otherIncome
-  const totalExpense = staffOwed + otherExpense
-  const grossProfit  = totalRevenue - totalExpense
-  const netCash      = regReceived + vendorPaid + otherIncome - staffPaid - otherExpense
-  const margin       = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0
+  // ── Computed ──
+  // Expenses that came from a bill (a paid cost line) belong to Overview; Other
+  // entries keeps only what was typed in by hand.
+  const linkedTx = useMemo(() => new Set(costs.map(c => c.transactionId).filter(Boolean)), [costs])
+  const otherTxs = transactions.filter(t => !linkedTx.has(t.id))
+  const otherIncome  = otherTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const otherExpense = otherTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const vendorCount  = vendors.filter(v => v.status === 'approved').length
+  const fin = useMemo(() => buildFinance({
+    tournamentId: String(tournamentId), regs: registrations, individuals: individualRegs, vendors,
+    staff: staffSummary, staffPaidIds, txs: transactions, costs, labelFor: c => costLabel(c, costEvents),
+  }), [tournamentId, registrations, individualRegs, vendors, staffSummary, staffPaidIds, transactions, costs, costEvents])
 
   const tabs = [
-    { key: 'summary', label: 'P&L Summary', Icon: BarChart3 },
+    { key: 'summary', label: 'Overview', Icon: BarChart3 },
     { key: 'budget',  label: 'Budget', Icon: Calculator },
-    { key: 'other',   label: `Other (${transactions.length})`, Icon: Wallet },
+    { key: 'other',   label: `Other entries (${otherTxs.length})`, Icon: Wallet },
   ] as const
 
   return (
@@ -200,24 +231,8 @@ export default function FinancialsPage() {
 
         <TournamentNav id={tournamentId as string} name={tournamentName || 'Tournament'} logoUrl={tournamentLogo} />
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-5 sm:mb-6 gap-3 sm:gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Financials</h1>
-          </div>
-          {/* Top-line summary pills */}
-          <div className="grid grid-cols-2 sm:flex gap-2 sm:flex-wrap">
-            {[
-              { label: 'Total Revenue', value: totalRevenue, color: 'text-slate-800', bg: 'bg-slate-50 border-slate-200' },
-              { label: 'Total Expenses', value: totalExpense, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
-              { label: 'Gross Profit', value: grossProfit, color: grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600', bg: grossProfit >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200' },
-              { label: 'Net Cash', value: netCash, color: netCash >= 0 ? 'text-emerald-700' : 'text-red-600', bg: netCash >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200' },
-            ].map(s => (
-              <div key={s.label} className={`border rounded-xl px-3 sm:px-4 py-2 text-center min-w-0 sm:min-w-[100px] ${s.bg}`}>
-                <div className={`text-lg font-bold ${s.color}`}>{fmt(s.value)}</div>
-                <div className="text-xs text-slate-500">{s.label}</div>
-              </div>
-            ))}
-          </div>
+        <div className="mb-4 sm:mb-5">
+          <h1 className="text-2xl font-bold text-slate-800">Financials</h1>
         </div>
 
         {/* Tabs */}
@@ -244,116 +259,19 @@ export default function FinancialsPage() {
 
         {loading ? <div className="text-center py-16 text-slate-400">Loading…</div> : <>
 
-        {/* ── SUMMARY TAB ── */}
+        {/* ── OVERVIEW: profit, cash, income and bills (Oct 5 2026 redesign) ── */}
         {activeTab === 'summary' && (
-          <div className="space-y-4">
-            <Card className="overflow-hidden">
-              {/* Revenue */}
-              <div className="px-4 sm:px-6 py-4 border-b border-slate-100 bg-emerald-50">
-                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-3">Revenue</p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Registration fees ({registrations.length} clubs · {registrations.reduce((s,r)=>s+r.teams.length,0)} teams · {individualRegs.length} players)</span>
-                    <span className="font-semibold">{fmt(regInvoiced)}</span>
-                  </div>
-                  {vendorApproved > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Vendor booths ({vendorCount} approved)</span>
-                      <span className="font-semibold">{fmt(vendorApproved)}</span>
-                    </div>
-                  )}
-                  {otherIncome > 0 && transactions.filter(t=>t.type==='income').map(tx => (
-                    <div key={tx.id} className="flex justify-between text-slate-500 pl-4">
-                      <span>{catLabel(tx.category)} — {tx.description}</span>
-                      <span>{fmt(tx.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between font-bold text-emerald-700 border-t border-emerald-200 pt-2 mt-1">
-                    <span>Total Revenue</span>
-                    <span>{fmt(totalRevenue)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-slate-500">
-                    <span>Collected so far</span>
-                    <span className="text-emerald-600 font-medium">{fmt(regReceived + vendorPaid + otherIncome)}</span>
-                  </div>
-                  {regBalance > 0 && (
-                    <div className="flex justify-between text-sm text-amber-600">
-                      <span>Outstanding from teams</span>
-                      <span className="font-medium">{fmt(regBalance)}</span>
-                    </div>
-                  )}
-                  {vendorBalance > 0 && (
-                    <div className="flex justify-between text-sm text-amber-600">
-                      <span>Outstanding from vendors</span>
-                      <span className="font-medium">{fmt(vendorBalance)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Expenses */}
-              <div className="px-4 sm:px-6 py-4 border-b border-slate-100 bg-red-50">
-                <p className="text-xs font-bold text-red-600 uppercase tracking-wide mb-3">Expenses</p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Staff pay ({staffSummary.length} staff members)</span>
-                    <span className="font-semibold">{fmt(staffOwed)}</span>
-                  </div>
-                  {otherExpense > 0 && transactions.filter(t=>t.type==='expense').map(tx => (
-                    <div key={tx.id} className="flex justify-between text-slate-500 pl-4">
-                      <span>{catLabel(tx.category)} — {tx.description}</span>
-                      <span>{fmt(tx.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between font-bold text-red-600 border-t border-red-200 pt-2 mt-1">
-                    <span>Total Expenses</span>
-                    <span>{fmt(totalExpense)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-slate-500">
-                    <span>Paid out to staff</span>
-                    <span className="text-red-500 font-medium">{fmt(staffPaid)}</span>
-                  </div>
-                  {staffUnpaid > 0 && (
-                    <div className="flex justify-between text-sm text-amber-600">
-                      <span>Staff still owed</span>
-                      <span className="font-medium">{fmt(staffUnpaid)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Bottom line */}
-              <div className="px-4 sm:px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className={`rounded-xl p-4 text-center ${grossProfit >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                  <div className={`text-2xl font-bold ${grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(grossProfit)}</div>
-                  <div className="text-sm text-slate-500 mt-0.5">Gross Profit ({margin}% margin)</div>
-                  <div className="text-xs text-slate-400 mt-0.5">Revenue − Expenses</div>
-                </div>
-                <div className={`rounded-xl p-4 text-center ${netCash >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                  <div className={`text-2xl font-bold ${netCash >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(netCash)}</div>
-                  <div className="text-sm text-slate-500 mt-0.5">Net Cash Position</div>
-                  <div className="text-xs text-slate-400 mt-0.5">Collected − Paid out</div>
-                </div>
-              </div>
-
-              {/* Expense bar */}
-              {totalRevenue > 0 && (
-                <div className="px-4 sm:px-6 pb-5">
-                  <div className="flex justify-between text-xs text-slate-500 mb-1">
-                    <span>Expenses as % of revenue</span>
-                    <span>{Math.min(100, Math.round((totalExpense / totalRevenue) * 100))}%</span>
-                  </div>
-                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-400 rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((totalExpense / totalRevenue) * 100))}%` }} />
-                  </div>
-                </div>
-              )}
-            </Card>
-          </div>
+          <OverviewTab tournamentId={String(tournamentId)} fin={fin} docs={docs} costs={costs} costEvents={costEvents}
+            contacts={contacts} taskTournaments={taskTournaments} contactsToday={contactsToday}
+            onSaveCost={saveCost} onRemoveCost={removeCost} onPatchContact={patchContact}
+            onAddIncome={() => { setActiveTab('other'); openNew('income') }} onOpenOther={() => setActiveTab('other')} />
         )}
 
-        {/* ── BUDGET TAB: vendor quotes, last time vs this time ── */}
-        {activeTab === 'budget' && <EventBudget tournamentId={tournamentId as string} />}
+        {/* ── BUDGET: the projected P&L ── */}
+        {activeTab === 'budget' && (
+          <BudgetTab tournamentId={String(tournamentId)} fin={fin} plan={plan} costs={costs} costEvents={costEvents} contacts={contacts}
+            onSavePlan={savePlan} onSaveCost={saveCost} onRemoveCost={removeCost} />
+        )}
 
         {/* ── OTHER INCOME & EXPENSES TAB ── */}
         {activeTab === 'other' && (
@@ -411,7 +329,8 @@ export default function FinancialsPage() {
               </Card>
             )}
 
-            {transactions.length === 0 ? (
+            {linkedTx.size > 0 && <p className="text-sm text-slate-600 mb-3">{linkedTx.size} payment{linkedTx.size === 1 ? '' : 's'} on vendor bills {linkedTx.size === 1 ? 'is' : 'are'} on the Overview tab, with {linkedTx.size === 1 ? 'its' : 'their'} bill{linkedTx.size === 1 ? '' : 's'}.</p>}
+            {otherTxs.length === 0 ? (
               <Card className="text-center py-16">
                 <div className="flex justify-center mb-3 text-slate-300"><Wallet size={40} /></div>
                 <p className="font-medium text-slate-600">No other transactions yet</p>
@@ -420,7 +339,7 @@ export default function FinancialsPage() {
             ) : (
               <>
               <div className="sm:hidden space-y-2">
-                {transactions.map(tx => (
+                {otherTxs.map(tx => (
                   <div key={tx.id} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -459,7 +378,7 @@ export default function FinancialsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {transactions.map(tx => (
+                    {otherTxs.map(tx => (
                       <tr key={tx.id} className="hover:bg-slate-50 group">
                         <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{showDate(tx.date)}</td>
                         <td className="px-4 py-3">

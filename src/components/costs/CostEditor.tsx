@@ -46,6 +46,7 @@ export default function CostEditor({ initial, contacts, tournaments, onSave, onD
   const sub = itemsTotal(items)
   const total = costTotal({ items, tax: c.tax || 0, budget: c.budget || 0 })
   const rate = taxRate({ items, tax: c.tax || 0 })
+  const hasPayments = (c.payments || []).length > 0
 
   function pickContact(id: string) {
     const k = contacts.find(x => x.id === id)
@@ -147,7 +148,7 @@ export default function CostEditor({ initial, contacts, tournaments, onSave, onD
               </span>
             </label>
             {sub === 0 && (
-              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0">Budget amount
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0">Amount (no items)
                 <input type="number" min={0} step="0.01" inputMode="decimal" value={c.budget || 0} onChange={e => set({ budget: Number(e.target.value) })} className={field} />
               </label>
             )}
@@ -159,7 +160,10 @@ export default function CostEditor({ initial, contacts, tournaments, onSave, onD
 
           {(c.status === 'booked' || c.status === 'paid') && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {c.status === 'booked' && (
+              {c.status === 'booked' && hasPayments && (
+                <p className="col-span-2 sm:col-span-3 text-sm text-slate-700">{money(round2(c.paid || 0))} paid in {(c.payments || []).length} payment{(c.payments || []).length === 1 ? '' : 's'}. Record or remove payments on the Overview tab.</p>
+              )}
+              {c.status === 'booked' && !hasPayments && (
                 <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0 col-span-2 sm:col-span-1">
                   <span className="flex justify-between">Deposit paid{total > 0 && <span className="flex gap-2 font-normal">
                     <button type="button" onClick={() => set({ paid: round2(total / 2) })} className="text-teal-700 hover:underline">50%</button>
