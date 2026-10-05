@@ -300,7 +300,13 @@ export default function Landing() {
             <a href="#login" className="hover:text-slate-800 transition-colors">Log in</a>
           </div>
         </div>
-        <p className="max-w-6xl mx-auto text-xs text-slate-400 mt-6">© 2026 Whistle Ready · whistleready.app · Tournament management for every sport.</p>
+        <div className="max-w-6xl mx-auto mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-400">
+          <p>© 2026 Whistle Ready · whistleready.app · Tournament management for every sport.</p>
+          <p className="flex gap-4">
+            <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy</Link>
+            <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms</Link>
+          </p>
+        </div>
       </footer>
     </div>
   )

@@ -124,8 +124,9 @@ export default function NavBar() {
   // Public pay-by-link pages present as the tournament org (Sunshine Events Group), not Whistle Ready.
   if (pathname?.startsWith('/pay')) return null
 
-  // The public marketing landing and the /find look-up have their own header.
-  if (!session && (pathname === '/' || pathname === '/find')) return null
+  // The public marketing landing, the /find look-up and the privacy and terms
+  // pages have their own header.
+  if (!session && (pathname === '/' || pathname === '/find' || pathname === '/privacy' || pathname === '/terms')) return null
 
   return (
     <div data-app-chrome className="sticky top-0 z-40">
