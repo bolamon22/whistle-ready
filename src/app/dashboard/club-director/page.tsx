@@ -839,7 +839,6 @@ export default function ClubDirectorDashboard() {
                 )}
                 <SharedNameNote clubs={data?.sharedClubs || []} />
                 <WhatsLeft title={leftTitle} items={leftItems} />
-                {draftsFor('hotel', 'READY TO SEND YOUR FAMILIES ABOUT HOTELS')}
                 {data?.registrations.map(reg => {
                   const paid = reg.payments.reduce((s, p) => s + p.amount, 0)
                   const inFlight = reg.clearing?.amount || 0
@@ -1180,6 +1179,11 @@ export default function ClubDirectorDashboard() {
                     </span>
                   </div>
                 )}
+
+                {/* Hotels last: an add-on, not every club stays over, and it sat above
+                    the club's own teams and invoice (Bo, Oct 5 2026: "definitely put
+                    the hotel information below all the club information"). */}
+                {draftsFor('hotel', 'READY TO SEND YOUR FAMILIES ABOUT HOTELS')}
 
                 {regs[0] && selTournament && (
                   <OtherEventsCard tournamentId={selTournament} teamCount={totalTeams} showMoney={showMoney}
