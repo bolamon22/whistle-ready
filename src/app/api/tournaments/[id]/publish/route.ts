@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { setPublicVisibility } from '@/lib/publicView'
 import { followerCounts, followerPhoneCounts, sendPushToFollowers } from '@/lib/follows'
 import { affectedTeams, teamDigest, type DigestGame } from '@/lib/scheduleDigest'
+import { waitlistedKeys, involvesWaitlisted } from '@/lib/poolMembership'
 
 function getClient() {
   return createClient({
@@ -101,9 +102,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   let notified = { teams: 0, sent: 0, failed: 0 }
   if (notify) {
     try {
-      const teams = affectedTeams(before, games as DigestGame[])
+      // Games with a waitlisted team are staff planning, hidden from the public
+      // (lib/poolMembership), so no follower hears about them -- not even the
+      // opponent's followers.
+      const wl = await waitlistedKeys(params.id).catch(() => null)
+      const shown = (games as DigestGame[]).filter(g => !involvesWaitlisted(g, wl))
+      const teams = affectedTeams(before, shown)
       for (const team of teams) {
-        const d = teamDigest(team, games as DigestGame[], { tournamentId: params.id, tournamentName, firstPublish })
+        const d = teamDigest(team, shown, { tournamentId: params.id, tournamentName, firstPublish })
         if (!d) continue
         const r = await sendPushToFollowers(params.id, [team], { title: d.title, body: d.body, url: `/tournaments/${params.id}/public`, tag: d.tag })
         notified.teams++; notified.sent += r.sent; notified.failed += r.failed

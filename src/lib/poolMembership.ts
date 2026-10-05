@@ -80,3 +80,39 @@ export async function pruneOrphanPoolNames(tournamentId: string): Promise<number
 }
 
 export { registeredKeys }
+
+// Waitlisted teams can sit in a pool (Bo, Oct 5 2026): he drags one in on the
+// Divisions page to build a practice schedule around it, and nothing about it
+// may reach the public -- not the pool list, the standings or its games --
+// until Registrations takes it off the waiting list. Staff see everything.
+// The flag is the only switch: clearing it makes the team and its games appear
+// with nothing else to redo.
+
+/** Loose keys of every waitlisted team, per division. */
+export async function waitlistedKeys(tournamentId: string): Promise<Map<string, Set<string>>> {
+  const teams = await prisma.registeredTeam.findMany({
+    where: { registration: { tournamentId, deletedAt: null }, waitlisted: true },
+    select: { division: true, teamName: true },
+  })
+  const byDiv = new Map<string, Set<string>>()
+  for (const t of teams) {
+    const d = nameKey(t.division)
+    if (!byDiv.has(d)) byDiv.set(d, new Set())
+    byDiv.get(d)!.add(nameKey(t.teamName))
+  }
+  return byDiv
+}
+
+/** `names` without the division's waitlisted teams (for anything outsiders see). */
+export function dropWaitlisted(names: string[], division: string, wl: Map<string, Set<string>> | null | undefined): string[] {
+  const set = wl?.get(nameKey(division))
+  if (!set || set.size === 0) return names
+  return names.filter(n => !set.has(nameKey(n)))
+}
+
+/** True when either side of the game is a waitlisted team in its division. */
+export function involvesWaitlisted(g: { division?: string | null; team1?: string | null; team2?: string | null }, wl: Map<string, Set<string>> | null | undefined): boolean {
+  const set = wl?.get(nameKey(g.division ?? ''))
+  if (!set || set.size === 0) return false
+  return set.has(nameKey(g.team1 ?? '')) || set.has(nameKey(g.team2 ?? ''))
+}

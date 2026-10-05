@@ -599,7 +599,10 @@ export default function DivisionsPage() {
 
   async function assignTeamToPool(teamName: string, poolName: string | null) {
     if (!activeDiv) return
-    if (poolName && teams.find(t => t.teamName === teamName)?.waitlisted) { toast.error(`${teamName} is on the waiting list. Take it off the list in Registrations first, then place it.`); return }
+    // A waitlisted team can go in a pool so the schedule can be planned around it.
+    // Outsiders don't see it, or its games, until Registrations clears the flag
+    // (lib/poolMembership); the flag is the only switch.
+    const placingWaitlisted = !!(poolName && teams.find(t => t.teamName === teamName)?.waitlisted)
     setAssigningTeam(teamName)
     const newPools = pools.map(p => {
       const names = p.teamNames.filter(n => n !== teamName)
@@ -615,14 +618,20 @@ export default function DivisionsPage() {
     setPools(newPools)
     setTeams(t => t.map(x => x.teamName === teamName ? { ...x, pool: poolName } : x))
     setAssigningTeam(null)
+    if (placingWaitlisted) toast(`${teamName} is in ${poolName} for planning only. The public won't see it or its games until you take it off the waiting list in Registrations.`, { duration: 6000 })
   }
 
   async function autoAssignPools() {
     if (!activeDiv || pools.length === 0) return
     setAutoAssigning(true)
     const all = [...teams.filter(t => !t.waitlisted).map(t => t.teamName)].sort(() => Math.random() - 0.5)
-    const newPools = pools.map(p => ({ ...p, teamNames: [] as string[] }))
-    all.forEach((name, i) => newPools[i % newPools.length].teamNames.push(name))
+    // Waitlisted teams Bo placed by hand stay where he put them; everyone else
+    // fills in around them, always into the smallest pool, so sizes stay within one.
+    const newPools = pools.map(p => ({ ...p, teamNames: teams.filter(t => t.waitlisted && t.pool === p.name).map(t => t.teamName) }))
+    all.forEach(name => {
+      const smallest = newPools.reduce((a, b) => (b.teamNames.length < a.teamNames.length ? b : a))
+      smallest.teamNames.push(name)
+    })
     await Promise.all(newPools.map(p =>
       fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pools`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -1460,12 +1469,17 @@ if (loading) return (
                                       onDragStart={() => setPoolDragging(team.teamName)}
                                       onDragEnd={() => { setPoolDragging(null); setPoolDragOver(null) }}
                                       title={team.clubName && team.clubName !== team.teamName ? `${team.teamName} — ${team.clubName}` : team.teamName}
-                                      className={`flex items-start gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:shadow-sm transition-all select-none ${poolDragging === team.teamName || assigningTeam === team.teamName ? 'opacity-40' : ''}`}>
-                                      <GripVertical size={14} className="text-slate-300 flex-shrink-0 pointer-events-none mt-0.5" />
+                                      className={`flex items-start gap-2 rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing hover:shadow-sm transition-all select-none ${team.waitlisted ? 'bg-amber-50/70 border border-dashed border-amber-300 hover:border-amber-400' : 'bg-white border border-slate-200 hover:border-slate-300'} ${poolDragging === team.teamName || assigningTeam === team.teamName ? 'opacity-40' : ''}`}>
+                                      {team.waitlisted
+                                        ? <Hourglass size={13} className="text-amber-500 flex-shrink-0 pointer-events-none mt-0.5" />
+                                        : <GripVertical size={14} className="text-slate-300 flex-shrink-0 pointer-events-none mt-0.5" />}
                                       <div className="min-w-0 flex-1 pointer-events-none">
                                         <p className="text-sm font-medium text-slate-800 leading-snug break-words">{team.teamName}</p>
                                         {team.clubName && team.clubName.trim().toLowerCase() !== team.teamName.trim().toLowerCase() && (
                                           <p className="text-xs text-slate-400 leading-snug break-words mt-0.5">{team.clubName}</p>
+                                        )}
+                                        {team.waitlisted && (
+                                          <p className="text-[10px] font-semibold text-amber-700 mt-1" title="Placed for planning. The public won't see this team or its games until it comes off the waiting list in Registrations.">Waitlisted · hidden from public</p>
                                         )}
                                       </div>
                                     </div>
@@ -1478,16 +1492,23 @@ if (loading) return (
                             <div>
                               <p className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
                                 <Hourglass size={13} /> Waiting list
-                                <span className="text-xs font-normal text-amber-600/70">({teams.filter(t => t.waitlisted).length})</span>
+                                <span className="text-xs font-normal text-amber-600/70">({teams.filter(t => t.waitlisted && !t.pool).length})</span>
                               </p>
-                              {/* not a drop target and not draggable: a waitlisted team isn't in the draw.
-                                  It gets a pool once Registrations takes it off the list. */}
-                              <div className="min-h-52 rounded-xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-2 space-y-2">
-                                {teams.filter(t => t.waitlisted).map(team => (
-                                  <div key={team.id} title={`${team.teamName} is on the waiting list. Take it off the list in Registrations to place it in a pool.`}
-                                    className="flex items-start gap-2 bg-white/70 border border-amber-200 rounded-lg px-3 py-2 select-none">
-                                    <Hourglass size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                                    <div className="min-w-0 flex-1">
+                              {/* Drag a waitlisted team into a pool to plan around it (staff-only), or
+                                  back here to take it out. Only waitlisted teams drop here. */}
+                              <div
+                                onDragOver={e => { if (!poolDragging || !teams.find(t => t.teamName === poolDragging)?.waitlisted) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setPoolDragOver('__waitlist') }}
+                                onDragLeave={e => { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) setPoolDragOver(null) }}
+                                onDrop={e => { e.preventDefault(); setPoolDragOver(null); const team = poolDragging; setPoolDragging(null); const t = teams.find(x => x.teamName === team); if (t?.waitlisted && t.pool) assignTeamToPool(t.teamName, null) }}
+                                className={`min-h-52 rounded-xl border-2 border-dashed p-2 space-y-2 transition-all ${poolDragOver === '__waitlist' ? 'border-amber-400 bg-amber-100/60' : 'border-amber-200 bg-amber-50/40'}`}>
+                                {teams.filter(t => t.waitlisted && !t.pool).map(team => (
+                                  <div key={team.id} draggable
+                                    onDragStart={() => setPoolDragging(team.teamName)}
+                                    onDragEnd={() => { setPoolDragging(null); setPoolDragOver(null) }}
+                                    title={`${team.teamName} is on the waiting list. Drag it into a pool to plan around it; the public won't see it until you clear the flag in Registrations.`}
+                                    className={`flex items-start gap-2 bg-white/70 border border-amber-200 rounded-lg px-3 py-2 select-none cursor-grab active:cursor-grabbing hover:border-amber-300 ${poolDragging === team.teamName || assigningTeam === team.teamName ? 'opacity-40' : ''}`}>
+                                    <Hourglass size={13} className="text-amber-500 flex-shrink-0 mt-0.5 pointer-events-none" />
+                                    <div className="min-w-0 flex-1 pointer-events-none">
                                       <p className="text-sm font-medium text-slate-700 leading-snug break-words">{team.teamName}</p>
                                       {team.clubName && team.clubName.trim().toLowerCase() !== team.teamName.trim().toLowerCase() && (
                                         <p className="text-xs text-slate-400 leading-snug break-words mt-0.5">{team.clubName}</p>
@@ -1495,7 +1516,10 @@ if (loading) return (
                                     </div>
                                   </div>
                                 ))}
-                                <p className="text-[11px] text-amber-700/80 px-1 pt-1">Not in the draw. Clear the waitlist flag in Registrations to place these teams.</p>
+                                {!teams.some(t => t.waitlisted && !t.pool) && (
+                                  <p className="text-[11px] text-amber-600/80 text-center py-6">All placed. Drag one back here to take it out of its pool.</p>
+                                )}
+                                <p className="text-[11px] text-amber-700/80 px-1 pt-1">Drag into a pool to plan the schedule around them. Staff only: the public won't see them or their games until you clear the waitlist flag in Registrations.</p>
                               </div>
                             </div>
                           )}
@@ -1538,14 +1562,14 @@ if (loading) return (
                                       <span className="text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Unconfirmed</span>
                                     )}
                                     {team.waitlisted && (
-                                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full" title="On the waiting list: not in the draw. Clear the flag in Registrations to place this team."><Hourglass size={10} /> Waitlist</span>
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full" title="On the waiting list. It can go in a pool for planning; the public won't see it or its games until you clear the flag in Registrations."><Hourglass size={10} /> Waitlist</span>
                                     )}
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 text-slate-500 text-xs">{team.clubName}</td>
                                 <td className="px-3 py-3">
-                                  {team.waitlisted ? (
-                                    <span className="text-xs text-amber-600" title="Take this team off the waiting list in Registrations to place it">Waiting list</span>
+                                  {team.waitlisted && pools.length === 0 ? (
+                                    <span className="text-xs text-amber-600" title="On the waiting list">Waiting list</span>
                                   ) : pools.length > 0 ? (
                                     <select
                                       value={team.pool ?? ''}
@@ -1553,8 +1577,8 @@ if (loading) return (
                                       onClick={e => e.stopPropagation()}
                                       disabled={assigningTeam === team.teamName}
                                       className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400 disabled:opacity-50">
-                                      <option value="">-- No pool --</option>
-                                      {pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                      <option value="">{team.waitlisted ? '-- Waiting list --' : '-- No pool --'}</option>
+                                      {pools.map(p => <option key={p.id} value={p.name}>{p.name}{team.waitlisted ? ' (hidden)' : ''}</option>)}
                                     </select>
                                   ) : (
                                     <span className="text-xs text-slate-400">--</span>

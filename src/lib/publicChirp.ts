@@ -8,7 +8,7 @@ import { sendEmail } from '@/lib/email'
 import { mdToEmailHtml } from '@/lib/emailMd'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { AUDIENCES, type AudienceId } from '@/lib/chirpNudges'
-import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
+import { keepRegistered, registeredKeys, waitlistedKeys, dropWaitlisted } from '@/lib/poolMembership'
 import { cleanName, nameKey } from '@/lib/names'
 import { resolveRules } from '@/lib/rules'
 
@@ -39,9 +39,10 @@ export const publicCovered = (answer: string) => !/don.?t have that information 
  *  we in?" while game times are still unpublished. */
 async function publicTeams(tournamentId: string, withUnpooled: boolean): Promise<string> {
   try {
-    const [pools, byDiv, reg] = await Promise.all([
+    const [pools, byDiv, wl, reg] = await Promise.all([
       prisma.pool.findMany({ where: { tournamentId }, orderBy: [{ division: 'asc' }, { name: 'asc' }] }),
       registeredKeys(tournamentId),
+      waitlistedKeys(tournamentId).catch(() => null),
       prisma.registeredTeam.findMany({
         where: { registration: { tournamentId, deletedAt: null }, waitlisted: false },
         select: { division: true, teamName: true },
@@ -52,7 +53,7 @@ async function publicTeams(tournamentId: string, withUnpooled: boolean): Promise
     for (const p of pools as { division: string; name: string; teamNames: string }[]) {
       let teams: string[] = []
       try { const t = JSON.parse(p.teamNames || '[]'); if (Array.isArray(t)) teams = t.filter((x: unknown) => typeof x === 'string' && x.trim()).map((x: string) => x.trim()) } catch {}
-      teams = keepRegistered(teams, p.division, byDiv)
+      teams = dropWaitlisted(keepRegistered(teams, p.division, byDiv), p.division, wl)
       const d = nameKey(p.division)
       if (!pooled.has(d)) pooled.set(d, new Set())
       teams.forEach(t => pooled.get(d)!.add(nameKey(t)))

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
+import { dropWaitlisted, involvesWaitlisted } from '@/lib/poolMembership'
+import { nameKey } from '@/lib/names'
 
 // Every division with its team, waiting-list, pool and game counts.
 //
@@ -20,10 +22,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const staff = publicView ? false : await isStaffRequest()
   const cache = publicView ? 'public, s-maxage=5, stale-while-revalidate=30' : 'private, no-store'
   let scheduleLive = staff
+  // Outsiders don't count a waitlisted team that staff placed in a pool to plan
+  // around, or its games (lib/poolMembership).
+  let wl: Map<string, Set<string>> | undefined
   if (!staff) {
     const vis = await getPublicVisibility(params.id).catch(() => null)
     if (vis?.pools !== 'live') return NextResponse.json([], { headers: { 'Cache-Control': cache } })
     scheduleLive = vis.schedule === 'live'
+    wl = vis.waitlisted
   }
   try {
     const [teams, tournament, games] = await Promise.all([
@@ -34,12 +40,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       // to clear them.
       prisma.registeredTeam.findMany({
         where: { registration: { tournamentId: params.id, deletedAt: null } },
-        select: { division: true, waitlisted: true },
+        select: { division: true, waitlisted: true, teamName: true },
       }),
       prisma.tournament.findUnique({ where: { id: params.id }, select: { registrationDivisions: true } }),
       prisma.game.findMany({
         where: { tournamentId: params.id },
-        select: { division: true, gameNumber: true, pool: true },
+        select: { division: true, gameNumber: true, pool: true, team1: true, team2: true },
       }),
     ])
 
@@ -50,6 +56,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         select: { division: true, teamNames: true },
       })
     } catch { /* Pool table not migrated yet */ }
+
+    const waitlistAll = new Map<string, Set<string>>()
+    for (const t of teams) {
+      if (!t.waitlisted) continue
+      const d = nameKey(t.division)
+      if (!waitlistAll.has(d)) waitlistAll.set(d, new Set())
+      waitlistAll.get(d)!.add(nameKey(t.teamName))
+    }
 
     // teams = teams in the draw; waitlisted teams are counted apart so they never
     // read as "unassigned" (they have no pool on purpose).
@@ -67,11 +81,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
     for (const p of pools) {
       const cur = divMap.get(p.division) ?? { teams: 0, waitlisted: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
-      const names: string[] = JSON.parse(p.teamNames || '[]')
+      // Waitlisted names never count as assigned: they aren't in teamCount either,
+      // so counting them would hide a real unassigned team.
+      const names = dropWaitlisted(JSON.parse(p.teamNames || '[]') as string[], p.division, waitlistAll)
       divMap.set(p.division, { ...cur, pools: cur.pools + 1, assignedTeams: cur.assignedTeams + names.length })
     }
     const bracketCount = new Map<string, number>()
     for (const g of games) {
+      if (involvesWaitlisted(g, wl)) continue
       const cur = divMap.get(g.division) ?? { teams: 0, waitlisted: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
       const isBracket = (g.gameNumber || '').startsWith('B')
       if (isBracket) {

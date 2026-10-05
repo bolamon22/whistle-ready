@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { waitlistedKeys, involvesWaitlisted } from '@/lib/poolMembership'
 
 // What the public is allowed to see of a tournament's schedule.
 //
@@ -23,6 +24,10 @@ export interface PublicVisibility {
   publishedAt: string | null
   ended: boolean
   snapshot: Record<string, { date: string; startTime: string; location: string }> | null
+  /** Waitlisted teams per division (lib/poolMembership). Staff may place one in a
+   *  pool to plan around it; its games stay off every public surface until the
+   *  flag is cleared in Registrations. */
+  waitlisted?: Map<string, Set<string>>
 }
 
 let columnsReady: Promise<void> | null = null
@@ -84,7 +89,13 @@ export async function getPublicVisibility(tournamentId: string): Promise<PublicV
     } catch { /* bad snapshot -> fall back to live */ }
   }
 
+  // Best-effort: a failed read leaves nothing filtered, which is no worse than
+  // before waitlisted teams could be placed at all.
+  let waitlisted: Map<string, Set<string>> | undefined
+  try { waitlisted = await waitlistedKeys(tournamentId) } catch { /* ignore */ }
+
   return {
+    waitlisted,
     pools, schedule,
     poolsAuto: !(r.publicPools === 'live' || r.publicPools === 'hidden'),
     scheduleAuto: !(r.publicSchedule === 'live' || r.publicSchedule === 'hidden'),
@@ -98,7 +109,7 @@ export async function setPublicVisibility(tournamentId: string, patch: { pools?:
   if (patch.schedule) await prisma.$executeRawUnsafe(`UPDATE "Tournament" SET "publicSchedule" = ? WHERE id = ?`, patch.schedule, tournamentId)
 }
 
-type GameLike = { id: string; gameNumber?: string | null; pool?: string | null; date: string; startTime: string; location: string }
+type GameLike = { id: string; gameNumber?: string | null; pool?: string | null; date: string; startTime: string; location: string; division?: string | null; team1?: string | null; team2?: string | null }
 
 export function isBracketGame(g: { gameNumber?: string | null }): boolean {
   return String(g.gameNumber || '').startsWith('B')
@@ -108,8 +119,9 @@ export function isBracketGame(g: { gameNumber?: string | null }): boolean {
 export function applyPublicView<T extends GameLike>(games: T[], vis: PublicVisibility): T[] {
   if (vis.schedule === 'live') {
     const snap = vis.snapshot
-    if (!snap) return games
-    return games.filter(g => snap[g.id]).map(g => ({ ...g, ...snap[g.id] }))
+    const shown = games.filter(g => !involvesWaitlisted(g, vis.waitlisted))
+    if (!snap) return shown
+    return shown.filter(g => snap[g.id]).map(g => ({ ...g, ...snap[g.id] }))
   }
   // Schedule & brackets off: no games at all, not even the pool matchups. Who
   // plays whom is the schedule too. With only Teams & pools on, this used to

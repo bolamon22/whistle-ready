@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
-import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
+import { keepRegistered, registeredKeys, waitlistedKeys, dropWaitlisted } from '@/lib/poolMembership'
 import { cleanName, nameKey } from '@/lib/names'
 
 // Who is in which pool, for the whole tournament, read from the Pool rows staff
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    const [pools, byDiv] = await Promise.all([
+    const [pools, byDiv, wl] = await Promise.all([
       prisma.pool.findMany({
         where: { tournamentId: params.id },
         orderBy: [{ division: 'asc' }, { name: 'asc' }],
@@ -43,6 +43,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       // stale before the write paths started pruning, since no screen in the
       // app can show an orphaned name, let alone remove it.
       registeredKeys(params.id),
+      // Staff may place a waitlisted team in a pool to plan around it; outsiders
+      // don't see it until Registrations clears the flag.
+      staff ? Promise.resolve(null) : waitlistedKeys(params.id).catch(() => null),
     ])
     // `unassigned` rows are registered teams in no pool yet -- see below.
     type Row = { id: string; division: string; name: string; teams: string[]; unassigned?: boolean }
@@ -54,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         // so trim on the way out -- see lib/names.
         if (Array.isArray(parsed)) teams = parsed.filter((t: unknown) => typeof t === 'string' && t.trim()).map((t: string) => t.trim())
       } catch { /* a malformed row is an empty pool, not a 500 */ }
-      return { id: p.id, division: p.division, name: p.name, teams: keepRegistered(teams, p.division, byDiv) }
+      return { id: p.id, division: p.division, name: p.name, teams: dropWaitlisted(keepRegistered(teams, p.division, byDiv), p.division, wl) }
     })
     // Registered teams that are in no pool yet. Before the schedule is
     // published the public page shows teams, and "if I don't have a pool

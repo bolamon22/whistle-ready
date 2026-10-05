@@ -11,7 +11,7 @@ import { eventInfo, divisionFull, addPolicy, addBlock } from '@/lib/clubPortal'
 import { parsePricing } from '@/lib/regPricing'
 import { divisionBadge } from '@/lib/regStatus'
 import { clearingTransfers } from '@/lib/pendingTransfers'
-import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
+import { keepRegistered, registeredKeys, dropWaitlisted } from '@/lib/poolMembership'
 import { nameKey } from '@/lib/names'
 import { openableRegistrations, sharedClubKeys, directorsOf } from '@/lib/clubAccess'
 import { pendingInvites } from '@/lib/clubInvites'
@@ -289,7 +289,9 @@ export async function GET(req: NextRequest) {
           const parsed = JSON.parse(p.teamNames || '[]')
           if (Array.isArray(parsed)) names = parsed.filter((n: unknown): n is string => typeof n === 'string' && !!n.trim()).map(n => n.trim())
         } catch { /* a malformed row is an empty pool */ }
-        const teams = keepRegistered(names, p.division, byDiv)
+        // A waitlisted team staff placed to plan around stays hidden in the club's
+        // view too, its own included, until the flag is cleared.
+        const teams = clubView ? dropWaitlisted(keepRegistered(names, p.division, byDiv), p.division, vis.waitlisted) : keepRegistered(names, p.division, byDiv)
         if (teams.some(t => mine.has(key(p.division, t)))) pools.push({ division: p.division, name: p.name, teams })
       }
     } catch { /* no pools shown rather than a failed portal */ }
