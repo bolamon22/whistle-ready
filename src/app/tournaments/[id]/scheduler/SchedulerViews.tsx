@@ -432,7 +432,7 @@ function useCounts(games: SGame[], divisions: string[]) {
   }, [games, divisions])
 }
 
-function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle }: { p: ViewsProps; sel: SGame; teamCount: Record<string, number>; onCancel: () => void; swapArmed: boolean; onSwapToggle: () => void }) {
+function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle, onBracket, bracketOpen }: { p: ViewsProps; sel: SGame; teamCount: Record<string, number>; onCancel: () => void; swapArmed: boolean; onSwapToggle: () => void; onBracket?: () => void; bracketOpen?: boolean }) {
   const placed = !!(sel.date && sel.startTime && sel.location)
   // Second line: each team's load, so a compact row never has to be opened to see it.
   // "3 games · 2 today" counts placed games over the whole event and on this day.
@@ -468,6 +468,7 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle }: 
       </div>
       {/* two rows of buttons, as many columns as needed, so the bar stays short */}
       <div className="grid grid-rows-2 grid-flow-col gap-1 flex-shrink-0 content-center">
+        {isBracket(sel) && onBracket && <button onClick={onBracket} aria-pressed={!!bracketOpen} title="See this game in its bracket" className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${bracketOpen ? 'bg-white text-emerald-900' : 'border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800'}`}>Bracket</button>}
         {isBracket(sel) && p.onToggleIfNeeded && <button onClick={() => p.onToggleIfNeeded!(sel.id)} aria-pressed={!!sel.ifNeeded} title={sel.ifNeededFromBracket ? `Named "${sel.bracketLabel}" in the bracket. Rename it there to change.` : sel.ifNeeded ? 'Marked If needed. Click to make it a regular game.' : 'Mark as If needed: only played on a certain result, e.g. if the 1 seed loses'} className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${sel.ifNeeded ? 'bg-violet-300 text-violet-950 hover:bg-violet-200' : 'border border-violet-300/70 text-violet-100 hover:bg-emerald-800'}`}>{sel.ifNeeded ? 'If needed ✓' : 'If needed'}</button>}
         {placed && p.onSwap && <button onClick={onSwapToggle} aria-pressed={swapArmed} title="Swap this game's slot with another game: click Swap, then the other game. Or drag this game onto it." className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${swapArmed ? 'bg-amber-300 text-amber-950 hover:bg-amber-200' : 'bg-emerald-200 text-emerald-950 hover:bg-emerald-100'}`}>{swapArmed ? 'Swapping…' : 'Swap'}</button>}
         {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100">Unschedule</button>}
@@ -537,6 +538,8 @@ export function TimelineView(p: ViewsProps) {
   useEffect(() => { try { setLotMiniRaw(localStorage.getItem(lotMiniKey) === '1') } catch {} }, [lotMiniKey])
   const setLotMini = (v: boolean) => { setLotMiniRaw(v); try { localStorage.setItem(lotMiniKey, v ? '1' : '0') } catch {} }
   const [tab, setTab] = useState<'issues' | 'day'>('issues')
+  // Bracket pop-over (BracketPanel): opened from the placing bar or the zoom row.
+  const [bracketOpen, setBracketOpen] = useState(false)
   const [openDivs, setOpenDivs] = useState<Record<string, boolean>>({})
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useTypeFilter()
@@ -607,8 +610,11 @@ export function TimelineView(p: ViewsProps) {
   useEffect(() => { try { const z = parseFloat(localStorage.getItem(zoomKey) || ''); if (z >= 0.5 && z <= 1.25) setZoomRaw(z) } catch {} }, [zoomKey])
   const setZoom = (z: number) => { const v = Math.min(1.25, Math.max(0.5, Math.round(z * 100) / 100)); setZoomRaw(v); try { localStorage.setItem(zoomKey, String(v)) } catch {} }
 
+  const bracketOpenRef = useRef(false)
+  bracketOpenRef.current = bracketOpen
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelId(null); setHover(null) } }
+    // Esc: close the bracket pop-over if it's open, otherwise drop the picked game
+    const onKey = (e: KeyboardEvent) => { if (e.key !== 'Escape') return; if (bracketOpenRef.current) { setBracketOpen(false); return } setSelId(null); setHover(null) }
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey)
   }, [])
   // a placed game that got moved/unscheduled elsewhere: drop the stale selection
@@ -939,6 +945,10 @@ export function TimelineView(p: ViewsProps) {
         {lotTop && renderLotStrip()}
         <div className="px-3 py-1.5 flex items-start gap-2 bg-white border-b border-slate-200 flex-shrink-0">
           <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} focus={focus} /></div>
+          {p.games.some(isBracket) && (
+            <button onClick={() => setBracketOpen(o => !o)} aria-pressed={bracketOpen} title="Show a division's bracket"
+              className={`flex-shrink-0 mt-1 h-6 px-2.5 rounded-md border text-[11px] font-bold ${bracketOpen ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900'}`}>Bracket</button>
+          )}
           <div className="flex-shrink-0 flex items-center gap-0.5 pt-1 text-slate-500" title="Zoom the board">
             <button onClick={() => setZoom(zoom - 0.1)} disabled={zoom <= 0.5} aria-label="Zoom out" className="w-6 h-6 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-sm leading-none">−</button>
             <button onClick={() => setZoom(1)} aria-label="Reset zoom" title="Back to 100%" className="w-10 text-[11px] font-semibold tabular-nums text-center hover:text-slate-900">{Math.round(zoom * 100)}%</button>
@@ -949,7 +959,15 @@ export function TimelineView(p: ViewsProps) {
         {/* While a game is picked up, its bar floats over the bottom of the board so the
             chips row keeps its width and the bar is always in view. */}
         {/* While dragging, the bar is see-through to the pointer so the slots under it still take the drop. */}
-        {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} teamCount={teamCount} onCancel={() => setSelId(null)} swapArmed={swapArmed} onSwapToggle={() => setSwapArmed(v => !v)} /></div>}
+        {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} teamCount={teamCount} onCancel={() => setSelId(null)} swapArmed={swapArmed} onSwapToggle={() => setSwapArmed(v => !v)} onBracket={() => setBracketOpen(o => !o)} bracketOpen={bracketOpen} /></div>}
+        {/* Bracket pop-over: floats above the placing bar (or the bottom of the board
+            when nothing is picked), so the board keeps its full width. */}
+        {bracketOpen && (
+          <div className={`absolute left-1/2 -translate-x-1/2 z-50 w-[760px] max-w-[calc(100%-24px)] flex flex-col rounded-2xl bg-white border border-slate-200 shadow-2xl`} style={{ bottom: sel ? 84 : 12, maxHeight: `calc(100% - ${sel ? 96 : 24}px)` }}>
+            <BracketPanel p={p} sel={sel} onClose={() => setBracketOpen(false)}
+              onPick={id => { setSelId(id); setHover(null); requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-tl-game="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })) }} />
+          </div>
+        )}
         {/* Room under the last row while the bar is up, so the late slots can scroll
             clear of it and take a click or a drop (Bo, Oct 5 2026: 8:30p and 9:20p sat
             under the bar with nowhere further to scroll). */}
@@ -1268,6 +1286,100 @@ export function TimelineView(p: ViewsProps) {
       </div>
     )
   }
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Bracket preview (pop-over over the board): one division's bracket as the schedule has it
+// right now -- each game's time and field, or "Not placed". Follows the picked
+// game's division; the picked game is ringed and the games feeding it and fed by
+// it are tinted, so "where does this go" reads off the tree. Click a game to pick it.
+// ───────────────────────────────────────────────────────────────────────────────
+function BracketPanel({ p, sel, onPick, onClose }: { p: ViewsProps; sel: SGame | null; onPick: (id: string) => void; onClose: () => void }) {
+  const bracketDivs = useMemo(() => p.divisions.filter(d => p.games.some(g => g.division === d && isBracket(g))), [p.divisions, p.games])
+  const [pickedDiv, setPickedDiv] = useState<string | null>(null)
+  const div = (sel && isBracket(sel) ? sel.division : null) ?? pickedDiv ?? (p.filterDiv !== '__all__' && bracketDivs.includes(p.filterDiv) ? p.filterDiv : null) ?? bracketDivs[0] ?? ''
+  const games = useMemo(() => p.games.filter(g => g.division === div && isBracket(g)), [p.games, div])
+  const byNum = useMemo(() => new Map(games.map(g => [g.gameNumber.toUpperCase(), g])), [games])
+  const refOf = (t: string) => { const m = (t || '').match(/^([WL])-(B\d+)$/i); return m ? { kind: m[1].toUpperCase(), num: m[2].toUpperCase() } : null }
+  const depth = useMemo(() => {
+    const d = new Map<string, number>()
+    const go = (g: SGame, seen: Set<string>): number => {
+      if (d.has(g.id)) return d.get(g.id)!
+      if (seen.has(g.id)) return 0
+      seen.add(g.id)
+      let v = 0
+      for (const t of [g.team1, g.team2]) { const r = refOf(t); const src = r ? byNum.get(r.num) : undefined; if (src) v = Math.max(v, go(src, seen) + 1) }
+      d.set(g.id, v); return v
+    }
+    games.forEach(g => go(g, new Set()))
+    return d
+  }, [games, byNum])
+  const num = (a: SGame, b: SGame) => a.gameNumber.localeCompare(b.gameNumber, undefined, { numeric: true })
+  const main = games.filter(g => g.bracketSection !== 'consolation' && !(g.bracketSection === '' && /^L-/i.test(g.team1) && /^L-/i.test(g.team2)))
+  const cons = games.filter(g => !main.includes(g)).sort((a, b) => (depth.get(a.id)! - depth.get(b.id)!) || num(a, b))
+  const rounds: SGame[][] = []
+  main.forEach(g => { const r = depth.get(g.id) ?? 0; (rounds[r] ??= []).push(g) })
+  rounds.forEach(r => r.sort(num))
+  const roundName = (i: number, n: number) => i === n - 1 ? 'Final' : i === n - 2 && n >= 3 ? 'Semifinals' : `Round ${i + 1}`
+  // the picked game's neighbors: what feeds it, and what it feeds
+  const feeds = new Set<string>(), fedBy = new Set<string>()
+  if (sel && sel.division === div) {
+    for (const t of [sel.team1, sel.team2]) { const r = refOf(t); const g = r && byNum.get(r.num); if (g) feeds.add(g.id) }
+    games.forEach(g => { if ([g.team1, g.team2].some(t => refOf(t)?.num === sel.gameNumber.toUpperCase())) fedBy.add(g.id) })
+  }
+  const c = p.divColor(div)
+  const node = (g: SGame, w = 'w-full') => {
+    const placed = !!(g.date && g.startTime && g.location)
+    const on = sel?.id === g.id, near = feeds.has(g.id) || fedBy.has(g.id)
+    const day = placed ? new Date(g.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : ''
+    const field = placed ? (p.fields.find(f => f.fullName === g.location)?.fieldName ?? g.location.split(' - ').pop()) : ''
+    return (
+      <button key={g.id} onClick={() => onPick(g.id)} title={`${g.gameNumber}: ${humanTeam(g.team1)} vs ${humanTeam(g.team2)}${placed ? ` · ${day} ${p.fmtTime(g.startTime)} · ${field}` : ' · not placed yet'}`}
+        className={`${w} text-left rounded-lg border bg-white px-1.5 py-1 transition-shadow hover:shadow-md ${on ? 'ring-2 ring-offset-1' : ''}`}
+        style={{ borderColor: on ? c : near ? c + '99' : '#e2e8f0', background: near && !on ? c + '14' : '#fff', boxShadow: on ? `0 0 0 2px ${c}` : undefined }}>
+        <div className="flex items-center gap-1 text-[9px] leading-none mb-0.5">
+          <b style={{ color: c }}>{g.gameNumber}</b>
+          <GameTag g={g} mini />
+                  </div>
+        <div className={`text-[9px] leading-none mb-0.5 truncate ${placed ? 'text-slate-500' : 'text-orange-600 font-semibold'}`}>{placed ? `${day} ${p.fmtTime(g.startTime).replace(/ ([AP])M$/, (_, x) => x.toLowerCase())} · ${field}` : 'Not placed'}</div>
+        <div className="text-[10px] font-semibold text-slate-800 truncate leading-tight">{humanTeam(g.team1)}</div>
+        <div className="text-[10px] text-slate-600 truncate leading-tight">{humanTeam(g.team2)}</div>
+      </button>
+    )
+  }
+  const placedN = games.filter(g => g.date && g.startTime && g.location).length
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="px-3 py-2 flex items-center gap-2 border-b border-slate-100">
+        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c }} />
+        <select value={div} onChange={e => setPickedDiv(e.target.value)} disabled={!!(sel && isBracket(sel))} title={sel && isBracket(sel) ? 'Following the game you picked' : 'Division'}
+          className="flex-1 min-w-0 text-xs font-bold text-slate-800 bg-transparent focus:outline-none disabled:opacity-100">
+          {bracketDivs.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <span className="text-[10px] text-slate-500 whitespace-nowrap">{placedN}/{games.length} placed</span>
+        <button onClick={onClose} aria-label="Close the bracket" title="Close (Esc)" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={14} /></button>
+      </div>
+      {games.length === 0 ? <p className="text-xs text-slate-400 text-center py-8">No bracket games yet.</p> : (
+        <div className="flex-1 overflow-auto p-3 space-y-3">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {rounds.map((r, i) => (
+              <div key={i} className="flex-1 min-w-[132px] flex flex-col">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1.5 text-center">{roundName(i, rounds.length)}</div>
+                <div className="flex-1 flex flex-col justify-around gap-2">{r.map(g => node(g))}</div>
+              </div>
+            ))}
+          </div>
+          {cons.length > 0 && (
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">Consolation</div>
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))' }}>{cons.map(g => node(g))}</div>
+            </div>
+          )}
+          <p className="text-[10px] text-slate-400 leading-snug">Click a game to pick it up, then click a slot to place it. Ringed: the game you picked. Tinted: the games that feed it and the one it feeds.</p>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
