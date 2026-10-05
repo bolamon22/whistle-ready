@@ -15,6 +15,7 @@ import { keepRegistered, registeredKeys } from '@/lib/poolMembership'
 import { nameKey } from '@/lib/names'
 import { openableRegistrations, sharedClubKeys, directorsOf } from '@/lib/clubAccess'
 import { pendingInvites } from '@/lib/clubInvites'
+import { recordPortalVisit } from '@/lib/portalVisits'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,6 +31,13 @@ export async function GET(req: NextRequest) {
   // club name (lib/clubAccess, Oct 4 2026).
   const openable = await openableRegistrations(as.userId, tournamentId)
   if (openable.length === 0) return NextResponse.json({ clubs: [] })
+
+  // The club opened its portal: counted for the Portal column on the
+  // registrations page (lib/portalVisits; Bo, Oct 5 2026). Staff looking with
+  // ?userId= is the office checking, not the club, so it isn't. Started here and
+  // awaited before the response so it runs alongside the reads below.
+  const visit = as.viewingOther ? null
+    : recordPortalVisit(as.userId, tournamentId, openable.map(r => r.id), String((session.user as any)?.role || ''))
 
   const clubNames = [...new Set(openable.map(r => r.clubName))]
   // Waivers and player registrations are filed by club name. A name another
@@ -287,5 +295,6 @@ export async function GET(req: NextRequest) {
     } catch { /* no pools shown rather than a failed portal */ }
   }
 
+  await visit
   return NextResponse.json({ clubs: clubNames, sharedClubs, registrations: regsOut, playerRegs, games, pools, teamNames, waivers, coachWaivers, lock, payTo, event })
 }

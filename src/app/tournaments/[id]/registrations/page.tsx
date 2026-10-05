@@ -37,6 +37,8 @@ interface Registration {
   confirmStatus?: string; confirmNote?: string; confirmAt?: string
   waiverUnassigned?: number
   hasAccount?: boolean; accountRole?: string; accountUserId?: string
+  /** Club portal use (lib/portalVisits): null until the portal has been opened. */
+  portal?: { last: string; first: string; lastBy: string; week: number; month: number; total: number; people: number } | null
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
 // wasWaitlisted: the row's waitlist state when the edit drawer opened. Rides on the
@@ -72,6 +74,16 @@ const fmtPayDate = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const today = () => new Date().toISOString().slice(0, 10)
 const shortDate = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+
+// The Portal cell's hover: when and by whom the club last opened its portal, and
+// how often (lib/portalVisits).
+const portalTitle = (p: NonNullable<Registration['portal']>) => {
+  const d = new Date(p.last)
+  const when = isNaN(d.getTime()) ? '' : d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const plural = (n: number) => `${n} visit${n === 1 ? '' : 's'}`
+  return `Last opened ${when}${p.lastBy ? ` by ${p.lastBy}` : ''}. ${plural(p.week)} in the last 7 days, ${plural(p.total)} since ${shortDate(p.first)}`
+    + `${p.people > 1 ? `, by ${p.people} people` : ''}. Opening it again within 30 minutes counts as the same visit.`
+}
 
 function calcInvoice(teams: TeamRow[], pricing: Pricing): number { return calcRegFee(teams, pricing) }
 
@@ -2324,6 +2336,21 @@ export default function RegistrationsPage() {
                             </button>
                           ) : (
                             <div className="text-sm text-slate-300">{commLog(reg).confirm ? 'Waiting' : '—'}</div>
+                          )}
+                        </div>
+                        {/* When the club last opened its portal, and how often (lib/portalVisits;
+                            Bo, Oct 5 2026: "it would be nice to know if they are using the
+                            portal and how often"). */}
+                        <div className="text-right">
+                          <div className="text-xs text-slate-400">Portal</div>
+                          {reg.portal?.last ? (
+                            <div className="text-sm font-medium text-slate-700 leading-tight" title={portalTitle(reg.portal)}>
+                              {shortDate(reg.portal.last)}
+                              <div className="text-[10.5px] font-semibold text-slate-400">{reg.portal.total} visit{reg.portal.total === 1 ? '' : 's'}</div>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-300"
+                              title={reg.hasAccount ? 'Has a login, but no portal visit recorded yet (visits are recorded from Oct 5, 2026)' : 'No login yet'}>—</div>
                           )}
                         </div>
                       </div>

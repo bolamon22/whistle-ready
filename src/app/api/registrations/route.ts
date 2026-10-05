@@ -19,6 +19,7 @@ import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { viewerRole } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
 import { canSeeMoney, canSeeContacts, payStatus } from '@/lib/roleScope'
+import { portalUsage } from '@/lib/portalVisits'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -144,6 +145,11 @@ export async function GET(req: NextRequest) {
       }
     } catch { /* no account info — the card just won't show a badge */ }
 
+    // When each club last opened its portal, and how often (lib/portalVisits;
+    // Bo, Oct 5 2026). Only the full view carries it: shapeForRole rebuilds the
+    // row for every other role and leaves it out.
+    const usage = canSeeMoney(role) ? await portalUsage(registrations.map((r: any) => r.id)) : new Map()
+
     return NextResponse.json(shapeForRole(registrations.map((r: any) => {
       const sum = summarizeClub(counts, r.clubName, r.teams || [])
       return {
@@ -160,6 +166,7 @@ export async function GET(req: NextRequest) {
         hasAccount: accounts.has(String(r.contactEmail || '').trim().toLowerCase()),
         accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.role || '',
         accountUserId: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id || '',
+        portal: usage.get(r.id) || null,
       }
     }), role))
   } catch {
