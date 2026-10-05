@@ -11,7 +11,7 @@ import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { countdownPhrase } from '@/lib/payLetterText'
 import toast, { Toaster } from 'react-hot-toast'
-import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail, Clock } from 'lucide-react'
+import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail, Clock, FileText } from 'lucide-react'
 import { nameKey } from '@/lib/names'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
@@ -961,6 +961,38 @@ export default function RegistrationsPage() {
     setCommSaving(false)
   }
 
+  // INVOICE: the club's invoice as a PDF, to download or email (api/registrations/
+  // [id]/invoice). Melissa at M&D Orlando, Oct 5 2026, needed one for the
+  // accounting office that cuts her check.
+  const [invFor, setInvFor] = useState<Registration | null>(null)
+  const [invToClub, setInvToClub] = useState(true)
+  const [invAlso, setInvAlso] = useState('')
+  const [invNote, setInvNote] = useState('')
+  const [invSending, setInvSending] = useState(false)
+  const openInvoice = (reg: Registration) => { setInvFor(reg); setInvToClub(true); setInvAlso(''); setInvNote('') }
+  const sendInvoice = async () => {
+    if (!invFor) return
+    setInvSending(true)
+    try {
+      const res = await fetch(`/api/registrations/${encodeURIComponent(invFor.id)}/invoice`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toClub: invToClub, also: invAlso, note: invNote }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'The invoice did not go out')
+      toast.success(`Invoice emailed to ${(d.to || []).join(', ')}`, { duration: 5000 })
+      setRegistrations(rs => rs.map(r => {
+        if (r.id !== invFor.id) return r
+        let log: Record<string, string> = {}
+        try { log = r.commEmailLog ? JSON.parse(r.commEmailLog) : {} } catch { /* fresh */ }
+        log.invoice = d.sentAt
+        return { ...r, commEmailLog: JSON.stringify(log) }
+      }))
+      setInvFor(null)
+    } catch (e: any) { toast.error(e?.message || 'The invoice did not go out') }
+    finally { setInvSending(false) }
+  }
+
   const [refundFor, setRefundFor] = useState<RegistrationPayment | null>(null)
   const [refundAmt, setRefundAmt] = useState('')
   const [refunding, setRefunding] = useState(false)
@@ -1616,6 +1648,43 @@ export default function RegistrationsPage() {
             </div>
           </div>
         )}
+        {invFor && (() => {
+          const pdf = `/api/registrations/${encodeURIComponent(invFor.id)}/invoice`
+          const sentOn = commLog(invFor).invoice
+          return (
+            <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !invSending && setInvFor(null)}>
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold text-slate-800 mb-1">Invoice · {invFor.clubName}</h3>
+                <p className="text-sm text-slate-500 mb-3">
+                  A PDF with the teams, amounts, payments so far, and how to pay by check, Zelle or online. Clubs can download it themselves from their pay page and portal.
+                  {sentOn ? <> Last emailed {shortDate(sentOn)}.</> : null}
+                </p>
+                <div className="flex flex-wrap gap-2 mb-5">
+                  <a href={`${pdf}?view=1`} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50"><ExternalLink size={14} /> Open PDF</a>
+                  <a href={pdf}
+                    className="inline-flex items-center gap-1.5 text-sm border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50"><Download size={14} /> Download</a>
+                </div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Email it</div>
+                <label className="flex items-start gap-2 text-sm text-slate-700 mb-3 cursor-pointer">
+                  <input type="checkbox" checked={invToClub} onChange={e => setInvToClub(e.target.checked)} className="mt-0.5 accent-teal-600" />
+                  <span>To the club: <span className="font-medium">{invFor.contactEmail || 'no email on file'}</span> and anyone who runs this club in the portal</span>
+                </label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Also send to (their accounting office, say)</label>
+                <input value={invAlso} onChange={e => setInvAlso(e.target.value)} placeholder="accounting@club.com" className={`${inputCls} mb-3`} />
+                <label className="block text-xs font-medium text-slate-600 mb-1">Note (optional)</label>
+                <textarea value={invNote} onChange={e => setInvNote(e.target.value)} rows={3} maxLength={1500}
+                  placeholder="Added to the email above the payment details" className={`${inputCls} mb-2`} />
+                <p className="text-xs text-slate-400 mb-4">A copy goes to the office inbox.</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setInvFor(null)} disabled={invSending} className="text-sm border border-slate-300 text-slate-600 px-4 py-2 rounded-lg hover:bg-slate-50">Cancel</button>
+                  <button onClick={sendInvoice} disabled={invSending || (!invToClub && !invAlso.trim())}
+                    className="text-sm bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold px-4 py-2 rounded-lg inline-flex items-center gap-1.5"><Mail size={14} /> {invSending ? 'Sending…' : 'Email invoice'}</button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
         {refundFor && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !refunding && setRefundFor(null)}>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
@@ -2305,7 +2374,7 @@ export default function RegistrationsPage() {
                           // Waiver + schedule sends live here; pay + confirm get their own
                           // stat columns on the right (Bo).
                           const log = commLog(reg)
-                          const sent = ([['waiver', 'Waivers'], ['schedule', 'Schedule']] as const)
+                          const sent = ([['waiver', 'Waivers'], ['schedule', 'Schedule'], ['invoice', 'Invoice']] as const)
                             .filter(([k]) => log[k]).map(([k, label]) => `${label} ${shortDate(log[k])}`)
                           if (!sent.length) return null
                           return <div className="text-[11px] text-slate-400 mt-0.5 truncate">Emailed · {sent.join(' · ')}</div>
@@ -2382,6 +2451,10 @@ export default function RegistrationsPage() {
                       className="text-xs text-green-600 border border-green-300 hover:border-green-500 px-2.5 py-1 rounded-lg">+ Payment</button>
                     {balance > 0 && <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/pay/${reg.id}`); toast.success('Payment link copied') }}
                       className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg">Pay link</button>}
+                    {reg.invoiceAmount - reg.discountAmount > 0 && (
+                      <button onClick={() => openInvoice(reg)} title="Download or email this club's invoice (PDF)"
+                        className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><FileText size={12} /> Invoice</button>
+                    )}
                     <button onClick={() => openComm(reg)} className="text-xs text-teal-600 border border-teal-200 hover:border-teal-400 px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><Mail size={12} /> Email</button>
                     {reg.confirmStatus === 'change_requested' && reg.confirmNote && (
                       <div className="w-full flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">

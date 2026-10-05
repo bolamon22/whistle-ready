@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Toaster } from 'react-hot-toast'
-import { CheckCircle2, AlertCircle, Clock } from 'lucide-react'
+import { CheckCircle2, AlertCircle, Clock, Download } from 'lucide-react'
 import StripePayPanel, { type PayMethod } from '@/components/StripePayPanel'
 import PublicChirp from '@/components/PublicChirp'
 
@@ -17,6 +17,16 @@ type PayInfo = {
   /** A bank transfer they already sent that is still clearing; already taken off balance. */
   clearing?: { amount: number; startedAt: string } | null
 }
+
+// The invoice as a PDF (api/registrations/[id]/invoice). Clubs that pay by check
+// need a document their accounting office will take (M&D Orlando, Oct 5 2026), and
+// this keeps that self-serve instead of an email to the office.
+const InvoiceLink = ({ regId, label = 'Download invoice (PDF)', className = '' }: { regId: string; label?: string; className?: string }) => (
+  <a href={`/api/registrations/${encodeURIComponent(regId)}/invoice`}
+    className={`inline-flex items-center gap-1.5 text-sm font-semibold text-teal-600 hover:text-teal-700 hover:underline ${className}`}>
+    <Download size={15} className="shrink-0" /> {label}
+  </a>
+)
 
 const startedOn = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
 
@@ -87,6 +97,7 @@ export default function PayPage() {
         Bank transfers take a few business days, and we&apos;ll mark your registration paid automatically once it lands.
         There&apos;s nothing else to pay.
       </p>
+      <InvoiceLink regId={regId} className="mt-4" />
     </div>
   </>)
 
@@ -100,6 +111,7 @@ export default function PayPage() {
           ? `There's no balance on file for ${info?.clubName || 'this registration'} right now. If that seems wrong, contact the tournament.`
           : `${info?.clubName || 'This registration'} is all paid up — nothing else due. See you on the field!`}
       </p>
+      {!info?.noInvoice && <InvoiceLink regId={regId} label="Download paid invoice (PDF)" className="mt-4" />}
     </div>
   </>)
 
@@ -139,7 +151,10 @@ export default function PayPage() {
   return shell(<>
     {header}
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h2 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">Invoice</h2>
+      <div className="flex items-center justify-between gap-3 mb-4 pb-2 border-b border-gray-100">
+        <h2 className="text-base font-bold text-gray-800">Invoice</h2>
+        <InvoiceLink regId={regId} />
+      </div>
       <div className="text-sm text-gray-500 mb-3">{info?.clubName} &middot; {info?.teamCount} team{info?.teamCount !== 1 ? 's' : ''}</div>
       {(info?.teams?.length || 0) > 0 && (
         <div className="mb-4 border border-gray-100 rounded-xl overflow-hidden">
@@ -192,6 +207,8 @@ export default function PayPage() {
     <p className="text-center text-xs text-gray-400 pb-6">
       Prefer Zelle? Send {fmt(balance)} to <span className="font-medium text-gray-500">{info?.zelleHandle || 'info@sunshinelax.com'}</span> with
       &ldquo;{info?.clubName || 'your club name'}&rdquo; in the memo &mdash; we&apos;ll mark your invoice paid when it arrives.
+      <br />Paying by check? <a href={`/api/registrations/${encodeURIComponent(regId)}/invoice`} className="font-medium text-teal-600 hover:underline">Download the invoice</a> for
+      your accounting office. It has the mailing address and what to write on the memo line.
     </p>
   </>)
 }

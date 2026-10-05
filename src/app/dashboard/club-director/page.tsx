@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, BedDouble, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Clock, Copy, CreditCard, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, Plus, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
+import { AlertTriangle, BedDouble, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Clock, Copy, CreditCard, Download, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, Plus, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { compressImageFile } from '@/lib/imageCompress'
 import {
@@ -1125,6 +1125,15 @@ export default function ClubDirectorDashboard() {
                             <span className="text-gray-500">Clearing: <span className="font-medium text-amber-600">{fmt(inFlight)}</span></span>
                           )}
                           <span className="text-gray-500">Balance: <span className={`font-semibold ${bal > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(bal)}</span></span>
+                          {/* The invoice as a PDF, for a club whose accounting office
+                              cuts the check (M&D Orlando, Oct 5 2026). Paid, it is the
+                              receipt. */}
+                          {due > 0 && (
+                            <a href={`/api/registrations/${encodeURIComponent(reg.id)}/invoice`}
+                              className="sm:ml-auto inline-flex items-center gap-1 font-semibold text-teal-600 hover:text-teal-700 hover:underline">
+                              <Download size={13} className="shrink-0" /> {bal > 0 ? 'Invoice (PDF)' : 'Paid invoice (PDF)'}
+                            </a>
+                          )}
                         </div>
                         {inFlight > 0 && reg.clearing && (
                           <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
