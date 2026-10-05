@@ -3,7 +3,7 @@ title: Schedule games on fields (Scheduler and Auto-fill)
 category: Setup
 order: 50
 routes: /tournaments/*/scheduler
-keywords: move game reschedule change time change field scheduler schedule games place games drag drop grid board timeline teams view auto-fill autofill parking lot unscheduled swap games conflicts back-to-back issues day start day end zoom compact fields
+keywords: undo ctrl z put back move game reschedule change time change field scheduler schedule games place games drag drop grid board timeline teams view auto-fill autofill parking lot unscheduled swap games conflicts back-to-back issues day start day end zoom compact fields
 ---
 The **Scheduler** puts every pool and bracket game on a field, date and time. Games that are not placed yet wait in the **Parking Lot**.
 
@@ -22,6 +22,8 @@ The **Scheduler** puts every pool and bracket game on a field, date and time. Ga
 On the **Board** or **Timeline** you can also click a game to pick it up. A green bar shows its division, game number, teams and pool, and how many games each team has. Click a green **Place here** slot to put it there, or use **Swap**, **Unschedule** or **Cancel**.
 
 Changes save as you go.
+
+**To undo a move:** click **Undo** next to **Tools**, or press Ctrl+Z (Cmd+Z on a Mac). The last game you moved goes back where it was, and a swap comes back as one step. Keep going to step further back, up to 30 moves; the button shows how many are left. A game someone else has moved since, or whose old slot is now taken, stays where it is. Undo remembers your moves until you leave or reload the page, and covers moves made by hand: for **Auto-fill** and the bulk tools, use **Revert**.
 
 **To place games automatically:**
 1. Click **Auto-fill**.

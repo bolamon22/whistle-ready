@@ -10,7 +10,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { closuresOf, isFieldClosedAt, fieldClosure, closureLabel, withClosure, blockedKeys, isAllDay, type Closure } from '@/lib/fieldClosures'
 import { divisionAbbr, teamRefKey } from '@/lib/names'
-import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban, PanelTop } from 'lucide-react'
+import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban, PanelTop, Undo2 } from 'lucide-react'
 
 interface Game {
   id: string
@@ -456,21 +456,100 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     toast.success(`${field.fieldName} removed`)
   }
 
-  async function patchGame(gameId: string, patch: Partial<Pick<Game, 'date' | 'startTime' | 'location'>>) {
+  async function patchGame(gameId: string, patch: Partial<Pick<Game, 'date' | 'startTime' | 'location'>>): Promise<Game | null> {
     setSaving(true)
     const res = await fetch(`/api/tournaments/${params.id}/games/${gameId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
+    let saved: Game | null = null
     if (res.ok) {
       const updated = await res.json()
+      saved = updated
       setGames(prev => prev.map(g => g.id === gameId ? { ...g, ...updated } : g))
     } else {
       toast.error('Failed to update game')
     }
     setSaving(false)
+    return saved
   }
+
+  // ── Undo for moves made by hand ─────────────────────────────────────────────
+  // Drag, place, unschedule and swap, newest last, up to 30 steps back (Bo, Oct 5:
+  // "we move something somewhere and you don't remember where it came from").
+  // Each step keeps where its games were and where they went. The bulk tools
+  // (Auto-fill, unschedule all, weather, re-stack) keep Checkpoint and Revert.
+  type Spot = { date: string; startTime: string; location: string }
+  type UndoStep = { label: string; moves: { id: string; from: Spot; to: Spot }[] }
+  const [undoStack, setUndoStack] = useState<UndoStep[]>([])
+  const [undoing, setUndoing] = useState(false)
+  const spotOf = (g: Partial<Spot>): Spot => ({ date: g.date || '', startTime: g.startTime || '', location: g.location || '' })
+  const sameSpot = (a: Spot, b: Spot) => a.date === b.date && a.startTime === b.startTime && a.location === b.location
+  const pushUndo = (step: UndoStep) => setUndoStack(st => [...st, step].slice(-30))
+  const gameName = (g: Game) => `${g.gameNumber} (${g.division})`
+  const spotPhrase = (sp: Spot) => {
+    if (!sp.location) return 'in the Parking Lot'
+    const field = fields.find(f => f.fullName === sp.location)?.fieldName || sp.location
+    return `on ${field} at ${fmtTime(sp.startTime)}${sp.date !== activeDate ? `, ${fmtDate(sp.date)}` : ''}`
+  }
+
+  /** A move made by hand: saves it and remembers where the game was, for Undo. */
+  async function moveGame(gameId: string, to: Spot) {
+    const g = games.find(x => x.id === gameId)
+    const saved = await patchGame(gameId, to)
+    if (g && saved && !sameSpot(spotOf(g), spotOf(saved)))
+      pushUndo({ label: `move ${gameName(g)}`, moves: [{ id: g.id, from: spotOf(g), to: spotOf(saved) }] })
+  }
+
+  async function undoLast() {
+    const step = undoStack[undoStack.length - 1]
+    if (!step || undoing) return
+    setUndoing(true)
+    setUndoStack(st => st.slice(0, -1))
+    try {
+      // Go by what is saved now: a game someone has moved since stays where it is,
+      // and a game only goes back into a slot that is still free.
+      let now: Game[] = games
+      try {
+        const r = await fetch(`/api/tournaments/${params.id}/games`)
+        if (r.ok) { const d = await r.json(); now = Array.isArray(d) ? d : (d.games ?? games) }
+      } catch { /* offline: go by what this page shows */ }
+      const ids = new Set(step.moves.map(m => m.id))
+      const back = step.moves.filter(m => {
+        const g = now.find(x => x.id === m.id)
+        if (!g || !sameSpot(spotOf(g), m.to)) return false
+        return !m.from.location || !now.some(o => !ids.has(o.id) && !o.isCanceled && sameSpot(spotOf(o), m.from))
+      })
+      const ok = await Promise.all(back.map(m => fetch(`/api/tournaments/${params.id}/games/${m.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m.from),
+      }).then(r => r.ok).catch(() => false)))
+      const done = back.filter((_, i) => ok[i])
+      setGames(now.map(g => { const m = done.find(x => x.id === g.id); return m ? { ...g, ...m.from } : g }))
+      setScratchPad(prev => prev.filter(id => !done.some(m => m.id === id && m.from.location)))
+      const named = (id: string) => { const g = now.find(x => x.id === id); return g ? gameName(g) : 'A game' }
+      if (done.length === 1 && step.moves.length === 1) toast.success(`Undone: ${named(done[0].id)} is back ${spotPhrase(done[0].from)}`)
+      else if (done.length) toast.success(`Undone: ${done.map(m => named(m.id)).join(' and ')} ${done.length === 1 ? 'is' : 'are'} back where ${done.length === 1 ? 'it was' : 'they were'}`)
+      const missed = step.moves.filter(m => !done.includes(m))
+      if (missed.length) toast.error(`${missed.map(m => named(m.id)).join(' and ')} stayed put: moved again since, or the old slot is taken`)
+    } finally {
+      setUndoing(false)
+    }
+  }
+  // Ctrl+Z (Cmd+Z on a Mac) undoes too, except while typing in a box.
+  const undoKey = useRef<() => void>(() => {})
+  undoKey.current = () => { if (!viewingCheckpoint && !saving) undoLast() }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return
+      e.preventDefault()
+      undoKey.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   async function reorderLot(draggedId: string, overId: string) {
     if (draggedId === overId) { setLotDragOver(null); return }
@@ -554,7 +633,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const occupied = games.find(g => g.id !== gameId && g.date === activeDate && g.startTime === time && g.location === field)
     if (occupied) { toast.error(`${field} is already booked at ${time}`); return }
     setScratchPad(prev => prev.filter(id => id !== gameId))
-    patchGame(gameId, { date: activeDate, startTime: time, location: field })
+    moveGame(gameId, { date: activeDate, startTime: time, location: field })
   }
 
   function handleDropParking(e: React.DragEvent) {
@@ -565,7 +644,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const g = games.find(x => x.id === gameId)
     setScratchPad(prev => prev.filter(id => id !== gameId))
     if (g && (g.date || g.startTime || g.location)) {
-      patchGame(gameId, { date: '', startTime: '', location: '' })
+      moveGame(gameId, { date: '', startTime: '', location: '' })
     }
   }
 
@@ -579,7 +658,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     // Unschedule if it was on the grid
     const game = games.find(g => g.id === gameId)
     if (game && (game.date || game.startTime || game.location)) {
-      patchGame(gameId, { date: '', startTime: '', location: '' })
+      moveGame(gameId, { date: '', startTime: '', location: '' })
     }
   }
 
@@ -609,6 +688,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         if (g.id === b.id) return { ...g, date: a.date, startTime: a.startTime, location: a.location }
         return g
       }))
+      pushUndo({ label: `swap ${a.gameNumber} and ${b.gameNumber}`, moves: [{ id: a.id, from: spotOf(a), to: spotOf(b) }, { id: b.id, from: spotOf(b), to: spotOf(a) }] })
       toast.success(`Swapped ${a.gameNumber} and ${b.gameNumber}`)
     } else {
       toast.error('Swap did not save. Reloading the board.')
@@ -1634,6 +1714,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
+        {/* Undo: one hand move (or swap) back per click */}
+        <button onClick={undoLast} disabled={!undoStack.length || undoing || saving || viewingCheckpoint}
+          title={undoStack.length ? `Undo ${undoStack[undoStack.length - 1].label} (Ctrl+Z) · ${undoStack.length} step${undoStack.length === 1 ? '' : 's'} back available` : 'Nothing to undo yet. Moves you make by hand can be undone here (Ctrl+Z).'}
+          className="inline-flex items-center gap-1 text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors flex-shrink-0 bg-white hover:bg-slate-100 text-slate-600 border-slate-200 disabled:opacity-40 disabled:hover:bg-white">
+          <Undo2 size={14} /> Undo{undoStack.length > 1 && <span className="font-medium text-slate-400">{undoStack.length}</span>}
+        </button>
+
         {/* Checkpoint, only while one exists */}
         {checkpoint && (
           <div className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-violet-50 px-1.5 h-7 flex-shrink-0">
@@ -1895,7 +1982,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                       const src = games.find(x => x.id === sourceId)
                       if (!src) return
                       if (src.date || src.startTime || src.location) {
-                        patchGame(sourceId, { date: '', startTime: '', location: '' })
+                        moveGame(sourceId, { date: '', startTime: '', location: '' })
                       } else {
                         reorderLot(sourceId, g.id)
                       }
@@ -2134,8 +2221,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             divColor: (d: string) => divColor(d, divisions, divColorMap), fmtTime, divAbbr,
             issues: { conflict: conflictMsgs, b2b: backToBackMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
             filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
-            onPlace: (id: string, time: string, field: string) => patchGame(id, { date: activeDate, startTime: time, location: field }),
-            onUnschedule: (id: string) => patchGame(id, { date: '', startTime: '', location: '' }),
+            onPlace: (id: string, time: string, field: string) => moveGame(id, { date: activeDate, startTime: time, location: field }),
+            onUnschedule: (id: string) => moveGame(id, { date: '', startTime: '', location: '' }),
             saving,
             prefsKey: params.id,
             onReorderFields: reorderField,
