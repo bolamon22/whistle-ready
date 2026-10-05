@@ -27,6 +27,7 @@ interface Game {
   isCanceled: boolean
   score1?: number | null
   score2?: number | null
+  ifNeeded?: boolean   // lib/ifNeeded: only played on a certain result
 }
 
 interface Field {
@@ -695,6 +696,24 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // Two placed games trade date, time and field. Shared by the Grid's swap mode and
   // the Board (drag a game onto another, or Swap on the moving bar).
+  // "If needed" (lib/ifNeeded): flips at once, rolls back if the save fails.
+  async function toggleIfNeeded(id: string) {
+    const g = games.find(x => x.id === id)
+    if (!g) return
+    const on = !g.ifNeeded
+    setGames(prev => prev.map(x => x.id === id ? { ...x, ifNeeded: on } : x))
+    const r = await fetch(`/api/tournaments/${params.id}/if-needed`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId: id, on }),
+    }).catch(() => null)
+    if (!r || !r.ok) {
+      setGames(prev => prev.map(x => x.id === id ? { ...x, ifNeeded: !on } : x))
+      toast.error('Could not save the If needed mark')
+      return
+    }
+    toast.success(on ? `${g.gameNumber} marked If needed` : `${g.gameNumber} is a regular game again`)
+  }
+
   async function swapGames(aId: string, bId: string) {
     const a = games.find(g => g.id === aId)
     const b = games.find(g => g.id === bId)
@@ -2291,6 +2310,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             lotOnTop: boardLotTop,
             onLotOnTop: setBoardLotTop,
             onSwap: swapGames,
+            onToggleIfNeeded: toggleIfNeeded,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()

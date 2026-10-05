@@ -25,6 +25,8 @@ export interface SGame {
   isCanceled: boolean
   score1?: number | null
   score2?: number | null
+  /** Only played on a certain result (lib/ifNeeded); dropped otherwise. */
+  ifNeeded?: boolean
 }
 export interface SField { venueName: string; fieldName: string; fullName: string; divRestrictions?: string[] }
 
@@ -69,6 +71,8 @@ export interface ViewsProps {
   closedLabel?: (fullName: string) => string | null
   /** Opens the close/reopen dialog for a field. */
   onToggleClosed?: (fullName: string) => void
+  /** Mark or unmark a game as "If needed" (only played on a certain result). */
+  onToggleIfNeeded?: (gameId: string) => void
   /** Setup > Venues division limits: false when this field is set for other divisions only (e.g. too small). */
   fieldAllows?: (fullName: string, division: string) => boolean
 }
@@ -148,6 +152,11 @@ function inkOn(hex: string): string {
   const lin = (i: number) => { const v = parseInt(c.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
   const L = 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4)
   return 1.05 / (L + 0.05) >= (L + 0.05) / 0.0718 ? '#ffffff' : '#1e293b'   // 0.0718 = slate-800's luminance + 0.05
+}
+// "If needed" marker: violet, dashed, never mistaken for an issue color.
+const IF_BORDER = '#7c3aed'
+function IfTag({ on, mini = false }: { on?: boolean; mini?: boolean }) {
+  return <span title="If needed: only played on a certain result" className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-violet-300 text-violet-950' : 'bg-violet-100 text-violet-700'}`}>{mini ? 'If' : 'If needed'}</span>
 }
 const poolLabel = (pool: string) => (/pool|bracket/i.test(pool) ? pool : `Pool ${pool}`)
 
@@ -434,7 +443,9 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle }: 
           <div className="text-[11px] leading-tight text-emerald-100 truncate">Click a green slot · amber = back-to-back · striped = busy</div>
         )}
       </div>
-      <div className="flex flex-col gap-1 flex-shrink-0 justify-center">
+      {/* two rows of buttons, as many columns as needed, so the bar stays short */}
+      <div className="grid grid-rows-2 grid-flow-col gap-1 flex-shrink-0 content-center">
+        {isBracket(sel) && p.onToggleIfNeeded && <button onClick={() => p.onToggleIfNeeded!(sel.id)} aria-pressed={!!sel.ifNeeded} title={sel.ifNeeded ? 'Marked If needed. Click to make it a regular game.' : 'Mark as If needed: only played on a certain result, e.g. if the 1 seed loses'} className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${sel.ifNeeded ? 'bg-violet-300 text-violet-950 hover:bg-violet-200' : 'border border-violet-300/70 text-violet-100 hover:bg-emerald-800'}`}>{sel.ifNeeded ? 'If needed ✓' : 'If needed'}</button>}
         {placed && p.onSwap && <button onClick={onSwapToggle} aria-pressed={swapArmed} title="Swap this game's slot with another game: click Swap, then the other game. Or drag this game onto it." className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${swapArmed ? 'bg-amber-300 text-amber-950 hover:bg-amber-200' : 'bg-emerald-200 text-emerald-950 hover:bg-emerald-100'}`}>{swapArmed ? 'Swapping…' : 'Swap'}</button>}
         {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100">Unschedule</button>}
         <button onClick={onCancel} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800">Cancel</button>
@@ -698,6 +709,7 @@ export function TimelineView(p: ViewsProps) {
         className={`${size} h-6 max-w-[200px] text-left rounded-md border pl-1.5 pr-2 inline-flex items-center gap-1 text-[10px] leading-none whitespace-nowrap overflow-hidden cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-2 ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
         style={{ borderLeft: `3px solid ${c}` }}>
         <b className={on ? 'text-white' : 'text-slate-800'}>{g.gameNumber}</b>
+        {g.ifNeeded && <IfTag on={on} mini />}
         <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>{humanTeam(g.team1)} v {humanTeam(g.team2)}</span>
       </button>
     )
@@ -708,7 +720,7 @@ export function TimelineView(p: ViewsProps) {
         onClick={() => setSelId(on ? null : g.id)}
         className={`${size} text-left rounded-lg border px-2 py-1.5 transition-all cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-[3px] ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
         style={{ borderLeft: `4px solid ${c}` }}>
-        <div className={`flex items-center gap-1.5 text-[10px] whitespace-nowrap overflow-hidden ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={`truncate ${on ? 'text-white' : 'text-slate-800'}`}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}</div>
+        <div className={`flex items-center gap-1.5 text-[10px] whitespace-nowrap overflow-hidden ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={`truncate ${on ? 'text-white' : 'text-slate-800'}`}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}{g.ifNeeded && <IfTag on={on} />}</div>
         <div className={`text-xs font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}</div>
         <div className={`text-[11px] leading-tight truncate ${on ? 'text-slate-300' : 'text-slate-600'}`}>vs {humanTeam(g.team2)}</div>
       </button>
@@ -1201,8 +1213,9 @@ export function TimelineView(p: ViewsProps) {
     if (mini) return (
       <div key={g.id} {...handlers}
         className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${fade}`}
-        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `4px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
+        style={{ background: bg, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `1px solid ${k.border}` : g.ifNeeded ? `1px dashed ${IF_BORDER}` : '1px solid #e2e8f0', borderLeft: `4px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
         <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
+        {g.ifNeeded && <IfTag on={on} mini />}
         {/* Count goes before each name: a long name truncates, and the count is the
             part Bo is reading for, so it must never be the part that gets cut. */}
         {/* Each name truncates on its own, so the second team's count survives a long first name. */}
@@ -1218,11 +1231,12 @@ export function TimelineView(p: ViewsProps) {
         className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden transition-shadow ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${on ? '' : 'hover:shadow-md'} ${fade}`}
         // Selected: dark card, but the division still shows: its stripe stays and the
         // selection ring takes the division color instead of a generic teal.
-        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `${on ? 5 : 4}px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 3px #f59e0b' : on ? `0 0 0 3px ${c}66` : undefined }}>
+        style={{ background: bg, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `1px solid ${k.border}` : g.ifNeeded ? `1.5px dashed ${IF_BORDER}` : '1px solid #e2e8f0', borderLeft: `${on ? 5 : 4}px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 3px #f59e0b' : on ? `0 0 0 3px ${c}66` : undefined }}>
         <div className={`flex items-center gap-1 text-[9px] leading-none whitespace-nowrap ${on ? 'text-slate-300' : 'text-slate-500'}`}>
           <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
           <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : c }} title={g.division}>{p.divAbbr(g.division)}</span>
           {g.pool && <span className="truncate">{g.pool}</span>}
+          {g.ifNeeded && <IfTag on={on} />}
           {g.isCanceled && <span className="ml-auto text-red-600 font-bold">CANC</span>}
         </div>
         <div className={`text-[11px] font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}{teamCount[teamKey(g.division, g.team1)] ? <span className={`font-normal ${on ? 'text-slate-400' : 'text-slate-500'}`}> ({teamCount[teamKey(g.division, g.team1)]})</span> : null}</div>

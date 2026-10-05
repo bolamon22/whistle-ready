@@ -29,7 +29,7 @@ import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Sta
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
 // One pool as staff set it on the Divisions page.
 interface PoolRoster { id:string; division:string; name:string; teams:string[]; unassigned?:boolean }
-interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
+interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean; ifNeeded?:boolean }
 interface Standing { team:string; w:number; l:number; t:number; gf:number; ga:number; pts:number }
 
 const fmtDate = (d:string) => { if(!d) return ''; const[y,m,day]=d.split('-'); return `${parseInt(m)}/${parseInt(day)}/${y}` }
@@ -321,7 +321,7 @@ function MirrorBracket({bracket,scheduledGames,showFlight}:{bracket:BkBracket;sc
             const isChamp=g.section==='championship'
             const hasScore=sg&&sg.score1!=null&&sg.score2!=null
             const hasSched=sg&&(sg.date||sg.startTime||sg.location)
-            const cap=hasSched?`${fmtShortDate(sg!.date)} ${fmt12bk(sg!.startTime)} · ${(sg!.location||'').split(' - ').pop()||sg!.location}`:(g.label||(isChamp?'Championship':'Not scheduled'))
+            const cap=(sg?.ifNeeded?'If needed · ':'')+(hasSched?`${fmtShortDate(sg!.date)} ${fmt12bk(sg!.startTime)} · ${(sg!.location||'').split(' - ').pop()||sg!.location}`:(g.label||(isChamp?'Championship':'Not scheduled')))
             const w0=!!hasScore&&sg!.score1!>sg!.score2!, w1=!!hasScore&&sg!.score2!>sg!.score1!
             const ra={src:g.team1Source,team:resolveTeam(g.team1Source,sg?.team1),score:sg?.score1,win:w0}
             const rb={src:g.team2Source,team:resolveTeam(g.team2Source,sg?.team2),score:sg?.score2,win:w1}
@@ -711,7 +711,8 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
           const t1w=hs&&g.score1!>g.score2!, t2w=hs&&g.score2!>g.score1!
           const isHL=isFollowed(g.division,g.team1)||isFollowed(g.division,g.team2)
           const chipCls=g.isChampionship?'bg-amber-100 text-amber-800':'bg-teal-100 text-teal-700'
-          const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-500'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.isChampionship?{t:'Bracket',c:'bg-amber-50 text-amber-700'}:g.pool?{t:poolLabel(g.pool),c:'bg-teal-50 text-teal-700'}:{t:'Upcoming',c:'bg-slate-100 text-slate-500'}
+          // "If needed": only played on a certain result (lib/ifNeeded), so families don't plan around it
+          const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-500'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.ifNeeded?{t:'If needed',c:'bg-violet-50 text-violet-700'}:g.isChampionship?{t:'Bracket',c:'bg-amber-50 text-amber-700'}:g.pool?{t:poolLabel(g.pool),c:'bg-teal-50 text-teal-700'}:{t:'Upcoming',c:'bg-slate-100 text-slate-500'}
           return (
             <div key={g.id} className={`bg-white border rounded-xl px-2.5 py-2 flex items-center gap-2.5 ${live?'border-red-200':isHL?'border-teal-300 bg-teal-50/30':'border-slate-200'}`}>
               <Link href={`/tournaments/${tournamentId}/public/games/${g.id}`} title="Game page" className={`text-[10px] font-bold w-8 text-center py-0.5 rounded flex-shrink-0 hover:ring-2 hover:ring-teal-300 ${chipCls}`}>{g.gameNumber}</Link>
