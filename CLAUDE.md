@@ -187,6 +187,19 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   contact (`VendorEmailDialog`, `lib/vendorEmails.ts`): ask for a quote (lists the last order's
   non-fee items), approve, confirm delivery, ask for the invoice; opens a Gmail compose window or
   copies — it never sends.
+- **Financials redesign (Oct 5).** `/tournaments/[id]/financials` tabs: **Overview**
+  (`components/financials/OverviewTab`), **Budget** (`BudgetTab`), **Other entries** (hand-typed
+  transactions only; a bill's synced expense is hidden there). All money math is in `lib/finance.ts`
+  (`buildFinance`, `projectPL`, client-safe). Rules: income = billed (teams, players, approved
+  booths, typed income); a cost counts once **committed** (cost line past Budgeted, staff schedule,
+  typed expense). "Profit when everything is collected and paid" = billed − committed; "Cash in hand"
+  = collected − paid. Never mix (the old page counted staff when owed but vendors when paid).
+  `EventCost.payments` (JSON list) is the record of each payment; `addPayment`/`removePayment` on
+  PATCH recompute `paid`, date, method, and set Paid when the total is covered; older lines with only
+  `paid` read as one payment (`paymentsOf`). `EventCost.planned` = the Budget tab's plan for that
+  line. Income plan + the staff plan live in raw-SQL `EventPlanLine` (`lib/eventPlan.ts`,
+  `/api/plan` GET/PUT replaces the event's lines). A blank planned box projects billed (income) or
+  committed (costs). `components/costs/EventBudget.tsx` is superseded by BudgetTab (unused).
 
 - **Club portal access is per registration, by email (Oct 4).** `src/lib/clubAccess.ts`: raw-SQL
   table `ClubRegAccess (userId, registrationId)`, created lazily; the first call carried every old
