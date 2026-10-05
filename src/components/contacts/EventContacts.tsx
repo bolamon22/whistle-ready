@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { AlertCircle, ArrowRight, BookUser, Mail, Phone, Plus, UserPlus, X } from 'lucide-react'
+import { AlertCircle, ArrowRight, BookUser, Mail, Phone, Plus, Send, UserPlus, X } from 'lucide-react'
 import { CONTACT_CATEGORIES, initials, telHref, type ContactRow } from '@/lib/contactTypes'
 import { announceTasksChanged, byDue, dueLabel, shortDate, type TaskView } from '@/lib/taskTemplate'
 import { CheckButton, dueTone } from '@/components/tasks/CheckButton'
 import { useContacts } from './useContacts'
 import ContactForm from './ContactForm'
+import SendDocumentDialog from './SendDocumentDialog'
 import { CatDot, ContactDetail, WaitFlag } from './ContactParts'
 
 // One tournament's setup: its checklist (this event's Tasks, each showing the
@@ -18,7 +19,8 @@ import { CatDot, ContactDetail, WaitFlag } from './ContactParts'
 // Tasks tab on phones, where the tab bar has no room for a seventh tab.
 
 export default function EventContacts({ tournamentId, withChecklist = true }: { tournamentId: string; withChecklist?: boolean }) {
-  const { data, failed, upsert, patch, remove } = useContacts(tournamentId)
+  const { data, failed, load, upsert, patch, remove } = useContacts(tournamentId)
+  const [sending, setSending] = useState<{ contactId?: string } | null>(null)
   const [selId, setSelId] = useState<string | null>(null)
   const [editing, setEditing] = useState<ContactRow | 'new' | null>(null)
   const [picking, setPicking] = useState(false)
@@ -35,6 +37,7 @@ export default function EventContacts({ tournamentId, withChecklist = true }: { 
         <h2 className="font-bold text-slate-800 flex-1 flex items-center gap-2">
           <BookUser size={18} className="text-teal-600" /> Contacts<span className="hidden sm:inline -ml-1">for this event</span> {data && <span className="text-slate-400 font-normal text-sm">{contacts.length}</span>}
         </h2>
+        {contacts.length > 0 && <button type="button" onClick={() => setSending({})} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-teal-300 bg-teal-50 text-xs font-semibold text-teal-800 hover:bg-teal-100"><Send size={13} />Send a document</button>}
         <button type="button" onClick={() => setPicking(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"><UserPlus size={13} />From directory</button>
         <button type="button" onClick={() => setEditing('new')} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"><Plus size={13} />New</button>
       </div>
@@ -87,9 +90,14 @@ export default function EventContacts({ tournamentId, withChecklist = true }: { 
           <div role="dialog" aria-modal="true" aria-label={selected.name} className="relative w-full sm:max-w-lg max-h-[88vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-4">
             <ContactDetail c={selected} tournaments={tournaments} today={today}
               onPatch={body => patch(selected, body)} onEdit={() => setEditing(selected)}
-              onDelete={() => { setSelId(null); remove(selected) }} onClose={() => setSelId(null)} />
+              onDelete={() => { setSelId(null); remove(selected) }} onClose={() => setSelId(null)}
+              onSend={() => { setSelId(null); setSending({ contactId: selected.id }) }} />
           </div>
         </div>
+      )}
+      {sending && (
+        <SendDocumentDialog contacts={contacts} tournaments={tournaments} today={today} tournamentId={tournamentId} contactId={sending.contactId}
+          onClose={() => setSending(null)} onSent={() => { setSending(null); load() }} />
       )}
       {editing && (
         <ContactForm contact={editing === 'new' ? null : editing} tournaments={tournaments} today={today} defaultEvent={tournamentId}

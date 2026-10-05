@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlertCircle, BookUser, Plus, Search, Upload } from 'lucide-react'
+import { AlertCircle, BookUser, Plus, Search, Send, Upload } from 'lucide-react'
 import { CONTACT_CATEGORIES, contactHaystack, isNoReply, type ContactRow } from '@/lib/contactTypes'
 import { announceTasksChanged } from '@/lib/taskTemplate'
 import { useContacts } from './useContacts'
 import ContactForm from './ContactForm'
+import SendDocumentDialog from './SendDocumentDialog'
 import { CatDot, ContactDetail, ContactListRow, shortName } from './ContactParts'
 
 // The org's Event contacts directory (/contacts): everyone we get something
@@ -24,6 +25,7 @@ export default function ContactDirectory() {
   const [selId, setSelId] = useState<string | null>(null)
   const [editing, setEditing] = useState<ContactRow | 'new' | null>(null)
   const [importing, setImporting] = useState(false)
+  const [sending, setSending] = useState<{ contactId?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // A link can open one contact (?c=<id>).
@@ -91,7 +93,8 @@ export default function ContactDirectory() {
   const detail = (c: ContactRow, close?: () => void) => (
     <ContactDetail c={c} tournaments={tournaments} today={today}
       onPatch={body => patch(c, body)} onEdit={() => setEditing(c)}
-      onDelete={() => { setSelId(null); remove(c) }} onClose={close} />
+      onDelete={() => { setSelId(null); remove(c) }} onClose={close}
+      onSend={() => setSending({ contactId: c.id })} />
   )
 
   return (
@@ -101,7 +104,13 @@ export default function ContactDirectory() {
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><BookUser size={24} className="text-teal-600" /> Event contacts</h1>
           <p className="text-sm text-slate-500 mt-0.5">Everyone we get something from, or owe something to, for each event. Staff only.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {all.length > 0 && (
+            <button type="button" onClick={() => setSending({})}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-teal-300 bg-teal-50 text-sm font-semibold text-teal-800 hover:bg-teal-100">
+              <Send size={15} />Send a document
+            </button>
+          )}
           <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importFile(f) }} />
           <button type="button" onClick={() => fileRef.current?.click()} disabled={importing}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
@@ -193,6 +202,12 @@ export default function ContactDirectory() {
             {detail(selected, () => setSelId(null))}
           </div>
         </div>
+      )}
+
+      {sending && (
+        <SendDocumentDialog contacts={all} tournaments={tournaments} today={today} contactId={sending.contactId}
+          tournamentId={event !== 'all' && event !== 'every' ? event : undefined}
+          onClose={() => setSending(null)} onSent={() => { setSending(null); load() }} />
       )}
 
       {editing && (

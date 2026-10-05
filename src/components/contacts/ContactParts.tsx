@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Mail, MapPin, Pencil, Phone, Trash2, X } from 'lucide-react'
+import { ArrowRight, Mail, MapPin, Pencil, Phone, Send, Trash2, X } from 'lucide-react'
 import {
   contactCategory, initials, isNoReply, telHref, waitingLabel, type ContactRow, type ContactView, type Waiting,
 } from '@/lib/contactTypes'
@@ -68,10 +68,12 @@ export function ContactListRow({ c, tournaments, today, selected, onSelect }: {
 }
 
 /** Everything about one contact, with the quick actions. */
-export function ContactDetail({ c, tournaments, today, onPatch, onEdit, onDelete, onClose }: {
+export function ContactDetail({ c, tournaments, today, onPatch, onEdit, onDelete, onClose, onSend }: {
   c: ContactRow; tournaments: TaskTournament[]; today: string
   onPatch: (body: Partial<ContactView>) => void
   onEdit: () => void; onDelete: () => void; onClose?: () => void
+  /** Opens Send a document with this contact picked. */
+  onSend?: () => void
 }) {
   const [confirmDel, setConfirmDel] = useState(false)
   useEffect(() => setConfirmDel(false), [c.id])
@@ -93,6 +95,7 @@ export function ContactDetail({ c, tournaments, today, onPatch, onEdit, onDelete
       <div className="flex flex-wrap gap-2">
         {tel && <a href={tel} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Phone size={15} />{c.phone}</a>}
         {c.email && <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Mail size={15} />Email</a>}
+        {c.email && onSend && <button type="button" onClick={onSend} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Send size={15} />Send a document</button>}
       </div>
       {c.email && <div className="text-sm text-slate-600 break-all">{c.email}</div>}
       {c.address && <div className="text-xs text-slate-500 flex gap-1"><MapPin size={13} className="flex-shrink-0 mt-px" />{c.address}</div>}
