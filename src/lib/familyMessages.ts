@@ -39,6 +39,11 @@ export type FamilyMessageInput = {
   hasBookingUrl: boolean
 }
 
+// A link must sit in a paragraph of its OWN -- blank line above and below.
+// messageBlocks() only promotes a paragraph that is nothing but a URL into the
+// worded link, so "Register here:\n<url>" stays a sentence with a raw address
+// hanging off it (Bo, Oct 5 2026: the waiver and coach cards still showed the
+// URL while the hotel card did not).
 const sign = (contactName: string) => (contactName.trim() ? `Thanks,\n${contactName.trim()}` : 'Thanks')
 const where = (location: string) => (location.trim() ? ` in ${location.trim()}` : '')
 
@@ -56,6 +61,7 @@ export function buildFamilyMessages(i: FamilyMessageInput): FamilyMessage[] {
 ${i.clubName} is playing in ${i.eventName}${when}${where(i.location)}. Before your player can take the field, every player needs a completed online waiver. It takes about two minutes and you only do it once.
 
 Complete it here:
+
 ${i.waiverUrl}
 
 Please get this done before we travel — players without a waiver can't check in on game day.
@@ -73,6 +79,7 @@ ${sign(i.contactName)}`,
 ${i.clubName} is playing in ${i.eventName}${when}${where(i.location)}. Every coach on our sideline needs to register with the tournament beforehand, the same as the players do.
 
 Register here:
+
 ${i.coachUrl}
 
 Please take care of it this week so we're covered at check-in.

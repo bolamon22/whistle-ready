@@ -21,43 +21,68 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [editing, setEditing] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState('')
+  const [pasted, setPasted] = useState('')
 
   const bodyOf = (m: FamilyMessage) => edits[m.key] ?? m.body
 
-  // Copies BOTH flavours at once: rich text with a real link on the words, and
-  // the plain text underneath it. Gmail, Outlook on the web and Apple Mail all
-  // compose in a rich-text editor, so they take the HTML and the families get
-  // the worded link instead of a bare address. Anywhere that only understands
-  // plain text still gets a perfectly good message. The Gmail/Outlook buttons
-  // below cannot do this — a compose URL carries text only.
-  async function copy(m: FamilyMessage) {
-    const text = `${bodyOf(m)}`
-    const html = messageHtml(bodyOf(m), m.linkLabel)
-    const done = () => { setCopied(m.key); setTimeout(() => setCopied(''), 2000) }
+  // Puts the message on the clipboard in BOTH flavours at once: rich text with
+  // a real link on the words, and the plain text underneath it. Gmail, Outlook
+  // on the web and Apple Mail all compose in a rich-text editor, so a paste
+  // keeps the worded link. Returns false when the browser refused the rich
+  // write, which is the only case where the plain text has to carry the day.
+  async function copyRich(m: FamilyMessage): Promise<boolean> {
     try {
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
         await navigator.clipboard.write([new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([messageHtml(bodyOf(m), m.linkLabel)], { type: 'text/html' }),
+          'text/plain': new Blob([bodyOf(m)], { type: 'text/plain' }),
         })])
-        done()
-        return
+        return true
       }
-    } catch { /* older browser, or the rich write was refused — plain below */ }
+    } catch { /* older browser, or the rich write was refused */ }
+    return false
+  }
+
+  async function copy(m: FamilyMessage) {
+    const done = () => { setCopied(m.key); setTimeout(() => setCopied(''), 2000) }
+    if (await copyRich(m)) { done(); return }
     try {
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(bodyOf(m))
       done()
     } catch {
       // Blocked in some in-app browsers — still give them something selectable.
-      window.prompt('Copy this message', text)
+      window.prompt('Copy this message', bodyOf(m))
     }
+  }
+
+  // Open a draft in their own email WITH the worded link, not a raw address.
+  //
+  // A compose deep link (?body=) carries plain text and nothing else, so the
+  // body can never arrive as formatted text however it is encoded (Bo, Oct 5
+  // 2026: "it still doesn't have the green text hyperlink in Gmail"). What CAN
+  // cross is the clipboard. So: copy the rich version, open the draft with the
+  // subject filled in and the body left empty, and tell them to paste. One
+  // extra keystroke, and the families get the link on the words.
+  //
+  // If the rich write is refused we fall straight back to the old behaviour and
+  // put the plain text in the URL, so the button never opens an empty draft
+  // with nothing on the clipboard.
+  //
+  // The tab is opened BEFORE the await: a window.open() that happens after one
+  // has lost its user gesture and pop-up blockers kill it.
+  async function openIn(m: FamilyMessage, which: 'gmail' | 'outlook' | 'mailto') {
+    const tab = which === 'mailto' ? null : window.open('', '_blank')
+    const rich = await copyRich(m)
+    const url = composeUrls(m.subject, rich ? '' : bodyOf(m))[which]
+    if (rich) { setPasted(m.key); setTimeout(() => setPasted(''), 20000) }
+    if (tab) tab.location.href = url
+    else window.location.href = url
   }
 
   return (
     <>
       {messages.map(m => {
         const body = bodyOf(m)
-        const urls = composeUrls(m.subject, body)
         const isEditing = !!editing[m.key]
         return (
           <div key={m.key} id={m.key}
@@ -106,19 +131,26 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
                 className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-4 py-2.5 rounded-xl">
                 {copied === m.key ? 'Copied' : 'Copy with link'}
               </button>
-              <a href={urls.gmail} target="_blank" rel="noreferrer"
-                className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">Gmail</a>
-              <a href={urls.outlook} target="_blank" rel="noreferrer"
-                className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">Outlook (web)</a>
+              <button type="button" onClick={() => openIn(m, 'gmail')}
+                className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">Gmail</button>
+              <button type="button" onClick={() => openIn(m, 'outlook')}
+                className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">Outlook (web)</button>
               {/* mailto — on an iPhone or Mac this is Apple Mail, on a PC it is
                   usually Outlook. The one button that works everywhere. */}
-              <a href={urls.mailto}
-                className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">My mail app</a>
+              <button type="button" onClick={() => openIn(m, 'mailto')}
+                className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">My mail app</button>
             </div>
+            {pasted === m.key && (
+              <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-2.5 text-sm text-teal-900">
+                <strong className="font-bold">Your message is copied.</strong> Click into the message box in the draft that just opened and press
+                <strong className="font-bold"> Ctrl + V</strong> (<strong className="font-bold">&#8984; V</strong> on a Mac). It pastes in with the words as the link.
+              </div>
+            )}
             <p className="text-xs text-slate-400 mt-2">
-              <strong className="font-semibold text-slate-500">Copy with link</strong> is the one to use — paste it into Gmail, Outlook or Apple Mail and it
-              arrives exactly as shown above, with the words as the link.
-              The other three open a draft already filled in, but email drafts opened from a web link can only hold plain text, so your families see the full web address instead.
+              All four buttons give your families the same message, with the words as the link instead of a long web address.
+              <strong className="font-semibold text-slate-500"> Copy with link</strong> puts it on your clipboard to paste wherever you like.
+              The other three open a draft in your own email with the subject filled in, copy the message at the same time, and ask you to paste it —
+              an email draft opened from a web link can only be handed plain text, so pasting is what keeps the link on the words.
               <strong className="font-semibold text-slate-500"> My mail app</strong> is Apple Mail on an iPhone or Mac, Outlook on a PC, or whatever you have set as default.
               Nothing is sent until you send it.
             </p>
