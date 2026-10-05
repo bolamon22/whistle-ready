@@ -40,7 +40,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const org = await orgForTournament(reg.tournamentId)
   const housing = org?.id ? await housingSettings(org.id) : null
-  const eventHome = tournamentAbs(org?.slug, `/tournaments/${seg}/event`)
 
   const messages = buildFamilyMessages({
     clubName: reg.clubName || 'our club',
@@ -50,9 +49,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     location: String(t?.location || ''),
     waiverUrl: tournamentAbs(org?.slug, `/tournaments/${seg}/player-waiver`),
     coachUrl: tournamentAbs(org?.slug, `/tournaments/${seg}/coach-waiver`),
-    // Falls back to the event page, which carries the travel info, when the org
-    // has not set a booking URL yet.
-    hotelUrl: housing?.bookingUrl || eventHome,
+    // A short, readable link instead of the housing company's 292-character
+    // booking URL: /tournaments/<slug>/hotel bounces to it. The long one wraps
+    // across four lines in a plain-text Gmail or Outlook draft and reads like
+    // something broke, and the compose buttons can never make it a worded link.
+    // It also survives the housing company changing its URL mid-event.
+    hotelUrl: tournamentAbs(org?.slug, `/tournaments/${seg}/hotel`),
     hasHousingContact: !!housing?.contactEmail,
     hasBookingUrl: !!housing?.bookingUrl,
   })

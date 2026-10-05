@@ -12,7 +12,7 @@ const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/'
 // the bottom of this file actually run. A rewrite returns immediately and would
 // skip them, which is how /tournaments/<slug>/dashboard served the staff grid
 // to anyone who guessed the slug.
-const PUBLIC_TOURNAMENT_PATH = /^\/tournaments\/[^/]+\/(public|register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/
+const PUBLIC_TOURNAMENT_PATH = /^\/tournaments\/[^/]+\/(public|register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|hotel|p|today)(\/|$)/
 
 const ROLE_HOME: Record<string, string> = {
   director:      '/dashboard/director',
