@@ -17,6 +17,9 @@ export type FamilyMessage = {
   blurb: string
   subject: string
   body: string
+  /** What the one link in this message is for — the button's words when the
+   *  message is copied as rich text. */
+  linkLabel: string
 }
 
 export type FamilyMessageInput = {
@@ -42,6 +45,7 @@ export function buildFamilyMessages(i: FamilyMessageInput): FamilyMessage[] {
       key: 'waivers',
       title: 'Player waivers',
       blurb: 'To your player families. Every player needs one before their first game.',
+      linkLabel: 'Complete the waiver',
       subject: `${i.eventName} — please complete your player's waiver`,
       body: `Hi everyone,
 
@@ -58,6 +62,7 @@ ${sign(i.contactName)}`,
       key: 'coaches',
       title: 'Coach registration',
       blurb: "To your coaching staff. Every coach on the sideline has to register, same as the players.",
+      linkLabel: 'Register as a coach',
       subject: `${i.eventName} — coaches, please register`,
       body: `Hi coaches,
 
@@ -74,6 +79,7 @@ ${sign(i.contactName)}`,
       key: 'hotel',
       title: 'Hotel rooms',
       blurb: 'To your player families. They book their own rooms; this keeps them together.',
+      linkLabel: 'Book your rooms',
       subject: `${i.eventName} — hotel rooms for ${i.clubName} families`,
       body: `Hi everyone,
 
@@ -87,6 +93,35 @@ ${sign(i.contactName)}`,
     },
   ]
   return msgs
+}
+
+const escHtml = (x: string) => x.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+
+/**
+ * The same message as HTML, with the bare link turned into a real button.
+ *
+ * This is what goes on the clipboard as text/html. Gmail, Outlook on the web
+ * and Apple Mail all compose in a rich-text editor, so a paste keeps the button
+ * — which is the only route to one. A compose deep link (?body=) carries plain
+ * text and nothing else, so the Gmail and Outlook buttons can never do this.
+ *
+ * Works off the body the director may have edited: a paragraph that is just a
+ * URL becomes the button, and any other URL is left as a normal link.
+ */
+export function messageHtml(body: string, linkLabel = 'Open the link'): string {
+  // Single quotes inside the stack on purpose: this string lands inside a
+  // double-quoted style="..." attribute, and a double quote here closes it
+  // early and strips the formatting straight back off the paste.
+  const font = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"
+  return String(body || '').split(/\n{2,}/).map(block => {
+    const t = block.trim()
+    if (!t) return ''
+    if (/^https?:\/\/\S+$/.test(t)) {
+      return `<p style="margin:0 0 16px"><a href="${t}" style="${font};background:#0b1f3a;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:15px;font-weight:bold;display:inline-block">${escHtml(linkLabel)}</a></p>`
+    }
+    const withLinks = escHtml(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
+    return `<p style="${font};font-size:15px;line-height:1.6;color:#111111;margin:0 0 14px">${withLinks.replace(/\n/g, '<br>')}</p>`
+  }).join('')
 }
 
 /** Deep links that open a compose window with the subject and body already in

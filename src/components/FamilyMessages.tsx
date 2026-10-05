@@ -8,7 +8,7 @@
 // email, already filled in, and they add their families and send it themselves.
 
 import { useState } from 'react'
-import { composeUrls, type FamilyMessage } from '@/lib/familyMessages'
+import { composeUrls, messageHtml, type FamilyMessage } from '@/lib/familyMessages'
 
 export default function FamilyMessages({ messages, highlight = '' }: { messages: FamilyMessage[]; highlight?: string }) {
   const [edits, setEdits] = useState<Record<string, string>>({})
@@ -16,12 +16,29 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
 
   const bodyOf = (m: FamilyMessage) => edits[m.key] ?? m.body
 
+  // Copies BOTH flavours at once: rich text with a real button, and the plain
+  // text underneath it. Gmail, Outlook on the web and Apple Mail all compose in
+  // a rich-text editor, so they take the HTML and the families get a button
+  // instead of a bare link. Anywhere that only understands plain text still
+  // gets a perfectly good message. The Gmail/Outlook buttons below cannot do
+  // this — a compose URL carries text only.
   async function copy(m: FamilyMessage) {
-    const text = `Subject: ${m.subject}\n\n${bodyOf(m)}`
+    const text = `${bodyOf(m)}`
+    const html = messageHtml(bodyOf(m), m.linkLabel)
+    const done = () => { setCopied(m.key); setTimeout(() => setCopied(''), 2000) }
+    try {
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        })])
+        done()
+        return
+      }
+    } catch { /* older browser, or the rich write was refused — plain below */ }
     try {
       await navigator.clipboard.writeText(text)
-      setCopied(m.key)
-      setTimeout(() => setCopied(''), 2000)
+      done()
     } catch {
       // Blocked in some in-app browsers — still give them something selectable.
       window.prompt('Copy this message', text)
@@ -49,7 +66,7 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
             <div className="flex flex-wrap gap-2 mt-3">
               <button type="button" onClick={() => copy(m)}
                 className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-4 py-2.5 rounded-xl">
-                {copied === m.key ? 'Copied' : 'Copy'}
+                {copied === m.key ? 'Copied' : 'Copy with button'}
               </button>
               <a href={urls.gmail} target="_blank" rel="noreferrer"
                 className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">Gmail</a>
@@ -61,9 +78,11 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
                 className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">My mail app</a>
             </div>
             <p className="text-xs text-slate-400 mt-2">
-              <strong className="font-semibold text-slate-500">My mail app</strong> opens Apple Mail on an iPhone or Mac, Outlook on a PC,
-              or whichever app you have set as your default. It opens a draft with everything filled in — you add your families and hit send.
-              Nothing goes out until you do.
+              <strong className="font-semibold text-slate-500">Copy with button</strong> pastes a tidy message with a real button instead of a long link —
+              paste it straight into Gmail, Outlook or Apple Mail.
+              The other three open a draft already filled in, but as plain text: a compose link can&apos;t carry a button.
+              <strong className="font-semibold text-slate-500"> My mail app</strong> is Apple Mail on an iPhone or Mac, Outlook on a PC, or whatever you have set as default.
+              Nothing is sent until you send it.
             </p>
           </div>
         )
