@@ -48,7 +48,8 @@ export interface ViewsProps {
   }
   filterDiv: string           // '__all__' or a division
   setFilterDiv: (d: string) => void
-  onPlace: (gameId: string, time: string, field: string) => Promise<void> | void
+  /** false = not placed (e.g. declined a warning), so the view keeps the game selected */
+  onPlace: (gameId: string, time: string, field: string) => Promise<void | boolean> | void | boolean
   onUnschedule: (gameId: string) => Promise<void> | void
   saving: boolean
   /** Timeline only: 'fields-down' (time across, the default) or 'fields-across' (time down, like the grid). */
@@ -590,7 +591,7 @@ export function TimelineView(p: ViewsProps) {
   const lotCard = (g: SGame, c: string, size: string, mini = false) => {
     const on = selId === g.id
     if (mini) return (
-      <button key={g.id} draggable
+      <button key={g.id} draggable data-lot-id={g.id}
         onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id) }}
         onDragEnd={() => setDragId(null)}
         onClick={() => setSelId(on ? null : g.id)}
@@ -602,7 +603,7 @@ export function TimelineView(p: ViewsProps) {
       </button>
     )
     return (
-      <button key={g.id} draggable
+      <button key={g.id} draggable data-lot-id={g.id}
         onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id) }}
         onDragEnd={() => setDragId(null)}
         onClick={() => setSelId(on ? null : g.id)}
@@ -688,8 +689,30 @@ export function TimelineView(p: ViewsProps) {
   const place = async (g: SGame, time: string, field: string) => {
     if (closedAt(field, time)) return
     if (placementStatus(g, p.slots.indexOf(time), p.dayGames, p.slots, p.increment) === 'blocked') return
+    // Placing from the parking lot hands the pick to the next game in it, in the
+    // order shown (same filters), so a run of games is click slot, click slot...
+    // (Bo, Oct 5 2026). Moving a game that was already placed does not.
+    const order = lot.flatMap(x => x.items)
+    const fromLot = order.findIndex(x => x.id === g.id)
+    const next = fromLot === -1 ? null : (order[fromLot + 1] ?? order.find(x => x.id !== g.id) ?? null)
     setSelId(null); setHover(null)
-    await p.onPlace(g.id, time, field)
+    const ok = await p.onPlace(g.id, time, field)
+    if (ok === false) { setSelId(g.id); return }
+    if (next) {
+      setSelId(next.id)
+      // Bring it into view in the strip or rail. Only the lot's own scroller moves:
+      // scrollIntoView also shifted the board sideways.
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[data-lot-id="${next.id}"]`)
+        let box = el?.parentElement ?? null
+        while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowX + getComputedStyle(box).overflowY)) box = box.parentElement
+        if (!el || !box) return
+        const e = el.getBoundingClientRect(), c = box.getBoundingClientRect()
+        const dx = e.left < c.left ? e.left - c.left - 8 : e.right > c.right ? e.right - c.right + 8 : 0
+        const dy = e.top < c.top ? e.top - c.top - 8 : e.bottom > c.bottom ? e.bottom - c.bottom + 8 : 0
+        if (dx || dy) box.scrollBy({ left: dx, top: dy, behavior: 'smooth' })
+      })
+    }
   }
 
   const slotCol = fit ? 'minmax(0, 1fr)' : '128px'

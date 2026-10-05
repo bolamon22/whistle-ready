@@ -2245,7 +2245,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             divColor: (d: string) => divColor(d, divisions, divColorMap), fmtTime, divAbbr,
             issues: { conflict: conflictMsgs, b2b: backToBackMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
             filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
-            onPlace: (id: string, time: string, field: string) => { if (okForField(games.find(g => g.id === id), field)) moveGame(id, { date: activeDate, startTime: time, location: field }) },
+            // Awaited so the Board picks the next game only once this one is on the board
+            // (otherwise its slot still reads as open for a moment).
+            onPlace: async (id: string, time: string, field: string) => { if (!okForField(games.find(g => g.id === id), field)) return false; await moveGame(id, { date: activeDate, startTime: time, location: field }) },
             onUnschedule: (id: string) => moveGame(id, { date: '', startTime: '', location: '' }),
             saving,
             prefsKey: params.id,
