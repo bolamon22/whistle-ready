@@ -169,9 +169,15 @@ function ConsTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boole
   return <span title={`${g.bracketLabel || 'Consolation'}: consolation game, flexible on time`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-slate-300 text-slate-900' : 'bg-slate-200 text-slate-600'}`}>{mini ? 'Con' : 'Consolation'}</span>
 }
 const isCons = (g: SGame) => !g.ifNeeded && g.bracketSection === 'consolation'
-// Either marker, or nothing.
+// Championship games (the bracket's championship section): the ones that matter
+// most, usually the last thing a division plays.
+function ChampTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
+  return <span title={`${g.bracketLabel || 'Championship'}: the division's title game`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-yellow-300 text-yellow-950' : 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-300'}`}>{mini ? 'Champ' : 'Championship'}</span>
+}
+// One marker per game: If needed, Championship, Consolation, or nothing.
 function GameTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
   if (g.ifNeeded) return <IfTag on={on} mini={mini} />
+  if (g.bracketSection === 'championship') return <ChampTag g={g} on={on} mini={mini} />
   if (isCons(g)) return <ConsTag g={g} on={on} mini={mini} />
   return null
 }
