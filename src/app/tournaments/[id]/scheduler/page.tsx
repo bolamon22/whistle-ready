@@ -958,6 +958,30 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     : gridSlots
   const visibleFields = fields.filter(f => !hiddenFields.has(f.fullName))
 
+  // Open slots per day (Bo, Oct 5 2026: "so I know if I have enough available on
+  // Sunday when I'm scheduling Saturday"). A slot is a start time in that day's
+  // window on a shown field that isn't closed then and has no game. With a
+  // division picked, only fields Setup allows for it count, and "to place" is
+  // that division's unplaced games.
+  const capDiv = gridDiv !== '__all__' ? gridDiv : null
+  function capacityFor(d: string) {
+    const w = windowForDate(d), daySlots = makeSlots(w.s, w.e, increment), cl = closuresFor(d)
+    const taken = new Set(games.filter(g => g.date === d && g.startTime && g.location).map(g => `${g.startTime}|${g.location}`))
+    let open = 0, total = 0
+    for (const f of visibleFields) {
+      if (capDiv && !fieldAllows(f.fullName, capDiv)) continue
+      for (const t of daySlots) {
+        if (isFieldClosedAt(cl, f.fullName, t)) continue
+        total++
+        if (!taken.has(`${t}|${f.fullName}`)) open++
+      }
+    }
+    return { open, total }
+  }
+  const capacity: Record<string, { open: number; total: number }> = Object.fromEntries(dates.map(d => [d, capacityFor(d)]))
+  const openSlotsAll = dates.reduce((n, d) => n + (capacity[d]?.open ?? 0), 0)
+  const toPlaceN = capDiv ? unscheduled.filter(g => g.division === capDiv).length : unscheduled.length
+
   // ── Weather delay (hold + shift) ──
   const gameDone = (g: Game) => g.isCanceled || (g.score1 != null && g.score2 != null)
   const wxCutoff = wxFrom ? hmToMin(wxFrom) : -1
@@ -1664,7 +1688,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       <div className={`border-b px-3 sm:px-4 h-11 flex items-center gap-2 whitespace-nowrap flex-shrink-0 relative z-30 ${hasChanges ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
         <div className="flex items-baseline gap-2 mr-1 flex-shrink-0">
           <span className="text-sm font-semibold text-slate-800">Scheduler</span>
-          <span className="text-[11px] text-slate-400">{games.length} games · <span className="text-amber-600 font-medium">{unscheduled.length} open</span></span>
+          {/* "to place" vs "open slots": was "N open", which read like open slots */}
+          <span className="text-[11px] text-slate-400" title={`${toPlaceN} game${toPlaceN === 1 ? '' : 's'}${capDiv ? ` in ${capDiv}` : ''} still to place; ${openSlotsAll} open slot${openSlotsAll === 1 ? '' : 's'} across all days${capDiv ? ` on fields set for ${capDiv}` : ''}`}>
+            {games.length} games · <span className="text-amber-600 font-medium">{toPlaceN} to place</span> · <span className={`font-medium ${openSlotsAll < toPlaceN ? 'text-red-600' : 'text-emerald-600'}`}>{openSlotsAll} open slots</span>
+          </span>
         </div>
 
         {/* Day window as one control */}
@@ -2199,7 +2226,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                 className={`${removable ? 'pl-5 pr-1' : 'px-5'} py-3 text-sm font-medium whitespace-nowrap ${
                   activeDate === d ? 'text-teal-600' : 'text-slate-600 hover:text-slate-900'}`}>
                 {fmtDate(d)}
-                <span className="ml-2 text-xs rounded-full px-1.5 py-0.5 bg-slate-100 text-slate-500">{n}</span>
+                <span className="ml-2 text-xs rounded-full px-1.5 py-0.5 bg-slate-100 text-slate-500" title={`${n} game${n === 1 ? '' : 's'} placed`}>{n}</span>
+                {capacity[d] && (
+                  <span className={`ml-1 text-xs rounded-full px-1.5 py-0.5 ${capacity[d].open ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
+                    title={`${capacity[d].open} of ${capacity[d].total} slots open${capDiv ? ` on fields set for ${capDiv}` : ''}`}>{capacity[d].open} open</span>
+                )}
               </button>
               {removable && (
                 <button onClick={() => removeDay(d)} aria-label={`Remove ${fmtDate(d)}`} title="Remove this day (no games on it)"
