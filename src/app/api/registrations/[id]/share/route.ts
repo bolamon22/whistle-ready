@@ -28,9 +28,19 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     where: { id: reg.tournamentId },
     select: { name: true, startDate: true, endDate: true, location: true },
   })
+  // The event's slug makes a link a family can read. Middleware rewrites
+   // /tournaments/<slug>/player-waiver to the real id, and the cuid path keeps
+   // working, so a missing slug just falls back to what we had.
+  let seg = reg.tournamentId
+  try {
+    const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+      'SELECT slug FROM "Tournament" WHERE id = ?', reg.tournamentId)
+    seg = String(rows?.[0]?.slug || '') || reg.tournamentId
+  } catch { /* column not migrated — cuid path is still correct */ }
+
   const org = await orgForTournament(reg.tournamentId)
   const housing = org?.id ? await housingSettings(org.id) : null
-  const eventHome = tournamentAbs(org?.slug, `/tournaments/${reg.tournamentId}/event`)
+  const eventHome = tournamentAbs(org?.slug, `/tournaments/${seg}/event`)
 
   const messages = buildFamilyMessages({
     clubName: reg.clubName || 'our club',
@@ -38,8 +48,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     eventName: t?.name || 'the tournament',
     dates: fmtDates(t?.startDate, t?.endDate),
     location: String(t?.location || ''),
-    waiverUrl: tournamentAbs(org?.slug, `/tournaments/${reg.tournamentId}/player-waiver`),
-    coachUrl: tournamentAbs(org?.slug, `/tournaments/${reg.tournamentId}/coach-waiver`),
+    waiverUrl: tournamentAbs(org?.slug, `/tournaments/${seg}/player-waiver`),
+    coachUrl: tournamentAbs(org?.slug, `/tournaments/${seg}/coach-waiver`),
     // Falls back to the event page, which carries the travel info, when the org
     // has not set a booking URL yet.
     hotelUrl: housing?.bookingUrl || eventHome,
