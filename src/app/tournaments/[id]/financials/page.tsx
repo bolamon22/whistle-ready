@@ -51,8 +51,11 @@ const ALL_CATEGORIES = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES]
 const METHODS = ['check', 'zelle', 'credit_card', 'cash', 'venmo', 'wire']
 const methodLabel = (m: string) => ({ check: 'Check', zelle: 'Zelle', credit_card: 'Credit Card', cash: 'Cash', venmo: 'Venmo', wire: 'Wire' }[m] ?? m)
 const catLabel  = (c: string) => ALL_CATEGORIES.find(x => x.value === c)?.label ?? c
-const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const today = () => new Date().toISOString().slice(0, 10)
+const fmt = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// Today on the viewer's own calendar; toISOString() is UTC, so after 8pm in Florida it said tomorrow.
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+// A stored YYYY-MM-DD is a calendar day, not an instant: new Date('2026-10-05') is UTC midnight, which shows as Oct 4 in Florida.
+const showDate = (ymd: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString() : ymd }
 const inputCls = "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
 /** A vendor application, as /api/tournaments/[id]/vendor-requests returns it. */
 type VendorSub = {
@@ -422,7 +425,7 @@ export default function FinancialsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-medium text-slate-800">{tx.description}</div>
-                        <div className="text-xs text-slate-400">{new Date(tx.date).toLocaleDateString()} · {methodLabel(tx.method)}</div>
+                        <div className="text-xs text-slate-400">{showDate(tx.date)} · {methodLabel(tx.method)}</div>
                         {tx.notes && <div className="text-xs text-slate-400 mt-0.5">{tx.notes}</div>}
                       </div>
                       <div className={`text-base font-bold whitespace-nowrap ${tx.type==='income'?'text-emerald-600':'text-red-500'}`}>{tx.type==='income'?'+':'-'}{fmt(tx.amount)}</div>
@@ -458,7 +461,7 @@ export default function FinancialsPage() {
                   <tbody className="divide-y divide-slate-100">
                     {transactions.map(tx => (
                       <tr key={tx.id} className="hover:bg-slate-50 group">
-                        <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{new Date(tx.date).toLocaleDateString()}</td>
+                        <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{showDate(tx.date)}</td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-slate-800">{tx.description}</div>
                           {tx.notes && <div className="text-xs text-slate-400">{tx.notes}</div>}
