@@ -161,6 +161,19 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   `checklists:{id}` (staff check it off), shown as one virtual row `setup:<id>` due the day before.
   No assignees on purpose ("just me for now").
 
+- **Event contacts (Oct 5).** Everyone an event gets something from or owes something to (venues,
+  counties, sports commissions, rentals, food/vendors, officials, insurance, housing). `/contacts`
+  (directory: stat tiles, event + category filters, detail panel/sheet) and each tournament's
+  **Contacts** tab (`/tournaments/[id]/contacts`: this event's Tasks as a setup checklist + its
+  contacts). On phones there is no 7th tab: the contacts sit at the bottom of the Tasks tab
+  (`NavGroup.wide`). Same feature switch and scope as Tasks (`tasks`, `tasksGate`). Raw-SQL
+  `OrgContact` (lazy, soft delete) in `lib/contacts.ts`; `lib/contactTypes.ts` is the client-safe
+  half. A task links to one contact via `OrgTask.contactId` (guarded ALTER); the checklist IS the
+  Tasks list, never a second one. `/api/contacts/import` takes a JSON file written with event
+  NAMES (matched to the org's next tournament with that name), skips duplicates, and turns its
+  open items into linked Tasks. Contact details never go in the repo (it is public): the Gmail-scan
+  seed lives outside it. Nothing here emails a contact; the pages only open Bo's mail app.
+
 - **Club portal access is per registration, by email (Oct 4).** `src/lib/clubAccess.ts`: raw-SQL
   table `ClubRegAccess (userId, registrationId)`, created lazily; the first call carried every old
   `ClubDirectorLink` over as the registrations its club name had at that moment. Every
