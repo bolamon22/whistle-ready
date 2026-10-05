@@ -3,27 +3,23 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { decryptConfig } from '@/lib/encrypt'
+import { qboRevoke } from '@/lib/qbo'
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const userId = (session.user as any).id
-
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT id, userId, provider, enabled, config, mode FROM OrgPaymentProvider WHERE id = ? AND userId = ?`,
-    params.id, userId
-  )
-  if (!rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const r = rows[0]
-  const cfg = decryptConfig(r.config)
-  return NextResponse.json({ ...r, config: cfg })
-}
+// No GET: it returned a provider's whole decrypted config (QuickBooks and Stripe
+// tokens and keys) to the browser, and nothing called it. The list
+// (api/payment-providers) shows only non-secret details. Removed Oct 5 2026,
+// before the QuickBooks connection reaches real books.
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const userId = (session.user as any).id
 
+  // Disconnecting QuickBooks also has Intuit revoke the login (lib/qbo qboRevoke).
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT provider, config FROM OrgPaymentProvider WHERE id = ? AND userId = ?`, params.id, userId
+  )
+  if (rows[0]?.provider === 'quickbooks') await qboRevoke(decryptConfig(rows[0].config))
   await prisma.$executeRawUnsafe(
     `DELETE FROM OrgPaymentProvider WHERE id = ? AND userId = ?`, params.id, userId
   )

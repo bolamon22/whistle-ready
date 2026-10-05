@@ -18,6 +18,7 @@ import { decryptConfig, encryptConfig } from '@/lib/encrypt'
 
 const API = 'https://quickbooks.api.intuit.com/v3/company'
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
+const REVOKE_URL = 'https://developer.api.intuit.com/v2/oauth2/tokens/revoke'
 const MINOR = '75'
 
 export type QboConnection = { ok: true; accessToken: string; realmId: string; companyName: string; rowId: string }
@@ -90,6 +91,27 @@ export async function qboConnection(orgId: string | null, opts: { userIds?: stri
   } catch {
     return { ok: false, reason: 'expired', message: 'Could not reach QuickBooks to refresh the connection. Try again in a minute.' }
   }
+}
+
+/**
+ * Disconnecting: ask Intuit to revoke the login, so its tokens stop working
+ * everywhere, not just in Whistle Ready (Intuit's disconnect requirement).
+ * Revoking the refresh token ends the whole grant. Best effort; never throws.
+ */
+export async function qboRevoke(cfg: Record<string, string>): Promise<boolean> {
+  const token = cfg.refreshToken || cfg.accessToken
+  const id = process.env.QBO_CLIENT_ID, secret = process.env.QBO_CLIENT_SECRET
+  if (!token || !id || !secret) return false
+  try {
+    const res = await fetch(REVOKE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString('base64')}` },
+      body: JSON.stringify({ token }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
+    })
+    return res.ok
+  } catch { return false }
 }
 
 /** One QuickBooks API call. Throws QboError with QuickBooks' own message. */
