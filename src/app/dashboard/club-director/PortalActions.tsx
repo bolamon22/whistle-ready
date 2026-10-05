@@ -170,20 +170,27 @@ export function RequestChangeDialog({ tournamentId, eventName, reg, team, event,
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
+  // A MOVE IS A REQUEST, NOT A DONE DEAL (Bo, Oct 5 2026). The division a team is
+  // in is the one the club signed up for, and clubs often ask days before the
+  // event, when the schedule is set and the division they want is full. So the
+  // dialog says so plainly, and the club ticks that it understands before sending.
+  const [understood, setUnderstood] = useState(false)
   const target = moveTargets.find(d => d.name === toDivision)
+  const fromDivision = team?.division || 'its current division'
 
   const options: { id: RequestKind; title: string; sub: string }[] = team ? [
-    ...(moveTargets.length ? [{ id: 'move' as const, title: 'Move to a different division', sub: 'The office checks space in the new division and moves the team.' }] : []),
+    ...(moveTargets.length ? [{ id: 'move' as const, title: 'Move to a different division', sub: 'A request, not a guarantee. The office checks whether there’s room.' }] : []),
     { id: 'remove', title: 'Remove this team', sub: 'Teams are only taken off by the office, so nothing disappears by accident.' },
     { id: 'other', title: 'Something else', sub: 'A name change, a coach change, anything we should fix.' },
   ] : []
 
-  const blocked = busy || staffView || (kind === 'move' && !toDivision) || (kind === 'other' && !note.trim())
+  const blocked = busy || staffView || (kind === 'move' && (!toDivision || !understood)) || (kind === 'other' && !note.trim())
   async function send() {
     if (blocked) return
     setBusy(true); setError('')
     const r = await postJson('/api/club-director/request', {
       tournamentId, registrationId: reg.id, kind, teamId: team?.id || '', toDivision, note,
+      ...(kind === 'move' ? { understood } : {}),
     })
     setBusy(false)
     if (!r.ok) { setError(r.data?.error || 'Could not send that request'); return }
@@ -194,9 +201,16 @@ export function RequestChangeDialog({ tournamentId, eventName, reg, team, event,
   return (
     <Dialog title={team ? `Request a change for ${team.teamName}` : 'Ask the office for a change'} onClose={onClose}>
       {sent ? (
-        <Done title="Request sent" onClose={onClose} body={
-          <>It&rsquo;s on your registration as &ldquo;Change requested,&rdquo; and the tournament office has it by email. They&rsquo;ll make the change and update your invoice if it changes.</>
-        } />
+        kind === 'move' && team ? (
+          <Done title="Request sent" tone="amber" onClose={onClose} body={
+            <>It&rsquo;s on your registration as &ldquo;Change requested,&rdquo; and the tournament office has it by email.
+              {' '}<strong className="font-semibold text-slate-800">A move isn&rsquo;t guaranteed:</strong> {team.teamName} stays in {fromDivision} unless the office confirms the move.</>
+          } />
+        ) : (
+          <Done title="Request sent" onClose={onClose} body={
+            <>It&rsquo;s on your registration as &ldquo;Change requested,&rdquo; and the tournament office has it by email. They&rsquo;ll make the change and update your invoice if it changes.</>
+          } />
+        )
       ) : (
         <div className="flex flex-col gap-4">
           <div className="pr-8">
@@ -231,10 +245,18 @@ export function RequestChangeDialog({ tournamentId, eventName, reg, team, event,
               {target && (
                 <p className="text-[13px] leading-relaxed text-slate-500">
                   {target.full
-                    ? `${target.name} is full right now, so this move would put ${team.teamName} on its waiting list. The office will check with you before moving anything.`
-                    : `${target.name} has room. The office will make the move and update your invoice if the price changes.`}
+                    ? `${target.name} is full right now, so there's no room unless a spot opens. If one does, ${team.teamName} would go on its waiting list first.`
+                    : `${target.name} shows open spots right now, but that can change before the office gets to it.`}
                 </p>
               )}
+              <div role="note" className="flex gap-2.5 items-start rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[13px] leading-relaxed text-amber-900">
+                <AlertTriangle size={17} className="shrink-0 mt-0.5" />
+                <p>
+                  <strong className="font-bold">A move isn&rsquo;t guaranteed.</strong> {team.teamName} is in {fromDivision}, the division your club signed up for.
+                  {' '}We&rsquo;ll do our best, but clubs often ask close to the event, when the schedule is set and divisions are full, so there may be no room to move them.
+                  {event?.posted ? ' The schedule for this event is already posted.' : ''}
+                </p>
+              </div>
             </div>
           )}
 
@@ -261,11 +283,25 @@ export function RequestChangeDialog({ tournamentId, eventName, reg, team, event,
             </label>
           )}
 
-          <NextSteps steps={[
+          <NextSteps steps={kind === 'move' && team ? [
+            'Your request shows on your registration, and the tournament office gets an email.',
+            `The office checks whether there's room in ${toDivision || 'the new division'}.`,
+            `If there is, they move ${team.teamName}, update your invoice, and you confirm the new list. If there isn't, ${team.teamName} stays in ${fromDivision}.`,
+          ] : [
             'Your request shows on your registration, and the tournament office gets an email.',
             'The office makes the change and updates your invoice.',
             'You check the updated list and confirm it.',
           ]} />
+
+          {kind === 'move' && team && (
+            <label className={`flex gap-3 items-start px-3.5 py-3 rounded-2xl cursor-pointer border ${understood ? 'border-teal-600 bg-teal-50' : 'border-slate-300 bg-white'}`}>
+              <input type="checkbox" checked={understood} onChange={e => setUnderstood(e.target.checked)}
+                className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-teal-600" />
+              <span className="text-[14px] leading-snug text-slate-800">
+                I understand {team.teamName} stays in <strong className="font-semibold">{fromDivision}</strong> unless the office confirms the move.
+              </span>
+            </label>
+          )}
 
           {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
           {staffView && <StaffNote />}
@@ -704,7 +740,7 @@ export function AccountNote({ confirm, onConfirm }: {
         <div className="min-w-0">
           <strong className="font-bold">Change requested{confirm.at ? ` · ${stamp(confirm.at)}` : ''}</strong>
           <p className="whitespace-pre-line break-words">{confirm.note}</p>
-          <p className="mt-1 text-amber-800">The tournament office will update your registration. Then you check the new list and confirm it.</p>
+          <p className="mt-1 text-amber-800">The tournament office will review it. Nothing changes until they do, and a division move only happens if there&rsquo;s room. If your teams change, you check the new list and confirm it.</p>
         </div>
       </section>
     )

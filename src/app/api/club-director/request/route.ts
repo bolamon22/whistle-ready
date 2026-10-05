@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
     const full = divisionFull(info, to)
     message = `Move ${team.teamName} from ${team.division || 'no division'} to ${to}.`
       + (full ? ` ${to} is marked full, so this would put them on its waiting list.` : '') + said
+      // The portal makes the club tick that a move isn't guaranteed (Bo, Oct 5
+      // 2026). Kept on the note, so the office has it in writing.
+      + (body.understood === true ? ` ${who || 'The club'} confirmed they understand the move isn't guaranteed and ${team.teamName} stays in ${team.division || 'its division'} unless the office confirms it.` : '')
   } else if (kind === 'remove' && team) {
     message = `Remove ${label(team)}.` + (note ? ` Why: "${note}" (${who || 'the club'})` : '')
   } else if (kind === 'add') {

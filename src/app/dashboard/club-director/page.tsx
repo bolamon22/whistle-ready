@@ -608,7 +608,7 @@ export default function ClubDirectorDashboard() {
     leftItems.push(regs.every(r => r.confirm?.status === 'confirmed')
       ? { key: 'confirm', title: 'Teams confirmed', detail: lastConfirmed ? `Confirmed ${shortDate(lastConfirmed)}` : 'Your team list is confirmed', done: true }
       : requested && !toConfirm
-        ? { key: 'confirm', title: 'Confirm your team list', detail: 'Change requested · the office is on it, then you confirm the new list', done: false }
+        ? { key: 'confirm', title: 'Confirm your team list', detail: 'Change requested · waiting on the office', done: false }
         : { key: 'confirm', title: 'Confirm your team list', detail: `${totalTeams} team${totalTeams === 1 ? '' : 's'} · tick the box to check the names and divisions`, done: false,
             ...(toConfirm ? {
               check: { onClick: () => setConfirmFor(toConfirm.id), title: 'Check your teams and confirm them' },
@@ -1057,7 +1057,7 @@ export default function ClubDirectorDashboard() {
                       </div>
                       {showChange && (
                         <p className="px-5 py-2.5 border-t border-gray-100 text-xs leading-relaxed text-gray-500">
-                          Moving a team to another division or removing one goes to the tournament office as a request.{' '}
+                          Moving a team to another division or removing one goes to the tournament office as a request, and a move only happens if there&rsquo;s room.{' '}
                           {portalEvent?.posted ? 'The schedule is posted, so adding a team is a request now too.' : 'You can add a team yourself until the schedule is posted.'}
                         </p>
                       )}
