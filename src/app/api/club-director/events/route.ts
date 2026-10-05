@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
   const today = todayET()
   const rows: any[] = await prisma.$queryRawUnsafe(
-    `SELECT id, name, startDate, endDate FROM "Tournament" WHERE orgId = ? AND id != ? ORDER BY startDate`, orgId, tournamentId)
+    `SELECT id, name, startDate, endDate, logoUrl FROM "Tournament" WHERE orgId = ? AND id != ? ORDER BY startDate`, orgId, tournamentId)
   const upcoming = rows.filter(t => String(t.name || '').trim() && String(t.endDate || t.startDate || '') >= today)
 
   const events = []
@@ -55,6 +55,8 @@ export async function GET(req: NextRequest) {
     if (regs.some(r => clubs.has(nameKey(r.clubName)))) continue
     events.push({
       id: info.id, name: info.name, startDate: info.startDate, endDate: info.endDate, location: info.location,
+      // The event's own logo on its card in the portal (Bo, Oct 5 2026).
+      logoUrl: String(row.logoUrl || ''),
       divisions: info.divisions.map(name => {
         const badge = divisionBadge(name, info.site)
         return { name, full: divisionFull(info, name), label: badge?.suffix || '' }

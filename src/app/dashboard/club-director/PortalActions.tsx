@@ -37,6 +37,15 @@ export type AgainSource = {
 export type OtherEvent = {
   id: string; name: string; startDate: string; endDate: string; location: string
   divisions: { name: string; full: boolean; label: string }[]; pricing: RegPricing
+  logoUrl?: string
+}
+
+/** An event's logo at a fixed height. Wordmarks are as common as badges (Monster
+ *  Mash is 453x180), so the width follows the image. Gone if it fails to load. */
+function EventLogo({ src, className = 'h-12 max-w-[96px]' }: { src?: string; className?: string }) {
+  if (!src) return null
+  return <img src={src} alt="" className={`${className} w-auto object-contain shrink-0`}
+    onError={e => { e.currentTarget.style.display = 'none' }} />
 }
 
 const money = (n: number) => '$' + (Math.round((n || 0) * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
@@ -591,7 +600,10 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
       <div className="flex flex-col gap-5">
         <div className="pr-8">
           <Eyebrow>Register teams</Eyebrow>
-          <h2 className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-900">{target ? `Register for ${target.name}` : 'Register for another event'}</h2>
+          <div className="mt-1 flex items-center gap-3">
+            <EventLogo src={target?.logoUrl} className="h-12 max-w-[110px]" />
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{target ? `Register for ${target.name}` : 'Register for another event'}</h2>
+          </div>
           <p className="mt-1 text-[15px] leading-relaxed text-slate-500">Your {eventName} teams are filled in to start. Keep them as they are, rename one, change a coach, leave one out or add a new team.</p>
         </div>
 
@@ -1008,18 +1020,23 @@ export function OtherEventsCard({ tournamentId, teamCount, showMoney, viewUserId
         {events.map(ev => {
           const per = calcFee(Array.from({ length: n }, () => ({ division: '' })), ev.pricing) / n
           return (
-            <div key={ev.id} className="rounded-2xl border border-gray-200 p-3.5 flex flex-col gap-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0">
+            // The button sits at the foot of the box, so two side by side line up even
+            // when one event's address runs to a second line (Bo, Oct 5 2026). The grid
+            // stretches both boxes to the taller one; the shorter just has a gap.
+            <div key={ev.id} className="rounded-2xl border border-gray-200 p-3.5 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <EventLogo src={ev.logoUrl} />
+                <span className="min-w-0 flex-1">
                   <span className="block font-bold text-gray-800">{ev.name}</span>
-                  <span className="block text-[13px] text-gray-500">{eventDates(ev.startDate, ev.endDate)}{ev.location ? ` · ${ev.location}` : ''}</span>
+                  <span className="block text-[13px] text-gray-500">{eventDates(ev.startDate, ev.endDate)}</span>
+                  {ev.location && <span className="block text-[13px] text-gray-500 line-clamp-2" title={ev.location}>{ev.location}</span>}
                 </span>
                 {showMoney && per > 0 && (
                   <span className="shrink-0 px-2.5 py-1 rounded-full bg-teal-50 border border-teal-100 text-teal-700 text-[13px] font-bold whitespace-nowrap">{money(per)} / team</span>
                 )}
               </div>
               <button type="button" onClick={() => onRegister(ev.id)}
-                className="min-h-[44px] rounded-full border border-teal-600 text-teal-700 hover:bg-teal-50 text-sm font-semibold inline-flex items-center justify-center gap-1.5">
+                className="mt-auto min-h-[44px] rounded-full border border-teal-600 text-teal-700 hover:bg-teal-50 text-sm font-semibold inline-flex items-center justify-center gap-1.5">
                 <ArrowRightLeft size={15} /> Register teams
               </button>
             </div>
