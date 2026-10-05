@@ -787,7 +787,10 @@ export function TimelineView(p: ViewsProps) {
             chips row keeps its width and the bar is always in view. */}
         {/* While dragging, the bar is see-through to the pointer so the slots under it still take the drop. */}
         {sel && <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-40 transition-opacity ${dragId ? 'pointer-events-none opacity-30' : ''}`}><SelectionBar p={p} sel={sel} teamCount={teamCount} onCancel={() => setSelId(null)} swapArmed={swapArmed} onSwapToggle={() => setSwapArmed(v => !v)} /></div>}
-        <div ref={boardRef} className="h-full overflow-auto relative" onClick={() => { if (hover) setHover(null) }}>
+        {/* Room under the last row while the bar is up, so the late slots can scroll
+            clear of it and take a click or a drop (Bo, Oct 5 2026: 8:30p and 9:20p sat
+            under the bar with nowhere further to scroll). */}
+        <div ref={boardRef} className="h-full overflow-auto relative" style={{ paddingBottom: sel ? 76 : undefined }} onClick={() => { if (hover) setHover(null) }}>
           {across ? (
             <div className="grid" style={{ gridTemplateColumns: `${allTimesMin ? TIME_W_MIN : TIME_W} ${p.fields.map(f => minFields.has(f.fullName) ? MIN_W : fieldCol).join(' ')}`, gridTemplateRows: `44px ${p.slots.map(x => minSlots.has(x) ? MIN_H : ROW_H).join(' ')}`, minWidth: fit ? undefined : 'max-content', zoom: zoom !== 1 ? zoom : undefined }}>
               {/* header: fields (drag to reorder, minimize to a strip) */}
