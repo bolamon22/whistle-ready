@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Copy, Plus } from 'lucide-react'
 import {
-  categoryForContact, changeLabel, costStatus, costTotal, itemsTotal, lastOrder, money, round2, taxRate,
+  categoryForContact, changeLabel, costStatus, costTotal, itemsTotal, lastOrder, money, paidSoFar, round2, taxRate,
   type CostView,
 } from '@/lib/costTypes'
 import { useContacts } from '@/components/contacts/useContacts'
@@ -31,7 +31,7 @@ export default function EventBudget({ tournamentId }: { tournamentId: string }) 
   const sum = (pred: (c: CostView) => boolean) => round2(mine.filter(pred).reduce((s, c) => s + costTotal(c), 0))
   const planned = sum(() => true)
   const committed = sum(c => c.status === 'booked' || c.status === 'paid')
-  const paid = sum(c => c.status === 'paid')
+  const paid = round2(mine.reduce((s, c) => s + paidSoFar(c), 0))
   const lastFor = (c: CostView) => c.contactId ? lastOrder(costs, c.contactId, tournamentId) : null
   const lastTotal = round2(mine.reduce((s, c) => { const l = lastFor(c); return s + (l ? costTotal(l) : 0) }, 0))
 
@@ -98,6 +98,7 @@ export default function EventBudget({ tournamentId }: { tournamentId: string }) 
                   <span className={`hidden sm:inline px-1.5 py-0.5 rounded text-[11px] font-semibold ${s.tone}`}>{s.label}</span>
                   <span className="text-right">
                     <span className="block text-sm font-bold text-slate-800 tabular-nums">{money(t)}</span>
+                    {c.status === 'booked' && c.paid > 0 && <span className="block text-[11px] text-sky-700">{money(c.paid)} paid</span>}
                     {ch !== null && <span className={`block text-[11px] ${Math.abs(ch) < 0.005 ? 'text-slate-500' : ch > 0 ? 'text-red-700' : 'text-emerald-700'}`}>{changeLabel(ch)}</span>}
                   </span>
                 </div>

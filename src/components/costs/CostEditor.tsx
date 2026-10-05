@@ -157,9 +157,18 @@ export default function CostEditor({ initial, contacts, tournaments, onSave, onD
             </div>
           </div>
 
-          {c.status === 'paid' && (
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0">Paid on
+          {(c.status === 'booked' || c.status === 'paid') && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {c.status === 'booked' && (
+                <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0 col-span-2 sm:col-span-1">
+                  <span className="flex justify-between">Deposit paid{total > 0 && <span className="flex gap-2 font-normal">
+                    <button type="button" onClick={() => set({ paid: round2(total / 2) })} className="text-teal-700 hover:underline">50%</button>
+                    {(c.paid || 0) > 0 && <button type="button" onClick={() => set({ paid: 0 })} className="text-slate-500 hover:underline">None</button>}
+                  </span>}</span>
+                  <input type="number" min={0} step="0.01" inputMode="decimal" value={c.paid || 0} onChange={e => set({ paid: Number(e.target.value) })} className={field} />
+                </label>
+              )}
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0">{c.status === 'paid' ? 'Paid on' : 'Deposit paid on'}
                 <input type="date" value={c.paidDate || ''} onChange={e => set({ paidDate: e.target.value })} className={field} />
               </label>
               <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0">Paid by
@@ -167,7 +176,11 @@ export default function CostEditor({ initial, contacts, tournaments, onSave, onD
                   {METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select>
               </label>
-              {!past && <p className="col-span-2 text-xs text-slate-500">Paid lines show up in this event’s Financials as an expense.</p>}
+              {!past && <p className="col-span-2 sm:col-span-3 text-xs text-slate-500">
+                {c.status === 'paid' ? 'The full total shows in this event’s Financials as an expense.'
+                  : (c.paid || 0) > 0 ? `The deposit shows in Financials now; set it to Paid when the balance (${money(round2(total - (c.paid || 0)))}) is paid.`
+                  : 'Enter a deposit once it’s paid and it shows in Financials as an expense.'}
+              </p>}
             </div>
           )}
 

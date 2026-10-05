@@ -56,6 +56,7 @@ export type CostView = {
   items: CostItem[]
   tax: number
   budget: number                // the planned amount before a quote came in; 0 = use the items
+  paid: number                  // paid so far (a deposit) while not fully Paid; Paid means the whole total
   notes: string
   paidDate: string
   method: string
@@ -69,6 +70,9 @@ export const costTotal = (c: Pick<CostView, 'items' | 'tax' | 'budget'>) => {
   const sub = itemsTotal(c.items)
   return sub > 0 ? round2(sub + (Number(c.tax) || 0)) : round2(c.budget)
 }
+/** What has gone out the door: the whole total once Paid, else any deposit. */
+export const paidSoFar = (c: Pick<CostView, 'items' | 'tax' | 'budget' | 'status' | 'paid'>) =>
+  c.status === 'paid' ? costTotal(c) : round2(Number(c.paid) || 0)
 export const money = (n: number) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 export const year = (d: string) => (/^\d{4}/.test(d) ? d.slice(0, 4) : '')
 

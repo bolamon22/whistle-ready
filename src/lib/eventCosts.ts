@@ -3,7 +3,7 @@ import { todayET } from '@/lib/publicView'
 import { inScope, scopeTournaments, type Scope } from '@/lib/tasks'
 import { getContact } from '@/lib/contacts'
 import {
-  costTotal, isCostCategory, isCostStatus, round2, type CostItem, type CostView,
+  costTotal, money, paidSoFar, isCostCategory, isCostStatus, round2, type CostItem, type CostView,
 } from '@/lib/costTypes'
 
 // Event costs (Bo, Oct 5 2026): each vendor's quote, item by item, per event,
@@ -37,6 +37,7 @@ export function ensureCostTable(): Promise<void> {
         "items" TEXT NOT NULL DEFAULT '[]',
         "tax" REAL NOT NULL DEFAULT 0,
         "budget" REAL NOT NULL DEFAULT 0,
+        "paid" REAL NOT NULL DEFAULT 0,
         "notes" TEXT NOT NULL DEFAULT '',
         "paidDate" TEXT NOT NULL DEFAULT '',
         "method" TEXT NOT NULL DEFAULT '',
@@ -47,6 +48,8 @@ export function ensureCostTable(): Promise<void> {
         "deletedAt" TEXT NOT NULL DEFAULT ''
       )`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EventCost_org" ON "EventCost"("orgId", "deletedAt")`)
+      // Added Oct 5 2026 (deposits): the table was already live without it.
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE "EventCost" ADD COLUMN "paid" REAL NOT NULL DEFAULT 0`) } catch { /* already there */ }
     })().catch(e => { ready = null; throw e })
   }
   return ready
@@ -85,6 +88,7 @@ function toRow(r: Record<string, unknown>): Row {
     items: cleanItems(r.items),
     tax: round2(Number(r.tax) || 0),
     budget: round2(Number(r.budget) || 0),
+    paid: round2(Number(r.paid) || 0),
     notes: String(r.notes || ''),
     paidDate: ymd(r.paidDate),
     method: String(r.method || ''),
@@ -115,12 +119,13 @@ function clean(input: CostInput): Clean {
   if (input.items !== undefined) out.items = cleanItems(input.items)
   if (input.tax !== undefined) out.tax = round2(num(input.tax))
   if (input.budget !== undefined) out.budget = round2(num(input.budget))
+  if (input.paid !== undefined) out.paid = round2(num(input.paid))
   if (input.notes !== undefined) out.notes = text(input.notes, 4000)
   if (input.paidDate !== undefined) out.paidDate = ymd(input.paidDate)
   if (input.method !== undefined) out.method = METHODS.has(String(input.method)) ? String(input.method) : ''
   return out
 }
-const COLS: (keyof Clean)[] = ['tournamentId', 'eventLabel', 'eventDate', 'contactId', 'vendor', 'category', 'status', 'quoteRef', 'quoteDate', 'items', 'tax', 'budget', 'notes', 'paidDate', 'method']
+const COLS: (keyof Clean)[] = ['tournamentId', 'eventLabel', 'eventDate', 'contactId', 'vendor', 'category', 'status', 'quoteRef', 'quoteDate', 'items', 'tax', 'budget', 'paid', 'notes', 'paidDate', 'method']
 const dbValue = (k: keyof Clean, v: unknown) => k === 'items' ? JSON.stringify(v) : v
 
 /**
@@ -169,8 +174,9 @@ export async function updateCost(scope: Scope, id: string, input: CostInput): Pr
   if (c.vendor === '') delete c.vendor
   const r = await resolveLinks(scope, c, cur)
   if ('error' in r) return r
-  // Marking it paid with no date pays it today.
-  if (c.status === 'paid' && cur.status !== 'paid' && !c.paidDate && !cur.paidDate) c.paidDate = todayET()
+  // Marking it paid (or paying a deposit) with no date pays it today.
+  const paying = (c.status === 'paid' && cur.status !== 'paid') || ((c.paid || 0) > 0 && !cur.paid)
+  if (paying && !c.paidDate && !cur.paidDate) c.paidDate = todayET()
   const keys = COLS.filter(k => c[k] !== undefined)
   if (keys.length) {
     await prisma.$executeRawUnsafe(
@@ -202,13 +208,18 @@ async function dropExpense(row: Row) {
   row.transactionId = ''
 }
 
-/** A Paid line on a tournament = one Financials expense with its amount; anything else = none. */
+/**
+ * Money paid on a tournament line = one Financials expense for what has been
+ * paid: the whole total once Paid, the deposit before that. Nothing paid = none.
+ */
 export async function syncExpense(row: Row): Promise<Row> {
-  if (row.status !== 'paid' || !row.tournamentId) { await dropExpense(row); return row }
+  const amount = paidSoFar(row)
+  if (!(amount > 0) || !row.tournamentId) { await dropExpense(row); return row }
+  const deposit = row.status !== 'paid'
   const data = {
     category: row.category,
-    description: [row.vendor, row.quoteRef ? `#${row.quoteRef}` : ''].filter(Boolean).join(' '),
-    amount: costTotal(row),
+    description: [row.vendor, row.quoteRef ? `#${row.quoteRef}` : '', deposit ? `deposit (of ${money(costTotal(row))})` : ''].filter(Boolean).join(' '),
+    amount,
     method: row.method || 'check',
     date: row.paidDate || todayET(),
     notes: 'From Budget',

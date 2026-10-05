@@ -179,9 +179,9 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   `EventCost` (lazy, soft delete) in `lib/eventCosts.ts`; `lib/costTypes.ts` is the client-safe half
   (`priceHistory`, `itemKey`, `lastOrder`, `costTotal`). Same switch/scope as Tasks (`tasksGate`).
   A line for a past event not in Whistle Ready has `tournamentId ''` + `eventLabel`/`eventDate`
-  (history only). **A Paid line on a tournament IS one `TournamentTransaction` expense**
-  (`syncExpense` creates/updates it, any other status or a delete removes it): never also add
-  it by hand on Financials > Other. UI: Financials **Budget** tab (`components/costs/EventBudget`:
+  (history only). **Money paid on a tournament line IS one `TournamentTransaction` expense**
+  (`syncExpense`): the deposit (`paid`, entered while Booked) until the line is Paid, then the
+  full total; nothing paid or a delete removes it. Never also add it by hand on Financials > Other. UI: Financials **Budget** tab (`components/costs/EventBudget`:
   this event's lines vs the same vendor last time, "Budget from last time"), and a **Costs**
   section on every contact card (`VendorCosts`, price history table). **Write an email** on a
   contact (`VendorEmailDialog`, `lib/vendorEmails.ts`): ask for a quote (lists the last order's
