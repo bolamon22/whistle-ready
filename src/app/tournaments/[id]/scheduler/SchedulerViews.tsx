@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop, Ruler } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
@@ -26,7 +26,7 @@ export interface SGame {
   score1?: number | null
   score2?: number | null
 }
-export interface SField { venueName: string; fieldName: string; fullName: string }
+export interface SField { venueName: string; fieldName: string; fullName: string; divRestrictions?: string[] }
 
 export interface ViewsProps {
   games: SGame[]              // every game in the tournament
@@ -68,13 +68,17 @@ export interface ViewsProps {
   closedLabel?: (fullName: string) => string | null
   /** Opens the close/reopen dialog for a field. */
   onToggleClosed?: (fullName: string) => void
+  /** Setup > Venues division limits: false when this field is set for other divisions only (e.g. too small). */
+  fieldAllows?: (fullName: string, division: string) => boolean
 }
 
-type IssueKind = 'conflict' | 'closed' | 'b2b' | 'bracket' | 'gap'
+type IssueKind = 'conflict' | 'closed' | 'field' | 'b2b' | 'bracket' | 'gap'
 const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues'] | null; label: string; dot: string; bg: string; border: string }[] = [
   { kind: 'conflict', key: 'conflict', label: 'Double-booked', dot: '#ef4444', bg: '#fee2e2', border: '#ef4444' },
   // not in p.issues: computed from isFieldClosed + dayGames in useIssueList
   { kind: 'closed',   key: null,       label: 'Field closed',  dot: '#dc2626', bg: '#fee2e2', border: '#dc2626' },
+  // not in p.issues either: computed from fieldAllows (Setup's division limits per field)
+  { kind: 'field',    key: null,       label: 'Wrong field',   dot: '#c026d3', bg: '#fae8ff', border: '#c026d3' },
   { kind: 'b2b',      key: 'b2b',      label: 'Back-to-back',  dot: '#f59e0b', bg: '#fef3c7', border: '#f59e0b' },
   { kind: 'bracket',  key: 'bracket',  label: 'Bracket order', dot: '#ea580c', bg: '#ffedd5', border: '#ea580c' },
   { kind: 'gap',      key: 'gap',      label: 'Long gap',      dot: '#14b8a6', bg: '',        border: '' },
@@ -200,15 +204,26 @@ function useIssueList(p: ViewsProps) {
         list.push({ kind: 'closed', label: closedKind.label, dot: closedKind.dot, text, gameId: g.id, division: g.division })
       }
     }
-    const order: Record<IssueKind, number> = { conflict: 0, closed: 1, b2b: 2, bracket: 3, gap: 4 }
+    // Games on a field that Setup limits to other divisions (a small field, say).
+    const fieldKind = KINDS.find(k => k.kind === 'field')!
+    if (p.fieldAllows) {
+      for (const g of p.dayGames) {
+        if (!g.location || p.fieldAllows(g.location, g.division)) continue
+        const field = p.fields.find(f => f.fullName === g.location)?.fieldName ?? g.location
+        const text = `${g.gameNumber} (${g.division}) is on ${field}, which Setup limits to other divisions. Move it.`
+        byGame.set(g.id, [...(byGame.get(g.id) ?? []), { kind: 'field', label: fieldKind.label, dot: fieldKind.dot, text }])
+        list.push({ kind: 'field', label: fieldKind.label, dot: fieldKind.dot, text, gameId: g.id, division: g.division })
+      }
+    }
+    const order: Record<IssueKind, number> = { conflict: 0, closed: 1, field: 2, b2b: 3, bracket: 4, gap: 5 }
     list.sort((a, b) => order[a.kind] - order[b.kind])
     return { byGame, list }
-  }, [p.games, p.issues, p.isFieldClosed, p.dayGames, p.fields, p.fmtTime])
+  }, [p.games, p.issues, p.isFieldClosed, p.fieldAllows, p.dayGames, p.fields, p.fmtTime])
 }
 
 function worstOf(items: { kind: IssueKind }[] | undefined) {
   if (!items || items.length === 0) return null
-  const order: IssueKind[] = ['conflict', 'closed', 'b2b', 'bracket', 'gap']
+  const order: IssueKind[] = ['conflict', 'closed', 'field', 'b2b', 'bracket', 'gap']
   return order.find(k => items.some(i => i.kind === k)) ?? null
 }
 const KIND = (k: IssueKind | null) => KINDS.find(x => x.kind === k)
@@ -219,7 +234,7 @@ const KIND = (k: IssueKind | null) => KINDS.find(x => x.kind === k)
 
 function IssueBadge({ kind, count }: { kind: IssueKind; count: number }) {
   const k = KIND(kind)!
-  const Icon = kind === 'conflict' ? AlertTriangle : kind === 'closed' ? Ban : kind === 'b2b' ? ArrowLeftRight : kind === 'bracket' ? Zap : Clock
+  const Icon = kind === 'conflict' ? AlertTriangle : kind === 'closed' ? Ban : kind === 'field' ? Ruler : kind === 'b2b' ? ArrowLeftRight : kind === 'bracket' ? Zap : Clock
   return (
     <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow ring-2 ring-white" style={{ background: k.dot, color: kind === 'b2b' ? '#0f172a' : '#fff' }}>
       <Icon size={11} />
@@ -396,6 +411,8 @@ const HINT = {
   valid:   { border: '#a7f3d0', bg: '#f0fdf4', text: '#34d399', label: 'Place here' },
   risk:    { border: '#f59e0b', bg: '#fffbeb', text: '#b45309', label: 'Back-to-back' },
   blocked: { border: '#ef4444', bg: 'repeating-linear-gradient(135deg,#fef2f2 0 6px,#fecaca 6px 8px)', text: '#b91c1c', label: 'Team busy' },
+  // Setup limits this field to other divisions. Still placeable (with a confirm), so not striped like blocked.
+  field:   { border: '#c026d3', bg: '#fdf4ff', text: '#a21caf', label: 'Not for this division' },
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
@@ -950,7 +967,8 @@ export function TimelineView(p: ViewsProps) {
     const g = cellMap[s + '|' + f.fullName]
     const closed = closedAt(f.fullName, s)
     const status = sel && !g && !closed ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
-    const h = status ? HINT[status] : null
+    const wrongField = !!(status && status !== 'blocked' && p.fieldAllows && !p.fieldAllows(f.fullName, sel!.division))
+    const h = wrongField ? HINT.field : status ? HINT[status] : null
     return (
       <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
         title={closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : undefined}
@@ -1031,7 +1049,7 @@ export function TimelineView(p: ViewsProps) {
     const k = KIND(worst)
     const on = selId === g.id, d = dim(g)
     const done = g.isCanceled || (g.score1 != null && g.score2 != null)
-    const bg = on ? '#0f172a' : d ? '#f8fafc' : worst === 'conflict' || worst === 'closed' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
+    const bg = on ? '#0f172a' : d ? '#f8fafc' : worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
     const handlers = {
       draggable: true,
       'data-tl-game': g.id,

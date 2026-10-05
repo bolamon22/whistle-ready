@@ -32,6 +32,24 @@ interface Field {
   venueName: string
   fieldName: string
   fullName: string
+  // Setup > Venues "only these divisions" list. Empty = any division.
+  divRestrictions?: string[]
+}
+
+// Field objects saved in Setup carry divRestrictions; plain-string fields have none.
+function restrictionsOf(f: any): string[] {
+  return f && typeof f === 'object' && Array.isArray(f.divRestrictions) ? f.divRestrictions.filter((d: any) => typeof d === 'string' && d.trim()) : []
+}
+function flattenVenues(venueList: any[]): Field[] {
+  const flat: Field[] = []
+  venueList.forEach(v => {
+    const flds: any[] = Array.isArray(v?.fields) ? v.fields : []
+    flds.forEach(f => {
+      const fieldName = typeof f === 'string' ? f : (f.name ?? String(f))
+      flat.push({ venueName: v.name, fieldName, fullName: `${v.name} - ${fieldName}`, divRestrictions: restrictionsOf(f) })
+    })
+  })
+  return flat
 }
 
 const PALETTE = [
@@ -254,14 +272,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       if (tData.scheduleIncrement) setIncrement(Number(tData.scheduleIncrement))
 
       const venueList: any[] = vData.venues ?? []
-      const flat: Field[] = []
-      venueList.forEach(v => {
-        const flds: any[] = Array.isArray(v.fields) ? v.fields : []
-        flds.forEach(f => {
-          const fieldName = typeof f === 'string' ? f : (f.name ?? String(f))
-          flat.push({ venueName: v.name, fieldName, fullName: `${v.name} - ${fieldName}` })
-        })
-      })
+      const flat = flattenVenues(venueList)
       setRawVenues(venueList.map(v => ({ name: v.name, fields: (Array.isArray(v.fields) ? v.fields : []).map((f: any) => typeof f === 'string' ? f : (f.name ?? String(f))) })))
       setFields(flat)
       setStoredVenuesRaw(venueList)
@@ -346,6 +357,19 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const closuresFor = (date: string): Closure[] => closuresOf(dayAvail.find((x: any) => x.date === date))
   const closuresToday = closuresFor(activeDate)
   const closedAt = (field: string, time: string) => isFieldClosedAt(closuresToday, field, time)
+  // Setup says which divisions fit on a field (e.g. small fields: younger divisions only).
+  const fieldAllows = (fullName: string, division: string) => {
+    const lim = fields.find(f => f.fullName === fullName)?.divRestrictions ?? []
+    if (!lim.length || !division) return true
+    const d = division.trim().toLowerCase()
+    return lim.some(x => x.trim().toLowerCase() === d)
+  }
+  const fieldNameOf = (fullName: string) => fields.find(f => f.fullName === fullName)?.fieldName ?? fullName
+  // Not a hard block (a director may knowingly override), but never silent.
+  const okForField = (g: Game | undefined, fullName: string) => {
+    if (!g || !fullName || fieldAllows(fullName, g.division)) return true
+    return window.confirm(`${fieldNameOf(fullName)} is set in Setup for other divisions only, not ${g.division}.\n\nPlace game ${g.gameNumber} there anyway?`)
+  }
   const closedLabelFor = (field: string) => closureLabel(fieldClosure(closuresToday, field), fmtTime)
   const [closeDlg, setCloseDlg] = useState<{ field: string; mode: 'day' | 'part'; from: string; to: string } | null>(null)
   function openCloseDialog(fullName: string) {
@@ -400,9 +424,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const merged = mergeVenues(venues)
     setRawVenues(venues)
     setStoredVenuesRaw(merged)
-    const flat: Field[] = []
-    venues.forEach(v => v.fields.forEach(f => flat.push({ venueName: v.name, fieldName: f, fullName: `${v.name} - ${f}` })))
-    setFields(flat)
+    setFields(flattenVenues(merged))
     // Preserve the saved per-day availability — only venues/fields change here.
     const r = await fetch(`/api/venues/${params.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -632,6 +654,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     if (closedAt(field, time)) { toast.error(`${fields.find(f => f.fullName === field)?.fieldName ?? field} is closed at ${fmtTime(time)} on this day`); return }
     const occupied = games.find(g => g.id !== gameId && g.date === activeDate && g.startTime === time && g.location === field)
     if (occupied) { toast.error(`${field} is already booked at ${time}`); return }
+    if (!okForField(games.find(g => g.id === gameId), field)) return
     setScratchPad(prev => prev.filter(id => id !== gameId))
     moveGame(gameId, { date: activeDate, startTime: time, location: field })
   }
@@ -676,6 +699,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const a = games.find(g => g.id === aId)
     const b = games.find(g => g.id === bId)
     if (!a || !b || a.id === b.id) return
+    if (!okForField(a, b.location) || !okForField(b, a.location)) return
     setSaving(true)
     const send = (id: string, to: Game) => fetch(`/api/tournaments/${params.id}/games/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -994,7 +1018,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     (afType === 'both' || (afType === 'bracket') === isBracketGame(g)))
 
   async function runAutoFill() {
-    const fieldsArg = fields.filter(f => afFields.has(f.fullName)).map(f => ({ fullName: f.fullName }))
+    const fieldsArg = fields.filter(f => afFields.has(f.fullName)).map(f => ({ fullName: f.fullName, divRestrictions: f.divRestrictions ?? [] }))
     if (fieldsArg.length === 0) { toast.error('Pick at least one field'); return }
     const days = dates.filter(d => (afCaps[d] ?? 0) > 0)
     if (days.length === 0) { toast.error('Give at least one day a number of games per team'); return }
@@ -1077,7 +1101,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const day1 = dates[0] || activeDate
     const day2 = dates[1] || day1
     const lastDay = dates[dates.length - 1] || day1
-    const fieldsArg = visibleFields.map(f => ({ fullName: f.fullName }))
+    const fieldsArg = visibleFields.map(f => ({ fullName: f.fullName, divRestrictions: f.divRestrictions ?? [] }))
     const toA = (g: Game) => ({ id: g.id, gameNumber: g.gameNumber, division: g.division, pool: g.pool, team1: g.team1, team2: g.team2 })
     const isBk = (g: Game) => { const t = gameType(g); return t === 'bracket' || t === 'championship' }
     const poolGames = filtered.filter(g => !isBk(g))
@@ -2221,12 +2245,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             divColor: (d: string) => divColor(d, divisions, divColorMap), fmtTime, divAbbr,
             issues: { conflict: conflictMsgs, b2b: backToBackMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
             filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
-            onPlace: (id: string, time: string, field: string) => moveGame(id, { date: activeDate, startTime: time, location: field }),
+            onPlace: (id: string, time: string, field: string) => { if (okForField(games.find(g => g.id === id), field)) moveGame(id, { date: activeDate, startTime: time, location: field }) },
             onUnschedule: (id: string) => moveGame(id, { date: '', startTime: '', location: '' }),
             saving,
             prefsKey: params.id,
             onReorderFields: reorderField,
             isFieldClosed: closedAt,
+            fieldAllows,
             closedLabel: closedLabelFor,
             onToggleClosed: openCloseDialog,
             lotOnTop: boardLotTop,
