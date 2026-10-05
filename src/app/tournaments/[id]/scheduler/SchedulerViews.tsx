@@ -563,15 +563,51 @@ export function TimelineView(p: ViewsProps) {
   const cellMap = useMemo(() => { const m: Record<string, SGame> = {}; p.dayGames.forEach(g => { m[g.startTime + '|' + g.location] = g }); return m }, [p.dayGames])
   const perSlot = p.slots.map(s => p.dayGames.filter(g => g.startTime === s).length)
 
-  // unscheduled, grouped by division, filtered by search
+  // Placing order (Bo, Oct 5 2026: bracket games came out "all over the place").
+  // p.unscheduled arrives in whatever order the database returns games with no
+  // time, roughly creation order, which interleaves bracket rounds. A bracket
+  // game's round is how deep its "W-B2"/"L-B3" references go, so: pool games by
+  // number, then bracket games round by round (first round, then the games fed
+  // by it...), by number within a round. Placing in this order never puts a
+  // game ahead of the games it waits on.
+  const placeOrder = useMemo(() => {
+    const byDiv = new Map<string, Map<string, SGame>>()
+    for (const g of p.games) {
+      if (!isBracket(g)) continue
+      if (!byDiv.has(g.division)) byDiv.set(g.division, new Map())
+      byDiv.get(g.division)!.set(g.gameNumber.toUpperCase(), g)
+    }
+    const depth = new Map<string, number>()
+    const depthOf = (g: SGame, seen: Set<string>): number => {
+      if (depth.has(g.id)) return depth.get(g.id)!
+      if (seen.has(g.id)) return 0   // a reference loop: don't recurse forever
+      seen.add(g.id)
+      let d = 0
+      for (const t of [g.team1, g.team2]) {
+        const m = (t || '').match(/^[WL]-(B\d+)$/i)
+        const src = m ? byDiv.get(g.division)?.get(m[1].toUpperCase()) : undefined
+        if (src) d = Math.max(d, depthOf(src, seen) + 1)
+      }
+      depth.set(g.id, d)
+      return d
+    }
+    p.games.forEach(g => { if (isBracket(g)) depthOf(g, new Set()) })
+    const num = (g: SGame) => g.gameNumber || ''
+    return (a: SGame, b: SGame) =>
+      (Number(isBracket(a)) - Number(isBracket(b))) ||
+      ((depth.get(a.id) ?? 0) - (depth.get(b.id) ?? 0)) ||
+      num(a).localeCompare(num(b), undefined, { numeric: true })
+  }, [p.games])
+
+  // unscheduled, grouped by division, filtered by search, in placing order
   const lot = useMemo(() => {
     const ql = q.trim().toLowerCase()
     const divs = p.filterDiv === '__all__' ? p.divisions : p.divisions.filter(d => d === p.filterDiv)
     return divs.map(d => ({
       div: d,
-      items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))),
+      items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))).sort(placeOrder),
     })).filter(x => x.items.length > 0)
-  }, [p.unscheduled, p.divisions, p.filterDiv, typeFilter, q])
+  }, [p.unscheduled, p.divisions, p.filterDiv, typeFilter, q, placeOrder])
   const lotCounts = useMemo(() => {
     const inDiv = p.unscheduled.filter(g => p.filterDiv === '__all__' || g.division === p.filterDiv)
     return { pool: inDiv.filter(g => !isBracket(g)).length, bracket: inDiv.filter(isBracket).length }
