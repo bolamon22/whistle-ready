@@ -27,6 +27,11 @@ export interface SGame {
   score2?: number | null
   /** Only played on a certain result (lib/ifNeeded); dropped otherwise. */
   ifNeeded?: boolean
+  /** true when the bracket itself names it "If needed" (so the toggle can't clear it) */
+  ifNeededFromBracket?: boolean
+  /** From the Bracket builder: the game's name and section (winners / consolation / ...) */
+  bracketLabel?: string
+  bracketSection?: string
 }
 export interface SField { venueName: string; fieldName: string; fullName: string; divRestrictions?: string[] }
 
@@ -157,6 +162,18 @@ function inkOn(hex: string): string {
 const IF_BORDER = '#7c3aed'
 function IfTag({ on, mini = false }: { on?: boolean; mini?: boolean }) {
   return <span title="If needed: only played on a certain result" className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-violet-300 text-violet-950' : 'bg-violet-100 text-violet-700'}`}>{mini ? 'If' : 'If needed'}</span>
+}
+// Consolation games (the bracket's consolation section): no title at stake, so
+// they can go wherever there's room once their feeders are set.
+function ConsTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
+  return <span title={`${g.bracketLabel || 'Consolation'}: consolation game, flexible on time`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-slate-300 text-slate-900' : 'bg-slate-200 text-slate-600'}`}>{mini ? 'Con' : 'Consolation'}</span>
+}
+const isCons = (g: SGame) => !g.ifNeeded && g.bracketSection === 'consolation'
+// Either marker, or nothing.
+function GameTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
+  if (g.ifNeeded) return <IfTag on={on} mini={mini} />
+  if (isCons(g)) return <ConsTag g={g} on={on} mini={mini} />
+  return null
 }
 const poolLabel = (pool: string) => (/pool|bracket/i.test(pool) ? pool : `Pool ${pool}`)
 
@@ -445,7 +462,7 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle }: 
       </div>
       {/* two rows of buttons, as many columns as needed, so the bar stays short */}
       <div className="grid grid-rows-2 grid-flow-col gap-1 flex-shrink-0 content-center">
-        {isBracket(sel) && p.onToggleIfNeeded && <button onClick={() => p.onToggleIfNeeded!(sel.id)} aria-pressed={!!sel.ifNeeded} title={sel.ifNeeded ? 'Marked If needed. Click to make it a regular game.' : 'Mark as If needed: only played on a certain result, e.g. if the 1 seed loses'} className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${sel.ifNeeded ? 'bg-violet-300 text-violet-950 hover:bg-violet-200' : 'border border-violet-300/70 text-violet-100 hover:bg-emerald-800'}`}>{sel.ifNeeded ? 'If needed ✓' : 'If needed'}</button>}
+        {isBracket(sel) && p.onToggleIfNeeded && <button onClick={() => p.onToggleIfNeeded!(sel.id)} aria-pressed={!!sel.ifNeeded} title={sel.ifNeededFromBracket ? `Named "${sel.bracketLabel}" in the bracket. Rename it there to change.` : sel.ifNeeded ? 'Marked If needed. Click to make it a regular game.' : 'Mark as If needed: only played on a certain result, e.g. if the 1 seed loses'} className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${sel.ifNeeded ? 'bg-violet-300 text-violet-950 hover:bg-violet-200' : 'border border-violet-300/70 text-violet-100 hover:bg-emerald-800'}`}>{sel.ifNeeded ? 'If needed ✓' : 'If needed'}</button>}
         {placed && p.onSwap && <button onClick={onSwapToggle} aria-pressed={swapArmed} title="Swap this game's slot with another game: click Swap, then the other game. Or drag this game onto it." className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${swapArmed ? 'bg-amber-300 text-amber-950 hover:bg-amber-200' : 'bg-emerald-200 text-emerald-950 hover:bg-emerald-100'}`}>{swapArmed ? 'Swapping…' : 'Swap'}</button>}
         {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100">Unschedule</button>}
         <button onClick={onCancel} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800">Cancel</button>
@@ -709,7 +726,7 @@ export function TimelineView(p: ViewsProps) {
         className={`${size} h-6 max-w-[200px] text-left rounded-md border pl-1.5 pr-2 inline-flex items-center gap-1 text-[10px] leading-none whitespace-nowrap overflow-hidden cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-2 ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
         style={{ borderLeft: `3px solid ${c}` }}>
         <b className={on ? 'text-white' : 'text-slate-800'}>{g.gameNumber}</b>
-        {g.ifNeeded && <IfTag on={on} mini />}
+        <GameTag g={g} on={on} mini />
         <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>{humanTeam(g.team1)} v {humanTeam(g.team2)}</span>
       </button>
     )
@@ -720,7 +737,7 @@ export function TimelineView(p: ViewsProps) {
         onClick={() => setSelId(on ? null : g.id)}
         className={`${size} text-left rounded-lg border px-2 py-1.5 transition-all cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-[3px] ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
         style={{ borderLeft: `4px solid ${c}` }}>
-        <div className={`flex items-center gap-1.5 text-[10px] whitespace-nowrap overflow-hidden ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={`truncate ${on ? 'text-white' : 'text-slate-800'}`}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}{g.ifNeeded && <IfTag on={on} />}</div>
+        <div className={`flex items-center gap-1.5 text-[10px] whitespace-nowrap overflow-hidden ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={`truncate ${on ? 'text-white' : 'text-slate-800'}`}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}<GameTag g={g} on={on} /></div>
         <div className={`text-xs font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}</div>
         <div className={`text-[11px] leading-tight truncate ${on ? 'text-slate-300' : 'text-slate-600'}`}>vs {humanTeam(g.team2)}</div>
       </button>
@@ -1215,7 +1232,7 @@ export function TimelineView(p: ViewsProps) {
         className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${fade}`}
         style={{ background: bg, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `1px solid ${k.border}` : g.ifNeeded ? `1px dashed ${IF_BORDER}` : '1px solid #e2e8f0', borderLeft: `4px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
         <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
-        {g.ifNeeded && <IfTag on={on} mini />}
+        <GameTag g={g} on={on} mini />
         {/* Count goes before each name: a long name truncates, and the count is the
             part Bo is reading for, so it must never be the part that gets cut. */}
         {/* Each name truncates on its own, so the second team's count survives a long first name. */}
@@ -1236,7 +1253,7 @@ export function TimelineView(p: ViewsProps) {
           <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
           <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : c }} title={g.division}>{p.divAbbr(g.division)}</span>
           {g.pool && <span className="truncate">{g.pool}</span>}
-          {g.ifNeeded && <IfTag on={on} />}
+          <GameTag g={g} on={on} />
           {g.isCanceled && <span className="ml-auto text-red-600 font-bold">CANC</span>}
         </div>
         <div className={`text-[11px] font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}{teamCount[teamKey(g.division, g.team1)] ? <span className={`font-normal ${on ? 'text-slate-400' : 'text-slate-500'}`}> ({teamCount[teamKey(g.division, g.team1)]})</span> : null}</div>

@@ -28,6 +28,9 @@ interface Game {
   score1?: number | null
   score2?: number | null
   ifNeeded?: boolean   // lib/ifNeeded: only played on a certain result
+  ifNeededFromBracket?: boolean
+  bracketLabel?: string
+  bracketSection?: string
 }
 
 interface Field {
@@ -700,6 +703,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   async function toggleIfNeeded(id: string) {
     const g = games.find(x => x.id === id)
     if (!g) return
+    if (g.ifNeededFromBracket) { toast(`${g.gameNumber} is named "${g.bracketLabel}" in the bracket. Rename it there to change it.`); return }
     const on = !g.ifNeeded
     setGames(prev => prev.map(x => x.id === id ? { ...x, ifNeeded: on } : x))
     const r = await fetch(`/api/tournaments/${params.id}/if-needed`, {

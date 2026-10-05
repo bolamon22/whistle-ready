@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
-import { getIfNeeded, withIfNeeded } from '@/lib/ifNeeded'
+import { getIfNeeded, withIfNeeded, bracketMeta } from '@/lib/ifNeeded'
 
 // Two audiences, two URLs:
 //   ?view=public  -> what the public schedule may show. Never includes staff
@@ -23,14 +23,16 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
       where: { tournamentId: params.id }, orderBy,
       include: { assignments:{ include:{ worker:true } } },
     })
-    return NextResponse.json(withIfNeeded(games, await getIfNeeded(params.id)), { headers: { 'Cache-Control': 'private, no-store' } })
+    const [ids, meta] = await Promise.all([getIfNeeded(params.id), bracketMeta(params.id)])
+    return NextResponse.json(withIfNeeded(games, ids, meta), { headers: { 'Cache-Control': 'private, no-store' } })
   }
-  const [games, vis, ifNeeded] = await Promise.all([
+  const [games, vis, ifNeeded, meta] = await Promise.all([
     prisma.game.findMany({ where: { tournamentId: params.id }, orderBy }),
     getPublicVisibility(params.id),
     getIfNeeded(params.id),
+    bracketMeta(params.id),
   ])
-  const out = withIfNeeded(applyPublicView(games, vis), ifNeeded).map(g => ({ ...g, assignments: [] as unknown[] }))
+  const out = withIfNeeded(applyPublicView(games, vis), ifNeeded, meta).map(g => ({ ...g, assignments: [] as unknown[] }))
   return NextResponse.json(out, {
     headers: { 'Cache-Control': publicView ? 'public, s-maxage=5, stale-while-revalidate=30' : 'private, no-store' },
   })
