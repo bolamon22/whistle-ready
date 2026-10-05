@@ -1137,7 +1137,12 @@ export function TimelineView(p: ViewsProps) {
     const k = KIND(worst)
     const on = selId === g.id, d = dim(g)
     const done = g.isCanceled || (g.score1 != null && g.score2 != null)
-    const bg = on ? '#0f172a' : d ? '#f8fafc' : worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
+    // Filtered-out games (another division, or pool vs bracket) used to go gray,
+    // and with a filter on most of the board lost its colors: Bo couldn't tell
+    // which division was which (Oct 5 2026). They now keep their division color
+    // and just fade; hovering brings one back to full strength.
+    const fade = d && !on ? 'opacity-60 hover:opacity-100' : done ? 'opacity-70' : ''
+    const bg = on ? '#0f172a' : worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
     const handlers = {
       draggable: true,
       'data-tl-game': g.id,
@@ -1151,9 +1156,9 @@ export function TimelineView(p: ViewsProps) {
     // In a minimized field or time: one line, game number in the division color.
     if (mini) return (
       <div key={g.id} {...handlers}
-        className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${done ? 'opacity-70' : ''}`}
-        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `3px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
-        <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
+        className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${fade}`}
+        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `4px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
+        <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
         {/* Count goes before each name: a long name truncates, and the count is the
             part Bo is reading for, so it must never be the part that gets cut. */}
         {/* Each name truncates on its own, so the second team's count survives a long first name. */}
@@ -1166,13 +1171,13 @@ export function TimelineView(p: ViewsProps) {
     )
     return (
       <div key={g.id} {...handlers}
-        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden transition-shadow ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${on ? '' : 'hover:shadow-md'} ${done ? 'opacity-70' : ''}`}
+        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden transition-shadow ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${on ? '' : 'hover:shadow-md'} ${fade}`}
         // Selected: dark card, but the division still shows: its stripe stays and the
         // selection ring takes the division color instead of a generic teal.
-        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : d ? '#f1f5f9' : '#e2e8f0'}`, borderLeft: `${on ? 5 : 4}px solid ${d && !on ? '#cbd5e1' : c}`, boxShadow: swapOver === g.id ? '0 0 0 3px #f59e0b' : on ? `0 0 0 3px ${c}66` : undefined }}>
+        style={{ background: bg, border: `1px solid ${on ? '#0f172a' : k && worst !== 'gap' ? k.border : '#e2e8f0'}`, borderLeft: `${on ? 5 : 4}px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 3px #f59e0b' : on ? `0 0 0 3px ${c}66` : undefined }}>
         <div className={`flex items-center gap-1 text-[9px] leading-none whitespace-nowrap ${on ? 'text-slate-300' : 'text-slate-500'}`}>
-          <b style={{ color: on ? '#fff' : d ? '#94a3b8' : c }}>{g.gameNumber}</b>
-          <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : d ? '#94a3b8' : c }} title={g.division}>{p.divAbbr(g.division)}</span>
+          <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
+          <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : c }} title={g.division}>{p.divAbbr(g.division)}</span>
           {g.pool && <span className="truncate">{g.pool}</span>}
           {g.isCanceled && <span className="ml-auto text-red-600 font-bold">CANC</span>}
         </div>
