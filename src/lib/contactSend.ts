@@ -89,3 +89,6 @@ export function wantsDoc(c: Pick<ContactView, 'needs' | 'gives' | 'category'>, k
 export const isEmail = (s: string) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[a-z]{2,}$/i.test(s.trim())
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
+/** Where a new certificate of insurance is requested (USA Lacrosse's form; WTW emails it back). Bo, Oct 5 2026. */
+export const COI_REQUEST_URL = 'https://www.usalacrosse.com/xtc2627'

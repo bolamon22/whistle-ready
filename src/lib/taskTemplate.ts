@@ -117,7 +117,12 @@ export const STARTER_TEMPLATE: TemplateItem[] = [
   { key: 'block', title: 'Hotel block with the housing partner', category: 'comms', offset: -84, link: 'travel' },
   { key: 'invite', title: 'Invite past clubs', category: 'comms', offset: -70, link: 'returningTeams' },
   { key: 'logos', title: 'Grant partner logo on the event page', category: 'grants', offset: -70, only: 'Events with a grant', suggest: ['monster mash', 'fall classic'], link: 'eventPage' },
-  { key: 'coi', title: 'Insurance certificate to the venue and grant partners', category: 'venue', offset: -70, link: 'documents' },
+  // Bo, Oct 5 2026: "make sure we save that website for COI for all future events".
+  { key: 'coi', title: 'Insurance certificate to the venue and grant partners', category: 'venue', offset: -70, link: 'documents', steps: [
+    'Request it at usalacrosse.com/xtc2627: Tournament, Third Party / Additional Insured, one request per holder',
+    'List every additional insured, plus the event, dates and venue, in Special instructions',
+    'When WTW emails it back: Contacts > Send a document > Certificate of insurance',
+  ] },
   { key: 'assigner', title: 'Confirm the officials assigner and rates', category: 'staff', offset: -56 },
   { key: 'awards', title: 'Order awards and banners (Lacrossewear)', category: 'awards', offset: -56 },
   { key: 'photo', title: 'Book the photographer', category: 'staff', offset: -56, link: 'photoBookings' },

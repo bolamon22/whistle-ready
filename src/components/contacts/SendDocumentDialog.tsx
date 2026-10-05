@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
-import { FileText, Paperclip, Send, Inbox, X } from 'lucide-react'
+import { ExternalLink, FileText, Paperclip, Send, Inbox, X } from 'lucide-react'
 import { announceTasksChanged, type TaskTournament } from '@/lib/taskTemplate'
 import type { ContactRow } from '@/lib/contactTypes'
-import { DOC_KINDS, MAX_ATTACHMENT_BYTES, docKind, draftEmail, isEmail, wantsDoc, type DocKind } from '@/lib/contactSend'
+import { COI_REQUEST_URL, DOC_KINDS, MAX_ATTACHMENT_BYTES, docKind, draftEmail, isEmail, wantsDoc, type DocKind } from '@/lib/contactSend'
 import { CatDot } from './ContactParts'
 
 // Send a document (a certificate of insurance, a W-9...) to the right event
@@ -150,6 +150,15 @@ export default function SendDocumentDialog({ contacts, tournaments, today, tourn
                 className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${kind === k.key ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>{k.label}</button>
             ))}
           </div>
+          {kind === 'coi' && (
+            <p className="-mt-2 text-xs text-slate-500">
+              Need a new certificate?{' '}
+              <a href={COI_REQUEST_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 font-semibold text-teal-700 hover:underline">
+                Request it from USA Lacrosse<ExternalLink size={11} />
+              </a>{' '}
+              (one per holder; list every additional insured in Special instructions). WTW emails it back.
+            </p>
+          )}
 
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">Event
