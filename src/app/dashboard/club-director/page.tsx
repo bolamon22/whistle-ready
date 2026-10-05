@@ -675,7 +675,7 @@ export default function ClubDirectorDashboard() {
       })()}
       {againFor && (
         <RegisterAgainDialog tournamentId={againFor.tournamentId} eventName={againFor.eventName} reg={againFor.reg}
-          initialEventId={againFor.eventId} showMoney={showMoney} staffView={staffView}
+          initialEventId={againFor.eventId} showMoney={showMoney} staffView={staffView} viewUserId={viewUserId}
           onClose={() => setAgainFor(null)} onRegistered={openNewEvent} />
       )}
 
@@ -1235,7 +1235,7 @@ export default function ClubDirectorDashboard() {
                 })()}
 
                 {regs[0] && selTournament && (
-                  <OtherEventsCard tournamentId={selTournament} teamCount={totalTeams} showMoney={showMoney}
+                  <OtherEventsCard tournamentId={selTournament} teamCount={totalTeams} showMoney={showMoney} viewUserId={viewUserId}
                     onRegister={eventId => setAgainFor({ tournamentId: selTournament, eventName: selTournamentName, reg: regs[0], eventId })} />
                 )}
               </div>

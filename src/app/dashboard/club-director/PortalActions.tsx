@@ -40,6 +40,13 @@ export type OtherEvent = {
 }
 
 const money = (n: number) => '$' + (Math.round((n || 0) * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+
+// The other events this club could register for. In staff view the club's own
+// login goes along as ?userId=, the way every other portal request does it;
+// without it the route answered for the staff member, who is in no club, and
+// "Bring your teams to another event" vanished from every View as (Oct 5 2026).
+const otherEventsUrl = (tournamentId: string, viewUserId = '') =>
+  `/api/club-director/events?tournamentId=${encodeURIComponent(tournamentId)}${viewUserId ? `&userId=${encodeURIComponent(viewUserId)}` : ''}`
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`
 
 /** "Oct 24" from a bare YYYY-MM-DD, without the UTC-midnight day slip. */
@@ -440,8 +447,10 @@ export function AddTeamDialog({ tournamentId, eventName, reg, event, showMoney, 
 /** One team on the form. `teamId` is the team it started from ('' for a new one). */
 type AgainRow = { key: string; teamId: string; on: boolean; teamName: string; division: string; coachName: string; coachEmail: string; editCoach: boolean }
 
-export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEventId, showMoney, staffView = false, onClose, onRegistered }: {
+export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEventId, showMoney, staffView = false, viewUserId = '', onClose, onRegistered }: {
   tournamentId: string; eventName: string; reg: AgainSource; initialEventId?: string; showMoney: boolean; staffView?: boolean
+  /** The club's login when staff are viewing its portal (?userId=). */
+  viewUserId?: string
   onClose: () => void; onRegistered: (newTournamentId: string) => void
 }) {
   const [events, setEvents] = useState<OtherEvent[] | null>(null)
@@ -464,11 +473,11 @@ export function RegisterAgainDialog({ tournamentId, eventName, reg, initialEvent
 
   useEffect(() => {
     let live = true
-    fetch(`/api/club-director/events?tournamentId=${encodeURIComponent(tournamentId)}`)
+    fetch(otherEventsUrl(tournamentId, viewUserId))
       .then(r => r.json()).then(d => { if (live) setEvents(Array.isArray(d?.events) ? d.events : []) })
       .catch(() => { if (live) setEvents([]) })
     return () => { live = false }
-  }, [tournamentId])
+  }, [tournamentId, viewUserId])
 
   const target = events?.find(e => e.id === targetId) || null
   // A team's division carries over when the new event offers one by the same
@@ -938,18 +947,21 @@ export function PortalPools({ pools, myTeams, scheduleLive }: {
 // The organizer's other events, on Overview
 // ---------------------------------------------------------------------------
 
-export function OtherEventsCard({ tournamentId, teamCount, showMoney, onRegister }: {
-  tournamentId: string; teamCount: number; showMoney: boolean; onRegister: (eventId: string) => void
+export function OtherEventsCard({ tournamentId, teamCount, showMoney, viewUserId = '', onRegister }: {
+  tournamentId: string; teamCount: number; showMoney: boolean
+  /** The club's login when staff are viewing its portal (?userId=). */
+  viewUserId?: string
+  onRegister: (eventId: string) => void
 }) {
   const [events, setEvents] = useState<OtherEvent[] | null>(null)
   useEffect(() => {
     let live = true
     setEvents(null)
-    fetch(`/api/club-director/events?tournamentId=${encodeURIComponent(tournamentId)}`)
+    fetch(otherEventsUrl(tournamentId, viewUserId))
       .then(r => r.ok ? r.json() : { events: [] }).then(d => { if (live) setEvents(Array.isArray(d?.events) ? d.events : []) })
       .catch(() => { if (live) setEvents([]) })
     return () => { live = false }
-  }, [tournamentId])
+  }, [tournamentId, viewUserId])
   if (!events || !events.length) return null
   const n = Math.max(1, teamCount)
   return (
