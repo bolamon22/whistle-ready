@@ -10,6 +10,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, ChevronRight, Users, Upload, Search, Mail, Star, Trophy, Download, Archive } from 'lucide-react'
+import { canon } from '@/lib/clubCanon'
+import ProspectsPanel from './ProspectsPanel'
 
 interface Hist { event:string; year:number; teams:number; paid:number; divisions:string[] }
 interface Club {
@@ -44,11 +46,6 @@ function yearOf(v:any):number|null{
   if(v==null||v==='') return null
   if(typeof v==='number'&&v>20000&&v<80000){ const d=new Date(Date.UTC(1899,11,30)+v*86400000); return d.getUTCFullYear() }
   const m=String(v).match(/20\d{2}/); return m?+m[0]:null
-}
-function canon(name:string){
-  let s=(name||'').toLowerCase().replace(/[^a-z0-9]/g,'')
-  for(const suf of ['lacrosseclub','lacrosse','laxclub','lax','lc','club']){ if(s.endsWith(suf)&&s.length>suf.length+2){ s=s.slice(0,-suf.length); break } }
-  return s||(name||'').toLowerCase().trim()
 }
 async function buildFromFiles(files:FileList):Promise<{clubs:Club[];skipped:string[]}>{
   // load SheetJS on demand
@@ -178,6 +175,7 @@ function ClubsInner(){
   const [showArchived,setShowArchived]=useState(false)
   const [expanded,setExpanded]=useState<string|null>(null)
   const [updatedAt,setUpdatedAt]=useState<string|null>(null)
+  const [tab,setTab]=useState<'clubs'|'prospects'>('clubs')
 
   useEffect(()=>{ if(status==='unauthenticated') router.replace('/login') },[status,router])
   useEffect(()=>{ fetch(`/api/org-clubs${q}`).then(r=>r.json()).then(d=>{ setClubs(d.clubs||[]); setUpdatedAt(d.updatedAt||null); setLoading(false) }).catch(()=>setLoading(false)) },[q])
@@ -259,19 +257,33 @@ function ClubsInner(){
         <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Users size={22} className="text-teal-600"/> Club database</h1>
           <div className="flex items-center gap-2">
-            {clubs.length>0 && (
+            {tab==='clubs' && clubs.length>0 && (
               <button onClick={async()=>{ if(!confirm('Clear the whole club database? You can rebuild it by importing again.')) return; await fetch(`/api/org-clubs${q}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clubs:[]})}); setClubs([]); setUpdatedAt(new Date().toISOString()); toast.success('Database cleared') }}
                 className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-50">Clear</button>
             )}
+            {tab==='clubs' && (
             <label className={`cursor-pointer inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg px-4 py-2 ${importing?'opacity-50 pointer-events-none':''}`}>
               <Upload size={15}/>{importing?'Importing…':clubs.length?'Import more':'Import registration exports'}
               <input type="file" multiple accept=".xlsx" className="hidden" disabled={importing} onChange={e=>{ onImport(e.target.files); e.currentTarget.value='' }}/>
             </label>
+            )}
           </div>
         </div>
-        <p className="text-sm text-slate-500 mb-4">Every club that has registered, with their full history. Import your registration spreadsheets — you can select several at once, or add them one at a time and they <b>add up</b> (re-importing a file just refreshes that event){updatedAt?` · last updated ${new Date(updatedAt).toLocaleDateString()}`:''}.</p>
+        {/* Customers we have, and the ones we want. Kept in one place so a name
+            can be checked against both without leaving the page. */}
+        <div className="flex bg-slate-100 rounded-lg p-0.5 w-fit mb-4">
+          {([['clubs','Clubs'],['prospects','Prospects']] as const).map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} className={`text-sm px-4 py-1.5 rounded-md transition-colors ${tab===k?'bg-white shadow text-teal-700 font-semibold':'text-slate-500 hover:text-slate-700'}`}>{l}</button>
+          ))}
+        </div>
 
-        {clubs.length===0 ? (
+        {tab==='clubs' && <p className="text-sm text-slate-500 mb-4">Every club that has registered, with their full history. Import your registration spreadsheets — you can select several at once, or add them one at a time and they <b>add up</b> (re-importing a file just refreshes that event){updatedAt?` · last updated ${new Date(updatedAt).toLocaleDateString()}`:''}.</p>}
+
+        {tab==='prospects' ? (
+          <ProspectsPanel q={q}
+            clubNames={new Set(clubs.map(c=>canon(c.club)))}
+            clubEmails={new Set(clubs.map(c=>(c.email||'').toLowerCase()).filter(Boolean))}/>
+        ) : clubs.length===0 ? (
           <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
             <Users size={36} className="mx-auto text-slate-300 mb-3"/>
             <p className="text-slate-600 font-medium">No clubs yet</p>
