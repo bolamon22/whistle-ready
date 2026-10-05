@@ -264,22 +264,30 @@ function IssueBadge({ kind, count }: { kind: IssueKind; count: number }) {
 // The division chips fold to one line while you work one division: just that chip
 // (with an x to clear) and a "Divisions" button to reopen the full row. Picking a
 // chip folds the row; clearing it opens it again.
-function DivisionChips({ p, counts, open, setOpen }: { p: ViewsProps; counts: Record<string, DivCount>; open: boolean; setOpen: (o: boolean) => void }) {
-  const active = p.filterDiv !== '__all__' ? p.filterDiv : null
+interface Focus { divs: Set<string> | null; toggle: (d: string) => void; only: (d: string) => void; clear: () => void }
+function DivisionChips({ p, counts, open, setOpen, focus }: { p: ViewsProps; counts: Record<string, DivCount>; open: boolean; setOpen: (o: boolean) => void; focus: Focus }) {
+  // "+" opens the row in add mode: each chip click then adds or removes a division
+  // instead of switching to it (Shift/Ctrl-click does the same any time).
+  const [adding, setAdding] = useState(false)
+  const active = focus.divs ? p.divisions.filter(d => focus.divs!.has(d)) : []
   if (!open) {
     return (
-      <div className="flex items-center gap-1.5">
-        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border bg-white text-slate-700 border-slate-200 hover:border-slate-300" title="Show every division">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button onClick={() => { setAdding(false); setOpen(true) }} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border bg-white text-slate-700 border-slate-200 hover:border-slate-300" title="Show every division">
           Divisions <span className="font-medium text-slate-400">{p.divisions.length}</span> <ChevronDown size={12} className="text-slate-400" />
         </button>
-        {active ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-1 py-1 rounded-full border" style={{ background: p.divColor(active), borderColor: p.divColor(active), color: '#fff' }}>
+        {active.length ? active.map(d => (
+          <span key={d} className="inline-flex items-center gap-1.5 text-xs font-bold pl-2 pr-1 py-1 rounded-full border" style={{ background: p.divColor(d), borderColor: p.divColor(d), color: inkOn(p.divColor(d)) }}>
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(255,255,255,.85)' }} />
-            {active}<span className="font-medium opacity-70">{counts[active]?.done ?? 0}/{counts[active]?.total ?? 0}</span>
-            <button onClick={() => { p.setFilterDiv('__all__'); setOpen(true) }} aria-label="Show all divisions" className="ml-0.5 w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/20"><X size={11} /></button>
+            {active.length > 2 ? p.divAbbr(d) : d}<span className="font-medium opacity-70">{counts[d]?.done ?? 0}/{counts[d]?.total ?? 0}</span>
+            <button onClick={() => { focus.toggle(d); if (active.length === 1) setOpen(true) }} aria-label={`Remove ${d}`} title={active.length === 1 ? 'Show all divisions' : `Remove ${d}`} className="ml-0.5 w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/20"><X size={11} /></button>
           </span>
-        ) : (
+        )) : (
           <span className="text-xs text-slate-500">All divisions</span>
+        )}
+        {active.length > 0 && (
+          <button onClick={() => { setAdding(true); setOpen(true) }} title="Add another division to the view" aria-label="Add another division"
+            className="w-6 h-6 rounded-full border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-800 flex items-center justify-center text-sm leading-none">+</button>
         )}
       </div>
     )
@@ -287,10 +295,10 @@ function DivisionChips({ p, counts, open, setOpen }: { p: ViewsProps; counts: Re
   // The open row is capped at two lines so the board keeps its height. A hidden copy
   // with full names is measured at the row's width; when it would need a third line
   // the chips switch to the division abbreviations (full name on hover).
-  return <OpenChips p={p} counts={counts} setOpen={setOpen} />
+  return <OpenChips p={p} counts={counts} setOpen={o => { if (!o) setAdding(false); setOpen(o) }} focus={focus} adding={adding} />
 }
 
-function OpenChips({ p, counts, setOpen }: { p: ViewsProps; counts: Record<string, DivCount>; setOpen: (o: boolean) => void }) {
+function OpenChips({ p, counts, setOpen, focus, adding }: { p: ViewsProps; counts: Record<string, DivCount>; setOpen: (o: boolean) => void; focus: Focus; adding: boolean }) {
   const probeRef = useRef<HTMLDivElement>(null)
   const [short, setShort] = useState(false)
   useLayoutEffect(() => {
@@ -307,15 +315,23 @@ function OpenChips({ p, counts, setOpen }: { p: ViewsProps; counts: Record<strin
   const anyStage = p.divisions.some(d => divStage(counts[d]))
   const row = (abbr: boolean, live: boolean) => (<>
     <button tabIndex={live ? 0 : -1} onClick={() => setOpen(false)} aria-label="Collapse the division row" title="Collapse" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronUp size={14} /></button>
-    <button tabIndex={live ? 0 : -1} onClick={() => p.setFilterDiv('__all__')}
+    <button tabIndex={live ? 0 : -1} onClick={focus.clear}
       className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors ${p.filterDiv === '__all__' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>All</button>
     {p.divisions.map(d => {
-      const on = p.filterDiv === d, c = p.divColor(d)
+      const on = !!focus.divs?.has(d), c = p.divColor(d)
       const stage = divStage(counts[d]), st = stage ? STAGE[stage] : null
+      const only = on && focus.divs!.size === 1
       return (
-        <button key={d} tabIndex={live ? 0 : -1} onClick={() => { p.setFilterDiv(on ? '__all__' : d); if (!on) setOpen(false) }} title={[abbr ? d : null, teamsNote(counts[d], true), st?.title].filter(Boolean).join(' · ')}
+        <button key={d} tabIndex={live ? 0 : -1}
+          onClick={e => {
+            // add mode, or Shift/Ctrl/Cmd-click with something picked: add or remove this one
+            if (focus.divs && (adding || e.shiftKey || e.ctrlKey || e.metaKey)) { focus.toggle(d); return }
+            if (only) { focus.clear(); return }
+            focus.only(d); setOpen(false)
+          }}
+          title={[abbr ? d : null, teamsNote(counts[d], true), st?.title, focus.divs && !adding ? 'Shift-click to add to the view' : null].filter(Boolean).join(' · ')}
           className={`inline-flex items-center gap-1.5 text-xs font-bold pl-2 ${abbr ? 'pr-2.5' : 'pr-3'} py-1 rounded-full border transition-colors whitespace-nowrap`}
-          style={on ? { background: c, borderColor: c, color: '#fff' } : st ? { background: st.bg, borderColor: st.border, color: st.text } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
+          style={on ? { background: c, borderColor: c, color: inkOn(c) } : st ? { background: st.bg, borderColor: st.border, color: st.text } : { background: '#fff', borderColor: '#e2e8f0', color: '#334155' }}>
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? 'rgba(255,255,255,.85)' : c }} />
           {abbr ? p.divAbbr(d) : d}
           {stage === 'complete'
@@ -324,6 +340,9 @@ function OpenChips({ p, counts, setOpen }: { p: ViewsProps; counts: Record<strin
         </button>
       )
     })}
+    {adding && live && (
+      <button onClick={() => setOpen(false)} className="text-xs font-bold px-3 py-1 rounded-full bg-slate-900 text-white hover:bg-slate-700">Done</button>
+    )}
     {anyStage && !abbr && (
       <span className="inline-flex items-center gap-2.5 ml-1 text-[10px] text-slate-400 whitespace-nowrap">
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border" style={{ background: STAGE.pools.bg, borderColor: STAGE.pools.border }} />pools placed</span>
@@ -563,7 +582,32 @@ export function TimelineView(p: ViewsProps) {
 
   // A division chip and the Pool/Bracket toggle narrow the unscheduled list to just
   // that; on the board the same games stay put but fade, so nothing moves under you.
-  const dim = (g: SGame) => (p.filterDiv !== '__all__' && g.division !== p.filterDiv) || !matchesType(g, typeFilter)
+  // More than one division in focus (Bo, Oct 5 2026): p.filterDiv is the first one
+  // (it drives the page's Division select too); `moreDivs` are the ones added with
+  // "+" or Shift/Ctrl-click on a chip. Changed from outside (the page's select),
+  // the extras drop.
+  const [moreDivs, setMoreDivs] = useState<string[]>([])
+  const keepMore = useRef(false)
+  useEffect(() => { if (keepMore.current) keepMore.current = false; else setMoreDivs([]) }, [p.filterDiv])
+  const focusDivs = useMemo(() => p.filterDiv === '__all__' ? null : new Set([p.filterDiv, ...moreDivs]), [p.filterDiv, moreDivs])
+  const focus: Focus = {
+    divs: focusDivs,
+    toggle: (d: string) => {
+      if (!focusDivs) { p.setFilterDiv(d); return }
+      if (!focusDivs.has(d)) { setMoreDivs(m => [...m, d]); return }
+      if (d !== p.filterDiv) { setMoreDivs(m => m.filter(x => x !== d)); return }
+      // removing the first one: the next becomes first, or back to all
+      const [next, ...rest] = moreDivs
+      if (next) { keepMore.current = true; setMoreDivs(rest); p.setFilterDiv(next) } else p.setFilterDiv('__all__')
+    },
+    only: (d: string) => { setMoreDivs([]); p.setFilterDiv(d) },
+    clear: () => { setMoreDivs([]); p.setFilterDiv('__all__') },
+  }
+  // Another division: grayed right down, so the ones in focus stand alone. Same
+  // division, other game type (the Pool/Bracket toggle): only faded, colors kept.
+  const divOut = (g: SGame) => !!focusDivs && !focusDivs.has(g.division)
+  const typeOut = (g: SGame) => !matchesType(g, typeFilter)
+  const dim = (g: SGame) => divOut(g) || typeOut(g)
   const tint = (div: string) => p.divColor(div) + '1f'
 
   // games per team in its division (the "(n)" counts on cards)
@@ -621,16 +665,16 @@ export function TimelineView(p: ViewsProps) {
   // unscheduled, grouped by division, filtered by search, in placing order
   const lot = useMemo(() => {
     const ql = q.trim().toLowerCase()
-    const divs = p.filterDiv === '__all__' ? p.divisions : p.divisions.filter(d => d === p.filterDiv)
+    const divs = focusDivs ? p.divisions.filter(d => focusDivs.has(d)) : p.divisions
     return divs.map(d => ({
       div: d,
       items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))).sort(placeOrder),
     })).filter(x => x.items.length > 0)
-  }, [p.unscheduled, p.divisions, p.filterDiv, typeFilter, q, placeOrder])
+  }, [p.unscheduled, p.divisions, focusDivs, typeFilter, q, placeOrder])
   const lotCounts = useMemo(() => {
-    const inDiv = p.unscheduled.filter(g => p.filterDiv === '__all__' || g.division === p.filterDiv)
+    const inDiv = p.unscheduled.filter(g => !focusDivs || focusDivs.has(g.division))
     return { pool: inDiv.filter(g => !isBracket(g)).length, bracket: inDiv.filter(isBracket).length }
-  }, [p.unscheduled, p.filterDiv])
+  }, [p.unscheduled, focusDivs])
 
   const dropTarget = (e: React.DragEvent) => e.dataTransfer.getData('gameId') || dragId
   // Dragging a placed game onto the unscheduled list (open or collapsed) takes it off
@@ -692,8 +736,8 @@ export function TimelineView(p: ViewsProps) {
           {p.filterDiv !== '__all__' && (
             <span className="px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 inline-flex items-center gap-1.5 text-[11px] text-slate-600">
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.divColor(p.filterDiv) }} />
-              Only <b className="text-slate-800">{p.filterDiv}</b>
-              <button onClick={() => p.setFilterDiv('__all__')} className="font-semibold text-teal-700 hover:underline">Show all</button>
+              Only <b className="text-slate-800">{p.filterDiv}</b>{moreDivs.length > 0 && <span title={moreDivs.join(', ')}> + {moreDivs.length} more</span>}
+              <button onClick={focus.clear} className="font-semibold text-teal-700 hover:underline">Show all</button>
             </span>
           )}
           <button onClick={() => setLotMini(!lotMini)} aria-pressed={lotMini} aria-label={lotMini ? 'Show full game cards' : 'Compact: one line per game'} title={lotMini ? 'Show full game cards' : 'Compact: one line per game'} className={`ml-auto w-6 h-6 rounded-md flex items-center justify-center ${lotMini ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}>{lotMini ? <UnfoldVertical size={14} /> : <FoldVertical size={14} />}</button>
@@ -815,8 +859,8 @@ export function TimelineView(p: ViewsProps) {
           {p.filterDiv !== '__all__' && (
             <div className="mx-3 mb-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-2 text-[11px] text-slate-600">
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.divColor(p.filterDiv) }} />
-              <span className="truncate flex-1">Only <b className="text-slate-800">{p.filterDiv}</b></span>
-              <button onClick={() => p.setFilterDiv('__all__')} className="font-semibold text-teal-700 hover:underline flex-shrink-0">Show all</button>
+              <span className="truncate flex-1">Only <b className="text-slate-800">{p.filterDiv}</b>{moreDivs.length > 0 && <span title={moreDivs.join(', ')}> + {moreDivs.length} more</span>}</span>
+              <button onClick={focus.clear} className="font-semibold text-teal-700 hover:underline flex-shrink-0">Show all</button>
             </div>
           )}
           <div className="flex-1 overflow-auto px-2 pb-3 space-y-2">
@@ -859,7 +903,7 @@ export function TimelineView(p: ViewsProps) {
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {lotTop && renderLotStrip()}
         <div className="px-3 py-1.5 flex items-start gap-2 bg-white border-b border-slate-200 flex-shrink-0">
-          <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} /></div>
+          <div className="flex-1 min-w-0 pt-0.5"><DivisionChips p={p} counts={counts} open={chipsOpen} setOpen={setChipsOpen} focus={focus} /></div>
           <div className="flex-shrink-0 flex items-center gap-0.5 pt-1 text-slate-500" title="Zoom the board">
             <button onClick={() => setZoom(zoom - 0.1)} disabled={zoom <= 0.5} aria-label="Zoom out" className="w-6 h-6 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-sm leading-none">−</button>
             <button onClick={() => setZoom(1)} aria-label="Reset zoom" title="Back to 100%" className="w-10 text-[11px] font-semibold tabular-nums text-center hover:text-slate-900">{Math.round(zoom * 100)}%</button>
@@ -1141,7 +1185,7 @@ export function TimelineView(p: ViewsProps) {
     // and with a filter on most of the board lost its colors: Bo couldn't tell
     // which division was which (Oct 5 2026). They now keep their division color
     // and just fade; hovering brings one back to full strength.
-    const fade = d && !on ? 'opacity-60 hover:opacity-100' : done ? 'opacity-70' : ''
+    const fade = on ? '' : divOut(g) ? 'grayscale opacity-40 hover:grayscale-0 hover:opacity-100' : d ? 'opacity-60 hover:opacity-100' : done ? 'opacity-70' : ''
     const bg = on ? '#0f172a' : worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
     const handlers = {
       draggable: true,

@@ -10,6 +10,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { closuresOf, isFieldClosedAt, fieldClosure, closureLabel, withClosure, blockedKeys, isAllDay, type Closure } from '@/lib/fieldClosures'
 import { divisionAbbr, teamRefKey } from '@/lib/names'
+import { divisionColorMap } from '@/lib/divisionColors'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban, PanelTop, Undo2 } from 'lucide-react'
 
 interface Game {
@@ -72,10 +73,9 @@ function getLuma(hex: string) {
 }
 function textColor(hex: string) { return getLuma(hex) > 0.35 ? '#1e293b' : '#ffffff' }
 
-function divColor(div: string, divs: string[], colorMap: Record<string, string> = {}) {
-  if (colorMap[div]) return colorMap[div]
-  const i = divs.indexOf(div)
-  return PALETTE[i % PALETTE.length] ?? PALETTE[0]
+// Distinct per division and the same as the Divisions page (lib/divisionColors).
+function divColor(div: string, colors: Record<string, string>) {
+  return colors[div] ?? PALETTE[0]
 }
 
 function hmToMin(s: string): number { const p = String(s || '').split(':'); const h = parseInt(p[0]); const m = parseInt(p[1] || '0'); return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m) }
@@ -846,6 +846,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const divisions = [...new Set(games.map(g => g.division))].sort()
+  const colorsByDiv = divisionColorMap(divisions, divColorMap)
   const divGameCounts = divisions.reduce((acc, d) => {
     acc[d] = games.filter(g => g.division === d).length
     return acc
@@ -1941,7 +1942,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                 {[0,1,2,3].map(i => {
                   const id = scratchPad[i]
                   const game = id ? games.find(g => g.id === id) : null
-                  const color = game ? divColor(game.division, divisions, divColorMap) : ''
+                  const color = game ? divColor(game.division, colorsByDiv) : ''
                   return (
                     <div key={i}
                       className={`w-20 h-11 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors
@@ -1987,7 +1988,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                   {unscheduled.length === 0 ? <span className="inline-flex items-center gap-1"><CheckCircle2 size={14} /> All games scheduled!</span> : 'No games match filter'}
                 </p>
               ) : filteredSorted.map(g => {
-                const color = divColor(g.division, divisions, divColorMap)
+                const color = divColor(g.division, colorsByDiv)
                 const hasConflict = conflictMsgs.has(g.id)
                 const hasB2B = !hasConflict && backToBackMsgs.has(g.id)
                 const isLotOver = lotDragOver === g.id
@@ -2066,7 +2067,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               {[0,1,2,3].map(i => {
                 const id = scratchPad[i]
                 const game = id ? games.find(g => g.id === id) : null
-                const color = game ? divColor(game.division, divisions, divColorMap) : ''
+                const color = game ? divColor(game.division, colorsByDiv) : ''
                 return (
                   <div key={i}
                     className={`h-11 rounded border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors
@@ -2100,7 +2101,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                 {unscheduled.length === 0 ? <span className="inline-flex items-center gap-1"><CheckCircle2 size={14} /> All scheduled!</span> : 'No matches'}
               </p>
             ) : filteredSorted.map(g => {
-              const color = divColor(g.division, divisions, divColorMap)
+              const color = divColor(g.division, colorsByDiv)
               const hasConflict = conflictMsgs.has(g.id)
               const hasB2B = !hasConflict && backToBackMsgs.has(g.id)
               return (
@@ -2242,7 +2243,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         (() => {
           const viewProps = {
             games, dayGames, unscheduled, activeDate, slots, fields: visibleFields, divisions, increment,
-            divColor: (d: string) => divColor(d, divisions, divColorMap), fmtTime, divAbbr,
+            divColor: (d: string) => divColor(d, colorsByDiv), fmtTime, divAbbr,
             issues: { conflict: conflictMsgs, b2b: backToBackMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
             filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
             // Awaited so the Board picks the next game only once this one is on the board
@@ -2346,7 +2347,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                               ${!matchesGrid ? 'opacity-20' : 'hover:brightness-110'}
                               ${isSwapSource ? 'ring-2 ring-white ring-offset-1 brightness-125' : ''}
                             `}
-                            style={{ backgroundColor: divColor(game.division, divisions, divColorMap), color: textColor(divColor(game.division, divisions, divColorMap)) }}
+                            style={{ backgroundColor: divColor(game.division, colorsByDiv), color: textColor(divColor(game.division, colorsByDiv)) }}
                           >
                             {(() => {
                               const b = conflictMsgs.has(game.id) ? { cls: 'bg-red-500 text-white', icon: <AlertTriangle size={12} /> }

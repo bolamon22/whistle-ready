@@ -9,6 +9,7 @@ import ShortTeamsBanner from '@/components/ShortTeamsBanner'
 import { findShortTeams, describeFinding, isPlaceholder, type BalanceGame } from '@/lib/gameBalance'
 import { poolKey } from '@/lib/poolNames'
 import { nameKey } from '@/lib/names'
+import { divisionColorMap } from '@/lib/divisionColors'
 import BracketBuilder from './BracketBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
@@ -55,6 +56,8 @@ export default function DivisionsPage() {
   const [loading, setLoading] = useState(true)
   const [loadingDiv, setLoadingDiv] = useState(false)
   const [divColors, setDivColors] = useState<Record<string, string>>({})
+  // Same distinct colors as the Scheduler (lib/divisionColors), not palette-by-position.
+  const colorOf = (name: string | null | undefined) => (name ? divisionColorMap(divisions.map(d => d.name), divColors)[name] : undefined) ?? PALETTE[0]
   const [poolGames, setPoolGames] = useState<PoolGame[]>([])
   const [teamFilter, setTeamFilter] = useState('')
   // Manual add. Open for one pool at a time; the pool is implied by which card's
@@ -1018,7 +1021,7 @@ if (loading) return (
                       {renamingDiv === div.name ? (
                         <div className="flex items-center gap-1 px-2 py-2" onClick={e => e.stopPropagation()}>
                           <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm ml-2"
-                            style={{ backgroundColor: divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length] }} />
+                            style={{ backgroundColor: colorOf(div.name) }} />
                           <input
                             autoFocus
                             value={renameValue}
@@ -1042,7 +1045,7 @@ if (loading) return (
                             <div className="flex items-center gap-2">
                               <span
                                 className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm"
-                                style={{ backgroundColor: divColors[div.name] || PALETTE[divisions.indexOf(div) % PALETTE.length] }}
+                                style={{ backgroundColor: colorOf(div.name) }}
                               />
                               <p className={`text-sm font-semibold truncate ${activeDiv === div.name ? 'text-teal-700' : 'text-slate-700'}`}>{div.name}</p>
                               {/* Beside the NAME, not down with the count pills: the
@@ -1303,7 +1306,7 @@ if (loading) return (
                     screen, and nothing on the content side said the name. */}
                 <div className="flex items-center gap-2.5 mb-3 min-w-0">
                   <span className="inline-block w-3.5 h-3.5 rounded-full flex-shrink-0 border border-white shadow-sm"
-                    style={{ backgroundColor: divColors[activeDiv] || PALETTE[Math.max(0, divisions.findIndex(d => d.name === activeDiv)) % PALETTE.length] }} />
+                    style={{ backgroundColor: colorOf(activeDiv) }} />
                   <h2 className="text-lg font-bold text-slate-800 truncate">{activeDiv}</h2>
                   <span className="text-xs text-slate-400 flex-shrink-0">
                     {teams.length} team{teams.length !== 1 ? 's' : ''} · {pools.length} pool{pools.length !== 1 ? 's' : ''}
@@ -1383,17 +1386,17 @@ if (loading) return (
                           <label className="relative cursor-pointer" title="Division color">
                             <span
                               className="block w-6 h-6 rounded-full border-2 border-white shadow ring-1 ring-slate-200 cursor-pointer"
-                              style={{ backgroundColor: divColors[activeDiv] || PALETTE[divisions.findIndex(d => d.name === activeDiv) % PALETTE.length] }}
+                              style={{ backgroundColor: colorOf(activeDiv) }}
                             />
                             <input
                               type="color"
-                              value={divColors[activeDiv] || PALETTE[divisions.findIndex(d => d.name === activeDiv) % PALETTE.length]}
+                              value={colorOf(activeDiv)}
                               onChange={e => saveDivColor(activeDiv, e.target.value)}
                               className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                               title="Change division color"
                             />
                           </label>
-                          <span className="text-[11px] text-slate-400 font-mono">{divColors[activeDiv] || PALETTE[divisions.findIndex(d => d.name === activeDiv) % PALETTE.length]}</span>
+                          <span className="text-[11px] text-slate-400 font-mono">{colorOf(activeDiv)}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
