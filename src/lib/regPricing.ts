@@ -145,6 +145,21 @@ export function calcFee(teams: { division?: string; waitlisted?: boolean }[], p:
   return total
 }
 
+/** calcFee one line per team, for an itemized invoice (lib/invoicePdf). The same
+ *  rules, so the lines add up to calcFee for the same teams and date: a team on
+ *  the waiting list is listed at 0 and still counts toward the volume tier. */
+export function calcFeeLines<T extends { division?: string; waitlisted?: boolean }>(teams: T[], p: RegPricing, asOf?: string): { team: T; amount: number }[] {
+  const when = asOf || todayISO()
+  const regularCount = teams.filter(t => !matchedFlat(p.flats, t.division)).length
+  const regRate = rateForCount(p.tiers, regularCount)
+  return teams.map(t => {
+    if (t.waitlisted) return { team: t, amount: 0 }
+    const f = matchedFlat(p.flats, t.division)
+    const base = f ? f.price : regRate
+    return { team: t, amount: Math.max(0, base - dateDiscount(base, p.dates, when)) }
+  })
+}
+
 const fmtMoney = (n: number) => '$' + (n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
 const fmtDate = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); const dt = new Date(+y, +m - 1, +day); return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
 
