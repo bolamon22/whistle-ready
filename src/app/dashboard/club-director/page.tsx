@@ -269,12 +269,13 @@ export default function ClubDirectorDashboard() {
     setHistoryLoading(false)
   }
 
-  // One message, under the tab that is already about that thing.
+  // One message, at the foot of the tab that is already about that thing:
+  // below the information, never above it (Bo, Oct 5 2026).
   const draftsFor = (key: 'waivers' | 'coaches' | 'hotel', heading: string) => {
     const picked = familyMsgs.filter(m => m.key === key)
     if (!picked.length) return null
     return (
-      <div className="pt-1">
+      <div className="pt-3">
         <p className="text-[11px] font-bold tracking-wide text-slate-400 mb-2">{heading}</p>
         <FamilyMessages messages={picked} />
       </div>
@@ -1195,7 +1196,6 @@ export default function ClubDirectorDashboard() {
             {tab === 'coaches' && (
               <div className="space-y-3">
                 <SharedNameNote clubs={data?.sharedClubs || []} />
-                {draftsFor('coaches', 'READY TO SEND YOUR COACHES')}
                 <p className="text-sm text-gray-500">
                   {coachesSigned} of {coachRows.length} team coach{coachRows.length === 1 ? '' : 'es'} {coachesSigned === 1 ? 'has' : 'have'} filed a waiver.
                   {coachesSigned < coachRows.length && ' The ones still outstanding are marked below.'}
@@ -1314,6 +1314,11 @@ export default function ClubDirectorDashboard() {
                     </div>
                   </div>
                 )}
+
+                {/* The letter comes after the list. Directors open this tab to see
+                    who has filed, and a full message above it pushed that out of
+                    sight (Bo, Oct 5 2026). */}
+                {draftsFor('coaches', 'READY TO SEND YOUR COACHES')}
               </div>
             )}
 
@@ -1326,7 +1331,6 @@ export default function ClubDirectorDashboard() {
             {tab === 'players' && (
               <div className="space-y-3">
                 <SharedNameNote clubs={data?.sharedClubs || []} />
-                {draftsFor('waivers', 'READY TO SEND YOUR FAMILIES')}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-gray-500">
                     {waivers.length} waiver{waivers.length === 1 ? '' : 's'} filed across your {teamRows.length} team{teamRows.length === 1 ? '' : 's'}.
@@ -1515,6 +1519,9 @@ export default function ClubDirectorDashboard() {
                 {teamRows.length === 0 && (
                   <div className="bg-white border border-gray-200 rounded-xl px-4 py-8 text-center text-gray-400">No teams registered yet</div>
                 )}
+
+                {/* After the rosters, for the same reason as the coach letter. */}
+                {draftsFor('waivers', 'READY TO SEND YOUR FAMILIES')}
               </div>
             )}
 
