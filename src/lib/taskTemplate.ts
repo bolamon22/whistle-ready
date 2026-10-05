@@ -41,6 +41,9 @@ export type TaskView = {
   tracked: { label: string; done?: boolean } | null
   /** Checklist rows: items checked off out of how many. */
   progress?: { done: number; total: number }
+  /** The event contact this task depends on (Event contacts), or ''. */
+  contactId?: string
+  contactName?: string
 }
 
 export type TaskTournament = { id: string; name: string; logoUrl: string; firstDay: string; lastDay: string; location: string }

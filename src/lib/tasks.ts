@@ -61,8 +61,11 @@ export function ensureTaskTable(): Promise<void> {
         "autoDoneAt" TEXT NOT NULL DEFAULT '',
         "createdBy" TEXT NOT NULL DEFAULT '',
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "contactId" TEXT NOT NULL DEFAULT ''
       )`)
+      // Tables made before Event contacts (Oct 2026) get the column here.
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgTask" ADD COLUMN "contactId" TEXT NOT NULL DEFAULT ''`) } catch { /* already there */ }
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgTask_org" ON "OrgTask"("orgId", "done")`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgTask_tournament" ON "OrgTask"("tournamentId")`)
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "OrgTask_template" ON "OrgTask"("tournamentId", "templateKey") WHERE "templateKey" <> ''`)
@@ -107,6 +110,7 @@ function toRow(r: Record<string, unknown>): Row {
     doneBy: String(r.doneBy || ''),
     autoDoneAt: String(r.autoDoneAt || ''),
     tracked: null,
+    contactId: String(r.contactId || ''),
   }
 }
 
@@ -120,7 +124,10 @@ export function view(r: Row): TaskView {
 export async function getTask(id: string): Promise<Row | null> {
   await ensureTaskTable()
   const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(`SELECT * FROM "OrgTask" WHERE id = ?`, id)
-  return rows[0] ? toRow(rows[0]) : null
+  if (!rows[0]) return null
+  const row = toRow(rows[0])
+  await attachContactNames([row])
+  return row
 }
 
 export function inScope(scope: Scope, orgId: string): boolean {
@@ -166,25 +173,26 @@ export async function orgForNewTask(scope: Scope, tournamentId: string): Promise
 
 export async function createTask(input: {
   orgId: string; tournamentId: string; title: string; category?: unknown; dueDate?: unknown
-  notes?: unknown; steps?: unknown; templateKey?: string; link?: string; createdBy: string
+  notes?: unknown; steps?: unknown; templateKey?: string; link?: string; createdBy: string; contactId?: string
 }): Promise<Row | null> {
   await ensureTaskTable()
   const title = clip(input.title, 200)
   if (!title) return null
   const id = newId()
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "OrgTask" ("id", "orgId", "tournamentId", "title", "category", "dueDate", "notes", "steps", "templateKey", "link", "createdBy")
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO "OrgTask" ("id", "orgId", "tournamentId", "title", "category", "dueDate", "notes", "steps", "templateKey", "link", "createdBy", "contactId")
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id, input.orgId || '', input.tournamentId || '', title,
     isCategory(input.category) ? input.category : 'other',
     isYmd(input.dueDate) ? input.dueDate : '',
     String(input.notes ?? '').slice(0, 4000),
     JSON.stringify(cleanSteps(input.steps)),
-    input.templateKey || '', input.link || '', clip(input.createdBy, 120))
+    input.templateKey || '', input.link || '', clip(input.createdBy, 120), clip(input.contactId, 40))
   return getTask(id)
 }
 
-export type TaskPatch = { title?: unknown; category?: unknown; dueDate?: unknown; notes?: unknown; steps?: unknown; done?: unknown }
+/** contactId must already be checked against the caller's scope (the route does it). */
+export type TaskPatch = { title?: unknown; category?: unknown; dueDate?: unknown; notes?: unknown; steps?: unknown; done?: unknown; contactId?: string }
 
 export async function updateTask(id: string, patch: TaskPatch, by: string): Promise<Row | null> {
   const cur = await getTask(id)
@@ -199,6 +207,7 @@ export async function updateTask(id: string, patch: TaskPatch, by: string): Prom
   if (patch.dueDate !== undefined) { sets.push(`"dueDate" = ?`); args.push(isYmd(patch.dueDate) ? patch.dueDate : '') }
   if (patch.notes !== undefined) { sets.push(`"notes" = ?`); args.push(String(patch.notes ?? '').slice(0, 4000)) }
   if (patch.steps !== undefined) { sets.push(`"steps" = ?`); args.push(JSON.stringify(cleanSteps(patch.steps))) }
+  if (patch.contactId !== undefined) { sets.push(`"contactId" = ?`); args.push(clip(patch.contactId, 40)) }
   if (patch.done !== undefined) {
     // Only a real change moves the stamp: checking a done task again keeps when it was done.
     if (patch.done && !cur.done) { sets.push(`"done" = 1`, `"doneAt" = ?`, `"doneBy" = ?`); args.push(new Date().toISOString(), clip(by, 120)) }
@@ -267,6 +276,20 @@ export async function checklistProgress(tournamentIds: string[]): Promise<Map<st
   return map
 }
 
+/** Fill in the contact each task points at, by name (Event contacts). Never throws. */
+async function attachContactNames(rows: Row[]): Promise<void> {
+  const ids = Array.from(new Set(rows.map(r => r.contactId || '').filter(Boolean)))
+  if (!ids.length) return
+  try {
+    // Raw query rather than lib/contacts, which imports this file. Deleted
+    // contacts still answer, so a task keeps a name until it is relinked.
+    const found: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+      `SELECT id, name FROM "OrgContact" WHERE id IN (${ids.map(() => '?').join(', ')})`, ...ids)
+    const names = new Map(found.map(r => [String(r.id), String(r.name || '')]))
+    for (const r of rows) if (r.contactId) r.contactName = names.get(r.contactId) || ''
+  } catch { /* no contacts table yet */ }
+}
+
 /**
  * Attach what the app can see to open tracked tasks, and check off the ones it
  * can prove are finished. Each is checked off ONCE (autoDoneAt): if Bo reopens
@@ -322,6 +345,7 @@ export async function collectTasks(scope: Scope, opts: { tournamentId?: string; 
   // A deleted tournament's tasks go with it.
   const rows = raw.map(toRow).filter(r => !r.tournamentId || known.has(r.tournamentId))
   if (opts.signals) await applySignals(rows)
+  await attachContactNames(rows)
 
   const listed = tournaments.filter(t =>
     t.firstDay && t.lastDay >= today && (opts.tournamentId === undefined || t.id === opts.tournamentId))
