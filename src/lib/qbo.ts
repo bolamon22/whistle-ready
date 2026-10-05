@@ -27,7 +27,9 @@ export type QboProblem = { ok: false; reason: 'not_connected' | 'expired' | 'no_
 export class QboError extends Error {
   status: number
   code: string
-  constructor(message: string, status = 0, code = '') { super(message); this.status = status; this.code = code }
+  /** Intuit's reference for the failed call (intuit_tid header), for their support. */
+  tid: string
+  constructor(message: string, status = 0, code = '', tid = '') { super(message); this.status = status; this.code = code; this.tid = tid }
 }
 
 /** QuickBooks' query language escapes a quote with a backslash. */
@@ -75,6 +77,7 @@ export async function qboConnection(orgId: string | null, opts: { userIds?: stri
     })
     const t: any = await res.json().catch(() => ({}))
     if (!res.ok || !t.access_token) {
+      console.error('QuickBooks token refresh failed', { status: res.status, error: String(t?.error || ''), intuit_tid: res.headers.get('intuit_tid') || '' })
       // invalid_grant: the refresh token ran out (100 days unused) or was revoked.
       return { ok: false, reason: 'expired', message: 'The QuickBooks connection has expired. Connect QuickBooks again in Admin > Payment providers.' }
     }
@@ -130,7 +133,12 @@ export async function qboFetch<T = any>(conn: QboConnection, path: string, init:
   const fault = j?.Fault?.Error?.[0] || j?.fault?.error?.[0]
   if (!res.ok || fault) {
     const msg = fault ? [fault.Message || fault.message, fault.Detail || fault.detail].filter(Boolean).join(': ') : `QuickBooks answered ${res.status}`
-    throw new QboError(msg, res.status, String(fault?.code || ''))
+    // Intuit's reference for the call: kept in the error the panel stores and in
+    // the logs (path without its query, which can hold a club's name).
+    const tid = res.headers.get('intuit_tid') || ''
+    const code = String(fault?.code || '')
+    console.error('QuickBooks API error', { path: path.split('?')[0], status: res.status, code, intuit_tid: tid })
+    throw new QboError(tid ? `${msg} (intuit_tid ${tid})` : msg, res.status, code, tid)
   }
   return j as T
 }
