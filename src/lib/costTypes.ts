@@ -41,6 +41,7 @@ export function categoryForContact(contactCategory: string): string {
 }
 
 export type CostItem = { item: string; qty: number; unit: number }
+export type CostPayment = { date: string; amount: number; method: string; ref: string }
 
 export type CostView = {
   id: string
@@ -55,8 +56,10 @@ export type CostView = {
   quoteDate: string
   items: CostItem[]
   tax: number
-  budget: number                // the planned amount before a quote came in; 0 = use the items
-  paid: number                  // paid so far (a deposit) while not fully Paid; Paid means the whole total
+  budget: number                // a flat amount for a line with no items (an invoice total); 0 = use the items
+  planned: number               // what the Budget tab plans to spend on this line; 0 = not planned
+  paid: number                  // paid so far (sum of payments) while not fully Paid; Paid means the whole total
+  payments: CostPayment[]       // each payment: deposit, balance... (older lines may have none, only `paid`)
   notes: string
   paidDate: string
   method: string

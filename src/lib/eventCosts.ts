@@ -2,8 +2,9 @@ import { prisma } from '@/lib/db'
 import { todayET } from '@/lib/publicView'
 import { inScope, scopeTournaments, type Scope } from '@/lib/tasks'
 import { getContact } from '@/lib/contacts'
+import { paymentsOf } from '@/lib/finance'
 import {
-  costTotal, money, paidSoFar, isCostCategory, isCostStatus, round2, type CostItem, type CostView,
+  costTotal, money, paidSoFar, isCostCategory, isCostStatus, round2, type CostItem, type CostPayment, type CostView,
 } from '@/lib/costTypes'
 
 // Event costs (Bo, Oct 5 2026): each vendor's quote, item by item, per event,
@@ -38,6 +39,8 @@ export function ensureCostTable(): Promise<void> {
         "tax" REAL NOT NULL DEFAULT 0,
         "budget" REAL NOT NULL DEFAULT 0,
         "paid" REAL NOT NULL DEFAULT 0,
+        "planned" REAL NOT NULL DEFAULT 0,
+        "payments" TEXT NOT NULL DEFAULT '[]',
         "notes" TEXT NOT NULL DEFAULT '',
         "paidDate" TEXT NOT NULL DEFAULT '',
         "method" TEXT NOT NULL DEFAULT '',
@@ -50,6 +53,9 @@ export function ensureCostTable(): Promise<void> {
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EventCost_org" ON "EventCost"("orgId", "deletedAt")`)
       // Added Oct 5 2026 (deposits): the table was already live without it.
       try { await prisma.$executeRawUnsafe(`ALTER TABLE "EventCost" ADD COLUMN "paid" REAL NOT NULL DEFAULT 0`) } catch { /* already there */ }
+      // Added Oct 5 2026 (Financials redesign): a planned amount per line, and each payment.
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE "EventCost" ADD COLUMN "planned" REAL NOT NULL DEFAULT 0`) } catch { /* already there */ }
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE "EventCost" ADD COLUMN "payments" TEXT NOT NULL DEFAULT '[]'`) } catch { /* already there */ }
     })().catch(e => { ready = null; throw e })
   }
   return ready
@@ -72,6 +78,16 @@ export function cleanItems(v: unknown): CostItem[] {
   }).filter(i => i.item || i.qty || i.unit)
 }
 
+export function cleanPayments(v: unknown): CostPayment[] {
+  let a: unknown = v
+  if (typeof v === 'string') { try { a = JSON.parse(v) } catch { a = [] } }
+  if (!Array.isArray(a)) return []
+  return a.slice(0, 40).map(x => {
+    const o = (x || {}) as Record<string, unknown>
+    return { date: ymd(o.date), amount: round2(num(o.amount)), method: METHODS.has(String(o.method)) ? String(o.method) : '', ref: line(o.ref, 80) }
+  }).filter(p => p.amount > 0)
+}
+
 function toRow(r: Record<string, unknown>): Row {
   return {
     id: String(r.id),
@@ -89,6 +105,8 @@ function toRow(r: Record<string, unknown>): Row {
     tax: round2(Number(r.tax) || 0),
     budget: round2(Number(r.budget) || 0),
     paid: round2(Number(r.paid) || 0),
+    planned: round2(Number(r.planned) || 0),
+    payments: cleanPayments(r.payments),
     notes: String(r.notes || ''),
     paidDate: ymd(r.paidDate),
     method: String(r.method || ''),
@@ -103,7 +121,7 @@ export async function getCost(id: string): Promise<Row | null> {
   return rows[0] ? toRow(rows[0]) : null
 }
 
-export type CostInput = Partial<Record<keyof CostView, unknown>>
+export type CostInput = Partial<Record<keyof CostView | 'addPayment' | 'removePayment', unknown>>
 type Clean = Partial<Omit<CostView, 'id' | 'transactionId'>>
 function clean(input: CostInput): Clean {
   const out: Clean = {}
@@ -120,13 +138,14 @@ function clean(input: CostInput): Clean {
   if (input.tax !== undefined) out.tax = round2(num(input.tax))
   if (input.budget !== undefined) out.budget = round2(num(input.budget))
   if (input.paid !== undefined) out.paid = round2(num(input.paid))
+  if (input.planned !== undefined) out.planned = round2(num(input.planned))
   if (input.notes !== undefined) out.notes = text(input.notes, 4000)
   if (input.paidDate !== undefined) out.paidDate = ymd(input.paidDate)
   if (input.method !== undefined) out.method = METHODS.has(String(input.method)) ? String(input.method) : ''
   return out
 }
-const COLS: (keyof Clean)[] = ['tournamentId', 'eventLabel', 'eventDate', 'contactId', 'vendor', 'category', 'status', 'quoteRef', 'quoteDate', 'items', 'tax', 'budget', 'paid', 'notes', 'paidDate', 'method']
-const dbValue = (k: keyof Clean, v: unknown) => k === 'items' ? JSON.stringify(v) : v
+const COLS: (keyof Clean)[] = ['tournamentId', 'eventLabel', 'eventDate', 'contactId', 'vendor', 'category', 'status', 'quoteRef', 'quoteDate', 'items', 'tax', 'budget', 'planned', 'paid', 'payments', 'notes', 'paidDate', 'method']
+const dbValue = (k: keyof Clean, v: unknown) => k === 'items' || k === 'payments' ? JSON.stringify(v) : v
 
 /**
  * Checks a line's links against what this login can see and fills in what
@@ -174,6 +193,27 @@ export async function updateCost(scope: Scope, id: string, input: CostInput): Pr
   if (c.vendor === '') delete c.vendor
   const r = await resolveLinks(scope, c, cur)
   if ('error' in r) return r
+  // A payment recorded (or one taken back): the list is the record; `paid`,
+  // the date and the method follow from it, and paying the whole total makes
+  // the line Paid. An older line with only `paid` starts its list from that.
+  const add = input.addPayment ? cleanPayments([input.addPayment])[0] : undefined
+  const removeAt = typeof input.removePayment === 'number' ? input.removePayment : -1
+  if (add || removeAt >= 0) {
+    const list = paymentsOf(cur).slice()
+    if (add) list.push({ ...add, date: add.date || todayET() })
+    if (removeAt >= 0 && removeAt < list.length) list.splice(removeAt, 1)
+    const total = costTotal({ items: c.items ?? cur.items, tax: c.tax ?? cur.tax, budget: c.budget ?? cur.budget })
+    const paidSum = round2(list.reduce((s, p) => s + p.amount, 0))
+    c.payments = list
+    const fullyPaid = total > 0 && paidSum >= total - 0.005
+    c.status = fullyPaid ? 'paid'
+      : cur.status === 'paid' || (paidSum > 0 && (cur.status === 'quoted' || cur.status === 'budget')) ? 'booked'
+      : (c.status ?? cur.status)
+    c.paid = fullyPaid ? total : paidSum
+    const latest = list[list.length - 1]
+    c.paidDate = latest?.date || ''
+    c.method = latest?.method || ''
+  }
   // Marking it paid (or paying a deposit) with no date pays it today.
   const paying = (c.status === 'paid' && cur.status !== 'paid') || ((c.paid || 0) > 0 && !cur.paid)
   if (paying && !c.paidDate && !cur.paidDate) c.paidDate = todayET()
