@@ -2319,6 +2319,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             games, dayGames, unscheduled, activeDate, slots, fields: visibleFields, divisions, increment,
             divColor: (d: string) => divColor(d, colorsByDiv), fmtTime, divAbbr,
             issues: { conflict: conflictMsgs, b2b: backToBackMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
+            filterPool: gridPool, filterTeam: gridTeam,
             filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
             // Awaited so the Board picks the next game only once this one is on the board
             // (otherwise its slot still reads as open for a moment).

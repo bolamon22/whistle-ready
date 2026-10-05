@@ -76,6 +76,10 @@ export interface ViewsProps {
   closedLabel?: (fullName: string) => string | null
   /** Opens the close/reopen dialog for a field. */
   onToggleClosed?: (fullName: string) => void
+  /** The page's Pool and Team selects: games outside them gray out on the Board
+   *  and drop from the parking lot ('__all__' or missing = no filter). */
+  filterPool?: string
+  filterTeam?: string
   /** Mark or unmark a game as "If needed" (only played on a certain result). */
   onToggleIfNeeded?: (gameId: string) => void
   /** Setup > Venues division limits: false when this field is set for other divisions only (e.g. too small). */
@@ -645,7 +649,12 @@ export function TimelineView(p: ViewsProps) {
   }
   // Another division: grayed right down, so the ones in focus stand alone. Same
   // division, other game type (the Pool/Bracket toggle): only faded, colors kept.
-  const divOut = (g: SGame) => !!focusDivs && !focusDivs.has(g.division)
+  // Another pool, or a game the picked team isn't in (the Pool and Team selects
+  // above the board, Bo Oct 5 2026: "show me just their games"), grays out the
+  // same way as another division.
+  const teamF = p.filterTeam && p.filterTeam !== '__all__' ? p.filterTeam : null
+  const poolF = p.filterPool && p.filterPool !== '__all__' ? p.filterPool : null
+  const divOut = (g: SGame) => (!!focusDivs && !focusDivs.has(g.division)) || (!!poolF && g.pool !== poolF) || (!!teamF && g.team1 !== teamF && g.team2 !== teamF)
   const typeOut = (g: SGame) => !matchesType(g, typeFilter)
   const dim = (g: SGame) => divOut(g) || typeOut(g)
   const tint = (div: string) => p.divColor(div) + '1f'
@@ -708,9 +717,9 @@ export function TimelineView(p: ViewsProps) {
     const divs = focusDivs ? p.divisions.filter(d => focusDivs.has(d)) : p.divisions
     return divs.map(d => ({
       div: d,
-      items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))).sort(placeOrder),
+      items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && !divOut(g) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))).sort(placeOrder),
     })).filter(x => x.items.length > 0)
-  }, [p.unscheduled, p.divisions, focusDivs, typeFilter, q, placeOrder])
+  }, [p.unscheduled, p.divisions, focusDivs, poolF, teamF, typeFilter, q, placeOrder])
   const lotCounts = useMemo(() => {
     const inDiv = p.unscheduled.filter(g => !focusDivs || focusDivs.has(g.division))
     return { pool: inDiv.filter(g => !isBracket(g)).length, bracket: inDiv.filter(isBracket).length }
