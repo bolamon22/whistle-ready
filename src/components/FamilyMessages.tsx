@@ -66,7 +66,7 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
             <div className="flex flex-wrap gap-2 mt-3">
               <button type="button" onClick={() => copy(m)}
                 className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-4 py-2.5 rounded-xl">
-                {copied === m.key ? 'Copied' : 'Copy with button'}
+                {copied === m.key ? 'Copied' : 'Copy with link'}
               </button>
               <a href={urls.gmail} target="_blank" rel="noreferrer"
                 className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">Gmail</a>
@@ -78,9 +78,9 @@ export default function FamilyMessages({ messages, highlight = '' }: { messages:
                 className="border border-slate-300 hover:border-slate-400 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl">My mail app</a>
             </div>
             <p className="text-xs text-slate-400 mt-2">
-              <strong className="font-semibold text-slate-500">Copy with button</strong> pastes a tidy message with a real button instead of a long link —
+              <strong className="font-semibold text-slate-500">Copy with link</strong> pastes a tidy message where the words are the link, instead of a long web address —
               paste it straight into Gmail, Outlook or Apple Mail.
-              The other three open a draft already filled in, but as plain text: a compose link can&apos;t carry a button.
+              The other three open a draft already filled in, but as plain text, which can only ever show the full address.
               <strong className="font-semibold text-slate-500"> My mail app</strong> is Apple Mail on an iPhone or Mac, Outlook on a PC, or whatever you have set as default.
               Nothing is sent until you send it.
             </p>

@@ -33,6 +33,10 @@ export type FamilyMessageInput = {
   hotelUrl: string
   /** Blank hides the "same hotel" offer rather than promising something. */
   hasHousingContact: boolean
+  /** False when the org has no booking URL set and hotelUrl is only the event
+   *  page. The message then stops telling families to "book through this link",
+   *  because that link does not book anything. */
+  hasBookingUrl: boolean
 }
 
 const sign = (contactName: string) => (contactName.trim() ? `Thanks,\n${contactName.trim()}` : 'Thanks')
@@ -79,11 +83,13 @@ ${sign(i.contactName)}`,
       key: 'hotel',
       title: 'Hotel rooms',
       blurb: 'To your player families. They book their own rooms; this keeps them together.',
-      linkLabel: 'Book your rooms',
+      linkLabel: i.hasBookingUrl ? 'Click here to book your rooms' : 'Hotel and travel details',
       subject: `${i.eventName} — hotel rooms for ${i.clubName} families`,
       body: `Hi everyone,
 
-For ${i.eventName}${when}${where(i.location)}, please book your rooms through the tournament's hotel link below. Booking through it keeps our club's rooms together and counted with the team.
+${i.hasBookingUrl
+  ? `For ${i.eventName}${when}${where(i.location)}, please book your rooms through the tournament's hotel link below. Booking through it keeps our club's rooms together and counted with the team.`
+  : `For ${i.eventName}${when}${where(i.location)}, the hotel and travel details are on the tournament's event page below.`}
 
 ${i.hotelUrl}
 ${i.hasHousingContact ? `
@@ -117,7 +123,7 @@ export function messageHtml(body: string, linkLabel = 'Open the link'): string {
     const t = block.trim()
     if (!t) return ''
     if (/^https?:\/\/\S+$/.test(t)) {
-      return `<p style="margin:0 0 16px"><a href="${t}" style="${font};background:#0b1f3a;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:15px;font-weight:bold;display:inline-block">${escHtml(linkLabel)}</a></p>`
+      return `<p style="${font};font-size:15px;line-height:1.6;margin:0 0 14px"><a href="${t}" style="color:#0f766e;font-weight:bold">${escHtml(linkLabel)}</a></p>`
     }
     const withLinks = escHtml(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
     return `<p style="${font};font-size:15px;line-height:1.6;color:#111111;margin:0 0 14px">${withLinks.replace(/\n/g, '<br>')}</p>`

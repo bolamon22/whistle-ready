@@ -54,6 +54,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // has not set a booking URL yet.
     hotelUrl: housing?.bookingUrl || eventHome,
     hasHousingContact: !!housing?.contactEmail,
+    hasBookingUrl: !!housing?.bookingUrl,
   })
 
   return NextResponse.json({
