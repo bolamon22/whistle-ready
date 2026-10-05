@@ -4,7 +4,12 @@ import { encryptConfig } from '@/lib/encrypt'
 
 const QBO_CLIENT_ID = process.env.QBO_CLIENT_ID || ''
 const QBO_CLIENT_SECRET = process.env.QBO_CLIENT_SECRET || ''
-const APP_URL = process.env.NEXTAUTH_URL || 'https://whistleready.app'
+// The address QuickBooks sends the login back to. It has to match a redirect URI
+// registered on the Intuit app exactly. It used NEXTAUTH_URL, which still says
+// gameday-staff5.vercel.app, so the login came back to the old domain where nobody
+// is signed in (Oct 5 2026). Register https://whistleready.app/api/oauth/quickbooks/callback
+// on the app's production keys; QBO_REDIRECT_BASE overrides it if ever needed.
+const APP_URL = (process.env.QBO_REDIRECT_BASE || 'https://whistleready.app').replace(/\/+$/, '')
 const REDIRECT_URI = `${APP_URL}/api/oauth/quickbooks/callback`
 
 export async function GET(req: Request) {
