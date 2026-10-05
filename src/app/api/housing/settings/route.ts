@@ -32,7 +32,11 @@ export async function PUT(req: Request) {
   if (body.contactEmail !== undefined) patch.contactEmail = String(body.contactEmail ?? '').trim().toLowerCase().slice(0, 200)
   if (body.cadence !== undefined && ['weekly', 'twice', 'manual'].includes(String(body.cadence))) patch.cadence = String(body.cadence)
   if (body.includeContact !== undefined) patch.includeContact = body.includeContact === true
-  if (body.bookingUrl !== undefined) patch.bookingUrl = String(body.bookingUrl ?? '').trim().slice(0, 300)
+  // 1000, not 300: a real housing-company booking link carries the venue's
+  // coordinates, a property list and tracking params. Monster Mash 2026's is
+  // 292 characters -- eight short of silently truncating into a link that
+  // books nothing, for every family a club emails.
+  if (body.bookingUrl !== undefined) patch.bookingUrl = String(body.bookingUrl ?? '').trim().slice(0, 1000)
   const settings = await saveHousingSettings(orgId, patch)
   return NextResponse.json({ ok: true, settings, boardUrl: housingBoardUrl(await housingCode(orgId)) })
 }
