@@ -39,6 +39,8 @@ interface Registration {
   hasAccount?: boolean; accountRole?: string; accountUserId?: string
   /** Club portal use (lib/portalVisits): null until the portal has been opened. */
   portal?: { last: string; first: string; lastBy: string; week: number; month: number; total: number; people: number } | null
+  /** Someone can open this registration in the portal, and whether the contact's own login can (lib/clubAccess). */
+  portalOpenable?: boolean; accountCanOpen?: boolean
   teams: RegisteredTeam[]; payments: RegistrationPayment[]
 }
 // wasWaitlisted: the row's waitlist state when the edit drawer opened. Rides on the
@@ -74,6 +76,11 @@ const fmtPayDate = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s 
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const today = () => new Date().toISOString().slice(0, 10)
 const shortDate = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+
+// In the portal = somebody's login can open this registration. A login on the
+// contact's email is not the same thing (see accountCanOpen in the API). Older
+// responses without the field fall back to the login check they used before.
+const inPortal = (r: Registration) => r.portalOpenable ?? !!r.hasAccount
 
 // The Portal cell's hover: when and by whom the club last opened its portal, and
 // how often (lib/portalVisits).
@@ -1455,7 +1462,7 @@ export default function RegistrationsPage() {
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {(['waiver', 'schedule', 'confirm', 'payment', 'account', 'checklist'] as const).map(k => (
                   <button key={k} onClick={() => { setCommKind(k)
-                    if (k === 'account') setCommSel(sel => new Set([...sel].filter(id => !registrations.find(r => r.id === id)?.hasAccount)))
+                    if (k === 'account') setCommSel(sel => new Set([...sel].filter(id => { const r = registrations.find(x => x.id === id); return r ? !inPortal(r) : false })))
                     // A paid club left ticked from another letter is a send that does
                     // nothing -- commSend skips a zero balance -- but it still inflates
                     // the "Send to 30 clubs" count on the button. Drop them here.
@@ -1492,7 +1499,7 @@ export default function RegistrationsPage() {
                   <span className="text-xs">
                     {/* All means all of what you are looking at. Picking "owes" and then
                         hitting All used to select the clubs who had already paid too. */}
-                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set(commVisible.filter(r => r.contactEmail && (commKind !== 'account' || !r.hasAccount)).map(r => r.id)))}>All</button>
+                    <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set(commVisible.filter(r => r.contactEmail && (commKind !== 'account' || !inPortal(r))).map(r => r.id)))}>All</button>
                     <span className="text-slate-300 mx-1">·</span>
                     <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set())}>None</button>
                   </span>
@@ -1515,7 +1522,7 @@ export default function RegistrationsPage() {
                         onChange={e => setCommSel(sel => { const n = new Set(sel); if (e.target.checked) { n.add(r.id) } else { n.delete(r.id) } return n })} />
                       <span className="flex-1 truncate text-slate-700">{r.clubName}</span>
                       {commKind === 'payment' && <span className={`text-[10px] shrink-0 ${regBalance(r) > 0 ? 'text-amber-600 font-semibold' : 'text-slate-300'}`}>{regBalance(r) > 0 ? `owes ${fmt(regBalance(r))}` : 'paid'}</span>}
-                      {commKind === 'account' && <span className={`text-[10px] shrink-0 ${r.hasAccount ? 'text-slate-300' : 'text-amber-600 font-semibold'}`}>{r.hasAccount ? 'has login' : 'no login'}</span>}
+                      {commKind === 'account' && <span className={`text-[10px] shrink-0 ${inPortal(r) ? 'text-slate-300' : 'text-amber-600 font-semibold'}`}>{inPortal(r) ? 'in portal' : r.hasAccount ? 'login not linked' : 'no login'}</span>}
                       {commKind === 'payment'
                         ? (r.lastPayReminderAt && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(r.lastPayReminderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)
                         : (commLog(r)[commKind] && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(commLog(r)[commKind]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)}
@@ -2248,12 +2255,23 @@ export default function RegistrationsPage() {
                         <div className="font-semibold text-slate-800 truncate">{reg.clubName || reg.clubContact}</div>
                         <div className="flex items-center gap-2 flex-wrap">
                           {reg.clubContact && <span className="text-sm font-medium text-slate-600 truncate">{reg.clubContact}</span>}
-                          {reg.contactEmail && (reg.hasAccount
+                          {reg.contactEmail && (reg.hasAccount && reg.accountCanOpen === false
+                            // A login on this email that can't open this registration:
+                            // a parent account, or a director whose access covers their
+                            // other event. Said so, and one click to the Account letter,
+                            // whose link connects it when they sign in (Oct 5 2026).
+                            // A span, not a button: the whole row header is already a button.
+                            ? <span role="button" tabIndex={0}
+                                onClick={e => { e.stopPropagation(); openComm(reg, 'account') }}
+                                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openComm(reg, 'account') } }}
+                                title={`${reg.contactEmail} has a login${reg.accountRole && reg.accountRole !== 'club_director' ? ` (${reg.accountRole})` : ''}, but it isn't connected to this registration, so their club portal doesn't show it. Click to send the Account letter: signing in from its link connects it.`}
+                                className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 px-1.5 py-0.5 rounded-full transition-colors cursor-pointer"><AlertTriangle size={10} /> Login not linked</span>
+                            : reg.hasAccount
                             // A club director's chip opens their own portal, so a
                             // report like "my Overview shows no teams" can be seen
                             // instead of reconstructed (Bo, Sep 15 2026). Stop the
                             // click bubbling or the card just expands underneath.
-                            ? (reg.accountRole === 'club_director' && reg.accountUserId
+                            ? ((reg.accountCanOpen || reg.accountRole === 'club_director') && reg.accountUserId
                               ? <a href={`/dashboard/club-director?userId=${encodeURIComponent(reg.accountUserId)}`}
                                   target="_blank" rel="noopener noreferrer"
                                   onClick={e => e.stopPropagation()}
@@ -2350,7 +2368,7 @@ export default function RegistrationsPage() {
                             </div>
                           ) : (
                             <div className="text-sm text-slate-300"
-                              title={reg.hasAccount ? 'Has a login, but no portal visit recorded yet (visits are recorded from Oct 5, 2026)' : 'No login yet'}>—</div>
+                              title={!reg.hasAccount ? 'No login yet' : reg.accountCanOpen === false ? 'Their login isn\u2019t connected to this registration, so the portal can\u2019t show it yet' : 'Has a login, but no portal visit recorded yet (visits are recorded from Oct 5, 2026)'}>—</div>
                           )}
                         </div>
                       </div>

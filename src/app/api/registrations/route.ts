@@ -14,7 +14,7 @@ import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { cleanName, nameKey } from '@/lib/names'
 import { isDivisionFull } from '@/lib/regStatus'
-import { canOpen } from '@/lib/clubAccess'
+import { canOpen, directorsOf } from '@/lib/clubAccess'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { viewerRole } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
@@ -149,6 +149,12 @@ export async function GET(req: NextRequest) {
     // Bo, Oct 5 2026). Only the full view carries it: shapeForRole rebuilds the
     // row for every other role and leaves it out.
     const usage = canSeeMoney(role) ? await portalUsage(registrations.map((r: any) => r.id)) : new Map()
+    // Who can open each registration in the portal (lib/clubAccess). A contact can
+    // have a login that was never connected to this registration -- a parent
+    // account from before, or a director whose access covers their other event --
+    // and "has a login" made the card read as fine while their portal showed
+    // nothing (Creator's Game, Riverwolves and Stealth, Oct 5 2026).
+    const openers = canSeeMoney(role) ? await directorsOf(registrations.map((r: any) => r.id)) : new Map()
 
     return NextResponse.json(shapeForRole(registrations.map((r: any) => {
       const sum = summarizeClub(counts, r.clubName, r.teams || [])
@@ -167,6 +173,8 @@ export async function GET(req: NextRequest) {
         accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.role || '',
         accountUserId: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id || '',
         portal: usage.get(r.id) || null,
+        portalOpenable: (openers.get(r.id)?.length ?? 0) > 0,
+        accountCanOpen: !!(openers.get(r.id) || []).some((d: any) => d.userId === accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id),
       }
     }), role))
   } catch {
