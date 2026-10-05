@@ -135,6 +135,17 @@ function humanTeam(t: string) {
   if (m) return (m[1].toUpperCase() === 'W' ? 'Winner of ' : 'Loser of ') + m[2].toUpperCase()
   return t
 }
+// White or dark text on a division's color, whichever stands out more (WCAG
+// contrast), so both a pale division and a mid teal read on their chip.
+function inkOn(hex: string): string {
+  const c = String(hex || '').replace('#', '')
+  if (!/^[0-9a-f]{6}/i.test(c)) return '#ffffff'
+  const lin = (i: number) => { const v = parseInt(c.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+  const L = 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4)
+  return 1.05 / (L + 0.05) >= (L + 0.05) / 0.0718 ? '#ffffff' : '#1e293b'   // 0.0718 = slate-800's luminance + 0.05
+}
+const poolLabel = (pool: string) => (/pool|bracket/i.test(pool) ? pool : `Pool ${pool}`)
+
 function gameLabel(g: SGame, divAbbr: (d: string) => string) {
   return g.gameNumber.startsWith('B') ? `${divAbbr(g.division)}-${g.gameNumber}` : g.gameNumber
 }
@@ -352,9 +363,13 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle }: 
   // (one row of chips tall) and never clips a long team name.
   return (
     <div className="flex items-stretch gap-2 pl-3 pr-1.5 py-1 rounded-xl text-white shadow-xl min-w-0 w-[520px] max-w-[92vw]" style={{ background: '#065f46' }}
-      title={`${humanTeam(sel.team1)} vs ${humanTeam(sel.team2)} — click a green slot. Amber = back-to-back, striped = team busy.`}>
+      title={`${sel.division} · ${humanTeam(sel.team1)} vs ${humanTeam(sel.team2)} — click a green slot. Amber = back-to-back, striped = team busy.`}>
       <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-        <div className="text-xs leading-tight truncate"><span className="text-emerald-200">{placed ? 'Moving' : 'Placing'}</span> <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b>{sel.pool && <span className="text-emerald-200"> · {sel.pool}</span>}</div>
+        <div className="text-xs leading-tight truncate">
+          <span className="text-emerald-200">{placed ? 'Moving' : 'Placing'}</span>{' '}
+          <span className="inline-block align-[1px] px-1.5 py-px mr-0.5 rounded-full ring-1 ring-white/60 text-[10px] font-bold leading-tight" style={{ background: p.divColor(sel.division), color: inkOn(p.divColor(sel.division)) }}>{sel.division}</span>{' '}
+          <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b>{sel.pool && <span className="text-emerald-200"> · {poolLabel(sel.pool)}</span>}
+        </div>
         {swapArmed ? (
           <div className="text-[11px] leading-tight text-amber-200 font-semibold">Now click the game to swap with</div>
         ) : l1 || l2 ? (

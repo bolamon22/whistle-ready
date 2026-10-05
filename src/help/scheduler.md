@@ -19,6 +19,8 @@ The **Scheduler** puts every pool and bracket game on a field, date and time. Ga
 
 **To move a game to another time or field:** drag it from where it sits to the new field and time slot. To take it off the schedule, drag it back to the **Parking Lot**.
 
+On the **Board** or **Timeline** you can also click a game to pick it up. A green bar shows its division, game number, teams and pool, and how many games each team has. Click a green **Place here** slot to put it there, or use **Swap**, **Unschedule** or **Cancel**.
+
 Changes save as you go.
 
 **To place games automatically:**
