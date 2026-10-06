@@ -147,6 +147,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [staffViewId,setStaffViewId]=useState('')
   const [listSearch,setListSearch]=useState('')
   const [listDivFilter,setListDivFilter]=useState('all')
+  // Boys / girls games (Bo, Oct 6 2026). On the grid, games outside the filter
+  // (this, the division select or the search) gray out rather than vanish, so
+  // the field-by-time layout stays put while you work one side.
+  const [genderFilter,setGenderFilter]=useState<'all'|'boys'|'girls'>('all')
 
   // Inline assignment expand (list/division views)
   const [assignExpandId,setAssignExpandId]=useState<string|null>(null)
@@ -398,6 +402,14 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
   const dates=eventDayList(tournament,games.map(g=>g.date))
   function gameGenderOf(div:string):'boys'|'girls'|'both'{const d=div.toLowerCase();return d.includes('girl')||d.includes('women')?'girls':d.includes('boy')||d.includes('men')?'boys':'both'}
+  // A division that is neither (coed, unnamed) counts as both, so it never hides.
+  const filteredOut=(g:Game)=>{
+    if(genderFilter!=='all'){const gg=gameGenderOf(g.division);if(gg!=='both'&&gg!==genderFilter)return true}
+    if(listDivFilter!=='all'&&g.division!==listDivFilter)return true
+    if(listSearch&&![g.gameNumber,g.team1,g.team2,g.division,g.location].some(s=>String(s||'').toLowerCase().includes(listSearch.toLowerCase())))return true
+    return false
+  }
+  const outCls='grayscale opacity-30 hover:grayscale-0 hover:opacity-100'
   const dayReqs=dates.map(date=>{
     const gs=games.filter(g=>g.date===date&&!g.isCanceled)
     let boys=0,girls=0,both=0
@@ -634,8 +646,14 @@ export default function GridPage({ params }: { params:{id:string} }) {
             <option value="all">All divisions</option>
             {[...new Set(games.map(g=>g.division))].sort().map(d=><option key={d} value={d}>{d}</option>)}
           </select>
+          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 border border-slate-200" role="group" aria-label="Boys or girls games">
+            {([['all','All games'],['boys','Boys games'],['girls','Girls games']] as const).map(([k,l])=>(
+              <button key={k} type="button" onClick={()=>setGenderFilter(k)} aria-pressed={genderFilter===k}
+                className={`px-2.5 py-0.5 rounded-md text-xs font-semibold transition-colors ${genderFilter===k?(k==='girls'?'bg-pink-600 text-white':k==='boys'?'bg-sky-600 text-white':'bg-slate-900 text-white'):'text-slate-600 hover:text-slate-900'}`}>{l}</button>
+            ))}
+          </div>
           <input className="bg-white text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 w-44" placeholder="Search team, game…" value={listSearch} onChange={e=>setListSearch(e.target.value)}/>
-          {(listSearch||listDivFilter!=='all')&&<button className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all')}}><X size={12} /> Clear</button>}
+          {(listSearch||listDivFilter!=='all'||genderFilter!=='all')&&<button className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all');setGenderFilter('all')}}><X size={12} /> Clear</button>}
         </div>
       )}
       {viewMode === 'staff' && <div className="mb-5"/>}
@@ -645,8 +663,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         const allDivs=[...new Set(games.map(g=>g.division))].sort()
         const listGames=games
           .filter(g=>activeDay?g.date===activeDay:true)
-          .filter(g=>listDivFilter==='all'||g.division===listDivFilter)
-          .filter(g=>!listSearch||[g.gameNumber,g.team1,g.team2,g.division,g.location].some(s=>s.toLowerCase().includes(listSearch.toLowerCase())))
+          .filter(g=>!filteredOut(g))
           .sort((a,b)=>a.startTime.localeCompare(b.startTime)||a.location.localeCompare(b.location))
         return(
           <div>
@@ -1086,7 +1103,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                       const game=gameMap.get(`${time}::${field}`)
                       if(collapsedFields.has(field))return<td key={field} className={`border-r border-slate-200 last:border-r-0 w-8 ${game?'bg-slate-200':'bg-slate-50'}`}/>
                       return(
-                        <td key={field} className="border-r border-slate-200 last:border-r-0 p-0.5 bg-slate-50 align-middle"
+                        <td key={field} className={`border-r border-slate-200 last:border-r-0 p-0.5 bg-slate-50 align-middle ${game&&filteredOut(game)?outCls:''}`}
                           onDragOver={e=>{if(game&&dragWorker&&!locked)e.preventDefault()}}
                           onDrop={e=>{e.preventDefault();if(game)dropWorkerOnGame(e,game)}}>
                           {game&&renderMini(game,doubled,()=>toggleTime(time),'click to open the row')}
@@ -1129,7 +1146,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
                       return(
                         <td key={field}
-                          className={`border-r border-t border-slate-300 last:border-r-0 align-top relative group transition-colors ${mode==='full'?'p-2':'p-1'} ${hasDoubleBooking&&mode==='full'?'ring-2 ring-inset ring-red-400':''} ${game.isCanceled&&mode==='full'?'opacity-40':''} ${isDragTarget?dropHasConflict?'ring-2 ring-inset ring-red-400 bg-red-50':'ring-2 ring-inset ring-emerald-400 bg-emerald-50':''}`}
+                          className={`border-r border-t border-slate-300 last:border-r-0 align-top relative group transition-colors ${mode==='full'?'p-2':'p-1'} ${hasDoubleBooking&&mode==='full'?'ring-2 ring-inset ring-red-400':''} ${game.isCanceled&&mode==='full'?'opacity-40':''} ${isDragTarget?dropHasConflict?'ring-2 ring-inset ring-red-400 bg-red-50':'ring-2 ring-inset ring-emerald-400 bg-emerald-50':''} ${!isDragTarget&&filteredOut(game)?outCls:''}`}
                           style={isDragTarget||mode!=='full'?{}:{background:dc.bg}}
                           onDragOver={e=>{e.preventDefault();if(dragGame&&dragGame.id!==game.id)setDragOver({time,field})}}
                           onDragLeave={()=>setDragOver(null)}
