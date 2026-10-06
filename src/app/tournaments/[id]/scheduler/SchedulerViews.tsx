@@ -80,6 +80,11 @@ export interface ViewsProps {
    *  and drop from the parking lot ('__all__' or missing = no filter). */
   filterPool?: string
   filterTeam?: string
+  /** Event days, for the placing bar's "Time" editor. */
+  dates?: string[]
+  /** Put a game at an exact day / time / field (any minute, not just a slot row).
+   *  Resolves false when it was refused (taken, closed, declined warning). */
+  onSetSpot?: (gameId: string, spot: { date: string; startTime: string; location: string }) => Promise<boolean | void> | boolean | void
   /** Mark or unmark a game as "If needed" (only played on a certain result). */
   onToggleIfNeeded?: (gameId: string) => void
   /** Setup > Venues division limits: false when this field is set for other divisions only (e.g. too small). */
@@ -447,6 +452,43 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle, on
     return `${all} game${all === 1 ? '' : 's'}${today ? ` (${today} today)` : ''}`
   }
   const l1 = load(sel.team1), l2 = load(sel.team2)
+  // "Time": type an exact day / start / field for this game, for the odd game that
+  // has to sit off the grid's rows (2:40 instead of 2:30). Bo, Oct 6 2026.
+  const [editing, setEditing] = useState(false)
+  const [eDate, setEDate] = useState('')
+  const [eTime, setETime] = useState('')
+  const [eField, setEField] = useState('')
+  const [saving, setSavingSpot] = useState(false)
+  useEffect(() => { setEditing(false) }, [sel.id])
+  const openEdit = () => {
+    setEDate(sel.date || p.activeDate)
+    setETime(sel.startTime || p.slots[0] || '08:00')
+    setEField(sel.location || p.fields[0]?.fullName || '')
+    setEditing(true)
+  }
+  const saveSpot = async () => {
+    if (!p.onSetSpot || !eDate || !eTime || !eField) return
+    setSavingSpot(true)
+    const ok = await p.onSetSpot(sel.id, { date: eDate, startTime: eTime, location: eField })
+    setSavingSpot(false)
+    if (ok !== false) setEditing(false)
+  }
+  const dayOpts = [...new Set([...(p.dates ?? []), p.activeDate, sel.date].filter(Boolean))].sort()
+  const fieldOpts = p.fields.some(f => f.fullName === sel.location) || !sel.location ? p.fields : [...p.fields, { venueName: '', fieldName: sel.location, fullName: sel.location }]
+  if (editing) return (
+    <div className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-xl text-white shadow-xl w-[560px] max-w-[94vw]" style={{ background: '#065f46' }}>
+      <span className="text-xs whitespace-nowrap"><b>{gameLabel(sel, p.divAbbr)}</b> <span className="text-emerald-200">to</span></span>
+      <select value={eDate} onChange={e => setEDate(e.target.value)} aria-label="Day" className="text-xs text-slate-900 rounded-md px-1.5 py-1 bg-white">
+        {dayOpts.map(d => <option key={d} value={d}>{new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</option>)}
+      </select>
+      <input type="time" step={60} value={eTime} onChange={e => setETime(e.target.value)} aria-label="Start time" className="text-xs text-slate-900 rounded-md px-1.5 py-[3px] bg-white w-[92px]" />
+      <select value={eField} onChange={e => setEField(e.target.value)} aria-label="Field" className="flex-1 min-w-0 text-xs text-slate-900 rounded-md px-1.5 py-1 bg-white">
+        {fieldOpts.map(f => <option key={f.fullName} value={f.fullName}>{f.fieldName}</option>)}
+      </select>
+      <button onClick={saveSpot} disabled={saving} className="text-[11px] font-bold leading-none px-3 py-1.5 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100 disabled:opacity-50">{saving ? 'Saving…' : 'Set'}</button>
+      <button onClick={() => setEditing(false)} aria-label="Close the time editor" className="w-6 h-6 rounded-full flex items-center justify-center text-emerald-100 hover:bg-emerald-800"><X size={13} /></button>
+    </div>
+  )
   // Two lines of text and the buttons stacked beside them, so the bar stays short
   // (one row of chips tall) and never clips a long team name.
   return (
@@ -472,6 +514,7 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle, on
       </div>
       {/* two rows of buttons, as many columns as needed, so the bar stays short */}
       <div className="grid grid-rows-2 grid-flow-col gap-1 flex-shrink-0 content-center">
+        {p.onSetSpot && <button onClick={openEdit} title="Type an exact day, start time and field for this game" className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800">Time</button>}
         {isBracket(sel) && onBracket && <button onClick={onBracket} aria-pressed={!!bracketOpen} title="See this game in its bracket" className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${bracketOpen ? 'bg-white text-emerald-900' : 'border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800'}`}>Bracket</button>}
         {isBracket(sel) && p.onToggleIfNeeded && <button onClick={() => p.onToggleIfNeeded!(sel.id)} aria-pressed={!!sel.ifNeeded} title={sel.ifNeededFromBracket ? `Named "${sel.bracketLabel}" in the bracket. Rename it there to change.` : sel.ifNeeded ? 'Marked If needed. Click to make it a regular game.' : 'Mark as If needed: only played on a certain result, e.g. if the 1 seed loses'} className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${sel.ifNeeded ? 'bg-violet-300 text-violet-950 hover:bg-violet-200' : 'border border-violet-300/70 text-violet-100 hover:bg-emerald-800'}`}>{sel.ifNeeded ? 'If needed ✓' : 'If needed'}</button>}
         {placed && p.onSwap && <button onClick={onSwapToggle} aria-pressed={swapArmed} title="Swap this game's slot with another game: click Swap, then the other game. Or drag this game onto it." className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${swapArmed ? 'bg-amber-300 text-amber-950 hover:bg-amber-200' : 'bg-emerald-200 text-emerald-950 hover:bg-emerald-100'}`}>{swapArmed ? 'Swapping…' : 'Swap'}</button>}

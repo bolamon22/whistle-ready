@@ -548,6 +548,25 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       pushUndo({ label: `move ${gameName(g)}`, moves: [{ id: g.id, from: spotOf(g), to: spotOf(saved) }] })
   }
 
+  // The placing bar's "Time" editor: an exact day / start / field, any minute.
+  // Same guards as a drop (taken, closed, wrong field), plus a warning when it
+  // overlaps a game on that field that starts less than one slot away.
+  async function setSpot(id: string, spot: Spot): Promise<boolean> {
+    const g = games.find(x => x.id === id)
+    if (!g) return false
+    const fname = fields.find(f => f.fullName === spot.location)?.fieldName ?? spot.location
+    const taken = games.find(x => x.id !== id && x.date === spot.date && x.startTime === spot.startTime && x.location === spot.location)
+    if (taken) { toast.error(`${fname} at ${fmtTime(spot.startTime)} already has ${gameName(taken)}`); return false }
+    if (isFieldClosedAt(closuresFor(spot.date), spot.location, spot.startTime)) { toast.error(`${fname} is closed at ${fmtTime(spot.startTime)} that day`); return false }
+    if (!okForField(g, spot.location)) return false
+    const t = hmToMin(spot.startTime)
+    const near = games.find(x => x.id !== id && x.date === spot.date && x.location === spot.location && x.startTime && Math.abs(hmToMin(x.startTime) - t) < increment)
+    if (near && !window.confirm(`${gameName(near)} starts at ${fmtTime(near.startTime)} on ${fname}, less than ${increment} minutes away. Put ${g.gameNumber} at ${fmtTime(spot.startTime)} anyway?`)) return false
+    await moveGame(id, spot)
+    toast.success(`${g.gameNumber} set to ${fmtTime(spot.startTime)} on ${fname}${spot.date !== activeDate ? `, ${fmtDate(spot.date)}` : ''}`)
+    return true
+  }
+
   async function undoLast() {
     const step = undoStack[undoStack.length - 1]
     if (!step || undoing) return
@@ -2336,6 +2355,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             onLotOnTop: setBoardLotTop,
             onSwap: swapGames,
             onToggleIfNeeded: toggleIfNeeded,
+            dates, onSetSpot: setSpot,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()
