@@ -52,7 +52,7 @@ const ADMIN_LINKS = [
 export default function TournamentsDashboard() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
-  // Tasks: the card above the list and a strip on each event's card, for the
+  // Tasks: the card below the list and a strip on each event's card, for the
   // roles that have the Tasks page (directors; admins always).
   const { effectiveRole } = useRole()
   const showTasks = !!session && roleCanAccess(effectiveRole, '/tasks')
@@ -602,8 +602,6 @@ export default function TournamentsDashboard() {
         </div>
       )}
 
-      {showTasks && <HomeTasksCard viewOrgId={viewOrgId} onEvents={onTaskEvents} />}
-
       {loading ? <div className="text-slate-400 text-center py-16">Loading…</div> :
        tournaments.length === 0 ? (
         <div className="card p-16 text-center">
@@ -641,6 +639,10 @@ export default function TournamentsDashboard() {
           )}
         </>
        )}
+
+      {/* Tasks come after the tournaments: Bo looks at his events first (Oct 6 2026).
+          It still loads with the page, so each card's task strip fills in as before. */}
+      {showTasks && <div className="mt-6"><HomeTasksCard viewOrgId={viewOrgId} onEvents={onTaskEvents} /></div>}
 
       {/* Copy Tournament Modal */}
       {copySourceId && (
