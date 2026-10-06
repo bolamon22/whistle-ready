@@ -1028,7 +1028,10 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const capDiv = gridDiv !== '__all__' ? gridDiv : null
   function capacityFor(d: string) {
     const w = windowForDate(d), daySlots = makeSlots(w.s, w.e, increment), cl = closuresFor(d)
-    const taken = new Set(games.filter(g => g.date === d && g.startTime && g.location).map(g => `${g.startTime}|${g.location}`))
+    const placedD = games.filter(g => g.date === d && g.startTime && g.location)
+    const taken = new Set(placedD.map(g => `${g.startTime}|${g.location}`))
+    // a slot an off-grid game on that field overlaps isn't open either
+    for (const g of placedD) for (const t of daySlots) if (t !== g.startTime && Math.abs(hmToMin(t) - hmToMin(g.startTime)) < increment) taken.add(`${t}|${g.location}`)
     let open = 0, total = 0
     for (const f of visibleFields) {
       if (capDiv && !fieldAllows(f.fullName, capDiv)) continue
@@ -2355,7 +2358,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             onLotOnTop: setBoardLotTop,
             onSwap: swapGames,
             onToggleIfNeeded: toggleIfNeeded,
-            dates, onSetSpot: setSpot,
+            dates, onSetSpot: setSpot, baseSlots: allSlots,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()

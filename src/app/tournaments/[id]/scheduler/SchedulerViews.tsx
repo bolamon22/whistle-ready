@@ -80,6 +80,10 @@ export interface ViewsProps {
    *  and drop from the parking lot ('__all__' or missing = no filter). */
   filterPool?: string
   filterTeam?: string
+  /** The day's regular start times (the grid, before off-grid game times are
+   *  added). Rows that exist only because one game was set to an odd time are
+   *  not open for other fields. */
+  baseSlots?: string[]
   /** Event days, for the placing bar's "Time" editor. */
   dates?: string[]
   /** Put a game at an exact day / time / field (any minute, not just a slot row).
@@ -865,6 +869,13 @@ export function TimelineView(p: ViewsProps) {
   // Header state: any part of the day closed. Cell state: closed at that start time.
   const isClosed = (field: string) => !!p.closedLabel?.(field)
   const closedAt = (field: string, time: string) => !!p.isFieldClosed?.(field, time)
+  const baseSet = useMemo(() => (p.baseSlots ? new Set(p.baseSlots) : null), [p.baseSlots])
+  const deadAt = (field: string, time: string): { g?: SGame } | null => {
+    if (baseSet && !baseSet.has(time)) return {}
+    const t = hm(time), moving = selId ?? dragId
+    const o = p.dayGames.find(x => x.location === field && x.id !== moving && x.startTime && x.startTime !== time && Math.abs(hm(x.startTime) - t) < p.increment)
+    return o ? { g: o } : null
+  }
   // games on this field that sit inside its closed window (they need moving)
   const toMove = (field: string) => p.dayGames.filter(g => g.location === field && g.startTime && closedAt(field, g.startTime)).length
   // Header room is about 100px, so the window reads as arrows: "Closed 11:20a →", "Closed → 1:00p",
@@ -1201,14 +1212,19 @@ export function TimelineView(p: ViewsProps) {
   // One cell of the day: a placed game, or a drop target while a game is picked up.
   function renderCell(f: SField, s: string, si: number, mini = false) {
     const g = cellMap[s + '|' + f.fullName]
-    const closed = closedAt(f.fullName, s)
+    // Not a real opening (Bo, Oct 6 2026): a row added for one off-grid game
+    // (2:10, 3:20) on every other field, or a slot on that game's own field it
+    // would overlap. Shown like a closed cell and never takes a game; "Time" on
+    // the placing bar can still put a game anywhere on purpose.
+    const dead = g ? null : deadAt(f.fullName, s)
+    const closed = closedAt(f.fullName, s) || !!dead
     const status = sel && !g && !closed ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
     const wrongField = !!(status && status !== 'blocked' && p.fieldAllows && !p.fieldAllows(f.fullName, sel!.division))
     const bt = status && status !== 'blocked' && isBracket(sel!) ? bracketTiming(sel!, s, p.activeDate, p.games, p.increment) : null
     const h = bt?.early ? { ...HINT.early, label: `Before ${bt.early}` } : wrongField ? HINT.field : status === 'valid' && bt?.b2b ? HINT.risk : status ? HINT[status] : null
     return (
       <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
-        title={closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : undefined}
+        title={dead ? (dead.g ? `Overlaps ${dead.g.gameNumber} at ${p.fmtTime(dead.g.startTime)} on ${f.fieldName}` : `${p.fmtTime(s)} is an off-grid time (one game was set to it). Use Time on the placing bar to put another game here.`) : closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : undefined}
         onDragOver={e => {
           if (!g && !closed) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return }
           // onto another placed game: the two trade places
@@ -1223,7 +1239,7 @@ export function TimelineView(p: ViewsProps) {
           setDragId(null)
         }}
         onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
-        style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined, background: closed && !g ? 'repeating-linear-gradient(135deg,#ffffff 0 8px,#fef2f2 8px 10px)' : undefined }}>
+        style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined, background: dead ? 'repeating-linear-gradient(135deg,#f8fafc 0 6px,#e2e8f0 6px 7px)' : closed && !g ? 'repeating-linear-gradient(135deg,#ffffff 0 8px,#fef2f2 8px 10px)' : undefined }}>
         {g ? renderGameCard(g, mini) : h ? (
           <div className={`absolute ${mini ? 'inset-0.5 rounded' : 'inset-1 rounded-lg'} flex items-center justify-center text-[10px] font-bold overflow-hidden`} style={{ border: `1.5px dashed ${h.border}`, background: h.bg, color: h.text }} title={h.label}>{mini ? null : h.label}</div>
         ) : null}
