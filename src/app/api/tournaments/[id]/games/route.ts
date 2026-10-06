@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { getIfNeeded, withIfNeeded, bracketMeta } from '@/lib/ifNeeded'
+import { refsLookup } from '@/lib/refRules'
 
 // Two audiences, two URLs:
 //   ?view=public  -> what the public schedule may show. Never includes staff
@@ -52,7 +53,7 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
     location:     String(b.location ?? ''),
     team1:        String(b.team1 ?? 'TBD'),
     team2:        String(b.team2 ?? 'TBD'),
-    refCount:     Number(b.refCount ?? 2),
+    refCount:     b.refCount !== undefined ? Number(b.refCount) : (await refsLookup(params.id))(String(b.division ?? '')),
     isChampionship: Boolean(b.isChampionship),
   }})
   return NextResponse.json(game, { status:201 })

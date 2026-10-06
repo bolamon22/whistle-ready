@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { getTemplate } from '@/lib/bracketTemplates'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
+import { refsLookup } from '@/lib/refRules'
 
 function genId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
@@ -146,6 +147,7 @@ async function createBracketRecords(opts: {
 }) {
   const { tournamentId, division, flight, numberOffset, format, teamCount, seeds, template } = opts
   const bracketId = genId()
+  const refs = (await refsLookup(tournamentId))(division)   // Officials rule (lib/refRules)
   await prisma.bracket.create({
     data: {
       id: bracketId, tournamentId, division, format, teamCount,
@@ -172,7 +174,7 @@ async function createBracketRecords(opts: {
           gameNumber: 'B' + (numberOffset + g.gameNumber),
           isChampionship: g.section === 'championship',
           team1: fmtSrc(g.t1), team2: fmtSrc(g.t2),
-          date: '', startTime: '', location: '', refCount: 2,
+          date: '', startTime: '', location: '', refCount: refs,
         },
       })
     )
@@ -319,7 +321,7 @@ export async function PATCH(
           gameNumber: 'B' + (offset + gameNumber),
           isChampionship: section === 'championship',
           team1: fmtSrc(t1Source), team2: fmtSrc(t2Source),
-          date: '', startTime: '', location: '', refCount: 2,
+          date: '', startTime: '', location: '', refCount: (await refsLookup(params.id))(division),
         },
       })
       const updated = await prisma.bracket.findFirst({

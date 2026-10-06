@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
+import { refsLookup } from '@/lib/refRules'
 
 // GET – list existing pool games for this division
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
@@ -254,7 +255,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
         tournamentId: params.id, division, pool: pool || null,
         gameNumber: String(gameNumber ?? ''), date: date ?? '', startTime: startTime ?? '',
         location: location ?? '', team1: team1 ?? 'TBD', team2: team2 ?? 'TBD',
-        refCount: Number(refCount ?? 2),
+        // the Officials rule for this division unless the caller set one (lib/refRules)
+        refCount: refCount !== undefined ? Number(refCount) : (await refsLookup(params.id))(division),
       },
     })
     return NextResponse.json(game, { status: 201 })
@@ -266,6 +268,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
 
     const pools = await prisma.pool.findMany({ where: { tournamentId: params.id, division } })
     if (pools.length === 0) return NextResponse.json({ error: 'No pools found for this division' }, { status: 400 })
+    const defaultRefs = (await refsLookup(params.id))(division)
 
     // Which club each team belongs to, for rule 1. Read from the registration
     // rather than inferred from the team name -- "Jup RevLax 2034/35" and
@@ -343,7 +346,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       const plain = assemble(false)
       const rounds = tally(withRule) >= tally(plain) ? withRule : plain
 
-      poolSchedules.push({ poolName: pool.name, rounds, rc: Number(refCount ?? 2) })
+      poolSchedules.push({ poolName: pool.name, rounds, rc: refCount !== undefined ? Number(refCount) : defaultRefs })
     }
 
     // Number games ROUND BY ROUND across all pools:

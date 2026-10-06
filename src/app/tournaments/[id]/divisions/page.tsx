@@ -158,7 +158,7 @@ export default function DivisionsPage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'add', gameNumber: `P${next}`, team1: addHome, team2: addAway,
-        pool: poolName, date: '', startTime: '', location: '', refCount: 2,
+        pool: poolName, date: '', startTime: '', location: '',
       }),
     })
     setAddingGame(false)
@@ -696,7 +696,7 @@ export default function DivisionsPage() {
     setGenerating(true)
     const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div)}/pool-games`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[div] ?? '2'), clearExisting: true }),
+      body: JSON.stringify({ action: 'generate', gamesPerTeam: Number(divGamesPerTeam[div] ?? '2'), clearExisting: true }),
     })
     const data = await res.json()
     if (!res.ok) { toast.error(data.error ?? 'Failed to generate games'); setGenerating(false); return }
@@ -902,7 +902,7 @@ export default function DivisionsPage() {
         // Generate games
         const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(div.name)}/pool-games`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[div.name] ?? 3), clearExisting: true }),
+          body: JSON.stringify({ action: 'generate', gamesPerTeam: Number(divGamesPerTeam[div.name] ?? 3), clearExisting: true }),
         })
         const data = await res.json()
         if (res.ok) totalGames += data.generated ?? 0
@@ -1777,7 +1777,7 @@ if (loading) return (
                                 if (includePoolGames) {
                                   const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(d.name)}/pool-games`, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ action: 'generate', refCount: 2, gamesPerTeam: Number(divGamesPerTeam[d.name] ?? 3), clearExisting: true }),
+                                    body: JSON.stringify({ action: 'generate', gamesPerTeam: Number(divGamesPerTeam[d.name] ?? 3), clearExisting: true }),
                                   })
                                   const data = await res.json()
                                   if (res.ok) totalGames += data.generated ?? 0

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, requireDirector } from '@/lib/apiAuth'
 import { assignEventSlug, slugOf, slugBase } from '@/lib/eventSlug'
+import { parseDivisionRules, applyRuleChange } from '@/lib/refRules'
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tiebreakers" TEXT NOT NULL DEFAULT '{}'`) } catch {}
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tagline" TEXT DEFAULT ''`) } catch {}
@@ -104,9 +105,24 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   if (b.regConfirmationOverride!==undefined) raw.push(['regConfirmationOverride', "TEXT DEFAULT ''", String(b.regConfirmationOverride ?? '')])
   for (const [col, type] of raw) { try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "${col}" ${type}`) } catch {} }
   for (const [col, , val] of raw) { try { await prisma.$executeRawUnsafe(`UPDATE "Tournament" SET "${col}" = ? WHERE id = ?`, val, params.id) } catch {} }
+  // Officials rules changing (Setup sends them on every save, so compare first):
+  // games still at what the old rules gave them follow to the new count.
+  const before = b.divisionRules!==undefined
+    ? await prisma.tournament.findUnique({ where:{id:params.id}, select:{ divisionRules:true, payRates:true } })
+    : null
   const out = Object.keys(data).length
     ? await prisma.tournament.update({ where:{id:params.id}, data })
     : await prisma.tournament.findUnique({ where:{id:params.id} })
+  if (before && out) {
+    try {
+      const oldRules = parseDivisionRules(before.divisionRules), newRules = parseDivisionRules((out as any).divisionRules)
+      if (JSON.stringify(oldRules) !== JSON.stringify(newRules)) {
+        let std = 2
+        try { const n = Number(JSON.parse(String((out as any).payRates||'{}'))?.officialsConfig?.standardCount); if (n>=1&&n<=3) std = n } catch {}
+        await applyRuleChange(params.id, oldRules, newRules, std)
+      }
+    } catch (e) { console.error('[tournament PATCH] ref rule backfill failed (non-blocking):', e) }
+  }
 
   // The URL slug. Only the BASE is ever settable -- the year is always computed
   // from the event's own start date, so it cannot drift out of step with it and

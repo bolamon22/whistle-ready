@@ -36,11 +36,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const payRates = parsePayRates(tournament.payRates)
   const divRules: Record<string,number> = parseJsonDeep(tournament.divisionRules, {})
 
+  // The game's own count, the same one the assigner board shows. The division
+  // rule used to override it here, so a 7v7 playoff bumped to two refs by hand
+  // still got one from Auto-assign. The rule now sets the default when the game
+  // is made (lib/refRules) and the stored count is the truth after that.
+  void divRules
   function getRefCount(game: { division: string; refCount: number; isChampionship: boolean }): number {
-    const div = game.division.toLowerCase()
-    for (const [keyword, count] of Object.entries(divRules)) {
-      if (div.includes(keyword.toLowerCase())) return game.isChampionship ? Math.max(count, 3) : count
-    }
     return game.isChampionship ? Math.max(game.refCount, 3) : game.refCount
   }
 
