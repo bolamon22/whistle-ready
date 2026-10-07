@@ -13,6 +13,7 @@ import { countdownPhrase } from '@/lib/payLetterText'
 import toast, { Toaster } from 'react-hot-toast'
 import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail, Clock, FileText } from 'lucide-react'
 import { nameKey } from '@/lib/names'
+import ConnectLoginDialog from '@/components/ConnectLoginDialog'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
 
@@ -52,7 +53,7 @@ interface Registration {
   commEmailLog?: string
   confirmStatus?: string; confirmNote?: string; confirmAt?: string
   waiverUnassigned?: number
-  hasAccount?: boolean; accountRole?: string; accountUserId?: string
+  hasAccount?: boolean; accountRole?: string; accountUserId?: string; accountName?: string
   /** Club portal use (lib/portalVisits): null until the portal has been opened. */
   portal?: { last: string; first: string; lastBy: string; week: number; month: number; total: number; people: number } | null
   /** Someone can open this registration in the portal, and whether the contact's own login can (lib/clubAccess). */
@@ -775,6 +776,8 @@ export default function RegistrationsPage() {
   type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment' | 'account' | 'checklist'
   const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder', account: 'Set up your account', checklist: 'Pre-event checklist' }
   const [commOpen, setCommOpen] = useState(false)
+  // "Login not linked": the admin connects it here, or sends the Account email (ConnectLoginDialog).
+  const [connectReg, setConnectReg] = useState<Registration | null>(null)
   const [commKind, setCommKind] = useState<CommKind>('waiver')
   const [commLetters, setCommLetters] = useState<Record<CommKind, { subject: string; body: string }> | null>(null)
   const [commSel, setCommSel] = useState<Set<string>>(new Set())
@@ -1569,6 +1572,20 @@ export default function RegistrationsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {connectReg && (
+          <ConnectLoginDialog reg={connectReg}
+            onClose={() => setConnectReg(null)}
+            onSendEmail={() => { const r = connectReg; setConnectReg(null); openComm(r, 'account') }}
+            onConnected={r => {
+              setConnectReg(null)
+              toast.success(r.already
+                ? `${r.name || r.email} could already open ${r.clubName}`
+                : `Connected. ${r.clubName} now shows in ${r.name || r.email}'s club portal${r.rolePromoted ? ' (they sign out and back in once to see it)' : ''}`,
+                { duration: 6000 })
+              load()
+            }} />
         )}
 
         {/* Refund modal */}
@@ -2541,13 +2558,15 @@ export default function RegistrationsPage() {
                           {reg.contactEmail && (reg.hasAccount && reg.accountCanOpen === false
                             // A login on this email that can't open this registration:
                             // a parent account, or a director whose access covers their
-                            // other event. Said so, and one click to the Account letter,
-                            // whose link connects it when they sign in (Oct 5 2026).
+                            // other event, or a registration staff entered for them. Said
+                            // so; one click shows whose login it is, to connect it now
+                            // (admins, Oct 7 2026) or send the Account letter, whose link
+                            // connects it when they sign in (Oct 5 2026).
                             // A span, not a button: the whole row header is already a button.
                             ? <span role="button" tabIndex={0}
-                                onClick={e => { e.stopPropagation(); openComm(reg, 'account') }}
-                                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openComm(reg, 'account') } }}
-                                title={`${reg.contactEmail} has a login${reg.accountRole && reg.accountRole !== 'club_director' ? ` (${reg.accountRole})` : ''}, but it isn't connected to this registration, so their club portal doesn't show it. Click to send the Account letter: signing in from its link connects it.`}
+                                onClick={e => { e.stopPropagation(); setConnectReg(reg) }}
+                                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setConnectReg(reg) } }}
+                                title={`${reg.contactEmail} has a login${reg.accountRole && reg.accountRole !== 'club_director' ? ` (${reg.accountRole})` : ''}, but it isn't connected to this registration, so their club portal doesn't show it. Click to connect it now, or to send the Account letter.`}
                                 className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 px-1.5 py-0.5 rounded-full transition-colors cursor-pointer"><AlertTriangle size={10} /> Login not linked</span>
                             : reg.hasAccount
                             // A club director's chip opens their own portal, so a

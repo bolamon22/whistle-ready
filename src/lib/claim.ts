@@ -220,3 +220,35 @@ export async function setUpPortalLogin(
     return none
   }
 }
+
+// ---------------------------------------------------------------------------
+// STAFF CONNECTING A LOGIN
+//
+// Bo, Oct 7 2026, after entering Miami Fuego's registration for them: "Can you
+// just set it up so I can do it without having to send them an email? I want to
+// be able to do it as the administrator." The registrations page shows an admin
+// whose login is on the registration's contact email (name, email, role) and they
+// confirm it. A person deciding with the login in front of them, so no email round
+// trip; the grant and the role rule are the claim link's, and the grant records
+// who made it.
+// ---------------------------------------------------------------------------
+
+/** Give a login a registration on a staff member's say-so. Null if it couldn't be done. */
+export async function connectLogin(registrationId: string, userId: string, by: string): Promise<{ rolePromoted: boolean } | null> {
+  try {
+    let rolePromoted = false
+    try {
+      const who = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+      if (PROMOTABLE.has(String(who?.role || ''))) {
+        await prisma.user.update({ where: { id: userId }, data: { role: 'club_director' } })
+        rolePromoted = true
+      }
+    } catch { /* the grant still stands; staff can set the role by hand */ }
+    if (!(await grantAccess(userId, registrationId, by))) return null
+    await markClaimed(registrationId, userId)
+    return { rolePromoted }
+  } catch (e) {
+    console.error('[claim] staff connect failed:', e)
+    return null
+  }
+}

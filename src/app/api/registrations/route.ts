@@ -133,15 +133,15 @@ export async function GET(req: NextRequest) {
 
     // Does the club contact have a Whistle Ready login? Matched by email, same
     // way the claim flow and the Staff Pool's App column do it.
-    const accounts = new Map<string, { id: string; role: string }>()
+    const accounts = new Map<string, { id: string; role: string; name: string }>()
     try {
       const emails = [...new Set(registrations.map((r: any) => String(r.contactEmail || '').trim().toLowerCase()).filter(Boolean))]
       if (emails.length) {
         const us: any[] = await prisma.$queryRawUnsafe(
-          `SELECT id, lower(email) AS email, role FROM "User" WHERE lower(email) IN (${emails.map(() => '?').join(',')})`, ...emails)
+          `SELECT id, lower(email) AS email, role, name FROM "User" WHERE lower(email) IN (${emails.map(() => '?').join(',')})`, ...emails)
         // id comes along so the Account chip can open that person's own club
         // portal (Bo, Sep 15 2026) -- reading the bug report beat guessing.
-        for (const u of us) accounts.set(String(u.email), { id: String(u.id || ''), role: String(u.role || '') })
+        for (const u of us) accounts.set(String(u.email), { id: String(u.id || ''), role: String(u.role || ''), name: String(u.name || '') })
       }
     } catch { /* no account info — the card just won't show a badge */ }
 
@@ -172,6 +172,8 @@ export async function GET(req: NextRequest) {
         hasAccount: accounts.has(String(r.contactEmail || '').trim().toLowerCase()),
         accountRole: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.role || '',
         accountUserId: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id || '',
+        // Shown before an admin connects the login by hand (ConnectLoginDialog).
+        accountName: accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.name || '',
         portal: usage.get(r.id) || null,
         portalOpenable: (openers.get(r.id)?.length ?? 0) > 0,
         accountCanOpen: !!(openers.get(r.id) || []).some((d: any) => d.userId === accounts.get(String(r.contactEmail || '').trim().toLowerCase())?.id),
