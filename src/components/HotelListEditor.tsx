@@ -15,7 +15,9 @@ import GalleryPicker from '@/components/GalleryPicker'
 // search link adds one row per block hotel in it, each already pointing at that
 // hotel's booking page for the event dates; staff type the name, rate, distance
 // and deadline the housing company gave them, and add the photos the hotel or the
-// housing company sends (several at once; the first is the main photo).
+// housing company sends (several at once; the first is the main photo), either as
+// files or as links to where the photos already are online (Bo, Oct 7: "this will
+// take me a while to save and upload").
 
 const labelCls = 'block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1'
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -31,6 +33,10 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
   // A photo upload in progress: which hotel, how far along. Rows can't move or be
   // removed meanwhile, so the photos land on the hotel they were picked for.
   const [busy, setBusy] = useState<{ row: number; done: number; total: number } | null>(null)
+  // Pasted photo links, per hotel row, and the row whose links are being checked.
+  const [photoLinks, setPhotoLinks] = useState<Record<number, string>>({})
+  const [checking, setChecking] = useState<number | null>(null)
+  const locked = !!busy || checking !== null
   // The list as it is now, for when an upload finishes after other edits.
   const latest = useRef(hotels)
   latest.current = hotels
@@ -79,6 +85,38 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
     if (errors.length) toast.error(`${errors.length} photo${errors.length === 1 ? '' : 's'} didn't upload: ${errors.slice(0, 3).join('; ')}`, { duration: 8000 })
   }
 
+  // A pasted address counts only if the browser can open it as a picture: a page
+  // address pasted by mistake would otherwise show as a broken photo to families.
+  const loadsAsPicture = (u: string) => new Promise<boolean>(res => {
+    const im = new Image()
+    const t = setTimeout(() => res(false), 10000)
+    im.onload = () => { clearTimeout(t); res(im.naturalWidth > 0) }
+    im.onerror = () => { clearTimeout(t); res(false) }
+    im.src = u
+  })
+
+  async function addPhotoLinks(i: number) {
+    const words = (photoLinks[i] || '').split(/[\s,]+/).filter(Boolean)
+    const links = Array.from(new Set(words.map(photoUrl).filter(u => /^https?:\/\//i.test(u))))
+    if (!links.length) { toast.error('Paste photo addresses that start with https://'); return }
+    setChecking(i)
+    let ok: boolean[] = []
+    try { ok = await Promise.all(links.map(loadsAsPicture)) } finally { setChecking(null) }
+    const pictures = links.filter((_, k) => ok[k])
+    const failed = links.filter((_, k) => !ok[k])
+    const have = photosOf(latest.current[i])
+    const fresh = pictures.filter(u => !have.includes(u)).slice(0, Math.max(0, MAX_HOTEL_PHOTOS - have.length))
+    if (fresh.length) {
+      onChange(latest.current.map((h, j) => (j === i ? { ...h, photos: [...photosOf(h), ...fresh] } : h)))
+      toast.success(`Added ${fresh.length} photo${fresh.length === 1 ? '' : 's'}. Save Changes to put ${fresh.length === 1 ? 'it' : 'them'} on the page.`, { duration: 5000 })
+    } else if (!failed.length) {
+      toast(have.length >= MAX_HOTEL_PHOTOS ? `Up to ${MAX_HOTEL_PHOTOS} photos a hotel` : 'Those photos are already on this hotel')
+    }
+    if (failed.length) toast.error(`${failed.length} link${failed.length === 1 ? " didn't" : "s didn't"} open as a picture. Copy the image address (right-click the photo), not the page address.`, { duration: 8000 })
+    // Leave only the ones that failed in the box, to fix or clear.
+    setPhotoLinks(v => ({ ...v, [i]: failed.join(' ') }))
+  }
+
   function addFromLibrary(i: number, url: string) {
     const u = photoUrl(url)
     if (!u) { toast.error("That picture can't be used here. Upload the file instead."); return }
@@ -125,9 +163,9 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-semibold text-slate-400 w-5">{i + 1}.</span>
               <input className={`${inputCls} bg-white`} value={h.name} onChange={e => set(i, { name: e.target.value })} placeholder="Hotel name (required to show)" />
-              <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || !!busy} aria-label="Move up" className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowUp size={15} /></button>
-              <button type="button" onClick={() => move(i, 1)} disabled={i === hotels.length - 1 || !!busy} aria-label="Move down" className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowDown size={15} /></button>
-              <button type="button" onClick={() => onChange(hotels.filter((_, j) => j !== i))} disabled={!!busy} aria-label="Remove hotel" className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-30"><Trash2 size={15} /></button>
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || locked} aria-label="Move up" className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowUp size={15} /></button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === hotels.length - 1 || locked} aria-label="Move down" className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowDown size={15} /></button>
+              <button type="button" onClick={() => onChange(hotels.filter((_, j) => j !== i))} disabled={locked} aria-label="Remove hotel" className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-30"><Trash2 size={15} /></button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pl-7">
               <div>
@@ -179,6 +217,19 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
                     </>
                   )}
                 </div>
+                {photosOf(h).length < MAX_HOTEL_PHOTOS && (
+                  <div className="flex gap-2 mt-2">
+                    <input className={`${inputCls} bg-white`} value={photoLinks[i] || ''}
+                      onChange={e => setPhotoLinks(v => ({ ...v, [i]: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPhotoLinks(i) } }}
+                      placeholder="Or paste photo links here" />
+                    <button type="button" onClick={() => addPhotoLinks(i)} disabled={!(photoLinks[i] || '').trim() || checking !== null}
+                      className="shrink-0 inline-flex items-center gap-1.5 text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50">
+                      {checking === i ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Add
+                    </button>
+                  </div>
+                )}
+                {photosOf(h).length < MAX_HOTEL_PHOTOS && <p className="text-[11px] text-slate-400 mt-1">Right-click a photo and choose Copy image address. Paste several at once if you like.</p>}
               </div>
             </div>
           </div>
