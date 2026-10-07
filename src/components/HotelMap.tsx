@@ -16,12 +16,14 @@ import { hotelChain, milesLabel, onMap, rateLabel, safeUrl, type EventHotel, typ
 // booking button. Pins that would sit on top of each other spread into a small
 // ring so every number shows.
 //
-// Map pictures: OpenStreetMap's tiles, credited in the corner as their policy asks.
-// They suit a page this size; a busier site would move to a paid tile service by
-// changing TILES.
+// Map pictures: OpenStreetMap's tiles, credited in the corner as their license
+// asks. They suit a page this size; a busier site would move to a paid tile
+// service by changing TILES. The credit opens in a new tab so a family who taps it
+// doesn't lose the hotels page (Bo, Oct 7: "it takes you off the website"), and
+// Leaflet's own "Leaflet" link, which its license doesn't ask for, is left off.
 
 const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-const CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+const CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
 const PIN = 26
 
 type Kind = 'event' | 'other' | 'sold' | 'fields'
@@ -167,6 +169,7 @@ export default function HotelMap({ hotels, fields = [], fallbackUrl = '', onShow
   useEffect(() => {
     if (!box.current) return
     const map = L.map(box.current, { scrollWheelZoom: false, zoomSnap: 0.5 })
+    map.attributionControl.setPrefix(false)
     L.tileLayer(TILES, { maxZoom: 18, attribution: CREDIT }).addTo(map)
     const layer = L.layerGroup().addTo(map)
     map.on('zoomend', () => spread(map, pinsRef.current))
