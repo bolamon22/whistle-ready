@@ -1,9 +1,18 @@
 'use client'
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { ArrowUpDown, Check, ChevronDown } from 'lucide-react'
+import dynamic from 'next/dynamic'
+// Leaflet's stylesheet (about 4 KB zipped) rides with the page, so the map never draws unstyled when it opens.
+import 'leaflet/dist/leaflet.css'
+import { ArrowUpDown, Check, ChevronDown, Map as MapIcon } from 'lucide-react'
 import HotelCards from '@/components/HotelCards'
-import { hotelChain, milesNumber, rateNumber, type EventHotel } from '@/lib/eventHotels'
+import { hotelChain, milesNumber, onMap, rateNumber, type EventHotel, type MapPlace } from '@/lib/eventHotels'
+
+// The map loads only when someone opens it (Leaflet and the map pictures).
+const HotelMap = dynamic(() => import('@/components/HotelMap'), {
+  ssr: false,
+  loading: () => <div className="h-[280px] sm:h-[380px] rounded-2xl border border-slate-200 bg-slate-100 animate-pulse" />,
+})
 
 // The hotels page's list with the families' filters (Bo, Oct 7: "at least list
 // the closest ones ... filter by price and distance ... search by hotel chain").
@@ -15,6 +24,9 @@ import { hotelChain, milesNumber, rateNumber, type EventHotel } from '@/lib/even
 // The controls are one row of matching dropdowns with the count at the end (Bo,
 // Oct 7: the boxed Sort / Chain / dropdown rows looked "kind of weird ... like all
 // in one line"). On a phone the dropdowns sit two to a row.
+// "View map" (Bo, Oct 7: "have it default on hide") opens a map of the hotels
+// shown, numbered like the list, with the fields (components/HotelMap). It is
+// offered whenever a hotel has a map spot, even on a short list.
 
 type Sort = 'recommended' | 'distance' | 'price'
 const SORTS: { key: Sort; label: string }[] = [
@@ -26,7 +38,8 @@ const PRICE_STEPS = [100, 125, 150, 175, 200, 250, 300, 400]
 const MILE_STEPS = [2, 5, 10, 15, 20, 30]
 const FAR = 1e9
 
-export default function HotelBrowser({ hotels, today, fallbackUrl = '' }: { hotels: EventHotel[]; today: string; fallbackUrl?: string }) {
+export default function HotelBrowser({ hotels, today, fallbackUrl = '', fields = [] }: { hotels: EventHotel[]; today: string; fallbackUrl?: string; fields?: MapPlace[] }) {
+  const [showMap, setShowMap] = useState(false)
   const [sort, setSort] = useState<Sort>('recommended')
   const [chain, setChain] = useState('all')
   const [maxPrice, setMaxPrice] = useState(0)
@@ -67,11 +80,15 @@ export default function HotelBrowser({ hotels, today, fallbackUrl = '' }: { hote
 
   const filtering = chain !== 'all' || !!maxPrice || !!maxMiles || eventOnly
   const clear = () => { setChain('all'); setMaxPrice(0); setMaxMiles(0); setEventOnly(false) }
+  const controls = hotels.length > 3
+  const mappable = hotels.some(onMap)
+  const toHotel = (i: number) => document.querySelector(`[data-hotel="${i + 1}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
     <div>
-      {hotels.length > 3 && (
+      {(controls || mappable) && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
+          {controls && (
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center [&>*:last-child:nth-child(odd)]:col-span-2">
             {/* "Sort:" on wider screens; on a phone an icon, so the choice fits half the row. */}
             <Pick label="Sort hotels" value={sort} onChange={v => setSort(v as Sort)}
@@ -90,20 +107,34 @@ export default function HotelBrowser({ hotels, today, fallbackUrl = '' }: { hote
                 options={[{ value: '0', label: 'Any distance' }, ...mileSteps.map(m => ({ value: String(m), label: `Within ${m} miles` }))]} />
             )}
           </div>
-          {mixedRates && (
-            <button type="button" onClick={() => setEventOnly(v => !v)} aria-pressed={eventOnly} className={`${pill(eventOnly)} px-3.5`}>
+          )}
+          {controls && mixedRates && (
+            <button type="button" onClick={() => setEventOnly(v => !v)} aria-pressed={eventOnly} className={`${pill(eventOnly)} px-3`}>
               {eventOnly && <Check size={15} aria-hidden />}Event rate only
             </button>
           )}
+          {mappable && (
+            <button type="button" onClick={() => setShowMap(v => !v)} aria-pressed={showMap} aria-controls="hotel-map" className={`${pill(showMap)} px-3`}>
+              <MapIcon size={15} aria-hidden />{showMap ? 'Hide map' : 'View map'}
+            </button>
+          )}
+          {controls && (
           <p className="ml-auto whitespace-nowrap text-sm text-slate-500" aria-live="polite">
             {filtering ? `${shown.length} of ${hotels.length} hotels` : `${hotels.length} hotels`}
             {filtering && <button type="button" onClick={clear} className="ml-2 font-semibold text-teal-700 hover:text-teal-900">Clear</button>}
           </p>
+          )}
+        </div>
+      )}
+
+      {mappable && showMap && (
+        <div id="hotel-map" className="mb-4">
+          <HotelMap hotels={shown} fields={fields} fallbackUrl={fallbackUrl} onShowHotel={toHotel} />
         </div>
       )}
 
       {shown.length
-        ? <HotelCards hotels={shown} fallbackUrl={fallbackUrl} today={today} gallery />
+        ? <HotelCards hotels={shown} fallbackUrl={fallbackUrl} today={today} gallery numbered={mappable && showMap} />
         : (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-sm text-slate-500">
             No hotels match those filters. <button type="button" onClick={clear} className="font-semibold text-teal-700 hover:text-teal-900">Clear filters</button>
@@ -127,11 +158,11 @@ function Pick({ label, prefix, value, options, onChange, active = false }: {
 }) {
   const shown = options.find(o => o.value === value)?.label ?? options[0]?.label ?? ''
   return (
-    <div className={`${pill(active)} relative min-w-0 pl-3.5 pr-8 focus-within:ring-2 focus-within:ring-teal-400`}>
+    <div className={`${pill(active)} relative min-w-0 pl-3 pr-7 focus-within:ring-2 focus-within:ring-teal-400`}>
       <span aria-hidden className="flex min-w-0 items-center gap-1.5">
         {prefix}<span className="truncate">{shown}</span>
       </span>
-      <ChevronDown size={15} aria-hidden className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 opacity-60" />
+      <ChevronDown size={15} aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 opacity-60" />
       <select aria-label={label} value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>

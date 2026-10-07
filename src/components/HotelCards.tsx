@@ -15,12 +15,21 @@ import HotelPhotos from '@/components/HotelPhotos'
 // pages pass the list through withSoldOut, which puts those hotels last. Their
 // booking button gives way to "Sold out", so nobody clicks through to a full block.
 //
+// With the hotels page map open (components/HotelMap), each name gets the number
+// its pin shows, in the pin's color.
+//
 // No hooks, so it renders on the server pages as they are; HotelPhotos is the
 // client part.
 
 export const todayET = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
 
-export default function HotelCards({ hotels, today, fallbackUrl = '', compact = false, gallery = false }: {
+const NUMBER_CLASS = {
+  event: 'bg-teal-700 text-white',
+  other: 'bg-white text-slate-900 border-2 border-slate-600',
+  sold: 'bg-slate-300 text-slate-600',
+}
+
+export default function HotelCards({ hotels, today, fallbackUrl = '', compact = false, gallery = false, numbered = false }: {
   hotels: EventHotel[]
   today: string
   /** The event's booking link, for a hotel listed without a link of its own. */
@@ -28,6 +37,8 @@ export default function HotelCards({ hotels, today, fallbackUrl = '', compact = 
   compact?: boolean
   /** The hotels page: each hotel's photos as a gallery across the top of its card. */
   gallery?: boolean
+  /** The hotels page with its map open: number each hotel like its pin. */
+  numbered?: boolean
 }) {
   if (!hotels.length) return null
   const fallback = safeUrl(fallbackUrl)
@@ -66,7 +77,7 @@ export default function HotelCards({ hotels, today, fallbackUrl = '', compact = 
         const photos = h.photos || []
         const top = gallery && photos.length > 0
         return (
-          <div key={i} className={`border border-slate-200 rounded-2xl p-4 sm:p-5 ${h.soldOut ? 'bg-slate-50' : 'bg-white'}`}>
+          <div key={i} data-hotel={i + 1} className={`border border-slate-200 rounded-2xl p-4 sm:p-5 scroll-mt-24 ${h.soldOut ? 'bg-slate-50' : 'bg-white'}`}>
             {top && <div className="mb-4"><HotelPhotos photos={photos} name={h.name} layout="grid" /></div>}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -74,7 +85,12 @@ export default function HotelCards({ hotels, today, fallbackUrl = '', compact = 
                   : photos.length > 0 ? <HotelPhotos photos={photos} name={h.name} layout="thumb" />
                   : <span className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0" aria-hidden><Hotel size={18} /></span>}
                 <div className="min-w-0">
-                  <h3 className={`font-bold text-slate-900 leading-snug ${top ? 'text-lg' : ''}`}>{h.name}</h3>
+                  <h3 className={`font-bold text-slate-900 leading-snug ${top ? 'text-lg' : ''}`}>
+                    {numbered && (
+                      <span aria-hidden className={`mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full align-[2px] text-xs font-bold ${NUMBER_CLASS[h.soldOut ? 'sold' : h.eventRate !== false ? 'event' : 'other']}`}>{i + 1}</span>
+                    )}
+                    {h.name}
+                  </h3>
                   <div className="text-sm text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
                     {hotelChain(h) !== 'Other' && <span className="text-slate-400">{hotelChain(h)}</span>}
                     {miles && <span className="inline-flex items-center gap-1"><MapPin size={13} className="text-slate-400" />{miles}</span>}

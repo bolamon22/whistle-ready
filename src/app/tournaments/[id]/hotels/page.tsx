@@ -5,7 +5,8 @@ import { ArrowLeft, Hotel, ArrowUpRight } from 'lucide-react'
 import type { Metadata } from 'next'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import { tournamentAbs, clip } from '@/lib/seo'
-import { cleanHotels, safeUrl, withSoldOut } from '@/lib/eventHotels'
+import { cleanHotels, onMap, safeUrl, withSoldOut, type MapPlace } from '@/lib/eventHotels'
+import { geocodeCached } from '@/lib/geocodeStore'
 import { todayET } from '@/components/HotelCards'
 import HotelBrowser from '@/components/HotelBrowser'
 import PublicChirp from '@/components/PublicChirp'
@@ -27,11 +28,27 @@ function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, auth
 async function load(id: string) {
   const client = db()
   let t: any = null; let c: any = {}; let soldOut: any = {}
-  try { const r = await client.execute({ sql: 'SELECT t.id, t.name, o.slug AS orgSlug FROM "Tournament" t LEFT JOIN "Organization" o ON o.id = t.orgId WHERE t.id = ?', args: [id] }); if (r.rows.length) t = r.rows[0] } catch {}
+  try { const r = await client.execute({ sql: 'SELECT t.id, t.name, t.venues, o.slug AS orgSlug FROM "Tournament" t LEFT JOIN "Organization" o ON o.id = t.orgId WHERE t.id = ?', args: [id] }); if (r.rows.length) t = r.rows[0] } catch {}
   try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${id}`] }); if (r.rows.length) c = JSON.parse(((r.rows[0] as any).value as string) || '{}') } catch {}
   // Sold-out marks from the housing board / Builder (lib/hotelStatus).
   try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`hotelStatus:${id}`] }); if (r.rows.length) soldOut = JSON.parse(((r.rows[0] as any).value as string) || '{}')?.soldOut || {} } catch {}
   return { t, c, soldOut }
+}
+
+/**
+ * The fields for the map: each venue with an address (Setup › Venues & fields),
+ * looked up once and kept (lib/geocodeStore). A slow or failed lookup just leaves
+ * the fields off the map.
+ */
+async function fieldsOnMap(venues: unknown): Promise<MapPlace[]> {
+  let list: any[] = []
+  try { const v = JSON.parse(String(venues || '[]')); list = Array.isArray(v) ? v : Array.isArray(v?.venues) ? v.venues : [] } catch {}
+  const withAddress = list.filter(v => typeof v?.address === 'string' && v.address.trim()).slice(0, 4)
+  const found = await Promise.all(withAddress.map(async v => {
+    const spot = await geocodeCached(v.address, { timeoutMs: 4000 }).catch(() => null)
+    return spot ? { name: String(v.name || '').trim().slice(0, 80), address: String(v.address).replace(/\s+/g, ' ').trim().slice(0, 160), lat: spot.lat, lng: spot.lng } : null
+  }))
+  return found.filter((f): f is MapPlace => !!f)
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
@@ -53,6 +70,8 @@ export default async function TournamentHotelsPage({ params }: { params: { id: s
   const base = `/tournaments/${params.id}`
   const moreUrl = safeUrl(c?.hotelsUrl)
   const name = String(t.name || '').trim()
+  // Only worth looking up when a hotel can go on the map.
+  const fields = hotels.some(onMap) ? await fieldsOnMap(t.venues) : []
 
   return (
     // A size wider than the rules page so each hotel's photos have room.
@@ -74,7 +93,7 @@ export default async function TournamentHotelsPage({ params }: { params: { id: s
         </div>
       )}
 
-      <HotelBrowser hotels={hotels} fallbackUrl={moreUrl} today={todayET()} />
+      <HotelBrowser hotels={hotels} fields={fields} fallbackUrl={moreUrl} today={todayET()} />
 
       {moreUrl && (
         <p className="text-sm text-slate-500 mt-5">
