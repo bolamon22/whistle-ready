@@ -37,6 +37,8 @@ export type EventHotel = {
   url: string
   /** Photos, the main one first: uploads (/api/img/<id>) or library picks. */
   photos: string[]
+  /** Set for the families' pages from the event's sold-out marks (withSoldOut); never stored with the list. */
+  soldOut?: boolean
 }
 
 export const MAX_HOTELS = 20
@@ -112,6 +114,28 @@ export function bookByLabel(bookBy: string, today: string): { text: string; pass
   const day = `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
   if (today && bookBy < today) return { text: `Block deadline passed (${day})`, passed: true }
   return { text: `Book by ${DAYS[d.getUTCDay()]}, ${day}`, passed: false }
+}
+
+// ── Sold out ───────────────────────────────────────────────────────────────
+// Bo, Oct 7: "if the hotel sells out ... will it mark it on our site if Vinny
+// marks it on the actual booking website?" It can't: nothing here reads Legacy's
+// site. So Vinny marks it on his Whistle Ready housing board instead (staff can in
+// Builder › Hotels too), and the pages show it at once. The marks live apart from
+// the list (AppSetting hotelStatus:<id>, lib/hotelStatus) so a Builder save made
+// from an older copy of the page can't quietly undo one.
+
+/** A hotel's lasting key: its booking-site property number when it has one, else its name. */
+export function hotelKey(h: { url?: string; name?: string }): string {
+  const p = reserveTravelProperty(String(h?.url || ''))
+  if (p) return `p:${p}`
+  const n = String(h?.name || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 120)
+  return n ? `n:${n}` : ''
+}
+
+/** The list with sold-out hotels marked and moved to the end; otherwise staff's order. */
+export function withSoldOut(hotels: EventHotel[], soldOut?: Record<string, unknown> | null): EventHotel[] {
+  const marked = hotels.map(h => { const k = hotelKey(h); return { ...h, soldOut: !!(k && soldOut && soldOut[k]) } })
+  return [...marked.filter(h => !h.soldOut), ...marked.filter(h => h.soldOut)]
 }
 
 /** Where the event's hotels live on its own site. */

@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { orgById } from '@/lib/org'
 import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
+import { hotelSwitches, type HotelSwitch } from '@/lib/hotelStatus'
 
 // Team housing (Bo, Sep 5 2026): the org's housing company gets a weekly report of
 // which clubs still need hotel blocks, plus a magic-link board (no login) to log
@@ -143,7 +144,9 @@ export type HousingClub = {
   clubBasedIn: string; numTeams: number; needsHotel: string; status: HousingStatus
   bookings: HousingBookingRow[]; roomNights: number; notes: string
 }
-export type HousingEvent = { id: string; name: string; startDate: string; endDate: string; location: string; clubs: HousingClub[] }
+// hotels: the event's listed block hotels with their Sold out switch (lib/hotelStatus),
+// so the housing company can mark a sold-out block right on the board.
+export type HousingEvent = { id: string; name: string; startDate: string; endDate: string; location: string; clubs: HousingClub[]; hotels: HotelSwitch[] }
 
 // Upcoming tournaments for the org (same date rule as the staff signup's event list).
 export async function housingBoard(orgId: string): Promise<HousingEvent[]> {
@@ -171,8 +174,11 @@ export async function housingBoard(orgId: string): Promise<HousingEvent[]> {
         } catch { /* concurrent migrate */ }
       }
     }
+    let hotels: HotelSwitch[] = []
+    try { hotels = await hotelSwitches(String(t.id)) } catch { /* the board still works without them */ }
     events.push({
       id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''), location: String(t.location || ''),
+      hotels,
       clubs: regs.map(r => {
         const bs = bookings.get(String(r.id)) ?? []
         return {

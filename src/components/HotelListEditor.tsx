@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, ArrowUp, ArrowDown, Link2, ExternalLink, ImagePlus, Star, X, Loader2 } from 'lucide-react'
 import {
-  EMPTY_HOTEL, MAX_HOTELS, MAX_HOTEL_PHOTOS, parseReserveTravel, reserveTravelHotelUrl, reserveTravelProperty, hotelsPath, photoUrl,
+  EMPTY_HOTEL, MAX_HOTELS, MAX_HOTEL_PHOTOS, parseReserveTravel, reserveTravelHotelUrl, reserveTravelProperty, hotelsPath, photoUrl, hotelKey,
   type EventHotel,
 } from '@/lib/eventHotels'
 import { uploadHotelPhoto, HOTEL_PHOTO_ACCEPT } from '@/lib/photoClient'
@@ -40,6 +40,33 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
   // The list as it is now, for when an upload finishes after other edits.
   const latest = useRef(hotels)
   latest.current = hotels
+
+  // Sold out, per hotel (lib/hotelStatus). Saved the moment it's flipped, not with
+  // Save Changes: the housing company flips the same switch on their board.
+  const [soldOut, setSoldOutMarks] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    fetch(`/api/tournaments/${tournamentId}/hotel-status`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (Array.isArray(d?.hotels)) setSoldOutMarks(Object.fromEntries(d.hotels.map((h: any) => [h.key, !!h.soldOut]))) })
+      .catch(() => {})
+  }, [tournamentId])
+
+  async function toggleSoldOut(h: EventHotel) {
+    const key = hotelKey(h)
+    if (!key) return
+    const next = !soldOut[key]
+    setSoldOutMarks(v => ({ ...v, [key]: next }))
+    const r = await fetch(`/api/tournaments/${tournamentId}/hotel-status`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, soldOut: next }),
+    }).catch(() => null)
+    if (!r?.ok) {
+      setSoldOutMarks(v => ({ ...v, [key]: !next }))
+      const d = r ? await r.json().catch(() => ({})) : {}
+      toast.error(d.error || 'That didn’t save. Try again.')
+      return
+    }
+    toast.success(next ? `${h.name || 'Hotel'} is marked sold out` : `${h.name || 'Hotel'} is open again`)
+  }
   // Blank box: read the booking link above, when it is a ReserveTravel search link.
   const bookingHasHotels = !!parseReserveTravel(bookingUrl)?.properties.length
   const source = link.trim() || (bookingHasHotels ? bookingUrl : '')
@@ -146,6 +173,7 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
       <p className="text-xs text-slate-500 mb-2">
         Families see these on the event page and at its hotel link, each with a button straight to that hotel&apos;s booking page.
         With hotels listed, the booking link above becomes &ldquo;See more hotels.&rdquo; Add photos the hotel or the housing company sends you.
+        Sold out saves the moment you flip it, and the housing company can flip it on their housing board too.
       </p>
 
       <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -167,7 +195,7 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
               <button type="button" onClick={() => move(i, 1)} disabled={i === hotels.length - 1 || locked} aria-label="Move down" className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowDown size={15} /></button>
               <button type="button" onClick={() => onChange(hotels.filter((_, j) => j !== i))} disabled={locked} aria-label="Remove hotel" className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-30"><Trash2 size={15} /></button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pl-7">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-7">
               <div>
                 <label className={labelCls}>Rate / night</label>
                 <input className={`${inputCls} bg-white`} value={h.rate} onChange={e => set(i, { rate: e.target.value })} placeholder="$199" inputMode="decimal" />
@@ -176,22 +204,38 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
                 <label className={labelCls}>Miles to fields</label>
                 <input className={`${inputCls} bg-white`} value={h.miles} onChange={e => set(i, { miles: e.target.value })} placeholder="1.1" inputMode="decimal" />
               </div>
-              <div className="col-span-2 sm:col-span-1">
+              <div>
                 <label className={labelCls}>Book by</label>
                 <input type="date" className={`${inputCls} bg-white`} value={h.bookBy} onChange={e => set(i, { bookBy: e.target.value })} />
               </div>
-              <div className="col-span-2 sm:col-span-3">
+              <div>
+                <label className={labelCls}>Sold out</label>
+                {(() => {
+                  const sold = !!soldOut[hotelKey(h)]
+                  return (
+                    <button type="button" role="switch" aria-checked={sold} aria-label={`${h.name || 'This hotel'} sold out`}
+                      onClick={() => toggleSoldOut(h)} disabled={!hotelKey(h)}
+                      className={`w-full inline-flex items-center justify-between gap-2 border rounded-lg px-3 py-2 text-sm disabled:opacity-50 ${sold ? 'bg-red-50 border-red-200 text-red-700 font-semibold' : 'bg-white border-slate-300 text-slate-500'}`}>
+                      <span>{sold ? 'Sold out' : 'Open'}</span>
+                      <span className={`relative shrink-0 w-8 h-[18px] rounded-full transition-colors ${sold ? 'bg-red-500' : 'bg-slate-300'}`} aria-hidden>
+                        <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-all ${sold ? 'left-[16px]' : 'left-[2px]'}`} />
+                      </span>
+                    </button>
+                  )
+                })()}
+              </div>
+              <div className="col-span-2 sm:col-span-4">
                 <label className={labelCls}>Booking link</label>
                 <div className="flex gap-2">
                   <input className={`${inputCls} bg-white`} value={h.url} onChange={e => set(i, { url: e.target.value.trim() })} placeholder="https://… (leave blank to use the booking link above)" />
                   {/^https?:\/\//i.test(h.url) && <a href={h.url} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center px-2.5 border border-slate-300 rounded-lg text-slate-500 hover:bg-white" aria-label="Open booking link"><ExternalLink size={14} /></a>}
                 </div>
               </div>
-              <div className="col-span-2 sm:col-span-3">
+              <div className="col-span-2 sm:col-span-4">
                 <label className={labelCls}>Note (optional)</label>
                 <input className={`${inputCls} bg-white`} value={h.note} onChange={e => set(i, { note: e.target.value })} placeholder="Breakfast included · free parking" />
               </div>
-              <div className="col-span-2 sm:col-span-3">
+              <div className="col-span-2 sm:col-span-4">
                 <label className={labelCls}>Photos <span className="normal-case font-normal tracking-normal text-slate-400">· the first one is the main photo</span></label>
                 <div className="flex flex-wrap items-center gap-2">
                   {photosOf(h).map((src, k, all) => (

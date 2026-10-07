@@ -15,7 +15,10 @@ type Club = {
   clubBasedIn: string; numTeams: number; status: string
   bookings: Booking[]; roomNights: number; notes: string
 }
-type Ev = { id: string; name: string; startDate: string; endDate: string; location: string; clubs: Club[] }
+// hotels: the event's listed block hotels, each with a Sold out switch. Flipping it
+// marks the hotel sold out on the families' hotel pages (lib/hotelStatus).
+type HotelSwitch = { key: string; name: string; soldOut: boolean }
+type Ev = { id: string; name: string; startDate: string; endDate: string; location: string; clubs: Club[]; hotels?: HotelSwitch[] }
 
 export const HOUSING_STATUS_META: Record<string, { label: string; text: string; bg: string; border: string }> = {
   needs: { label: 'Needs hotels', text: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
@@ -70,6 +73,7 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
   const [filter, setFilter] = useState<string>('all')
   const [error, setError] = useState('')
   const [flash, setFlash] = useState<string | null>(null)
+  const [hotelError, setHotelError] = useState<{ ev: string; msg: string } | null>(null)
 
   const apiQuery = code ? `?code=${encodeURIComponent(code)}` : viewOrgId ? `?viewOrgId=${encodeURIComponent(viewOrgId)}` : ''
 
@@ -113,9 +117,29 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
     }
   }
 
+  const setHotels = (eventId: string, fn: (hs: HotelSwitch[]) => HotelSwitch[]) =>
+    setEvents(evs => evs?.map(e => e.id === eventId ? { ...e, hotels: fn(e.hotels ?? []) } : e) ?? null)
+
+  async function toggleSoldOut(eventId: string, key: string, soldOut: boolean) {
+    setHotelError(null)
+    setHotels(eventId, hs => hs.map(h => h.key === key ? { ...h, soldOut } : h))
+    const res = await fetch('/api/housing/board', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...(code ? { code } : { viewOrgId }), hotelSoldOut: { tournamentId: eventId, key, soldOut } }),
+    }).catch(() => null)
+    const d = res ? await res.json().catch(() => ({})) : {}
+    if (res?.ok && Array.isArray(d.hotels)) {
+      setHotels(eventId, () => d.hotels)
+      setFlash(key); setTimeout(() => setFlash(f => f === key ? null : f), 1200)
+    } else {
+      setHotels(eventId, hs => hs.map(h => h.key === key ? { ...h, soldOut: !soldOut } : h))
+      setHotelError({ ev: eventId, msg: d.error || 'That didn’t save. Check your connection and try again.' })
+    }
+  }
+
   if (error) return <div className="max-w-xl mx-auto text-center py-16 px-4"><p className="text-slate-500 text-sm">{error}</p></div>
   if (!events) return <div className="text-center py-16 text-slate-400 text-sm">Loading…</div>
-  if (!events.some(e => e.clubs.length)) return <div className="text-center py-16 text-slate-400 text-sm">No upcoming events with registered clubs yet.</div>
+  if (!events.some(e => e.clubs.length || e.hotels?.length)) return <div className="text-center py-16 text-slate-400 text-sm">No upcoming events with registered clubs yet.</div>
 
   const inputCls = 'border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500'
 
@@ -158,13 +182,37 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
         </div>
       )}
 
-      {events.filter(e => shown(e).length).map(ev => (
+      {events.filter(e => shown(e).length || e.hotels?.length).map(ev => (
         <div key={ev.id}>
           <div className="flex items-baseline gap-2.5 mb-2.5 px-1">
             <h2 className="text-base font-extrabold text-slate-900">{ev.name}</h2>
             <span className="text-xs text-slate-500">{fmtEventDates(ev.startDate, ev.endDate)}{ev.location ? ` · ${ev.location}` : ''}</span>
           </div>
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
+          {!!ev.hotels?.length && (
+            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 mb-3">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
+                <span className="text-[10px] font-extrabold tracking-wider text-slate-400">BLOCK HOTELS</span>
+                <span className="text-[11px] text-slate-500">Mark a hotel sold out and the event&apos;s hotel page shows it right away.</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {ev.hotels.map(h => (
+                  <button key={h.key} type="button" role="switch" aria-checked={h.soldOut}
+                    aria-label={`${h.name}: ${h.soldOut ? 'sold out' : 'open'}`}
+                    onClick={() => toggleSoldOut(ev.id, h.key, !h.soldOut)}
+                    className={`inline-flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors max-w-full ${h.soldOut ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                    <span className={`text-[12.5px] font-semibold truncate ${h.soldOut ? 'text-red-800' : 'text-slate-800'}`}>{h.name}</span>
+                    <span className={`relative shrink-0 w-8 h-[18px] rounded-full transition-colors ${h.soldOut ? 'bg-red-500' : 'bg-slate-300'}`} aria-hidden>
+                      <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-all ${h.soldOut ? 'left-[16px]' : 'left-[2px]'}`} />
+                    </span>
+                    <span className={`shrink-0 text-[10px] font-extrabold tracking-wider ${h.soldOut ? 'text-red-600' : 'text-slate-400'}`}>{h.soldOut ? 'SOLD OUT' : 'MARK SOLD OUT'}</span>
+                    <span className={`shrink-0 text-[10px] font-bold text-emerald-600 transition-opacity ${flash === h.key ? 'opacity-100' : 'opacity-0'}`}>Saved</span>
+                  </button>
+                ))}
+              </div>
+              {hotelError?.ev === ev.id && <p className="text-[11px] text-red-600 mt-2">{hotelError.msg}</p>}
+            </div>
+          )}
+          {shown(ev).length > 0 && <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
             <div className="min-w-[950px]">
               <div className="grid grid-cols-[210px_200px_150px_1fr_170px] gap-3 px-4 py-2 border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold tracking-wider text-slate-400">
                 <div>CLUB</div><div>CONTACT</div><div>STATUS</div><div>HOTELS — a club can split across several</div><div>NOTES</div>
@@ -250,7 +298,7 @@ export default function HousingBoard({ code, viewOrgId, onData }: {
                 )
               })}
             </div>
-          </div>
+          </div>}
         </div>
       ))}
     </div>

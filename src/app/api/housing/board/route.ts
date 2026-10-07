@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
 import { ensureHousingCols, housingBoard, housingSettings, orgForHousingCode, deriveStatus, bookingsByReg, syncRegAggregates } from '@/lib/housing'
+import { setSoldOut } from '@/lib/hotelStatus'
 
 // The housing board's data — two doors to the same rows:
 //   ?code=  : the housing company's magic link (no login; code is the secret)
@@ -48,10 +49,24 @@ export async function POST(req: Request) {
     addBooking?: { hotel?: unknown; rooms?: unknown; nights?: unknown }
     updateBooking?: { id?: unknown; hotel?: unknown; rooms?: unknown; nights?: unknown }
     removeBooking?: unknown
+    hotelSoldOut?: { tournamentId?: unknown; key?: unknown; soldOut?: unknown }
   } = {}
   try { body = await req.json() } catch { /* validated below */ }
   const res = await resolveOrg(req, body)
   if (res instanceof NextResponse) return res
+
+  // Sold out, for one of an event's listed block hotels (lib/hotelStatus). The event
+  // must be one of THIS org's, like every other write on the board.
+  if (body.hotelSoldOut !== undefined) {
+    const h = body.hotelSoldOut ?? {}
+    const tid = String(h.tournamentId ?? '')
+    const ownEvent: Record<string, unknown>[] = tid ? await prisma.$queryRawUnsafe(
+      `SELECT id FROM "Tournament" WHERE id = ? AND orgId = ?`, tid, res.orgId) : []
+    if (!ownEvent.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const hotels = await setSoldOut(tid, String(h.key ?? ''), h.soldOut === true, res.viaCode ? 'housing board' : 'staff (housing board)')
+    if (!hotels) return NextResponse.json({ error: 'That hotel is not on this event’s list' }, { status: 404 })
+    return NextResponse.json({ ok: true, hotels })
+  }
 
   const regId = String(body.regId ?? '')
   if (!regId) return NextResponse.json({ error: 'regId is required' }, { status: 400 })

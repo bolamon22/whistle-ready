@@ -5,7 +5,7 @@ import { ArrowLeft, Hotel, ArrowUpRight } from 'lucide-react'
 import type { Metadata } from 'next'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import { tournamentAbs, clip } from '@/lib/seo'
-import { cleanHotels, safeUrl } from '@/lib/eventHotels'
+import { cleanHotels, safeUrl, withSoldOut } from '@/lib/eventHotels'
 import HotelCards, { todayET } from '@/components/HotelCards'
 import PublicChirp from '@/components/PublicChirp'
 
@@ -25,10 +25,12 @@ function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, auth
 
 async function load(id: string) {
   const client = db()
-  let t: any = null; let c: any = {}
+  let t: any = null; let c: any = {}; let soldOut: any = {}
   try { const r = await client.execute({ sql: 'SELECT t.id, t.name, o.slug AS orgSlug FROM "Tournament" t LEFT JOIN "Organization" o ON o.id = t.orgId WHERE t.id = ?', args: [id] }); if (r.rows.length) t = r.rows[0] } catch {}
   try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`tournamentSite:${id}`] }); if (r.rows.length) c = JSON.parse(((r.rows[0] as any).value as string) || '{}') } catch {}
-  return { t, c }
+  // Sold-out marks from the housing board / Builder (lib/hotelStatus).
+  try { const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`hotelStatus:${id}`] }); if (r.rows.length) soldOut = JSON.parse(((r.rows[0] as any).value as string) || '{}')?.soldOut || {} } catch {}
+  return { t, c, soldOut }
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
@@ -41,8 +43,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 export default async function TournamentHotelsPage({ params }: { params: { id: string } }) {
-  const { t, c } = await load(params.id)
-  const hotels = cleanHotels(c?.hotelList)
+  const { t, c, soldOut } = await load(params.id)
+  const hotels = withSoldOut(cleanHotels(c?.hotelList), soldOut)
   // No list yet: the short link knows the next best place (the housing link,
   // then the event page), and never sends anyone back here.
   if (!t || !hotels.length) redirect(`/tournaments/${params.id}/hotel`)
@@ -61,6 +63,13 @@ export default async function TournamentHotelsPage({ params }: { params: { id: s
       <p className="text-slate-600 mt-2 mb-6">
         Hotels holding rooms for {name || 'the event'}. Book through these buttons so you get the event rate and your rooms count for the event.
       </p>
+
+      {hotels.every(h => h.soldOut) && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl px-4 py-3 mb-4 text-sm">
+          Every block hotel is sold out right now.
+          {moreUrl && <> <a href={moreUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">See more hotels near the fields</a>.</>}
+        </div>
+      )}
 
       <HotelCards hotels={hotels} fallbackUrl={moreUrl} today={todayET()} gallery />
 

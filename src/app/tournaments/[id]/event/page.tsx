@@ -27,7 +27,7 @@ import SponsorWall from '@/components/SponsorWall'
 import SponsorPitch from '@/components/SponsorPitch'
 import { sponsorList, sponsorsForEvent, sponsorPitch, statNum } from '@/lib/sponsors'
 import { vendorConfig } from '@/lib/vendorForm'
-import { cleanHotels, hotelsPath } from '@/lib/eventHotels'
+import { cleanHotels, hotelsPath, withSoldOut } from '@/lib/eventHotels'
 import HotelCards, { todayET } from '@/components/HotelCards'
 
 // Cache policy for published pages.
@@ -93,7 +93,13 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   } catch (e: any) {
     console.error('[event page] failed to read tournamentSite content:', params.id, e?.message || e)
   }
-  const hotelList = cleanHotels(c.hotelList)
+  // Sold-out hotels marked and moved last (lib/hotelStatus; the housing board and the Builder set them).
+  let hotelSoldOut: any = {}
+  try {
+    const r = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: [`hotelStatus:${params.id}`] })
+    if (r.rows.length) hotelSoldOut = JSON.parse(((r.rows[0] as any).value as string) || '{}')?.soldOut || {}
+  } catch { /* no marks yet */ }
+  const hotelList = withSoldOut(cleanHotels(c.hotelList), hotelSoldOut)
   let sponsors: any[] = []
   let pitchRaw: any = {}
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
