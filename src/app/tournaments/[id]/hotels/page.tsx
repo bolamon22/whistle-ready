@@ -52,7 +52,8 @@ export default async function TournamentHotelsPage({ params }: { params: { id: s
   const name = String(t.name || '').trim()
 
   return (
-    <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
+    // A size wider than the rules page so each hotel's photos have room.
+    <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
       <div className="mb-4">
         <Link href={`${base}/event`} className="inline-flex items-center gap-1.5 text-teal-700 hover:text-teal-900 text-sm font-semibold"><ArrowLeft size={15} /> Back to event page</Link>
       </div>
@@ -61,7 +62,7 @@ export default async function TournamentHotelsPage({ params }: { params: { id: s
         Hotels holding rooms for {name || 'the event'}. Book through these buttons so you get the event rate and your rooms count for the event.
       </p>
 
-      <HotelCards hotels={hotels} fallbackUrl={moreUrl} today={todayET()} />
+      <HotelCards hotels={hotels} fallbackUrl={moreUrl} today={todayET()} gallery />
 
       {moreUrl && (
         <p className="text-sm text-slate-500 mt-5">

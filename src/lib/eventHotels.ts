@@ -15,6 +15,13 @@
 // the hotel's own link still shows the $199 special event rate, rooms left and
 // the Group Block button, with Legacy's site id, so bookings count for them.
 //
+// Photos (Bo, Oct 7, with a screenshot of the gallery on Legacy's hotel page:
+// "Are we able to show the images that the hotel provides... Maybe with some
+// thumbnails"): staff upload them per hotel in the Builder. The photos on
+// Legacy's pages are the hotels' supplier content, under the same terms, so they
+// are not taken from there; the hotel or Legacy sends them, and ARN's API would
+// carry them along with live rates.
+//
 // Pure, no database: the Builder (client) and the pages (server) both use it.
 
 export type EventHotel = {
@@ -28,16 +35,36 @@ export type EventHotel = {
   note: string
   /** That hotel's booking page. */
   url: string
+  /** Photos, the main one first: uploads (/api/img/<id>) or library picks. */
+  photos: string[]
 }
 
 export const MAX_HOTELS = 20
+export const MAX_HOTEL_PHOTOS = 20
 
-export const EMPTY_HOTEL: EventHotel = { name: '', rate: '', miles: '', bookBy: '', note: '', url: '' }
+export const EMPTY_HOTEL: EventHotel = { name: '', rate: '', miles: '', bookBy: '', note: '', url: '', photos: [] }
 
 /** An http(s) address or ''. A button only ever opens a real web page. */
 export function safeUrl(u: unknown): string {
   const s = String(u ?? '').trim()
   return /^https?:\/\/[^\s"'<>]+$/i.test(s) ? s : ''
+}
+
+/**
+ * A photo we can show, or ''. An upload is /api/img/<id> (what /api/upload
+ * answers), a library pick may be a full address. Never a data: URL: the bytes
+ * would ride inside the event's JSON on every page load.
+ */
+export function photoUrl(u: unknown): string {
+  const s = String(u ?? '').trim()
+  if (s.length > 1000) return ''
+  return /^\/(?!\/)[^\s"'<>\\]+$/.test(s) ? s : safeUrl(s)
+}
+
+/** A hotel's photos, tidied: showable, no repeats, at most MAX_HOTEL_PHOTOS. */
+export function cleanPhotos(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  return Array.from(new Set(v.map(photoUrl).filter(Boolean))).slice(0, MAX_HOTEL_PHOTOS)
 }
 
 const one = (x: unknown, n: number) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
@@ -52,6 +79,7 @@ export function cleanHotels(v: unknown): EventHotel[] {
     bookBy: /^\d{4}-\d{2}-\d{2}$/.test(String(h?.bookBy ?? '')) ? String(h.bookBy) : '',
     note: one(h?.note, 280),
     url: safeUrl(h?.url),
+    photos: cleanPhotos(h?.photos),
   })).filter(h => h.name)
 }
 
