@@ -189,6 +189,17 @@ export default function DivisionsPage() {
   // Every division's roster (pooled and not-yet-pooled registered teams), so the
   // rail can spot games that name a team the division no longer has.
   const [allRosters, setAllRosters] = useState<{ division: string; teams: string[] }[]>([])
+  // Quick search over the division rail (Bo, Oct 7 2026): a division name, or a
+  // team, which finds the division(s) it plays in from the pool rosters.
+  const [divSearch, setDivSearch] = useState('')
+  const teamsByDiv = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const r of allRosters) m.set(r.division, [...(m.get(r.division) ?? []), ...r.teams])
+    return m
+  }, [allRosters])
+  const searchQ = divSearch.trim().toLowerCase()
+  const teamHits = (div: string) => searchQ ? (teamsByDiv.get(div) ?? []).filter(t => t.toLowerCase().includes(searchQ)) : []
+  const shownDivisions = searchQ ? divisions.filter(d => d.name.toLowerCase().includes(searchQ) || teamHits(d.name).length > 0) : divisions
 
   // What the rail flags beside a division name. Each is something that has to be
   // fixed before game day and is easy to lose track of across 14 divisions:
@@ -1007,6 +1018,14 @@ if (loading) return (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="bg-slate-800 px-4 py-3">
                 <p className="text-xs font-bold text-white uppercase tracking-wider">Divisions</p>
+                {divisions.length > 3 && (
+                  <div className="relative mt-2">
+                    <input value={divSearch} onChange={e => setDivSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setDivSearch('') }}
+                      placeholder="Search division or team" aria-label="Search divisions or teams"
+                      className="w-full text-xs rounded-md bg-slate-700 text-white placeholder-slate-400 border border-slate-600 pl-2.5 pr-7 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                    {divSearch && <button onClick={() => setDivSearch('')} aria-label="Clear search" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"><X size={13} /></button>}
+                  </div>
+                )}
               </div>
               {divisions.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs text-slate-400">
@@ -1015,7 +1034,10 @@ if (loading) return (
                 </div>
               ) : (
                 <div>
-                  {divisions.map(div => (
+                  {searchQ && shownDivisions.length === 0 && (
+                    <div className="px-4 py-5 text-center text-xs text-slate-400">No division or team matches &ldquo;{divSearch.trim()}&rdquo;.</div>
+                  )}
+                  {shownDivisions.map(div => (
                     <div key={div.name}
                       className={`w-full border-b border-slate-100 last:border-b-0 transition-colors group ${activeDiv === div.name ? 'bg-teal-50 border-l-2 border-l-sky-500' : div.teamCount === 0 ? 'bg-rose-50 hover:bg-rose-100' : 'hover:bg-slate-50'}`}>
                       {renamingDiv === div.name ? (
@@ -1039,7 +1061,7 @@ if (loading) return (
                               the bracket preview), and a button inside a button is
                               invalid markup that React will not render. */}
                           <div role="button" tabIndex={0}
-                            onClick={() => selectDiv(div.name)}
+                            onClick={() => { selectDiv(div.name); if (teamHits(div.name).length && !div.name.toLowerCase().includes(searchQ)) setTeamFilter(divSearch.trim()) }}
                             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDiv(div.name) } }}
                             className="flex-1 text-left px-4 py-2.5 min-w-0 cursor-pointer">
                             <div className="flex items-center gap-2">
@@ -1059,6 +1081,11 @@ if (loading) return (
                                 </span>
                               )}
                             </div>
+                            {teamHits(div.name).length > 0 && (
+                              <div className="pl-5 mt-0.5 text-[11px] text-teal-700 truncate" title={teamHits(div.name).join(', ')}>
+                                {teamHits(div.name).slice(0, 2).join(', ')}{teamHits(div.name).length > 2 ? ` +${teamHits(div.name).length - 2}` : ''}
+                              </div>
+                            )}
                             <div className="pl-5 mt-0.5 flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-slate-400">{div.teamCount} team{div.teamCount !== 1 ? 's' : ''}{div.waitlistCount ? <span className="text-amber-600" title={`${div.waitlistCount} on the waiting list, not in the draw`}> +{div.waitlistCount} waitlist</span> : null} · {div.poolCount} pool{div.poolCount !== 1 ? 's' : ''}</span>
                               {div.gameCount > 0 && (
