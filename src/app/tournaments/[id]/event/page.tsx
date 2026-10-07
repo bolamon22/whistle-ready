@@ -27,7 +27,7 @@ import SponsorWall from '@/components/SponsorWall'
 import SponsorPitch from '@/components/SponsorPitch'
 import { sponsorList, sponsorsForEvent, sponsorPitch, statNum } from '@/lib/sponsors'
 import { vendorConfig } from '@/lib/vendorForm'
-import { cleanHotels, hotelsPath, withSoldOut } from '@/lib/eventHotels'
+import { cleanHotels, featuredHotels, hotelsPath, withSoldOut } from '@/lib/eventHotels'
 import HotelCards, { todayET } from '@/components/HotelCards'
 
 // Cache policy for published pages.
@@ -100,6 +100,9 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     if (r.rows.length) hotelSoldOut = JSON.parse(((r.rows[0] as any).value as string) || '{}')?.soldOut || {}
   } catch { /* no marks yet */ }
   const hotelList = withSoldOut(cleanHotels(c.hotelList), hotelSoldOut)
+  // The event page shows a few (the event-rate hotels, or the closest); the hotels
+  // page lists them all with filters.
+  const featured = featuredHotels(hotelList)
   let sponsors: any[] = []
   let pitchRaw: any = {}
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
@@ -305,12 +308,16 @@ export default async function TournamentEventPage({ params }: { params: { id: st
     ) : null,
     hotels: (c.hotelsUrl || c.hotels || hotelList.length) ? (
       <EventSection id="hotels" title="Hotels">
-        {/* The block hotels listed in the Builder, each with its own booking
-            button (lib/eventHotels); without a list, the housing link as before. */}
+        {/* The hotels listed in the Builder, each with its own booking button
+            (lib/eventHotels): the event-rate ones here, all of them with filters
+            on the hotels page. Without a list, the housing link as before. */}
         {hotelList.length > 0
           ? <div className="mb-4">
-              <HotelCards hotels={hotelList} fallbackUrl={c.hotelsUrl} today={todayET()} />
-              {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:text-teal-900 mt-3"><Hotel size={14} /> See more hotels near the fields</a>}
+              <HotelCards hotels={featured} fallbackUrl={c.hotelsUrl} today={todayET()} />
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3">
+                {hotelList.length > featured.length && <Link href={hotelsPath(params.id)} className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-full"><Hotel size={14} /> See all {hotelList.length} hotels: compare price, distance and chain</Link>}
+                {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:text-teal-900"><Hotel size={14} /> See more hotels near the fields</a>}
+              </div>
             </div>
           : c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full mb-4"><Hotel size={15} /> Book hotels</a>}
         {c.hotels && <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />}
@@ -512,8 +519,8 @@ export default async function TournamentEventPage({ params }: { params: { id: st
               <h3 className="font-bold text-slate-900 text-sm">Where to stay</h3>
               {hotelList.length > 0 ? (
                 <>
-                  <HotelCards hotels={hotelList} fallbackUrl={c.hotelsUrl} today={todayET()} compact />
-                  <Link href={hotelsPath(params.id)} className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg mt-3"><Hotel size={13} /> All hotels &amp; rates</Link>
+                  <HotelCards hotels={featured} fallbackUrl={c.hotelsUrl} today={todayET()} compact />
+                  <Link href={hotelsPath(params.id)} className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg mt-3"><Hotel size={13} /> {hotelList.length > featured.length ? `All ${hotelList.length} hotels & rates` : 'All hotels & rates'}</Link>
                 </>
               ) : (
                 <>

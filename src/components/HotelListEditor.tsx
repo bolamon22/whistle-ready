@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, ArrowUp, ArrowDown, Link2, ExternalLink, ImagePlus, Star, X, Loader2 } from 'lucide-react'
 import {
-  EMPTY_HOTEL, MAX_HOTELS, MAX_HOTEL_PHOTOS, parseReserveTravel, reserveTravelHotelUrl, reserveTravelProperty, hotelsPath, photoUrl, hotelKey,
+  EMPTY_HOTEL, MAX_HOTELS, MAX_HOTEL_PHOTOS, parseReserveTravel, reserveTravelHotelUrl, reserveTravelProperty, hotelsPath, photoUrl, hotelKey, hotelChain, CHAIN_NAMES,
   type EventHotel,
 } from '@/lib/eventHotels'
 import { uploadHotelPhoto, HOTEL_PHOTO_ACCEPT } from '@/lib/photoClient'
@@ -162,7 +162,10 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
     const have = new Set(hotels.map(h => reserveTravelProperty(h.url)).filter(Boolean))
     const fresh = l.properties.filter(p => !have.has(p)).slice(0, Math.max(0, MAX_HOTELS - hotels.length))
     if (!fresh.length) { toast('Those hotels are already listed'); return }
-    onChange([...hotels, ...fresh.map(p => ({ ...EMPTY_HOTEL, url: reserveTravelHotelUrl(l, p) }))])
+    // The housing company's event search link lists the block hotels (properties=);
+    // a single hotel's page (property=) may be any hotel near the fields.
+    const block = /[?&]properties=/i.test(source)
+    onChange([...hotels, ...fresh.map(p => ({ ...EMPTY_HOTEL, url: reserveTravelHotelUrl(l, p), eventRate: block }))])
     toast.success(`Added ${fresh.length} hotel${fresh.length === 1 ? '' : 's'}. Type each one's name and rate.`, { duration: 5000 })
     setLink('')
   }
@@ -172,6 +175,7 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
       <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mt-4 mb-1">Hotels to list</label>
       <p className="text-xs text-slate-500 mb-2">
         Families see these on the event page and at its hotel link, each with a button straight to that hotel&apos;s booking page.
+        List the block hotels (tick Event rate) and any others close to the fields; the hotels page lets families sort and filter them by price, distance and chain.
         With hotels listed, the booking link above becomes &ldquo;See more hotels.&rdquo; Add photos the hotel or the housing company sends you.
         Sold out saves the moment you flip it, and the housing company can flip it on their housing board too.
       </p>
@@ -185,6 +189,7 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
       </div>
       {!link.trim() && bookingHasHotels && <p className="text-[11px] text-slate-400 -mt-2 mb-3">Leave it blank to use the booking link above.</p>}
 
+      <datalist id="hotel-chains">{CHAIN_NAMES.map(c => <option key={c} value={c} />)}</datalist>
       <div className="space-y-3">
         {hotels.map((h, i) => (
           <div key={i} className="border border-slate-200 rounded-xl p-3 bg-slate-50/60">
@@ -199,6 +204,11 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
               <div>
                 <label className={labelCls}>Rate / night</label>
                 <input className={`${inputCls} bg-white`} value={h.rate} onChange={e => set(i, { rate: e.target.value })} placeholder="$199" inputMode="decimal" />
+                {/* Lists saved before this box existed were all block hotels: unset counts as ticked. */}
+                <label className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                  <input type="checkbox" className="accent-teal-600" checked={h.eventRate !== false} onChange={e => set(i, { eventRate: e.target.checked })} />
+                  Event rate (room block)
+                </label>
               </div>
               <div>
                 <label className={labelCls}>Miles to fields</label>
@@ -224,7 +234,12 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
                   )
                 })()}
               </div>
-              <div className="col-span-2 sm:col-span-4">
+              <div className="col-span-2 sm:col-span-1">
+                <label className={labelCls}>Chain</label>
+                <input className={`${inputCls} bg-white`} value={h.chain || ''} onChange={e => set(i, { chain: e.target.value })}
+                  placeholder={hotelChain({ name: h.name }) === 'Other' ? 'e.g. Hilton' : hotelChain({ name: h.name })} list="hotel-chains" />
+              </div>
+              <div className="col-span-2 sm:col-span-3">
                 <label className={labelCls}>Booking link</label>
                 <div className="flex gap-2">
                   <input className={`${inputCls} bg-white`} value={h.url} onChange={e => set(i, { url: e.target.value.trim() })} placeholder="https://… (leave blank to use the booking link above)" />

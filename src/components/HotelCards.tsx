@@ -1,5 +1,5 @@
 import { Hotel, MapPin, Clock, ArrowUpRight } from 'lucide-react'
-import { bookByLabel, milesLabel, rateLabel, safeUrl, type EventHotel } from '@/lib/eventHotels'
+import { bookByLabel, hotelChain, milesLabel, rateLabel, safeUrl, type EventHotel } from '@/lib/eventHotels'
 import HotelPhotos from '@/components/HotelPhotos'
 
 // The event's block hotels, shown in Whistle Ready (lib/eventHotels says why).
@@ -76,6 +76,7 @@ export default function HotelCards({ hotels, today, fallbackUrl = '', compact = 
                 <div className="min-w-0">
                   <h3 className={`font-bold text-slate-900 leading-snug ${top ? 'text-lg' : ''}`}>{h.name}</h3>
                   <div className="text-sm text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                    {hotelChain(h) !== 'Other' && <span className="text-slate-400">{hotelChain(h)}</span>}
                     {miles && <span className="inline-flex items-center gap-1"><MapPin size={13} className="text-slate-400" />{miles}</span>}
                     {by && <span className={`inline-flex items-center gap-1 ${by.passed ? 'text-amber-700' : ''}`}><Clock size={13} className={by.passed ? 'text-amber-500' : 'text-slate-400'} />{by.text}</span>}
                   </div>
@@ -87,7 +88,7 @@ export default function HotelCards({ hotels, today, fallbackUrl = '', compact = 
                   {rate && (
                     <div>
                       <div className={`text-lg font-extrabold leading-none ${h.soldOut ? 'text-slate-400' : 'text-slate-900'}`}>{rate.replace(' / night', '')}<span className={`text-sm font-medium ${h.soldOut ? 'text-slate-400' : 'text-slate-500'}`}> / night</span></div>
-                      {!h.soldOut && <div className="text-[11px] font-semibold uppercase tracking-wide text-teal-700 mt-1">Event rate</div>}
+                      {!h.soldOut && h.eventRate !== false && <div className="text-[11px] font-semibold uppercase tracking-wide text-teal-700 mt-1">Event rate</div>}
                     </div>
                   )}
                   {h.soldOut ? (

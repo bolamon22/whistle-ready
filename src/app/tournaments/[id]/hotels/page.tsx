@@ -6,7 +6,8 @@ import type { Metadata } from 'next'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import { tournamentAbs, clip } from '@/lib/seo'
 import { cleanHotels, safeUrl, withSoldOut } from '@/lib/eventHotels'
-import HotelCards, { todayET } from '@/components/HotelCards'
+import { todayET } from '@/components/HotelCards'
+import HotelBrowser from '@/components/HotelBrowser'
 import PublicChirp from '@/components/PublicChirp'
 
 // The event's hotels, in Whistle Ready: the block hotels staff list in the
@@ -61,17 +62,19 @@ export default async function TournamentHotelsPage({ params }: { params: { id: s
       </div>
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2"><Hotel size={22} className="text-slate-400" /> Hotels</h1>
       <p className="text-slate-600 mt-2 mb-6">
-        Hotels holding rooms for {name || 'the event'}. Book through these buttons so you get the event rate and your rooms count for the event.
+        {hotels.every(h => h.eventRate)
+          ? <>Hotels holding rooms for {name || 'the event'}. Book through these buttons so you get the event rate and your rooms count for the event.</>
+          : <>Hotels near the fields for {name || 'the event'}. The ones marked Event rate hold rooms for the tournament. Book through these buttons so you get that rate and your rooms count for the event.</>}
       </p>
 
       {hotels.every(h => h.soldOut) && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl px-4 py-3 mb-4 text-sm">
-          Every block hotel is sold out right now.
+          Every hotel here is sold out right now.
           {moreUrl && <> <a href={moreUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">See more hotels near the fields</a>.</>}
         </div>
       )}
 
-      <HotelCards hotels={hotels} fallbackUrl={moreUrl} today={todayET()} gallery />
+      <HotelBrowser hotels={hotels} fallbackUrl={moreUrl} today={todayET()} />
 
       {moreUrl && (
         <p className="text-sm text-slate-500 mt-5">

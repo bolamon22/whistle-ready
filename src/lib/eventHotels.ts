@@ -37,14 +37,20 @@ export type EventHotel = {
   url: string
   /** Photos, the main one first: uploads (/api/img/<id>) or library picks. */
   photos: string[]
+  /** Holds a room block at the event rate. Lists saved before this field were all block hotels. */
+  eventRate: boolean
+  /** Chain, when staff set it; '' means worked out from the name (hotelChain). */
+  chain: string
   /** Set for the families' pages from the event's sold-out marks (withSoldOut); never stored with the list. */
   soldOut?: boolean
 }
 
-export const MAX_HOTELS = 20
+// Bo, Oct 7: list more than the block hotels, "at least the closest ones", and
+// let families filter by price, distance and chain (components/HotelBrowser).
+export const MAX_HOTELS = 40
 export const MAX_HOTEL_PHOTOS = 20
 
-export const EMPTY_HOTEL: EventHotel = { name: '', rate: '', miles: '', bookBy: '', note: '', url: '', photos: [] }
+export const EMPTY_HOTEL: EventHotel = { name: '', rate: '', miles: '', bookBy: '', note: '', url: '', photos: [], eventRate: false, chain: '' }
 
 /** An http(s) address or ''. A button only ever opens a real web page. */
 export function safeUrl(u: unknown): string {
@@ -82,6 +88,8 @@ export function cleanHotels(v: unknown): EventHotel[] {
     note: one(h?.note, 280),
     url: safeUrl(h?.url),
     photos: cleanPhotos(h?.photos),
+    eventRate: h?.eventRate !== false,
+    chain: one(h?.chain, 40),
   })).filter(h => h.name)
 }
 
@@ -136,6 +144,59 @@ export function hotelKey(h: { url?: string; name?: string }): string {
 export function withSoldOut(hotels: EventHotel[], soldOut?: Record<string, unknown> | null): EventHotel[] {
   const marked = hotels.map(h => { const k = hotelKey(h); return { ...h, soldOut: !!(k && soldOut && soldOut[k]) } })
   return [...marked.filter(h => !h.soldOut), ...marked.filter(h => h.soldOut)]
+}
+
+// ── Chain, price, distance (the families' filters) ─────────────────────────
+
+// Brand words to the chain whose loyalty program families know. First match
+// wins, so the longer, more specific names come first.
+const CHAINS: [string, RegExp][] = [
+  ['Marriott', /marriott|courtyard|fairfield|residence inn|springhill|towneplace|four points|sheraton|westin|aloft|\bac hotel|moxy|element |renaissance|le m[ée]ridien|delta hotels|gaylord|autograph collection|tribute portfolio|ritz-?carlton|st\.? regis/i],
+  ['Hilton', /hilton|hampton|homewood|home2|embassy suites|doubletree|tru by|curio collection|tapestry collection|canopy by|conrad|waldorf|motto by|spark by|tempo by|livsmart|signia/i],
+  ['IHG', /holiday inn|crowne plaza|candlewood|staybridge|avid hotel|hotel indigo|kimpton|intercontinental|even hotel|voco|atwell|garner/i],
+  ['Hyatt', /hyatt|andaz|thompson hotel|alila|caption by/i],
+  ['Wyndham', /wyndham|la quinta|days inn|super 8|ramada|microtel|baymont|howard johnson|travelodge|wingate|hawthorn|americinn|trademark collection/i],
+  ['Choice', /comfort inn|comfort suites|quality inn|sleep inn|clarion|mainstay|suburban studios|econo lodge|rodeway|cambria|ascend|woodspring|everhome|radisson/i],
+  ['Best Western', /best western|surestay|\bv[iī]b\b|gl[oō] hotel|aiden by|sadie by/i],
+  ['Kasa', /\bkasa\b/i],
+  ['Sonesta', /sonesta/i],
+  ['Extended Stay America', /extended stay america/i],
+  ['Red Roof', /red roof/i],
+  ['Motel 6', /motel 6|studio 6/i],
+]
+export const CHAIN_NAMES = CHAINS.map(([n]) => n)
+
+/** The hotel's chain: what staff set, else worked out from its name, else 'Other'. */
+export function hotelChain(h: { name?: string; chain?: string }): string {
+  const set = String(h?.chain || '').trim()
+  if (set) return set
+  const n = String(h?.name || '')
+  for (const [chain, re] of CHAINS) if (re.test(n)) return chain
+  return 'Other'
+}
+
+/** The nightly rate as a number, or null when it isn't one. */
+export function rateNumber(rate: string): number | null {
+  const n = Number(String(rate || '').replace(/[$,\s]/g, ''))
+  return rate && Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Miles from the fields as a number, or null when blank. */
+export function milesNumber(miles: string): number | null {
+  const n = Number(String(miles || '').replace(/[^0-9.]/g, ''))
+  return miles && Number.isFinite(n) && n >= 0 ? n : null
+}
+
+/**
+ * The few hotels the event page shows (its Hotels section and side rail; the
+ * hotels page lists them all): the event-rate hotels in staff's order, or the
+ * closest ones when none are marked. Sold-out ones stay last.
+ */
+export function featuredHotels(hotels: EventHotel[], max = 4): EventHotel[] {
+  const block = hotels.filter(h => h.eventRate)
+  const pool = block.length ? block : [...hotels].sort((a, b) =>
+    Number(!!a.soldOut) - Number(!!b.soldOut) || (milesNumber(a.miles) ?? 1e9) - (milesNumber(b.miles) ?? 1e9))
+  return pool.slice(0, max)
 }
 
 /** Where the event's hotels live on its own site. */
