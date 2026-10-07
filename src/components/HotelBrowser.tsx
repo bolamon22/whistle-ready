@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { ArrowUpDown, Check, ChevronDown } from 'lucide-react'
 import HotelCards from '@/components/HotelCards'
 import { hotelChain, milesNumber, rateNumber, type EventHotel } from '@/lib/eventHotels'
 
@@ -11,6 +12,9 @@ import { hotelChain, milesNumber, rateNumber, type EventHotel } from '@/lib/even
 //   Filter: chain, a top price, a top distance, event rate only.
 // Sold-out hotels stay last whatever the sort. With three hotels or fewer there is
 // nothing to sift, so the controls stay out of the way.
+// The controls are one row of matching dropdowns with the count at the end (Bo,
+// Oct 7: the boxed Sort / Chain / dropdown rows looked "kind of weird ... like all
+// in one line"). On a phone the dropdowns sit two to a row.
 
 type Sort = 'recommended' | 'distance' | 'price'
 const SORTS: { key: Sort; label: string }[] = [
@@ -63,62 +67,39 @@ export default function HotelBrowser({ hotels, today, fallbackUrl = '' }: { hote
 
   const filtering = chain !== 'all' || !!maxPrice || !!maxMiles || eventOnly
   const clear = () => { setChain('all'); setMaxPrice(0); setMaxMiles(0); setEventOnly(false) }
-  const chip = (on: boolean) => `shrink-0 inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${on ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`
-  const selectCls = 'border border-slate-200 rounded-full bg-white pl-3 pr-8 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400'
 
   return (
     <div>
       {hotels.length > 3 && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 mb-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mr-1">Sort</span>
-            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Sort hotels">
-              {SORTS.map(s => (
-                <button key={s.key} type="button" onClick={() => setSort(s.key)} aria-pressed={sort === s.key}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${sort === s.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center [&>*:last-child:nth-child(odd)]:col-span-2">
+            {/* "Sort:" on wider screens; on a phone an icon, so the choice fits half the row. */}
+            <Pick label="Sort hotels" value={sort} onChange={v => setSort(v as Sort)}
+              prefix={<><ArrowUpDown size={14} className="shrink-0 text-slate-400 sm:hidden" /><span className="hidden font-normal text-slate-400 sm:inline">Sort:</span></>}
+              options={SORTS.map(s => ({ value: s.key, label: s.label }))} />
+            {chains.length > 1 && (
+              <Pick label="Hotel chain" value={chain} active={chain !== 'all'} onChange={setChain}
+                options={[{ value: 'all', label: 'All chains' }, ...chains.map(([name, n]) => ({ value: name, label: `${name} (${n})` }))]} />
+            )}
+            {priceSteps.length > 0 && (
+              <Pick label="Highest price per night" value={String(maxPrice)} active={!!maxPrice} onChange={v => setMaxPrice(Number(v))}
+                options={[{ value: '0', label: 'Any price' }, ...priceSteps.map(p => ({ value: String(p), label: `Up to $${p}/night` }))]} />
+            )}
+            {mileSteps.length > 0 && (
+              <Pick label="Farthest from the fields" value={String(maxMiles)} active={!!maxMiles} onChange={v => setMaxMiles(Number(v))}
+                options={[{ value: '0', label: 'Any distance' }, ...mileSteps.map(m => ({ value: String(m), label: `Within ${m} miles` }))]} />
+            )}
           </div>
-          {chains.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-0.5" role="group" aria-label="Hotel chain">
-              <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400 mr-1">Chain</span>
-              <button type="button" onClick={() => setChain('all')} aria-pressed={chain === 'all'} className={chip(chain === 'all')}>All</button>
-              {chains.map(([name, n]) => (
-                <button key={name} type="button" onClick={() => setChain(chain === name ? 'all' : name)} aria-pressed={chain === name} className={chip(chain === name)}>
-                  {name} <span className="opacity-60 tabular-nums">{n}</span>
-                </button>
-              ))}
-            </div>
+          {mixedRates && (
+            <button type="button" onClick={() => setEventOnly(v => !v)} aria-pressed={eventOnly} className={`${pill(eventOnly)} px-3.5`}>
+              {eventOnly && <Check size={15} aria-hidden />}Event rate only
+            </button>
           )}
-          {(priceSteps.length > 0 || mileSteps.length > 0 || mixedRates) && (
-            <div className="flex flex-wrap items-center gap-2">
-              {priceSteps.length > 0 && (
-                <select aria-label="Highest price per night" className={selectCls} value={maxPrice} onChange={e => setMaxPrice(Number(e.target.value))}>
-                  <option value={0}>Any price</option>
-                  {priceSteps.map(p => <option key={p} value={p}>Up to ${p} / night</option>)}
-                </select>
-              )}
-              {mileSteps.length > 0 && (
-                <select aria-label="Farthest from the fields" className={selectCls} value={maxMiles} onChange={e => setMaxMiles(Number(e.target.value))}>
-                  <option value={0}>Any distance</option>
-                  {mileSteps.map(m => <option key={m} value={m}>Within {m} miles</option>)}
-                </select>
-              )}
-              {mixedRates && (
-                <button type="button" onClick={() => setEventOnly(v => !v)} aria-pressed={eventOnly} className={chip(eventOnly)}>Event rate only</button>
-              )}
-            </div>
-          )}
+          <p className="ml-auto whitespace-nowrap text-sm text-slate-500" aria-live="polite">
+            {filtering ? `${shown.length} of ${hotels.length} hotels` : `${hotels.length} hotels`}
+            {filtering && <button type="button" onClick={clear} className="ml-2 font-semibold text-teal-700 hover:text-teal-900">Clear</button>}
+          </p>
         </div>
-      )}
-
-      {hotels.length > 3 && (
-        <p className="text-sm text-slate-500 mb-3" aria-live="polite">
-          {filtering ? `${shown.length} of ${hotels.length} hotels` : `${hotels.length} hotels`}
-          {filtering && <button type="button" onClick={clear} className="ml-2 font-semibold text-teal-700 hover:text-teal-900">Clear filters</button>}
-        </p>
       )}
 
       {shown.length
@@ -128,6 +109,32 @@ export default function HotelBrowser({ hotels, today, fallbackUrl = '' }: { hote
             No hotels match those filters. <button type="button" onClick={clear} className="font-semibold text-teal-700 hover:text-teal-900">Clear filters</button>
           </div>
         )}
+    </div>
+  )
+}
+
+const pill = (on: boolean) => `inline-flex h-10 sm:h-9 items-center gap-1.5 rounded-full border text-sm font-medium transition-colors ${on ? 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}`
+
+/** A dropdown that looks like the other pills: the picked option shows, the phone's own picker opens. */
+function Pick({ label, prefix, value, options, onChange, active = false }: {
+  label: string
+  prefix?: ReactNode
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+  /** A filter that's narrowing the list right now. */
+  active?: boolean
+}) {
+  const shown = options.find(o => o.value === value)?.label ?? options[0]?.label ?? ''
+  return (
+    <div className={`${pill(active)} relative min-w-0 pl-3.5 pr-8 focus-within:ring-2 focus-within:ring-teal-400`}>
+      <span aria-hidden className="flex min-w-0 items-center gap-1.5">
+        {prefix}<span className="truncate">{shown}</span>
+      </span>
+      <ChevronDown size={15} aria-hidden className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 opacity-60" />
+      <select aria-label={label} value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
     </div>
   )
 }
