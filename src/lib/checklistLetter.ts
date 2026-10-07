@@ -56,7 +56,8 @@ export type ChecklistLinks = {
   waiverLink: string
   coachLink: string
   payLink: string
-  /** The org's housing bookingUrl — where families actually book. */
+  /** The event's short hotel link (/tournaments/<id>/hotel, lib/hotelTarget): its own
+   *  hotel list, its housing link or the org's — where families actually book. */
   hotelLink: string
   /** /share/<regId> — the ready-written messages. Anchored per row. */
   shareLink: string

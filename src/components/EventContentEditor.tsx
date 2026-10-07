@@ -17,6 +17,8 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, ImagePlus, Sparkles } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
+import HotelListEditor from '@/components/HotelListEditor'
+import type { EventHotel } from '@/lib/eventHotels'
 import AiGenerateButton from '@/components/AiGenerateButton'
 import BlockBuilder from '@/components/BlockBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
@@ -27,6 +29,8 @@ export type Contact = { name: string; role: string; phone: string; email: string
 export type EventContent = {
   overview: string; ageChartUrl: string; divisionsNote: string; heroImage: string
   locations: Loc[]; hotels: string; hotelsUrl: string
+  /** Block hotels shown on the event's own pages (lib/eventHotels). */
+  hotelList?: EventHotel[]
   rules: string; rulesSourceId?: string; contacts: Contact[]
   sectionOrder?: string[]; hiddenSections?: string[]
   blocks?: Block[]
@@ -36,7 +40,7 @@ export type EventContent = {
   divisionStatus?: Record<string, string>; divisionSpots?: Record<string, string>
 }
 export const EMPTY_EVENT_CONTENT: EventContent = {
-  overview: '', ageChartUrl: '', divisionsNote: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '',
+  overview: '', ageChartUrl: '', divisionsNote: '', heroImage: '', locations: [], hotels: '', hotelsUrl: '', hotelList: [],
   rules: '', rulesSourceId: '', contacts: [], sectionOrder: [], hiddenSections: [], blocks: [],
   regStatus: '', regStatusText: '', regClosesOn: '', divisionStatus: {}, divisionSpots: {},
 }
@@ -92,6 +96,7 @@ export function useEventContent(id: string) {
           ...EMPTY_EVENT_CONTENT, ...d,
           overview: str(d?.overview), ageChartUrl: str(d?.ageChartUrl), divisionsNote: str(d?.divisionsNote), heroImage: str(d?.heroImage),
           hotels: str(d?.hotels), hotelsUrl: str(d?.hotelsUrl),
+          hotelList: Array.isArray(d?.hotelList) ? d.hotelList : [],
           rules: str(d?.rules), rulesSourceId: str(d?.rulesSourceId),
           locations: Array.isArray(d?.locations) ? d.locations : [],
           contacts: Array.isArray(d?.contacts) ? d.contacts : [],
@@ -224,7 +229,9 @@ export default function EventContentSection({
     <div>
       <label className={labelCls}>Booking link (housing company)</label>
       <input className={inputCls} value={c.hotelsUrl} onChange={e => setC(v => ({ ...v, hotelsUrl: e.target.value }))} placeholder="https://book.housingcompany.com/…" />
-      <p className="text-xs text-slate-400 mt-1">Shows as a “Book hotels” button on the event page.</p>
+      <p className="text-xs text-slate-400 mt-1">This event&apos;s page at the housing company. Shows as a “Book hotels” button, and the event&apos;s hotel link in club letters opens it, until hotels are listed below.</p>
+      <HotelListEditor tournamentId={id} hotels={c.hotelList || []} bookingUrl={c.hotelsUrl}
+        onChange={next => setC(v => ({ ...v, hotelList: next }))} />
       <label className={labelCls}>Details (optional)</label>
       <AiGenerateButton kind="custom" current={c.hotels} onResult={(t) => setC(v => ({ ...v, hotels: t }))} />
       <MarkdownField value={c.hotels} onChange={val => setC(v => ({ ...v, hotels: val }))} minHeight={120} placeholder="Stay-to-play info, room blocks, notes…" />

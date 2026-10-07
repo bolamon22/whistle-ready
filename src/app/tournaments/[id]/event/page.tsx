@@ -27,6 +27,8 @@ import SponsorWall from '@/components/SponsorWall'
 import SponsorPitch from '@/components/SponsorPitch'
 import { sponsorList, sponsorsForEvent, sponsorPitch, statNum } from '@/lib/sponsors'
 import { vendorConfig } from '@/lib/vendorForm'
+import { cleanHotels, hotelsPath } from '@/lib/eventHotels'
+import HotelCards, { todayET } from '@/components/HotelCards'
 
 // Cache policy for published pages.
 //
@@ -91,6 +93,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   } catch (e: any) {
     console.error('[event page] failed to read tournamentSite content:', params.id, e?.message || e)
   }
+  const hotelList = cleanHotels(c.hotelList)
   let sponsors: any[] = []
   let pitchRaw: any = {}
   let org: any = { name: '', slug: '', logoUrl: '', contactEmail: '' }
@@ -294,9 +297,16 @@ export default async function TournamentEventPage({ params }: { params: { id: st
         </div>
       </EventSection>
     ) : null,
-    hotels: (c.hotelsUrl || c.hotels) ? (
+    hotels: (c.hotelsUrl || c.hotels || hotelList.length) ? (
       <EventSection id="hotels" title="Hotels">
-        {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full mb-4"><Hotel size={15} /> Book hotels</a>}
+        {/* The block hotels listed in the Builder, each with its own booking
+            button (lib/eventHotels); without a list, the housing link as before. */}
+        {hotelList.length > 0
+          ? <div className="mb-4">
+              <HotelCards hotels={hotelList} fallbackUrl={c.hotelsUrl} today={todayET()} />
+              {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:text-teal-900 mt-3"><Hotel size={14} /> See more hotels near the fields</a>}
+            </div>
+          : c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full mb-4"><Hotel size={15} /> Book hotels</a>}
         {c.hotels && <div className="prose-body" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />}
       </EventSection>
     ) : null,
@@ -491,13 +501,22 @@ export default async function TournamentEventPage({ params }: { params: { id: st
             </div>
           )}
 
-          {railVisible.has('hotels') && (c.hotelsUrl || c.hotels) && (
+          {railVisible.has('hotels') && (c.hotelsUrl || c.hotels || hotelList.length > 0) && (
             <div id="hotels" className="bg-white border border-slate-200 rounded-2xl p-4 scroll-mt-28">
               <h3 className="font-bold text-slate-900 text-sm">Where to stay</h3>
-              {c.hotels
-                ? <div className="text-xs text-slate-500 mt-1 prose-body [&_p]:m-0" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />
-                : <p className="text-xs text-slate-500 mt-1">Room blocks for traveling teams.</p>}
-              {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg mt-3"><Hotel size={13} /> Book hotels</a>}
+              {hotelList.length > 0 ? (
+                <>
+                  <HotelCards hotels={hotelList} fallbackUrl={c.hotelsUrl} today={todayET()} compact />
+                  <Link href={hotelsPath(params.id)} className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg mt-3"><Hotel size={13} /> All hotels &amp; rates</Link>
+                </>
+              ) : (
+                <>
+                  {c.hotels
+                    ? <div className="text-xs text-slate-500 mt-1 prose-body [&_p]:m-0" dangerouslySetInnerHTML={{ __html: mdToHtml(c.hotels) }} />
+                    : <p className="text-xs text-slate-500 mt-1">Room blocks for traveling teams.</p>}
+                  {c.hotelsUrl && <a href={c.hotelsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg mt-3"><Hotel size={13} /> Book hotels</a>}
+                </>
+              )}
             </div>
           )}
 

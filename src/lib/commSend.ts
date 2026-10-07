@@ -8,6 +8,7 @@ import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { deriveStatus, housingSettings } from '@/lib/housing'
+import { eventHotelInfo, hasHotelInfo } from '@/lib/hotelTarget'
 import { hotelDistance, HOTEL_RADIUS_MILES } from '@/lib/geoDistance'
 import { readConfirmMany } from '@/lib/changeRequest'
 import { buildChecklist, checklistHtml, checklistText, openCount, whatsLeftPhrase, expectedPlayers, CHECKLIST_SENTINEL } from '@/lib/checklistLetter'
@@ -199,10 +200,14 @@ export async function runCommSend(args: {
       for (const row of rows) hotelById.set(String(row.id), row)
     } catch { /* columns missing — deriveStatus falls back to the form answer */ }
   }
-  // Where families actually book. Blank until the org sets one, in which case
-  // the hotel line points at the event page, which carries the travel info.
+  // Where families actually book: the event's short hotel link, which opens its
+  // own hotel list, its housing link or the org's (lib/hotelTarget). With none of
+  // those the hotel line points at the event page, which carries the travel info.
+  // It used to be the org's link for every event (Monster Mash's), so the Fall
+  // Classic letters would have sent clubs to the Wellington hotels (Oct 7 2026).
   const housing = kind === 'checklist' && orgId ? await housingSettings(orgId) : null
-  const bookingUrl = housing?.bookingUrl || ''
+  const hotelInfo = kind === 'checklist' ? await eventHotelInfo(tournamentId, orgId) : null
+  const hotelLink = hotelInfo && hasHotelInfo(hotelInfo) ? tournamentAbs(org?.slug, `/tournaments/${tournamentId}/hotel`) : eventHome
 
   const kindMeta = kind === 'payment' ? null : COMM_KINDS[kind]
   const cta = kindMeta?.cta ?? null
@@ -331,7 +336,7 @@ export async function runCommSend(args: {
         waiverLink,
         coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
         payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
-        hotelLink: bookingUrl || eventHome,
+        hotelLink,
         shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
         portalLink: tournamentAbs(org?.slug, '/dashboard/club-director'),
       })

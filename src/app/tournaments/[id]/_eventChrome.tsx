@@ -4,6 +4,7 @@ import { OrgHeader, OrgFooter, buildNav, orgBase } from '@/app/o/[slug]/_chrome'
 import { buildHeroProps } from '@/lib/eventHero'
 import { getPublicVisibility } from '@/lib/publicView'
 import EventHero from './_eventHero'
+import { hasHotelList } from '@/lib/eventHotels'
 
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
 
@@ -40,7 +41,7 @@ export default async function EventChrome({ tournamentId, active, children }: { 
     Number(t.teamRegEnabled) && { href: `${base}/event#fees`, label: 'Tournament fees' },
     divs.length && { href: `${base}/event#divisions`, label: 'Divisions' },
     (Array.isArray(cs.locations) && cs.locations.length) && { href: `${base}/event#locations`, label: 'Location' },
-    (cs.hotelsUrl || cs.hotels) && { href: `${base}/event#hotels`, label: 'Hotels' },
+    (cs.hotelsUrl || cs.hotels || hasHotelList(cs)) && { href: `${base}/event#hotels`, label: 'Hotels' },
     cs.rules && { href: `${base}/rules`, label: 'Rules' },
     (Array.isArray(cs.contacts) && cs.contacts.length) && { href: `${base}/event#contacts`, label: 'Contacts' },
     // Counted the same way the section is rendered, or an event with no partners

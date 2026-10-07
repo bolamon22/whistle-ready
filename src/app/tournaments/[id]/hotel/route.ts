@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { orgForTournament } from '@/lib/org'
-import { housingSettings } from '@/lib/housing'
 import { tournamentAbs } from '@/lib/seo'
+import { eventHotelInfo, hotelDestination } from '@/lib/hotelTarget'
 
-// One short, readable hotel link per event: /tournaments/<slug>/hotel bounces
-// to whatever the org has set as its booking URL.
+// One short, readable hotel link per event: /tournaments/<slug>/hotel bounces to
+// the event's own hotel list (/hotels) when it has one, else the event's housing
+// link (Builder › Hotels), else the org's booking link at Staff › Housing
+// (lib/hotelTarget). It used to be the org's link for every event, and that was
+// Monster Mash's, so the Fall Classic's hotel link opened the Wellington hotels.
 //
 // Why it exists (Bo, Oct 5 2026): a real housing-company booking link carries
 // the venue's coordinates, a property list and tracking params — Monster Mash
@@ -15,8 +18,8 @@ import { tournamentAbs } from '@/lib/seo'
 // email, it is in the address: make the address short.
 //
 // It also means the day the housing company changes its link, every message
-// already sitting in a parent's inbox still works — one setting at
-// /staff/housing, not a reissued email.
+// already sitting in a parent's inbox still works — one setting, not a reissued
+// email.
 //
 // Public on purpose: this is the link clubs forward to families who have no
 // account. It is listed in PUBLIC_TOURNAMENT_PATH in middleware.ts.
@@ -25,18 +28,13 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const org = await orgForTournament(params.id)
+  const info = await eventHotelInfo(params.id, org?.id)
 
-  let booking = ''
-  try {
-    booking = org?.id ? String((await housingSettings(org.id)).bookingUrl || '') : ''
-  } catch { /* housing table not reachable — the event page still answers */ }
-
-  // Only ever bounce to a real http(s) address. A typo in the setting sends
-  // families to the event page, which carries the travel info, rather than
-  // somewhere unexpected.
-  const dest = /^https?:\/\//i.test(booking.trim())
-    ? booking.trim()
-    : tournamentAbs(org?.slug, `/tournaments/${params.id}/event`)
+  // Only ever bounce to a real http(s) address (lib/eventHotels safeUrl). With
+  // nothing set, or a typo in the setting, families get the event page, which
+  // carries the travel info, rather than somewhere unexpected.
+  const dest = hotelDestination(info, params.id, path => tournamentAbs(org?.slug, path))
+    || tournamentAbs(org?.slug, `/tournaments/${params.id}/event`)
 
   // 302, not 308: the booking URL changes between events and seasons, and a
   // permanent redirect would be cached in parents' browsers past that.

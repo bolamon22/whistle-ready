@@ -4,6 +4,7 @@ import { orgForTournament } from '@/lib/org'
 import { tournamentAbs } from '@/lib/seo'
 import { housingSettings } from '@/lib/housing'
 import { buildFamilyMessages } from '@/lib/familyMessages'
+import { eventHotelInfo, hasHotelInfo } from '@/lib/hotelTarget'
 
 // Ready-made messages a club director sends to their OWN families — the public
 // half of /share/[regId]. The regId in the link is the key, the same trust model
@@ -40,6 +41,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const org = await orgForTournament(reg.tournamentId)
   const housing = org?.id ? await housingSettings(org.id) : null
+  // The short link below opens this event's hotels (lib/hotelTarget), so ask
+  // whether the event has any, not only whether the org has a link.
+  const hotelInfo = await eventHotelInfo(reg.tournamentId, org?.id)
 
   const messages = buildFamilyMessages({
     clubName: reg.clubName || 'our club',
@@ -56,7 +60,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // It also survives the housing company changing its URL mid-event.
     hotelUrl: tournamentAbs(org?.slug, `/tournaments/${seg}/hotel`),
     hasHousingContact: !!housing?.contactEmail,
-    hasBookingUrl: !!housing?.bookingUrl,
+    hasBookingUrl: hasHotelInfo(hotelInfo),
   })
 
   return NextResponse.json({

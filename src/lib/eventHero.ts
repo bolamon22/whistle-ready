@@ -1,5 +1,6 @@
 import { parsePricing, baseFee } from '@/lib/regPricing'
 import { regBadge, type BadgeTone } from '@/lib/regStatus'
+import { hasHotelList } from '@/lib/eventHotels'
 
 // Everything the event header needs, worked out once. The event page and every
 // page wrapped in _eventChrome call buildHeroProps, so the eyebrow, the fact
@@ -116,7 +117,9 @@ export function buildHeroProps(o: HeroInput) {
     t.location && { key: 'location', kind: 'fact', icon: 'map-pin', label: 'Location', value: shortLocation(t.location), short: shortLocation(t.location), href: o.sectionHref('locations') },
     n > 0 && { key: 'divisions', kind: 'fact', icon: 'layers', label: 'Divisions', value: `${n} division${n > 1 ? 's' : ''}`, short: `${n} division${n > 1 ? 's' : ''}`, href: o.sectionHref('divisions') },
     minFee && { key: 'fee', kind: 'action', icon: 'ticket', label: 'Team fee', value: `Team fee from ${minFee}`, short: 'Team fee', href: registerHref || o.sectionHref('fees') },
-    (c.hotelsUrl || c.hotels) && { key: 'hotels', kind: 'action', icon: 'bed-double', label: 'Hotels', value: 'Book hotels', short: 'Hotels', href: c.hotelsUrl || o.sectionHref('hotels') },
+    // With block hotels listed (lib/eventHotels) the button opens the event's own
+    // hotel page; otherwise the housing link, as before.
+    (c.hotelsUrl || c.hotels || hasHotelList(c)) && { key: 'hotels', kind: 'action', icon: 'bed-double', label: 'Hotels', value: 'Book hotels', short: 'Hotels', href: hasHotelList(c) ? `${o.base}/hotels` : c.hotelsUrl || o.sectionHref('hotels') },
     { key: 'waiver', kind: 'action', icon: 'clipboard-list', label: 'Waiver', value: 'Player waiver', short: 'Waiver', href: `${o.base}/player-waiver` },
     {
       key: 'schedule', kind: 'action', label: 'Schedule', href: `${o.base}/public`,
