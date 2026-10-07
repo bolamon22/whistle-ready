@@ -1,12 +1,15 @@
 import Link from 'next/link'
 import { headers } from 'next/headers'
 import { isCustomOrgHost } from '@/lib/orgDomains'
+import { createClient } from '@libsql/client'
 import { Facebook, Instagram, Globe, UserRound } from 'lucide-react'
-import OrgNav from './OrgNav'
+import { fmtRangeShort, shortLocation } from '@/lib/eventHero'
+import { regBadge, shortDay, TONE_CLASS } from '@/lib/regStatus'
+import OrgNav, { EventMark, type HeaderEvent } from './OrgNav'
 
 export type PageRec = { title: string; slug: string; group?: string; body?: string; heroImage?: string; placement?: 'nav' | 'footer' }
 export type NavLink = { title: string; href: string }
-export type NavItem = { type: 'link'; title: string; href: string } | { type: 'group'; label: string; children: NavLink[] }
+export type NavItem = { type: 'link'; title: string; href: string; id?: string } | { type: 'group'; label: string; children: NavLink[] }
 
 // Link base for the org's own pages. On a custom domain (sunshinelax.com) the org
 // is served at the root so links are root-relative (''); on whistleready.app they
@@ -20,7 +23,7 @@ export function buildNav(base: string, pages: PageRec[], hasGallery: boolean, wo
   // Straight to the event list, not the top of the home page: on the home page itself
   // `base || '/'` just reloaded and appeared to do nothing, and from /gallery or /work
   // it left you scrolling for the events. Same target as the hero's "See all events".
-  const items: NavItem[] = [{ type: 'link', title: 'Tournaments', href: base ? `${base}#tournaments` : '/#tournaments' }]
+  const items: NavItem[] = [{ type: 'link', id: 'tournaments', title: 'Tournaments', href: base ? `${base}#tournaments` : '/#tournaments' }]
   if (hasGallery) items.push({ type: 'link', title: 'Gallery', href: `${base}/gallery` })
   const groupAt: Record<string, number> = {}
   for (const p of pages) {
@@ -67,17 +70,125 @@ export function buildFooterLinks(base: string, pages: PageRec[]): { label: strin
   return out
 }
 
-export function OrgHeader({ org, homeHref, nav, registerHref }: { org: any; homeHref: string; nav: NavItem[]; registerHref?: string }) {
+// The header's event logos: the org's next few events, soonest first. Four fit
+// beside Tournaments at 1280px with Sunshine's longest menu (measured Oct 7 2026:
+// 247px free before the logos, about 83px after, the org name untouched). An
+// event stays through its last day in Eastern time, eventIsOver's rule, so it is
+// still up there the weekend it is played, when families most need its schedule.
+const HEADER_EVENTS = 4
+
+// Same palette and hash as the home page's event cards, so an event with no logo
+// gets the same color in the header as on its card.
+const ACCENTS = ['#0e7490', '#b45309', '#9f1239', '#1d4ed8', '#6d28d9', '#047857']
+function accentFor(str: string) { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return ACCENTS[h % ACCENTS.length] }
+function initials(name: string) {
+  return name.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('') || name.slice(0, 2).toUpperCase()
+}
+
+export async function headerEvents(orgId: string): Promise<HeaderEvent[]> {
+  if (!orgId) return []
+  try {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const res = await client.execute({
+      sql: `SELECT id, name, startDate, endDate, location, logoUrl, teamRegEnabled, registrationDivisions FROM "Tournament"
+            WHERE orgId = ? AND TRIM(COALESCE(name, '')) <> '' AND COALESCE(NULLIF(endDate, ''), startDate) >= ?
+            ORDER BY startDate LIMIT ${HEADER_EVENTS}`,
+      args: [orgId, today],
+    })
+    const rows = res.rows as any[]
+    if (!rows.length) return []
+
+    // The registration badge the home page's cards show. Only the fields regBadge
+    // reads come back, not each event's whole page blob, since this runs on every
+    // page of the site. No badges is the worst a failure here can do.
+    const site: Record<string, any> = {}
+    try {
+      const keys = rows.map(t => `tournamentSite:${t.id}`)
+      const s = await client.execute({
+        sql: `SELECT "key", json_extract("value", '$.regStatus') AS regStatus, json_extract("value", '$.regStatusText') AS regStatusText,
+                json_extract("value", '$.regClosesOn') AS regClosesOn, json_extract("value", '$.divisionStatus') AS divisionStatus
+              FROM "AppSetting" WHERE "key" IN (${keys.map(() => '?').join(',')}) AND json_valid("value")`,
+        args: keys,
+      })
+      for (const r of s.rows as any[]) {
+        let divisionStatus: Record<string, string> = {}
+        try { const d = JSON.parse(String(r.divisionStatus || '{}')); if (d && typeof d === 'object') divisionStatus = d } catch { /* no division states */ }
+        site[String(r.key).slice('tournamentSite:'.length)] = {
+          regStatus: r.regStatus == null ? undefined : String(r.regStatus),
+          regStatusText: r.regStatusText == null ? undefined : String(r.regStatusText),
+          regClosesOn: r.regClosesOn == null ? undefined : String(r.regClosesOn),
+          divisionStatus,
+        }
+      }
+    } catch { /* no badges this render */ }
+
+    return rows.map(t => {
+      const id = String(t.id)
+      const raw = String(t.name || '')
+      let divs: string[] = []
+      try { const d = JSON.parse(String(t.registrationDivisions || '[]')); if (Array.isArray(d)) divs = d.filter(Boolean) } catch { /* label falls back */ }
+      const badge = regBadge(site[id] || null, divs)
+      const logo = String(t.logoUrl || '')
+      return {
+        id,
+        name: raw.replace(/\s+/g, ' ').trim(),
+        href: `/tournaments/${id}/event`,
+        // A logo still stored inline would ride along on every page of the site, twice.
+        logoUrl: logo.startsWith('data:') && logo.length > 60000 ? '' : logo,
+        initials: initials(raw),
+        accent: accentFor(raw),
+        dates: fmtRangeShort(String(t.startDate || ''), String(t.endDate || '')),
+        day: shortDay(String(t.startDate || '')),
+        place: shortLocation(String(t.location || '')),
+        registerHref: Number(t.teamRegEnabled) ? `/tournaments/${id}/register` : undefined,
+        badge: badge ? { label: badge.label, cls: TONE_CLASS[badge.tone] } : null,
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+// `orgId` falls back to org.id; the tournament pages pass it, since the org they
+// hand in is only a name and a logo. `currentId` is the event being shown, which
+// gets a ring among the logos.
+export async function OrgHeader({ org, homeHref, nav, registerHref, orgId, currentId = '' }: { org: any; homeHref: string; nav: NavItem[]; registerHref?: string; orgId?: string; currentId?: string }) {
+  const all = await headerEvents(String(orgId || org?.id || ''))
+  // A lone event that is the page you are already on promotes nothing.
+  const events = all.length > 1 || (all.length === 1 && all[0].id !== currentId) ? all : []
   return (
-    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/70 relative">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-        <Link href={homeHref} className="flex items-center gap-2.5 min-w-0 flex-shrink">
-          {org.logoUrl && <img src={org.logoUrl} alt="" className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-contain bg-white border border-slate-100 flex-shrink-0" />}
-          <span className="font-extrabold tracking-tight text-slate-900 text-base sm:text-lg truncate">{org.name}</span>
-        </Link>
-        <OrgNav nav={nav} registerHref={registerHref} />
-      </div>
-    </header>
+    <>
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/70 relative">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <Link href={homeHref} className="flex items-center gap-2.5 min-w-0 flex-shrink">
+            {org.logoUrl && <img src={org.logoUrl} alt="" className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-contain bg-white border border-slate-100 flex-shrink-0" />}
+            <span className="font-extrabold tracking-tight text-slate-900 text-base sm:text-lg truncate">{org.name}</span>
+          </Link>
+          <OrgNav nav={nav} registerHref={registerHref} events={events} currentId={currentId} />
+        </div>
+      </header>
+      {/* Below xl the bar has no room for the logos, so phones and tablets get
+          them here: logo and first day, sliding sideways when a narrow phone
+          can't fit them all. It scrolls away with the page instead of sticking
+          under the bar, which already takes 64px of a phone screen. */}
+      {events.length > 0 && (
+        <nav aria-label="Upcoming events" className="xl:hidden bg-white border-b border-slate-200/70">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-1.5 flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {events.map(e => {
+              const here = e.id === currentId
+              return (
+                <Link key={e.id} href={e.href} prefetch={false} title={`${e.name} · ${e.dates}`} aria-label={`${e.name}, ${e.dates}`} aria-current={here ? 'true' : undefined}
+                  className={`flex-none inline-flex items-center gap-1.5 rounded-full border py-[3px] pl-[3px] pr-2 text-xs font-semibold whitespace-nowrap transition-colors ${here ? 'border-teal-500 ring-1 ring-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-400'}`}>
+                  <EventMark e={e} className="w-7 h-7 rounded-full border border-slate-100 text-[10px]" />
+                  {e.day}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      )}
+    </>
   )
 }
 

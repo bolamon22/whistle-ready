@@ -3,7 +3,7 @@ title: Edit your organization's public website
 category: Organization
 order: 660
 routes: /dashboard/org/site
-keywords: website public site org site hero about sponsors partners info pages faq directions gallery photos instagram feed contact social logo event pages
+keywords: website public site org site hero about sponsors partners info pages faq directions gallery photos instagram feed contact social logo event pages header event logos upcoming events cross promote
 ---
 The **Website** page edits your organization's public site: logo, hero, about section, sponsors, info pages, photo gallery and contact details. Each tournament's own event page is edited from here too.
 
@@ -23,6 +23,8 @@ The **Website** page edits your organization's public site: logo, hero, about se
 - **Contact & social**: **Email**, **Phone**, **Hours**, **Address**, and Facebook, Instagram and website links.
 
 **Log in link:** every page of the site has **Log in** at the top (a person icon on phones) and **Log in to your account** in the footer. Club directors, coaches, parents and staff all use it and land on their own page. Once signed in, the header link reads **My account**. It's always there; there's nothing to turn on.
+
+**Upcoming event logos:** the header of your site and of each event's pages shows the logos of your next four events, soonest first, each linking to its event page. On computers they sit next to **Tournaments**, and pointing at one shows its dates, location and, while registration is open, **Register**. On phones and tablets they're in a row under the menu bar. They come from each tournament's logo and dates, and an event drops off after its last day. There's nothing to turn on.
 
 **Common problems:**
 - Nothing is published until you click **Save**.

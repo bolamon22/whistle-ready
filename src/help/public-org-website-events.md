@@ -4,7 +4,7 @@ category: Public pages
 order: 950
 audience: public
 routes: /o/*
-keywords: website, home page, upcoming tournaments, events, register, register a team, sign up team, event details, next up, dates, location, schedule
+keywords: website, home page, upcoming tournaments, events, register, register a team, sign up team, event details, next up, dates, location, schedule, logos, event logos, other events
 ---
 Our website's home page lists every upcoming tournament, with dates and location, and links straight to each event's details and team registration.
 
@@ -14,6 +14,8 @@ Our website's home page lists every upcoming tournament, with dates and location
 2. Tap an event card (or **Event details** / **Details**) to open that event's page.
 3. To sign up a team, tap **Register** on the event card. The **Register a team** button at the top of the home page, and the **Register** button in the menu, open registration for the next event.
 4. Some cards show a small status label under the dates (for example, which divisions are open). Check it before you register.
+
+**To jump to another event:** the logos at the top of our website and of each event's pages are our next events, soonest first. On a computer they sit next to **Tournaments**: point at one to see its dates (and **Register**, while registration is open), or click it to open the event. On a phone or tablet they're in the row just under the menu bar, each with its first day. The event you're looking at is outlined in teal.
 
 **Common problems:**
 - No **Register** button on a card means team registration isn't open for that event yet.

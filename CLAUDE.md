@@ -149,6 +149,14 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Org site header shows the next events (Oct 7).** Cross-promotion on every page that renders
+  `OrgHeader` (org pages + each event's pages): `headerEvents()` in `o/[slug]/_chrome.tsx` = the
+  org's next 4 by start date, kept through the last day in Eastern time; the reg badge comes from
+  `json_extract` on the 4 `tournamentSite:` blobs, not the whole blobs. `OrgHeader` is now async and
+  loads them from `orgId` (falls back to `org.id`); tournament pages pass `orgId` + `currentId`
+  (that event gets a teal ring). `OrgNav` shows the logos beside **Tournaments** from `xl`, with a
+  hover card (`EventLogos`); below `xl` a pill row (logo + first day) sits under the header. Fit
+  measured at 1280 with Sunshine's longest menu: 247px free before, about 83px after.
 - **Tasks (Oct 4).** Bo's to-do list per event: `/tasks` (every event + General), each tournament's
   **Tasks** tab (`/tournaments/[id]/tasks`), a card on the tournaments page and a box on the tournament
   dashboard. Red badges (top bar, Tasks tab) count OVERDUE only (Bo: overdue+this-week was always lit).

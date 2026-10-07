@@ -69,7 +69,7 @@ export default async function EventChrome({ tournamentId, active, children }: { 
 
   return (
     <>
-      {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={hero.registerHref} />}
+      {org.slug && <OrgHeader org={orgForChrome} orgId={String(t.orgId || '')} currentId={tournamentId} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={hero.registerHref} />}
       {t.name && <EventHero {...hero} />}
       {children}
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} base={orgBase(org.slug)} pages={navPages} />}

@@ -483,7 +483,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   return (
     <div className="min-h-screen bg-slate-50">
       <JsonLd data={[sportsEventLd, breadcrumbLd, ...(faqLd ? [faqLd] : [])]} />
-      {org.slug && <OrgHeader org={orgForChrome} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
+      {org.slug && <OrgHeader org={orgForChrome} orgId={String(t.orgId || '')} currentId={params.id} homeHref={orgBase(org.slug) || '/'} nav={nav} registerHref={registerHref} />}
       {/* Shared with every other public page of this event -- see _eventHero. */}
       <EventHero {...hero} />
 
