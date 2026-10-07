@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, ArrowUp, ArrowDown, Link2, ExternalLink, ImagePlus, Star, X, Loader2 } from 'lucide-react'
+import { Plus, Trash2, ArrowUp, ArrowDown, Link2, ExternalLink, ImagePlus, Star, X, Loader2, MapPin } from 'lucide-react'
 import {
-  EMPTY_HOTEL, MAX_HOTELS, MAX_HOTEL_PHOTOS, parseReserveTravel, reserveTravelHotelUrl, reserveTravelProperty, hotelsPath, photoUrl, hotelKey, hotelChain, CHAIN_NAMES,
+  EMPTY_HOTEL, MAX_HOTELS, MAX_HOTEL_PHOTOS, parseReserveTravel, reserveTravelHotelUrl, reserveTravelProperty, hotelsPath, photoUrl, hotelKey, hotelChain, CHAIN_NAMES, onMap,
   type EventHotel,
 } from '@/lib/eventHotels'
+import { parseLatLng } from '@/lib/geocode'
 import { uploadHotelPhoto, HOTEL_PHOTO_ACCEPT } from '@/lib/photoClient'
 import GalleryPicker from '@/components/GalleryPicker'
 
@@ -18,6 +19,9 @@ import GalleryPicker from '@/components/GalleryPicker'
 // housing company sends (several at once; the first is the main photo), either as
 // files or as links to where the photos already are online (Bo, Oct 7: "this will
 // take me a while to save and upload").
+// The address puts the hotel on the hotels page map: it is looked up when staff
+// leave the box (/api/geocode). An address the lookup doesn't know can be replaced
+// by the spot's numbers pasted from Google Maps.
 
 const labelCls = 'block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1'
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -36,6 +40,8 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
   // Pasted photo links, per hotel row, and the row whose links are being checked.
   const [photoLinks, setPhotoLinks] = useState<Record<number, string>>({})
   const [checking, setChecking] = useState<number | null>(null)
+  // Map lookups, per hotel row: in progress, or the address wasn't found.
+  const [geo, setGeo] = useState<Record<number, 'looking' | 'missing'>>({})
   const locked = !!busy || checking !== null
   // The list as it is now, for when an upload finishes after other edits.
   const latest = useRef(hotels)
@@ -72,7 +78,26 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
   const source = link.trim() || (bookingHasHotels ? bookingUrl : '')
 
   const set = (i: number, patch: Partial<EventHotel>) => onChange(hotels.map((h, j) => (j === i ? { ...h, ...patch } : h)))
+
+  /** Put row i on the map from its address (or pasted numbers), unless it is already there. */
+  async function locate(i: number) {
+    const h = latest.current[i]
+    const q = (h?.address || '').replace(/\s+/g, ' ').trim()
+    if (!h || !q || onMap(h)) return
+    const typed = parseLatLng(q)
+    if (typed) { onChange(latest.current.map((x, j) => (j === i ? { ...x, ...typed } : x))); return }
+    setGeo(v => ({ ...v, [i]: 'looking' }))
+    const d = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+    const now = latest.current[i]
+    // Typed over, moved or removed meanwhile: this answer is for an address no longer there.
+    if (!now || (now.address || '').replace(/\s+/g, ' ').trim() !== q) { setGeo(v => { const n = { ...v }; delete n[i]; return n }); return }
+    if (d?.found && typeof d.lat === 'number' && typeof d.lng === 'number') {
+      setGeo(v => { const n = { ...v }; delete n[i]; return n })
+      onChange(latest.current.map((x, j) => (j === i ? { ...x, lat: d.lat, lng: d.lng } : x)))
+    } else setGeo(v => ({ ...v, [i]: 'missing' }))
+  }
   const move = (i: number, d: -1 | 1) => {
+    setGeo({})
     const j = i + d
     if (j < 0 || j >= hotels.length) return
     const next = [...hotels]; [next[i], next[j]] = [next[j], next[i]]; onChange(next)
@@ -198,7 +223,7 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
               <input className={`${inputCls} bg-white`} value={h.name} onChange={e => set(i, { name: e.target.value })} placeholder="Hotel name (required to show)" />
               <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || locked} aria-label="Move up" className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowUp size={15} /></button>
               <button type="button" onClick={() => move(i, 1)} disabled={i === hotels.length - 1 || locked} aria-label="Move down" className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowDown size={15} /></button>
-              <button type="button" onClick={() => onChange(hotels.filter((_, j) => j !== i))} disabled={locked} aria-label="Remove hotel" className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-30"><Trash2 size={15} /></button>
+              <button type="button" onClick={() => { setGeo({}); onChange(hotels.filter((_, j) => j !== i)) }} disabled={locked} aria-label="Remove hotel" className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-30"><Trash2 size={15} /></button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-7">
               <div>
@@ -245,6 +270,23 @@ export default function HotelListEditor({ tournamentId, hotels, onChange, bookin
                   <input className={`${inputCls} bg-white`} value={h.url} onChange={e => set(i, { url: e.target.value.trim() })} placeholder="https://… (leave blank to use the booking link above)" />
                   {/^https?:\/\//i.test(h.url) && <a href={h.url} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center px-2.5 border border-slate-300 rounded-lg text-slate-500 hover:bg-white" aria-label="Open booking link"><ExternalLink size={14} /></a>}
                 </div>
+              </div>
+              <div className="col-span-2 sm:col-span-4">
+                <label className={labelCls}>Address <span className="normal-case font-normal tracking-normal text-slate-400">· puts the hotel on the map</span></label>
+                <input className={`${inputCls} bg-white`} value={h.address || ''} placeholder="2155 Wellington Green Dr, Wellington, FL 33414"
+                  onChange={e => { const address = e.target.value; setGeo(v => { const n = { ...v }; delete n[i]; return n }); set(i, { address, lat: undefined, lng: undefined }) }}
+                  onBlur={() => locate(i)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); locate(i) } }} />
+                <p className="mt-1 text-xs flex flex-wrap items-center gap-x-2" aria-live="polite">
+                  {geo[i] === 'looking' ? <span className="text-slate-500 inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" />Finding it on the map…</span>
+                    : onMap(h) ? <>
+                        <span className="text-teal-700 font-semibold inline-flex items-center gap-1"><MapPin size={12} />On the map</span>
+                        <a href={`https://www.google.com/maps?q=${h.lat},${h.lng}`} target="_blank" rel="noopener noreferrer" className="text-slate-500 underline hover:text-slate-700">check the spot</a>
+                      </>
+                    : geo[i] === 'missing' ? <span className="text-amber-700">Couldn’t find that address. Check it, or paste the spot from Google Maps instead: right-click the hotel there and click the numbers at the top.</span>
+                    : (h.address || '').trim() ? <button type="button" onClick={() => locate(i)} className="font-semibold text-teal-700 hover:text-teal-900">Find it on the map</button>
+                    : <span className="text-slate-400">Add the street address to show this hotel on the map.</span>}
+                </p>
               </div>
               <div className="col-span-2 sm:col-span-4">
                 <label className={labelCls}>Note (optional)</label>

@@ -41,16 +41,24 @@ export type EventHotel = {
   eventRate: boolean
   /** Chain, when staff set it; '' means worked out from the name (hotelChain). */
   chain: string
+  /** Street address. The Builder looks it up (lib/geocode) to put the hotel on the map. */
+  address: string
+  /** Where the hotel sits on the hotels page map; both or neither. */
+  lat?: number
+  lng?: number
   /** Set for the families' pages from the event's sold-out marks (withSoldOut); never stored with the list. */
   soldOut?: boolean
 }
+
+/** A spot on the hotels page map other than a hotel: the fields (from the event's venues). */
+export type MapPlace = { name: string; address: string; lat: number; lng: number }
 
 // Bo, Oct 7: list more than the block hotels, "at least the closest ones", and
 // let families filter by price, distance and chain (components/HotelBrowser).
 export const MAX_HOTELS = 40
 export const MAX_HOTEL_PHOTOS = 20
 
-export const EMPTY_HOTEL: EventHotel = { name: '', rate: '', miles: '', bookBy: '', note: '', url: '', photos: [], eventRate: false, chain: '' }
+export const EMPTY_HOTEL: EventHotel = { name: '', rate: '', miles: '', bookBy: '', note: '', url: '', photos: [], eventRate: false, chain: '', address: '' }
 
 /** An http(s) address or ''. A button only ever opens a real web page. */
 export function safeUrl(u: unknown): string {
@@ -77,6 +85,14 @@ export function cleanPhotos(v: unknown): string[] {
 
 const one = (x: unknown, n: number) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 
+/** A real map spot as {lat, lng} (rounded to about 10 cm), or null. 0,0 is a blank, not a place. */
+export function mapSpot(lat: unknown, lng: unknown): { lat: number; lng: number } | null {
+  if (lat === null || lat === undefined || lat === '' || lng === null || lng === undefined || lng === '') return null
+  const a = Number(lat), o = Number(lng)
+  if (!Number.isFinite(a) || !Number.isFinite(o) || Math.abs(a) > 90 || Math.abs(o) > 180 || (a === 0 && o === 0)) return null
+  return { lat: Math.round(a * 1e6) / 1e6, lng: Math.round(o * 1e6) / 1e6 }
+}
+
 /** The stored list, tidied: named rows only, at most MAX_HOTELS. */
 export function cleanHotels(v: unknown): EventHotel[] {
   if (!Array.isArray(v)) return []
@@ -90,8 +106,13 @@ export function cleanHotels(v: unknown): EventHotel[] {
     photos: cleanPhotos(h?.photos),
     eventRate: h?.eventRate !== false,
     chain: one(h?.chain, 40),
+    address: one(h?.address, 160),
+    ...(mapSpot(h?.lat, h?.lng) || {}),
   })).filter(h => h.name)
 }
+
+/** True when the hotel has a spot on the map. */
+export const onMap = (h: { lat?: number; lng?: number }) => typeof h.lat === 'number' && typeof h.lng === 'number'
 
 /** True when the event content lists at least one hotel. */
 export const hasHotelList = (c: any) => cleanHotels(c?.hotelList).length > 0
