@@ -23,6 +23,7 @@ import AiGenerateButton from '@/components/AiGenerateButton'
 import BlockBuilder from '@/components/BlockBuilder'
 import GalleryPicker from '@/components/GalleryPicker'
 import { resolveBlocks, Block } from '@/lib/eventBlocks'
+import { mergeEventContent, sameJson } from '@/lib/eventContentMerge'
 
 export type Loc = { name: string; address: string; mapUrl: string; fieldMapUrl: string }
 export type Contact = { name: string; role: string; phone: string; email: string }
@@ -76,6 +77,71 @@ async function uploadImage(file: File): Promise<string | null> {
   } catch { return null }
 }
 
+// `any` because stored content comes from older versions of this page and from
+// server routes (FAQs, rule sets) as well as from here.
+function normalizeEventContent(d: any): EventContent {
+  // Stored values may be null/undefined; coerce so consumers can safely
+  // call .trim() without crashing the page.
+  const str = (v: any) => typeof v === 'string' ? v : ''
+  return {
+    ...EMPTY_EVENT_CONTENT, ...d,
+    overview: str(d?.overview), ageChartUrl: str(d?.ageChartUrl), divisionsNote: str(d?.divisionsNote), heroImage: str(d?.heroImage),
+    hotels: str(d?.hotels), hotelsUrl: str(d?.hotelsUrl),
+    hotelList: Array.isArray(d?.hotelList) ? d.hotelList : [],
+    rules: str(d?.rules), rulesSourceId: str(d?.rulesSourceId),
+    locations: Array.isArray(d?.locations) ? d.locations : [],
+    contacts: Array.isArray(d?.contacts) ? d.contacts : [],
+    regStatus: str(d?.regStatus), regStatusText: str(d?.regStatusText), regClosesOn: str(d?.regClosesOn),
+    divisionStatus: (d?.divisionStatus && typeof d.divisionStatus === 'object') ? d.divisionStatus : {},
+    divisionSpots: (d?.divisionSpots && typeof d.divisionSpots === 'object') ? d.divisionSpots : {},
+  }
+}
+
+// The copy of each event's content this page last loaded or saved, and the
+// server's revision of it (see the site route). A save sends that revision; if
+// someone saved since, this page's edits are merged into their copy rather than
+// putting the old copy back (lib/eventContentMerge.ts).
+const lastSeen = new Map<string, { rev: string; content: EventContent }>()
+
+/** The stored content, or null if it couldn't be loaded. */
+export async function loadEventContent(id: string): Promise<EventContent | null> {
+  try {
+    const r = await fetch(`/api/tournaments/${id}/site`, { cache: 'no-store' })
+    if (!r.ok) return null
+    const content = normalizeEventContent(await r.json())
+    lastSeen.set(id, { rev: r.headers.get('X-Content-Rev') || '', content })
+    return content
+  } catch { return null }
+}
+
+/**
+ * Saves `edited`. If the event was saved somewhere else since this page loaded,
+ * merges and saves again. `content` is what's now stored (the merged copy when
+ * there was one). Never throws.
+ */
+export async function saveEventContentNow(id: string, edited: EventContent): Promise<{ ok: boolean; content: EventContent }> {
+  let mine = edited
+  for (let tries = 0; tries < 3; tries++) {
+    const seen = lastSeen.get(id) || { rev: '', content: EMPTY_EVENT_CONTENT }
+    // Nothing changed here: nothing to save, and nothing to put back over a newer save.
+    if (sameJson(mine, seen.content)) return { ok: true, content: mine }
+    let res: Response
+    try {
+      res = await fetch(`/api/tournaments/${id}/site`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Base-Rev': seen.rev },
+        body: JSON.stringify(mine),
+      })
+    } catch { return { ok: false, content: mine } }
+    const d: any = await res.json().catch(() => ({}))
+    if (res.ok) { lastSeen.set(id, { rev: String(d?.rev || ''), content: mine }); return { ok: true, content: mine } }
+    if (res.status !== 409 || !d?.current) return { ok: false, content: mine }
+    const theirs = normalizeEventContent(d.current)
+    mine = mergeEventContent(seen.content, mine, theirs)
+    lastSeen.set(id, { rev: String(d.rev || ''), content: theirs })
+  }
+  return { ok: false, content: mine }
+}
+
 /** Loads + saves the public event content for a tournament. */
 export function useEventContent(id: string) {
   const [content, setContent] = useState<EventContent>(EMPTY_EVENT_CONTENT)
@@ -84,28 +150,8 @@ export function useEventContent(id: string) {
 
   useEffect(() => {
     if (!id) return
-    fetch(`/api/tournaments/${id}/site`)
-      .then(r => r.ok ? r.json() : {})
-      // `any` because the two branches above are a parsed body and a bare {}, so
-      // every d?.field read below is an error on the empty one without it.
-      .then((d: any) => setContent(() => {
-        // Stored values may be null/undefined; coerce so consumers can safely
-        // call .trim() without crashing the page.
-        const str = (v: any) => typeof v === 'string' ? v : ''
-        return {
-          ...EMPTY_EVENT_CONTENT, ...d,
-          overview: str(d?.overview), ageChartUrl: str(d?.ageChartUrl), divisionsNote: str(d?.divisionsNote), heroImage: str(d?.heroImage),
-          hotels: str(d?.hotels), hotelsUrl: str(d?.hotelsUrl),
-          hotelList: Array.isArray(d?.hotelList) ? d.hotelList : [],
-          rules: str(d?.rules), rulesSourceId: str(d?.rulesSourceId),
-          locations: Array.isArray(d?.locations) ? d.locations : [],
-          contacts: Array.isArray(d?.contacts) ? d.contacts : [],
-          regStatus: str(d?.regStatus), regStatusText: str(d?.regStatusText), regClosesOn: str(d?.regClosesOn),
-          divisionStatus: (d?.divisionStatus && typeof d.divisionStatus === 'object') ? d.divisionStatus : {},
-          divisionSpots: (d?.divisionSpots && typeof d.divisionSpots === 'object') ? d.divisionSpots : {},
-        }
-      }))
-      .catch(() => {})
+    loadEventContent(id)
+      .then(c => { if (c) setContent(c) })
       .finally(() => setLoaded(true))
     fetch('/api/org-rules')
       .then(r => r.ok ? r.json() : {})
@@ -115,13 +161,15 @@ export function useEventContent(id: string) {
 
   /** Persist the content. Returns true on success — never throws. */
   const saveEventContent = useCallback(async (): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/tournaments/${id}/site`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(content),
-      })
-      return res.ok
-    } catch { return false }
+    const sent = content
+    const { ok, content: stored } = await saveEventContentNow(id, sent)
+    if (stored !== sent) {
+      // Someone saved this event since this page loaded. Show the merged copy,
+      // keeping anything typed while the save was going.
+      setContent(now => now === sent ? stored : mergeEventContent(sent, now, stored))
+      if (ok) toast.success('Also kept the changes saved elsewhere since you opened this page')
+    }
+    return ok
   }, [id, content])
 
   return { content, setContent, ruleSets, loaded, saveEventContent }
@@ -144,12 +192,14 @@ export default function EventContentSection({
     setGenFaq(true)
     try {
       // Save first so the generator sees the latest details.
-      await fetch(`/api/tournaments/${id}/site`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })
+      const saved = await saveEventContentNow(id, c)
+      if (!saved.ok) { toast.error('Could not save the page first. Try again.'); return }
+      if (saved.content !== c) setC(saved.content)
       const res = await fetch(`/api/tournaments/${id}/generate-faqs`, { method: 'POST' })
       const d = await res.json().catch(() => ({}))
       if (res.ok) {
-        const fresh = await fetch(`/api/tournaments/${id}/site`).then(r => r.ok ? r.json() : null)
-        if (fresh) setC(prev => ({ ...EMPTY_EVENT_CONTENT, ...fresh, locations: Array.isArray(fresh.locations) ? fresh.locations : [], contacts: Array.isArray(fresh.contacts) ? fresh.contacts : [] }))
+        const fresh = await loadEventContent(id)
+        if (fresh) setC(fresh)
         toast.success(d.added ? `Added ${d.added} FAQ${d.added === 1 ? '' : 's'} from event details` : 'FAQs already up to date')
       } else toast.error(d.error || 'Could not generate FAQs')
     } catch { toast.error('Could not generate FAQs') } finally { setGenFaq(false) }
