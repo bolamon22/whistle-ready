@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { requireFeature } from '@/lib/apiAuth'
+import { tournamentOrgId } from '@/lib/org'
 
 async function ensureTable() {
   try {
@@ -22,9 +22,17 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
+// Saving needs the Builder's own permission (tournament_setup: directors and
+// admins) and the event's org. It used to take any signed-in account, and anyone
+// can make a coach, parent or club-director account through /api/auth/register,
+// so a stranger could rewrite an event page, including the hotel buttons families
+// book through (Oct 7 2026).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Sign in to edit' }, { status: 401 })
+  const gate = await requireFeature('tournament_setup')
+  if (!gate.ok) return gate.res
+  const orgId = await tournamentOrgId(params.id)
+  if (!orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
+  if (gate.role !== 'admin' && gate.orgId !== orgId) return NextResponse.json({ error: 'Not your organization' }, { status: 403 })
   try {
     await ensureTable()
     const value = JSON.stringify(await req.json() || {})
@@ -35,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
     // Published pages are cached briefly (see `revalidate` on those pages); refresh
     // them now so staff see their edit immediately instead of waiting for expiry.
-    for (const p of [`/tournaments/${params.id}/event`, `/tournaments/${params.id}/rules`]) {
+    for (const p of [`/tournaments/${params.id}/event`, `/tournaments/${params.id}/rules`, `/tournaments/${params.id}/hotels`]) {
       try { revalidatePath(p) } catch { /* cache refresh is best-effort */ }
     }
     return NextResponse.json({ ok: true })
