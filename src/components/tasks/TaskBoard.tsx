@@ -5,7 +5,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import {
   AlertCircle, ArrowRight, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, LayoutTemplate,
-  ListChecks, Plus, RefreshCw, Trash2, X, Landmark, Tent, Users, Mail, Banknote, Trophy, Archive, Shapes, UserRound,
+  ListChecks, Plus, RefreshCw, Search, Trash2, X, Landmark, Tent, Users, Mail, Banknote, Trophy, Archive, Shapes, UserRound,
   type LucideIcon,
 } from 'lucide-react'
 import {
@@ -57,6 +57,7 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
   const [qCat, setQCat] = useState('other')
   const [qDue, setQDue] = useState('')
   const [adding, setAdding] = useState(false)
+  const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -164,7 +165,22 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
     ? (thisT && !realTasks.length && (!thisT.lastDay || thisT.lastDay >= today) ? [thisT] : [])
     : upcoming.filter(t => !realTasks.some(x => x.tournamentId === t.id))
 
+  // Search: every word has to appear somewhere on the task (title, notes, steps,
+  // contact, event, category). It looks past the folded groups and the event
+  // chips, because a task you remember is often sitting under Later, unseen.
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const searching = words.length > 0
+  const hay = (t: TaskView) => [t.title, t.notes, t.contactName || '', nameOf(t.tournamentId), categoryLabel(t.category),
+    t.tracked?.label || '', ...t.steps.map(x => x.text)].join(' ').toLowerCase()
+
   const groups: Group[] = useMemo(() => {
+    if (words.length) {
+      const hits = listTasks.filter(t => { const h = hay(t); return words.every(w => h.includes(w)) })
+      return [
+        { key: 'search', label: 'Matches', icon: Search, items: hits.filter(t => !t.done).sort(byDue) },
+        { key: 'searchdone', label: 'Done', icon: CheckCircle2, tone: 'green' as const, items: hits.filter(t => t.done).sort(byDue) },
+      ].filter(g => g.items.length)
+    }
     const open = visible.filter(t => !t.done).sort(byDue)
     const done = visible.filter(t => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || '') || byDue(a, b))
     const doneGroup: Group = { key: 'done', label: 'Done', icon: CheckCircle2, tone: 'green', items: done, closed: true }
@@ -188,7 +204,8 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
       ]
     }
     return [...gs, doneGroup].filter(g => g.items.length)
-  }, [visible, mode, scoped, tournaments, today])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, mode, scoped, tournaments, today, query, listTasks])
 
   /** The group a task sits in under the current grouping. */
   function groupKeyOf(t: TaskView): string {
@@ -198,7 +215,7 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
     return dueBucket(t.dueDate, today)
   }
 
-  const stateOf = (g: Group): GroupState => groupState[`${mode}:${g.key}`] ?? (g.closed ? 'closed' : 'open')
+  const stateOf = (g: Group): GroupState => searching ? 'all' : groupState[`${mode}:${g.key}`] ?? (g.closed ? 'closed' : 'open')
   const setState = (g: Group, s: GroupState) => setGroupState(m => ({ ...m, [`${mode}:${g.key}`]: s }))
 
   const selected = selId ? allTasks.find(t => t.id === selId) || null : null
@@ -350,6 +367,19 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
 
       <div className="flex flex-col lg:flex-row lg:items-start gap-5">
         <div className="flex-1 min-w-0 space-y-3">
+          {/* Search */}
+          <div className="relative">
+            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden />
+            <input type="search" value={query} onChange={e => setQuery(e.target.value)} aria-label="Search tasks"
+              onKeyDown={e => { if (e.key === 'Escape') setQuery('') }}
+              placeholder={scoped ? 'Search this event’s tasks, like “shirts” or “carts”' : 'Search every task, like “shirts” or “carts”'}
+              className="w-full border border-slate-300 rounded-xl pl-9 pr-9 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500" />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700"><X size={16} /></button>
+            )}
+          </div>
+
           {/* Quick add */}
           <form onSubmit={add} id="add" className="scroll-mt-24 p-2.5 bg-white border border-slate-200 rounded-xl space-y-2">
             <div className="flex items-center gap-2">
@@ -380,7 +410,8 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
 
           {groups.length === 0 && (
             <div className="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-sm text-slate-500">
-              {listTasks.length ? 'Nothing here. Try another event.' : 'No tasks yet. Add one above, or start from the checklist template.'}
+              {searching ? <>No task matches “{query.trim()}”. Add it above if it’s a new one.</>
+                : listTasks.length ? 'Nothing here. Try another event.' : 'No tasks yet. Add one above, or start from the checklist template.'}
             </div>
           )}
 
@@ -403,7 +434,7 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
                   {shown.map(t => (
                     <li key={t.id} id={`task-${t.id}`} className="border-t border-slate-100 scroll-mt-24">
                       <TaskRow task={t} today={today} selected={t.id === selId}
-                        eventName={!scoped && filter === 'all' ? nameOf(t.tournamentId) : ''}
+                        eventName={!scoped && (filter === 'all' || searching) ? nameOf(t.tournamentId) : ''}
                         onToggle={() => toggle(t)} onSelect={() => setSelId(s => s === t.id ? null : t.id)} />
                       {t.id === selId && t.kind === 'task' && (
                         <div className="lg:hidden px-4 pb-4 pt-1 bg-teal-50 border-t border-teal-100">{detail(t)}</div>
