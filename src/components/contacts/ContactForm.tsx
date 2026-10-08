@@ -15,6 +15,9 @@ const EMPTY: ContactView = {
 }
 
 const input = 'border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-normal text-slate-800 bg-white w-full'
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** "2026-05-16" -> "May 2026": the year alone didn't tell this May's Summer Kick Off from next May's. */
+const monthYear = (d: string) => `${MONTHS[Number(d.slice(5, 7)) - 1] || ''} ${d.slice(0, 4)}`.trim()
 const lbl = 'flex flex-col gap-1 text-xs font-semibold text-slate-600'
 
 export default function ContactForm({ contact, tournaments, today, defaultEvent, onClose, onSaved }: {
@@ -37,10 +40,17 @@ export default function ContactForm({ contact, tournaments, today, defaultEvent,
 
   const set = <K extends keyof ContactView>(k: K, v: ContactView[K]) => setF(x => ({ ...x, [k]: v }))
   const toggleEvent = (id: string) => set('events', f.events.includes(id) ? f.events.filter(e => e !== id) : [...f.events, id])
-  // Upcoming events first, then the rest newest first; any already tagged stay listed.
+  // Upcoming events, then past ones (newest first) only when asked for or already
+  // ticked. Oct 8 2026: past events sat in the same row in the same style, and a
+  // new athletic trainer was ticked onto May's Summer Kick Off, one chip over from
+  // next year's, so she showed under no upcoming event.
+  const [showPast, setShowPast] = useState(false)
   const upcoming = tournaments.filter(t => t.lastDay && t.lastDay >= today)
   const past = tournaments.filter(t => !(t.lastDay && t.lastDay >= today)).sort((a, b) => (b.firstDay || '').localeCompare(a.firstDay || ''))
-  const shown = [...upcoming, ...past.filter((t, i) => i < 4 || f.events.includes(t.id))]
+  const pastShown = past.filter((t, i) => f.events.includes(t.id) || (showPast && i < 6))
+  const morePast = !showPast && past.some(t => !f.events.includes(t.id))
+  const isUpcoming = (id: string) => upcoming.some(t => t.id === id)
+  const onlyPast = !f.everyEvent && f.events.length > 0 && !f.events.some(isUpcoming)
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
@@ -89,16 +99,20 @@ export default function ContactForm({ contact, tournaments, today, defaultEvent,
             <div className="flex flex-wrap gap-1.5">
               <button type="button" onClick={() => set('everyEvent', !f.everyEvent)} aria-pressed={f.everyEvent}
                 className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${f.everyEvent ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300'}`}>Every event</button>
-              {shown.map(t => {
+              {[...upcoming, ...pastShown].map(t => {
                 const on = f.events.includes(t.id)
+                const old = !isUpcoming(t.id)
                 return (
                   <button key={t.id} type="button" onClick={() => toggleEvent(t.id)} aria-pressed={on}
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${on ? 'bg-teal-700 text-white border-teal-700' : 'bg-white text-slate-700 border-slate-300'}`}>
-                    {t.name}{t.firstDay ? ` · ${t.firstDay.slice(0, 4)}` : ''}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${on ? 'bg-teal-700 text-white border-teal-700' : old ? 'bg-white text-slate-500 border-slate-300 border-dashed' : 'bg-white text-slate-700 border-slate-300'}`}>
+                    {t.name}{t.firstDay ? ` · ${monthYear(t.firstDay)}` : ''}{old ? ' (past)' : ''}
                   </button>
                 )
               })}
+              {morePast && <button type="button" onClick={() => setShowPast(true)} className="px-2 py-1 text-xs font-semibold text-teal-700 hover:underline">Past events…</button>}
             </div>
+            {onlyPast && <p className="mt-1.5 text-xs text-amber-700">Only past events are ticked, so this contact won’t show on any upcoming event’s Contacts tab.</p>}
+            {!f.everyEvent && !f.events.length && <p className="mt-1.5 text-xs text-slate-500">No event ticked: this contact will show in the directory only.</p>}
           </fieldset>
 
           <div className="grid sm:grid-cols-2 gap-3">
