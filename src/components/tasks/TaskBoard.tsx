@@ -14,6 +14,8 @@ import {
   type TaskTournament, type TaskView,
 } from '@/lib/taskTemplate'
 import StarterDialog from './StarterDialog'
+import VendorEmailDialog from '@/components/contacts/VendorEmailDialog'
+import type { ContactRow, ContactView } from '@/lib/contactTypes'
 import { CheckButton, dueTone } from './CheckButton'
 
 // The task list: grouped rows, a detail panel, quick add. One component for the
@@ -69,12 +71,28 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
   useEffect(() => { load() }, [load])
 
   // Event contacts a task can be linked to. Best-effort: no contacts, no picker.
+  // The full rows are kept too, so a task's contact can be emailed from the task.
   const [contacts, setContacts] = useState<ContactOption[]>([])
+  const [contactRows, setContactRows] = useState<ContactRow[]>([])
+  const [writing, setWriting] = useState<{ taskId: string; contactId: string } | null>(null)
   useEffect(() => {
     fetch('/api/contacts').then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.contacts) setContacts(d.contacts.map((c: ContactOption) => ({ id: c.id, name: c.name, company: c.company, events: c.events || [], everyEvent: !!c.everyEvent }))) })
+      .then(d => {
+        if (!d?.contacts) return
+        setContactRows(d.contacts)
+        setContacts(d.contacts.map((c: ContactOption) => ({ id: c.id, name: c.name, company: c.company, events: c.events || [], everyEvent: !!c.everyEvent })))
+      })
       .catch(() => {})
   }, [])
+  const patchContact = async (id: string, body: Partial<ContactView>) => {
+    setContactRows(rows => rows.map(c => c.id === id ? { ...c, ...body } : c))
+    try {
+      const r = await fetch(`/api/contacts/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.contact) throw new Error(d.error || 'Could not save the contact')
+      setContactRows(rows => rows.map(c => c.id === id ? { ...c, ...d.contact } : c))
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save the contact') }
+  }
 
   // The tab page's setup checklist reports its progress; keep its row in step.
   useEffect(() => {
@@ -258,6 +276,8 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
   const pct = counts.total ? Math.round((counts.done / counts.total) * 100) : 0
   const detail = (t: TaskView) => (
     <TaskDetail task={t} today={today} eventName={nameOf(t.tournamentId)} contacts={contacts}
+      emailable={!!contactRows.find(c => c.id === t.contactId)?.email}
+      onWrite={() => setWriting({ taskId: t.id, contactId: t.contactId || '' })}
       onPatch={(body, local) => patch(t, body, local)} onToggle={() => toggle(t)} onDelete={() => remove(t)} onClose={() => setSelId(null)} />
   )
 
@@ -415,6 +435,16 @@ export default function TaskBoard({ tournamentId, onLoaded }: {
           onClose={() => setStarterFor(null)}
           onAdded={() => { setStarterFor(null); load(); announceTasksChanged() }} />
       )}
+      {writing && contactRows.some(c => c.id === writing.contactId) && (() => {
+        const task = data.tasks.find(x => x.id === writing.taskId)
+        return (
+          <VendorEmailDialog contact={contactRows.find(c => c.id === writing.contactId)!} tournaments={data.tournaments} today={today}
+            tournamentId={task?.tournamentId || undefined}
+            onClose={() => setWriting(null)} onPatch={body => patchContact(writing.contactId, body)}
+            // Sending the email is what this task was for, so it checks itself off (Reopen undoes it).
+            onSent={() => { if (task && !task.done) toggle(task) }} />
+        )
+      })()}
     </div>
   )
 }
@@ -474,8 +504,10 @@ function TaskRow({ task: t, today, selected, eventName, onToggle, onSelect }: {
   )
 }
 
-function TaskDetail({ task, today, eventName, contacts, onPatch, onToggle, onDelete, onClose }: {
+function TaskDetail({ task, today, eventName, contacts, emailable, onWrite, onPatch, onToggle, onDelete, onClose }: {
   task: TaskView; today: string; eventName: string; contacts: ContactOption[]
+  /** The linked contact has an email address, so the task can write to them. */
+  emailable: boolean; onWrite: () => void
   onPatch: (body: Record<string, unknown>, local: Partial<TaskView>) => void
   onToggle: () => void; onDelete: () => void; onClose: () => void
 }) {
@@ -550,7 +582,7 @@ function TaskDetail({ task, today, eventName, contacts, onPatch, onToggle, onDel
         const missing = task.contactId && !contacts.some(c => c.id === task.contactId)
         const opt = (c: ContactOption) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` · ${c.company}` : ''}</option>
         return (
-          <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+          <div className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
             <span className="flex items-baseline justify-between">Contact
               {task.contactId && !missing && <Link href={`/contacts?c=${encodeURIComponent(task.contactId)}`} className="font-semibold text-teal-700 hover:underline">Open contact</Link>}
             </span>
@@ -569,7 +601,13 @@ function TaskDetail({ task, today, eventName, contacts, onPatch, onToggle, onDel
                 </>
               ) : contacts.map(opt)}
             </select>
-          </label>
+            {task.contactId && !missing && emailable && (
+              <button type="button" onClick={onWrite}
+                className="mt-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-teal-600 bg-white text-sm font-bold text-teal-700 hover:bg-teal-50">
+                <Mail size={15} /> Email {task.contactName || 'them'}
+              </button>
+            )}
+          </div>
         )
       })()}
 

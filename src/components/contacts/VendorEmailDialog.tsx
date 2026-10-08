@@ -19,7 +19,7 @@ import { costLabel, useCosts } from '@/components/costs/useCosts'
 
 const field = 'border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white w-full min-w-0'
 
-export default function VendorEmailDialog({ contact, tournaments, today, tournamentId, onClose, onPatch }: {
+export default function VendorEmailDialog({ contact, tournaments, today, tournamentId, onClose, onPatch, onSent }: {
   contact: ContactRow
   tournaments: TaskTournament[]
   today: string
@@ -27,6 +27,8 @@ export default function VendorEmailDialog({ contact, tournaments, today, tournam
   onClose: () => void
   /** Logs the contact once the email is opened to send. */
   onPatch: (body: Partial<ContactView>) => void
+  /** After Send (not "Email it to me") goes out — a task checks itself off. */
+  onSent?: () => void
 }) {
   const { data: session } = useSession()
   const myName = (session?.user as { name?: string } | undefined)?.name || ''
@@ -110,7 +112,7 @@ export default function VendorEmailDialog({ contact, tournaments, today, tournam
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.error || 'Could not send it')
       toast.success(mode === 'me' ? `Sent to ${d.to?.[0] || 'you'}. Open it in Gmail and forward it.` : `Sent to ${(d.to || []).join(', ')}`, { duration: 6000 })
-      if (mode === 'send') onPatch({ lastContact: today, ...(contact.waiting === 'us' ? { waiting: '' as const } : {}) })
+      if (mode === 'send') { onPatch({ lastContact: today, ...(contact.waiting === 'us' ? { waiting: '' as const } : {}) }); onSent?.() }
       onClose()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not send it')
