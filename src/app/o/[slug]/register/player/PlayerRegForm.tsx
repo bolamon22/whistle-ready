@@ -669,7 +669,9 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
               )}
             </div>
           )}
-          <div><label className={labelCls}>Jersey number</label><input className={inputCls} name="jerseyNumber" value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value)} /></div>
+          {/* Digits only, up to 3: a 10-digit number typed here (Oct 7 2026) once
+              made every waiver list of its event fail to load (lib/formSubmissions). */}
+          <div><label className={labelCls}>Jersey number</label><input className={inputCls} name="jerseyNumber" inputMode="numeric" autoComplete="off" maxLength={3} value={d.jerseyNumber} onChange={e => set('jerseyNumber', e.target.value.replace(/\D/g, '').slice(0, 3))} /></div>
           {fields.position !== false && <div><label className={labelCls}>Position</label><select className={inputCls} name="position" value={d.position} onChange={e => set('position', e.target.value)}><option value="">Select…</option>{POSITIONS.map(p => <option key={p}>{p}</option>)}</select></div>}
         </div>
       </div>
