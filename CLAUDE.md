@@ -36,6 +36,15 @@ provider swappable in one file and is the seam for per-org senders + future chan
   Lacrossewear/lwops.com but uses a SEPARATE key ("Whistle Ready", Mail Send only) and a separate
   authenticated domain — only the plan quota is shared.
 
+### Payments (Stripe)
+- Every card / ACH payment surface uses `src/components/StripePayPanel.tsx`: the /pay link (the club
+  portal's Pay button opens it) and the team registration payment step.
+- **Apple Pay** (Oct 8 2026, ecc6275) rides on the card option: Stripe's Express Checkout Element on
+  the same card PaymentIntent, so the 3% fee and the recording are the card path's. It only appears
+  on domains registered in Stripe > Settings > Payment method domains (whistleready.app and
+  sunshineeventsgroup.com). **A new domain that shows the pay page must be added there too**, or
+  Apple Pay silently doesn't show on it.
+
 ### Apple Wallet passes
 Credentials can be added to Apple Wallet. ONE wrapper — **`src/lib/wallet.ts`** (`buildApplePass()` /
 `walletEnabled()`); routes must never import `passkit-generator` directly, same rule as `email.ts`.
