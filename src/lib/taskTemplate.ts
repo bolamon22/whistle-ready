@@ -129,6 +129,9 @@ export const STARTER_TEMPLATE: TemplateItem[] = [
   { key: 'permit', title: 'Permit packet signed and returned', category: 'venue', offset: -42, link: 'documents' },
   { key: 'staffhotel', title: 'Staff hotel rooms', category: 'staff', offset: -42, only: 'Away events', suggest: ['fall classic'] },
   { key: 'tents', title: 'Book tents', category: 'rentals', offset: -28 },
+  // Oct 8 2026: Fine Designs sells shirts on site and sends an onsite questionnaire
+  // about a month out; Bo answers it the same way each year (Contacts > their usual email).
+  { key: 'shirts', title: 'Confirm the T-shirt vendor (Fine Designs)', category: 'awards', offset: -28, steps: ['Send their usual email (dates, team count, staff shirt sizes)', 'Add the team-list link', 'They confirm setup'] },
   { key: 'carts', title: 'Reserve golf carts', category: 'rentals', offset: -28 },
   { key: 'truck', title: 'Box truck rental', category: 'rentals', offset: -28 },
   { key: 'affidavit', title: 'Background check and concussion affidavit, notarized, with Exhibit A', category: 'venue', offset: -28, only: 'Martin County venues', suggest: ['fall classic'], link: 'exhibitA', tracked: true },
