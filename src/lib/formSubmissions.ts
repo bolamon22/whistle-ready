@@ -73,6 +73,13 @@ export function ensureSubmissionsTable(): Promise<void> {
         try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgFormSubmission" ADD COLUMN ${col}`) } catch { /* already there */ }
       }
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgFormSubmission_pass" ON "OrgFormSubmission" ("passToken")`)
+      // Jersey numbers saved before derived() kept them to 0-999 (Oct 8 2026): one
+      // out of range can't be read back and takes down every list of its event.
+      // Clears the sort column only; what the family typed stays in "data". Never
+      // holds up the table: a failure here is tried again on the next cold start.
+      try {
+        await prisma.$executeRawUnsafe(`UPDATE "OrgFormSubmission" SET "jersey" = NULL WHERE "jersey" IS NOT NULL AND NOT ("jersey" BETWEEN 0 AND 999)`)
+      } catch { /* tried again on the next cold start */ }
     })().catch(e => { tableReady = null; throw e })
   }
   return tableReady
@@ -90,8 +97,14 @@ function derived(data: any) {
   const playerName = String(d.playerName || d.coachFullName || d.name || d.companyName || '').trim()
   const teamName = String(d.teamName || '').trim()
   const clubName = String(d.clubName || '').trim()
-  const jn = parseInt(String(d.jerseyNumber ?? '').replace(/\D/g, ''), 10)
-  const jersey = Number.isFinite(jn) ? jn : null
+  // The jersey as a number, for the jersey sort: 0-999 or nothing. Prisma's
+  // libSQL adapter reads an INTEGER column back as a 32-bit integer, so a number
+  // of 10 or more digits typed in the jersey box (a Monster Mash waiver, Oct 7
+  // 2026) saved fine but failed every later read of that event's waivers: each
+  // club's portal showed 0 and the staff list wouldn't load. What the family
+  // typed stays in data.jerseyNumber, so nothing they entered is lost.
+  const digits = String(d.jerseyNumber ?? '').replace(/\D/g, '')
+  const jersey = digits && digits.length <= 3 ? Number(digits) : null
   const parts: string[] = []
   for (const [k, v] of Object.entries(d)) {
     if (SKIP_IN_SEARCH.has(k)) continue
