@@ -4,7 +4,7 @@ category: Public pages
 order: 900
 audience: public
 routes: /tournaments/*/register, /tournaments/*/event
-keywords: register, registration, sign up, enter team, add team, club registration, team entry, divisions, how to register, signup form, entry form, password, club portal password, create password, login, account, sign in, returning club, past teams, register again, welcome back, registered before
+keywords: register, registration, sign up, enter team, add team, club registration, team entry, divisions, how to register, signup form, entry form, password, club portal password, create password, login, account, sign in, returning club, past teams, register again, welcome back, registered before, Apple Pay, pay by card
 ---
 Club directors and coaches use the team registration form to enter one or more teams in a tournament. You can enter all of your club's teams on one form.
 
@@ -18,7 +18,7 @@ Club directors and coaches use the team registration form to enter one or more t
 4. Optionally **Upload Logo** under **Club Logo**. It is used for every team unless you **Upload Custom** for a team.
 5. Under **Team Information**, fill in each team: **Club Name**, **Team**, **Division**, **Coach Name**, **Coach Phone** and **Coach Email**. Tap **+ Add Team** for each extra team, or **Remove** to drop one.
 6. Check the **Estimated Total**. Tap **view fee schedule** to see how the fee is worked out.
-7. Pick a **Payment Options** choice: **Bank Transfer (ACH) — No Fee**, **Credit Card**, **PayPal / Venmo**, **Zelle** or **Check**. Card and PayPal / Venmo add a processing fee shown on the form.
+7. Pick a **Payment Options** choice: **Bank Transfer (ACH) — No Fee**, **Credit Card**, **PayPal / Venmo**, **Zelle** or **Check**. Card and PayPal / Venmo add a processing fee shown on the form. On the payment step, **Credit Card** also offers **Apple Pay** on an iPhone, iPad or Mac in Safari, with the same fee.
 8. Add anything else under **Additional Notes**, then tap **Continue to Payment** (bank transfer, card, PayPal / Venmo) or **Submit Registration** (Zelle, check).
 
 **Registered before with another email?** If your name and club match a director on file whose login uses a different email, the form asks **Have you registered before?** and shows that email partly hidden (like j•••@g•••.com). Tap **Yes, sign in with …** and enter that login's password to keep your clubs in one portal; the registration then uses that email. Or tap **No, set up a new login** to keep the email you typed. You need to pick one before you submit.

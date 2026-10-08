@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import { Elements, CardElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { CreditCard, Landmark, Lock, Wallet } from 'lucide-react'
 
 // Shared Stripe payment panel: method chooser (fee-free ACH vs card +3%),
@@ -70,6 +70,59 @@ function CardPayForm({ clientSecret, clubName, regId, total, onSuccess }: {
         {paying ? 'Processing…' : `Pay ${fmt(total)}`}
       </button>
     </form>
+  )
+}
+
+// Apple Pay, offered on the card option (Bo, Oct 8 2026: "add Apple Pay ... if
+// they want to pay that way"). It pays the same card PaymentIntent, so the 3%
+// card fee, the receipt and the recording are the card path's. Stripe shows the
+// button only where Apple Pay works (Safari on an iPhone, iPad or Mac with a card
+// in Wallet) and only on domains registered in Stripe under Settings > Payment
+// method domains; anywhere else it renders nothing and the card form stands alone.
+function ApplePayButton({ clientSecret, regId, onShown, onSuccess }: {
+  clientSecret: string; regId: string; onShown: (shown: boolean) => void; onSuccess: () => void
+}) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [err, setErr] = useState('')
+  return (
+    <div>
+      <ExpressCheckoutElement
+        options={{
+          paymentMethods: { applePay: 'auto', googlePay: 'never', link: 'never', paypal: 'never', amazonPay: 'never', klarna: 'never' },
+          buttonType: { applePay: 'plain' },
+          buttonTheme: { applePay: 'black' },
+          buttonHeight: 48,
+        }}
+        onReady={({ availablePaymentMethods }) => onShown(!!availablePaymentMethods?.applePay)}
+        onConfirm={async (event) => {
+          if (!stripe || !elements) { event.paymentFailed({ reason: 'fail' }); return }
+          setErr('')
+          const { error: submitError } = await elements.submit()
+          if (submitError) {
+            setErr(submitError.message || 'Apple Pay couldn’t start. You can pay with a card below.')
+            event.paymentFailed({ reason: 'fail' })
+            return
+          }
+          const { error, paymentIntent } = await stripe.confirmPayment({
+            elements, clientSecret,
+            confirmParams: { return_url: window.location.href },
+            redirect: 'if_required',
+          })
+          if (error) { setErr(error.message || 'Payment failed'); return }
+          if (paymentIntent?.status === 'succeeded') {
+            try {
+              await fetch(`/api/registrations/${regId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stripeConfirm: paymentIntent.id }),
+              })
+            } catch { /* payment succeeded on Stripe; the webhook records it as backup */ }
+            onSuccess()
+          }
+        }}
+      />
+      {err && <p className="text-red-500 text-sm mt-1.5">{err}</p>}
+    </div>
   )
 }
 
@@ -289,6 +342,16 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
   const [payError, setPayError] = useState('')
   const [paypalClientId, setPaypalClientId] = useState('')
   const [paypalProbe, setPaypalProbe] = useState<'pending' | 'ready' | 'off'>('pending')
+  // Apple Pay rides on the card option. The tile says so on devices that can use
+  // it; the button itself shows only where Stripe can actually offer it.
+  const [applePayDevice, setApplePayDevice] = useState(false)
+  const [walletShown, setWalletShown] = useState(false)
+  useEffect(() => {
+    try {
+      const s = (window as any).ApplePaySession
+      setApplePayDevice(!!(s && typeof s.canMakePayments === 'function' && s.canMakePayments()))
+    } catch { /* not a browser with Apple Pay */ }
+  }, [])
 
   useEffect(() => {
     fetch('/api/paypal/config')
@@ -303,7 +366,7 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
 
   async function chooseMethod(m: PayMethod) {
     if (creating) return
-    setMethod(m); setClientSecret(''); setPayError('')
+    setMethod(m); setClientSecret(''); setPayError(''); setWalletShown(false)
     onMethodChange?.(m)
     if (m === 'paypal') return // the PayPal pane creates its own order when clicked
     setCreating(true)
@@ -346,7 +409,7 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
         </button>
         <button type="button" onClick={() => chooseMethod('card')} disabled={creating}
           className={`rounded-xl border-2 p-4 text-left transition-colors ${method === 'card' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
-          <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><CreditCard size={16} className="text-teal-600" /> Card</div>
+          <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><CreditCard size={16} className="text-teal-600" /> {applePayDevice ? 'Card or Apple Pay' : 'Card'}</div>
           <div className="text-xs text-gray-500 font-medium mt-1">3% fee — pay {fmt(cardTotal)}</div>
           <div className="text-xs text-gray-400 mt-0.5">Instant confirmation</div>
         </button>
@@ -363,9 +426,19 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
       {creating && <p className="text-sm text-slate-400 text-center py-3">Setting up payment…</p>}
       {!creating && payError && method && <p className="text-sm text-red-500">{payError}</p>}
       {!creating && !payError && method === 'card' && stripePromise && clientSecret && (
-        <Elements stripe={stripePromise}>
-          <CardPayForm clientSecret={clientSecret} clubName={clubName} regId={registrationId} total={cardTotal} onSuccess={onCardSuccess} />
-        </Elements>
+        <>
+          <Elements key={clientSecret} stripe={stripePromise} options={{ clientSecret }}>
+            <ApplePayButton clientSecret={clientSecret} regId={registrationId} onShown={setWalletShown} onSuccess={onCardSuccess} />
+          </Elements>
+          {walletShown && (
+            <div className="flex items-center gap-3 my-4 text-xs text-gray-400">
+              <span className="flex-1 border-t border-gray-200" />or pay with a card<span className="flex-1 border-t border-gray-200" />
+            </div>
+          )}
+          <Elements stripe={stripePromise}>
+            <CardPayForm clientSecret={clientSecret} clubName={clubName} regId={registrationId} total={cardTotal} onSuccess={onCardSuccess} />
+          </Elements>
+        </>
       )}
       {!creating && !payError && method === 'ach' && stripePromise && clientSecret && (
         <AchPayForm
