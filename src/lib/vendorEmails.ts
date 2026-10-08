@@ -130,3 +130,53 @@ export function gmailCompose(to: string, subject: string, body: string): string 
   const q = (s: string) => encodeURIComponent(s)
   return `https://mail.google.com/mail/?view=cm&fs=1&to=${q(to)}&su=${q(subject)}&body=${q(body)}`
 }
+
+// ── A contact's usual email ───────────────────────────────────────────────────
+// Bo, Oct 8 2026: "I normally respond with an email, and it's typically the
+// same exact email every year." Saved on the contact with this year's facts
+// swapped for {tokens}; next year the tokens are filled from that event.
+
+export type TemplateVars = { event: string; dates: string; year: string; teams: string; place: string; first: string; me: string }
+
+export const TEMPLATE_TOKENS: { key: keyof TemplateVars; label: string }[] = [
+  { key: 'event', label: 'event name' }, { key: 'dates', label: 'dates' }, { key: 'year', label: 'year' },
+  { key: 'teams', label: 'team count' }, { key: 'place', label: 'location' }, { key: 'first', label: 'their first name' }, { key: 'me', label: 'your first name' },
+]
+
+export function templateVars(o: {
+  event: Pick<TaskTournament, 'name' | 'firstDay' | 'lastDay' | 'location'> | null
+  teams: number | null
+  contactName: string
+  signer: string
+}): TemplateVars {
+  const first = greeting([{ name: o.contactName }]).replace(/^Hi\s*/, '').replace(/,$/, '').replace(/^all$/, '')
+  return {
+    event: o.event?.name.trim() || '',
+    dates: o.event ? eventDates(o.event) : '',
+    year: (o.event?.firstDay || '').slice(0, 4),
+    teams: o.teams === null ? '' : String(o.teams),
+    place: o.event?.location || '',
+    first,
+    me: (o.signer || '').trim().split(/\s+/)[0] || '',
+  }
+}
+
+/** "{event} on {dates}" -> "Monster Mash Lax Clash on Oct 24–25, 2026". Unknown values stay as [token]. */
+export function fillTemplate(text: string, v: TemplateVars): string {
+  return text.replace(/\{(event|dates|year|teams|place|first|me)\}/g, (_, k: keyof TemplateVars) => v[k] || `[${k}]`)
+}
+
+/** This year's facts in a written email turned back into {tokens}, longest first so "Oct 24–25, 2026" wins over "2026". */
+export function toTemplate(text: string, v: TemplateVars): string {
+  const pairs = (Object.entries(v) as [keyof TemplateVars, string][])
+    .filter(([k, val]) => val && val.length >= (k === 'teams' ? 2 : 3) && k !== 'first' && k !== 'me')
+    .sort((a, b) => b[1].length - a[1].length)
+  let out = text
+  for (const [k, val] of pairs) {
+    const esc = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // Numbers only as whole words: "97" must not eat "1997".
+    const re = k === 'teams' || k === 'year' ? new RegExp(`(?<![\\d])${esc}(?![\\d])`, 'g') : new RegExp(esc, 'g')
+    out = out.replace(re, `{${k}}`)
+  }
+  return out
+}

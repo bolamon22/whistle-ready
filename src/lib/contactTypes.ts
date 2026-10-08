@@ -57,6 +57,9 @@ export type ContactView = {
   events: string[]
   /** Serves every event (insurance, housing, referee assignors). */
   everyEvent: boolean
+  /** The email Bo sends them every year, with {event}, {dates}, {teams}... in place of this year's facts. '' = none saved. */
+  emailSubject: string
+  emailBody: string
   waiting: Waiting
   /** YYYY-MM-DD the waiting started, or ''. */
   waitingSince: string

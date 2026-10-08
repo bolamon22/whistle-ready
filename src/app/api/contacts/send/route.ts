@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic'
 // POST /api/contacts/send  (multipart form)
 //   file, kind (coi|w9|other), tournamentId, contactIds (JSON), emails (JSON),
 //   subject, message, mode (send|me), copyMe (1|0), saveDoc (1|0), taskIds (JSON)
+//   plain=1: a message with no document (a vendor's usual email, Oct 8 2026)
 //
 // Sends a document (a certificate of insurance, a W-9...) to event contacts,
 // with the email already written (Bo, Oct 5 2026). Only ever runs when Bo
@@ -42,14 +43,16 @@ export async function POST(req: NextRequest) {
   const tournamentId = String(form.get('tournamentId') || '')
   const copyMe = form.get('copyMe') !== '0'
   const saveDoc = form.get('saveDoc') === '1'
-  const file = form.get('file') as File | null
+  const plain = form.get('plain') === '1'
+  const raw = form.get('file')
+  const file = raw && typeof raw !== 'string' ? raw as File : null
 
   if (!subject || !message) return NextResponse.json({ error: 'Add a subject and a message' }, { status: 400 })
-  if (!file || typeof file === 'string') return NextResponse.json({ error: 'Attach the document' }, { status: 400 })
-  const bytes = new Uint8Array(await file.arrayBuffer())
-  if (!bytes.length) return NextResponse.json({ error: 'That file is empty' }, { status: 400 })
+  if (!file && !plain) return NextResponse.json({ error: 'Attach the document' }, { status: 400 })
+  const bytes = file ? new Uint8Array(await file.arrayBuffer()) : new Uint8Array()
+  if (file && !bytes.length) return NextResponse.json({ error: 'That file is empty' }, { status: 400 })
   if (bytes.length > MAX_ATTACHMENT_BYTES) return NextResponse.json({ error: 'File too large (10 MB max)' }, { status: 413 })
-  const fileName = (file.name || 'document.pdf').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 160)
+  const fileName = file ? (file.name || 'document.pdf').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 160) : ''
 
   try {
     const ts = await scopeTournaments(g.scope)
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     const org = await orgById(g.orgId || event?.orgId || '')
     const sender = orgSender(org)
-    const attachments = [{ filename: fileName, content: Buffer.from(bytes).toString('base64'), type: file.type || 'application/pdf' }]
+    const attachments = file ? [{ filename: fileName, content: Buffer.from(bytes).toString('base64'), type: file.type || 'application/pdf' }] : []
 
     const res = mode === 'me'
       ? await sendEmail({
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
               <span style="color:#475569">Delete this box and the "Ready to forward" line, then send.</span>
             </div>${html(message)}</div>`,
           text: `Forward this to: ${to.join(', ')}\nSubject: ${subject}\n\n${message}`,
-          attachments,
+          ...(attachments.length ? { attachments } : {}),
           ...sender,
         })
       : await sendEmail({
@@ -93,7 +96,7 @@ export async function POST(req: NextRequest) {
           html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a">${html(message)}</div>`,
           text: message,
           ...(copyMe && me ? { cc: me } : {}),
-          attachments,
+          ...(attachments.length ? { attachments } : {}),
           ...sender,
           // Replies come straight back to the person who sent it.
           ...(me ? { replyTo: me } : {}),
@@ -107,7 +110,9 @@ export async function POST(req: NextRequest) {
       const today = todayET()
       for (const c of contacts) {
         try {
-          const note = `${today}: sent ${kind.label.toLowerCase()}${event ? ` (${event.name})` : ''}: ${fileName}`
+          const note = file
+            ? `${today}: sent ${kind.label.toLowerCase()}${event ? ` (${event.name})` : ''}: ${fileName}`
+            : `${today}: emailed "${subject}"`
           await updateContact(c.id, {
             lastContact: today,
             ...(c.waiting === 'us' ? { waiting: '' } : {}),
@@ -124,7 +129,7 @@ export async function POST(req: NextRequest) {
     }
 
     let savedDoc = ''
-    if (saveDoc && event) {
+    if (saveDoc && event && file) {
       try {
         const client = createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
         // Same table the Documents tab uses (api/tournaments/[id]/documents).

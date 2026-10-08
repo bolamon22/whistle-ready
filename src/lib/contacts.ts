@@ -48,6 +48,9 @@ export function ensureContactTable(): Promise<void> {
         "deletedAt" TEXT NOT NULL DEFAULT ''
       )`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrgContact_org" ON "OrgContact"("orgId", "deletedAt")`)
+      // Added Oct 8 2026: the email Bo sends this contact every year (Fine Designs' onsite answers).
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgContact" ADD COLUMN "emailSubject" TEXT NOT NULL DEFAULT ''`) } catch { /* already there */ }
+      try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgContact" ADD COLUMN "emailBody" TEXT NOT NULL DEFAULT ''`) } catch { /* already there */ }
     })().catch(e => { ready = null; throw e })
   }
   return ready
@@ -81,6 +84,8 @@ function toRow(r: Record<string, unknown>): Row {
     notes: String(r.notes || ''),
     events: parseEvents(r.events),
     everyEvent: Number(r.everyEvent) === 1,
+    emailSubject: String(r.emailSubject || ''),
+    emailBody: String(r.emailBody || ''),
     waiting: isWaiting(r.waiting) ? (r.waiting as ContactView['waiting']) : '',
     waitingSince: ymd(r.waitingSince),
     lastContact: ymd(r.lastContact),
@@ -115,13 +120,15 @@ function clean(input: ContactInput, eventIds: Set<string>): Partial<ContactView>
   if (input.notes !== undefined) out.notes = text(input.notes, 4000)
   if (input.events !== undefined) out.events = (Array.isArray(input.events) ? input.events : []).map(String).filter(id => eventIds.has(id))
   if (input.everyEvent !== undefined) out.everyEvent = !!input.everyEvent
+  if (input.emailSubject !== undefined) out.emailSubject = line(input.emailSubject, 200)
+  if (input.emailBody !== undefined) out.emailBody = text(input.emailBody, 8000)
   if (input.waiting !== undefined) out.waiting = isWaiting(input.waiting) ? input.waiting : ''
   if (input.waitingSince !== undefined) out.waitingSince = ymd(input.waitingSince)
   if (input.lastContact !== undefined) out.lastContact = ymd(input.lastContact)
   return out
 }
 
-const COLS: (keyof ContactView)[] = ['name', 'role', 'company', 'category', 'phone', 'email', 'address', 'gives', 'needs', 'notes', 'events', 'everyEvent', 'waiting', 'waitingSince', 'lastContact']
+const COLS: (keyof ContactView)[] = ['name', 'role', 'company', 'category', 'phone', 'email', 'address', 'gives', 'needs', 'notes', 'events', 'everyEvent', 'emailSubject', 'emailBody', 'waiting', 'waitingSince', 'lastContact']
 const dbValue = (k: keyof ContactView, v: unknown) => k === 'events' ? JSON.stringify(v) : k === 'everyEvent' ? (v ? 1 : 0) : v
 
 export async function createContact(orgId: string, input: ContactInput, eventIds: Set<string>, by: string): Promise<Row | null> {
