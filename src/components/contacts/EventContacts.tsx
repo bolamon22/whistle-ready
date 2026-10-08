@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { AlertCircle, ArrowRight, BookUser, Mail, Phone, Plus, Send, UserPlus, X } from 'lucide-react'
-import { CONTACT_CATEGORIES, initials, telHref, type ContactRow } from '@/lib/contactTypes'
+import { AlertCircle, ArrowRight, BookUser, Mail, Phone, Plus, Search, Send, UserPlus, X } from 'lucide-react'
+import { CONTACT_CATEGORIES, contactHaystack, initials, telHref, type ContactRow } from '@/lib/contactTypes'
 import { announceTasksChanged, byDue, dueLabel, shortDate, type TaskView } from '@/lib/taskTemplate'
 import { CheckButton, dueTone } from '@/components/tasks/CheckButton'
 import { useContacts } from './useContacts'
@@ -31,7 +31,35 @@ export default function EventContacts({ tournamentId, withChecklist = true }: { 
   const tournaments = data?.tournaments || []
   const contacts = data?.contacts || []
   const selected = selId ? contacts.find(c => c.id === selId) || null : null
-  const groups = CONTACT_CATEGORIES.map(k => ({ ...k, items: contacts.filter(c => c.category === k.key) })).filter(g => g.items.length)
+
+  // Search and a category filter (Bo, Oct 8 2026: "can we have a filter or a
+  // search?"). A search also looks through the rest of the directory, fetched the
+  // first time someone types, so a contact who isn't tagged with this event (Oct 8:
+  // a new athletic trainer saved under May's Summer Kick Off) still turns up, one
+  // click from being added here.
+  const [q, setQ] = useState('')
+  const [cat, setCat] = useState('')
+  const [dir, setDir] = useState<ContactRow[] | null>(null)
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const searching = words.length > 0
+  const matches = (c: ContactRow) => (!cat || c.category === cat) && words.every(w => contactHaystack(c).includes(w))
+  const shown = contacts.filter(matches)
+  const groups = CONTACT_CATEGORIES.map(k => ({ ...k, items: shown.filter(c => c.category === k.key) })).filter(g => g.items.length)
+  const cats = CONTACT_CATEGORIES.map(k => ({ ...k, n: contacts.filter(c => c.category === k.key).length })).filter(k => k.n)
+  useEffect(() => {
+    if (!searching || dir) return
+    let live = true
+    fetch('/api/contacts').then(r => r.ok ? r.json() : { contacts: [] }).then(d => { if (live) setDir(d.contacts || []) }).catch(() => { if (live) setDir([]) })
+    return () => { live = false }
+  }, [searching, dir])
+  const onEvent = new Set(contacts.map(c => c.id))
+  const elsewhere = searching ? (dir || []).filter(c => !onEvent.has(c.id) && matches(c)) : []
+  const eventLabel = (id: string) => {
+    const t = tournaments.find(x => x.id === id)
+    return t ? `${t.name}${t.lastDay && t.lastDay < today ? ' (past)' : ''}` : 'another event'
+  }
+  const addHere = (c: ContactRow) => { const events = [...c.events, tournamentId]; upsert({ ...c, events }); patch(c, { events }) }
+  const chip = (on: boolean) => `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${on ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`
 
   const list = (
     <section className="space-y-3">
@@ -43,6 +71,26 @@ export default function EventContacts({ tournamentId, withChecklist = true }: { 
         <button type="button" onClick={() => setPicking(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"><UserPlus size={13} />From directory</button>
         <button type="button" onClick={() => setEditing('new')} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"><Plus size={13} />New</button>
       </div>
+      {contacts.length > 0 && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, org, phone…" aria-label="Search contacts"
+              className="w-full pl-8 pr-8 py-1.5 rounded-lg border border-slate-300 bg-white text-sm" />
+            {q && <button type="button" onClick={() => setQ('')} aria-label="Clear search" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700"><X size={14} /></button>}
+          </div>
+          {cats.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => setCat('')} aria-pressed={!cat} className={chip(!cat)}>All <span className="opacity-60">{contacts.length}</span></button>
+              {cats.map(k => (
+                <button key={k.key} type="button" onClick={() => setCat(c => c === k.key ? '' : k.key)} aria-pressed={cat === k.key} className={chip(cat === k.key)}>
+                  <CatDot category={k.key} />{k.label} <span className="opacity-60">{k.n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {failed && <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"><AlertCircle size={15} />{failed}</div>}
       {!data && !failed && <p className="text-sm text-slate-400 py-6 text-center">Loading contacts…</p>}
       {data && !contacts.length && (
@@ -74,6 +122,30 @@ export default function EventContacts({ tournamentId, withChecklist = true }: { 
           </ul>
         </div>
       ))}
+      {data && contacts.length > 0 && !shown.length && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center text-sm text-slate-500">
+          No one on this event matches{searching ? <> “{q.trim()}”</> : ' that filter'}.{' '}
+          <button type="button" onClick={() => { setQ(''); setCat('') }} className="font-semibold text-teal-700 hover:underline">Clear</button>
+        </div>
+      )}
+      {searching && dir === null && <p className="text-xs text-slate-400 px-1">Checking the rest of the directory…</p>}
+      {elsewhere.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+          <h3 className="px-3 py-1.5 border-b border-amber-200 text-[11px] font-semibold uppercase tracking-wide text-amber-800">In the directory, not on this event</h3>
+          <ul>
+            {elsewhere.map((c, i) => (
+              <li key={c.id} className={`px-3 py-2 flex items-center gap-2.5 ${i ? 'border-t border-amber-100' : ''}`}>
+                <CatDot category={c.category} />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-semibold text-slate-800 truncate">{c.name}{(c.role || c.company) && <span className="font-normal text-slate-500"> · {c.role || c.company}</span>}</span>
+                  <span className="block text-xs text-slate-500">{c.events.length ? `On ${c.events.map(eventLabel).join(', ')}` : 'Not on any event'}</span>
+                </span>
+                <button type="button" onClick={() => addHere(c)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold whitespace-nowrap"><Plus size={13} />Add to this event</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 
