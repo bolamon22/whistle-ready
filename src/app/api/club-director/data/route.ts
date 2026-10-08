@@ -119,14 +119,11 @@ export async function GET(req: NextRequest) {
   let waivers: any[] = []
   try {
     const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
-      // "jersey" through CASE, not as the bare column: the libSQL adapter reads an
-      // INTEGER column as a 32-bit integer, and one out-of-range value (a long
-      // number typed in the jersey box, Oct 7 2026) failed this whole query, so
-      // every club at Monster Mash saw 0 waivers. A computed column is typed from
-      // its values instead, and anything outside 0-999 reads as no number.
-      `SELECT "id", "playerName", "teamName", "clubName",
-              CASE WHEN "jersey" BETWEEN 0 AND 999 THEN "jersey" END AS "jersey",
-              "submittedAt", "data"
+      // "jersey" stays the plain column. lib/formSubmissions keeps it to 0-999 (one
+      // 10-digit jersey failed this whole query on Oct 7 2026, so every Monster
+      // Mash club saw 0 waivers). Don't read it through CASE: Prisma's engine
+      // failed that computed column on every portal on Oct 8.
+      `SELECT "id", "playerName", "teamName", "clubName", "jersey", "submittedAt", "data"
        FROM "OrgFormSubmission"
        WHERE "tournamentId" = ? AND "formType" = 'player' AND "archivedAt" IS NULL
        ORDER BY "playerName" ASC`, tournamentId)
