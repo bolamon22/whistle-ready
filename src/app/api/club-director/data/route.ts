@@ -119,7 +119,14 @@ export async function GET(req: NextRequest) {
   let waivers: any[] = []
   try {
     const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
-      `SELECT "id", "playerName", "teamName", "clubName", "jersey", "submittedAt", "data"
+      // "jersey" through CASE, not as the bare column: the libSQL adapter reads an
+      // INTEGER column as a 32-bit integer, and one out-of-range value (a long
+      // number typed in the jersey box, Oct 7 2026) failed this whole query, so
+      // every club at Monster Mash saw 0 waivers. A computed column is typed from
+      // its values instead, and anything outside 0-999 reads as no number.
+      `SELECT "id", "playerName", "teamName", "clubName",
+              CASE WHEN "jersey" BETWEEN 0 AND 999 THEN "jersey" END AS "jersey",
+              "submittedAt", "data"
        FROM "OrgFormSubmission"
        WHERE "tournamentId" = ? AND "formType" = 'player' AND "archivedAt" IS NULL
        ORDER BY "playerName" ASC`, tournamentId)
@@ -158,7 +165,11 @@ export async function GET(req: NextRequest) {
       // Nothing is lost by being strict — the club is recoverable from the
       // "Club — Team" tag when the clubName column is blank, which is done above.
       .filter(w => mine.has(norm(w.club)))
-  } catch { /* no waivers table yet -- the tab shows none rather than failing */ }
+  } catch (e) {
+    // The tab shows none rather than failing the portal, but say so in the logs:
+    // swallowed silently, a failed read looks to a club like its waivers vanished.
+    console.error('[club portal] player waivers read failed', tournamentId, e)
+  }
 
   // The club's COACH waivers, same store and same club-only scoping as the players
   // above (formType 'coach' instead of 'player'). Joe Frederick asked for this
