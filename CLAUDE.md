@@ -121,6 +121,15 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Chrome stealing frontmost focus blocks clicks on GitHub Desktop (it's read-tier) — re-open GHD or
   use Ctrl+P. GHD may open on a different monitor — use `switch_display`.
 
+### Tooling gotcha — libSQL reads INTEGER columns as 32-bit
+Prisma's libSQL adapter types a column declared `INTEGER` as Int32 when it reads it back, so one
+stored value above 2,147,483,647 fails the whole raw query ("Raw query failed. Code: `N/A`.
+Message: `N/A`"), not just that row. Oct 7 2026: one waiver with a 10-digit jersey number emptied
+the Player waivers tab in every Monster Mash club's portal and broke the staff waiver list (fixed in
+6ab57e6 + dd0f597). Don't store epoch milliseconds, phone numbers or other big numbers in an
+INTEGER column read through `$queryRawUnsafe`: keep them as TEXT, bound them on write, or read
+them through an expression (`CASE … END AS "col"`), which the adapter types from the values.
+
 ### Help pages (Chirp's manual)
 Any change to what a page does, what its buttons are called, or where it lives
 updates that feature's help page in the same commit. A new feature gets a new
