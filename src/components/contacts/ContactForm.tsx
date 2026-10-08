@@ -11,7 +11,7 @@ import type { TaskTournament } from '@/lib/taskTemplate'
 
 const EMPTY: ContactView = {
   id: '', name: '', role: '', company: '', category: 'venue', phone: '', email: '', address: '',
-  gives: '', needs: '', notes: '', events: [], everyEvent: false, waiting: '', waitingSince: '', lastContact: '',
+  gives: '', needs: '', notes: '', events: [], everyEvent: false, emailSubject: '', emailBody: '', waiting: '', waitingSince: '', lastContact: '',
 }
 
 const input = 'border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-normal text-slate-800 bg-white w-full'
