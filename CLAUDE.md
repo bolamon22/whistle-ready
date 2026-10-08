@@ -219,7 +219,12 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   section on every contact card (`VendorCosts`, price history table). **Write an email** on a
   contact (`VendorEmailDialog`, `lib/vendorEmails.ts`): ask for a quote (lists the last order's
   non-fee items), approve, confirm delivery, ask for the invoice; opens a Gmail compose window or
-  copies — it never sends.
+  copies. **Their usual email (Oct 8):** a contact can keep the email Bo sends them every year
+  (`OrgContact.emailSubject`/`emailBody`, tokens {event} {dates} {year} {teams} {place} {first} {me};
+  `fillTemplate`/`toTemplate` in `lib/vendorEmails.ts`, an unknown value shows as `[token]`). "Save
+  as their usual email" tokenizes what's in the box. **Send** / **Email it to me** go through
+  `/api/contacts/send` with `plain=1` (no attachment; org sender, cc + reply-to the signed-in user,
+  a dated note on the contact) — the only sends from this dialog; Gmail/Copy still never send.
 - **Financials redesign (Oct 5).** `/tournaments/[id]/financials` tabs: **Overview**
   (`components/financials/OverviewTab`), **Budget** (`BudgetTab`), **Other entries** (hand-typed
   transactions only; a bill's synced expense is hidden there). All money math is in `lib/finance.ts`
