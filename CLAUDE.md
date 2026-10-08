@@ -121,14 +121,21 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Chrome stealing frontmost focus blocks clicks on GitHub Desktop (it's read-tier) — re-open GHD or
   use Ctrl+P. GHD may open on a different monitor — use `switch_display`.
 
-### Tooling gotcha — libSQL reads INTEGER columns as 32-bit
-Prisma's libSQL adapter types a column declared `INTEGER` as Int32 when it reads it back, so one
-stored value above 2,147,483,647 fails the whole raw query ("Raw query failed. Code: `N/A`.
-Message: `N/A`"), not just that row. Oct 7 2026: one waiver with a 10-digit jersey number emptied
-the Player waivers tab in every Monster Mash club's portal and broke the staff waiver list (fixed in
-6ab57e6 + dd0f597). Don't store epoch milliseconds, phone numbers or other big numbers in an
-INTEGER column read through `$queryRawUnsafe`: keep them as TEXT, bound them on write, or read
-them through an expression (`CASE … END AS "col"`), which the adapter types from the values.
+### Tooling gotcha — raw-query column types (Prisma 5.22 + libSQL)
+The libSQL adapter picks a type for each column of a raw query, and one value that doesn't fit it
+fails the WHOLE query with "Raw query failed. Code: `N/A`. Message: `N/A`", not just that row:
+- **A column declared `INTEGER` is read as a 32-bit integer.** One value above 2,147,483,647 fails
+  it. Oct 7 2026: a 10-digit jersey number emptied the Player waivers tab in every Monster Mash
+  club's portal and broke the staff waiver list (6ab57e6 keeps jerseys to 0-999 and clears bad
+  ones). Don't store epoch milliseconds, phone numbers or other big numbers in an INTEGER column
+  read this way: keep them as TEXT, or bound them on write.
+- **A computed column (`CASE …`, `MAX(…)`, anything without a declared type) is typed from its first
+  non-null value, and a number type there rejects NULL.** Oct 8 2026: reading `jersey` through
+  `CASE … END` (dd0f597) emptied every club's waiver tab at every event until 0e73b6f put the plain
+  column back. Don't use a computed column that can hold both numbers and NULLs. `COUNT(*)` is fine.
+- Check a raw-query change on the live site as soon as it deploys: a local test through the adapter
+  alone skips Prisma's engine, which is where both of these fail (its download is blocked in the
+  Cowork sandbox).
 
 ### Help pages (Chirp's manual)
 Any change to what a page does, what its buttons are called, or where it lives
