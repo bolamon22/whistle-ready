@@ -10,6 +10,8 @@ import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
 import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
 import { SAMPLE_PLAYER } from '@/lib/samplePlayerCard'
 import CardPreview from './CardPreview'
+import ParentAccountOffer from '@/components/ParentAccountOffer'
+import type { AccountOffer } from '@/lib/parentWaiverFields'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean; homeTown?: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -266,6 +268,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [passToken, setPassToken] = useState('')   // set when the submission got a player pass
+  const [account, setAccount] = useState<AccountOffer | null>(null)   // "save your info": a password for the parent email, or already in their account
   const [d, setD] = useState<any>({
     playerName: '', playerEmail: '', usLacrosse: '', dob: '', gender: '', grade: '', teamName: '', teamOther: '', clubName: '', teamPick: '', notListed: false, jerseyNumber: '', position: '', photoUrl: '', cardLink: '', clubLogoUrl: '',
     parentName: '', parentEmail: '', parentPhone: '', homeCity: '', homeState: '',
@@ -501,7 +504,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       const division = clubMode && d.teamPick && d.teamPick !== '__other' ? String(pickedTeam?.division || '') : ''
       const data = { ...rest, teamName: resolvedTeam, division, clubName: clubMode && d.clubName !== '__other' ? d.clubName : '', tournamentId: tournamentId || '', tournamentName: tournamentName || '' }
       const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data }) })
-      if (res.ok) { const j = await res.json().catch(() => ({})); if (j.passToken) setPassToken(String(j.passToken)); setDone(true); try { window.scrollTo({ top: 0 }) } catch {} }
+      if (res.ok) { const j = await res.json().catch(() => ({})); if (j.passToken) setPassToken(String(j.passToken)); if (j.account?.token || j.account?.linked) setAccount(j.account as AccountOffer); setDone(true); try { window.scrollTo({ top: 0 }) } catch {} }
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Submission failed') }
     } catch { toast.error('Submission failed') } finally { setSubmitting(false) }
   }
@@ -525,6 +528,11 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         <h1 className="text-2xl font-extrabold text-slate-900 mt-4">{confirmationTitle}</h1>
         <div className="text-slate-500 mt-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: confirmationHtml }} />
       </div>
+
+      {/* Asked here, right under "you're registered", so it's seen before the card
+          and the receipt. Not shown when someone else is signed in (the office at
+          check-in): see lib/parentWaivers accountOffer. */}
+      {account && <div className="print:hidden"><ParentAccountOffer offer={account} playerName={d.playerName} /></div>}
 
       {passToken && (
         <div className="mt-8 bg-[#0b1220] rounded-2xl p-5 text-white">
@@ -552,13 +560,6 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="mt-6 bg-teal-50 border border-teal-200 rounded-2xl p-5 text-center">
-        <h3 className="font-bold text-slate-900">Create a parent account</h3>
-        <p className="text-sm text-slate-600 mt-1">Manage your players, register faster for future tournaments, and update details anytime.</p>
-        <a href={`/register?role=parent&name=${encodeURIComponent(d.parentName || d.playerName || '')}&email=${encodeURIComponent(d.parentEmail || d.playerEmail || '')}`}
-          className="inline-block mt-4 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-full transition-colors">Create a parent account</a>
       </div>
     </div>
     </>

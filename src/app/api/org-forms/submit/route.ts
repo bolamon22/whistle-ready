@@ -13,6 +13,8 @@ import { vendorConfig, priceLabel } from '@/lib/vendorForm'
 import { mediaConfig, photographerSharePct, commitmentLines } from '@/lib/mediaForm'
 import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 import { scopedEmailsForEventNames } from '@/lib/scopedNotify'
+import { accountOffer } from '@/lib/parentWaivers'
+import type { AccountOffer } from '@/lib/parentWaiverFields'
 
 // PUBLIC: a registrant submits a standalone org form (no auth). Validates the org
 // exists, then stores the submission as its own row (see src/lib/formSubmissions.ts —
@@ -502,7 +504,18 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* email failure must not fail the submission */ }
 
-    return NextResponse.json({ ok: true, id: saved.id, passToken: passUrl ? saved.passToken : undefined, passUrl: passUrl || undefined })
+    // The end of a player waiver: offer the parent a password so they can come
+    // back and update it (Bo, Oct 9 2026). Signed in as that parent, it goes
+    // straight into their account. See lib/parentWaivers. Never fails the waiver.
+    let account: AccountOffer | undefined
+    if (formType === 'player') {
+      try {
+        const session = await getServerSession(authOptions)
+        account = await accountOffer({ id: saved.id, orgId, data }, session?.user)
+      } catch (e) { console.error('[parent account] offer failed', e) }
+    }
+
+    return NextResponse.json({ ok: true, id: saved.id, passToken: passUrl ? saved.passToken : undefined, passUrl: passUrl || undefined, account })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to submit' }, { status: 500 })
   }
