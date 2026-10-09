@@ -733,6 +733,19 @@ export const GENERATED_HELP: { id: string; title: string; category: string; keyw
     "body": "Incidents is a shared log of medical, safety, facility and weather issues so the team can track them until they're handled. For emergencies, call 911 first.\n\n**Where:** **Live → Communications**, **Incidents** tab, or **Incidents** on your home page.\n\n**To log an incident:**\n1. Pick the **Type**: **Medical**, **Safety**, **Facility**, **Weather** or **Other**.\n2. Pick the **Severity**: **Low**, **Medium** or **High**.\n3. Enter the **Field / location (optional)**.\n4. Describe it under **What happened**.\n5. Tap **Log incident**.\n\n**To close one out:** tap **Resolve** on the incident. It moves to the resolved list. Tap **Show resolved** to see past incidents.\n\n**Common problems:**\n- **Log incident** stays grayed out until **What happened** is filled in.\n- The trash icon deletes an incident for good."
   },
   {
+    "id": "handle-complaints",
+    "title": "Handle a complaint at the fields",
+    "category": "Game day",
+    "keywords": "complaint, upset parent, angry coach, referee complaint, bad call, illegal player, too old, ineligible, two teams, protest, eligibility, sportsmanship, ejection, escalate, de-escalate, who handles complaints, head official, tournament director",
+    "routes": [
+      "/tournaments/*/incidents",
+      "/tournaments/*/communications",
+      "/tournaments/*/today"
+    ],
+    "audience": "staff",
+    "body": "Complaints come up every weekend: a referee's calls, a player someone thinks is too old or on two teams, a coach's behavior. Your job is to stay calm and route it. You don't decide it.\n\n**At the field:**\n1. Listen, stay polite, and don't argue or agree. Don't comment on a referee, a call, a team or a player.\n2. A parent, player or fan: ask them to bring it to their own coach or club director. Only coaches and club directors raise concerns with the tournament.\n3. A coach or club director: send them to the head official (for officiating) or the tournament director (for eligibility, rosters or conduct). They can also email info@sunshinelax.com with the team, field, time and what happened.\n4. Never stop a game or promise an outcome (a forfeit, a score change, a suspension). Only the tournament director decides those.\n5. Injury, a threat or a fight: get the nearest official and the tournament director right away, and call 911 in an emergency.\n\n**Afterward:** if it was more than a quick question, log it in **Incidents** (Type **Other**, or **Safety** for anything physical) with the field and what happened, so the tournament director can follow up.\n\n**What the rules say** (for your own answers): players may play on more than one team only if the teams are in different divisions, there's no roster switching in playoff games, and divisions follow USA Lacrosse age guidelines with no age or grad-year exemptions."
+  },
+  {
     "id": "checklist",
     "title": "Use the shared setup checklist",
     "category": "Game day",
@@ -1492,5 +1505,19 @@ export const GENERATED_HELP: { id: string; title: string; category: string; keyw
     ],
     "audience": "public",
     "body": "Organizer answers about event-day policies. The event's **Rules** page and the weather policy page have the full text.\n\n**What happens with weather or lightning? Is there a refund?**\nPlay stops as soon as thunder or lightning is seen, and players and spectators leave the fields for their vehicles. Play resumes 20 minutes after the last lightning. Games may be shortened, or the event may switch to a festival format, to stay on schedule. Changes are posted in the tournament app. Weather-related cancellations, rescheduling and format changes are non-refundable.\n\n**Can a player guest on another team?**\nTeams sometimes need to share or borrow players to field a full roster, so guest playing across different divisions is allowed. Please limit double-rostering when you can, to avoid player fatigue and schedule conflicts. To keep competition fair, A-roster players should not guest on B teams. Roster switching is not allowed in playoff games, and all divisions follow USA Lacrosse age guidelines, with no age or grad-year exemptions.\n\n**How are ties in the standings broken?**\nIn order: overall record, head-to-head result, fewest goals against, goal differential (capped at plus or minus 7 a game), then a coin flip.\n\n**Is there an admission fee? Can we bring dogs, coolers or tents?**\nThere's no admission fee. Only service dogs are allowed. Pop-up tents, folding chairs and coolers are welcome.\n\n**Is there a parking fee? Can we bring an RV?**\nParking is free. At our Wellington events, the Village of Wellington can't accommodate RVs in the parking lot.\n\n**Do players need a USA Lacrosse membership?**\nYes.\n\n**Do photographers or videographers need a media pass?**\nYes. Apply for a media credential: on the **Gallery** page tap **Shoot with us**, then **Apply for a credential**. The organizer reviews every application.\n\n**What does it cost to be a vendor, and when do we set up?**\nOne booth is $600 per event, two booths at opposite ends are $1,000, and a showcase (demos, no sales) is $300. Booth location and load-in and load-out times are sent after you're approved.\n\n**Can food trucks or food vendors come?**\nFood and beverage is contracted separately and isn't open to new applications."
+  },
+  {
+    "id": "public-faq-concerns",
+    "title": "FAQ: raising a concern about a referee, a call or another team",
+    "category": "Public pages",
+    "keywords": "protest a game, file a protest, protest the game, complaint, complain, concern, referee, ref, bad call, officiating, unfair, illegal player, ineligible, too old, over age, playing on two teams, two teams, ringer, roster, protest, cheating, sportsmanship, coach yelling, report, who do I tell, contact tournament director, head official",
+    "routes": [
+      "/tournaments/*/today",
+      "/tournaments/*/public",
+      "/tournaments/*/event",
+      "/tournaments/*/rules"
+    ],
+    "audience": "public",
+    "body": "How to raise a concern during the event. Tournament staff don't settle disputes over chat, and Chirp won't judge a referee, team or player.\n\n**I'm a parent, player or fan. Who do I tell?**\nPlease share your concern with your own coach or club director. Coaches and club directors are the ones who raise concerns with the tournament, so they can look into it with the right information.\n\n**I'm a coach or club director. Who do I tell?**\nAt the fields, speak to the head official or a tournament staff member, not the referee during the game. Otherwise, email the tournament director at info@sunshinelax.com with your team, the game (field and time) and what happened.\n\n**Can a player play on two teams?**\nPlayers may play on more than one team as long as the teams are in different divisions. Roster switching is not allowed in playoff games.\n\n**What about a player who seems too old?**\nAll divisions follow USA Lacrosse age guidelines, with no age or grad-year exemptions. If your coach believes a player is ineligible, they should raise it with the tournament director.\n\n**Someone is hurt, or I feel unsafe.**\nFind the nearest tournament staff member right away. Call 911 in an emergency."
   }
 ]
