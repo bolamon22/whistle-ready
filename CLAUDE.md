@@ -189,6 +189,16 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   once the event's last day has passed (hotel answers feed the room-night reports), and records
   `parent: <name>` in the waiver's edits. Which fields show follows the org's waiver switches
   (`shownParentFields`; its defaults copy DEFAULT_FIELDS in `tournaments/[id]/player-waiver/page.tsx`).
+  **Auto-fill:** `components/WaiverPrefillBar.tsx` above the waiver's `<form>` (never inside it: it has
+  its own sign-in form). Signed out: inline sign-in. Signed in: one chip per player from
+  `GET /api/parent/prefill?event=` (`prefillFor`: newest-touched waiver per name+DOB; player + family
+  keys only, never club/team/hotel/signature; grade only in the same school year, Aug 1; photo only
+  `/api/img/`). **New player** = family only, for siblings; `?sibling=1` picks it (the thank-you card's
+  **Add a brother or sister** and My Players link there). **Parent dashboard** reads
+  `/api/public/tournaments` (`/api/tournaments` returns [] for logins with no org, i.e. every parent),
+  derives the players' teams from waivers as (division, team) via `teamRefKey`, and its Schedule
+  filters to them (**My teams' games** / **All games**), games from `?view=public`, sorted by minutes,
+  not clock text. Device follows (TeamFollow2, phone alerts) stay on the public page.
   Not built: adding a waiver filed before the account existed.
 
 - **Org site header shows the next events (Oct 7).** Cross-promotion on every page that renders
