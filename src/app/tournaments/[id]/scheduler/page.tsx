@@ -504,13 +504,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   async function patchGame(gameId: string, patch: Partial<Pick<Game, 'date' | 'startTime' | 'location'>>): Promise<Game | null> {
     setSaving(true)
+    // A dropped connection at the field threw here and left "saving" stuck on;
+    // it now reads as a failed save like any other.
     const res = await fetch(`/api/tournaments/${params.id}/games/${gameId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
-    })
+    }).catch(() => null)
     let saved: Game | null = null
-    if (res.ok) {
+    if (res && res.ok) {
       const updated = await res.json()
       saved = updated
       setGames(prev => prev.map(g => g.id === gameId ? { ...g, ...updated } : g))
@@ -541,11 +543,12 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   }
 
   /** A move made by hand: saves it and remembers where the game was, for Undo. */
-  async function moveGame(gameId: string, to: Spot) {
+  async function moveGame(gameId: string, to: Spot): Promise<boolean> {
     const g = games.find(x => x.id === gameId)
     const saved = await patchGame(gameId, to)
     if (g && saved && !sameSpot(spotOf(g), spotOf(saved)))
       pushUndo({ label: `move ${gameName(g)}`, moves: [{ id: g.id, from: spotOf(g), to: spotOf(saved) }] })
+    return !!saved
   }
 
   // The placing bar's "Time" editor: an exact day / start / field, any minute.
@@ -562,7 +565,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const t = hmToMin(spot.startTime)
     const near = games.find(x => x.id !== id && x.date === spot.date && x.location === spot.location && x.startTime && Math.abs(hmToMin(x.startTime) - t) < increment)
     if (near && !window.confirm(`${gameName(near)} starts at ${fmtTime(near.startTime)} on ${fname}, less than ${increment} minutes away. Put ${g.gameNumber} at ${fmtTime(spot.startTime)} anyway?`)) return false
-    await moveGame(id, spot)
+    if (!(await moveGame(id, spot))) return false
     toast.success(`${g.gameNumber} set to ${fmtTime(spot.startTime)} on ${fname}${spot.date !== activeDate ? `, ${fmtDate(spot.date)}` : ''}`)
     return true
   }
@@ -2345,8 +2348,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
             // Awaited so the Board picks the next game only once this one is on the board
             // (otherwise its slot still reads as open for a moment).
-            onPlace: async (id: string, time: string, field: string) => { if (!okForField(games.find(g => g.id === id), field)) return false; await moveGame(id, { date: activeDate, startTime: time, location: field }) },
-            onUnschedule: (id: string) => moveGame(id, { date: '', startTime: '', location: '' }),
+            onPlace: async (id: string, time: string, field: string) => { if (!okForField(games.find(g => g.id === id), field)) return false; return await moveGame(id, { date: activeDate, startTime: time, location: field }) },
+            onUnschedule: async (id: string) => { await moveGame(id, { date: '', startTime: '', location: '' }) },
             saving,
             prefsKey: params.id,
             onReorderFields: reorderField,
