@@ -4,7 +4,7 @@ category: Public pages
 order: 905
 audience: public
 routes: /tournaments/*/player-waiver
-keywords: waiver, player waiver, sign waiver, release, liability, parent form, permission, player registration, consent form, waiver link, every player needs
+keywords: waiver, player waiver, sign waiver, release, liability, parent form, permission, player registration, consent form, waiver link, every player needs, parent account, create password, save my info, change waiver later
 ---
 Every player must have a signed waiver on file before playing. Parents (or adult players) fill it out online once per tournament. No paper forms.
 
@@ -18,9 +18,16 @@ Every player must have a signed waiver on file before playing. Parents (or adult
 6. Read the waiver, tick **I have read and agree to the waiver and release of liability above**, and type your full name in **Type your full name as signature**.
 7. Tap **Submit registration**.
 
-You will see a confirmation (usually **You're registered!**) and **Your submission**. You can also tap **Create a parent account** to register faster next time.
+You will see a confirmation (usually **You're registered!**), then **Save your info for next time?**
+
+8. To come back and change details later (jersey number, phone numbers, emergency contact, hotel), type a password under **Create a password** and tap **Create my account**. Your login is the parent email you entered. You're signed in, and **Open my account** takes you to **My Players** (see "What coaches and parents see after signing in").
+9. If that email already has an account, the box asks to add your player to it instead. Enter that account's password and tap **Add to my account**. **Forgot your password?** opens the reset page in a new tab: reset it there, then come back to this page and enter the new password.
+
+If you were signed in as that parent when you submitted, the waiver goes into your account by itself and the box just says **Saved to your account**. Your player card (at some events) and **Your submission** are below.
 
 **Common problems:**
 - Fill out one waiver per player. Siblings each need their own.
 - Pick the team from the list when it is there. A team typed in by hand is not connected to the roster, the schedule or game-day check-in.
 - Some events also give each player a printable player card after the waiver. See "Your player card".
+- No password box after submitting? It isn't offered when someone else is signed in on the device (for example the check-in table), or when the parent email wasn't valid. The waiver is saved either way.
+- Waivers filled out before you made an account aren't in it. Only the waiver you just submitted goes in.
