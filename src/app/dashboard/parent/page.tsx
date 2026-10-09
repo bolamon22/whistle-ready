@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
+import { CalendarDays, Search, Star, User } from 'lucide-react'
+import ParentWaiverList, { type ParentWaiver } from '@/components/ParentWaiverList'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string; location: string }
 interface Game {
@@ -20,6 +22,7 @@ export default function ParentDashboard() {
   const [followed, setFollowed] = useState<string[]>([])
   const [teamFollows, setTeamFollows] = useState<{tournamentId: string; teamName: string}[]>([])
   const [linkedPlayers, setLinkedPlayers] = useState<PlayerReg[]>([])
+  const [waivers, setWaivers] = useState<ParentWaiver[]>([])   // waivers put in this account at the end of the waiver
   const [games, setGames] = useState<Record<string, Game[]>>({})
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'schedule' | 'teams' | 'players' | 'discover'>('schedule')
@@ -31,11 +34,20 @@ export default function ParentDashboard() {
     Promise.all([
       fetch('/api/tournaments').then(r => r.json()),
       fetch('/api/parent/follows').then(r => r.json()),
-    ]).then(([t, f]) => {
+      fetch('/api/parent/waivers').then(r => r.ok ? r.json() : { waivers: [] }).catch(() => ({ waivers: [] })),
+    ]).then(([t, f, w]) => {
       setAllTournaments(t)
       setFollowed(f.tournaments || [])
       setTeamFollows(f.teams || [])
       setLinkedPlayers(f.players || [])
+      const mine: ParentWaiver[] = Array.isArray(w?.waivers) ? w.waivers : []
+      setWaivers(mine)
+      // ?tab=players is where "Open my account" on the waiver lands. Otherwise a
+      // parent with players and nothing followed starts on My Players.
+      let asked = ''
+      try { asked = new URLSearchParams(window.location.search).get('tab') || '' } catch {}
+      if (['schedule', 'teams', 'players', 'discover'].includes(asked)) setTab(asked as typeof tab)
+      else if (mine.length && !(f.tournaments?.length > 0)) setTab('players')
       if (f.tournaments?.length > 0) {
         setSelTournament(f.tournaments[0])
         loadGames(f.tournaments[0])
@@ -75,16 +87,18 @@ export default function ParentDashboard() {
     <div className="max-w-4xl mx-auto py-8">
       <Toaster />
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Welcome, {session?.user?.name} 👋</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Welcome, {session?.user?.name}</h1>
         <p className="text-gray-500 text-sm mt-0.5">Parent Dashboard</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-5 border-b border-gray-200">
-        {([['schedule','📅 Schedule'],['teams','⭐ My Teams'],['players','👤 My Players'],['discover','🔍 Discover']] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key as any)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-pink-500 text-pink-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            {label}
+      {/* Four across on a phone: equal widths, icons from sm up. Teal and lucide
+          icons per the design standard (this page used to have its own colors and emoji). */}
+      <div className="flex sm:gap-2 mb-5 border-b border-gray-200">
+        {([['schedule', 'Schedule', CalendarDays], ['teams', 'My Teams', Star], ['players', 'My Players', User], ['discover', 'Discover', Search]] as const).map(([key, label, Icon]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 whitespace-nowrap px-1 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-teal-500 text-teal-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <Icon size={15} className="hidden sm:block" />{label}
           </button>
         ))}
       </div>
@@ -94,16 +108,16 @@ export default function ParentDashboard() {
         <div>
           {followedTournaments.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
-              <div className="text-4xl mb-3">📅</div>
+              <CalendarDays size={36} className="mx-auto mb-3 text-gray-300" />
               <p>You're not following any tournaments yet.</p>
-              <button onClick={() => setTab('discover')} className="mt-3 text-pink-600 hover:underline text-sm">Discover tournaments →</button>
+              <button onClick={() => setTab('discover')} className="mt-3 text-teal-700 hover:underline text-sm">Discover tournaments →</button>
             </div>
           ) : (
             <>
               <div className="flex gap-2 mb-4 flex-wrap">
                 {followedTournaments.map(t => (
                   <button key={t.id} onClick={() => { setSelTournament(t.id); loadGames(t.id) }}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${selTournament === t.id ? 'bg-pink-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${selTournament === t.id ? 'bg-teal-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                     {t.logoUrl && <img src={t.logoUrl} alt="" className="w-4 h-4 inline mr-1 rounded" />}
                     {t.name}
                   </button>
@@ -113,7 +127,7 @@ export default function ParentDashboard() {
                 {displayGames.map(g => {
                   const isFollowed = followedTeamNames.includes(g.team1) || followedTeamNames.includes(g.team2)
                   return (
-                    <div key={g.id} className={`bg-white border rounded-xl px-5 py-3 flex items-center gap-4 ${isFollowed ? 'border-pink-200 bg-pink-50' : 'border-gray-200'}`}>
+                    <div key={g.id} className={`bg-white border rounded-xl px-5 py-3 flex items-center gap-4 ${isFollowed ? 'border-teal-200 bg-teal-50' : 'border-gray-200'}`}>
                       <div className="text-center w-14 flex-shrink-0">
                         <div className="text-xs text-gray-400">{g.date}</div>
                         <div className="text-sm font-semibold text-gray-700">{g.startTime}</div>
@@ -125,7 +139,7 @@ export default function ParentDashboard() {
                       {(g.score1 !== null && g.score2 !== null) && (
                         <div className="text-sm font-bold text-gray-700">{g.score1} – {g.score2}</div>
                       )}
-                      {isFollowed && <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full">⭐ Following</span>}
+                      {isFollowed && <span className="inline-flex items-center gap-1 text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full"><Star size={11} /> Following</span>}
                     </div>
                   )
                 })}
@@ -168,22 +182,34 @@ export default function ParentDashboard() {
       {/* Players tab */}
       {tab === 'players' && (
         <div>
-          <p className="text-sm text-gray-500 mb-4">Link your child's player registration to track their games.</p>
-          {linkedPlayers.length === 0 ? (
+          {waivers.length === 0 && linkedPlayers.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
-              <div className="text-4xl mb-3">👤</div>
-              <p>No players linked yet.</p>
-              <p className="text-xs mt-1">Coming soon: search for your child's registration to link it here.</p>
+              <User size={36} className="mx-auto mb-3 text-gray-300" />
+              <p>No players in your account yet.</p>
+              <p className="text-xs mt-1 max-w-sm mx-auto leading-relaxed">When you fill out a player waiver, create a password at the end. Your player shows up here, and you can update their details any time.</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {linkedPlayers.map(p => (
-                <div key={p.id} className="bg-white border border-gray-200 rounded-xl px-5 py-3">
-                  <div className="font-medium text-gray-800">{p.playerName}</div>
-                  <div className="text-xs text-gray-400">{p.teamClubName}</div>
+            <>
+              {waivers.length > 0 && (
+                <>
+                  <p className="text-sm text-gray-500 mb-4">Your players&rsquo; waivers. Update a jersey number, phone number or emergency contact any time before the event.</p>
+                  <ParentWaiverList waivers={waivers} onChange={setWaivers} />
+                </>
+              )}
+              {linkedPlayers.length > 0 && (
+                <div className={waivers.length ? 'mt-8' : ''}>
+                  {waivers.length > 0 && <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Linked registrations</h2>}
+                  <div className="space-y-2">
+                    {linkedPlayers.map(p => (
+                      <div key={p.id} className="bg-white border border-gray-200 rounded-xl px-5 py-3">
+                        <div className="font-medium text-gray-800">{p.playerName}</div>
+                        <div className="text-xs text-gray-400">{p.teamClubName}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -198,7 +224,7 @@ export default function ParentDashboard() {
                 {t.logoUrl ? (
                   <img src={t.logoUrl} alt="logo" className="w-12 h-12 object-contain rounded-xl border border-gray-100 flex-shrink-0" />
                 ) : (
-                  <div className="w-12 h-12 rounded-xl bg-pink-100 text-pink-700 font-bold text-lg flex items-center justify-center flex-shrink-0">{t.name[0]}</div>
+                  <div className="w-12 h-12 rounded-xl bg-teal-100 text-teal-700 font-bold text-lg flex items-center justify-center flex-shrink-0">{t.name[0]}</div>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-gray-800 truncate">{t.name}</div>
@@ -207,7 +233,7 @@ export default function ParentDashboard() {
                 {followed.includes(t.id) ? (
                   <button onClick={() => unfollowTournament(t.id)} className="text-xs text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">Unfollow</button>
                 ) : (
-                  <button onClick={() => followTournament(t.id)} className="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded-lg">Follow</button>
+                  <button onClick={() => followTournament(t.id)} className="text-xs bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg">Follow</button>
                 )}
               </div>
             ))}
