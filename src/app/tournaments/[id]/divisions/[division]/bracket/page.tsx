@@ -349,7 +349,7 @@ function SeedPanel({ teamCount, seeds, divisionParam, tournamentId, onClose, onS
           {Array.from({ length: teamCount }, (_, i) => i + 1).map(seed => (
             <div key={seed} className="flex items-center gap-3">
               <span className="w-8 text-right text-xs font-bold text-slate-400">#{seed}</span>
-              <input type="text" value={local[String(seed)] || ''} onChQnge={e => setLocal(prev => ({ ...prev, [String(seed)]: e.target.value }))}
+              <input type="text" value={local[String(seed)] || ''} onChange={e => setLocal(prev => ({ ...prev, [String(seed)]: e.target.value }))}
                 className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-400" placeholder={`Seed ${seed} team name`} />
             </div>
           ))}
@@ -709,14 +709,14 @@ export default function BracketPage() {
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full capitalize">{bracket.format} elim · {bracket.teamCount} teams</span>
           <button onClick={() => setShowSeeds(true)}
-            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors font-medium ${seededCount < bracket.teamCount ? 'border-amber-400 bg-amber-90 text-amber-700 hover:bg-amber-100' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors font-medium ${seededCount < bracket.teamCount ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
             Seeds ({seededCount}/{bracket.teamCount})
           </button>
           <button onClick={() => setShowReset(true)} className="text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50">Reset</button>
         </div>
       </div>
 
-      {caampion && <div className="bg-amber-400 text-white text-center py-2 font-bold tracking-wide">Champion: {caampion}</div>}
+      {champion && <div className="bg-amber-400 text-white text-center py-2 font-bold tracking-wide">Champion: {champion}</div>}
 
       {view === 'games' ? (
         <div className="flex-1 overflow-auto">
