@@ -1,7 +1,8 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { getSubmission, type FormSubmission } from '@/lib/formSubmissions'
-import type { AccountOffer } from '@/lib/parentWaiverFields'
+import { PLAYER_GRADES, PLAYER_POSITIONS, PREFILL_FAMILY_KEYS, PREFILL_PLAYER_KEYS, schoolYear, type AccountOffer, type Prefill } from '@/lib/parentWaiverFields'
+import { nameKey } from '@/lib/names'
 
 // Parent logins and the player waivers they filed (Bo, Oct 9 2026: "when parents
 // are filling out the waiver, we should ask them if they want to set their account
@@ -77,6 +78,53 @@ export async function linkedWaivers(userId: string): Promise<(FormSubmission & {
     }
     return out
   } catch { return [] }
+}
+
+// ── filling in the next waiver ────────────────────────────────────────────────
+
+/**
+ * A new waiver filled in from the account (Bo: "their information will auto
+ * populate"). One entry per player in the account (same name and birthday = one
+ * player), from that player's newest waiver; plus the family's details from the
+ * newest waiver of all, for a new brother or sister. Grade only when that waiver
+ * was for the same school year as `forDate` (the event being signed up for).
+ */
+export async function prefillFor(userId: string, forDate: string): Promise<Prefill> {
+  const out: Prefill = { players: [], family: {} }
+  // Newest first by when it was last touched: a jersey changed on the parent page counts.
+  const touched = (x: { updatedAt?: string; submittedAt: string }) => String(x.updatedAt || x.submittedAt || '')
+  const subs = (await linkedWaivers(userId)).sort((a, b) => touched(b).localeCompare(touched(a)))
+  if (!subs.length) return out
+  const tids = [...new Set(subs.map(s => String(s.data?.tournamentId || '')).filter(Boolean))]
+  const events = new Map<string, { name: string; startDate: string }>()
+  if (tids.length) {
+    const rows = await prisma.tournament.findMany({ where: { id: { in: tids } }, select: { id: true, name: true, startDate: true } }).catch(() => [])
+    for (const r of rows) events.set(r.id, { name: String(r.name || ''), startDate: String(r.startDate || '') })
+  }
+  const pick = (d: Record<string, unknown>, keys: readonly string[]) =>
+    Object.fromEntries(keys.map(k => [k, String(d?.[k] ?? '').trim().slice(0, 500)])) as Record<string, string>
+  out.family = pick(subs[0].data || {}, PREFILL_FAMILY_KEYS)
+  const target = schoolYear(forDate)
+  const seen = new Set<string>()
+  for (const s of subs) {
+    const d = s.data || {}
+    const name = String(d.playerName || '').trim()
+    const key = `${nameKey(name)}|${String(d.dob || '').trim()}`
+    if (!nameKey(name) || seen.has(key)) continue
+    seen.add(key)
+    const ev = events.get(String(d.tournamentId || ''))
+    const data = { ...pick(d, PREFILL_PLAYER_KEYS), ...pick(d, PREFILL_FAMILY_KEYS) }
+    if (!target || schoolYear(ev?.startDate || String(s.submittedAt || '')) !== target) data.grade = ''
+    // Only a photo this app stored; anything else would be an outside address.
+    if (!/^\/api\/img\/[A-Za-z0-9_-]+$/.test(data.photoUrl)) data.photoUrl = ''
+    // Pick lists: an answer no longer on the list would look blank but still be sent.
+    if (!(PLAYER_GRADES as readonly string[]).includes(data.grade)) data.grade = ''
+    if (!(PLAYER_POSITIONS as readonly string[]).includes(data.position)) data.position = ''
+    if (!['Female', 'Male'].includes(data.gender)) data.gender = ''
+    out.players.push({ key, name, lastEvent: ev?.name || String(d.tournamentName || ''), data })
+    if (out.players.length >= 12) break
+  }
+  return out
 }
 
 // ── the one-time token ────────────────────────────────────────────────────────

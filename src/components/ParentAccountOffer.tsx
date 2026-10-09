@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { CheckCircle2, Eye, EyeOff, Lock } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, Lock, UserPlus } from 'lucide-react'
 import type { AccountOffer } from '@/lib/parentWaiverFields'
 
 // The end of the player waiver (Bo, Oct 9 2026): "ask them if they want to set
@@ -62,7 +62,11 @@ export default function ParentAccountOffer({ offer, playerName }: { offer: Accou
           <p className="text-sm text-slate-600 mt-1 leading-relaxed">
             {first ? `${whose} waiver` : 'This waiver'} is in your account. Sign in with <span className="font-semibold text-slate-800 break-all">{email}</span> any time to update {whose} details.
           </p>
-          <a href="/dashboard/parent?tab=players" className="inline-block mt-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full text-sm transition-colors">Open my account &rarr;</a>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3">
+            <a href="/dashboard/parent?tab=players" className="inline-block bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-full text-sm transition-colors">Open my account &rarr;</a>
+            {/* A fresh waiver for this event with the family's details filled in (WaiverPrefillBar, ?sibling=1). */}
+            <a href="?sibling=1" className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-900"><UserPlus size={15} /> Add a brother or sister</a>
+          </div>
         </div>
       </div>
     </div>

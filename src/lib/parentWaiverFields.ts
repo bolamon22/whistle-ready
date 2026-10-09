@@ -129,6 +129,31 @@ export function pickParentFields(data: Record<string, unknown> | null | undefine
   return out
 }
 
+// ── filling in a new waiver from the account ─────────────────────────────────
+// Bo, Oct 9 2026: a parent registering for another tournament with the same login
+// should find "their information will auto populate". Only the player's and the
+// family's details carry over. Never the event's own answers (club, team, hotel)
+// and never the agreement or signature: those are given fresh for each event.
+
+/** The player's details, filled from that player's newest waiver. */
+export const PREFILL_PLAYER_KEYS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'jerseyNumber', 'position', 'photoUrl', 'cardLink'] as const
+/** The family's details, filled for any player, including a new brother or sister. */
+export const PREFILL_FAMILY_KEYS = ['parentName', 'parentEmail', 'parentPhone', 'homeCity', 'homeState', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone'] as const
+
+export type PrefillPlayer = { key: string; name: string; lastEvent: string; data: Record<string, string> }
+export type Prefill = { players: PrefillPlayer[]; family: Record<string, string> }
+
+/**
+ * The school year a date falls in, named by the year it starts (Aug 1). A grade
+ * from an earlier school year is out of date, so it isn't carried over.
+ */
+export function schoolYear(isoDate: string): number {
+  const m = /^(\d{4})-(\d{2})/.exec(String(isoDate || ''))
+  if (!m) return 0
+  const y = Number(m[1]), month = Number(m[2])
+  return month >= 8 ? y : y - 1
+}
+
 /**
  * What the waiver's thank-you screen offers (lib/parentWaivers accountOffer):
  *   - linked: the person signed in is the waiver's parent, so it is already in

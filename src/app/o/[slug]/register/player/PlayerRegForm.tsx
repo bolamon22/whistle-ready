@@ -11,6 +11,7 @@ import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
 import { SAMPLE_PLAYER } from '@/lib/samplePlayerCard'
 import CardPreview from './CardPreview'
 import ParentAccountOffer from '@/components/ParentAccountOffer'
+import WaiverPrefillBar from '@/components/WaiverPrefillBar'
 import type { AccountOffer } from '@/lib/parentWaiverFields'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean; homeTown?: boolean }
@@ -278,6 +279,8 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
     agree: false, signature: '',
   })
   const set = (k: string, v: any) => setD((p: any) => ({ ...p, [k]: v }))
+  // From the parent's account (WaiverPrefillBar): player and family details only, never the team, hotel or signature.
+  const fillFromAccount = useCallback((v: Record<string, string>) => setD((p: any) => ({ ...p, ...v })), [])
 
   // BROWSERS FILL FORMS IN WAYS REACT CANNOT SEE.
   //
@@ -568,6 +571,9 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
   return (
     <>
     {headerEl}
+    {/* Returning families: sign in or pick a player to fill this in. Outside the
+        waiver's <form> so its own sign-in form isn't nested in it. */}
+    <WaiverPrefillBar eventId={tournamentId} onFill={fillFromAccount} className={`${cardOn ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl'} mx-auto px-6 pt-8 -mb-4`} />
     <div className={`${cardOn ? 'max-w-2xl lg:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-8 lg:items-start' : 'max-w-2xl'} mx-auto px-6 py-10`}>
     <form ref={formRef} onSubmit={submit} className="space-y-6 min-w-0">
       <Toaster position="top-right" />
