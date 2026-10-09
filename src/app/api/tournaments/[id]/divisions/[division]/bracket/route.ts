@@ -147,7 +147,7 @@ async function createBracketRecords(opts: {
 }) {
   const { tournamentId, division, flight, numberOffset, format, teamCount, seeds, template } = opts
   const bracketId = genId()
-  const refs = (await refsLookup(tournamentId))(division)   // Officials rule (lib/refRules)
+  const refsFor = await refsLookup(tournamentId)   // Officials rule (lib/refRules)
   await prisma.bracket.create({
     data: {
       id: bracketId, tournamentId, division, format, teamCount,
@@ -174,7 +174,7 @@ async function createBracketRecords(opts: {
           gameNumber: 'B' + (numberOffset + g.gameNumber),
           isChampionship: g.section === 'championship',
           team1: fmtSrc(g.t1), team2: fmtSrc(g.t2),
-          date: '', startTime: '', location: '', refCount: refs,
+          date: '', startTime: '', location: '', refCount: refsFor(division, g.section === 'championship'),
         },
       })
     )
@@ -321,7 +321,7 @@ export async function PATCH(
           gameNumber: 'B' + (offset + gameNumber),
           isChampionship: section === 'championship',
           team1: fmtSrc(t1Source), team2: fmtSrc(t2Source),
-          date: '', startTime: '', location: '', refCount: (await refsLookup(params.id))(division),
+          date: '', startTime: '', location: '', refCount: (await refsLookup(params.id))(division, section === 'championship'),
         },
       })
       const updated = await prisma.bracket.findFirst({

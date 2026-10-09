@@ -383,8 +383,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
     return m
   })()
   const lastNameOf=(w:{id:string;name:string})=>lastNames.get(w.id)||w.name.trim().split(/\s+/).pop()||w.name
-  // Slots a game needs: its ref count (3 for a championship) plus a scorekeeper.
-  const slotsOf=(g:Game)=>g.isChampionship?Math.max(g.refCount,3):g.refCount
+  // Refs a game needs: its stored count. A championship's default (one more than the
+  // division's usual, so 3, or 2 for 7v7) is set on the game by lib/refRules, so the
+  // minus button works on it like any other game.
+  const slotsOf=(g:Game)=>g.refCount
   const slotRoles=(rc:number)=>['ref1','ref2','ref3'].slice(0,rc)
   // Who is on a game, slot by slot, and whether it is fully crewed.
   const crewOf=(g:Game,doubled:Set<string>)=>{
@@ -413,20 +415,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const dayReqs=dates.map(date=>{
     const gs=games.filter(g=>g.date===date&&!g.isCanceled)
     let boys=0,girls=0,both=0
-    for(const g of gs){const slots=g.isChampionship?Math.max(g.refCount,3):g.refCount;const gg=gameGenderOf(g.division);if(gg==='girls')girls+=slots;else if(gg==='boys')boys+=slots;else both+=slots}
+    for(const g of gs){const slots=slotsOf(g);const gg=gameGenderOf(g.division);if(gg==='girls')girls+=slots;else if(gg==='boys')boys+=slots;else both+=slots}
     const fields=new Set(gs.filter(g=>g.location).map(g=>g.location)).size
     return{date,games:gs.length,boys,girls,both,refSlots:boys+girls+both,fields}
   })
-
-  // Apply division keyword rules to determine ref count
-  const divRules:Record<string,number>=JSON.parse(tournament.divisionRules||'{}')
-  function getRefCount(game:Game):number{
-    const div=game.division.toLowerCase()
-    for(const [keyword,count] of Object.entries(divRules)){
-      if(div.includes(keyword.toLowerCase()))return game.isChampionship?Math.max(count,3):count
-    }
-    return game.isChampionship?Math.max(game.refCount,3):game.refCount
-  }
 
   const dayGames=games.filter(g=>g.date===activeDay)
   const times=[...new Set(dayGames.map(g=>g.startTime))].sort()
@@ -690,7 +682,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                     const sk=g.assignments.find(a=>a.role==='scorekeeper')
                     const isAssignOpen=assignExpandId===g.id
                     const doubled=getDoubleBookedWorkers(g.startTime,g.date)
-                    const refCount=g.isChampionship?Math.max(g.refCount,3):g.refCount
+                    const refCount=slotsOf(g)
                     return(<>
                       <tr key={g.id} className={`border-b border-slate-100 cursor-pointer ${isAssignOpen?'bg-sky-50/40 border-b-0':'hover:bg-slate-50'} ${g.isCanceled?'opacity-50':''}`} onClick={()=>setAssignExpandId(isAssignOpen?null:g.id)}>
                         <td className="px-4 py-3 font-mono text-slate-500 text-xs">{g.gameNumber}</td>
@@ -757,7 +749,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                         const sk=g.assignments.find(a=>a.role==='scorekeeper')
                         const isAssignOpen=assignExpandId===g.id
                         const doubled=getDoubleBookedWorkers(g.startTime,g.date)
-                        const refCount=g.isChampionship?Math.max(g.refCount,3):g.refCount
+                        const refCount=slotsOf(g)
                         return(<>
                           <tr key={g.id} className={`border-b border-slate-100 cursor-pointer ${isAssignOpen?'bg-sky-50/40 border-b-0':'hover:bg-slate-50'} ${g.isCanceled?'opacity-40':''}`} onClick={()=>setAssignExpandId(isAssignOpen?null:g.id)}>
                             <td className="px-4 py-2.5 text-slate-400 text-xs w-10">{g.gameNumber}</td>

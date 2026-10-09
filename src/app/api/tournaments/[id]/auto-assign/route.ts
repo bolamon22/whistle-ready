@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // is made (lib/refRules) and the stored count is the truth after that.
   void divRules
   function getRefCount(game: { division: string; refCount: number; isChampionship: boolean }): number {
-    return game.isChampionship ? Math.max(game.refCount, 3) : game.refCount
+    return game.refCount   // championships carry their own count now (lib/refRules championshipRefs)
   }
 
   const rosterEntries = await prisma.rosterEntry.findMany({

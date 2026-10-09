@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
     location:     String(b.location ?? ''),
     team1:        String(b.team1 ?? 'TBD'),
     team2:        String(b.team2 ?? 'TBD'),
-    refCount:     b.refCount !== undefined ? Number(b.refCount) : (await refsLookup(params.id))(String(b.division ?? '')),
+    refCount:     b.refCount !== undefined ? Number(b.refCount) : (await refsLookup(params.id))(String(b.division ?? ''), Boolean(b.isChampionship)),
     isChampionship: Boolean(b.isChampionship),
   }})
   return NextResponse.json(game, { status:201 })
