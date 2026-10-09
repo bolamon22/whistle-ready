@@ -174,6 +174,23 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Parent accounts from the waiver (Oct 9).** The player waiver's thank-you screen asks **Save your
+  info for next time?** (`components/ParentAccountOffer.tsx`). The submit response carries `account`
+  from `accountOffer()` in `lib/parentWaivers.ts`: a 3-hour HMAC token (NEXTAUTH_SECRET, prefix
+  `parentacct.`) naming the waiver, org and parent email (`existing` when that email has a login), or
+  `linked` when the signed-in user IS the parent or parent 2. Anyone else signed in (office at
+  check-in, club director, coach) gets nothing. `POST /api/parent/account {token, password}` makes a
+  `parent` login on the token's email (8+ chars), or for an existing login needs that login's own
+  password (never overwritten); 8 tries per waiver per 15 min (`overLimit`). Waivers join logins ONLY
+  through raw-SQL table `ParentWaiverLink` (userId, submissionId, orgId; created lazily), never by email
+  match. **My Players** on `/dashboard/parent` (`components/ParentWaiverList.tsx`, `?tab=players`)
+  lists them (`GET /api/parent/waivers`); `PATCH /api/parent/waivers/[id]` edits only the fields in
+  `lib/parentWaiverFields.ts` (pure; not name, DOB, gender, team, parent email or signature), refuses
+  once the event's last day has passed (hotel answers feed the room-night reports), and records
+  `parent: <name>` in the waiver's edits. Which fields show follows the org's waiver switches
+  (`shownParentFields`; its defaults copy DEFAULT_FIELDS in `tournaments/[id]/player-waiver/page.tsx`).
+  Not built: adding a waiver filed before the account existed.
+
 - **Org site header shows the next events (Oct 7).** Cross-promotion on every page that renders
   `OrgHeader` (org pages + each event's pages): `headerEvents()` in `o/[slug]/_chrome.tsx` = the
   org's next 4 by start date, kept through the last day in Eastern time; the reg badge comes from
