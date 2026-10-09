@@ -44,6 +44,9 @@ export async function GET() {
     const lastDay = String(ev?.endDate || ev?.startDate || '').slice(0, 10)
     return {
       id: s.id,
+      tournamentId: tid,
+      // The team as the schedule names it: (division, team), never the name alone.
+      division: String(d.division || ''),
       playerName: String(d.playerName || ''),
       eventName: ev?.name || String(d.tournamentName || ''),
       eventDates: ev ? fmtRange(String(ev.startDate || ''), String(ev.endDate || '')) : '',

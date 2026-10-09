@@ -12,6 +12,9 @@ import { PARENT_FIELD_GROUPS, type ParentField } from '@/lib/parentWaiverFields'
 
 export type ParentWaiver = {
   id: string
+  tournamentId: string
+  /** With the team, how the schedule names it: (division, team). Blank when the team was typed in. */
+  division: string
   playerName: string
   eventName: string
   eventDates: string
