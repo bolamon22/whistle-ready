@@ -31,16 +31,22 @@ export async function setIfNeeded(tournamentId: string, gameId: string, on: bool
 // B<gameNumber + numberOffset> in the same division. Reading that here means a
 // game named "If needed" in the bracket shows as one on the schedule without
 // being marked twice (Bo, Oct 5 2026), and consolation games are labeled too.
-export interface BracketMeta { label: string; section: string }
+// flight: 'A' / 'B' when the division is split into flights, else ''. Both
+// flights number their seeds from 1, so a "Seed 1 v Seed 4" game needs it to
+// say which bracket it belongs to (Bo, Oct 11 2026).
+export interface BracketMeta { label: string; section: string; flight: string }
 export async function bracketMeta(tournamentId: string): Promise<Map<string, BracketMeta>> {
   const out = new Map<string, BracketMeta>()
   try {
     const brackets = await prisma.bracket.findMany({
       where: { tournamentId },
-      select: { division: true, numberOffset: true, games: { select: { gameNumber: true, label: true, section: true } } },
+      select: { division: true, flight: true, numberOffset: true, games: { select: { gameNumber: true, label: true, section: true } } },
     })
+    const perDiv = new Map<string, number>()
+    for (const b of brackets) perDiv.set(b.division, (perDiv.get(b.division) ?? 0) + 1)
     for (const b of brackets) for (const g of b.games) {
-      out.set(`${b.division}|B${g.gameNumber + (b.numberOffset ?? 0)}`, { label: g.label || '', section: g.section || '' })
+      const flight = (perDiv.get(b.division) ?? 0) > 1 ? (b.flight || 'A') : ''
+      out.set(`${b.division}|B${g.gameNumber + (b.numberOffset ?? 0)}`, { label: g.label || '', section: g.section || '', flight })
     }
   } catch { /* bracket tables not migrated: no labels */ }
   return out
@@ -59,6 +65,7 @@ export function withIfNeeded<T extends { id: string; division?: string | null; g
       ifNeededFromBracket: fromBracket,
       bracketLabel: m?.label || '',
       bracketSection: m?.section || '',
+      bracketFlight: m?.flight || '',
     }
   })
 }

@@ -32,6 +32,7 @@ export interface SGame {
   /** From the Bracket builder: the game's name and section (winners / consolation / ...) */
   bracketLabel?: string
   bracketSection?: string
+  bracketFlight?: string
 }
 export interface SField { venueName: string; fieldName: string; fullName: string; divRestrictions?: string[] }
 
@@ -187,6 +188,13 @@ const isCons = (g: SGame) => !g.ifNeeded && g.bracketSection === 'consolation'
 function ChampTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
   return <span title={`${g.bracketLabel || 'Championship'}: the division's title game`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-yellow-300 text-yellow-950' : 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-300'}`}>{mini ? 'Champ' : 'Championship'}</span>
 }
+// Which flight a bracket game is in, for a division split into two brackets: both
+// number their seeds from 1, so "Seed 1 v Seed 4" alone could be either one.
+function FlightTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
+  if (!g.bracketFlight) return null
+  return <span title={`Flight ${g.bracketFlight}: seeds are numbered within this flight`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-indigo-300 text-indigo-950' : 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-300'}`}>{mini ? `Flt ${g.bracketFlight}` : `Flight ${g.bracketFlight}`}</span>
+}
+const flightNote = (g: SGame) => (g.bracketFlight ? ` · Flight ${g.bracketFlight}` : '')
 // One marker per game: If needed, Championship, Consolation, or nothing.
 function GameTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
   if (g.ifNeeded) return <IfTag on={on} mini={mini} />
@@ -481,7 +489,7 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle, on
   const fieldOpts = p.fields.some(f => f.fullName === sel.location) || !sel.location ? p.fields : [...p.fields, { venueName: '', fieldName: sel.location, fullName: sel.location }]
   if (editing) return (
     <div className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-xl text-white shadow-xl w-[560px] max-w-[94vw]" style={{ background: '#065f46' }}>
-      <span className="text-xs whitespace-nowrap"><b>{gameLabel(sel, p.divAbbr)}</b> <span className="text-emerald-200">to</span></span>
+      <span className="text-xs whitespace-nowrap"><b>{gameLabel(sel, p.divAbbr)}{flightNote(sel)}</b> <span className="text-emerald-200">to</span></span>
       <select value={eDate} onChange={e => setEDate(e.target.value)} aria-label="Day" className="text-xs text-slate-900 rounded-md px-1.5 py-1 bg-white">
         {dayOpts.map(d => <option key={d} value={d}>{new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</option>)}
       </select>
@@ -502,7 +510,7 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle, on
         <div className="text-xs leading-tight truncate">
           <span className="text-emerald-200">{placed ? 'Moving' : 'Placing'}</span>{' '}
           <span className="inline-block align-[1px] px-1.5 py-px mr-0.5 rounded-full ring-1 ring-white/60 text-[10px] font-bold leading-tight" style={{ background: p.divColor(sel.division), color: inkOn(p.divColor(sel.division)) }}>{sel.division}</span>{' '}
-          <b>{gameLabel(sel, p.divAbbr)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b>{sel.pool && <span className="text-emerald-200"> · {poolLabel(sel.pool)}</span>}
+          <b>{gameLabel(sel, p.divAbbr)}{flightNote(sel)} · {humanTeam(sel.team1)} vs {humanTeam(sel.team2)}</b>{sel.pool && <span className="text-emerald-200"> · {poolLabel(sel.pool)}</span>}
         </div>
         {swapArmed ? (
           <div className="text-[11px] leading-tight text-amber-200 font-semibold">Now click the game to swap with</div>
@@ -790,10 +798,11 @@ export function TimelineView(p: ViewsProps) {
         onDragStart={e => { e.dataTransfer.setData('gameId', g.id); e.dataTransfer.effectAllowed = 'move'; setDragId(g.id); setSelId(g.id) }}
         onDragEnd={() => setDragId(null)}
         onClick={() => setSelId(on ? null : g.id)}
-        title={`${gameLabel(g, p.divAbbr)}${g.pool ? ` · ${g.pool}` : ''} — ${humanTeam(g.team1)} vs ${humanTeam(g.team2)}`}
+        title={`${gameLabel(g, p.divAbbr)}${flightNote(g)}${g.pool ? ` · ${g.pool}` : ''} — ${humanTeam(g.team1)} vs ${humanTeam(g.team2)}`}
         className={`${size} h-6 max-w-[200px] text-left rounded-md border pl-1.5 pr-2 inline-flex items-center gap-1 text-[10px] leading-none whitespace-nowrap overflow-hidden cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-2 ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
         style={{ borderLeft: `3px solid ${c}` }}>
         <b className={on ? 'text-white' : 'text-slate-800'}>{g.gameNumber}</b>
+        <FlightTag g={g} on={on} mini />
         <GameTag g={g} on={on} mini />
         <span className={`truncate ${on ? 'text-slate-200' : 'text-slate-700'}`}>{humanTeam(g.team1)} v {humanTeam(g.team2)}</span>
       </button>
@@ -805,7 +814,7 @@ export function TimelineView(p: ViewsProps) {
         onClick={() => setSelId(on ? null : g.id)}
         className={`${size} text-left rounded-lg border px-2 py-1.5 transition-all cursor-grab active:cursor-grabbing ${on ? 'bg-slate-900 border-slate-900 ring-[3px] ring-teal-500/40' : dim(g) ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
         style={{ borderLeft: `4px solid ${c}` }}>
-        <div className={`flex items-center gap-1.5 text-[10px] whitespace-nowrap overflow-hidden ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={`truncate ${on ? 'text-white' : 'text-slate-800'}`}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}<GameTag g={g} on={on} /></div>
+        <div className={`flex items-center gap-1.5 text-[10px] whitespace-nowrap overflow-hidden ${on ? 'text-slate-300' : 'text-slate-500'}`}><b className={`flex-shrink-0 ${on ? 'text-white' : 'text-slate-800'}`}>{gameLabel(g, p.divAbbr)}</b>{g.pool && <span className="truncate">{g.pool}</span>}<FlightTag g={g} on={on} mini /><GameTag g={g} on={on} /></div>
         <div className={`text-xs font-bold leading-tight truncate ${on ? 'text-white' : 'text-slate-900'}`}>{humanTeam(g.team1)}</div>
         <div className={`text-[11px] leading-tight truncate ${on ? 'text-slate-300' : 'text-slate-600'}`}>vs {humanTeam(g.team2)}</div>
       </button>
@@ -1089,7 +1098,7 @@ export function TimelineView(p: ViewsProps) {
           {hovered && hover && !dragId && !sel && (
             <div className="fixed z-[60] w-[268px] rounded-xl bg-slate-900 text-white px-3 py-2.5 shadow-xl pointer-events-none"
               style={{ left: Math.max(8, Math.min(hover.x - 134, (typeof window !== 'undefined' ? window.innerWidth : 1400) - 276)), top: hover.below ? hover.y + 6 : hover.y - 6, transform: hover.below ? undefined : 'translateY(-100%)' }}>
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-400"><span className="w-2 h-2 rounded-full" style={{ background: p.divColor(hovered.division) }} />{hovered.division}{hovered.pool ? ` · ${hovered.pool}` : ''} · <b className="text-white">{gameLabel(hovered, p.divAbbr)}</b></div>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400"><span className="w-2 h-2 rounded-full" style={{ background: p.divColor(hovered.division) }} />{hovered.division}{hovered.pool ? ` · ${hovered.pool}` : ''} · <b className="text-white">{gameLabel(hovered, p.divAbbr)}</b>{flightNote(hovered)}</div>
               <div className="text-[13px] font-extrabold mt-0.5">{humanTeam(hovered.team1)} <span className="font-normal text-slate-400">vs</span> {humanTeam(hovered.team2)}</div>
               <div className="text-[11px] text-slate-300">{p.fmtTime(hovered.startTime)} · {hovered.location}</div>
               {hoverIssues.length === 0 ? (
@@ -1324,6 +1333,7 @@ export function TimelineView(p: ViewsProps) {
         className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${fade}`}
         style={{ background: bg, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `1px solid ${k.border}` : g.ifNeeded ? `1px dashed ${IF_BORDER}` : '1px solid #e2e8f0', borderLeft: `4px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
         <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
+        <FlightTag g={g} on={on} mini />
         <GameTag g={g} on={on} mini />
         {/* Count goes before each name: a long name truncates, and the count is the
             part Bo is reading for, so it must never be the part that gets cut. */}
@@ -1345,6 +1355,7 @@ export function TimelineView(p: ViewsProps) {
           <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
           <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : c }} title={g.division}>{p.divAbbr(g.division)}</span>
           {g.pool && <span className="truncate">{g.pool}</span>}
+          <FlightTag g={g} on={on} />
           <GameTag g={g} on={on} />
           {g.isCanceled && <span className="ml-auto text-red-600 font-bold">CANC</span>}
         </div>
@@ -1366,7 +1377,13 @@ function BracketPanel({ p, sel, onPick, onClose }: { p: ViewsProps; sel: SGame |
   const bracketDivs = useMemo(() => p.divisions.filter(d => p.games.some(g => g.division === d && isBracket(g))), [p.divisions, p.games])
   const [pickedDiv, setPickedDiv] = useState<string | null>(null)
   const div = (sel && isBracket(sel) ? sel.division : null) ?? pickedDiv ?? (p.filterDiv !== '__all__' && bracketDivs.includes(p.filterDiv) ? p.filterDiv : null) ?? bracketDivs[0] ?? ''
-  const games = useMemo(() => p.games.filter(g => g.division === div && isBracket(g)), [p.games, div])
+  const divGames = useMemo(() => p.games.filter(g => g.division === div && isBracket(g)), [p.games, div])
+  // A division split into flights is two brackets: show one at a time, the picked
+  // game's flight, so two "Seed 1"s and two finals don't share one tree.
+  const flights = useMemo(() => Array.from(new Set(divGames.map(g => g.bracketFlight || ''))).filter(Boolean).sort(), [divGames])
+  const [pickedFlight, setPickedFlight] = useState<string | null>(null)
+  const flight = flights.length > 1 ? ((sel && sel.division === div && sel.bracketFlight) || (pickedFlight && flights.includes(pickedFlight) ? pickedFlight : flights[0])) : ''
+  const games = useMemo(() => (flight ? divGames.filter(g => g.bracketFlight === flight) : divGames), [divGames, flight])
   const byNum = useMemo(() => new Map(games.map(g => [g.gameNumber.toUpperCase(), g])), [games])
   const refOf = (t: string) => { const m = (t || '').match(/^([WL])-(B\d+)$/i); return m ? { kind: m[1].toUpperCase(), num: m[2].toUpperCase() } : null }
   const depth = useMemo(() => {
@@ -1424,6 +1441,14 @@ function BracketPanel({ p, sel, onPick, onClose }: { p: ViewsProps; sel: SGame |
           className="flex-1 min-w-0 text-xs font-bold text-slate-800 bg-transparent focus:outline-none disabled:opacity-100">
           {bracketDivs.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
+        {flights.length > 1 && (
+          <div className="flex rounded-md bg-slate-100 p-0.5 flex-shrink-0" role="group" aria-label="Flight">
+            {flights.map(f => (
+              <button key={f} onClick={() => setPickedFlight(f)} disabled={!!(sel && sel.division === div && sel.bracketFlight)} aria-pressed={flight === f}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold ${flight === f ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:text-slate-900 disabled:opacity-50'}`}>Flight {f}</button>
+            ))}
+          </div>
+        )}
         <span className="text-[10px] text-slate-500 whitespace-nowrap">{placedN}/{games.length} placed</span>
         <button onClick={onClose} aria-label="Close the bracket" title="Close (Esc)" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={14} /></button>
       </div>

@@ -32,6 +32,7 @@ interface Game {
   ifNeededFromBracket?: boolean
   bracketLabel?: string
   bracketSection?: string
+  bracketFlight?: string   // 'A' / 'B' in a division split into flights
 }
 
 interface Field {
