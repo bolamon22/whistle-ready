@@ -174,6 +174,12 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Staff W-9 upload (Oct 11).** W-9 card on the staff portal (`components/StaffW9Card.tsx`, `/dashboard/staff`),
+  `GET/POST /api/staff-portal/w9` (worker from the session email, oldest record, never from the request). All W-9
+  storage goes through `lib/staffW9.ts`: encrypted data URL in AppSetting `w9:{workerId}`, `w9meta:{workerId}`
+  for the portal's date/name, `Worker.w9OnFile` for the pool's W-9 check. Type is sniffed from the bytes (PDF,
+  JPEG, PNG, WebP; 2 MB); refuses without `ENCRYPTION_KEY` (lib/encrypt has a public fallback key). Viewer
+  `/api/workers/[id]/w9` is director/admin only and serves the sniffed type with nosniff. Staff merge moves it.
 - **Division notes + bracket format before the schedule (Oct 11).** "Notes on the public schedule" above a
   division's tabs (`divisions/DivisionNotes.tsx`): one per division, one for all divisions. AppSetting
   `divisionNotes:{tournamentId}` = `{ all, divisions: { [name]: note } }` (`lib/divisionNotes.ts`, 600 chars,
