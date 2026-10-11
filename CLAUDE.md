@@ -174,6 +174,14 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Division notes + bracket format before the schedule (Oct 11).** "Notes on the public schedule" above a
+  division's tabs (`divisions/DivisionNotes.tsx`): one per division, one for all divisions. AppSetting
+  `divisionNotes:{tournamentId}` = `{ all, divisions: { [name]: note } }` (`lib/divisionNotes.ts`, 600 chars,
+  `nameKey` match); `GET/PUT /api/tournaments/[id]/division-notes`, public only once Teams & pools is on.
+  Public DivisionView shows the division's note then the all note at the top. The bracket GET gives
+  non-staff a format-only bracket (`preview: true`, `seeds: {}`, games stripped to number/round/section/
+  sources/label) when Teams & pools is on but Schedule & brackets is not; the page draws it under the pools
+  as **Bracket format** (`BracketView preview`). Not the event page's `divisionsNote` (Tournament setup).
 - **Pool play only / no bracket (Oct 11).** A division's **Bracket** tab opens with a **No bracket: pool
   play only** checkbox (`BracketBuilder.tsx`, `PUT /api/tournaments/[id]/divisions/[division]/no-bracket`).
   Stored per event in AppSetting `noBracket:{tournamentId}` as `{ [division]: { at, by } }`, matched by
