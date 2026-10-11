@@ -12,6 +12,7 @@ import { isPlaceholder } from '@/lib/gameBalance'
 import { closuresOf, isFieldClosedAt, fieldClosure, closureLabel, withClosure, blockedKeys, isAllDay, type Closure } from '@/lib/fieldClosures'
 import { divisionAbbr, teamRefKey } from '@/lib/names'
 import { divisionColorMap } from '@/lib/divisionColors'
+import { bracketWaits, brokenWait } from '@/lib/bracketOrder'
 import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban, PanelTop, Undo2 } from 'lucide-react'
 
 interface Game {
@@ -575,6 +576,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     if (taken) { toast.error(`${fname} at ${fmtTime(spot.startTime)} already has ${gameName(taken)}`); return false }
     if (isFieldClosedAt(closuresFor(spot.date), spot.location, spot.startTime)) { toast.error(`${fname} is closed at ${fmtTime(spot.startTime)} that day`); return false }
     if (!okForField(g, spot.location)) return false
+    const early = brokenWait(bracketWaits(g, games, increment).waits, spot.date, spot.startTime)
+    if (early && !window.confirm(`${g.gameNumber} at ${fmtTime(spot.startTime)} is too early: ${early.why}.\n\nSet it there anyway?`)) return false
     const t = hmToMin(spot.startTime)
     const near = games.find(x => x.id !== id && x.date === spot.date && x.location === spot.location && x.startTime && Math.abs(hmToMin(x.startTime) - t) < increment)
     if (near && !window.confirm(`${gameName(near)} starts at ${fmtTime(near.startTime)} on ${fname}, less than ${increment} minutes away. Put ${g.gameNumber} at ${fmtTime(spot.startTime)} anyway?`)) return false
@@ -1140,6 +1143,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const res = results.filter(r => r.date === d).map(r => { const g = games.find(x => x.id === r.id)!; return { game: toA(g), time: r.time, location: r.location } })
       return [...pre, ...res]
     }
+    // games on other days as they stand in this run (lead-in games and pool play there, for bracket order)
+    const otherDaysFor = (d: string) => {
+      const dayOf = (g: Game) => results.find(r => r.id === g.id)?.date ?? (g.startTime && g.location ? g.date : '')
+      const earlier: ReturnType<typeof toA>[] = [], later: ReturnType<typeof toA>[] = []
+      for (const g of games) { const gd = dayOf(g); if (!gd || gd === d) continue; (gd < d ? earlier : later).push(toA(g)) }
+      return { earlier, later }
+    }
     const slotsFor = (d: string) => { const w = windowForDate(d); return makeSlots(w.s, w.e, increment) }
     // Each checked day takes games until every team reaches that day's number; the
     // rest roll to the next checked day. With "both", bracket games go after pool
@@ -1172,7 +1182,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         const batch = pickForDay(remaining, d, afCaps[d])
         if (!batch.length) continue
         const cl = closuresFor(d), daySlots = slotsFor(d)
-        const af = autoFill({ toPlace: batch.map(toA), placed: occFor(d), fields: fieldsArg, slots: daySlots, maxPerDay: afCaps[d], blocked: blockedKeys(cl, fieldsArg, daySlots) })
+        const af = autoFill({ toPlace: batch.map(toA), placed: occFor(d), otherDays: otherDaysFor(d), fields: fieldsArg, slots: daySlots, maxPerDay: afCaps[d], blocked: blockedKeys(cl, fieldsArg, daySlots) })
         af.placements.forEach(pp => results.push({ ...pp, date: d }))
         const done = new Set(af.placements.map(pp => pp.id))
         remaining = remaining.filter(g => !done.has(g.id))
@@ -1223,13 +1233,20 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const res = results.filter(r => r.date === d).map(r => { const g = games.find(x => x.id === r.id)!; return { game: toA(g), time: r.time, location: r.location } })
       return [...pre, ...res]
     }
+    // games on other days as they stand in this run (lead-in games and pool play there, for bracket order)
+    const otherDaysFor = (d: string) => {
+      const dayOf = (g: Game) => results.find(r => r.id === g.id)?.date ?? (g.startTime && g.location ? g.date : '')
+      const earlier: ReturnType<typeof toA>[] = [], later: ReturnType<typeof toA>[] = []
+      for (const g of games) { const gd = dayOf(g); if (!gd || gd === d) continue; (gd < d ? earlier : later).push(toA(g)) }
+      return { earlier, later }
+    }
     // fill a set of games across one or more days; overflow carries to the next day (maxPerDay naturally spreads)
     const fillAcross = (toPlace: Game[], days: string[]) => {
       let remaining = toPlace
       for (const d of days) {
         if (!remaining.length) break
         const cl = closuresFor(d)
-        const af = autoFill({ toPlace: remaining.map(toA), placed: occFor(d), fields: fieldsArg, slots: allSlots, blocked: blockedKeys(cl, fieldsArg, allSlots) })
+        const af = autoFill({ toPlace: remaining.map(toA), placed: occFor(d), otherDays: otherDaysFor(d), fields: fieldsArg, slots: allSlots, blocked: blockedKeys(cl, fieldsArg, allSlots) })
         af.placements.forEach(pp => results.push({ ...pp, date: d }))
         const done = new Set(af.placements.map(pp => pp.id))
         remaining = remaining.filter(g => !done.has(g.id))
@@ -1368,28 +1385,15 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     }
   })
 
-  // ── Bracket dependency-order detection ──────────────────────────────────────────
+  // ── Bracket order: lead-in games first, and seeded games after pool play plus a
+  //    slot to seed (lib/bracketOrder: the same rules as the Board's hints and Auto-fill).
   const bracketOrderMsgs = new Map<string, string>()
   scheduledGames.filter(g => g.gameNumber.startsWith('B')).forEach(g => {
-    const feeders = [g.team1, g.team2].map(bracketFeeders).filter((f): f is string => f !== null)
-    feeders.forEach(feederNum => {
-      const feeder = games.find(x => x.gameNumber === feederNum && x.division === g.division)
-      if (!feeder) return
-      let msg = ''
-      if (!feeder.date || !feeder.startTime) {
-        msg = `${divAbbr(g.division)}-${feederNum} is not yet scheduled (must play before ${g.gameNumber})`
-      } else {
-        const feederTime = feeder.date + 'T' + feeder.startTime
-        const gameTime = g.date + 'T' + g.startTime
-        if (feederTime >= gameTime) {
-          const when = feeder.date === g.date
-            ? (feeder.startTime === g.startTime ? 'at the same time as' : `after (${feeder.startTime})`)
-            : 'on a later date than'
-          msg = `${divAbbr(g.division)}-${feederNum} scheduled ${when} ${g.gameNumber} — bracket out of order!`
-        }
-      }
-      if (msg) bracketOrderMsgs.set(g.id, bracketOrderMsgs.has(g.id) ? bracketOrderMsgs.get(g.id)! + '\n' + msg : msg)
-    })
+    const { waits, unknown } = bracketWaits(g, games, increment)
+    const msgs = [...unknown.map(u => `${divAbbr(g.division)}-${g.gameNumber}: ${u}`)]
+    const broken = waits.filter(w => brokenWait([w], g.date, g.startTime))
+    broken.forEach(w => msgs.push(`${divAbbr(g.division)}-${g.gameNumber} at ${fmtTime(g.startTime)}${w.date !== g.date ? ` ${fmtDate(g.date)}` : ''} is too early: ${w.why}${w.date !== g.date ? ` ${fmtDate(w.date)}` : ''}`))
+    if (msgs.length) bracketOrderMsgs.set(g.id, msgs.join('\n'))
   })
 
   // Every issue on a game, worst first, for the hover card.

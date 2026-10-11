@@ -8,6 +8,8 @@
 //   - neither team already playing at that time
 //   - team not already at maxPerDay games that day
 //   - a bracket game lands strictly AFTER all the games that feed it
+//   - a seeded bracket game ("Seed 3") waits for its division's pool play plus one
+//     empty slot to seed (lib/bracketOrder; Bo, Oct 11 2026)
 // SOFT preferences (minimised, weighted):
 //   - spread a division's games across fields (parallelism + rest) while keeping
 //     each team roughly on consistent fields (less bouncing)
@@ -43,6 +45,9 @@ export interface AutoFillInput {
   slots: string[] // ordered "HH:MM"
   maxPerDay?: number
   blocked?: string[] // `${time}|${location}` cells nothing may land in (field closed for part of the day)
+  /** Games already on other days: lead-in games and pool play there count
+   *  (earlier: done before this day; later: not done until after it). */
+  otherDays?: { earlier: AGame[]; later: AGame[] }
 }
 
 export interface AutoFillResult {
@@ -161,6 +166,16 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
   const placements: { id: string; time: string; location: string }[] = []
   const unplaceable: string[] = []
 
+  // Lead-in games and pool play on other days.
+  const earlierKeys = new Set((input.otherDays?.earlier ?? []).map(g => gameKey(g.division, g.gameNumber)))
+  const laterKeys = new Set((input.otherDays?.later ?? []).map(g => gameKey(g.division, g.gameNumber)))
+  const poolsLater = new Set((input.otherDays?.later ?? []).filter(g => !isBracket(g)).map(g => g.division))
+  const isSeedSlot = (t: string) => /^Seed \d+$/i.test((t || '').trim())
+  // Last slot a division's pool game starts in on this day (fixed + placed this run).
+  const poolIdx = new Map<string, number>()
+  const notePool = (g: AGame, i: number | undefined) => { if (i == null || isBracket(g)) return; poolIdx.set(g.division, Math.max(poolIdx.get(g.division) ?? -1, i)) }
+  input.placed.forEach(p => notePool(p.game, slotIndex.get(p.time)))
+
   for (const g of ordered) {
     const elig = input.fields.filter(
       f => !f.divRestrictions || f.divRestrictions.length === 0 || f.divRestrictions.includes(g.division),
@@ -170,13 +185,22 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
     let best: { time: string; location: string; score: number } | null = null
     for (let i = 0; i < slots.length; i++) {
       const time = slots[i]
-      // bracket order: every feeder must already sit at an earlier slot
+      // bracket order: every feeder must already sit at an earlier slot, or on an earlier day
       if (isBracket(g) && feederNums.length) {
         const ok = feederNums.every(fn => {
-          const fi = gameStartIdx.get(gameKey(g.division, fn))
+          const k = gameKey(g.division, fn)
+          if (earlierKeys.has(k)) return true
+          if (laterKeys.has(k)) return false
+          const fi = gameStartIdx.get(k)
           return fi != null && fi < i
         })
         if (!ok) continue
+      }
+      // seeding: a seeded game waits for pool play to end plus one slot
+      if (isBracket(g) && (isSeedSlot(g.team1) || isSeedSlot(g.team2))) {
+        if (poolsLater.has(g.division)) continue
+        const last = poolIdx.get(g.division)
+        if (last != null && i < last + 2) continue
       }
       // team double-book or over the daily cap
       const t1s = teamSlots.get(teamKey(g.division, g.team1)) ?? []
@@ -224,6 +248,7 @@ export function autoFill(input: AutoFillInput): AutoFillResult {
     addTeamSlot(g.division, g.team1, i)
     addTeamSlot(g.division, g.team2, i)
     gameStartIdx.set(gameKey(g.division, g.gameNumber), i)
+    notePool(g, i)
     placements.push({ id: g.id, time: best.time, location: best.location })
   }
 

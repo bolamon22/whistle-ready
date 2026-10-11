@@ -3,6 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop, Ruler } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { BracketView, type BkBracket } from '@/components/BracketDiagram'
+import { bracketWaits, brokenWait, type BracketWait } from '@/lib/bracketOrder'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
 //   Timeline  - fields down, time across. Every field fits without sideways scroll;
@@ -245,21 +246,14 @@ function placementStatus(g: SGame, slotIdx: number, dayGames: SGame[], slots: st
   }
   return worst
 }
-// A bracket game can't start until the games feeding it ("W-B3", "L-B4") have
-// started earlier; right after one is a back-to-back for whoever advances. Only
-// placed feeders count: an unplaced one says nothing about this slot yet.
-// Same rule as the "Bracket order" issue (page.tsx), checked before placing.
-function bracketTiming(g: SGame, time: string, date: string, games: SGame[], increment: number): { early: string | null; b2b: boolean } {
-  let early: string | null = null, b2b = false
-  const tMin = hm(time)
-  for (const t of [g.team1, g.team2]) {
-    const m = (t || '').match(/^[WL]-(B\d+)$/i)
-    if (!m) continue
-    const f = games.find(x => x.division === g.division && x.gameNumber.toUpperCase() === m[1].toUpperCase())
-    if (!f || !f.date || !f.startTime) continue
-    if (f.date > date || (f.date === date && hm(f.startTime) >= tMin)) { early = early ?? f.gameNumber; continue }
-    if (f.date === date && tMin - hm(f.startTime) === increment) b2b = true
-  }
+// When a bracket game may start: after the games feeding it ("W-B3", "L-B4") have
+// ended, and a seeded game only after pool play plus one slot to seed (lib/
+// bracketOrder, the same rules as the Issues list and Auto-fill). Starting right
+// as a lead-in game ends is a back-to-back for whoever advances.
+function bracketTiming(g: SGame, time: string, date: string, games: SGame[], increment: number): { early: BracketWait | null; b2b: boolean } {
+  const { waits } = bracketWaits(g, games, increment)
+  const early = brokenWait(waits, date, time)
+  const b2b = !early && waits.some(w => w.kind === 'feeder' && w.date === date && w.atMin === hm(time))
   return { early, b2b }
 }
 function hm(s: string) { const p = String(s || '').split(':'); return (parseInt(p[0]) || 0) * 60 + (parseInt(p[1] || '0') || 0) }
@@ -935,9 +929,7 @@ export function TimelineView(p: ViewsProps) {
     if (placementStatus(g, p.slots.indexOf(time), p.dayGames, p.slots, p.increment) === 'blocked') return
     const bt = isBracket(g) ? bracketTiming(g, time, p.activeDate, p.games, p.increment) : null
     if (bt?.early) {
-      const f = p.games.find(x => x.division === g.division && x.gameNumber === bt.early)
-      const when = f ? (f.date === p.activeDate ? `at ${p.fmtTime(f.startTime)}` : 'on a later day') : ''
-      if (!window.confirm(`${g.gameNumber} waits on ${bt.early}, which plays ${when}. Put ${g.gameNumber} before it anyway?`)) return
+      if (!window.confirm(`${g.gameNumber} at ${p.fmtTime(time)} is too early: ${bt.early.why}${bt.early.date !== p.activeDate ? ` (on ${new Date(bt.early.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' })})` : ''}.\n\nPut ${g.gameNumber} here anyway?`)) return
     }
     // Placing from the parking lot hands the pick to the next game in it, in the
     // order shown (same filters), so a run of games is click slot, click slot...
@@ -1263,10 +1255,10 @@ export function TimelineView(p: ViewsProps) {
     const status = sel && !g && !closed ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
     const wrongField = !!(status && status !== 'blocked' && p.fieldAllows && !p.fieldAllows(f.fullName, sel!.division))
     const bt = status && status !== 'blocked' && isBracket(sel!) ? bracketTiming(sel!, s, p.activeDate, p.games, p.increment) : null
-    const h = bt?.early ? { ...HINT.early, label: `Before ${bt.early}` } : wrongField ? HINT.field : status === 'valid' && bt?.b2b ? HINT.risk : status ? HINT[status] : null
+    const h = bt?.early ? { ...HINT.early, label: bt.early.kind === 'seeding' ? 'Seeding time' : `Before ${bt.early.ref} ends` } : wrongField ? HINT.field : status === 'valid' && bt?.b2b ? HINT.risk : status ? HINT[status] : null
     return (
       <div key={f.fullName + '|' + s} className="relative border-b border-slate-200 border-r border-slate-100 min-w-0"
-        title={dead ? (dead.g ? `Overlaps ${dead.g.gameNumber} at ${p.fmtTime(dead.g.startTime)} on ${f.fieldName}` : `${p.fmtTime(s)} is an off-grid time (one game was set to it). Use Time on the placing bar to put another game here.`) : closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : undefined}
+        title={dead ? (dead.g ? `Overlaps ${dead.g.gameNumber} at ${p.fmtTime(dead.g.startTime)} on ${f.fieldName}` : `${p.fmtTime(s)} is an off-grid time (one game was set to it). Use Time on the placing bar to put another game here.`) : closed && !g ? `${f.fieldName} is closed at ${p.fmtTime(s)}` : bt?.early ? `Too early for ${sel!.gameNumber}: ${bt.early.why}` : undefined}
         onDragOver={e => {
           if (!g && !closed) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return }
           // onto another placed game: the two trade places
