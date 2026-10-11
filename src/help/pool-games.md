@@ -30,4 +30,5 @@ Pool games are numbered P#; bracket games are B#. Set dates, times and fields on
 **Common problems:**
 - If games are already scheduled, you see **Scheduled Games Will Be Replaced**. Regenerating removes them from the scheduler grid; the new games go to the parking lot.
 - Unticking **Pool games** rebuilds brackets only, leaving a schedule you have worked on alone.
+- A division set to **No bracket: pool play only** (on its **Bracket** tab) never gets a bracket from **Generate all divisions** or **Generate brackets**; the summary counts it as pool play only.
 - "These two already play each other in this division" means the matchup already exists.

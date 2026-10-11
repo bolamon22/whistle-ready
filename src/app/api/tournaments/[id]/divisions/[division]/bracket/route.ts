@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getTemplate } from '@/lib/bracketTemplates'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { isNoBracket } from '@/lib/divisionPlan'
 import { getPublicVisibility } from '@/lib/publicView'
 import { refsLookup } from '@/lib/refRules'
 
@@ -230,6 +231,12 @@ export async function POST(
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const division = decodeURIComponent(params.division)
   const body = await req.json()
+
+  // Pool play only (the Bracket tab's checkbox, lib/divisionPlan): no bracket for this
+  // division from any page -- Generate all, the Bracket tab, the old bracket page.
+  if (await isNoBracket(params.id, division)) {
+    return NextResponse.json({ error: `${division} is set to pool play only (no bracket). To build one, open its Bracket tab and click "This division has a bracket after all".`, noBracket: true }, { status: 409 })
+  }
 
   try {
     // ── Split a division into flights (cutoff on the seed list) ──────────

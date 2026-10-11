@@ -4,6 +4,7 @@ import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
 import { dropWaitlisted, involvesWaitlisted } from '@/lib/poolMembership'
 import { nameKey } from '@/lib/names'
+import { noBracketKeys, renameNoBracket, setNoBracket } from '@/lib/divisionPlan'
 
 // Every division with its team, waiting-list, pool and game counts.
 //
@@ -99,6 +100,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       }
     }
 
+    // Pool play only (no bracket), from the division's Bracket tab: lib/divisionPlan.
+    const poolOnly = await noBracketKeys(params.id).catch(() => new Set<string>())
     const divisions = [...divMap.entries()]
       .map(([name, data]) => ({
         name,
@@ -109,6 +112,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         gameCount: scheduleLive ? data.gameCount : 0,
         poolGameCount: scheduleLive ? data.gameCount : 0,
         bracketGameCount: scheduleLive ? (bracketCount.get(name) ?? 0) : 0,
+        noBracket: poolOnly.has(nameKey(name)),
       }))
       .sort((a, b) => {
         // Curated order from registrationDivisions; names not in it (legacy) go last, A\u2192Z.
@@ -199,6 +203,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       where: { id: params.id },
       data: { registrationDivisions: JSON.stringify(updatedDivs) },
     })
+    // A renamed division stays pool play only.
+    await renameNoBracket(params.id, oldName, newName.trim()).catch(() => {})
 
     return NextResponse.json({ ok: true, count: teams.length })
   } catch (e) {
@@ -239,6 +245,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     // Delete pools and games for this division
     await prisma.pool.deleteMany({ where: { tournamentId: params.id, division: name } }).catch(() => {})
     await prisma.game.deleteMany({ where: { tournamentId: params.id, division: name } }).catch(() => {})
+    // A new division made later under the same name starts with a bracket.
+    await setNoBracket(params.id, name, false).catch(() => {})
 
     return NextResponse.json({ ok: true })
   } catch (e) {

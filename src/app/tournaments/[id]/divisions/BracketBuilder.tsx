@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { TEMPLATE_CATALOG, BRACKET_TEMPLATES, type GameTemplate } from '@/lib/bracketTemplates'
+import { CheckCircle2 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,9 @@ interface Props {
   // after the user has switched tabs by hand.
   initialTab?: 'seeding' | 'preview'
   openPreviewAt?: number
+  /** "No bracket: pool play only" (lib/divisionPlan), and how the page hears it changed. */
+  noBracket?: boolean
+  onNoBracketChange?: (on: boolean) => void
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -73,8 +77,12 @@ const SECTION_LABELS: Record<string, string> = {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function BracketBuilder({ tournamentId, division, planFormat, planCount, planConsolation, planLoserConsolation, initialTab, openPreviewAt }: Props) {
+export default function BracketBuilder({ tournamentId, division, planFormat, planCount, planConsolation, planLoserConsolation, initialTab, openPreviewAt, noBracket, onNoBracketChange }: Props) {
   const [loading, setLoading] = useState(true)
+  // Pool play only (Bo, Oct 11 2026: "an option not to schedule bracket games").
+  const [poolOnly, setPoolOnly] = useState(!!noBracket)
+  useEffect(() => { setPoolOnly(!!noBracket) }, [noBracket])
+  const [savingPoolOnly, setSavingPoolOnly] = useState(false)
   const [bracket, setBracket] = useState<BracketData | null>(null)
   const [tab, setTab] = useState<'seeding' | 'manage' | 'preview'>(initialTab ?? 'seeding')
   const [showAddGame, setShowAddGame] = useState(false)
@@ -448,6 +456,41 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
 
   // ── Setup wizard ───────────────────────────────────────────────────────
 
+  async function setNoBracket(on: boolean) {
+    setSavingPoolOnly(true); setError(null)
+    try {
+      const r = await fetch(`/api/tournaments/${tournamentId}/divisions/${encodeURIComponent(division)}/no-bracket`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setError(j.error || 'That didn’t save. Try again.'); return }
+      setPoolOnly(on)
+      onNoBracketChange?.(on)
+    } catch { setError('That didn’t save. Check your connection and try again.') }
+    finally { setSavingPoolOnly(false) }
+  }
+
+  if (!bracket && poolOnly) {
+    return (
+      <div className="py-6 px-2 max-w-lg" data-testid="pool-only">
+        <div className="bg-slate-800 border-2 border-teal-500 rounded-xl p-5">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={22} className="text-teal-300 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold text-white text-base">No bracket: pool play only</div>
+              <p className="text-slate-300 mt-1 leading-relaxed">This division has no playoffs or championship game. No bracket games are made or scheduled for it: <b className="text-white">Generate all divisions</b> skips it, and a bracket can&rsquo;t be built here until this is turned off.</p>
+              <button onClick={() => setNoBracket(false)} disabled={savingPoolOnly}
+                className="mt-4 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-teal-300 border border-slate-600 hover:border-teal-500 disabled:opacity-60 transition-colors">
+                {savingPoolOnly ? 'Saving…' : 'This division has a bracket after all'}
+              </button>
+            </div>
+          </div>
+        </div>
+        {error && <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</div>}
+      </div>
+    )
+  }
+
   if (!bracket) {
     const selCount = Math.max(2, parseInt(selCountInput) || 2)
     const entry = TEMPLATE_CATALOG.find(t => t.key === `${selFormat}-${selCount}`)
@@ -458,6 +501,15 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
           No bracket yet. Choose a format and team count, then add or remove games as needed.
         </p>
 
+        {/* First question: is there a bracket at all? */}
+        <label className="mb-5 flex items-start gap-3 bg-slate-800 border border-slate-700 hover:border-teal-500 rounded-xl p-4 cursor-pointer transition-colors" data-testid="no-bracket-box">
+          <input type="checkbox" checked={savingPoolOnly} disabled={savingPoolOnly} onChange={() => setNoBracket(true)} className="mt-0.5 w-4 h-4 accent-teal-500" />
+          <span className="text-sm">
+            <span className="font-semibold text-white">No bracket: pool play only</span>
+            <span className="block text-slate-400 mt-0.5">Tick this when the division has no playoffs or championship game. No bracket games are made or scheduled for it.</span>
+          </span>
+        </label>
+
         <div className="mb-5">
           <button onClick={() => setShowSplit(v => !v)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-teal-300 border border-slate-700 hover:border-teal-500 transition-colors">
@@ -467,7 +519,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         {showSplit && splitPanel}
 
         {error && (
-          <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
             {error}
           </div>
         )}
@@ -631,7 +683,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       {showSplit && flights.length <= 1 && splitPanel}
 
       {error && (
-        <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           {error}
         </div>
       )}

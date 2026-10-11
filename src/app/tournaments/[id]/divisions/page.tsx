@@ -20,7 +20,7 @@ const PALETTE = [
   '#14b8a6', '#ef4444', '#f59e0b', '#6366f1', '#06b6d4',
 ]
 
-interface Division { name: string; teamCount: number; waitlistCount?: number; poolCount: number; unassignedTeams: number; gameCount: number; bracketGameCount?: number }
+interface Division { name: string; teamCount: number; waitlistCount?: number; poolCount: number; unassignedTeams: number; gameCount: number; bracketGameCount?: number; noBracket?: boolean }
 interface Pool { id: string; name: string; teamNames: string[] }
 interface PoolGame {
   id: string; gameNumber: string; pool: string | null
@@ -782,7 +782,9 @@ export default function DivisionsPage() {
    * on screen -- which is how eleven of fourteen divisions ended up with no bracket
    * and nothing said about it.
    */
-  async function generateBracketForDivision(divName: string, teamCount: number): Promise<'created' | 'rebuilt' | 'exists' | 'stale' | 'too-small' | 'failed'> {
+  async function generateBracketForDivision(divName: string, teamCount: number): Promise<'created' | 'rebuilt' | 'exists' | 'stale' | 'too-small' | 'failed' | 'pool-only'> {
+    // "No bracket: pool play only" on the division's Bracket tab: nothing to build.
+    if (divisions.find(d => d.name === divName)?.noBracket) return 'pool-only'
     const tc = teamCount
     if (tc < 2) return 'too-small'
     const sd = smartTable[tc] || {}
@@ -868,6 +870,7 @@ export default function DivisionsPage() {
     let bracketsKept = 0
     let bracketsFailed = 0
     let bracketsRebuilt = 0
+    let poolOnly = 0
     const staleDivs: string[] = []
 
     // Clean up stale games for 0-team divisions
@@ -927,6 +930,7 @@ export default function DivisionsPage() {
         else if (r === 'exists') bracketsKept++
         else if (r === 'stale') staleDivs.push(div.name)
         else if (r === 'failed') bracketsFailed++
+        else if (r === 'pool-only') poolOnly++
       }
     }
 
@@ -949,6 +953,7 @@ export default function DivisionsPage() {
       bracketsCreated ? `${bracketsCreated} bracket${bracketsCreated !== 1 ? 's' : ''} created` : '',
       bracketsRebuilt ? `${bracketsRebuilt} resized` : '',
       bracketsKept ? `${bracketsKept} already fit` : '',
+      poolOnly ? `${poolOnly} pool play only (no bracket)` : '',
     ].filter(Boolean)
     toast.success(`${headline}${bits.length ? `, ${bits.join(', ')}` : ''}`)
     // A bracket that no longer fits its division but holds seeds, a flight split or
@@ -1099,6 +1104,9 @@ if (loading) return (
                                   onClick={e => { e.stopPropagation(); selectDiv(div.name); setActiveTab('bracket'); setPreviewDiv(div.name); setPreviewNonce(n => n + 1) }}
                                   className="text-[10px] text-violet-600 bg-violet-50 hover:bg-violet-100 hover:text-violet-800 px-1.5 py-0.5 rounded-full transition-colors"
                                   title="See the bracket">{div.bracketGameCount} bracket</button>
+                              )}
+                              {div.noBracket && (
+                                <span className="text-[10px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full" title="No bracket: pool play only (set on the Bracket tab)">Pool play only</span>
                               )}
                               {div.unassignedTeams > 0 && div.poolCount > 0 && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full" title={`${div.unassignedTeams} team${div.unassignedTeams !== 1 ? 's' : ''} not assigned to a pool`}>
@@ -2153,7 +2161,9 @@ if (loading) return (
                         </ul>
                       </div>
                     )}
-                    <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} initialTab={previewDiv === activeDiv ? 'preview' : 'seeding'} openPreviewAt={previewNonce} />
+                    <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} initialTab={previewDiv === activeDiv ? 'preview' : 'seeding'} openPreviewAt={previewNonce}
+                      noBracket={!!divisions.find(d => d.name === activeDiv)?.noBracket}
+                      onNoBracketChange={on => setDivisions(d => d.map(x => x.name === activeDiv ? { ...x, noBracket: on } : x))} />
                   </>
                 })()
               )}

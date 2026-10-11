@@ -3,11 +3,13 @@ title: Build a bracket, seeds and flights
 category: Setup
 order: 44
 routes: /tournaments/*/divisions
-keywords: bracket playoff playoffs single elimination double elimination consolation both-ways 3rd place seeds seeding flights flight A flight B champion reset bracket add bracket game rename label
+keywords: bracket playoff playoffs no bracket pool play only no playoffs no championship single elimination double elimination consolation both-ways 3rd place seeds seeding flights flight A flight B champion reset bracket add bracket game rename label
 ---
 Each division can have a playoff bracket. Pool standings feed the seeds, and bracket games go to the Scheduler as B# games.
 
 **Where:** **Setup → Divisions & teams**, pick a division, open the **Bracket** tab.
+
+**No bracket (pool play only):** if a division has no playoffs or championship game, tick **No bracket: pool play only** at the top of its **Bracket** tab. No bracket games are made or scheduled for it: **Generate all divisions** and **Generate brackets** skip it, and no bracket can be built for it until you click **This division has a bracket after all**. The division shows **Pool play only** in the list on the left.
 
 **To create a bracket:**
 1. Pick a **Format**: **Single Elimination**, **Double Elimination** or **Both-ways consolation**.
@@ -28,6 +30,7 @@ In **Both-ways consolation**, winners move right to the **Champion** and first-r
 
 **Common problems:**
 - **Reset** deletes the bracket and all its games after a confirmation. This cannot be undone.
+- **No bracket: pool play only** can't be ticked while the division has a bracket or B# games. **Reset** the bracket (or delete the B# games) first.
 - Splitting into flights needs at least 3 ranked teams. With no pool standings yet, finish pool play or seed by hand first.
 - Dates, times and fields are set on the **Scheduler**; unplaced bracket games show **Not scheduled**.
 - The public **Bracket** tab shows bracket games once pool play concludes.
