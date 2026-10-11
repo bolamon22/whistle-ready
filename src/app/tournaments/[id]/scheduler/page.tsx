@@ -8,6 +8,7 @@ import { usePublicVisibility, PublicVisibilityMenu } from '../PublicVisibility'
 import { TimelineView, TeamLanesView, useDragAutoScroll } from './SchedulerViews'
 import toast, { Toaster } from 'react-hot-toast'
 import { autoFill, isRealTeam, teamKey } from '@/lib/autoSchedule'
+import { isPlaceholder } from '@/lib/gameBalance'
 import { closuresOf, isFieldClosedAt, fieldClosure, closureLabel, withClosure, blockedKeys, isAllDay, type Closure } from '@/lib/fieldClosures'
 import { divisionAbbr, teamRefKey } from '@/lib/names'
 import { divisionColorMap } from '@/lib/divisionColors'
@@ -962,13 +963,16 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       .map(g => g.pool).filter(Boolean) as string[]
   )].sort()
 
-  // Parking lot: available teams based on division + pool filters
+  // Parking lot: available teams based on division + pool filters. Teams only:
+  // bracket slots ("Seed 1", "W-B3", "L-B2", "Winner ...") are not teams, and a
+  // big bracket filled the list with them (Bo, Oct 11 2026). Game Type > Bracket
+  // still finds those games.
   const parkingTeams = [...new Set(
     games
       .filter(g => filterDiv === '__all__' || g.division === filterDiv)
       .filter(g => filterPool === '__all__' || g.pool === filterPool)
       .flatMap(g => [g.team1, g.team2])
-      .filter(t => t && t !== 'TBD')
+      .filter(t => !isPlaceholder(t))
   )].sort()
 
   // Apply parking lot filters
@@ -1277,7 +1281,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       .filter(g => gridDiv === '__all__' || g.division === gridDiv)
       .filter(g => gridPool === '__all__' || g.pool === gridPool)
       .flatMap(g => [g.team1, g.team2])
-      .filter(t => t && t !== 'TBD')
+      .filter(t => !isPlaceholder(t))   // teams only, as in the parking lot's list
   )].sort()
 
   function gameMatchesGridFilter(g: Game) {
