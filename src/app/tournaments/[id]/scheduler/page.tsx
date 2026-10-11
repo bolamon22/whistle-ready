@@ -176,6 +176,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   useDragAutoScroll(gridScrollRef, !!dragId)
   const [autoFilling, setAutoFilling]   = useState(false)
   const [gridZoom, setGridZoom]         = useState(1)
+  // Small cards on the Grid (Bo, Oct 11 2026: "a compacted version of the schedule"):
+  // one line per game, field names only, narrower columns, so a whole day fits.
+  const [gridDense, setGridDenseRaw]    = useState(false)
+  useEffect(() => { try { if (localStorage.getItem('wr-grid-dense') === '1') setGridDenseRaw(true) } catch {} }, [])
+  const setGridDense = (v: boolean) => { setGridDenseRaw(v); try { localStorage.setItem('wr-grid-dense', v ? '1' : '0') } catch {} }
   const [splitMode, setSplitMode]       = useState<'d1d2'|'spread'|'oneday'>('d1d2')
   // Auto-fill dialog: what to place, where, and how many games per team on each day.
   const [showAF, setShowAF]     = useState(false)
@@ -2019,6 +2024,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               title="Compact view: hides empty time rows so you only see slots that have games. Click again to show every time.">
               <span className="inline-flex items-center gap-1"><Clock size={12} /> Compact</span>
             </button>
+            <button
+              onClick={() => setGridDense(!gridDense)}
+              aria-pressed={gridDense}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${gridDense ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
+              title="Small cards: one line per game (number, then teams) and narrower fields, so more of the day fits on screen. Hover a game for the division and pool.">
+              Small cards
+            </button>
             <div className="relative">
               <button
                 onClick={() => setShowFieldPicker(v => !v)}
@@ -2387,18 +2399,18 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         })()
       ) : (
         <div ref={gridScrollRef} className="flex-1 overflow-auto" style={{ zoom: gridZoom }}>
-          <table className="border-collapse" style={{ minWidth: `${80 + visibleFields.length * 160}px` }}>
+          <table className="border-collapse" style={gridDense ? { width: `${80 + visibleFields.length * 136 + 96}px`, tableLayout: 'fixed' } : { minWidth: `${80 + visibleFields.length * 160}px` }}>
             <thead className="sticky top-0 z-20">
               <tr>
                 <th className="sticky left-0 z-30 w-20 bg-slate-100 border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 text-center">
                   Time
                 </th>
                 {visibleFields.map(f => (
-                  <th key={f.fullName} className={`border border-slate-200 px-3 py-2 text-center min-w-[155px] group relative ${closedLabelFor(f.fullName) ? 'bg-red-50' : 'bg-slate-100'}`}>
-                    <div className="text-[10px] text-slate-400 font-normal">{f.venueName}</div>
+                  <th key={f.fullName} title={gridDense ? f.fullName : undefined} className={`border border-slate-200 text-center group relative ${gridDense ? 'px-1.5 py-1 w-[136px]' : 'px-3 py-2 min-w-[155px]'} ${closedLabelFor(f.fullName) ? 'bg-red-50' : 'bg-slate-100'}`}>
+                    {!gridDense && <div className="text-[10px] text-slate-400 font-normal">{f.venueName}</div>}
                     <div className="text-xs font-semibold text-slate-700">{f.fieldName}</div>
                     <button onClick={() => openCloseDialog(f.fullName)}
-                      className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full border ${closedLabelFor(f.fullName) ? 'bg-red-100 border-red-300 text-red-700' : 'border-transparent text-slate-300 opacity-0 group-hover:opacity-100 hover:text-slate-600 hover:border-slate-300'}`}
+                      className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full border ${closedLabelFor(f.fullName) ? 'bg-red-100 border-red-300 text-red-700' : `border-transparent text-slate-300 opacity-0 group-hover:opacity-100 hover:text-slate-600 hover:border-slate-300 ${gridDense ? 'hidden group-hover:inline-block' : ''}`}`}
                       title={closedLabelFor(f.fullName) ? 'Closed on this day. Click to change the hours or reopen.' : 'Close this field for all or part of this day: nothing can be placed there by hand or by Auto-fill'}>
                       {closedLabelFor(f.fullName) ?? 'Close today'}
                     </button>
@@ -2447,7 +2459,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     return (
                       <td
                         key={f.fullName}
-                        className={`border border-slate-200 p-1 align-top ${slotHasGame ? 'h-16' : 'h-8'} transition-colors ${isOver ? 'bg-teal-50' : closedAt(f.fullName, slot) ? '' : 'bg-white hover:bg-slate-50'}`}
+                        className={`border border-slate-200 align-top ${gridDense ? `p-0.5 ${slotHasGame ? 'h-10' : 'h-5'}` : `p-1 ${slotHasGame ? 'h-16' : 'h-8'}`} transition-colors ${isOver ? 'bg-teal-50' : closedAt(f.fullName, slot) ? '' : 'bg-white hover:bg-slate-50'}`}
                         style={closedAt(f.fullName, slot) && !game ? { background: 'repeating-linear-gradient(135deg,#fff 0 8px,#fef2f2 8px 10px)' } : undefined}
                         title={closedAt(f.fullName, slot) && !game ? `${f.fieldName} is closed at ${fmtTime(slot)}` : undefined}
                         onDragOver={e => { if (closedAt(f.fullName, slot)) return; e.preventDefault(); setOverCell(cellKey) }}
@@ -2463,7 +2475,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                             data-game-card
                             onMouseEnter={e => showIssues(e, game.id)}
                             onMouseLeave={() => hideIssues(game.id)}
-                            className={`relative rounded-md px-2 py-1 h-full min-h-[52px] flex flex-col justify-between transition-all
+                            title={gridDense ? `${game.gameNumber} · ${game.division}${game.pool ? ` · ${game.pool}` : ''}: ${game.team1} vs ${game.team2}` : undefined}
+                            className={`relative rounded-md h-full transition-all ${gridDense ? 'px-1.5 py-0.5 min-h-[32px] flex items-center' : 'px-2 py-1 min-h-[52px] flex flex-col justify-between'}
                               ${swapMode ? 'cursor-pointer hover:ring-2 hover:ring-white' : 'cursor-grab active:cursor-grabbing'}
                               ${dragId === game.id ? 'opacity-30' : ''}
                               ${!matchesGrid ? 'opacity-20' : 'hover:brightness-110'}
@@ -2482,12 +2495,18 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                               return (
                                 <button type="button" aria-label="Show scheduling issues"
                                   onClick={e => { e.stopPropagation(); if (issueTip?.id === game.id && issueTip.pinned) setIssueTip(null); else showIssues(e, game.id, true) }}
-                                  className={`absolute bottom-0.5 right-0.5 rounded-full w-5 h-5 flex items-center justify-center shadow ring-2 ring-white/70 ${b.cls}`}>
+                                  className={`absolute rounded-full flex items-center justify-center shadow ring-2 ring-white/70 ${gridDense ? 'top-1/2 -translate-y-1/2 right-0.5 w-4 h-4 [&>svg]:w-2.5 [&>svg]:h-2.5' : 'bottom-0.5 right-0.5 w-5 h-5'} ${b.cls}`}>
                                   {b.icon}
                                   {n > 1 && <span className="absolute -top-1.5 -right-1.5 bg-slate-900 text-white text-[8px] font-bold rounded-full min-w-[14px] h-[14px] px-0.5 flex items-center justify-center">{n}</span>}
                                 </button>
                               )
                             })()}
+                            {gridDense ? (
+                              <div className="min-w-0 w-full pr-4 text-[10px] leading-tight whitespace-nowrap">
+                                <div className="flex items-baseline gap-1 min-w-0"><b className="flex-shrink-0">{game.gameNumber}</b><span className="truncate min-w-0 font-semibold">{game.team1}</span></div>
+                                <div className="truncate pl-3" style={{ opacity: 0.85 }}>v {game.team2}</div>
+                              </div>
+                            ) : (<>
                             <div className="flex items-center justify-between gap-1">
                               <div className="font-bold text-[10px] leading-none" style={{ color: 'inherit' }}>{game.gameNumber.startsWith('B') ? `${divAbbr(game.division)}-${game.gameNumber}` : game.gameNumber}</div>
                               <div className="text-[9px] leading-none truncate" style={{ opacity: 0.75 }}>{game.division}{game.pool ? ` · ${game.pool}` : ''}</div>
@@ -2496,6 +2515,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                               <div className="text-xs font-semibold truncate leading-tight">{game.team1}{(teamGames[teamKey(game.division, game.team1)]?.length ?? 0) > 0 && <span className="opacity-60 font-normal"> ({teamGames[teamKey(game.division, game.team1)]?.length})</span>}</div>
                               <div className="text-[10px] truncate" style={{ opacity: 0.85 }}>vs {game.team2}{(teamGames[teamKey(game.division, game.team2)]?.length ?? 0) > 0 && <span className="opacity-60"> ({teamGames[teamKey(game.division, game.team2)]?.length})</span>}</div>
                             </div>
+                            </>)}
                           </div>
                         ) : isTeamBusy ? (
                           <div className="h-full rounded-sm bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] text-slate-500 font-semibold tracking-wide">In Use</div>
