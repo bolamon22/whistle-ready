@@ -161,6 +161,24 @@ function TypeToggle({ value, onChange, counts }: { value: TypeFilter; onChange: 
   )
 }
 
+// Flight A / Flight B, shown when the divisions in view have a bracket split into
+// flights (Bo, Oct 11 2026: "can you make it so we can filter Flight A and Flight B?").
+function FlightToggle({ flights, value, onChange, counts }: { flights: string[]; value: string; onChange: (f: string) => void; counts: Record<string, number> }) {
+  if (flights.length < 2) return null
+  return (
+    <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-indigo-50 border border-indigo-200 whitespace-nowrap" role="group" aria-label="Flight">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500 pl-2 pr-1">Flight</span>
+      {['', ...flights].map(f => (
+        <button key={f || 'all'} onClick={() => onChange(f)} aria-pressed={value === f}
+          title={f ? `Only Flight ${f} bracket games` : 'Every flight'}
+          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full transition-colors ${value === f ? 'bg-indigo-600 text-white' : 'text-indigo-700 hover:text-indigo-950'}`}>
+          {f || 'All'}{f ? <span className="font-medium opacity-70 ml-1">{counts[f] ?? 0}</span> : null}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function humanTeam(t: string) {
   const m = (t || '').match(/^([WL])-(B\d+)$/i)
   if (m) return (m[1].toUpperCase() === 'W' ? 'Winner of ' : 'Loser of ') + m[2].toUpperCase()
@@ -713,7 +731,17 @@ export function TimelineView(p: ViewsProps) {
   const teamF = p.filterTeam && p.filterTeam !== '__all__' ? p.filterTeam : null
   const poolF = p.filterPool && p.filterPool !== '__all__' ? p.filterPool : null
   const divOut = (g: SGame) => (!!focusDivs && !focusDivs.has(g.division)) || (!!poolF && g.pool !== poolF) || (!!teamF && g.team1 !== teamF && g.team2 !== teamF)
-  const typeOut = (g: SGame) => !matchesType(g, typeFilter)
+  // Flight filter: only offered while the divisions in view have flighted brackets.
+  const [flightF, setFlightF] = useState('')
+  const flightsShown = useMemo(() => Array.from(new Set(p.games.filter(g => g.bracketFlight && (!focusDivs || focusDivs.has(g.division))).map(g => g.bracketFlight!))).sort(), [p.games, focusDivs])
+  useEffect(() => { if (flightF && !flightsShown.includes(flightF)) setFlightF('') }, [flightF, flightsShown])
+  const flightCounts = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const g of p.unscheduled) if (g.bracketFlight && (!focusDivs || focusDivs.has(g.division))) c[g.bracketFlight] = (c[g.bracketFlight] ?? 0) + 1
+    return c
+  }, [p.unscheduled, focusDivs])
+  const flightOut = (g: SGame) => !!flightF && g.bracketFlight !== flightF
+  const typeOut = (g: SGame) => !matchesType(g, typeFilter) || flightOut(g)
   const dim = (g: SGame) => divOut(g) || typeOut(g)
   const tint = (div: string) => p.divColor(div) + '1f'
 
@@ -775,9 +803,9 @@ export function TimelineView(p: ViewsProps) {
     const divs = focusDivs ? p.divisions.filter(d => focusDivs.has(d)) : p.divisions
     return divs.map(d => ({
       div: d,
-      items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && !divOut(g) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))).sort(placeOrder),
+      items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && !flightOut(g) && !divOut(g) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))).sort(placeOrder),
     })).filter(x => x.items.length > 0)
-  }, [p.unscheduled, p.divisions, focusDivs, poolF, teamF, typeFilter, q, placeOrder])
+  }, [p.unscheduled, p.divisions, focusDivs, poolF, teamF, typeFilter, flightF, q, placeOrder])
   const lotCounts = useMemo(() => {
     const inDiv = p.unscheduled.filter(g => !focusDivs || focusDivs.has(g.division))
     return { pool: inDiv.filter(g => !isBracket(g)).length, bracket: inDiv.filter(isBracket).length }
@@ -842,6 +870,7 @@ export function TimelineView(p: ViewsProps) {
               className="w-40 pl-6 pr-2 py-1 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-400" />
           </label>
           <TypeToggle value={typeFilter} onChange={setTypeFilter} counts={lotCounts} />
+          <FlightToggle flights={flightsShown} value={flightF} onChange={setFlightF} counts={flightCounts} />
           {p.filterDiv !== '__all__' && (
             <span className="px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 inline-flex items-center gap-1.5 text-[11px] text-slate-600">
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.divColor(p.filterDiv) }} />
@@ -855,7 +884,7 @@ export function TimelineView(p: ViewsProps) {
         {/* width:0 + min-width:100%: the row's cards must not count toward the column's
             intrinsic width, or the whole board grows past the viewport instead of scrolling. */}
         <div className={`overflow-x-auto overflow-y-hidden px-3 flex items-stretch ${lotMini ? 'pb-1.5 gap-2' : 'pb-2 gap-2.5'}`} style={{ width: 0, minWidth: '100%' }}>
-          {lot.length === 0 && <p className="text-xs text-slate-400 py-3">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : typeFilter !== 'all' || p.filterDiv !== '__all__' ? 'Nothing left to place with these filters.' : 'No games match.'}</p>}
+          {lot.length === 0 && <p className="text-xs text-slate-400 py-3">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : typeFilter !== 'all' || flightF || p.filterDiv !== '__all__' ? 'Nothing left to place with these filters.' : 'No games match.'}</p>}
           {lot.map(grp => {
             const c = p.divColor(grp.div)
             return (
@@ -969,8 +998,9 @@ export function TimelineView(p: ViewsProps) {
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Team or game #" aria-label="Search unscheduled games"
               className="w-full pl-7 pr-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-400" />
           </div>
-          <div className="px-3 pb-2 flex items-center gap-2">
+          <div className="px-3 pb-2 flex items-center gap-2 flex-wrap">
             <TypeToggle value={typeFilter} onChange={setTypeFilter} counts={lotCounts} />
+            <FlightToggle flights={flightsShown} value={flightF} onChange={setFlightF} counts={flightCounts} />
           </div>
           {p.filterDiv !== '__all__' && (
             <div className="mx-3 mb-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-2 text-[11px] text-slate-600">
@@ -980,7 +1010,7 @@ export function TimelineView(p: ViewsProps) {
             </div>
           )}
           <div className="flex-1 overflow-auto px-2 pb-3 space-y-2">
-            {lot.length === 0 && <p className="text-xs text-slate-400 text-center py-8">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : typeFilter !== 'all' || p.filterDiv !== '__all__' ? 'Nothing left to place with these filters.' : 'No games match.'}</p>}
+            {lot.length === 0 && <p className="text-xs text-slate-400 text-center py-8">{p.unscheduled.length === 0 ? 'Everything is on the grid.' : typeFilter !== 'all' || flightF || p.filterDiv !== '__all__' ? 'Nothing left to place with these filters.' : 'No games match.'}</p>}
             {lot.map(grp => {
               const open = openDivs[grp.div] ?? true
               const c = p.divColor(grp.div)
