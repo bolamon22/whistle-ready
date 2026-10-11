@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
+import { mergeW9 } from '@/lib/staffW9'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -109,7 +110,7 @@ export async function POST(req: Request) {
   // history; the imported record has the history and no pay details. Each column is
   // written on its own because any of them may not exist on an older database yet.
   const filled: string[] = []
-  for (const col of ['venmoHandle', 'zelleHandle', 'mailingAddress', 'w9OnFile']) {
+  for (const col of ['venmoHandle', 'zelleHandle', 'mailingAddress']) {
     const kv = (keep as Record<string, unknown>)[col]
     const rv = (rem as Record<string, unknown>)[col]
     const value = (kv !== null && kv !== undefined && String(kv).trim() !== '') ? kv : rv
@@ -119,6 +120,11 @@ export async function POST(req: Request) {
       filled.push(col)
     } catch { /* column not on this database yet */ }
   }
+
+  // The W-9 lives in AppSetting under the worker's id (lib/staffW9), so it has to move
+  // with the person. w9OnFile used to be merged as a column above, where the kept
+  // record's 0 beat the other record's 1 and the file was left under the deleted id.
+  try { if (await mergeW9(keepId, removeId)) filled.push('w9OnFile') } catch (e) { console.error('merge w9', e) }
 
   await client.execute({ sql: `DELETE FROM "Worker" WHERE id = ?`, args: [removeId] })
   return NextResponse.json({ ok: true, keepId, filled })

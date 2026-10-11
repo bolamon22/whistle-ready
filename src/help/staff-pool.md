@@ -3,7 +3,7 @@ title: Add and edit people in the Staff Pool
 category: Staff
 order: 400
 routes: /staff
-keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo
+keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form
 ---
 The Staff Pool is your organization's master list of everyone who works your events: refs, scorekeepers, athletic trainers and field operations. Each tournament's roster is picked from this pool.
 
@@ -16,6 +16,8 @@ The Staff Pool is your organization's master list of everyone who works your eve
 4. Tick **Also serves as Assigner** if they assign games, add **Notes**, then click **Add Staff**.
 
 **To edit someone:** find them with **Search by name…** or the **Role**, **Can Ref** and **App** filters, then click **Edit**. Click **Profile** to see their details without editing.
+
+**W-9s:** staff upload their own on their staff portal. **W-9 ✓** under **Pay Method** means one is on file; click **Profile** and then **View W-9 →** to open it. Only directors and admins can open a W-9.
 
 **To change many people at once:**
 1. Tick the box next to each person.

@@ -3,7 +3,7 @@ title: Your staff home page on game day
 category: Game day
 order: 500
 routes: /dashboard/staff, /dashboard/ref, /dashboard/scorekeeper
-keywords: my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability
+keywords: my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability w-9 w9 tax form upload w-9 paycheck
 ---
 When a ref, scorekeeper, trainer or field ops worker logs in, they land on their own home page with their events, their next game and the game day tools.
 
@@ -12,6 +12,8 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 **To sign up for an event:**
 1. Under **My events**, tap **Sign up to work** on the event.
 2. Once you're on it, it shows **Working** and how many games you're assigned. Tap **Can't work it** to take yourself off (only before you have games).
+
+**To upload your W-9:** under **W-9 needed**, tap **Upload W-9** and pick the signed form as a PDF or a photo (up to 2 MB; photos are shrunk for you). **Blank W-9 from the IRS** opens an empty form. Once it's in, the card says **W-9 on file**; tap **Replace** to send a new one. It's stored encrypted, and only tournament directors can open it.
 
 **To see your games:**
 - **Up next** shows your next game with time, field and teams.
@@ -29,3 +31,4 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 - **Your login isn't linked to a staff record yet.** Contact your coordinator.
 - **Check in** marks the game on your phone only; it doesn't notify anyone.
 - **No upcoming assignments.** You haven't been put on a game yet.
+- "Upload the W-9 as a PDF or a photo": other file types (Word documents, for example) aren't taken. Save it as a PDF or take a photo of the signed form.

@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import StaffW9Card from '@/components/StaffW9Card'
 import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2 } from 'lucide-react'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
@@ -228,6 +229,9 @@ export default function RefDashboard() {
           {!portal.worker && <p className="text-[11px] text-gray-400 mt-2">Your login isn't linked to a staff record yet — contact your coordinator to sign up for events.</p>}
         </div>
       )}
+
+      {/* W-9: upload it here instead of emailing it (components/StaffW9Card) */}
+      {portal?.worker && <StaffW9Card />}
 
       {/* Time clock — hourly staff (field ops & athletic trainers) */}
       {punch?.worker && (punch.worker.defaultRole === 'field_ops' || punch.worker.defaultRole === 'athletic_trainer') && (() => {

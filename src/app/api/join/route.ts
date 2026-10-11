@@ -6,7 +6,7 @@ import { orgById } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { sendEmail, orgSender } from '@/lib/email'
 import { notifyStaffRegistered } from '@/lib/staffNotify'
-import { encrypt } from '@/lib/encrypt'
+import { saveW9, w9FromDataUrl, w9StorageReady } from '@/lib/staffW9'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 
@@ -158,15 +158,11 @@ export async function POST(req: NextRequest) {
       await client.execute({ sql: `UPDATE "Worker" SET photoUrl = ?, updatedAt = datetime('now') WHERE id = ?`, args: [photo, workerId] })
     }
 
-    // W-9 (photo or PDF): encrypted at rest (AES-256-GCM, src/lib/encrypt), stored under
-    // AppSetting w9:{workerId} — NOT on the Worker row, so it never rides along in list
-    // payloads. Retrieval is director-only (/api/workers/[id]/w9).
-    const w9 = typeof body.w9 === 'string' && (body.w9.startsWith('data:image/') || body.w9.startsWith('data:application/pdf')) && body.w9.length < 2000000 ? body.w9 : null
-    if (w9) {
-      const value = encrypt(w9)
-      await prisma.appSetting.upsert({ where: { key: `w9:${workerId}` }, update: { value }, create: { key: `w9:${workerId}`, value } })
-      await client.execute({ sql: `UPDATE "Worker" SET w9OnFile = 1, updatedAt = datetime('now') WHERE id = ?`, args: [workerId] })
-    }
+    // W-9 (photo or PDF): the form stopped asking on Sep 4, and staff upload it on their
+    // portal now. One still sent here is checked and stored the same way (lib/staffW9:
+    // its type read from its own bytes, encrypted, director-only).
+    const w9File = typeof body.w9 === 'string' && w9StorageReady() ? w9FromDataUrl(body.w9) : null
+    const w9 = w9File ? await saveW9(workerId, { ...w9File, name: 'W-9 (signup)' }, 'signup').then(() => true, () => false) : false
 
     // Events they said they can work → straight onto those rosters (same pool the
     // Staff Roster page and Assigner read).
@@ -208,7 +204,7 @@ export async function POST(req: NextRequest) {
           ${eventLines}
           <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
             You're set up to be paid by <strong>${payMethod === 'venmo' ? 'Venmo' : payMethod === 'zelle' ? 'Zelle' : 'check'}</strong>${payHandle ? ` (${payHandle})` : ''}${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).length ? `, with ${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).join(' and ')} as backup` : ''}.
-            ${w9 ? 'Your W-9 is on file.' : 'One thing before your first paycheck: we\'ll need a completed W-9 — you can send it to us anytime.'}
+            ${w9 ? 'Your W-9 is on file.' : 'One thing before your first paycheck: we\'ll need a completed W-9. Upload it on your staff portal under <strong>W-9</strong> whenever it suits you. It\'s stored encrypted, and only our tournament directors can open it.'}
           </p>
           <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
             <strong>What happens next:</strong><br>
