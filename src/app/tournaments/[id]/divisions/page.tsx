@@ -11,6 +11,7 @@ import { poolKey } from '@/lib/poolNames'
 import { nameKey } from '@/lib/names'
 import { divisionColorMap } from '@/lib/divisionColors'
 import BracketBuilder from './BracketBuilder'
+import DivisionNotes from './DivisionNotes'
 import GalleryPicker from '@/components/GalleryPicker'
 import { PublicVisibilityCard } from '../PublicVisibility'
 import { ArrowRight, Check, X, AlertTriangle, Pencil, Sparkles, Zap, ArrowLeftRight, GripVertical, Trash2, Calendar, Plus, Hourglass } from 'lucide-react'
@@ -1347,6 +1348,8 @@ if (loading) return (
                     {teams.length} team{teams.length !== 1 ? 's' : ''} · {pools.length} pool{pools.length !== 1 ? 's' : ''}
                   </span>
                 </div>
+
+                <DivisionNotes tournamentId={id} division={activeDiv} />
 
                 {/* Sub-tabs */}
                 <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
