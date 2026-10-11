@@ -80,13 +80,15 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
 
   const allGroups: NavGroup[] = [
     { label: 'Dashboard', href: `${base}/dashboard` },
+    // Tournament setup last (Bo, Oct 11 2026): an event is set up once; the pages
+    // used week to week come first.
     { label: 'Setup', items: [
-      { href: `${base}/builder`,    label: 'Tournament setup' },
       { href: `${base}/divisions`,  label: 'Divisions & teams' },
       { href: `${base}/scheduler`,  label: 'Scheduler' },
       { href: `${base}`,            label: 'Assigner' },
       { href: `${base}/checklist`,  label: 'Checklist' },
       { href: `${base}/documents`,  label: 'Documents' },
+      { href: `${base}/builder`,    label: 'Tournament setup' },
     ]},
     { label: 'People', items: [
       // Order IS the grouping — keep same-section items adjacent or the heading

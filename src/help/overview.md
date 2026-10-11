@@ -11,7 +11,7 @@ Whistle Ready runs a tournament from setup to the final whistle. Each tournament
 
 **The top menu:**
 - **Dashboard** — the tournament at a glance: teams, games, staff and money.
-- **Setup** — **Tournament setup**, **Divisions & teams**, **Scheduler**, **Assigner**, **Checklist** and **Documents**.
+- **Setup** — **Divisions & teams**, **Scheduler**, **Assigner**, **Checklist**, **Documents** and, last, **Tournament setup**.
 - **People** — **Team registrations**, **Player waivers**, **Coach waivers**, **Travel & hotels**, **Staff roster**, **Staff applications**, **Media credentials**, **Photo bookings**, **Photos & video sent in** and **Vendor requests**.
 - **Live** — **Post scores**, **Assignments**, **Communications** and **Chirp insights**.
 - **Financials** — revenue, expenses and profit.
