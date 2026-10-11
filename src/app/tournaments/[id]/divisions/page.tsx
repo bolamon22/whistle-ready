@@ -2166,6 +2166,7 @@ if (loading) return (
                     )}
                     <BracketBuilder key={activeDiv} tournamentId={id} division={activeDiv} planFormat={fmt as 'single' | 'double' | '2gg' | undefined} planCount={cnt} planConsolation={cons} planLoserConsolation={owes2} initialTab={previewDiv === activeDiv ? 'preview' : 'seeding'} openPreviewAt={previewNonce}
                       noBracket={!!divisions.find(d => d.name === activeDiv)?.noBracket}
+                      poolGameCount={poolGames.length} poolPerTeam={poolG} guarantee={guar} divisionTeams={tc}
                       onNoBracketChange={on => setDivisions(d => d.map(x => x.name === activeDiv ? { ...x, noBracket: on } : x))} />
                   </>
                 })()

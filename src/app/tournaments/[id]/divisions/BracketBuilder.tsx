@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { TEMPLATE_CATALOG, BRACKET_TEMPLATES, type GameTemplate } from '@/lib/bracketTemplates'
+import { TEMPLATE_CATALOG, BRACKET_TEMPLATES, getTemplate, type GameTemplate } from '@/lib/bracketTemplates'
+import { buildTemplate, bracketStats, type BracketStats } from '@/lib/bracketGen'
 import { CheckCircle2 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -41,6 +42,35 @@ interface Props {
   /** "No bracket: pool play only" (lib/divisionPlan), and how the page hears it changed. */
   noBracket?: boolean
   onNoBracketChange?: (on: boolean) => void
+  /** For the game counts shown before a bracket is built: the division's pool
+   *  games, pool games per team, the event's game guarantee and team count. */
+  poolGameCount?: number
+  poolPerTeam?: number
+  guarantee?: number
+  divisionTeams?: number
+}
+
+// A flight's format. 'owes2' is single elimination plus a loser-fed 2nd game for
+// every team: the fewest games that still give everyone 2 bracket games.
+type SplitFmt = 'single' | 'double' | '2gg' | 'owes2'
+const SPLIT_FMT_LABEL: Record<SplitFmt, string> = { single: 'Single', double: 'Double', '2gg': '2GG', owes2: 'Min 2' }
+const SPLIT_FMT_TITLE: Record<SplitFmt, string> = {
+  single: 'Single elimination: losers are out after one game',
+  double: 'Double elimination (4 or 8 teams)',
+  '2gg': 'Both-ways consolation: winners and consolation brackets, every team plays 2+',
+  owes2: 'Single elimination plus a loser-fed 2nd game for every team: the fewest games that still give everyone 2',
+}
+
+/** "9 games · every team 2+" or "7 games · 4 teams get only 1" for a would-be bracket. */
+function StatsLine({ st, need, className = '' }: { st: BracketStats | null; need: number; className?: string }) {
+  if (!st) return null
+  return (
+    <p className={`text-xs font-medium ${st.short ? 'text-amber-300' : 'text-emerald-300'} ${className}`}>
+      {st.games} game{st.games === 1 ? '' : 's'}{st.ifNeeded ? ` (${st.ifNeeded} if needed)` : ''} · {st.short
+        ? `${st.short} team${st.short === 1 ? '' : 's'} could get only ${st.minPerTeam} bracket game${st.minPerTeam === 1 ? '' : 's'}`
+        : `every team plays ${need}+`}
+    </p>
+  )
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -77,7 +107,9 @@ const SECTION_LABELS: Record<string, string> = {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function BracketBuilder({ tournamentId, division, planFormat, planCount, planConsolation, planLoserConsolation, initialTab, openPreviewAt, noBracket, onNoBracketChange }: Props) {
+export default function BracketBuilder({ tournamentId, division, planFormat, planCount, planConsolation, planLoserConsolation, initialTab, openPreviewAt, noBracket, onNoBracketChange, poolGameCount, poolPerTeam, guarantee, divisionTeams }: Props) {
+  // Bracket games each team still needs once pool play is done (4 guaranteed - 2 pool = 2).
+  const need = Math.max(1, (guarantee ?? 4) - (poolPerTeam ?? 2))
   const [loading, setLoading] = useState(true)
   // Pool play only (Bo, Oct 11 2026: "an option not to schedule bracket games").
   const [poolOnly, setPoolOnly] = useState(!!noBracket)
@@ -105,8 +137,8 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   useEffect(() => { activeRef.current = activeFlight }, [activeFlight])
   const [showSplit, setShowSplit] = useState(false)
   const [cutoffInput, setCutoffInput] = useState('8')
-  const [fmtA, setFmtA] = useState<'single' | 'double' | '2gg'>('single')
-  const [fmtB, setFmtB] = useState<'single' | 'double' | '2gg'>('single')
+  const [fmtA, setFmtA] = useState<SplitFmt>('single')
+  const [fmtB, setFmtB] = useState<SplitFmt>('single')
   const [splitting, setSplitting] = useState(false)
   const [logos, setLogos] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -194,7 +226,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       const r = await fetch(apiBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format: selFormat, teamCount: Math.max(2, parseInt(selCountInput) || 2), consolationCount: Math.max(0, parseInt(consolationInput) || 0), loserConsolation, seeds: {} }),
+        body: JSON.stringify({ format: selFormat, teamCount: Math.max(2, parseInt(selCountInput) || 2), consolationCount: Math.max(0, parseInt(consolationInput) || 0), loserConsolation: loserConsolation && selFormat !== '2gg', seeds: {} }),
       })
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Failed to create') }
       await loadBracket()
@@ -372,8 +404,8 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ split: {
           cutoff: cut, total,
-          flightA: { format: fmtA, consolationCount: 0, loserConsolation: false },
-          flightB: { format: fmtB, consolationCount: 0, loserConsolation: false },
+          flightA: { format: fmtA === 'owes2' ? 'single' : fmtA, consolationCount: 0, loserConsolation: fmtA === 'owes2' },
+          flightB: { format: fmtB === 'owes2' ? 'single' : fmtB, consolationCount: 0, loserConsolation: fmtB === 'owes2' },
           seeds: seedMap,
         } }),
       })
@@ -388,7 +420,13 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   const totalTeams = standings.length || (bracket?.teamCount ?? 0)
   const cutPreview = Math.max(1, Math.min(parseInt(cutoffInput) || 1, Math.max(1, totalTeams - 1)))
   const flightBCount = Math.max(0, totalTeams - cutPreview)
-  const splitFormatPickers = ([['Flight A', fmtA, setFmtA], ['Flight B', fmtB, setFmtB]] as [string, string, (v: 'single' | 'double' | '2gg') => void][])
+  // What each flight would be, counted with the same generator the API builds from.
+  const planStats = (fmt: SplitFmt, n: number): BracketStats | null =>
+    n >= 2 ? bracketStats(buildTemplate(fmt === 'owes2' ? 'single' : fmt, n, 0, fmt === 'owes2'), n, need) : null
+  const doubleOk = (n: number) => !!getTemplate('double', n)
+  const stA = planStats(fmtA, cutPreview), stB = planStats(fmtB, flightBCount)
+  const bracketTotal = (stA?.games ?? 0) + (stB?.games ?? 0)
+  const splitFormatPickers = ([['Flight A', fmtA, setFmtA, cutPreview], ['Flight B', fmtB, setFmtB, flightBCount]] as [string, SplitFmt, (v: SplitFmt) => void, number][])
   const splitPanel = (
     <div className="mb-5 rounded-xl border border-teal-500/40 bg-slate-800/80 p-5">
       <p className="text-base font-semibold text-white mb-1">Split into flights</p>
@@ -409,30 +447,46 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
             <p className="text-xs font-semibold text-teal-300 uppercase tracking-wider">Flight A</p>
             <p className="text-sm text-white mt-1">{cutPreview} {cutPreview === 1 ? 'team' : 'teams'}</p>
             <p className="text-xs text-slate-400 mt-0.5">seeds 1–{cutPreview}</p>
+            <StatsLine st={stA} need={need} className="mt-1.5" />
           </div>
           <div className="rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2.5">
             <p className="text-xs font-semibold text-teal-300 uppercase tracking-wider">Flight B</p>
             <p className="text-sm text-white mt-1">{flightBCount} {flightBCount === 1 ? 'team' : 'teams'}</p>
             <p className="text-xs text-slate-400 mt-0.5">{flightBCount > 0 ? `seeds ${cutPreview + 1}–${totalTeams}` : '—'}</p>
+            <StatsLine st={stB} need={need} className="mt-1.5" />
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-4 mb-4">
-        {splitFormatPickers.map(([lbl, val, set]) => (
+        {splitFormatPickers.map(([lbl, val, set, n]) => (
           <div key={lbl}>
             <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">{lbl} format</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['single', 'double', '2gg'] as const).map(ff => (
-                <button key={ff} onClick={() => set(ff)}
-                  className={`py-2 rounded-lg text-xs font-medium border transition-colors ${val === ff ? 'bg-teal-600 border-teal-500 text-white' : 'bg-slate-900 border-slate-600 text-slate-300 hover:text-white hover:border-slate-500'}`}>
-                  {ff === 'single' ? 'Single' : ff === 'double' ? 'Double' : '2GG'}
-                </button>
-              ))}
+            <div className="grid grid-cols-4 gap-1.5">
+              {(['single', 'owes2', '2gg', 'double'] as const).map(ff => {
+                const off = ff === 'double' && !doubleOk(n)
+                const st = off ? null : planStats(ff, n)
+                return (
+                  <button key={ff} onClick={() => set(ff)} disabled={off}
+                    title={off ? 'Double elimination is only built for 4 or 8 teams' : `${SPLIT_FMT_TITLE[ff]}${st ? ` · ${st.games} games` : ''}`}
+                    className={`py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${val === ff ? 'bg-teal-600 border-teal-500 text-white' : 'bg-slate-900 border-slate-600 text-slate-300 hover:text-white hover:border-slate-500'}`}>
+                    <span className="block">{SPLIT_FMT_LABEL[ff]}</span>
+                    <span className={`block text-[10px] leading-tight mt-0.5 ${val === ff ? 'text-teal-100' : st?.short ? 'text-amber-400/90' : 'text-slate-400'}`}>{st ? `${st.games} gm${st.short ? ' · short' : ''}` : '—'}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
         ))}
       </div>
+
+      {totalTeams > 0 && (
+        <div className="mb-3 rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2 text-sm text-slate-300 flex flex-wrap items-baseline gap-x-2">
+          <span>Bracket <b className="text-white">{bracketTotal}</b></span>
+          {poolGameCount != null && <><span className="text-slate-500">+</span><span>Pool <b className="text-white">{poolGameCount}</b></span>
+            <span className="text-slate-500">=</span><span className="font-semibold text-teal-300">{bracketTotal + poolGameCount} games in the division</span></>}
+        </div>
+      )}
 
       <button onClick={handleSplit} disabled={splitting}
         className="w-full py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
@@ -493,7 +547,13 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
 
   if (!bracket) {
     const selCount = Math.max(2, parseInt(selCountInput) || 2)
-    const entry = TEMPLATE_CATALOG.find(t => t.key === `${selFormat}-${selCount}`)
+    const consN = Math.max(0, parseInt(consolationInput) || 0)
+    const owes = loserConsolation && selFormat !== '2gg'
+    // A fixed template's blurb ("7 games · 1 champion") is wrong once loser-fed games are added.
+    const entry = owes ? undefined : TEMPLATE_CATALOG.find(t => t.key === `${selFormat}-${selCount}`)
+    // Every team in the division counts: teams past the bracket's seeds play only
+    // the consolation slots (or nothing).
+    const singleStats = bracketStats(buildTemplate(selFormat, selCount, owes ? 0 : consN, owes), Math.max(selCount, divisionTeams ?? selCount), need)
 
     return (
       <div className="py-6 px-2 max-w-lg">
@@ -595,10 +655,14 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
                 {FORMAT_LABELS[selFormat]} · {selCount} team{selCount !== 1 ? 's' : ''}
               </div>
               <div className="text-slate-400 mt-0.5">
-                {selFormat === '2gg' ? 'Every team plays 2 bracket games · losers get loser-fed consolation games · ' : `${selCount - 1} game${selCount - 2 !== 0 ? 's' : ''} · `}bracket generated automatically
+                {selFormat === '2gg' ? 'Losers get loser-fed consolation games · ' : owes ? 'First-round losers get a loser-fed 2nd game · ' : ''}bracket generated automatically
                 {parseInt(consolationInput) > 0 && ` · ${consolationInput} consolation slot${parseInt(consolationInput) > 1 ? 's' : ''}`}
               </div>
             </>
+          )}
+          <StatsLine st={singleStats} need={need} className="mt-2" />
+          {poolGameCount != null && (
+            <p className="text-xs text-slate-400 mt-1">Bracket {singleStats.games} + pool {poolGameCount} = <span className="font-semibold text-teal-300">{singleStats.games + poolGameCount} games in the division</span></p>
           )}
         </div>
 
