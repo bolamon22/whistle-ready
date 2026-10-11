@@ -34,7 +34,8 @@ export const TOURNAMENT_PAGES: { label: string; path: string; public?: boolean }
   { label: 'Setup → Divisions & teams', path: '/divisions' },
   { label: 'Setup → Scheduler', path: '/scheduler' },
   { label: 'Setup → Assigner', path: '' },
-  { label: 'Setup → Checklist', path: '/checklist' },
+  // Directors and admins have no Checklist in Setup: theirs is under the task list on Tasks.
+  { label: 'Setup → Checklist (staff; directors: Tasks tab, under the task list)', path: '/checklist' },
   { label: 'Setup → Documents', path: '/documents' },
   { label: 'People → Team registrations', path: '/registrations' },
   { label: 'People → Player waivers', path: '/player-waivers' },

@@ -29,7 +29,11 @@ interface TournamentMeta {
 // section name prints the heading above itself, so grouping is just ordering —
 // no nested menu, no second thing to tap. People has eleven pages heading for
 // it; a flat list of eleven is a wall, and on a phone it is a wall you scroll.
-type NavItem = { href: string; label: string; sect?: string }
+type NavItem = {
+  href: string; label: string; sect?: string
+  /** Left out for roles that can open this page, where the same thing already is. */
+  unlessCan?: string
+}
 /** wide: a tab only on wider screens; the phone tab bar has room for six. */
 type NavGroup = { label: string; href?: string; items?: NavItem[]; wide?: boolean }
 
@@ -86,7 +90,10 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
       { href: `${base}/divisions`,  label: 'Divisions & teams' },
       { href: `${base}/scheduler`,  label: 'Scheduler' },
       { href: `${base}`,            label: 'Assigner' },
-      { href: `${base}/checklist`,  label: 'Checklist' },
+      // The setup checklist is also at the bottom of the Tasks tab (Bo, Oct 11 2026:
+      // "should we move checklist to the task tab?"). Staff can't open Tasks, so
+      // only they still get it here; directors and admins use Tasks.
+      { href: `${base}/checklist`,  label: 'Checklist', unlessCan: `${base}/tasks` },
       { href: `${base}/documents`,  label: 'Documents' },
       { href: `${base}/builder`,    label: 'Tournament setup' },
     ]},
@@ -129,7 +136,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   // the Assigner for an assigner (who has no tournament dashboard).
   const home = [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/assignments`].find(canOpen) ?? `${base}/dashboard`
   const groups: NavGroup[] = allGroups
-    .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href)) } : g)
+    .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href) && !(i.unlessCan && status === 'authenticated' && canOpen(i.unlessCan))) } : g)
     .filter(g => g.href ? canOpen(g.href) : (g.items?.length ?? 0) > 0)
   const phoneGroups = groups.filter(g => !g.wide)
 

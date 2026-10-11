@@ -7,7 +7,7 @@ keywords: checklist setup checklist to do list tasks field setup check off add i
 ---
 The setup checklist is one shared list for the whole event. Anyone on staff can check items off and add their own, and everyone sees the same list.
 
-**Where:** **Setup → Checklist**, or **Setup checklist** on a field ops worker's home page. Directors also see it under the task list on the tournament's **Tasks** tab, where it counts as one task due the day before the first game day.
+**Where:** directors and admins: the tournament's **Tasks** tab, under the task list, where it also counts as one task due the day before the first game day. Staff: **Setup → Checklist**, or **Setup checklist** on a field ops worker's home page.
 
 **To use it:**
 1. Tap an item to check it off. It shows who checked it and when. Tap again to uncheck it.
