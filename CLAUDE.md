@@ -174,6 +174,13 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Pool play only / no bracket (Oct 11).** A division's **Bracket** tab opens with a **No bracket: pool
+  play only** checkbox (`BracketBuilder.tsx`, `PUT /api/tournaments/[id]/divisions/[division]/no-bracket`).
+  Stored per event in AppSetting `noBracket:{tournamentId}` as `{ [division]: { at, by } }`, matched by
+  `nameKey` (`lib/divisionPlan.ts`). On: the bracket POST refuses with 409 `noBracket: true` (any page,
+  including split into flights), Generate all skips the division and counts it in its summary, the
+  divisions GET returns `noBracket`, the rail shows **Pool play only**. Turning it on is refused (409)
+  while the division has a Bracket row or any B# game. Division rename carries it; delete clears it.
 - **Parent accounts from the waiver (Oct 9).** The player waiver's thank-you screen asks **Save your
   info for next time?** (`components/ParentAccountOffer.tsx`). The submit response carries `account`
   from `accountOffer()` in `lib/parentWaivers.ts`: a 3-hour HMAC token (NEXTAUTH_SECRET, prefix
