@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { buildTemplate, type Gen } from '@/lib/bracketGen'
+import { bracketSrcLabel } from '@/lib/bracketPlaceholders'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { isNoBracket } from '@/lib/divisionPlan'
 import { getPublicVisibility } from '@/lib/publicView'
@@ -10,12 +11,9 @@ function genId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 }
 
-function fmtSrc(src: string): string {
-  if (src.startsWith('seed:')) return 'Seed ' + src.slice(5)
-  if (src.startsWith('winner:')) return 'W-B' + src.slice(7)
-  if (src.startsWith('loser:')) return 'L-B' + src.slice(6)
-  return src
-}
+// Placeholder teams on the schedulable rows, in the schedule's B numbers (Flight B's
+// "winner:3" is W-B<3 + offset>, not Flight A's W-B3). See lib/bracketPlaceholders.
+const fmtSrc = (src: string, offset = 0) => bracketSrcLabel(src, offset)
 
 // Persist one bracket (Bracket row + BracketGame rows + schedulable Game rows).
 // numberOffset shifts the schedulable "B#" so flights never collide (Flight A
@@ -52,7 +50,7 @@ async function createBracketRecords(opts: {
           tournamentId, division,
           gameNumber: 'B' + (numberOffset + g.gameNumber),
           isChampionship: g.section === 'championship',
-          team1: fmtSrc(g.t1), team2: fmtSrc(g.t2),
+          team1: fmtSrc(g.t1, numberOffset), team2: fmtSrc(g.t2, numberOffset),
           date: '', startTime: '', location: '', refCount: refsFor(division, g.section === 'championship'),
         },
       })
@@ -224,7 +222,7 @@ export async function PATCH(
           tournamentId: params.id, division,
           gameNumber: 'B' + (offset + gameNumber),
           isChampionship: section === 'championship',
-          team1: fmtSrc(t1Source), team2: fmtSrc(t2Source),
+          team1: fmtSrc(t1Source, offset), team2: fmtSrc(t2Source, offset),
           date: '', startTime: '', location: '', refCount: (await refsLookup(params.id))(division, section === 'championship'),
         },
       })
@@ -242,8 +240,8 @@ export async function PATCH(
       if (t2Source !== undefined) bdata.team2Source = t2Source
       if (Object.keys(bdata).length) await prisma.bracketGame.updateMany({ where: { bracketId: bracket.id, gameNumber }, data: bdata })
       const gdata: any = {}
-      if (t1Source !== undefined) gdata.team1 = fmtSrc(t1Source)
-      if (t2Source !== undefined) gdata.team2 = fmtSrc(t2Source)
+      if (t1Source !== undefined) gdata.team1 = fmtSrc(t1Source, offset)
+      if (t2Source !== undefined) gdata.team2 = fmtSrc(t2Source, offset)
       if (Object.keys(gdata).length) await prisma.game.updateMany({ where: { tournamentId: params.id, division, gameNumber: 'B' + (offset + gameNumber) }, data: gdata })
       const updated = await prisma.bracket.findFirst({ where: { id: bracket.id }, include: { games: { orderBy: { gameNumber: 'asc' } } } })
       return NextResponse.json({ ...updated, seeds: JSON.parse(updated!.seeds || '{}') })

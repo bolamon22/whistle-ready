@@ -4,6 +4,7 @@ import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { getIfNeeded, withIfNeeded, bracketMeta } from '@/lib/ifNeeded'
 import { refsLookup } from '@/lib/refRules'
+import { syncBracketPlaceholders } from '@/lib/bracketPlaceholders'
 
 // Two audiences, two URLs:
 //   ?view=public  -> what the public schedule may show. Never includes staff
@@ -20,6 +21,8 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
   const staff = publicView ? false : await isStaffRequest()
   const orderBy = [{ date:'asc' as const },{ startTime:'asc' as const },{ location:'asc' as const }]
   if (staff) {
+    // Heal bracket placeholders written with a flight's own numbering (lib/bracketPlaceholders).
+    await syncBracketPlaceholders(params.id)
     const games = await prisma.game.findMany({
       where: { tournamentId: params.id }, orderBy,
       include: { assignments:{ include:{ worker:true } } },
