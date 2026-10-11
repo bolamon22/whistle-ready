@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop, Ruler } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
+import { BracketView, type BkBracket } from '@/components/BracketDiagram'
 
 // Two alternative views of the day's schedule, switchable with the legacy grid:
 //   Timeline  - fields down, time across. Every field fits without sideways scroll;
@@ -94,6 +95,8 @@ export interface ViewsProps {
   onToggleIfNeeded?: (gameId: string) => void
   /** Setup > Venues division limits: false when this field is set for other divisions only (e.g. too small). */
   fieldAllows?: (fullName: string, division: string) => boolean
+  /** For the bracket pop-over, which reads each division's bracket from the bracket API. */
+  tournamentId?: string
 }
 
 type IssueKind = 'conflict' | 'closed' | 'field' | 'b2b' | 'bracket' | 'gap'
@@ -1035,7 +1038,7 @@ export function TimelineView(p: ViewsProps) {
         {/* Bracket pop-over: floats above the placing bar (or the bottom of the board
             when nothing is picked), so the board keeps its full width. */}
         {bracketOpen && (
-          <div className={`absolute left-1/2 -translate-x-1/2 z-50 w-[760px] max-w-[calc(100%-24px)] flex flex-col rounded-2xl bg-white border border-slate-200 shadow-2xl`} style={{ bottom: sel ? 84 : 12, maxHeight: `calc(100% - ${sel ? 96 : 24}px)` }}>
+          <div className={`absolute left-1/2 -translate-x-1/2 z-50 w-[1100px] max-w-[calc(100%-24px)] flex flex-col rounded-2xl bg-white border border-slate-200 shadow-2xl`} style={{ bottom: sel ? 84 : 12, maxHeight: `calc(100% - ${sel ? 96 : 24}px)` }}>
             <BracketPanel p={p} sel={sel} onClose={() => setBracketOpen(false)}
               onPick={id => { setSelId(id); setHover(null); requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-tl-game="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })) }} />
           </div>
@@ -1384,6 +1387,18 @@ function BracketPanel({ p, sel, onPick, onClose }: { p: ViewsProps; sel: SGame |
   const [pickedFlight, setPickedFlight] = useState<string | null>(null)
   const flight = flights.length > 1 ? ((sel && sel.division === div && sel.bracketFlight) || (pickedFlight && flights.includes(pickedFlight) ? pickedFlight : flights[0])) : ''
   const games = useMemo(() => (flight ? divGames.filter(g => g.bracketFlight === flight) : divGames), [divGames, flight])
+  // The bracket itself (rounds, where each slot comes from, seeds), so the pop-over
+  // can draw it the way the public event page does. Read fresh each time it opens.
+  const [brackets, setBrackets] = useState<Record<string, BkBracket[] | 'none'>>({})
+  useEffect(() => {
+    if (!p.tournamentId || !div || brackets[div]) return
+    fetch(`/api/tournaments/${p.tournamentId}/divisions/${encodeURIComponent(div)}/bracket`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(b => { const list: BkBracket[] = Array.isArray(b) ? b : b?.id ? [b] : []; setBrackets(m => ({ ...m, [div]: list.length ? list : 'none' })) })
+      .catch(() => setBrackets(m => ({ ...m, [div]: 'none' })))
+  }, [p.tournamentId, div, brackets])
+  const divBrackets = brackets[div]
+  const shownBrackets = Array.isArray(divBrackets) ? (flight ? divBrackets.filter(b => (b.flight || 'A') === flight) : divBrackets) : null
   const byNum = useMemo(() => new Map(games.map(g => [g.gameNumber.toUpperCase(), g])), [games])
   const refOf = (t: string) => { const m = (t || '').match(/^([WL])-(B\d+)$/i); return m ? { kind: m[1].toUpperCase(), num: m[2].toUpperCase() } : null }
   const depth = useMemo(() => {
@@ -1452,7 +1467,16 @@ function BracketPanel({ p, sel, onPick, onClose }: { p: ViewsProps; sel: SGame |
         <span className="text-[10px] text-slate-500 whitespace-nowrap">{placedN}/{games.length} placed</span>
         <button onClick={onClose} aria-label="Close the bracket" title="Close (Esc)" className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={14} /></button>
       </div>
-      {games.length === 0 ? <p className="text-xs text-slate-400 text-center py-8">No bracket games yet.</p> : (
+      {games.length > 0 && shownBrackets && shownBrackets.length > 0 ? (
+        <div className="flex-1 overflow-auto p-3">
+          <div style={{ zoom: 0.85 }}>
+            <BracketView bracketList={shownBrackets} consOpen
+              scheduledGames={games.map(g => ({ gameNumber: g.gameNumber, date: g.date, startTime: g.startTime, location: g.location, team1: g.team1, team2: g.team2, ifNeeded: g.ifNeeded }))}
+              pick={{ selected: sel && sel.division === div ? sel.gameNumber : undefined, near: new Set(games.filter(g => feeds.has(g.id) || fedBy.has(g.id)).map(g => g.gameNumber)), onPick: num => { const g = games.find(x => x.gameNumber === num); if (g) onPick(g.id) } }} />
+          </div>
+          <p className="text-[10px] text-slate-400 leading-snug mt-2">Click a game to pick it up, then click a slot to place it. Ringed: the game you picked. Tinted: the games that feed it and the one it feeds.</p>
+        </div>
+      ) : games.length === 0 ? <p className="text-xs text-slate-400 text-center py-8">No bracket games yet.</p> : (
         <div className="flex-1 overflow-auto p-3 space-y-3">
           <div className="flex gap-2 overflow-x-auto pb-1">
             {rounds.map((r, i) => (

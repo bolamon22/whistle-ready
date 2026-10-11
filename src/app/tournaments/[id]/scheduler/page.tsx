@@ -2366,7 +2366,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             onLotOnTop: setBoardLotTop,
             onSwap: swapGames,
             onToggleIfNeeded: toggleIfNeeded,
-            dates, onSetSpot: setSpot, baseSlots: allSlots,
+            dates, onSetSpot: setSpot, baseSlots: allSlots, tournamentId: params.id,
           }
           return schedView === 'teams' ? <TeamLanesView {...viewProps} /> : <TimelineView {...viewProps} orientation={schedView === 'board' ? 'fields-across' : 'fields-down'} />
         })()
