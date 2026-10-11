@@ -82,6 +82,13 @@ function generateSEGames(teamCount: number, consolationCount: number): Gen[] {
 }
 
 function generateOwes2(teamCount: number): Gen[] {
+  // Three teams can't pair losers without a rematch or leaving the 1 seed on
+  // one game, so the 1 seed plays the loser of 2 v 3 and then the final.
+  if (teamCount === 3) return [
+    { gameNumber: 1, round: 1, section: 'winners', t1: 'seed:2', t2: 'seed:3', label: '' },
+    { gameNumber: 2, round: 1, section: 'consolation', t1: 'seed:1', t2: 'loser:1', label: 'Consolation' },
+    { gameNumber: 3, round: 2, section: 'championship', t1: 'seed:1', t2: 'winner:1', label: 'Championship' },
+  ]
   const games = generateSEGames(teamCount, 0)
   let gn = games.length + 1
   const isSeed = (x: string) => x.startsWith('seed:')
@@ -97,8 +104,6 @@ function generateOwes2(teamCount: number): Gen[] {
   const candidates = games.filter(g => isSeed(g.t1) || isSeed(g.t2)).sort((a, b) => strength(a) - strength(b))
   const extra: Gen[] = []
   const used = new Set<number>()
-  let cn = 1
-  const consTotal = Math.floor(candidates.length / 2)
   for (let i = 0; i < candidates.length; i++) {
     const a = candidates[i]
     if (used.has(a.gameNumber)) continue
@@ -107,16 +112,23 @@ function generateOwes2(teamCount: number): Gen[] {
     if (!partner) { for (let j = i + 1; j < candidates.length; j++) { const b = candidates[j]; if (!used.has(b.gameNumber)) { partner = b; break } } }
     if (partner) {
       used.add(a.gameNumber); used.add(partner.gameNumber)
-      const guaranteed = both(a) && both(partner)
-      extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${a.gameNumber}`, t2: `loser:${partner.gameNumber}`, label: guaranteed ? (consTotal > 1 ? `Consolation ${cn++}` : 'Consolation') : 'If needed' })
+      // A first-round loser always has just one game, so any game with one in it
+      // is always played: it is a consolation game, not "If needed". (It was
+      // labeled If needed unless BOTH sides were first-round losers, which told
+      // the Scheduler a game a team is owed might be dropped.)
+      const guaranteed = both(a) || both(partner)
+      extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${a.gameNumber}`, t2: `loser:${partner.gameNumber}`, label: guaranteed ? 'Consolation' : 'If needed' })
     }
   }
   // Odd leftover: a contingency game against a non-conflicting opponent.
   const leftover = candidates.find(g => !used.has(g.gameNumber))
   if (leftover) {
     const opp = candidates.find(g => g.gameNumber !== leftover.gameNumber && !conflict(leftover, g)) || candidates.find(g => g.gameNumber !== leftover.gameNumber)
-    if (opp) extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${leftover.gameNumber}`, t2: `loser:${opp.gameNumber}`, label: 'If needed' })
+    if (opp) extra.push({ gameNumber: gn++, round: 1, section: 'consolation', t1: `loser:${leftover.gameNumber}`, t2: `loser:${opp.gameNumber}`, label: both(leftover) ? 'Consolation' : 'If needed' })
   }
+  const consN = extra.filter(g => g.label === 'Consolation').length
+  let cn = 1
+  if (consN > 1) for (const g of extra) if (g.label === 'Consolation') g.label = `Consolation ${cn++}`
   return [...games, ...extra]
 }
 
@@ -124,6 +136,13 @@ function generateOwes2(teamCount: number): Gen[] {
 function buildTemplate(format: string, teamCount: number, consolationCount: number, loserConsolation: boolean): Gen[] {
   if (loserConsolation) return generateOwes2(teamCount)
   const rawTemplate = getTemplate(format, teamCount)
+  // 2GG only has fixed templates for 4, 8 and 16 teams. Any other count fell
+  // through to plain single elimination with no consolation games, so a 7-team
+  // flight picked as 2GG left its first-round losers on one bracket game (Bo,
+  // Oct 11 2026: "we need to guarantee 4 total games ... 2 bracket, 2 pool").
+  // Build it with loser-fed consolation games instead, which gives every team
+  // at least 2 bracket games for any count.
+  if (!rawTemplate && format === '2gg') return generateOwes2(teamCount)
   if (rawTemplate) {
     const base: Gen[] = rawTemplate.map((g) => ({
       gameNumber: g.gameNumber, round: g.round,

@@ -595,7 +595,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
                 {FORMAT_LABELS[selFormat]} · {selCount} team{selCount !== 1 ? 's' : ''}
               </div>
               <div className="text-slate-400 mt-0.5">
-                {selCount - 1} game{selCount - 2 !== 0 ? 's' : ''} · bracket generated automatically
+                {selFormat === '2gg' ? 'Every team plays 2 bracket games · losers get loser-fed consolation games · ' : `${selCount - 1} game${selCount - 2 !== 0 ? 's' : ''} · `}bracket generated automatically
                 {parseInt(consolationInput) > 0 && ` · ${consolationInput} consolation slot${parseInt(consolationInput) > 1 ? 's' : ''}`}
               </div>
             </>
