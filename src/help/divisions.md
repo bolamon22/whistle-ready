@@ -3,7 +3,7 @@ title: Manage divisions, teams and pools
 category: Setup
 order: 40
 routes: /tournaments/*/divisions
-keywords: divisions teams pools add team edit team delete team move team swap teams assign pools auto-assign pool A pool B unassigned rename division division color waitlist unconfirmed
+keywords: divisions teams pools add team edit team delete team move team swap teams assign pools auto-assign pool A pool B unassigned rename division division color waitlist unconfirmed division note notes note for all divisions public note
 ---
 **Divisions & teams** is where you see each division's teams, sort them into pools, and build games and brackets.
 
@@ -26,8 +26,11 @@ An amber "unassigned" count shows how many teams still need a pool.
 
 **To move a team to another division:** click **Move** on its row, pick the **Destination Division**, and click **Move Team**.
 
+**To add a note to the public schedule:** above the tabs, under **Notes on the public schedule**, click **Note for this division** or **Note for all divisions**, type it and click **Save**. On the public schedule page, each division shows its own note, then the note for all divisions, at the top. They show once **Teams & pools** is public. Click the pencil to change a note; save it empty to remove it.
+
 **Common problems:**
 - **Waiting list** teams are not in the draw. Clear the waitlist flag in **People → Team registrations** to place them.
 - **Unconfirmed** teams were added without full details. Click **Edit**, fill them in and save to confirm.
 - **Delete** on a team row also removes it from registrations (you are asked to confirm).
 - If no divisions show, set them up in **Setup → Tournament setup → Divisions** (**Set up in Builder**).
+- The **Divisions note** in **Setup → Tournament setup** is a different note: it shows under the division list on the event page, not on the schedule.

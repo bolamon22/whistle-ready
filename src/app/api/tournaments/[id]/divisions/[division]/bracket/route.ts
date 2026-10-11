@@ -201,10 +201,19 @@ export async function GET(
 ) {
   const division = decodeURIComponent(params.division)
   try {
-    // Brackets belong to the schedule switch: while it's hidden the public gets none.
+    // The public gets brackets with the schedule. Before that, once Teams & pools is
+    // public, it gets the format only (Bo, Oct 11 2026: "show the bracket preview, even
+    // though they're not populated with the teams ... even when the schedule is not
+    // released. This would help people understand the format"): each game and where
+    // its teams come from (Seed 3, W-B1). Never the seeds' team names, which would be
+    // matchups, or the games' teams, results, times and fields.
+    let formatOnly = false
     if (!(await isStaffRequest())) {
       const vis = await getPublicVisibility(params.id)
-      if (vis.schedule !== 'live') return NextResponse.json([])
+      if (vis.schedule !== 'live') {
+        if (vis.pools !== 'live') return NextResponse.json([])
+        formatOnly = true
+      }
     }
     const brackets = await prisma.bracket.findMany({
       where: { tournamentId: params.id, division },
@@ -212,6 +221,16 @@ export async function GET(
       orderBy: { flight: 'asc' },
     })
     // Always return an array of flights (empty when none).
+    if (formatOnly) {
+      return NextResponse.json(brackets.map((b) => ({
+        id: b.id, division: b.division, format: b.format, teamCount: b.teamCount, flight: b.flight,
+        numberOffset: b.numberOffset, seeds: {}, preview: true,
+        games: b.games.map((g) => ({
+          id: g.id, gameNumber: g.gameNumber, round: g.round, section: g.section,
+          team1Source: g.team1Source, team2Source: g.team2Source, label: g.label,
+        })),
+      })))
+    }
     return NextResponse.json(
       brackets.map((b) => ({ ...b, seeds: JSON.parse(b.seeds || '{}') }))
     )

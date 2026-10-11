@@ -14,8 +14,9 @@ Each tournament has two public pages for teams and families. Neither needs a log
 **Where:** click **Public** in the tournament header (the globe icon on a phone) to open the public schedule page in a new tab.
 
 **What the public schedule page shows:**
-- **Teams & pools** (pool lists and standings) and **Schedule & brackets** can each be turned on or off. Use the **Public:** pill on the Scheduler, or the **Public page** card on **Divisions & teams**.
-- Until **Schedule & brackets** is on, no games show anywhere: not the times, and not who plays whom. With only **Teams & pools** on, the page lists each pool's teams.
+- **Teams & pools** (pool lists, bracket formats and division notes) and **Schedule & brackets** can each be turned on or off. Use the **Public:** pill on the Scheduler, or the **Public page** card on **Divisions & teams**.
+- Until **Schedule & brackets** is on, no games show anywhere: not the times, and not who plays whom. With only **Teams & pools** on, the page lists each pool's teams and each division's **Bracket format**: the bracket with **Seed 1**, **W-B1** and so on in place of teams, and no times or fields.
+- Notes written on **Divisions & teams** show at the top of each division: the division's own note, then the note for all divisions.
 - Until **Teams & pools** is on, nobody outside your staff can see which teams registered or how many each division has, and the event page leaves out its team and club totals.
 - Club directors' portals follow the same switches, including when you open a club's portal yourself.
 - The schedule shows times and fields as of your last **Publish** on the Scheduler. Moving games stays private until you publish again.
@@ -25,3 +26,4 @@ Each tournament has two public pages for teams and families. Neither needs a log
 - "The public page still shows the old times" — click **Publish** on the Scheduler.
 - Followed teams show **Schedule coming soon** until **Schedule & brackets** is made public.
 - Bracket games appear once pool play concludes.
+- A division set to **No bracket: pool play only** says so instead of showing a bracket.

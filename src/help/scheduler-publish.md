@@ -24,7 +24,7 @@ Followers get one message per team with its current schedule, never one per game
 
 **To choose what the public sees:**
 1. Click the **Public:** pill (**Public: schedule**, **Public: pools only** or **Public: hidden**).
-2. Switch **Teams & pools** (pool lists and standings) and **Schedule & brackets** on or off.
+2. Switch **Teams & pools** (pool lists, bracket formats and division notes) and **Schedule & brackets** on or off.
 
 The same switches are on the **Public page** card on **Divisions & teams**.
 

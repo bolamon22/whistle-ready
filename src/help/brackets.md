@@ -9,6 +9,8 @@ Each division can have a playoff bracket. Pool standings feed the seeds, and bra
 
 **Where:** **Setup → Divisions & teams**, pick a division, open the **Bracket** tab.
 
+**What the public sees:** once **Teams & pools** is public, the public schedule page shows each division's bracket under its pools as **Bracket format**, with **Seed 1**, **W-B1** and so on in place of teams. Teams, times and fields show when **Schedule & brackets** is public.
+
 **No bracket (pool play only):** if a division has no playoffs or championship game, tick **No bracket: pool play only** at the top of its **Bracket** tab. No bracket games are made or scheduled for it: **Generate all divisions** and **Generate brackets** skip it, and no bracket can be built for it until you click **This division has a bracket after all**. The division shows **Pool play only** in the list on the left.
 
 **To create a bracket:**

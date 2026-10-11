@@ -6,7 +6,7 @@ import LiveTicker from '@/components/LiveTicker'
 import FollowButton from '@/components/FollowButton'
 import FollowAlertsSheet from '@/components/FollowAlertsSheet'
 import { deviceId as getDeviceId } from '@/lib/pushClient'
-import { teamRefKey } from '@/lib/names'
+import { nameKey, teamRefKey } from '@/lib/names'
 
 const LogosContext = createContext<Record<string, string>>({})
 // Follower counts per team, from /follows. Bo wants Follow to read like Instagram --
@@ -23,7 +23,7 @@ function FollowerCount({division,team,className=''}:{division:string;team:string
   return <span className={`inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 ${className}`} title={`${n} follower${n===1?'':'s'}`}><Users size={10} aria-hidden/>{n} follower{n===1?'':'s'}</span>
 }
 import Link from 'next/link'
-import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Bell, X, Megaphone, Search } from 'lucide-react'
+import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Bell, X, Megaphone, Search, Info } from 'lucide-react'
 
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
@@ -227,13 +227,16 @@ function bkLeft(round:number){return(round-1)*(BK_W+BK_CONN)}
 function bkRoundLabel(r:number,max:number){if(r===max)return'Championship';if(r===max-1&&max>=3)return'Semifinals';if(r===max-2&&max>=4)return'Quarterfinals';return`Round ${r}`}
 function fmt12bk(t:string){if(!t)return'';const[h,m]=t.split(':').map(Number);return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`}
 function fmtShortDate(d:string){if(!d)return'';const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
-const isPlaceholderTeam=(n:string)=>/^(seed\s|w-b\d|l-b\d|bracket|winner|loser|tbd$)/i.test((n||'').trim())
+const isPlaceholderTeam=(n:string)=>/^(seed\s|w-b\d|l-b\d|bracket\b|winner\b|loser\b|tbd$)/i.test((n||'').trim())
+// Bracket format before the schedule is out (`preview`): each game is captioned with
+// its number, the name the W-B#/L-B# slots refer to, instead of "Not scheduled".
+const bkPreviewCap=(num:number,label:string|null,isChamp:boolean)=>`B${num}${label?` · ${label}`:isChamp?' · Championship':''}`
 
 interface BkBracketGame{gameNumber:number;round:number;section:string;team1Source:string;team2Source:string;label:string|null}
 interface BkBracket{id:string;format:string;teamCount:number;flight?:string;numberOffset?:number;games:BkBracketGame[];seeds:Record<string,string>}
 
 // ── Both-ways consolation tournament (mirror) ──────────────────────────────
-function MirrorBracket({bracket,scheduledGames,showFlight}:{bracket:BkBracket;scheduledGames:Game[];showFlight:boolean}){
+function MirrorBracket({bracket,scheduledGames,showFlight,preview=false}:{bracket:BkBracket;scheduledGames:Game[];showFlight:boolean;preview?:boolean}){
   const logos=useContext(LogosContext)
   const [zoom,setZoom]=useState(1)
   const offset=bracket.numberOffset??0
@@ -321,7 +324,7 @@ function MirrorBracket({bracket,scheduledGames,showFlight}:{bracket:BkBracket;sc
             const isChamp=g.section==='championship'
             const hasScore=sg&&sg.score1!=null&&sg.score2!=null
             const hasSched=sg&&(sg.date||sg.startTime||sg.location)
-            const cap=(sg?.ifNeeded?'If needed · ':'')+(hasSched?`${fmtShortDate(sg!.date)} ${fmt12bk(sg!.startTime)} · ${(sg!.location||'').split(' - ').pop()||sg!.location}`:(g.label||(isChamp?'Championship':'Not scheduled')))
+            const cap=preview?bkPreviewCap(g.gameNumber+offset,g.label,isChamp):(sg?.ifNeeded?'If needed · ':'')+(hasSched?`${fmtShortDate(sg!.date)} ${fmt12bk(sg!.startTime)} · ${(sg!.location||'').split(' - ').pop()||sg!.location}`:(g.label||(isChamp?'Championship':'Not scheduled')))
             const w0=!!hasScore&&sg!.score1!>sg!.score2!, w1=!!hasScore&&sg!.score2!>sg!.score1!
             const ra={src:g.team1Source,team:resolveTeam(g.team1Source,sg?.team1),score:sg?.score1,win:w0}
             const rb={src:g.team2Source,team:resolveTeam(g.team2Source,sg?.team2),score:sg?.score2,win:w1}
@@ -366,7 +369,7 @@ function MirrorBracket({bracket,scheduledGames,showFlight}:{bracket:BkBracket;sc
   )
 }
 
-function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];scheduledGames:Game[]}){
+function BracketView({bracketList,scheduledGames,preview=false,poolOnly=false}:{bracketList:BkBracket[];scheduledGames:Game[];preview?:boolean;poolOnly?:boolean}){
   const [showCons,setShowCons]=useState(false)
   const logos=useContext(LogosContext)
 
@@ -383,14 +386,14 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
   if(bracketList.length===0)return(
     <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-gray-200">
       <div className="flex justify-center mb-2"><Trophy size={30} className="text-slate-300"/></div>
-      <p className="font-medium">Bracket games will appear here once pool play concludes.</p>
+      <p className="font-medium">{poolOnly?'Pool play only: this division has no bracket.':'Bracket games will appear here once pool play concludes.'}</p>
     </div>
   )
 
   return(
     <div className="space-y-6">
       {bracketList.map(bracket=>{
-        if(bracket.format==='2gg'&&bracket.games.some(g=>(g.label||'').toLowerCase().includes('consolation championship')))return <MirrorBracket key={bracket.id} bracket={bracket} scheduledGames={scheduledGames} showFlight={bracketList.length>1}/>
+        if(bracket.format==='2gg'&&bracket.games.some(g=>(g.label||'').toLowerCase().includes('consolation championship')))return <MirrorBracket key={bracket.id} bracket={bracket} scheduledGames={scheduledGames} showFlight={bracketList.length>1} preview={preview}/>
         const offset=bracket.numberOffset??0
         const schedByNum=new Map(scheduledGames.map(g=>[g.gameNumber,g]))
         const mainGames=bracket.games.filter(g=>g.section==='winners'||g.section==='championship')
@@ -486,27 +489,26 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
             {bracketList.length>1&&<p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Flight {bracket.flight||'A'}</p>}
 
             {/* Progress bar */}
-            <div className="flex items-center gap-2 mb-3">
+            {!preview&&<div className="flex items-center gap-2 mb-3">
               <div className="flex gap-1">
                 {Array.from({length:totalRounds},(_,i)=>(
                   <div key={i} className={`h-1.5 w-8 rounded-full ${i<roundsDone?'bg-blue-500':'bg-gray-200'}`}/>
                 ))}
               </div>
               <span className="text-xs text-gray-500">{roundsDone} of {totalRounds} {totalRounds===1?'round':'rounds'} complete</span>
-            </div>
+            </div>}
 
-            {/* Round labels */}
-            <div style={{position:'relative',height:18,width:canvasW,marginBottom:6}}>
-              {[...roundGroups.keys()].map(r=>(
-                <div key={r} style={{position:'absolute',left:bkLeft(r),width:BK_W,textAlign:'center'}}
-                  className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
-                  {bkRoundLabel(r,maxRound)}
-                </div>
-              ))}
-            </div>
-
-            {/* Bracket canvas */}
+            {/* Bracket canvas. The round labels scroll with it: outside the scroller
+                they ran past the page edge on a phone and the whole page slid sideways. */}
             <div style={{overflowX:'auto',paddingBottom:8}}>
+              <div style={{position:'relative',height:18,width:canvasW,marginBottom:6}}>
+                {[...roundGroups.keys()].map(r=>(
+                  <div key={r} style={{position:'absolute',left:bkLeft(r),width:BK_W,textAlign:'center'}}
+                    className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                    {bkRoundLabel(r,maxRound)}
+                  </div>
+                ))}
+              </div>
               <div style={{position:'relative',width:canvasW,height:canvasH}}>
                 <svg style={{position:'absolute',top:0,left:0,width:canvasW,height:canvasH,pointerEvents:'none'}} viewBox={`0 0 ${canvasW} ${canvasH}`}>
                   {connectors}
@@ -518,7 +520,7 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
                   const isChamp=bg.section==='championship'||(bg.label||'').toLowerCase().includes('championship')
                   const hasScore=sg&&sg.score1!=null&&sg.score2!=null
                   const hasSched=sg&&(sg.date||sg.startTime||sg.location)
-                  const cap=hasSched?`${fmtShortDate(sg!.date)} ${fmt12bk(sg!.startTime)} · ${(sg!.location||'').split(' - ').pop()||sg!.location}`:(isChamp?(bg.label||'Championship'):'Not scheduled')
+                  const cap=preview?bkPreviewCap(bg.gameNumber+offset,bg.label,isChamp):hasSched?`${fmtShortDate(sg!.date)} ${fmt12bk(sg!.startTime)} · ${(sg!.location||'').split(' - ').pop()||sg!.location}`:(isChamp?(bg.label||'Championship'):'Not scheduled')
                   const w0=!!hasScore&&sg!.score1!>sg!.score2!, w1=!!hasScore&&sg!.score2!>sg!.score1!
                   const r1={src:bg.team1Source,team:resolveTeam(bg.team1Source,sg?.team1),score:sg?.score1,win:w0}
                   const r2={src:bg.team2Source,team:resolveTeam(bg.team2Source,sg?.team2),score:sg?.score2,win:w1}
@@ -584,7 +586,7 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
                           </div>
                           <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-100 bg-gray-50">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasScore?'bg-green-500':'bg-gray-300'}`}/>
-                            <span className="text-[10px] text-gray-500 truncate">{sg&&(sg.date||sg.location)?`${fmtShortDate(sg.date)} · ${(sg.location||'').split(' - ').pop()||sg.location}`:bg.label||'Not scheduled'}</span>
+                            <span className="text-[10px] text-gray-500 truncate">{sg&&(sg.date||sg.location)?`${fmtShortDate(sg.date)} · ${(sg.location||'').split(' - ').pop()||sg.location}`:preview?bkPreviewCap(bg.gameNumber+offset,bg.label,false):bg.label||'Not scheduled'}</span>
                           </div>
                         </div>
                       )
@@ -602,7 +604,7 @@ function BracketView({bracketList,scheduledGames}:{bracketList:BkBracket[];sched
 
 type DivTab = 'standings'|'schedule'|'bracket'
 
-function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,scheduleLive=true,rosters=[]}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean;rosters?:PoolRoster[]}) {
+function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,scheduleLive=true,rosters=[],notes,poolOnly=false}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean}) {
   // Every team on this view plays in `division`; follows are per (division, team).
   const followed=(team:string)=>isFollowed(division,team)
   const onFollow=(team:string)=>toggleFollow(division,team)
@@ -651,6 +653,17 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
 
   return (
     <div>
+      {/* Notes staff wrote on the Divisions page (lib/divisionNotes): this division's,
+          then the one for every division. */}
+      {notes&&(notes.division||notes.all)&&(
+        <div className="mb-4 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm flex items-start gap-2.5" data-testid="division-notes">
+          <Info size={16} className="text-teal-600 mt-0.5 flex-shrink-0"/>
+          <div className="min-w-0 space-y-1.5 text-sm text-slate-700 leading-relaxed">
+            {notes.division&&<p className="whitespace-pre-line break-words">{notes.division}</p>}
+            {notes.all&&<p className={`whitespace-pre-line break-words ${notes.division?'text-slate-500':''}`}>{notes.all}</p>}
+          </div>
+        </div>
+      )}
       {scheduleLive && <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-xl overflow-hidden shadow-sm">
         {tabs.map(t=>(
           <button key={t} onClick={()=>setDivTab(t)}
@@ -678,6 +691,19 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
             // so the page doesn't change character once they are split up.
             ? <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={0} numPools={1} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>
             : <PoolCard division={division} pool="" standings={calcStandings(games,division,undefined,tiebreakers,divRoster)} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={1} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>}
+          {/* The bracket's format before the schedule is out: the bracket route sends
+              the games and where their teams come from, no teams, times or fields. */}
+          {!scheduleLive&&(bracketList.length>0||poolOnly)&&(
+            <div className="pt-2" data-testid="bracket-format">
+              <div className="flex items-baseline justify-between gap-x-3 gap-y-1 flex-wrap mb-2">
+                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-800">Bracket format</h3>
+                {!poolOnly&&<span className="text-xs text-slate-500">Teams are placed after pool play. Times and fields are coming soon.</span>}
+              </div>
+              {poolOnly
+                ? <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-600">Pool play only: this division has no bracket.</div>
+                : <div className="bg-white rounded-xl border border-slate-200 p-4"><BracketView bracketList={bracketList} scheduledGames={[]} preview/></div>}
+            </div>
+          )}
         </div>
       )}
 
@@ -787,7 +813,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
       })()}
 
       {scheduleLive && divTab==='bracket' && (
-        <BracketView bracketList={bracketList} scheduledGames={bracketGames}/>
+        <BracketView bracketList={bracketList} scheduledGames={bracketGames} poolOnly={poolOnly}/>
       )}
     </div>
   )
@@ -820,6 +846,11 @@ export default function PublicTournamentPage() {
   const [askAlertsFor,setAskAlertsFor]=useState<string|null>(null)
   const [teamSearch,setTeamSearch]=useState('')
   const [announcements,setAnnouncements]=useState<any[]>([])
+  // Division notes from the Divisions page (lib/divisionNotes), and the divisions set
+  // to pool play only (lib/divisionPlan).
+  const [divNotes,setDivNotes]=useState<{all:string;divisions:Record<string,string>}>({all:'',divisions:{}})
+  const [poolOnlyDivs,setPoolOnlyDivs]=useState<string[]>([])
+  const noteFor=(div:string)=>{const k=nameKey(div);const hit=Object.keys(divNotes.divisions).find(n=>nameKey(n)===k);return hit?divNotes.divisions[hit]:''}
   // Registered-team count per division (same numbers the staff Divisions page shows).
   const [regTeamCounts,setRegTeamCounts]=useState<Record<string,number>>({})
   // What staff have published (lib/publicView). The games feed is already filtered
@@ -859,9 +890,10 @@ export default function PublicTournamentPage() {
       }catch{}
     })()
     fetch(`/api/tournaments/${id}/announcements`).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d.announcements))setAnnouncements(d.announcements)}).catch(()=>{})
+    fetch(`/api/tournaments/${id}/division-notes?view=public`).then(r=>r.ok?r.json():null).then(d=>{if(d&&typeof d==='object')setDivNotes({all:typeof d.all==='string'?d.all:'',divisions:d.divisions&&typeof d.divisions==='object'?d.divisions:{}})}).catch(()=>{})
     fetch(`/api/tournaments/${id}/visibility`).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.pools)setPubVis({pools:d.pools,schedule:d.schedule})}).catch(()=>{})
     fetch(`/api/tournaments/${id}/pools?view=public`).then(r=>r.ok?r.json():[]).then(d=>{if(Array.isArray(d))setPoolRosters(d.filter((x:any)=>x&&typeof x.division==='string'))}).catch(()=>{})
-    fetch(`/api/tournaments/${id}/divisions?view=public`).then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)){const m:Record<string,number>={};d.forEach((x:any)=>{if(x&&typeof x.name==='string')m[x.name]=Number(x.teamCount)||0});setRegTeamCounts(m)}}).catch(()=>{})
+    fetch(`/api/tournaments/${id}/divisions?view=public`).then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)){const m:Record<string,number>={};d.forEach((x:any)=>{if(x&&typeof x.name==='string')m[x.name]=Number(x.teamCount)||0});setRegTeamCounts(m);setPoolOnlyDivs(d.filter((x:any)=>x&&x.noBracket&&typeof x.name==='string').map((x:any)=>x.name))}}).catch(()=>{})
   },[id])
 
   // A name-only legacy follow becomes a follow of that name in every division it
@@ -1178,6 +1210,8 @@ export default function PublicTournamentPage() {
               tiebreakers={tiebreakers}
               scheduleLive={pubVis.schedule==='live'}
               rosters={liveRosters.filter(r=>r.division===selectedDiv)}
+              notes={{division:noteFor(selectedDiv),all:divNotes.all}}
+              poolOnly={poolOnlyDivs.some(n=>nameKey(n)===nameKey(selectedDiv))}
             />
           </div>
         )}

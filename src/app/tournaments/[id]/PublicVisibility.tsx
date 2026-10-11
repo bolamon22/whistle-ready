@@ -74,7 +74,7 @@ function Rows({ tournamentId, vis, update, busy, setBusy }: {
   )
   return (
     <div className="divide-y divide-slate-100">
-      {row('pools', 'Teams & pools', 'Pool lists and standings')}
+      {row('pools', 'Teams & pools', 'Pool lists, bracket formats and division notes')}
       {row('schedule', 'Schedule & brackets', vis.publishedAt
         ? `Times and fields as of the last Publish (${new Date(vis.publishedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })})`
         : 'Not published yet. Turning this on publishes the current schedule')}
