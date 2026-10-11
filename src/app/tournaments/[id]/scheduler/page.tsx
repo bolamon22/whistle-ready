@@ -214,6 +214,17 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [scratchPad,   setScratchPad]   = useState<string[]>([])
 
   const [divColorMap,  setDivColorMap]  = useState<Record<string, string>>({})
+  // Every division the event has, games or not. Colors are dealt out in name order
+  // over this list, the same list the Divisions page uses: dealing them over only
+  // the divisions with games shifted every color after a division with none (Bo,
+  // Oct 11 2026: Boys U10 (10v10) has no games yet, so from it on each division
+  // showed its neighbor's color here).
+  const [allDivNames, setAllDivNames] = useState<string[]>([])
+  useEffect(() => {
+    fetch(`/api/tournaments/${params.id}/divisions`).then(r => (r.ok ? r.json() : [])).then(d => {
+      if (Array.isArray(d)) setAllDivNames(d.map((x: { name?: string }) => x?.name || '').filter(Boolean))
+    }).catch(() => {})
+  }, [params.id])
 
   // ── Draft/publish versioning ─────────────────────────────────────────────
   const [snapshot,       setSnapshot]       = useState<Record<string, {date:string,startTime:string,location:string}>>({})
@@ -913,7 +924,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const divisions = [...new Set(games.map(g => g.division))].sort()
-  const colorsByDiv = divisionColorMap(divisions, divColorMap)
+  const colorsByDiv = divisionColorMap([...divisions, ...allDivNames], divColorMap)
   const divGameCounts = divisions.reduce((acc, d) => {
     acc[d] = games.filter(g => g.division === d).length
     return acc
