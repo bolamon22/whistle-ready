@@ -197,24 +197,24 @@ function inkOn(hex: string): string {
 // "If needed" marker: violet, dashed, never mistaken for an issue color.
 const IF_BORDER = '#7c3aed'
 function IfTag({ on, mini = false }: { on?: boolean; mini?: boolean }) {
-  return <span title="If needed: only played on a certain result" className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-violet-300 text-violet-950' : 'bg-violet-100 text-violet-700'}`}>{mini ? 'If' : 'If needed'}</span>
+  return <span title="If needed: only played on a certain result" className={`keep-ink flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-violet-300 text-violet-950' : 'bg-violet-100 text-violet-700'}`}>{mini ? 'If' : 'If needed'}</span>
 }
 // Consolation games (the bracket's consolation section): no title at stake, so
 // they can go wherever there's room once their feeders are set.
 function ConsTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
-  return <span title={`${g.bracketLabel || 'Consolation'}: consolation game, flexible on time`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-slate-300 text-slate-900' : 'bg-slate-200 text-slate-600'}`}>{mini ? 'Con' : 'Consolation'}</span>
+  return <span title={`${g.bracketLabel || 'Consolation'}: consolation game, flexible on time`} className={`keep-ink flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-slate-300 text-slate-900' : 'bg-slate-200 text-slate-600'}`}>{mini ? 'Con' : 'Consolation'}</span>
 }
 const isCons = (g: SGame) => !g.ifNeeded && g.bracketSection === 'consolation'
 // Championship games (the bracket's championship section): the ones that matter
 // most, usually the last thing a division plays.
 function ChampTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
-  return <span title={`${g.bracketLabel || 'Championship'}: the division's title game`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-yellow-300 text-yellow-950' : 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-300'}`}>{mini ? 'Champ' : 'Championship'}</span>
+  return <span title={`${g.bracketLabel || 'Championship'}: the division's title game`} className={`keep-ink flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-yellow-300 text-yellow-950' : 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-300'}`}>{mini ? 'Champ' : 'Championship'}</span>
 }
 // Which flight a bracket game is in, for a division split into two brackets: both
 // number their seeds from 1, so "Seed 1 v Seed 4" alone could be either one.
 function FlightTag({ g, on, mini = false }: { g: SGame; on?: boolean; mini?: boolean }) {
   if (!g.bracketFlight) return null
-  return <span title={`Flight ${g.bracketFlight}: seeds are numbered within this flight`} className={`flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-indigo-300 text-indigo-950' : 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-300'}`}>{mini ? `Flt ${g.bracketFlight}` : `Flight ${g.bracketFlight}`}</span>
+  return <span title={`Flight ${g.bracketFlight}: seeds are numbered within this flight`} className={`keep-ink flex-shrink-0 rounded font-extrabold uppercase tracking-wide leading-none ${mini ? 'text-[7px] px-[3px] py-[2px]' : 'text-[8px] px-1 py-[2px]'} ${on ? 'bg-indigo-300 text-indigo-950' : 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-300'}`}>{mini ? `Flt ${g.bracketFlight}` : `Flight ${g.bracketFlight}`}</span>
 }
 const flightNote = (g: SGame) => (g.bracketFlight ? ` · Flight ${g.bracketFlight}` : '')
 // One marker per game: If needed, Championship, Consolation, or nothing.
@@ -322,9 +322,9 @@ function IssueBadge({ kind, count }: { kind: IssueKind; count: number }) {
   const k = KIND(kind)!
   const Icon = kind === 'conflict' ? AlertTriangle : kind === 'closed' ? Ban : kind === 'field' ? Ruler : kind === 'b2b' ? ArrowLeftRight : kind === 'bracket' ? Zap : Clock
   return (
-    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow ring-2 ring-white" style={{ background: k.dot, color: kind === 'b2b' ? '#0f172a' : '#fff' }}>
+    <span className="keep-ink absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow ring-2 ring-white" style={{ background: k.dot, color: kind === 'b2b' ? '#0f172a' : '#fff' }}>
       <Icon size={11} />
-      {count > 1 && <span className="absolute -top-1.5 -right-1.5 bg-slate-900 text-white text-[8px] font-bold rounded-full min-w-[14px] h-[14px] px-0.5 flex items-center justify-center">{count}</span>}
+      {count > 1 && <span className="keep-ink absolute -top-1.5 -right-1.5 bg-slate-900 text-white text-[8px] font-bold rounded-full min-w-[14px] h-[14px] px-0.5 flex items-center justify-center">{count}</span>}
     </span>
   )
 }
@@ -681,6 +681,11 @@ export function TimelineView(p: ViewsProps) {
   // Board zoom (the Grid's −/+), remembered per tournament on this device.
   const zoomKey = 'wr-sched-zoom:' + (p.prefsKey ?? '')
   const [zoom, setZoomRaw] = useState(1)
+  // Bright cards: each game filled with its division's color, like the Grid (Bo, Oct
+  // 11 2026: "I like this bright colors it helps me see the different divisions").
+  const [bright, setBrightRaw] = useState(false)
+  useEffect(() => { try { if (localStorage.getItem('wr-board-bright') === '1') setBrightRaw(true) } catch {} }, [])
+  const setBright = (v: boolean) => { setBrightRaw(v); try { localStorage.setItem('wr-board-bright', v ? '1' : '0') } catch {} }
   useEffect(() => { try { const z = parseFloat(localStorage.getItem(zoomKey) || ''); if (z >= 0.5 && z <= 1.25) setZoomRaw(z) } catch {} }, [zoomKey])
   const setZoom = (z: number) => { const v = Math.min(1.25, Math.max(0.5, Math.round(z * 100) / 100)); setZoomRaw(v); try { localStorage.setItem(zoomKey, String(v)) } catch {} }
 
@@ -749,7 +754,7 @@ export function TimelineView(p: ViewsProps) {
   const cnt = (division: string, team: string, on: boolean) => {
     const n = teamCount[teamKey(division, team)]
     if (!n) return null
-    return <span className={`inline-block flex-shrink-0 min-w-[13px] px-[3px] mr-[3px] rounded text-center font-bold tabular-nums ${on ? 'bg-white/20 text-white' : 'bg-slate-900/10 text-slate-600'}`} title={`${humanTeam(team)}: ${n} game${n === 1 ? '' : 's'} placed`}>{n}</span>
+    return <span className={`inline-block flex-shrink-0 min-w-[13px] px-[3px] mr-[3px] rounded text-center font-bold tabular-nums ${on ? 'bg-white/20 text-white' : bright ? 'bg-black/15' : 'bg-slate-900/10 text-slate-600'}`} title={`${humanTeam(team)}: ${n} game${n === 1 ? '' : 's'} placed`}>{n}</span>
   }
 
   const cellMap = useMemo(() => { const m: Record<string, SGame> = {}; p.dayGames.forEach(g => { m[g.startTime + '|' + g.location] = g }); return m }, [p.dayGames])
@@ -1046,6 +1051,10 @@ export function TimelineView(p: ViewsProps) {
             <button onClick={() => setBracketOpen(o => !o)} aria-pressed={bracketOpen} title="Show a division's bracket"
               className={`flex-shrink-0 mt-1 h-6 px-2.5 rounded-md border text-[11px] font-bold ${bracketOpen ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900'}`}>Bracket</button>
           )}
+          <button onClick={() => setBright(!bright)} aria-pressed={bright} title={bright ? 'Back to light cards' : 'Fill each game with its division color'}
+            className={`flex-shrink-0 mt-1 h-6 px-2.5 rounded-md border text-[11px] font-bold inline-flex items-center gap-1.5 ${bright ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900'}`}>
+            <span className="flex -space-x-1">{['#ec4899', '#3b82f6', '#10b981'].map(c => <span key={c} className="w-2.5 h-2.5 rounded-full ring-1 ring-white" style={{ background: c }} />)}</span>Bright
+          </button>
           <div className="flex-shrink-0 flex items-center gap-0.5 pt-1 text-slate-500" title="Zoom the board">
             <button onClick={() => setZoom(zoom - 0.1)} disabled={zoom <= 0.5} aria-label="Zoom out" className="w-6 h-6 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-sm leading-none">−</button>
             <button onClick={() => setZoom(1)} aria-label="Reset zoom" title="Back to 100%" className="w-10 text-[11px] font-semibold tabular-nums text-center hover:text-slate-900">{Math.round(zoom * 100)}%</button>
@@ -1341,7 +1350,12 @@ export function TimelineView(p: ViewsProps) {
     // which division was which (Oct 5 2026). They now keep their division color
     // and just fade; hovering brings one back to full strength.
     const fade = on ? '' : divOut(g) ? 'grayscale opacity-40 hover:grayscale-0 hover:opacity-100' : d ? 'opacity-60 hover:opacity-100' : done ? 'opacity-70' : ''
-    const bg = on ? '#0f172a' : worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'bracket' ? k!.bg : tint(g.division)
+    const issueBg = worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'bracket'
+    // Bright: the division color fills the card and every line takes the ink that reads
+    // on it; an issue shows as a thick border in its color instead of a tinted card.
+    const lit = bright && !on
+    const bg = on ? '#0f172a' : lit ? c : issueBg ? k!.bg : tint(g.division)
+    const litCls = lit ? '[&_*:not(.keep-ink)]:!text-inherit' : ''
     const handlers = {
       draggable: true,
       'data-tl-game': g.id,
@@ -1355,8 +1369,8 @@ export function TimelineView(p: ViewsProps) {
     // In a minimized field or time: one line, game number in the division color.
     if (mini) return (
       <div key={g.id} {...handlers}
-        className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${fade}`}
-        style={{ background: bg, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `1px solid ${k.border}` : g.ifNeeded ? `1px dashed ${IF_BORDER}` : '1px solid #e2e8f0', borderLeft: `4px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
+        className={`absolute inset-0.5 rounded px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] leading-none ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${fade} ${litCls}`}
+        style={{ background: bg, color: lit ? inkOn(c) : undefined, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `${lit ? 2 : 1}px solid ${k.border}` : lit ? '1px solid rgba(0,0,0,0.12)' : g.ifNeeded ? `1px dashed ${IF_BORDER}` : '1px solid #e2e8f0', borderLeft: `4px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 2px #f59e0b' : on ? `0 0 0 2px ${c}66` : undefined }}>
         <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
         <FlightTag g={g} on={on} mini />
         <GameTag g={g} on={on} mini />
@@ -1372,10 +1386,10 @@ export function TimelineView(p: ViewsProps) {
     )
     return (
       <div key={g.id} {...handlers}
-        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden transition-shadow ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${on ? '' : 'hover:shadow-md'} ${fade}`}
+        className={`absolute inset-1 rounded-lg px-1.5 py-1 flex flex-col gap-px overflow-hidden transition-shadow ${swapArmed && !on ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'cursor-grab active:cursor-grabbing'} ${on ? '' : 'hover:shadow-md'} ${fade} ${litCls}`}
         // Selected: dark card, but the division still shows: its stripe stays and the
         // selection ring takes the division color instead of a generic teal.
-        style={{ background: bg, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `1px solid ${k.border}` : g.ifNeeded ? `1.5px dashed ${IF_BORDER}` : '1px solid #e2e8f0', borderLeft: `${on ? 5 : 4}px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 3px #f59e0b' : on ? `0 0 0 3px ${c}66` : undefined }}>
+        style={{ background: bg, color: lit ? inkOn(c) : undefined, border: on ? '1px solid #0f172a' : k && worst !== 'gap' ? `${lit ? 2 : 1}px solid ${k.border}` : g.ifNeeded ? `1.5px dashed ${IF_BORDER}` : lit ? '1px solid rgba(0,0,0,0.12)' : '1px solid #e2e8f0', borderLeft: `${on ? 5 : 4}px solid ${c}`, boxShadow: swapOver === g.id ? '0 0 0 3px #f59e0b' : on ? `0 0 0 3px ${c}66` : undefined }}>
         <div className={`flex items-center gap-1 text-[9px] leading-none whitespace-nowrap ${on ? 'text-slate-300' : 'text-slate-500'}`}>
           <b style={{ color: on ? '#fff' : c }}>{g.gameNumber}</b>
           <span className="font-semibold truncate" style={{ color: on ? '#cbd5e1' : c }} title={g.division}>{p.divAbbr(g.division)}</span>

@@ -179,6 +179,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   // Small cards on the Grid (Bo, Oct 11 2026: "a compacted version of the schedule"):
   // one line per game, field names only, narrower columns, so a whole day fits.
   const [gridDense, setGridDenseRaw]    = useState(false)
+  // Hide the Grid's parking lot down to one line (Bo, Oct 11 2026: "remove the parking
+  // lot or minimize it altogether"). Remembered per browser.
+  const [lotHidden, setLotHiddenRaw]    = useState(false)
+  useEffect(() => { try { if (localStorage.getItem('wr-grid-lot-hidden') === '1') setLotHiddenRaw(true) } catch {} }, [])
+  const setLotHidden = (v: boolean) => { setLotHiddenRaw(v); try { localStorage.setItem('wr-grid-lot-hidden', v ? '1' : '0') } catch {} }
   useEffect(() => { try { if (localStorage.getItem('wr-grid-dense') === '1') setGridDenseRaw(true) } catch {} }, [])
   const setGridDense = (v: boolean) => { setGridDenseRaw(v); try { localStorage.setItem('wr-grid-dense', v ? '1' : '0') } catch {} }
   const [splitMode, setSplitMode]       = useState<'d1d2'|'spread'|'oneday'>('d1d2')
@@ -1422,6 +1427,58 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const selectCls = 'text-xs bg-slate-800 text-slate-200 border border-slate-600 rounded px-2 py-0.5'
   const gridSelectCls = 'text-xs bg-white text-slate-700 border border-slate-300 rounded px-2 py-1'
 
+  // The Grid's view controls (zoom, Compact, Small cards, Fields): in the parking lot's
+  // header, and in its one-line bar when the lot is hidden.
+  const gridControls = (
+          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+            <div className="flex items-center gap-0.5 mr-1 text-slate-400">
+              <span className="text-[10px] mr-0.5">Zoom</span>
+              <button onClick={() => setGridZoom(z => Math.max(0.5, Math.round((z - 0.1) * 100) / 100))} className="w-5 h-5 rounded border border-slate-200 hover:bg-slate-50 text-xs leading-none">−</button>
+              <span className="text-[10px] w-8 text-center tabular-nums">{Math.round(gridZoom * 100)}%</span>
+              <button onClick={() => setGridZoom(z => Math.min(1, Math.round((z + 0.1) * 100) / 100))} className="w-5 h-5 rounded border border-slate-200 hover:bg-slate-50 text-xs leading-none">+</button>
+            </div>
+            <button
+              onClick={() => setHideEmptySlots(v => !v)}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hideEmptySlots ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
+              title="Compact view: hides empty time rows so you only see slots that have games. Click again to show every time.">
+              <span className="inline-flex items-center gap-1"><Clock size={12} /> Compact</span>
+            </button>
+            <button
+              onClick={() => setGridDense(!gridDense)}
+              aria-pressed={gridDense}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${gridDense ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
+              title="Small cards: one line per game (number, then teams) and narrower fields, so more of the day fits on screen. Hover a game for the division and pool.">
+              Small cards
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowFieldPicker(v => !v)}
+                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hiddenFields.size > 0 ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
+                title="Show/hide field columns">
+                <MapPin size={12} className="inline -mt-0.5 mr-1" /> Fields{hiddenFields.size > 0 ? ` (${visibleFields.length}/${fields.length})` : ''}
+              </button>
+              {showFieldPicker && (
+                <div className="absolute right-0 top-8 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-3 min-w-[180px]" onClick={e => e.stopPropagation()}>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Show / Hide Fields</p>
+                  {fields.map(f => (
+                    <label key={f.fullName} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-slate-50 rounded px-1">
+                      <input type="checkbox" checked={!hiddenFields.has(f.fullName)}
+                        onChange={() => setHiddenFields(prev => {
+                          const next = new Set(prev)
+                          if (next.has(f.fullName)) next.delete(f.fullName); else next.add(f.fullName)
+                          return next
+                        })}
+                        className="rounded accent-teal-600" />
+                      <span className="text-xs text-slate-700">{f.fieldName}</span>
+                    </label>
+                  ))}
+                  {hiddenFields.size > 0 && <button onClick={() => setHiddenFields(new Set())} className="mt-2 text-[10px] text-teal-600 hover:underline block">Show all</button>}
+                </div>
+              )}
+            </div>
+          </div>
+  )
+
   if (loading) return (
     <div className="min-h-screen bg-slate-50">
       <TournamentNav id={params.id} name={tMeta.name} logoUrl={tMeta.logoUrl} />
@@ -1937,7 +1994,16 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       )}
 
       {/* ── Parking Lot (grid view only: the other views carry their own unscheduled list) ── */}
-      {schedView === 'grid' && !sideStage && <div className="bg-slate-900 border-b border-slate-700 flex-shrink-0">
+      {schedView === 'grid' && !sideStage && lotHidden && (
+        <div className="bg-slate-900 border-b border-slate-700 flex-shrink-0 px-4 sm:px-6 py-1.5 flex items-center gap-2"
+          onDragOver={e => e.preventDefault()} onDrop={handleDropParking} title="Drop a game here to unschedule it">
+          <span className="text-slate-400 text-xs font-semibold uppercase tracking-widest">Parking Lot</span>
+          <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${unscheduled.length ? 'bg-orange-500/20 text-orange-300' : 'bg-slate-700 text-slate-300'}`}>{unscheduled.length}</span>
+          <button onClick={() => setLotHidden(false)} className="text-slate-400 hover:text-white text-xs inline-flex items-center gap-1 px-1"><ChevronDown size={12} /> Show</button>
+          {gridControls}
+        </div>
+      )}
+      {schedView === 'grid' && !sideStage && !lotHidden && <div className="bg-slate-900 border-b border-slate-700 flex-shrink-0">
 
         {/* Filter row */}
         <div className="px-4 sm:px-6 pt-2 pb-1 flex items-center gap-2 flex-wrap">
@@ -1946,6 +2012,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             className="text-slate-500 hover:text-slate-300 transition-colors text-xs px-1"
             title={lotExpanded ? 'Collapse' : 'Expand to see all games'}>
             {lotExpanded ? <span className="inline-flex items-center gap-1"><ChevronUp size={12} /> Collapse</span> : <span className="inline-flex items-center gap-1"><ChevronDown size={12} /> Expand</span>}
+          </button>
+          <button onClick={() => setLotHidden(true)} className="text-slate-500 hover:text-slate-300 transition-colors text-xs px-1" title="Hide the parking lot down to one line (the count and the view controls stay)">
+            <span className="inline-flex items-center gap-1"><X size={12} /> Hide</span>
           </button>
           <button
             onClick={() => setLotOrder(
@@ -2011,53 +2080,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             </button>
           )}
 
-          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
-            <div className="flex items-center gap-0.5 mr-1 text-slate-400">
-              <span className="text-[10px] mr-0.5">Zoom</span>
-              <button onClick={() => setGridZoom(z => Math.max(0.5, Math.round((z - 0.1) * 100) / 100))} className="w-5 h-5 rounded border border-slate-200 hover:bg-slate-50 text-xs leading-none">−</button>
-              <span className="text-[10px] w-8 text-center tabular-nums">{Math.round(gridZoom * 100)}%</span>
-              <button onClick={() => setGridZoom(z => Math.min(1, Math.round((z + 0.1) * 100) / 100))} className="w-5 h-5 rounded border border-slate-200 hover:bg-slate-50 text-xs leading-none">+</button>
-            </div>
-            <button
-              onClick={() => setHideEmptySlots(v => !v)}
-              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hideEmptySlots ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
-              title="Compact view: hides empty time rows so you only see slots that have games. Click again to show every time.">
-              <span className="inline-flex items-center gap-1"><Clock size={12} /> Compact</span>
-            </button>
-            <button
-              onClick={() => setGridDense(!gridDense)}
-              aria-pressed={gridDense}
-              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${gridDense ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
-              title="Small cards: one line per game (number, then teams) and narrower fields, so more of the day fits on screen. Hover a game for the division and pool.">
-              Small cards
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => setShowFieldPicker(v => !v)}
-                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${hiddenFields.size > 0 ? 'bg-slate-200 text-slate-700 border-slate-300' : 'text-slate-400 border-slate-200 hover:border-slate-400'}`}
-                title="Show/hide field columns">
-                <MapPin size={12} className="inline -mt-0.5 mr-1" /> Fields{hiddenFields.size > 0 ? ` (${visibleFields.length}/${fields.length})` : ''}
-              </button>
-              {showFieldPicker && (
-                <div className="absolute right-0 top-8 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-3 min-w-[180px]" onClick={e => e.stopPropagation()}>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Show / Hide Fields</p>
-                  {fields.map(f => (
-                    <label key={f.fullName} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-slate-50 rounded px-1">
-                      <input type="checkbox" checked={!hiddenFields.has(f.fullName)}
-                        onChange={() => setHiddenFields(prev => {
-                          const next = new Set(prev)
-                          if (next.has(f.fullName)) next.delete(f.fullName); else next.add(f.fullName)
-                          return next
-                        })}
-                        className="rounded accent-teal-600" />
-                      <span className="text-xs text-slate-700">{f.fieldName}</span>
-                    </label>
-                  ))}
-                  {hiddenFields.size > 0 && <button onClick={() => setHiddenFields(new Set())} className="mt-2 text-[10px] text-teal-600 hover:underline block">Show all</button>}
-                </div>
-              )}
-            </div>
-          </div>
+          {gridControls}
           {!swapMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest whitespace-nowrap hidden sm:block">Scratch</span>
