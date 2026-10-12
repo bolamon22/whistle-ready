@@ -6,9 +6,10 @@ import PasswordInput from '@/components/PasswordInput'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { agoLabel, isOnline } from '@/lib/presenceTime'
 import toast, { Toaster } from 'react-hot-toast'
 
-interface User { id: string; name: string; email: string; role: string; createdAt: string }
+interface User { id: string; name: string; email: string; role: string; createdAt: string; lastSeenAt?: string | null; lastLoginAt?: string | null }
 interface ClubLink { id: string; tournamentId: string; clubName: string }
 interface Tournament { id: string; name: string }
 interface Registration { clubName: string; tournamentId: string }
@@ -345,6 +346,7 @@ export default function AdminUsersPage() {
               <th className="text-left px-4 py-3 text-gray-500 font-semibold">Email</th>
               <th className="text-left px-4 py-3 text-gray-500 font-semibold">Role</th>
               <th className="text-left px-4 py-3 text-gray-500 font-semibold">Joined</th>
+              <th className="text-left px-4 py-3 text-gray-500 font-semibold">Last on</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -363,6 +365,11 @@ export default function AdminUsersPage() {
                   </select>
                 </td>
                 <td className="px-4 py-3 text-gray-400">{new Date(u.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-3 whitespace-nowrap" title={u.lastLoginAt ? `Last sign-in ${agoLabel(u.lastLoginAt)}` : 'No sign-in recorded yet'}>
+                  {isOnline(u.lastSeenAt)
+                    ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" />On now</span>
+                    : <span className="text-gray-400">{agoLabel(u.lastSeenAt || u.lastLoginAt) || '—'}</span>}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex gap-1.5 justify-end flex-wrap">
                     <Link href={`/profile/${u.id}`}
@@ -390,7 +397,7 @@ export default function AdminUsersPage() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No users found</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No users found</td></tr>
             )}
           </tbody>
         </table>

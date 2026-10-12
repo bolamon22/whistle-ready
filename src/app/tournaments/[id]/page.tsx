@@ -8,8 +8,9 @@ import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, 
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
 import { gameGender } from '@/lib/gameGender'
+import { isOnline, presenceLabel } from '@/lib/presenceTime'
 
-interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null }
+interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
 interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[] }
 interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string }
@@ -996,6 +997,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 {workers.filter(w=>rosterIds.has(w.id)).sort((a,b)=>a.name.localeCompare(b.name)).map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
               {staffViewId&&<span className="text-sm text-slate-500">{staffGame.length} games assigned</span>}
+              {(()=>{const sw=staffViewId?workers.find(w=>w.id===staffViewId):undefined;if(!sw||!('lastSeenAt' in sw))return null;const on=isOnline(sw.lastSeenAt);return<span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${on?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-500'}`}>{on&&<span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>}{presenceLabel(sw)}</span>})()}
             </div>
             {!staffViewId?<div className="card p-12 text-center text-slate-400">Select a staff member to see their schedule</div>:staffGame.length===0?<div className="card p-12 text-center text-slate-400">No games assigned yet</div>:(
               <div className="space-y-4">
@@ -1150,14 +1152,18 @@ export default function GridPage({ params }: { params:{id:string} }) {
               <span className="text-xs text-slate-400 italic pt-1">{rosterWorkers.length===0?'No staff on the roster yet.':'Nobody matches.'}</span>
             ):list.map(({w,count})=>{
               const kind=staffKind(w)
+              // Presence keys only come back for roles allowed to see them (api/workers).
+              const showPresence='lastSeenAt' in w
+              const on=showPresence&&isOnline(w.lastSeenAt)
               return(
                 <div key={w.id} draggable={!locked}
                   onDragStart={e=>{e.dataTransfer.setData('workerId',w.id);e.dataTransfer.effectAllowed='copy';setDragWorker(w)}}
                   onDragEnd={()=>{setDragWorker(null);setDragSlot(null)}}
                   className={`flex items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-2 pr-1 h-6 text-[11px] whitespace-nowrap shrink-0 transition-colors ${locked?'opacity-60 cursor-default':'cursor-grab active:cursor-grabbing hover:border-sky-400'} ${dragWorker?.id===w.id?'opacity-40':''}`}
-                  title={`${w.name} · ${kind.label} · ${certLabel(w.certLevel)} · ${count} game${count!==1?'s':''} today`}>
+                  title={`${w.name} · ${kind.label} · ${certLabel(w.certLevel)} · ${count} game${count!==1?'s':''} today${showPresence?` · ${presenceLabel(w)}`:''}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${kind.dot}`}/>
                   <span className="font-medium text-slate-700">{w.name}</span>
+                  {on&&<span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100" aria-label="On now"/>}
                   <span className={`text-[10px] font-bold px-1.5 rounded-full ${loadCls(count)}`}>{count}</span>
                 </div>
               )

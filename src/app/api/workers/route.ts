@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
 import { redactWorker } from '@/lib/roleScope'
 import { createClient } from '@libsql/client'
+import { presenceByEmail, canSeePresence } from '@/lib/presence'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -26,8 +27,10 @@ async function resolveOrgId(req: Request): Promise<{ orgId: string | null; isAdm
 // App-login status for the Staff Pool: is each Worker matched (by email) to a User
 // account, or covered by a pending claim invite (see /api/workers/onboard)?
 // Best-effort — a failure here must never block the roster itself.
-async function withAppStatus(client: ReturnType<typeof db>, rows: unknown[]) {
+// lastSeenAt / lastLoginAt ride along for event-running roles only (see lib/presence).
+async function withAppStatus(client: ReturnType<typeof db>, rows: unknown[], withPresence = false) {
   if (!rows.length) return rows
+  const seen = withPresence ? await presenceByEmail(client) : null
   const users = new Map<string, string>()
   try {
     const u = await client.execute(`SELECT lower(email) AS email, role FROM "User" WHERE email IS NOT NULL AND email != ''`)
@@ -53,7 +56,10 @@ async function withAppStatus(client: ReturnType<typeof db>, rows: unknown[]) {
     const userRole = email ? users.get(email) : undefined
     const invitedAt = invByWorker.get(String(r.id)) ?? (email ? invByEmail.get(email) : undefined)
     const appStatus = userRole !== undefined ? 'registered' : invitedAt !== undefined ? 'invited' : email ? 'none' : 'no_email'
-    return { ...r, appStatus, appRole: userRole ?? null, invitedAt: invitedAt ?? null }
+    const base = { ...r, appStatus, appRole: userRole ?? null, invitedAt: invitedAt ?? null }
+    if (!seen) return base   // keys absent = this viewer isn't shown presence
+    const p = email ? seen.get(email) : undefined
+    return { ...base, lastSeenAt: p?.lastSeenAt ?? null, lastLoginAt: p?.lastLoginAt ?? null }
   })
 }
 
@@ -69,7 +75,7 @@ export async function GET(req: Request) {
   if (isAdmin && !orgId) {
     // Platform view — all workers
     const res = await client.execute(`SELECT * FROM "Worker" ORDER BY name ASC`)
-    return NextResponse.json(shape(await withAppStatus(client, res.rows as unknown[])))
+    return NextResponse.json(shape(await withAppStatus(client, res.rows as unknown[], canSeePresence(gate.role))))
   }
 
   if (orgId) {
@@ -78,7 +84,7 @@ export async function GET(req: Request) {
         sql: `SELECT * FROM "Worker" WHERE orgId = ? ORDER BY name ASC`,
         args: [orgId],
       })
-      return NextResponse.json(shape(await withAppStatus(client, res.rows as unknown[])))
+      return NextResponse.json(shape(await withAppStatus(client, res.rows as unknown[], canSeePresence(gate.role))))
     } catch {
       // orgId column not yet migrated — return empty until migration is run
       return NextResponse.json([])

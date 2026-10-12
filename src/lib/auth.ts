@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { createClient } from '@libsql/client'
+import { markLogin } from '@/lib/presence'
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -18,6 +19,7 @@ export const authOptions: NextAuthOptions = {
         if (!user || !user.password) return null
         const valid = await bcrypt.compare(credentials.password, user.password)
         if (!valid) return null
+        await markLogin(user.id)
         return { id: user.id, name: user.name, email: user.email, role: user.role }
       },
     }),

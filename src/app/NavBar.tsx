@@ -9,6 +9,8 @@ import { useRole } from '@/lib/role-context'
 import { useOrg } from '@/lib/org-context'
 import { isStaffThemeRoute } from './ThemeShell'
 import { roleCanAccess } from '@/lib/routeAccess'
+import WhoIsOn from '@/components/WhoIsOn'
+import { canSeePresence } from '@/lib/presenceTime'
 
 interface Tournament {
   id: string
@@ -260,6 +262,8 @@ export default function NavBar() {
                   </select>
                 </div>
               )}
+
+              {canSeePresence(role) && <WhoIsOn />}
 
               <span className={`hidden xl:inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>
                 {ROLE_LABELS[role] ?? role}
