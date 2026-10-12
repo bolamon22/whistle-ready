@@ -93,6 +93,7 @@ function JoinForm() {
   const [venmoHandle, setVenmoHandle] = useState('')
   const [zelleHandle, setZelleHandle] = useState('')
   const [mailingAddress, setMailingAddress] = useState('')
+  const [referredBy, setReferredBy] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [hpExtra, setHpExtra] = useState('') // honeypot — humans never see it
@@ -162,6 +163,7 @@ function JoinForm() {
         org: orgId, code, name, email, phone: phone || null, role, gender, certLevel, password,
         tournamentIds: Array.from(selEvents), photo: photo || null, hp_extra: hpExtra,
         payMethod, venmoHandle: venmoHandle || null, zelleHandle: zelleHandle || null, mailingAddress: mailingAddress || null,
+        referredBy: referredBy.trim() || null,
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -319,6 +321,16 @@ function JoinForm() {
               ))}
             </div>
           </div>
+
+          {role && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Who referred you? <span className="font-normal text-slate-400">(optional)</span></label>
+              <input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                value={referredBy} onChange={e => setReferredBy(e.target.value)} maxLength={120} autoComplete="off"
+                placeholder={role === 'scorekeeper' ? 'e.g. the scorekeeper who told you about us' : 'Name of whoever told you about us'} />
+              <p className="text-[10.5px] text-slate-400 mt-1">Helps us pair you with people you like working with.</p>
+            </div>
+          )}
 
           {role === 'ref' && (
             <>
