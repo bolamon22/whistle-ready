@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+import { primeAlerts, penaltyOverAlert } from '@/lib/gameAlert'
 
 interface Game {
   id: string; tournamentId?: string; gameNumber: string; division: string; location: string
@@ -12,9 +13,9 @@ interface Penalty {
   id: string; team: 1 | 2; playerNum: string
   remaining: number; total: number; active: boolean; paused: boolean
 }
-interface TournamentDefaults { periodSecs: number; penaltySecs: number; rulesUrl: string; askScorer: boolean }
+interface TournamentDefaults { periodSecs: number; penaltySecs: number; rulesUrl: string; askScorer: boolean; penaltyAlert: boolean }
 
-const DEFAULTS_FALLBACK: TournamentDefaults = { periodSecs: 20 * 60, penaltySecs: 120, rulesUrl: 'https://sunshineeventsgroup.com/rules/', askScorer: false }
+const DEFAULTS_FALLBACK: TournamentDefaults = { periodSecs: 20 * 60, penaltySecs: 120, rulesUrl: 'https://sunshineeventsgroup.com/rules/', askScorer: false, penaltyAlert: true }
 const PRESETS = [30, 60, 120, 180, 300] // :30, 1, 2, 3, 5 min
 
 function fmt(secs: number) {
@@ -54,6 +55,8 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   const clockRef = useRef<NodeJS.Timeout | null>(null)
 
   const [penalties, setPenalties] = useState<Penalty[]>([])
+  const [penOver, setPenOver] = useState<string[]>([])   // "penalty over" banners until dismissed
+  const prevActivePens = useRef<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [gameEnded, setGameEnded] = useState(false)
@@ -169,6 +172,18 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     return () => { if (clockRef.current) clearInterval(clockRef.current) }
   }, [clockRunning])
 
+  // Penalty over: buzz + beep (where the phone allows) and a banner that stays
+  // until dismissed, so the scorer can wave the player back on even if the
+  // phone is on silent. Fires when a timer runs out, not when one is removed.
+  useEffect(() => {
+    const prev = prevActivePens.current
+    const ended = penalties.filter(p => !p.active && p.remaining <= 0 && prev.has(p.id))
+    prevActivePens.current = new Set(penalties.filter(p => p.active).map(p => p.id))
+    if (!ended.length || !game) return
+    if (defaults.penaltyAlert) penaltyOverAlert()
+    setPenOver(list => [...list, ...ended.map(p => `${p.team === 1 ? game.team1 : game.team2}${p.playerNum ? ' #' + p.playerNum : ''} can return`)])
+  }, [penalties]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // auto-stop at 0:00
   useEffect(() => {
     if (clockRunning && clockMs <= 0) { setClockRunning(false); toast('⏱ Period over') }
@@ -176,6 +191,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
   function toggleClock() {
     const starting = !clockRunning
+    if (starting) primeAlerts()   // unlock sound with this tap so the penalty alert can play later
     if (starting && clockMs <= 0) setClockMs(periodSecs * 1000)
     setClockRunning(r => !r)
     if (starting) pushLive({ live: true })
@@ -250,6 +266,10 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     } catch { toast.error('Failed to save') } finally { setSavingCfg(false) }
   }
 
+  function setPenaltyAlert(val: boolean) {
+    if (!game) return
+    setDefaults(saveDefaults(game.tournamentId ?? tid, { penaltyAlert: val }))
+  }
   function setAskScorer(val: boolean) {
     if (!game) return
     setDefaults(saveDefaults(game.tournamentId ?? tid, { askScorer: val }))
@@ -275,6 +295,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
   function addPenalty() {
     if (!showPenaltyForm || !game) return
+    primeAlerts()
     const total = Math.max(1, chosenSecs())
     setPenalties(p => [...p, {
       id: Math.random().toString(36).slice(2), team: showPenaltyForm, playerNum: penPlayer,
@@ -366,6 +387,18 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col select-none">
       <Toaster position="top-center" toastOptions={{ style: { background: '#1f2937', color: '#fff', border: '1px solid #374151' } }} />
+
+      {/* Penalty over banners — stay until dismissed */}
+      {penOver.length > 0 && (
+        <div className="fixed top-0 inset-x-0 z-[70] p-3 space-y-2">
+          {penOver.map((msg, i) => (
+            <div key={i} role="alert" className="flex items-center gap-3 rounded-2xl bg-red-600 text-white px-4 py-3 shadow-2xl">
+              <span className="flex-1 font-bold">⏱ Penalty over — {msg}</span>
+              <button onClick={() => setPenOver(l => l.filter((_, j) => j !== i))} className="px-4 py-2 rounded-xl bg-white text-red-700 font-bold text-sm">OK</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Top info bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-3">
@@ -512,6 +545,14 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
               <span className="text-sm text-gray-200">Ask for player&nbsp;# when a goal is scored</span>
               <input type="checkbox" checked={defaults.askScorer} onChange={e => setAskScorer(e.target.checked)} className="accent-emerald-600 w-5 h-5" />
             </label>
+            <div className="flex items-center gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 mt-3">
+              <label className="flex-1 flex items-center justify-between gap-3 cursor-pointer">
+                <span className="text-sm text-gray-200">Sound + vibrate when a penalty ends</span>
+                <input type="checkbox" checked={defaults.penaltyAlert} onChange={e => setPenaltyAlert(e.target.checked)} className="accent-emerald-600 w-5 h-5" />
+              </label>
+              <button onClick={() => penaltyOverAlert()} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200">Test</button>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1 px-1">Saved on this phone. iPhones can&apos;t vibrate from a web page; they beep and show a banner.</p>
             <label className="flex items-center justify-between gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 cursor-pointer mt-3">
               <span className="text-sm text-gray-200">No ties — warn at final if the score is tied</span>
               <input type="checkbox" checked={noTies} onChange={e => { setNoTies(e.target.checked); saveConfig({ noTies: e.target.checked }) }} className="accent-emerald-600 w-5 h-5" />
