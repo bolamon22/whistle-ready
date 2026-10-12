@@ -7,6 +7,7 @@ import TournamentNav from './TournamentNav'
 import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X } from 'lucide-react'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
+import { gameGender } from '@/lib/gameGender'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
@@ -151,7 +152,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
   // Clear assignments state
   const [showClear,setShowClear]=useState(false)
-  const [clearConfirm,setClearConfirm]=useState('')
+  const [clearArmed,setClearArmed]=useState(false) // second-click confirmation step
+  const [clearFields,setClearFields]=useState<Set<string>>(new Set()) // empty = all fields
   const [clearName,setClearName]=useState('')
   const [clearSaving,setClearSaving]=useState(false)
   const [clearCategories,setClearCategories]=useState<Set<string>>(new Set())
@@ -278,14 +280,32 @@ export default function GridPage({ params }: { params:{id:string} }) {
     setAutoAssigning(false)
   }
 
+  function resetClear(){setShowClear(false);setClearArmed(false);setClearName('');setClearCategories(new Set());setClearFields(new Set())}
+  // Mirrors the clear-assignments route: same kinds, same field filter, same gender rule.
+  function clearTargets(kinds:Set<string>,fields:Set<string>){
+    let n=0
+    for(const g of games){
+      if(g.date!==activeDay)continue
+      if(fields.size&&!fields.has(g.location))continue
+      const gg=gameGender(g.division)
+      const refsHit=(kinds.has('girls-refs')&&gg!=='boys')||(kinds.has('boys-refs')&&gg!=='girls')
+      for(const a of g.assignments){
+        if(a.role==='scorekeeper'?kinds.has('scorekeepers'):refsHit&&/^ref[123]$/.test(a.role))n++
+      }
+    }
+    return n
+  }
+
   async function clearAssignments(){
-    if(clearConfirm!=='DELETE'||!clearName.trim())return
+    if(!clearArmed||!clearName.trim()||clearCategories.size===0)return
     setClearSaving(true)
-    const res=await fetch(`/api/tournaments/${params.id}/clear-assignments`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({deletedBy:clearName.trim(),date:activeDay})})
-    const data=await res.json()
-    if(res.ok){toast.success(`Cleared ${data.deleted} assignments`);await load()}
-    else toast.error('Failed to clear')
-    setClearSaving(false);setShowClear(false);setClearConfirm('');setClearName('')
+    try{
+      const res=await fetch(`/api/tournaments/${params.id}/clear-assignments`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({deletedBy:clearName.trim(),date:activeDay,kinds:Array.from(clearCategories),fields:Array.from(clearFields)})})
+      const data=await res.json().catch(()=>({}))
+      if(res.ok){toast.success(`Cleared ${data.deleted} assignment${data.deleted===1?'':'s'}`);await load();resetClear()}
+      else{toast.error(data.error||'Failed to clear');setClearArmed(false)}
+    }catch{toast.error('Failed to clear');setClearArmed(false)}
+    setClearSaving(false)
   }
 
   function openEditGame(g:Game){setEditGame(g);setGameForm({gameNumber:g.gameNumber,date:g.date,startTime:g.startTime,location:g.location,division:g.division,pool:g.pool??'',team1:g.team1,team2:g.team2,refCount:g.refCount,isChampionship:g.isChampionship,isCanceled:g.isCanceled})}
@@ -427,7 +447,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   if(!tournament)return<div className="text-red-500">Not found</div>
 
   const dates=eventDayList(tournament,games.map(g=>g.date))
-  function gameGenderOf(div:string):'boys'|'girls'|'both'{const d=div.toLowerCase();return d.includes('girl')||d.includes('women')?'girls':d.includes('boy')||d.includes('men')?'boys':'both'}
+  const gameGenderOf=gameGender
   // A division that is neither (coed, unnamed) counts as both, so it never hides.
   const filteredOut=(g:Game)=>{
     if(genderFilter!=='all'){const gg=gameGenderOf(g.division);if(gg!=='both'&&gg!==genderFilter)return true}
@@ -669,9 +689,20 @@ export default function GridPage({ params }: { params:{id:string} }) {
       )}
 
       {/* Clear assignments modal */}
-      {showClear&&(
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      {showClear&&(()=>{
+        const KIND_OPTS=[
+          {val:'girls-refs',label:'👧 Girls Referees',short:"girls' ref",on:'border-pink-400 bg-pink-50'},
+          {val:'boys-refs',label:'👦 Boys Referees',short:"boys' ref",on:'border-sky-400 bg-sky-50'},
+          {val:'scorekeepers',label:'📋 Score Keepers',short:'scorekeeper',on:'border-emerald-400 bg-emerald-50'},
+        ]
+        const fieldList=Array.from(new Set(dayGames.map(g=>g.location).filter(Boolean))).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
+        const total=clearTargets(clearCategories,clearFields)
+        const kindNames=KIND_OPTS.filter(k=>clearCategories.has(k.val)).map(k=>k.short)
+        const whereText=clearFields.size===0?'all fields':Array.from(clearFields).join(', ')
+        const change=(fn:()=>void)=>{fn();setClearArmed(false)}
+        return(
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>!clearSaving&&resetClear()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-red-100 bg-red-50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-red-800">Clear Assignments</h2>
               <p className="text-sm text-red-600 mt-1">For <strong>{formatDate(activeDay)}</strong>. This cannot be undone.</p>
@@ -679,33 +710,67 @@ export default function GridPage({ params }: { params:{id:string} }) {
             <div className="px-6 py-5 space-y-4">
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">What do you want to clear?</p>
-                {([['girls-refs','👧 Girls Referees','pink'],['boys-refs','👦 Boys Referees','sky'],['scorekeepers','📋 Score Keepers','emerald']] as const).map(([val,label,color])=>(
-                  <label key={val} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${clearCategories.has(val)?`border-${color}-400 bg-${color}-50`:`border-slate-200 hover:bg-slate-50`}`}>
-                    <input type="checkbox" className="w-4 h-4 accent-red-600" checked={clearCategories.has(val)} onChange={e=>{const s=new Set(clearCategories);e.target.checked?s.add(val):s.delete(val);setClearCategories(s)}}/>
-                    <span className="text-sm font-medium text-slate-800">{label}</span>
-                  </label>
-                ))}
+                {KIND_OPTS.map(k=>{
+                  const n=clearTargets(new Set([k.val]),clearFields)
+                  return(
+                  <label key={k.val} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${clearCategories.has(k.val)?k.on:'border-slate-200 hover:bg-slate-50'}`}>
+                    <input type="checkbox" className="w-4 h-4 accent-red-600" checked={clearCategories.has(k.val)} onChange={e=>change(()=>{const s=new Set(clearCategories);e.target.checked?s.add(k.val):s.delete(k.val);setClearCategories(s)})}/>
+                    <span className="text-sm font-medium text-slate-800 flex-1">{k.label}</span>
+                    <span className={`text-xs font-semibold tabular-nums ${n?'text-slate-600':'text-slate-300'}`}>{n}</span>
+                  </label>)
+                })}
               </div>
+              {fieldList.length>1&&(
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-700">Which fields?</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button type="button" onClick={()=>change(()=>setClearFields(new Set()))}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${clearFields.size===0?'bg-slate-800 text-white border-slate-800':'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>All</button>
+                    {fieldList.map(f=>{
+                      const on=clearFields.has(f)
+                      const n=clearCategories.size?clearTargets(clearCategories,new Set([f])):null
+                      return(
+                      <button key={f} type="button" aria-pressed={on}
+                        onClick={()=>change(()=>{const s=new Set(clearFields);on?s.delete(f):s.add(f);setClearFields(s)})}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${on?'bg-red-600 text-white border-red-600':'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                        {f}{n!==null&&<span className={`ml-1 tabular-nums ${on?'text-red-100':'text-slate-400'}`}>{n}</span>}
+                      </button>)
+                    })}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="label">Your name (for the audit log)</label>
                 <input className="input" placeholder="e.g. John Smith" value={clearName} onChange={e=>setClearName(e.target.value)}/>
               </div>
-              <div>
-                <label className="label">Type <strong>DELETE</strong> to confirm</label>
-                <input className="input font-mono" placeholder="DELETE" value={clearConfirm} onChange={e=>setClearConfirm(e.target.value)}/>
-              </div>
-              <div className="flex gap-3">
-                <button className="btn-secondary flex-1" onClick={()=>{setShowClear(false);setClearConfirm('');setClearName('');setClearCategories(new Set())}}>Cancel</button>
-                <button
-                  className="flex-1 px-4 py-2 rounded-xl font-semibold text-sm transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={clearAssignments}
-                  disabled={clearConfirm!=='DELETE'||!clearName.trim()||clearCategories.size===0||clearSaving}
-                >{clearSaving?'Clearing…':'Clear'}</button>
-              </div>
+              {!clearArmed?(
+                <div className="flex gap-3">
+                  <button className="btn-secondary flex-1" onClick={resetClear}>Cancel</button>
+                  <button
+                    className="flex-1 px-4 py-2 rounded-xl font-semibold text-sm transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={()=>setClearArmed(true)}
+                    disabled={!clearName.trim()||clearCategories.size===0||total===0}
+                  >{clearCategories.size===0?'Pick what to clear':total===0?'Nothing to clear':`Clear ${total} assignment${total===1?'':'s'}…`}</button>
+                </div>
+              ):(
+                <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 space-y-3">
+                  <p className="text-sm text-red-800">
+                    Are you sure? This removes <strong>{total}</strong> {kindNames.join(' + ')} assignment{total===1?'':'s'} on <strong>{whereText}</strong> for {formatDate(activeDay)}.
+                  </p>
+                  <div className="flex gap-3">
+                    <button className="btn-secondary flex-1" onClick={()=>setClearArmed(false)} disabled={clearSaving}>Go back</button>
+                    <button
+                      className="flex-1 px-4 py-2 rounded-xl font-semibold text-sm transition-colors bg-red-700 text-white hover:bg-red-800 disabled:opacity-40"
+                      onClick={clearAssignments}
+                      disabled={clearSaving}
+                    >{clearSaving?'Clearing…':'Yes, clear them'}</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        </div>)
+      })()}
 
       {/* ── Page header: shared nav + light toolbar ─────────────────── */}
       <TournamentNav
@@ -738,7 +803,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         )}
         <div className="flex items-center gap-1.5">
           {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="text-xs font-semibold text-purple-700 border border-purple-200 hover:bg-purple-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Zap size={13} /> Auto-assign</button>}
-          {dayGames.length > 0 && <button onClick={() => { setShowClear(true); setClearConfirm(''); setClearName(''); setClearCategories(new Set()) }} className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Trash2 size={13} /> Clear</button>}
+          {dayGames.length > 0 && <button onClick={() => { resetClear(); setShowClear(true) }} className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Trash2 size={13} /> Clear</button>}
           <button onClick={openAddGame} className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Plus size={13} /> Game</button>
           <label className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"><Upload size={13} /> Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>
         </div>

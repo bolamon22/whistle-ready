@@ -2,21 +2,13 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getPayRate, parsePayRates, parseJsonDeep } from '@/lib/utils'
 import { requireStaff } from '@/lib/apiAuth'
+import { gameGender } from '@/lib/gameGender'
 
 interface WorkerRow {
   id: string; name: string; certLevel: string; defaultRole: string
   gender: string; payRateOverride: number | null; roles: string
 }
 
-// Whose game it is, from the division name. Whole words: "Women" used to count as
-// "men" too, which made every women's game a boys' game as well.
-type GameGender = 'boys' | 'girls' | 'both'
-function gameGender(division: string): GameGender {
-  const d = ` ${division.toLowerCase().replace(/[^a-z]+/g, ' ')} `
-  if (/ (girl|girls|women|womens|ladies) /.test(d)) return 'girls'
-  if (/ (boy|boys|men|mens) /.test(d)) return 'boys'
-  return 'both'
-}
 
 function genderMatch(workerGender: string, division: string): boolean {
   const g = gameGender(division)
