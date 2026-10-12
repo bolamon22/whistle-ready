@@ -8,12 +8,20 @@ interface WorkerRow {
   gender: string; payRateOverride: number | null; roles: string
 }
 
+// Whose game it is, from the division name. Whole words: "Women" used to count as
+// "men" too, which made every women's game a boys' game as well.
+type GameGender = 'boys' | 'girls' | 'both'
+function gameGender(division: string): GameGender {
+  const d = ` ${division.toLowerCase().replace(/[^a-z]+/g, ' ')} `
+  if (/ (girl|girls|women|womens|ladies) /.test(d)) return 'girls'
+  if (/ (boy|boys|men|mens) /.test(d)) return 'boys'
+  return 'both'
+}
+
 function genderMatch(workerGender: string, division: string): boolean {
-  const d = division.toLowerCase()
-  const isGirls = d.includes('girl') || d.includes('women')
-  const isBoys  = d.includes('boy')  || d.includes('men')
-  if (isGirls && workerGender === 'boys') return false
-  if (isBoys  && workerGender === 'girls') return false
+  const g = gameGender(division)
+  if (g === 'girls' && workerGender === 'boys') return false
+  if (g === 'boys' && workerGender === 'girls') return false
   return true
 }
 
@@ -29,7 +37,18 @@ function canScorekeeper(w: WorkerRow): boolean {
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  const { date, stickyScorekeeper } = await req.json()
+  const { date, stickyScorekeeper, fill } = await req.json()
+  // What to fill (Bo, Oct 12 2026: "options to auto assign Score keepers, Girls Refs,
+  // and Boys refs independently"). Leaving one out leaves its slots alone, so staff
+  // can run girls' refs first, check them, then the rest. Default: everything.
+  const want = {
+    sk: fill?.scorekeepers !== false,
+    boys: fill?.boysRefs !== false,
+    girls: fill?.girlsRefs !== false,
+  }
+  // Games that aren't boys' or girls' (coed, or a name that says neither) go with
+  // either refs choice.
+  const refsWanted = (division: string) => { const g = gameGender(division); return g === 'girls' ? want.girls : g === 'boys' ? want.boys : (want.boys || want.girls) }
 
   const tournament = await prisma.tournament.findUnique({ where: { id: params.id } })
   if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -117,7 +136,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // so we don't accidentally lock a ref out of ref slots.
   // Fall back to refs-who-can-SK only if not enough dedicated SKs.
   const fieldScorekeeper = new Map<string, string>()
-  if (stickyScorekeeper) {
+  if (stickyScorekeeper && want.sk) {
     const fields = Array.from(new Set(games.map(g => g.location)))
     const times  = Array.from(new Set(games.map(g => g.startTime))).sort()
     const firstTime = times[0] ?? '08:00'
@@ -157,6 +176,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     for (const role of neededRoles) {
       if (game.assignments.some(a => a.role === role)) continue // already assigned
+      if (role === 'scorekeeper' ? !want.sk : !refsWanted(game.division)) continue // not asked to fill this one
 
       if (role === 'scorekeeper') {
         let skId: string | null = null
@@ -198,13 +218,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         }
 
       } else {
-        // Ref slot
+        // Ref slot. On a boys' or girls' game, refs who only do that side go first and
+        // refs who do both are the fallback: girls' refs are the scarce ones, and a
+        // both-ways ref used up on a boys' game at 9:40 can't cover a girls' game then.
+        const gg = gameGender(game.division)
+        const flex = (w: WorkerRow) => (gg !== 'both' && (w.gender || 'both') === 'both' ? 1 : 0)
         const eligible = sortByLoad(
           refs.filter(w =>
             isEligible(w.id, game.startTime) &&
             genderMatch(w.gender, game.division)
           )
-        )
+        ).sort((a, b) => flex(a) - flex(b))
         const worker = eligible[0]
         if (worker) {
           const payRate = worker.payRateOverride ?? getPayRate(worker.certLevel, role, payRates)
@@ -233,13 +257,16 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (missingRefs > 0) needMore.push(`${missingRefs} more ref${missingRefs !== 1 ? 's' : ''}`)
   if (missingSKs  > 0) needMore.push(`${missingSKs} more scorekeeper${missingSKs !== 1 ? 's' : ''}`)
 
+  const did = [want.sk && 'scorekeepers', want.boys && "boys' refs", want.girls && "girls' refs"].filter(Boolean) as string[]
+  const scope = did.length === 3 ? '' : ` (${did.join(' and ')} only)`
   return NextResponse.json({
     assigned: created.length,
+    scope: did,
     gaps,
     missingRefs,
     missingSKs,
     summary: gaps.length === 0
-      ? `✅ All slots filled — ${created.length} assignments made!`
-      : `Filled ${created.length} slots. Still need ${needMore.join(' and ')} to cover all games.`,
+      ? `✅ All slots filled${scope} — ${created.length} assignments made!`
+      : `Filled ${created.length} slots${scope}. Still need ${needMore.join(' and ')} to cover all games.`,
   })
 }

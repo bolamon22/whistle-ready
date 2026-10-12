@@ -132,6 +132,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
   // Auto-assign state
   const [showAutoAssign,setShowAutoAssign]=useState(false)
   const [stickyScorekeeper,setStickyScorekeeper]=useState(true)
+  // Which slots Auto-assign fills: scorekeepers, boys' refs, girls' refs, each on its own.
+  const [aaFill,setAaFill]=useState({scorekeepers:true,boysRefs:true,girlsRefs:true})
   const [autoAssigning,setAutoAssigning]=useState(false)
   const [autoResult,setAutoResult]=useState<{assigned:number;gaps:GapEntry[];missingRefs:number;missingSKs:number;summary:string}|null>(null)
 
@@ -247,7 +249,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
   async function runAutoAssign(){
     setAutoAssigning(true)
-    const res=await fetch(`/api/tournaments/${params.id}/auto-assign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:activeDay,stickyScorekeeper})})
+    const res=await fetch(`/api/tournaments/${params.id}/auto-assign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:activeDay,stickyScorekeeper,fill:aaFill})})
     const data=await res.json()
     if(res.ok){setAutoResult(data);await load()}
     else toast.error(data.error||'Auto-assign failed')
@@ -492,16 +494,42 @@ export default function GridPage({ params }: { params:{id:string} }) {
             </div>
             {!autoResult?(
               <div className="px-6 py-5 space-y-4">
-                <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 hover:border-sky-300 transition-colors">
+                {(()=>{
+                  // Open slots of each kind on this day (not canceled), so the choice shows what it will fill.
+                  const open={scorekeepers:0,boysRefs:0,girlsRefs:0}
+                  for(const g of dayGames){
+                    if(g.isCanceled)continue
+                    if(!g.assignments.some(a=>a.role==='scorekeeper'))open.scorekeepers++
+                    const refsOpen=['ref1','ref2','ref3'].slice(0,slotsOf(g)).filter(r=>!g.assignments.some(a=>a.role===r)).length
+                    const gg=gameGenderOf(g.division)
+                    if(gg==='girls')open.girlsRefs+=refsOpen;else open.boysRefs+=refsOpen
+                  }
+                  const opts:[keyof typeof aaFill,string,string][]=[['scorekeepers','Scorekeepers','bg-emerald-500'],['boysRefs',"Boys' refs",'bg-sky-500'],['girlsRefs',"Girls' refs",'bg-pink-500']]
+                  return(
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Fill</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {opts.map(([k,label,dot])=>(
+                          <label key={k} className={`flex flex-col gap-0.5 cursor-pointer p-2.5 rounded-xl border transition-colors ${aaFill[k]?'border-sky-400 bg-sky-50':'border-slate-200 hover:border-slate-300'}`}>
+                            <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><input type="checkbox" checked={aaFill[k]} onChange={e=>setAaFill(f=>({...f,[k]:e.target.checked}))}/><span className={`w-2 h-2 rounded-full ${dot}`}/>{label}</span>
+                            <span className="text-[11px] text-slate-500 pl-5">{open[k]} open</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5">Unticked ones are left as they are. Tip: run girls&apos; refs first; refs who do both are saved for girls&apos; games when a boys-only ref is free.</p>
+                    </div>
+                  )
+                })()}
+                {aaFill.scorekeepers&&<label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 hover:border-sky-300 transition-colors">
                   <input type="checkbox" checked={stickyScorekeeper} onChange={e=>setStickyScorekeeper(e.target.checked)} className="mt-0.5"/>
                   <div>
                     <p className="font-semibold text-slate-800 text-sm">Keep scorekeepers on one field all day</p>
                     <p className="text-xs text-slate-400 mt-0.5">Each scorekeeper stays on a single field for all games. Recommended for consistency.</p>
                   </div>
-                </label>
+                </label>}
                 <div className="flex gap-3">
                   <button className="btn-secondary flex-1" onClick={()=>setShowAutoAssign(false)}>Cancel</button>
-                  <button className="btn-primary flex-1" onClick={runAutoAssign} disabled={autoAssigning}>{autoAssigning?'Assigning…':'Run Auto-Assign'}</button>
+                  <button className="btn-primary flex-1" onClick={runAutoAssign} disabled={autoAssigning||(!aaFill.scorekeepers&&!aaFill.boysRefs&&!aaFill.girlsRefs)}>{autoAssigning?'Assigning…':'Run Auto-Assign'}</button>
                 </div>
               </div>
             ):(
