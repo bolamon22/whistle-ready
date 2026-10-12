@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { notifyGameMoment, pastHalftime } from '@/lib/finalAlerts'
 
 // Live in-progress scores so parents can follow on the public page (no login).
 // Each game's live state is stored in AppSetting under key `liveScore:<gameId>`:
@@ -56,6 +57,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const gameId = String(body.gameId || '').trim()
     if (!gameId) return NextResponse.json({ error: 'gameId required' }, { status: 400 })
 
+    const k = `liveScore:${gameId}`
+    // What followers have already been told about this game (start/halftime),
+    // carried from the previous update so each alert goes out once.
+    let prevAlerts: { start?: boolean; half?: boolean } = {}
+    try {
+      const prev = await prisma.appSetting.findUnique({ where: { key: k } })
+      if (prev) prevAlerts = (JSON.parse(prev.value || '{}').alerts) || {}
+    } catch { /* first update */ }
     const entry = {
       score1: Number(body.score1) || 0,
       score2: Number(body.score2) || 0,
@@ -63,8 +72,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       periodLabel: String(body.periodLabel || ''),
       live: !!body.live,
       updatedAt: new Date().toISOString(),
+      alerts: { ...prevAlerts },
     }
-    const k = `liveScore:${gameId}`
+    // Start: the first live update (clock started or first goal). Halftime: the
+    // scorer's clock ran out at the end of the half, or they moved into the
+    // second half. Finals go out from the game save (lib/finalAlerts notifyFinal).
+    const wantStart = entry.live && !prevAlerts.start
+    const wantHalf = entry.live && !prevAlerts.half && (body.event === 'halftime' || pastHalftime(entry.periodLabel, entry.period))
+    if (wantStart || wantHalf) {
+      const g = await prisma.game.findUnique({ where: { id: gameId } }).catch(() => null)
+      if (g && g.tournamentId === params.id) {
+        const base = { ...g, score1: entry.score1, score2: entry.score2, url: `/tournaments/${params.id}/public/games/${g.id}` }
+        // Marked as sent only when it actually went out (null = held back: not
+        // event day, too early, placeholder teams), so a scorer testing the
+        // clock an hour early doesn't use up the real start alert.
+        if (wantHalf) {
+          if (await notifyGameMoment('halftime', base)) { entry.alerts.half = true; entry.alerts.start = true }
+        } else if (await notifyGameMoment('start', base)) {
+          entry.alerts.start = true
+        }
+      }
+    }
     await prisma.appSetting.upsert({
       where: { key: k },
       update: { value: JSON.stringify(entry) },

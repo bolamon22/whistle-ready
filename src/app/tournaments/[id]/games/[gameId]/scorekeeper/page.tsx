@@ -202,11 +202,11 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   }
 
   // push the live state so parents can follow on the public page
-  function pushLive(opts: { score1?: number; score2?: number; period?: number; live: boolean } = { live: true }) {
+  function pushLive(opts: { score1?: number; score2?: number; period?: number; live: boolean; event?: 'halftime' } = { live: true }) {
     const s1 = opts.score1 ?? score1, s2 = opts.score2 ?? score2, per = opts.period ?? currentPeriod
     fetch(`/api/tournaments/${tid}/live-scores`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameId: params.gameId, score1: s1, score2: s2, period: per, periodLabel: periodLabelFor(per), live: opts.live }),
+      body: JSON.stringify({ gameId: params.gameId, score1: s1, score2: s2, period: per, periodLabel: periodLabelFor(per), live: opts.live, ...(opts.event ? { event: opts.event } : {}) }),
     }).catch(() => {})
   }
   function changePeriod(delta: number) {
@@ -285,7 +285,11 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
   // auto-stop at 0:00
   useEffect(() => {
-    if (clockRunning && clockMs <= 0) { setClockRunning(false); toast('⏱ Period over') }
+    if (clockRunning && clockMs <= 0) {
+      setClockRunning(false); toast('⏱ Period over')
+      // End of the first half (or Q2): tell followers the halftime score.
+      if ((periodFormat === 'halves' && currentPeriod === 1) || (periodFormat === 'quarters' && currentPeriod === 2)) pushLive({ live: true, event: 'halftime' })
+    }
   }, [clockMs, clockRunning])
 
   function toggleClock() {

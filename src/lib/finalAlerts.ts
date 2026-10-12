@@ -107,3 +107,59 @@ export async function notifyFinal(before: ScoreState, after: FinalGame): Promise
     return null
   }
 }
+
+// ---- start + halftime ---------------------------------------------------------
+//
+// Bo (Oct 12 2026): families following a team get three alerts per game --
+// start, halftime, final -- not one per goal. They share the final's tag, so on
+// the phone it's ONE notification per game that updates: "Underway" becomes
+// "Halftime: 3-2" becomes "Final: 7-5". Same guards as finals (event dates,
+// real teams, not canceled), plus a start can't go out more than 30 minutes
+// before the game's scheduled time, so a scorer testing the clock early sends
+// nothing. The live-scores route decides when, and remembers what it sent.
+
+export type GameMoment = 'start' | 'halftime'
+
+function nowMinutesET(): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date())
+  const h = Number(parts.find(p => p.type === 'hour')?.value || 0), m = Number(parts.find(p => p.type === 'minute')?.value || 0)
+  return h * 60 + m
+}
+
+export async function notifyGameMoment(
+  kind: GameMoment,
+  g: FinalGame & { startTime?: string | null; location?: string | null },
+): Promise<{ sent: number; failed: number } | null> {
+  try {
+    if (g.isCanceled || !isRealTeam(g.team1) || !isRealTeam(g.team2)) return null
+    const t = await prisma.tournament.findUnique({ where: { id: g.tournamentId }, select: { name: true, startDate: true, endDate: true, dates: true } })
+    const today = todayET()
+    if (!t || !duringEvent(t, today, g.date)) return null
+    if (kind === 'start') {
+      if (g.date && g.date.slice(0, 10) !== today) return null
+      const m = /^(\d{1,2}):(\d{2})/.exec(g.startTime || '')
+      if (m && nowMinutesET() < Number(m[1]) * 60 + Number(m[2]) - 30) return null
+    }
+    const field = (g.location || '').split(' - ').pop() || ''
+    const where = [t.name, g.division, g.gameNumber ? `Game ${g.gameNumber}` : '', field].filter(Boolean).join(' · ')
+    const s1 = g.score1 ?? 0, s2 = g.score2 ?? 0
+    const title = kind === 'start'
+      ? (s1 || s2 ? `Underway: ${g.team1} ${s1}, ${g.team2} ${s2}` : `Underway: ${g.team1} vs ${g.team2}`)
+      : `Halftime: ${g.team1} ${s1}, ${g.team2} ${s2}`
+    return await sendPushToFollowers(g.tournamentId, [{ division: g.division, team: g.team1 }, { division: g.division, team: g.team2 }], {
+      title, body: where, url: g.url || `/tournaments/${g.tournamentId}/public`, tag: finalTag(g),
+    })
+  } catch (e) {
+    console.error('[finalAlerts] notifyGameMoment failed (non-blocking):', e)
+    return null
+  }
+}
+
+/** Has this live update crossed halftime? Halves: into half 2. Quarters: into Q3.
+ *  Running clocks and 3-period games have no halftime. */
+export function pastHalftime(periodLabel: string, period: number): boolean {
+  const l = (periodLabel || '').toLowerCase()
+  if (l.startsWith('half')) return period >= 2
+  if (l.startsWith('qtr') || l.startsWith('quarter')) return period >= 3
+  return false
+}

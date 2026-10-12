@@ -15,7 +15,7 @@ Follow a team on the schedule page to keep it under **My Teams** and get phone a
 3. Your followed teams show under **My Teams** at the top of the page, with each team's next game.
 4. If alerts are off, tap **Turn on alerts** in **My Teams** any time. **Alerts on** means this phone will get them.
 
-Alerts cover: when the schedule is out, when and where your team plays, if a game moves, and every final score. Nothing else.
+Alerts cover: when the schedule is out, when and where your team plays, if a game moves, and each game's start, halftime score and final score (one alert per game that updates). Nothing else.
 
 **Common problems:**
 - iPhone: alerts only work after you add the schedule to your Home Screen. In Safari tap **Share**, then **Add to Home Screen**, then open it from there and turn on alerts.

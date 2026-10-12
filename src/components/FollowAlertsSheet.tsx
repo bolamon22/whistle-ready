@@ -66,7 +66,7 @@ export default function FollowAlertsSheet({ team, deviceId, onDone }: {
           </>
         ) : (
           <>
-            <p className="text-sm text-slate-600">When the schedule is out, when {team} plays and where, if a game moves, and every final. Nothing else.</p>
+            <p className="text-sm text-slate-600">When the schedule is out, when {team} plays and where, if a game moves, and each game&apos;s start, halftime score and final. Nothing else.</p>
             {!supported && <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">This browser can&apos;t receive notifications. Your follows still save; try Chrome or the installed app for alerts.</p>}
             {err && <p className="mt-3 text-xs text-red-600">{err}</p>}
             <div className="mt-4 flex flex-col gap-2">
