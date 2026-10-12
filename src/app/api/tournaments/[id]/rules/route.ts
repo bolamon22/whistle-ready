@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { resolveRules } from '@/lib/rules'
 
 // Tournament scoring config: the playing-rules reference text shown in the
 // scorekeeper's 📖 Rules panel, the "no ties" flag, period format, and the game
@@ -38,10 +39,33 @@ async function readConfig(id: string) {
   } catch { return { ...DEFAULT_CONFIG } }
 }
 
+// The tournament's published rules: the event page's Rules section, i.e. a linked
+// org rule set (orgRules:<orgId>) or the event's own text (tournamentSite:<id>).
+// The scorer shows these automatically; scoringConfig.rules is now only an
+// optional scorer-specific override. Same text the public /rules page shows.
+async function readEventRules(id: string): Promise<{ body: string; sourceName?: string }> {
+  try {
+    const site = await prisma.appSetting.findUnique({ where: { key: `tournamentSite:${id}` } })
+    const content = site ? JSON.parse(site.value || '{}') : {}
+    let sets: any[] = []
+    // Tournament.orgId is a raw column (not in schema.prisma).
+    const t = await prisma.$queryRawUnsafe<Array<{ orgId: string | null }>>(`SELECT orgId FROM "Tournament" WHERE id = ?`, id)
+    const orgId = t?.[0]?.orgId
+    if (orgId) {
+      const r = await prisma.appSetting.findUnique({ where: { key: `orgRules:${orgId}` } })
+      const v = r ? JSON.parse(r.value || '{}') : {}
+      sets = Array.isArray(v.sets) ? v.sets : []
+    }
+    const res = resolveRules(content, sets)
+    return { body: res.body || '', sourceName: res.sourceName }
+  } catch { return { body: '' } }
+}
+
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   try {
     await ensureTable()
-    return NextResponse.json(await readConfig(params.id))
+    const [cfg, ev] = await Promise.all([readConfig(params.id), readEventRules(params.id)])
+    return NextResponse.json({ ...cfg, eventRules: ev.body, eventRulesSource: ev.sourceName || '' })
   } catch {
     return NextResponse.json({ ...DEFAULT_CONFIG })
   }

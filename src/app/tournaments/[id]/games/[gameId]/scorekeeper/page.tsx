@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
 
 interface Game {
   id: string; tournamentId?: string; gameNumber: string; division: string; location: string
@@ -39,6 +40,7 @@ function saveDefaults(tid: string, patch: Partial<TournamentDefaults>): Tourname
 
 export default function ScorekeeperPage({ params }: { params: { id: string; gameId: string } }) {
   const tid = params.id // tournament id
+  const router = useRouter()
   const [game, setGame] = useState<Game | null>(null)
   const [loading, setLoading] = useState(true)
   const [defaults, setDefaults] = useState<TournamentDefaults>(DEFAULTS_FALLBACK)
@@ -79,7 +81,11 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
   // rules slide-over (viewer) + shared scoring config (rules text + no-ties)
   const [showRules, setShowRules] = useState(false)
-  const [rulesText, setRulesText] = useState('')
+  const [rulesText, setRulesText] = useState('')          // optional scorer notes (scoringConfig.rules)
+  const [eventRules, setEventRules] = useState('')        // the tournament's published rules, looked up automatically
+  const [eventRulesSource, setEventRulesSource] = useState('')
+  const [exiting, setExiting] = useState(false)
+  const savedScores = useRef<{ s1: number; s2: number }>({ s1: 0, s2: 0 })
   const [noTies, setNoTies] = useState(false)
   const [periodFormat, setPeriodFormat] = useState('halves')
   const [periodBreakMin, setPeriodBreakMin] = useState(0)
@@ -101,6 +107,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
       const d = loadDefaults(g.tournamentId ?? tid)
       setGame(g); setDefaults(d)
       setScore1(g.score1 ?? 0); setScore2(g.score2 ?? 0)
+      savedScores.current = { s1: g.score1 ?? 0, s2: g.score2 ?? 0 }
       setPeriodSecs(d.periodSecs); setClockMs(d.periodSecs * 1000)
       setSetupMin(Math.floor(d.periodSecs / 60)); setSetupSec(d.periodSecs % 60)
       setPenSecs(d.penaltySecs)
@@ -115,6 +122,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     fetch(`/api/tournaments/${tid}/rules`).then(r => r.ok ? r.json() : null).then(d => {
       if (d) {
         setRulesText(d.rules || ''); setNoTies(!!d.noTies)
+        setEventRules(d.eventRules || ''); setEventRulesSource(d.eventRulesSource || '')
         if (d.periodFormat) setPeriodFormat(d.periodFormat)
         if (d.periodBreakMin != null) setPeriodBreakMin(d.periodBreakMin)
         setOfficialTimeOnField(d.officialTimeOnField !== false)
@@ -193,17 +201,45 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   // server tells followers about finals, so mid-game saves say `provisional`.
   async function saveScore(opts: { final?: boolean } = {}) {
     setSaving(true)
-    await fetch(`/api/games/${params.gameId}`, {
+    const res = await fetch(`/api/games/${params.gameId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ score1, score2, ...(opts.final ? {} : { provisional: true }) }),
-    })
-    setSaving(false); setSaved(true); toast.success(opts.final ? 'Final posted!' : 'Score saved!')
+    }).catch(() => null)
+    setSaving(false)
+    if (!res || !res.ok) { toast.error('Could not save — check your signal and try again'); return false }
+    savedScores.current = { s1: score1, s2: score2 }
+    setSaved(true); toast.success(opts.final ? 'Final posted!' : 'Score saved!')
     setTimeout(() => setSaved(false), 2000)
+    return true
+  }
+
+  // Leave the game. There was no way out before (scorers had to use the browser's
+  // back button). Unsaved score changes are saved as a running (not final) score
+  // first so nothing is lost; the clock and penalty timers live on this screen only,
+  // so warn before dropping them.
+  async function exitGame() {
+    const activePens = penalties.filter(p => p.active).length
+    const warn = [
+      clockRunning ? 'the clock is running' : '',
+      activePens ? `${activePens} penalty timer${activePens === 1 ? ' is' : 's are'} running` : '',
+    ].filter(Boolean)
+    if (warn.length && !window.confirm(`Leave this game? ${warn.join(' and ')} — ${warn.length > 1 ? 'they' : 'it'} will stop. The score is kept.`)) return
+    setExiting(true)
+    setClockRunning(false)
+    const dirty = score1 !== savedScores.current.s1 || score2 !== savedScores.current.s2
+    if (dirty && !gameEnded) {
+      const ok = await saveScore()
+      if (!ok && !window.confirm('The score did not save. Leave anyway? Your changes will be lost.')) { setExiting(false); return }
+    }
+    // Back to wherever they came from inside the app; otherwise this event's game list.
+    const sameSite = typeof document !== 'undefined' && document.referrer.startsWith(window.location.origin)
+    if (sameSite && window.history.length > 1) router.back()
+    else router.push(`/tournaments/${tid}/scoring`)
   }
 
   function openSettings() { setShowSettings(true) }
   function openRules() { setShowRules(true) }
-  async function saveConfig(patch: { rules?: string; noTies?: boolean }) {
+  async function saveConfig(patch: { rules?: string; noTies?: boolean; officialTimeOnField?: boolean; periodFormat?: string }) {
     setSavingCfg(true)
     try {
       const res = await fetch(`/api/tournaments/${tid}/rules`, {
@@ -334,7 +370,13 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
       {/* Top info bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-3">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="inline-flex items-center gap-1 bg-emerald-900/50 text-emerald-400 border border-emerald-800/40 rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide">📋 Scorekeeper View</span>
+          <div className="flex items-center gap-2">
+            <button onClick={exitGame} disabled={exiting} aria-label="Exit game"
+              className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold disabled:opacity-50">
+              {exiting ? 'Saving…' : '← Exit'}
+            </button>
+            <span className="hidden sm:inline-flex items-center gap-1 bg-emerald-900/50 text-emerald-400 border border-emerald-800/40 rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide">📋 Scorekeeper View</span>
+          </div>
           {game.isChampionship && <span className="text-xs bg-amber-900/50 text-amber-400 px-2 py-1 rounded-full">🏆 Championship</span>}
           <div className="flex items-center gap-2">
             <button onClick={openSettings} aria-label="Settings"
@@ -424,7 +466,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
         <button onClick={() => {
             if (noTies && score1 === score2) { if (!window.confirm('The score is tied and this tournament doesn’t allow ties. Post it as a tie anyway?')) return }
             if (!window.confirm(`Post the final score?\n\n${game.team1} ${score1} – ${score2} ${game.team2}`)) return
-            saveScore({ final: true }); setGameEnded(true); setClockRunning(false); pushLive({ live: false })
+            setClockRunning(false); saveScore({ final: true }).then(ok => { if (ok) { setGameEnded(true); pushLive({ live: false }) } })
           }}
           className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-base active:scale-[.98] transition-all">End Game &amp; Post Score</button>
         {gameEnded && (<p className="text-center text-xs text-emerald-400 mt-2">Final: {game.team1} {score1} – {score2} {game.team2}</p>)}
@@ -442,10 +484,19 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
             <button onClick={() => setShowRules(false)} className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg font-semibold">✕ Back to scoring</button>
           </div>
           <div className="flex-1 overflow-auto p-5">
-            {rulesText.trim() ? (
-              <div className="max-w-2xl mx-auto text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{rulesText}</div>
-            ) : (
-              <div className="p-6 text-center text-sm text-gray-400">No rules added yet.<br />Add them in ⚙ Settings.</div>
+            {rulesText.trim() && (
+              <div className="max-w-2xl mx-auto mb-5 rounded-xl border border-amber-800/40 bg-amber-950/30 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-400 mb-1.5">Scorer notes</p>
+                <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{rulesText}</div>
+              </div>
+            )}
+            {eventRules.trim() ? (
+              <div className="max-w-2xl mx-auto">
+                {eventRulesSource && <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-2">{eventRulesSource}</p>}
+                <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{eventRules}</div>
+              </div>
+            ) : !rulesText.trim() && (
+              <div className="p-6 text-center text-sm text-gray-400">This tournament has no rules on its event page yet.<br />Add them in the event page&apos;s Rules section and they show up here.</div>
             )}
           </div>
         </div>
@@ -454,7 +505,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
       {/* Settings modal */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 w-full max-w-sm">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="font-bold text-white mb-1">⚙ Settings</h3>
             <p className="text-xs text-gray-500 mb-4">Saved for the whole tournament.</p>
             <label className="flex items-center justify-between gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 cursor-pointer">
@@ -481,12 +532,13 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
               <p className="text-[11px] text-gray-500 mt-1">Sets how the period is labeled in the scorer (Half / Qtr / Period).</p>
             </div>
             <div className="mt-4">
-              <label className="block text-xs text-gray-400 mb-1">Tournament rules (shown in the 📖 Rules reference)</label>
-              <textarea value={rulesText} onChange={e => setRulesText(e.target.value)} rows={6} placeholder="Paste or type the playing rules here…"
+              <p className="text-[11px] text-gray-400 mb-2">{eventRules.trim() ? `📖 Rules load automatically from the event page${eventRulesSource ? ` (${eventRulesSource})` : ''}.` : '📖 No rules on the event page yet — add them in the event page’s Rules section.'}</p>
+              <label className="block text-xs text-gray-400 mb-1">Extra notes for scorers (optional, shown above the rules)</label>
+              <textarea value={rulesText} onChange={e => setRulesText(e.target.value)} rows={4} placeholder="e.g. Running clock in the last 2 min if up by 6+…"
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <button onClick={() => saveConfig({ rules: rulesText })} disabled={savingCfg}
-                className="mt-2 w-full px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-sm disabled:opacity-50">Save rules</button>
-              <p className="text-[11px] text-gray-500 mt-1">Saved for the whole tournament. Scorers open it from 📖 Rules without leaving the game.</p>
+                className="mt-2 w-full px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-sm disabled:opacity-50">Save notes</button>
+              <p className="text-[11px] text-gray-500 mt-1">Saved for the whole tournament. Scorers open them from 📖 Rules without leaving the game.</p>
             </div>
             <button onClick={() => setShowSettings(false)} className="w-full mt-4 py-3 rounded-xl bg-gray-800 text-gray-300 hover:bg-gray-700 font-semibold">Done</button>
           </div>
