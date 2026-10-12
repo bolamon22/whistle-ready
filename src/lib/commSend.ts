@@ -188,7 +188,7 @@ export async function runCommSend(args: {
   // it (one the office entered, say) still needs the link, and the claim page
   // asks them for their existing password.
   const alreadyOpen = new Set<string>()
-  if (kind === 'account' || kind === 'checklist') {
+  if (kind === 'account' || kind === 'checklist' || needsReqs) {
     try {
       for (const id of (await directorsOf(regs.map(r => r.id))).keys()) alreadyOpen.add(id)
     } catch { /* can't tell — send anyway; the claim page handles an existing account */ }
@@ -199,10 +199,11 @@ export async function runCommSend(args: {
   const confirmStates = kind === 'checklist' || needsReqs ? await readConfirmMany(regs.map(r => r.id)) : null
   // Whether the contact has a Whistle Ready login AT ALL, which is a different
   // question from whether that login can open this registration (alreadyOpen,
-  // above). The registrations page badge uses this one; the checklist needs
-  // both so it can tell "sign up" from "claim the one you have".
+  // above). The registrations page badge uses this one; the checklist and the
+  // urgent letter's login row need both so they can tell "sign up" from "claim
+  // the one you have".
   const accountEmails = new Set<string>()
-  if (kind === 'checklist') {
+  if (kind === 'checklist' || needsReqs) {
     const emails = [...new Set(regs.map(r => String(r.contactEmail || '').trim().toLowerCase()).filter(Boolean))]
     if (emails.length) {
       try {
@@ -272,6 +273,32 @@ export async function runCommSend(args: {
     }
   }
 
+  // The login row's facts and links, for the checklist and the urgent letter alike.
+  // A club nobody can open in the portal yet gets a fresh single-use claim link,
+  // which replaces any earlier one; a test copy gets the dummy link instead.
+  const loginFor = async (reg: (typeof regs)[number]) => {
+    let claimLink = ''
+    if (!alreadyOpen.has(reg.id)) {
+      if (testMode) claimLink = claimUrl(tournamentAbs(org?.slug, ''), TEST_CLAIM_TOKEN)
+      else {
+        const tk = await issueClaimToken(reg.id)
+        if (tk) claimLink = claimUrl(tournamentAbs(org?.slug, ''), tk)
+      }
+    }
+    return {
+      facts: {
+        hasLogin: alreadyOpen.has(reg.id),
+        hasAccountElsewhere: accountEmails.has(String(reg.contactEmail || '').trim().toLowerCase()),
+        loginEmail: String(reg.contactEmail || ''),
+      },
+      links: {
+        // Already has a login? Send them to sign in rather than to a claim page.
+        accountLink: claimLink || tournamentAbs(org?.slug, '/login'),
+        portalLink: tournamentAbs(org?.slug, '/dashboard/club-director'),
+      },
+    }
+  }
+
   const results: SendResult[] = []
   // The first email that actually goes out is kept as the receipt's copy.
   let sample: { subject: string; html: string; to: string } | null = null
@@ -301,13 +328,17 @@ export async function runCommSend(args: {
       const due = (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
       const balance = Math.round(Math.max(0, due - paid) * 100) / 100
       if (balance <= 0) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_balance' }); continue }
-      const requirements = needsReqs
-        ? buildRequirements(statusFacts(reg, Math.round(Math.max(0, due) * 100) / 100, balance), {
+      // After the balance check, so a claim link is only minted for a club that is
+      // actually getting this letter.
+      const login = needsReqs ? await loginFor(reg) : null
+      const requirements = login
+        ? buildRequirements({ ...statusFacts(reg, Math.round(Math.max(0, due) * 100) / 100, balance), ...login.facts }, {
             confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
             waiverLink,
             coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
             payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
             shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
+            ...login.links,
           })
         : null
       const { subject, html, text } = buildPayReminderEmail({
@@ -347,19 +378,10 @@ export async function runCommSend(args: {
       // Free-text town vs free-text venue; null when either can't be placed,
       // and null must not read as local (lib/geoDistance).
       const miles = hotelDistance(reg.clubBasedIn, t.location as unknown as string)
-      let claimLink = ''
-      if (!alreadyOpen.has(reg.id)) {
-        if (testMode) claimLink = claimUrl(tournamentAbs(org?.slug, ''), TEST_CLAIM_TOKEN)
-        else {
-          const tk = await issueClaimToken(reg.id)
-          if (tk) claimLink = claimUrl(tournamentAbs(org?.slug, ''), tk)
-        }
-      }
+      const login = await loginFor(reg)
       checkItems = buildChecklist({
         ...statusFacts(reg, invoiced, Math.round(Math.max(0, invoiced - paidSoFar) * 100) / 100),
-        hasLogin: alreadyOpen.has(reg.id),
-        hasAccountElsewhere: accountEmails.has(String(reg.contactEmail || '').trim().toLowerCase()),
-        loginEmail: String(reg.contactEmail || ''),
+        ...login.facts,
         // The housing board's own call, so the email and the board agree.
         housingStatus: deriveStatus({ ...hotel, needsHotel: reg.needsHotel }),
         // Only a staff tick on the board counts as local. deriveStatus also
@@ -374,14 +396,12 @@ export async function runCommSend(args: {
         housingContactEmail: housing?.contactEmail || '',
       }, {
         confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
-        // Already has a login? Send them to sign in rather than to a claim page.
-        accountLink: claimLink || tournamentAbs(org?.slug, '/login'),
         waiverLink,
         coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
         payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         hotelLink,
         shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
-        portalLink: tournamentAbs(org?.slug, '/dashboard/club-director'),
+        ...login.links,
       })
     }
     // Confirm + account links are per club: their registration id (confirm) or a

@@ -50,10 +50,11 @@ export function mergePayLetter(text: string, vals: Record<string, string>): stri
 // here for years without a hand-typed date or team count going stale.
 //
 // A third, 'urgent' (Bo, Oct 12 2026), is the last push before the event: the club
-// may lose its spot to the waiting list, and paying is only one of the four things
+// may lose its spot to the waiting list, and paying is only one of the five things
 // that keep it. {requirements} merges to THIS club's balance, player and coach
-// registrations and team confirmation, checked off where already done (built in
-// lib/checklistLetter by the same rules as the pre-event checklist).
+// registrations, team confirmation and account setup (the club login), checked off
+// where already done (built in lib/checklistLetter by the same rules as the
+// pre-event checklist).
 
 export type PayLetterVariant = 'reminder' | 'final' | 'urgent'
 export const PAY_LETTER_VARIANTS: readonly PayLetterVariant[] = ['reminder', 'final', 'urgent']

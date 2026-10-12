@@ -770,8 +770,8 @@ export default function RegistrationsPage() {
       .replace(/\{countdown\}/g, countdownPhrase(payStartDate))
       .replace(/\{eventTeams\}/g, String(registrations.reduce((n, r) => n + r.teams.length, 0) || '') || 'a full field of')
       // The real rows are built per club when it sends (lib/checklistLetter
-      // buildRequirements), from the balance, waivers, coach sign-ups and confirmation.
-      .replace(/\{requirements\}/g, `[ ] Balance payment — ${fmt(bal)} still outstanding\n[ ] Player registrations — …\n[ ] Coach registrations — …\n[ ] Final team confirmation — …\n(each one is checked off for this club if it's already done, with a button on the open ones)`)
+      // buildRequirements), from the balance, waivers, coach sign-ups, confirmation and login.
+      .replace(/\{requirements\}/g, `[ ] Balance payment — ${fmt(bal)} still outstanding\n[ ] Player registrations — …\n[ ] Coach registrations — …\n[ ] Final team confirmation — …\n[ ] Account setup — …\n(each one is checked off for this club if it's already done, with a button on the open ones)`)
   }
 
   // Pre-tournament club emails (Bo): waiver push, schedule announcement, team
@@ -1738,7 +1738,7 @@ export default function RegistrationsPage() {
                     {payVariant === 'final'
                       ? 'For a full event — names the waiting list and says unconfirmed spots get reassigned.'
                       : payVariant === 'urgent'
-                        ? 'The last push — lists what each club still has open (balance, player and coach registrations, team confirmation) and warns the spot can go to the waiting list.'
+                        ? 'The last push — lists what each club still has open (balance, player and coach registrations, team confirmation, account setup) and warns the spot can go to the waiting list.'
                         : 'The everyday ask — no deadline, no waiting list. Each letter is saved separately.'}
                   </p>
                 </div>

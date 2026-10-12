@@ -234,31 +234,34 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
   return items
 }
 
-// THE URGENT PAYMENT LETTER'S LIST (Bo, Oct 12 2026). His four requirements for
+// THE URGENT PAYMENT LETTER'S LIST (Bo, Oct 12 2026). His five requirements for
 // keeping a spot, in his order and under his names: balance, player registrations,
-// coach registrations, final team confirmation. The rows come out of buildChecklist
-// itself, so whether a club is "done" can never differ between this letter and the
-// pre-event checklist. Login and hotel are not part of securing the spot, so the
-// facts that drive them are answered here only to drop or skip those rows.
+// coach registrations, final team confirmation, and account setup (the club login:
+// his draft left the fifth bullet blank, and he confirmed that is what it was for).
+// The rows come out of buildChecklist itself, so whether a club is "done" can never
+// differ between this letter and the pre-event checklist. The hotel is not part of
+// securing the spot, so the facts that drive it are answered here only to drop it.
 export type RequirementFacts = Pick<ChecklistFacts,
   'eventName' | 'teamCount' | 'teamsConfirmed' | 'confirmedOn' | 'waiverTotal' | 'teamsWithNoWaivers'
-  | 'expectedLow' | 'expectedHigh' | 'coachTotal' | 'teamsWithNoCoach' | 'invoiced' | 'balance'>
-export type RequirementLinks = Pick<ChecklistLinks, 'confirmLink' | 'waiverLink' | 'coachLink' | 'payLink' | 'shareLink'>
+  | 'expectedLow' | 'expectedHigh' | 'coachTotal' | 'teamsWithNoCoach' | 'invoiced' | 'balance'
+  | 'hasLogin' | 'hasAccountElsewhere' | 'loginEmail'>
+export type RequirementLinks = Pick<ChecklistLinks,
+  'confirmLink' | 'waiverLink' | 'coachLink' | 'payLink' | 'shareLink' | 'accountLink' | 'portalLink'>
 
 const REQUIREMENTS: { key: ChecklistItem['key']; open: string; done: string }[] = [
   { key: 'balance', open: 'Balance payment', done: 'Balance paid' },
   { key: 'waivers', open: 'Player registrations', done: 'Player registrations' },
   { key: 'coaches', open: 'Coach registrations', done: 'Coach registrations' },
   { key: 'teams', open: 'Final team confirmation', done: 'Teams confirmed' },
+  { key: 'login', open: 'Account setup', done: 'Account set up' },
 ]
 
 export function buildRequirements(f: RequirementFacts, links: RequirementLinks): ChecklistItem[] {
   const all = buildChecklist({
     ...f,
-    hasLogin: true, hasAccountElsewhere: false, loginEmail: '',
     housingStatus: 'local', staffMarkedLocal: true, saidNeedsHotel: false, withinLocalRadius: true,
     hotelName: '', hotelRooms: 0, housingContactName: '', housingContactEmail: '',
-  }, { ...links, accountLink: '', hotelLink: '', portalLink: '' })
+  }, { ...links, hotelLink: '' })
   return REQUIREMENTS.flatMap(r => {
     const it = all.find(i => i.key === r.key)
     return it ? [{ ...it, title: it.done ? r.done : r.open }] : []

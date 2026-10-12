@@ -18,7 +18,7 @@ The **Email clubs** dialog sends a letter to each club's contact (the team direc
 
 **To send pay reminders:**
 1. Pick **Payment reminder**. The list opens on **Owes**; switch to **Paid** or **All** if needed. Each club shows what it owes.
-2. Pick **Standard** for the everyday ask, **Waiting list** for a full event (it says unconfirmed spots get reassigned), or **Urgent** for the last push before the event. **Urgent** lists what each club still has open: balance, player registrations, coach registrations and final team confirmation. Anything a club has already done is checked off, and each open item has its own button. It also warns that the spot can go to a team on the waiting list.
+2. Pick **Standard** for the everyday ask, **Waiting list** for a full event (it says unconfirmed spots get reassigned), or **Urgent** for the last push before the event. **Urgent** lists what each club still has open: balance, player registrations, coach registrations, final team confirmation and account setup (their club login). Anything a club has already done is checked off, and each open item has its own button. It also warns that the spot can go to a team on the waiting list.
 3. Each email includes the invoice, paid and balance table and a **Pay online** button.
 
 **To write your own letter:**

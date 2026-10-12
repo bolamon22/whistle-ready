@@ -97,7 +97,7 @@ export const FIELD_NOTES: Record<string, string> = {
   playerCount: "the club's total registered players",
   balance: 'what the club still owes, e.g. "$995.00"',
   eventTeams: 'how many teams are registered for the whole event, e.g. "112"',
-  requirements: "the club's balance, player and coach registrations and team confirmation, each checked off if done",
+  requirements: "the club's balance, player and coach registrations, team confirmation and account setup, each checked off if done",
   checklist: "the club's whole pre-event checklist, ticked where done",
   whatsLeft: 'how much of the checklist is still open, e.g. "2 things left"',
 }
