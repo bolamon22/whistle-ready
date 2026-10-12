@@ -17,13 +17,17 @@ import { ensurePaymentGuard } from './paymentGuard'
 import { registrationRecipients, directorEmailsByRegistration } from '@/lib/clubDirectorLinks'
 import { directorsOf } from '@/lib/clubAccess'
 import { clearingTransfers } from '@/lib/pendingTransfers'
+import { countdownPhrase } from '@/lib/payLetterText'
+import { asLetterButton, CTA_LABELS } from '@/lib/customLetters'
 
 // The club-letter send itself, lifted out of the route so the scheduler can run
 // exactly the same code later (Bo, Sep 10: "schedule when we send the email").
 // Per-club token merge, per-club result, and each success stamps the letter's
 // date onto the registration so the page can show "Waivers Sep 10".
 
-export type SendKind = CommKind | 'payment'
+// 'custom' is a letter the org wrote itself (lib/customLetters): no saved default,
+// its own button, and its own key in the per-club email log.
+export type SendKind = CommKind | 'payment' | 'custom'
 export type SendStatus = 'sent' | 'no_email' | 'no_balance' | 'has_account' | 'failed'
 export type SendResult = { regId: string; club: string; status: SendStatus }
 
@@ -45,7 +49,7 @@ function testBanner(clubName: string): string {
 }
 
 export function isSendKind(k: string): k is SendKind {
-  return k === 'payment' || !!COMM_KINDS[k as CommKind]
+  return k === 'payment' || k === 'custom' || !!COMM_KINDS[k as CommKind]
 }
 
 /** Put `replacement` where the {checklist} token was; append it if the org
@@ -87,8 +91,19 @@ export async function runCommSend(args: {
    *  token and would dead-link whatever is already sitting in that director's
    *  inbox. A test must not be able to damage a real send. */
   testTo?: string
+  /** An org-written letter: which saved one (for the per-club log), its name (for
+   *  the receipt) and its button. Pay balance sends it as a payment letter. */
+  custom?: { id?: unknown; name?: unknown; button?: unknown } | null
 }): Promise<{ ok: true; sentAt: string; results: SendResult[] } | { ok: false; error: string; status: number }> {
-  const { tournamentId, kind } = args
+  const { tournamentId } = args
+  const custom = args.custom ? {
+    id: String(args.custom.id ?? '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40),
+    name: String(args.custom.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40),
+    button: asLetterButton(args.custom.button),
+  } : null
+  // A Pay-balance letter of the org's own is a payment letter in every respect:
+  // balance math, the skip for clubs that have paid, the invoice chrome.
+  const kind: SendKind = args.kind === 'custom' && custom?.button === 'pay' ? 'payment' : args.kind
   const testMode = !!String(args.testTo || '').trim()
   // One club is all a test needs, and it caps the blast radius of a bad call.
   const regIds = args.regIds.map(x => String(x)).filter(Boolean).slice(0, testMode ? 1 : undefined)
@@ -105,9 +120,11 @@ export async function runCommSend(args: {
   const org = await orgForTournament(tournamentId)
 
   const orgId = (org as { id?: string } | null)?.id ?? null
-  const letter = kind === 'payment' ? await payLetterFor(orgId) : await commLetterFor(orgId, kind)
+  const letter = kind === 'payment' ? await payLetterFor(orgId) : kind === 'custom' ? { subject: '', body: '' } : await commLetterFor(orgId, kind)
   const subjectTpl = String(args.subject ?? '').trim().slice(0, 200) || letter.subject
   const bodyTpl = String(args.body ?? '').trim().slice(0, 4000) || letter.body
+  // Only an org letter can arrive empty: every built-in letter has a default.
+  if (!subjectTpl || !bodyTpl) return { ok: false, error: 'Write the letter first', status: 400 }
   // A payment letter that carries {requirements} (the Urgent one does) needs the
   // same status facts as the pre-event checklist: waivers, coaches, confirmations.
   const needsReqs = kind === 'payment' && bodyTpl.includes('{requirements}')
@@ -122,7 +139,8 @@ export async function runCommSend(args: {
 
   // Registered-player counts per team, from completed waivers (Bo: directors should
   // see "you have 7 registered" and per-team splits so they know who's light).
-  const counts = kind === 'waiver' || kind === 'checklist' || needsReqs ? await waiverCounts(tournamentId) : null
+  const customCounts = kind === 'custom' && /\{playerCounts?\}/.test(bodyTpl)
+  const counts = kind === 'waiver' || kind === 'checklist' || needsReqs || customCounts ? await waiverCounts(tournamentId) : null
   const coaches = kind === 'checklist' || needsReqs ? await coachSignatures(tournamentId) : null
   const playerCountsFor = (reg: { clubName: string; teams: { teamName: string; division: string; clubName?: string | null }[] }) => {
     if (!counts) return { text: '', total: 0 }
@@ -212,8 +230,12 @@ export async function runCommSend(args: {
   const hotelInfo = kind === 'checklist' ? await eventHotelInfo(tournamentId, orgId) : null
   const hotelLink = hotelInfo && hasHotelInfo(hotelInfo) ? tournamentAbs(org?.slug, `/tournaments/${tournamentId}/hotel`) : eventHome
 
-  const kindMeta = kind === 'payment' ? null : COMM_KINDS[kind]
-  const cta = kindMeta?.cta ?? null
+  const kindMeta = kind === 'payment' || kind === 'custom' ? null : COMM_KINDS[kind]
+  // An org letter carries the button it was saved with; None (and Pay balance,
+  // whose button is the payment chrome) put no club-letter button under it.
+  const customCta = kind === 'custom' && custom && (custom.button === 'waiver' || custom.button === 'schedule' || custom.button === 'confirm') ? custom.button : null
+  const cta = kind === 'custom' ? customCta : (kindMeta?.cta ?? null)
+  const ctaLabel = customCta ? CTA_LABELS[customCta] : (kindMeta?.ctaLabel ?? '')
   const sharedCtaUrl = cta === 'waiver' ? waiverLink : cta === 'schedule' ? scheduleLink : ''
   const now = new Date().toISOString()
 
@@ -313,7 +335,7 @@ export async function runCommSend(args: {
       results.push({ regId: reg.id, club: reg.clubName, status: 'has_account' }); continue
     }
 
-    const pc = kind === 'waiver' ? playerCountsFor(reg) : null
+    const pc = kind === 'waiver' || customCounts ? playerCountsFor(reg) : null
 
     // The checklist's own items, from status this club already has on the
     // registrations page — nothing here is ticked by hand.
@@ -394,6 +416,7 @@ export async function runCommSend(args: {
       openCount: checkItems ? String(openCount(checkItems)) : '',
       whatsLeft: checkItems ? whatsLeftPhrase(checkItems) : '',
       daysToEvent: daysToEvent,
+      countdown: countdownPhrase(t.startDate as unknown as string),
     }
     const subject = mergeCommLetter(subjectTpl, vals)
     const bodyText = mergeCommLetter(bodyTpl, vals)
@@ -403,11 +426,11 @@ export async function runCommSend(args: {
       logoUrl: eventLogo, logoHref: eventHome, logoAlt: t.name || 'Tournament', logoBox,
       footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
       body: `${checklistBodyHtml(bodyText, checkItems)}
-  ${ctaUrl ? `<p style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">${kindMeta?.ctaLabel ?? ''}</a></p>
+  ${ctaUrl ? `<p style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">${ctaLabel}</a></p>
   <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${ctaUrl}</p>` : ''}`,
       footerNote: 'Questions? Just reply to this email.',
     })
-    const text = `${checkItems ? splitOnSentinel(bodyText, checklistText(checkItems)) : bodyText}${ctaUrl ? `\n\n${kindMeta?.ctaLabel ?? ''}: ${ctaUrl}` : ''}`
+    const text = `${checkItems ? splitOnSentinel(bodyText, checklistText(checkItems)) : bodyText}${ctaUrl ? `\n\n${ctaLabel}: ${ctaUrl}` : ''}`
     const r = await sendEmail({
       to: recipients, text, ...orgSender(org),
       subject: testMode ? `[TEST] ${subject}` : subject,
@@ -417,7 +440,7 @@ export async function runCommSend(args: {
       if (!testMode) {
         let log: Record<string, string> = {}
         try { const raw = logById.get(reg.id); if (raw) log = JSON.parse(raw) } catch { /* fresh log */ }
-        log[kind] = now
+        log[kind === 'custom' ? `custom:${custom?.id || 'oneoff'}` : kind] = now
         try { await prisma.$executeRawUnsafe(`UPDATE "TeamRegistration" SET "commEmailLog" = ? WHERE id = ?`, JSON.stringify(log), reg.id) } catch { /* best effort */ }
       }
       if (!sample) sample = { subject, html, to: recipients.join(', ') }
@@ -426,7 +449,8 @@ export async function runCommSend(args: {
       results.push({ regId: reg.id, club: reg.clubName, status: 'failed' })
     }
   }
-  if (args.notifyTo) await sendReceipt(args.notifyTo, org, t.name || 'the tournament', kind, results, sample, !!args.scheduled)
+  const letterLabel = custom?.name || (kind === 'payment' ? 'Payment reminder' : kind === 'custom' ? 'Your letter' : COMM_KINDS[kind].label)
+  if (args.notifyTo) await sendReceipt(args.notifyTo, org, t.name || 'the tournament', letterLabel, results, sample, !!args.scheduled)
   return { ok: true, sentAt: now, results }
 }
 
@@ -440,12 +464,11 @@ const esc = (x: string) => x.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 // tally, who got it, and the actual email one club received, inlined below.
 async function sendReceipt(
   to: string, org: { name?: string | null } | null, tName: string,
-  kind: SendKind, results: SendResult[], sample: { subject: string; html: string; to: string } | null,
+  label: string, results: SendResult[], sample: { subject: string; html: string; to: string } | null,
   scheduled: boolean,
 ) {
   try {
     const sent = results.filter(r => r.status === 'sent')
-    const label = kind === 'payment' ? 'Payment reminder' : COMM_KINDS[kind].label
     const others = results.filter(r => r.status !== 'sent')
     const line = (r: SendResult) => `<li style="margin:2px 0">${esc(r.club || r.regId)} <span style="color:#94a3b8">— ${STATUS_WORDS[r.status]}</span></li>`
     await sendEmail({

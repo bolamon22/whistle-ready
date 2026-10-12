@@ -12,7 +12,7 @@ import { createScheduled } from '@/lib/commSchedule'
 export async function POST(req: NextRequest) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
-  let body: { tournamentId?: unknown; kind?: unknown; regIds?: unknown; subject?: unknown; body?: unknown; sendAt?: unknown; test?: unknown } = {}
+  let body: { tournamentId?: unknown; kind?: unknown; regIds?: unknown; subject?: unknown; body?: unknown; sendAt?: unknown; test?: unknown; custom?: unknown } = {}
   try { body = await req.json() } catch { /* validated below */ }
 
   const tournamentId = String(body.tournamentId ?? '')
@@ -20,6 +20,11 @@ export async function POST(req: NextRequest) {
   const regIds = (Array.isArray(body.regIds) ? body.regIds : []).map(x => String(x)).filter(Boolean)
   const subject = String(body.subject ?? '')
   const letterBody = String(body.body ?? '')
+  // An org-written letter (lib/customLetters): which one, its name and its button.
+  // runCommSend cleans each field; a scheduled send keeps it in the row's payload.
+  const custom = body.custom && typeof body.custom === 'object'
+    ? (body.custom as { id?: unknown; name?: unknown; button?: unknown })
+    : undefined
 
   // A test copy to the signed-in staffer. Same runCommSend the real send and the
   // cron use -- a test down a second code path proves nothing -- but it writes
@@ -34,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (!regIds.length) return NextResponse.json({ error: 'Pick a club for the test to be built from' }, { status: 400 })
     const t = await runCommSend({
       tournamentId, kind: kind as SendKind, regIds: regIds.slice(0, 1),
-      subject, body: letterBody, testTo: me,
+      subject, body: letterBody, testTo: me, custom,
     })
     if (!t.ok) return NextResponse.json({ error: t.error }, { status: t.status })
     return NextResponse.json({ ok: true, test: true, to: me, results: t.results })
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
     const scheduled = await createScheduled({
       tournamentId, kind: kind as SendKind, regIds, subject, body: letterBody,
       sendAt: when.toISOString(),
+      payload: custom ? { custom: { id: String(custom.id ?? ''), name: String(custom.name ?? ''), button: String(custom.button ?? '') } } : undefined,
       createdBy: String((session?.user as { name?: string; email?: string } | undefined)?.name || (session?.user as { email?: string } | undefined)?.email || ''),
     })
     return NextResponse.json({ ok: true, scheduled })
@@ -61,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   // Same reasoning as the returning-team invites: a receipt is the only durable
   // record that an immediate send happened.
-  const res = await runCommSend({ tournamentId, kind: kind as SendKind, regIds, subject, body: letterBody, notifyTo: OFFICE_CC })
+  const res = await runCommSend({ tournamentId, kind: kind as SendKind, regIds, subject, body: letterBody, notifyTo: OFFICE_CC, custom })
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
   return NextResponse.json({ ok: true, sentAt: res.sentAt, results: res.results })
 }

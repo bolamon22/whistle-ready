@@ -174,6 +174,17 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Club letters you write + AI writer (Oct 12).** The Email clubs dialog (registrations page) has **Your
+  letter**: saved letters live in AppSetting `commLetterCustom:{orgId}` = `{ letters }` (`lib/customLetters.ts`,
+  pure and client-safe; 40 per org; name 40 / subject 200 / body 4000 chars), `GET/POST/PUT/DELETE
+  /api/registrations/comm-custom`. Sends reuse `runCommSend` with `kind: 'custom'` + `custom: {id,name,button}`;
+  a letter whose button is **Pay balance** runs as `payment` (same recipients, pay link and receipt as the
+  payment reminder). No built-in text, so an empty letter is refused (400). Send log key `custom:{id}`
+  (`custom:oneoff` when unsaved); scheduled sends carry `payload.custom` to the cron. `{countdown}` joined the
+  merge fields. AI: `POST /api/registrations/comm-ai` (staff, same key + model as `api/ai/generate`, forced
+  `letter` tool, prompt in `lib/letterAi.ts`) writes words only; the send fills the `{fields}`. Unknown
+  `{fields}` block Send/Save (red), a rewrite that drops a field shows an amber warning, and **Undo the AI
+  change** restores the letter. Both AI boxes take dictation through `DictateButton`.
 - **Staff W-9 upload (Oct 11).** W-9 card on the staff portal (`components/StaffW9Card.tsx`, `/dashboard/staff`),
   `GET/POST /api/staff-portal/w9` (worker from the session email, oldest record, never from the request). All W-9
   storage goes through `lib/staffW9.ts`: encrypted data URL in AppSetting `w9:{workerId}`, `w9meta:{workerId}`

@@ -10,6 +10,8 @@ import RegPricingEditor from '@/components/RegPricingEditor'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { countdownPhrase } from '@/lib/payLetterText'
+import { unknownFields, CTA_LABELS, type CustomLetter, type LetterButton } from '@/lib/customLetters'
+import { AiWritePanel, AiRewriteBar, ButtonPicker, type AiLetter } from '@/components/comm/LetterAi'
 import toast, { Toaster } from 'react-hot-toast'
 import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail, Clock, FileText } from 'lucide-react'
 import { nameKey } from '@/lib/names'
@@ -777,13 +779,25 @@ export default function RegistrationsPage() {
   // Keep this list in step with COMM_KINDS in src/lib/commLetters.ts. It is a
   // second, hand-written copy: when `account` was added there and not here, its
   // letter simply never appeared in this dialog.
-  type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment' | 'account' | 'checklist'
-  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder', account: 'Set up your account', checklist: 'Pre-event checklist' }
+  // 'custom' is a letter the org writes itself, below the built-in ones (lib/customLetters).
+  type CommKind = 'waiver' | 'schedule' | 'confirm' | 'payment' | 'account' | 'checklist' | 'custom'
+  const COMM_KIND_LABELS: Record<CommKind, string> = { waiver: 'Player waiver reminder', schedule: 'Schedule is ready', confirm: 'Confirm your teams', payment: 'Payment reminder', account: 'Set up your account', checklist: 'Pre-event checklist', custom: 'Your letter' }
   const [commOpen, setCommOpen] = useState(false)
   // "Login not linked": the admin connects it here, or sends the Account email (ConnectLoginDialog).
   const [connectReg, setConnectReg] = useState<Registration | null>(null)
   const [commKind, setCommKind] = useState<CommKind>('waiver')
   const [commLetters, setCommLetters] = useState<Record<CommKind, { subject: string; body: string }> | null>(null)
+  // Letters the org writes itself (Bo, Oct 12 2026), with or without the AI. The one
+  // on screen is a working copy, so moving between letters never saves anything.
+  const [customLetters, setCustomLetters] = useState<CustomLetter[] | null>(null)
+  const [customId, setCustomId] = useState('')   // '' = a new letter, not saved yet
+  const [customDraft, setCustomDraft] = useState<{ name: string; button: LetterButton; subject: string; body: string }>({ name: '', button: 'none', subject: '', body: '' })
+  const [customSaving, setCustomSaving] = useState(false)
+  const [customDeleteAsk, setCustomDeleteAsk] = useState(false)
+  const loadCustomLetters = () => {
+    fetch('/api/registrations/comm-custom').then(r => r.ok ? r.json() : null)
+      .then(d => { if (Array.isArray(d?.letters)) setCustomLetters(d.letters) }).catch(() => {})
+  }
   const [commSel, setCommSel] = useState<Set<string>>(new Set())
   const [commSending, setCommSending] = useState(false)
   const [commTesting, setCommTesting] = useState(false)
@@ -822,6 +836,7 @@ export default function RegistrationsPage() {
         .catch(() => {})
     }
     if (!payLetters[payVariant]) loadPayLetter(payVariant)
+    if (!customLetters) loadCustomLetters()
     if (!payEventName) {
       fetch(`/api/tournaments/${tournamentId}`).then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.name) { setPayEventName(d.name); setPayStartDate(d.startDate || '') } }).catch(() => {})
@@ -848,6 +863,7 @@ export default function RegistrationsPage() {
       .replace(/\{payLink\}/g, `${origin}/pay/${reg.id}`)
       .replace(/\{shareLink\}/g, `${origin}/share/${reg.id}`)
       .replace(/\{daysToEvent\}/g, '(days)')
+      .replace(/\{countdown\}/g, countdownPhrase(payStartDate))
       .replace(/\{openCount\}/g, '(count)')
       .replace(/\{whatsLeft\}/g, 'what this club still has open')
       // The real block is built per club at send time (lib/checklistLetter) from
@@ -856,11 +872,22 @@ export default function RegistrationsPage() {
   }
   // The payment kind edits the SAME letter the per-club modal uses; the other
   // three edit their commLetters entry.
-  const commCur = commKind === 'payment' ? payLetter : (commLetters ? commLetters[commKind] : null)
+  const commCur = commKind === 'payment' ? payLetter : commKind === 'custom' ? customDraft : (commLetters ? commLetters[commKind] : null)
   const setCommCur = (patch: Partial<{ subject: string; body: string }>) => {
     if (commKind === 'payment') setPayLetters(l => (l[payVariant] ? { ...l, [payVariant]: { ...l[payVariant]!, ...patch } } : l))
+    else if (commKind === 'custom') setCustomDraft(d => ({ ...d, ...patch }))
     else setCommLetters(l => l ? { ...l, [commKind]: { ...l[commKind], ...patch } } : l)
   }
+  // An org letter with the Pay balance button goes out as a payment letter
+  // (commSend), so it gets the payment picker, preview and tracking too.
+  const isPayLetter = commKind === 'payment' || (commKind === 'custom' && customDraft.button === 'pay')
+  const sendKind = commKind === 'custom' ? (customDraft.button === 'pay' ? 'payment' : 'custom') : commKind
+  const customPayload = commKind === 'custom' ? { custom: { id: customId, name: customDraft.name, button: customDraft.button } } : {}
+  // Where a send is logged per club, and so where "sent Oct 12" is read back from.
+  const commLogKey = commKind === 'custom' ? `custom:${customId || 'oneoff'}` : commKind
+  // A {field} the letter's merge doesn't know reaches every club as literal text.
+  const commUnknown = commCur ? unknownFields(`${commCur.subject}\n${commCur.body}`, isPayLetter) : []
+  const unknownMsg = () => `${commUnknown.map(f => `{${f}}`).join(', ')} ${commUnknown.length === 1 ? "isn't a fill-in field" : "aren't fill-in fields"} for this letter. Fix it before sending.`
   // A club whose bank transfer is still clearing has paid: it is not on the "Owes" list.
   const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0) - inFlightFor(r.id))
 
@@ -869,7 +896,7 @@ export default function RegistrationsPage() {
   // payment letter gets a paid/unpaid filter and opens on the ones who owe.
   const [commPayFilter, setCommPayFilter] = useState<'owes' | 'paid' | 'all'>('owes')
   const owesCount = registrations.filter(r => regBalance(r) > 0).length
-  const commVisible = commKind !== 'payment' || commPayFilter === 'all'
+  const commVisible = !isPayLetter || commPayFilter === 'all'
     ? registrations
     : registrations.filter(r => commPayFilter === 'owes' ? regBalance(r) > 0 : regBalance(r) <= 0)
   // Send myself one copy, merged from a real club, before letting it loose on
@@ -877,13 +904,14 @@ export default function RegistrationsPage() {
   // is a letter nobody has tested.
   const sendCommTest = async () => {
     if (!commCur) return
+    if (commUnknown.length) { toast.error(unknownMsg(), { duration: 6000 }); return }
     const sampleId = [...commSel][0] || registrations[0]?.id
     if (!sampleId) { toast.error('No clubs here to build a test from'); return }
     setCommTesting(true)
     try {
       const res = await fetch('/api/registrations/comm-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [sampleId], ...commCur, test: true }),
+        body: JSON.stringify({ tournamentId, kind: sendKind, regIds: [sampleId], subject: commCur.subject, body: commCur.body, ...customPayload, test: true }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.ok) throw new Error(d.error || 'Test send failed')
@@ -906,13 +934,14 @@ export default function RegistrationsPage() {
 
   const sendComm = async () => {
     if (!commCur || commSel.size === 0) return
+    if (commUnknown.length) { toast.error(unknownMsg(), { duration: 6000 }); return }
     if (commWhen === 'later' && !commAt) { toast.error('Pick a date and time'); return }
     setCommSending(true)
     try {
       const sendAtIso = commWhen === 'later' && commAt ? new Date(commAt).toISOString() : ''
       const res = await fetch('/api/registrations/comm-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentId, kind: commKind, regIds: [...commSel], ...commCur, ...(sendAtIso ? { sendAt: sendAtIso } : {}) }),
+        body: JSON.stringify({ tournamentId, kind: sendKind, regIds: [...commSel], subject: commCur.subject, body: commCur.body, ...customPayload, ...(sendAtIso ? { sendAt: sendAtIso } : {}) }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.ok) throw new Error(d.error || 'Send failed')
@@ -931,10 +960,10 @@ export default function RegistrationsPage() {
       const sentIds = new Set(sent.map((r: any) => r.regId))
       setRegistrations(rs => rs.map(r => {
         if (!sentIds.has(r.id)) return r
-        if (commKind === 'payment') return { ...r, lastPayReminderAt: d.sentAt }
+        if (isPayLetter) return { ...r, lastPayReminderAt: d.sentAt }
         let log: Record<string, string> = {}
         try { log = r.commEmailLog ? JSON.parse(r.commEmailLog) : {} } catch { /* fresh */ }
-        log[commKind] = d.sentAt
+        log[commLogKey] = d.sentAt
         return { ...r, commEmailLog: JSON.stringify(log) }
       }))
       setCommOpen(false)
@@ -949,8 +978,60 @@ export default function RegistrationsPage() {
       setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, confirmStatus: d.status ?? 'awaiting', confirmNote: '', notes: d.notes ?? r.notes } : r))
     } else toast.error('Failed')
   }
+  // Only clubs that owe -- what the Payment reminder pill does when it is picked.
+  const narrowToOwing = () => {
+    setCommPayFilter('owes')
+    setCommSel(sel => new Set([...sel].filter(id => { const r = registrations.find(x => x.id === id); return r ? regBalance(r) > 0 : false })))
+  }
+  const startNewLetter = () => {
+    setCommKind('custom'); setCustomId(''); setCustomDeleteAsk(false)
+    setCustomDraft({ name: '', button: 'none', subject: '', body: '' })
+  }
+  const pickCustomLetter = (l: CustomLetter) => {
+    setCommKind('custom'); setCustomId(l.id); setCustomDeleteAsk(false)
+    setCustomDraft({ name: l.name, button: l.button, subject: l.subject, body: l.body })
+    if (l.button === 'pay') narrowToOwing()
+  }
+  const setCustomButton = (b: LetterButton) => {
+    setCustomDraft(d => ({ ...d, button: b }))
+    if (b === 'pay') narrowToOwing()
+  }
+  // A fresh draft from the AI. It names the letter too, unless it already has a name.
+  const applyAiDraft = (r: AiLetter) => setCustomDraft(d => ({ ...d, subject: r.subject, body: r.body, name: d.name.trim() ? d.name : (r.name || '') }))
+  const saveCustomLetter = async () => {
+    if (commUnknown.length) { toast.error(unknownMsg(), { duration: 6000 }); return }
+    if (!customDraft.name.trim()) { toast.error('Give the letter a name first'); return }
+    if (!customDraft.subject.trim() || !customDraft.body.trim()) { toast.error('Write the subject and the letter first'); return }
+    setCustomSaving(true)
+    try {
+      const res = await fetch('/api/registrations/comm-custom', {
+        method: customId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...(customId ? { id: customId } : {}), ...customDraft }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d?.letter) throw new Error(d?.error || 'Could not save the letter')
+      const saved = d.letter as CustomLetter
+      setCustomLetters(ls => customId ? (ls || []).map(l => l.id === saved.id ? saved : l) : [...(ls || []), saved])
+      setCustomId(saved.id)
+      setCustomDraft({ name: saved.name, button: saved.button, subject: saved.subject, body: saved.body })
+      toast.success(customId ? 'Letter saved' : `Saved \u201c${saved.name}\u201d with your letters`)
+    } catch (e: any) { toast.error(e?.message || 'Could not save the letter') }
+    finally { setCustomSaving(false) }
+  }
+  const deleteCustomLetter = async () => {
+    if (!customId) return
+    const res = await fetch(`/api/registrations/comm-custom?id=${encodeURIComponent(customId)}`, { method: 'DELETE' })
+    if (res.ok || res.status === 404) {
+      setCustomLetters(ls => (ls || []).filter(l => l.id !== customId))
+      toast.success('Letter deleted')
+      startNewLetter()
+    } else toast.error('Could not delete the letter')
+    setCustomDeleteAsk(false)
+  }
+
   const saveCommLetter = async () => {
     if (!commCur) return
+    if (commUnknown.length) { toast.error(unknownMsg(), { duration: 6000 }); return }
     setCommSaving(true)
     const res = commKind === 'payment'
       ? await fetch('/api/registrations/pay-letter', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...commCur, variant: payVariant }) })
@@ -1610,7 +1691,35 @@ export default function RegistrationsPage() {
                     {COMM_KIND_LABELS[k]}
                   </button>
                 ))}
+                {(customLetters || []).map(l => (
+                  <button key={l.id} onClick={() => pickCustomLetter(l)} title={l.button === 'pay' ? 'Your letter · goes to clubs that owe' : 'Your letter'}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${commKind === 'custom' && customId === l.id ? 'bg-teal-600 text-white border-teal-600' : 'text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+                    {l.name}
+                  </button>
+                ))}
+                <button onClick={startNewLetter}
+                  className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full border ${commKind === 'custom' && !customId ? 'bg-teal-600 text-white border-teal-600' : 'text-teal-700 border-teal-300 hover:border-teal-500'}`}>
+                  <Plus size={12} /> New letter
+                </button>
               </div>
+              {/* A letter of the org's own: the AI writer for a new one, then its name
+                  and button. Saved letters keep the button they were saved with. */}
+              {commKind === 'custom' && (
+                <>
+                  {!customId && <AiWritePanel tournamentId={String(tournamentId)} button={customDraft.button} onButton={setCustomButton} onResult={applyAiDraft} />}
+                  <div className="mb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center">
+                    <label htmlFor="custom-letter-name" className="text-xs font-medium text-slate-600">Name</label>
+                    <input id="custom-letter-name" value={customDraft.name} maxLength={40}
+                      onChange={e => setCustomDraft(d => ({ ...d, name: e.target.value }))}
+                      placeholder="What you'll call it, e.g. Pools are posted"
+                      className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                    {customId && (<>
+                      <span className="text-xs font-medium text-slate-600">Button</span>
+                      <ButtonPicker value={customDraft.button} onChange={setCustomButton} />
+                    </>)}
+                  </div>
+                </>
+              )}
               {/* Which payment letter. A full event with clubs waiting and an event
                   that is simply owed money are different conversations, so they are
                   two saved letters rather than one that has to cover both. */}
@@ -1636,7 +1745,7 @@ export default function RegistrationsPage() {
               )}
               <div className="mb-4">
                 <div className="flex items-baseline justify-between mb-1">
-                  <label className="text-xs font-medium text-slate-600">Send to ({commSel.size} selected{commKind === 'payment' && commPayFilter !== 'all' ? ` · ${commVisible.length} shown` : ` of ${registrations.length} clubs`})</label>
+                  <label className="text-xs font-medium text-slate-600">Send to ({commSel.size} selected{isPayLetter && commPayFilter !== 'all' ? ` · ${commVisible.length} shown` : ` of ${registrations.length} clubs`})</label>
                   <span className="text-xs">
                     {/* All means all of what you are looking at. Picking "owes" and then
                         hitting All used to select the clubs who had already paid too. */}
@@ -1645,7 +1754,7 @@ export default function RegistrationsPage() {
                     <button className="text-teal-600 hover:underline" onClick={() => setCommSel(new Set())}>None</button>
                   </span>
                 </div>
-                {commKind === 'payment' && (
+                {isPayLetter && (
                   <div className="flex items-center gap-1 mb-1.5">
                     {([['owes', `Owes (${owesCount})`], ['paid', `Paid (${registrations.length - owesCount})`], ['all', `All (${registrations.length})`]] as const).map(([k, label]) => (
                       <button key={k} onClick={() => setCommPayFilter(k)}
@@ -1662,11 +1771,11 @@ export default function RegistrationsPage() {
                       <input type="checkbox" disabled={!r.contactEmail} checked={commSel.has(r.id)}
                         onChange={e => setCommSel(sel => { const n = new Set(sel); if (e.target.checked) { n.add(r.id) } else { n.delete(r.id) } return n })} />
                       <span className="flex-1 truncate text-slate-700">{r.clubName}</span>
-                      {commKind === 'payment' && <span className={`text-[10px] shrink-0 ${regBalance(r) > 0 ? 'text-amber-600 font-semibold' : 'text-slate-300'}`}>{regBalance(r) > 0 ? `owes ${fmt(regBalance(r))}` : 'paid'}</span>}
+                      {isPayLetter && <span className={`text-[10px] shrink-0 ${regBalance(r) > 0 ? 'text-amber-600 font-semibold' : 'text-slate-300'}`}>{regBalance(r) > 0 ? `owes ${fmt(regBalance(r))}` : 'paid'}</span>}
                       {commKind === 'account' && <span className={`text-[10px] shrink-0 ${inPortal(r) ? 'text-slate-300' : 'text-amber-600 font-semibold'}`}>{inPortal(r) ? 'in portal' : r.hasAccount ? 'login not linked' : 'no login'}</span>}
-                      {commKind === 'payment'
+                      {isPayLetter
                         ? (r.lastPayReminderAt && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(r.lastPayReminderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)
-                        : (commLog(r)[commKind] && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(commLog(r)[commKind]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)}
+                        : (commLog(r)[commLogKey] && <span className="text-[10px] text-slate-400 shrink-0">sent {new Date(commLog(r)[commLogKey]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>)}
                       {!r.contactEmail && <span className="text-[10px] text-slate-400 shrink-0">no email</span>}
                     </label>
                   ))}
@@ -1682,10 +1791,22 @@ export default function RegistrationsPage() {
                   <textarea className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[130px] resize-y focus:outline-none focus:ring-2 focus:ring-teal-400"
                     value={commCur.body}
                     onChange={e => setCommCur({ body: e.target.value })} />
+                  <AiRewriteBar tournamentId={String(tournamentId)} kind={commKind} button={commKind === 'custom' ? customDraft.button : undefined}
+                    subject={commCur.subject} body={commCur.body} onResult={r => setCommCur({ subject: r.subject, body: r.body })} />
+                  {commUnknown.length > 0 && (
+                    <p role="alert" className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {commUnknown.map(f => `{${f}}`).join(', ')} {commUnknown.length === 1 ? 'isn\u2019t a fill-in field' : 'aren\u2019t fill-in fields'} for this letter, so {commUnknown.length === 1 ? 'it' : 'they'} would reach every club exactly as typed. Fix or remove {commUnknown.length === 1 ? 'it' : 'them'} to send.
+                    </p>
+                  )}
+                  {commKind === 'custom' && !isPayLetter && (
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                      Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{event}'} {'{eventDates}'} {'{countdown}'} {'{teamsList}'} {'{playerCounts}'} {'{org}'}
+                    </p>
+                  )}
                   {/* Named here because a token nobody knows about never gets used --
                       countdown and eventTeams exist so a saved letter stops needing a
                       hand-typed "three weeks away" and "over 90 teams". */}
-                  {commKind === 'payment' && (
+                  {isPayLetter && (
                     <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
                       Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{balance}'} {'{event}'} {'{org}'} · and per send: {'{countdown}'} (&ldquo;about three weeks away&rdquo;, from the event date) {'{eventTeams}'} (teams registered right now) · {'{requirements}'} (what the club still has open, checked off where done)
                     </p>
@@ -1693,21 +1814,25 @@ export default function RegistrationsPage() {
                   {(() => {
                     const sample = registrations.find(r => commSel.has(r.id)) || registrations[0]
                     if (!sample) return null
-                    const merge = commKind === 'payment' ? mergePayPreview : mergeCommPreview
+                    const merge = isPayLetter ? mergePayPreview : mergeCommPreview
                     return (
                       <div className="mt-4">
                         <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">PREVIEW — AS {sample.clubName.toUpperCase()} WILL GET IT</div>
                         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-700 space-y-2">
                           <div className="font-semibold text-slate-900">{merge(commCur.subject, sample)}</div>
                           {merge(commCur.body, sample).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
-                          <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{({
+                          <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{commKind === 'custom'
+                            ? (customDraft.button === 'pay' ? 'Invoiced / paid / balance table + the "Pay online" button appear here automatically'
+                              : customDraft.button === 'none' ? 'No button under this letter'
+                              : `"${CTA_LABELS[customDraft.button]}" button appears here automatically`)
+                            : ({
                             payment: 'Invoiced / paid / balance table + the "Pay online" button appear here automatically',
                             waiver: '"Open the player waiver" button appears here automatically',
                             schedule: '"View the schedule" button appears here automatically',
                             confirm: '"Review + confirm your teams" button appears here automatically — their own private link',
                             account: '"Set up my account" button appears here automatically — a single-use link tied to this registration',
                             checklist: 'Each open item carries its own button — confirm teams, set up a login, share the waiver link, pay the balance',
-                          } as Record<CommKind, string>)[commKind]}</div>
+                          } as Record<string, string>)[commKind]}</div>
                         </div>
                       </div>
                     )
@@ -1727,13 +1852,21 @@ export default function RegistrationsPage() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <button onClick={sendComm} disabled={commSending || commSel.size === 0}
+                    <button onClick={sendComm} disabled={commSending || commSel.size === 0 || commUnknown.length > 0}
                       className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{commSending ? (commWhen === 'later' ? 'Scheduling…' : 'Sending…') : commWhen === 'later' ? `Schedule for ${commSel.size} club${commSel.size !== 1 ? 's' : ''}` : `Send to ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`}</button>
-                    <button onClick={saveCommLetter} disabled={commSaving}
-                      className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{commSaving ? 'Saving…' : 'Save as default'}</button>
-                    <button onClick={sendCommTest} disabled={commTesting || commSending} title="One copy to your own inbox, merged from a real club. Nothing is recorded against them."
+                    {commKind === 'custom'
+                      ? <button onClick={saveCustomLetter} disabled={customSaving || commUnknown.length > 0}
+                          className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{customSaving ? 'Saving…' : customId ? 'Save changes' : 'Save as a new letter'}</button>
+                      : <button onClick={saveCommLetter} disabled={commSaving || commUnknown.length > 0}
+                          className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{commSaving ? 'Saving…' : 'Save as default'}</button>}
+                    <button onClick={sendCommTest} disabled={commTesting || commSending || commUnknown.length > 0} title="One copy to your own inbox, merged from a real club. Nothing is recorded against them."
                       className="text-sm text-slate-600 border border-slate-300 hover:border-slate-400 px-3 py-2 rounded-lg disabled:opacity-50">{commTesting ? 'Sending test…' : 'Send a test to me'}</button>
                     <button onClick={() => setCommOpen(false)} className="text-sm text-slate-500 px-3 py-2">Cancel</button>
+                    {commKind === 'custom' && customId && (customDeleteAsk
+                      ? <span className="ml-auto inline-flex items-center gap-2 text-xs text-slate-600">Delete \u201c{customDraft.name || 'this letter'}\u201d?
+                          <button onClick={deleteCustomLetter} className="font-semibold text-red-700 hover:underline">Delete</button>
+                          <button onClick={() => setCustomDeleteAsk(false)} className="font-semibold text-slate-500 hover:underline">Keep</button></span>
+                      : <button onClick={() => setCustomDeleteAsk(true)} className="ml-auto text-xs font-semibold text-slate-400 hover:text-red-700">Delete letter</button>)}
                   </div>
                   {scheduled.length > 0 && (
                     <div className="mt-5 border-t border-slate-100 pt-3">
@@ -1741,7 +1874,7 @@ export default function RegistrationsPage() {
                       <div className="space-y-1">
                         {scheduled.map(sc => (
                           <div key={sc.id} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                            <span className="font-semibold text-slate-700">{COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind}</span>
+                            <span className="font-semibold text-slate-700">{sc.payload?.custom?.name || COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind}</span>
                             <span className="text-slate-400">·</span>
                             <span>{sc.regIds.length} club{sc.regIds.length !== 1 ? 's' : ''}</span>
                             <span className="text-slate-400">·</span>

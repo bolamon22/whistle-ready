@@ -27,7 +27,11 @@ export async function GET(req: NextRequest) {
           clubs: ((job.payload?.clubs as InviteClub[] | undefined) ?? []),
           subjectTemplate: job.subject, bodyTemplate: job.body, notifyTo: OFFICE_CC, scheduled: true,
         })
-      : await runCommSend({ tournamentId: job.tournamentId, kind: job.kind, regIds: job.regIds, subject: job.subject, body: job.body, notifyTo: OFFICE_CC, scheduled: true })
+      : await runCommSend({
+          tournamentId: job.tournamentId, kind: job.kind, regIds: job.regIds, subject: job.subject, body: job.body, notifyTo: OFFICE_CC, scheduled: true,
+          // An org-written letter rides in the payload (comm-send stored it there).
+          custom: (job.payload?.custom as { id?: unknown; name?: unknown; button?: unknown } | undefined) ?? null,
+        })
     if (res.ok) {
       const results = 'results' in res ? res.results : []
       const sent = 'results' in res ? res.results.filter(r => r.status === 'sent').length : res.sent

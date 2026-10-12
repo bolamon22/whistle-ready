@@ -106,5 +106,5 @@ export async function commLetterFor(orgId: string | null, kind: CommKind): Promi
 }
 
 export function mergeCommLetter(text: string, vals: Record<string, string>): string {
-  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount|confirmLink|accountLink|checklist|openCount|whatsLeft|daysToEvent|payLink|shareLink)\}/g, (_m, k: string) => vals[k] ?? '')
+  return text.replace(/\{(contact|club|event|teams|org|waiverLink|scheduleLink|teamsList|eventDates|playerCounts|playerCount|confirmLink|accountLink|checklist|openCount|whatsLeft|daysToEvent|payLink|shareLink|countdown)\}/g, (_m, k: string) => vals[k] ?? '')
 }
