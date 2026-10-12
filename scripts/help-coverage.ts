@@ -14,9 +14,16 @@ import { ARTICLE_ROUTES, PUBLIC_ARTICLE_ROUTES } from '../src/lib/helpArticles'
 const APP = path.join(__dirname.includes('scripts') ? path.join(__dirname, '..') : process.cwd(), 'src/app')
 const ROLES = ['admin', 'director', 'assigner', 'scheduler', 'staff', 'public']
 
-// Kept in step with src/middleware.ts.
-const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm', '/pay/', '/pass/', '/coach/', '/vendor/', '/media/', '/claim/', '/unauthorized']
-const PUBLIC_TOURNAMENT_PATH = /^\/tournaments\/[^/]+\/(public|register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|p|today)(\/|$)/
+// Kept in step with src/middleware.ts (PUBLIC_ROUTES, PUBLIC_TOURNAMENT_PATH and its
+// passthrough list). Oct 12 2026: /share, /privacy, /terms and the event's hotels
+// page had gone public there and were still counted here as staff pages.
+const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm', '/share', '/privacy', '/terms', '/pay/', '/pass/', '/coach/', '/vendor/', '/media/', '/claim/', '/unauthorized']
+const PUBLIC_TOURNAMENT_PATH = /^\/tournaments\/[^/]+\/(public|register|individual-register|player-register|player-waiver|coach-waiver|vendor-request|shoot|work|event|rules|hotel|hotels|p|today)(\/|$)/
+
+// Pages with nothing to explain, left out of the count: the legal pages, the
+// "no access" page, and two old division pages nothing links to any more (the
+// Divisions page's own tabs replaced them).
+const NOT_COUNTED = ['/privacy', '/terms', '/unauthorized', '/tournaments/[id]/divisions/[division]/assign-pools', '/tournaments/[id]/divisions/[division]/bracket']
 
 function pages(dir = APP, base = ''): string[] {
   const out: string[] = []
@@ -33,15 +40,16 @@ function pages(dir = APP, base = ''): string[] {
 const concrete = (r: string) => r.replace(/\[[^\]]+\]/g, 'x')
 const isPublic = (r: string) => { const c = concrete(r); return PUBLIC_ROUTES.some(p => c.startsWith(p)) || PUBLIC_TOURNAMENT_PATH.test(c) }
 
+// A route covers that one page ('*' = one segment), never the pages under it: the
+// Tournaments list's '/tournaments' used to count every tournament page as covered.
 const compile = (all: Record<string, string[]>) => Object.values(all).flat().map(r => {
   const re = r.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]+')
-  // '/tournaments/*' is the Assigner page itself, not everything under it.
-  return new RegExp('^' + re + (r.split('/').length > 3 || !r.includes('*') ? '(?=/|$)' : '$'))
+  return new RegExp('^' + re + '$')
 })
 const staffPatterns = compile(ARTICLE_ROUTES), publicPatterns = compile(PUBLIC_ARTICLE_ROUTES)
 const coveredBy = (pats: RegExp[]) => (r: string) => pats.some(re => re.test(concrete(r)))
 
-const all = pages().sort()
+const all = pages().filter(r => !NOT_COUNTED.includes(r)).sort()
 const list = process.argv.includes('--list')
 console.log(`${all.length} pages in the app\n`)
 for (const role of ROLES) {

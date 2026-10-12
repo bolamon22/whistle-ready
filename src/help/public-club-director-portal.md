@@ -2,7 +2,7 @@
 title: Use your club portal (club directors)
 category: Public pages
 order: 967
-audience: public
+audience: both
 routes: /dashboard/club-director
 keywords: club director, club portal, add a director, add director, second director, co-director, invite director, new director, club directors, register teams, rename a team, new team, team dashboard, invoice, balance, pay, payment method, waivers, roster, coach, change coach, schedule, register again, history, club logo, add a team, move a team, change division, remove a team, drop a team, request a change, confirm teams, confirm team list, verify teams, tick box, what's left, register for another event, waiting list
 ---

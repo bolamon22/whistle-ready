@@ -2,7 +2,7 @@
 title: What coaches and parents see after signing in
 category: Public pages
 order: 968
-audience: public
+audience: both
 routes: /dashboard/coach, /dashboard/parent
 keywords: coach dashboard, parent dashboard, my team, games, follow tournament, my players, discover, schedule, wins, losses, switch team, edit waiver, change jersey number, update emergency contact, parent account, change hotel, my team's games, follow my team, sibling, brother, sister
 ---
