@@ -10,7 +10,7 @@ import RegPricingEditor from '@/components/RegPricingEditor'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { countdownPhrase } from '@/lib/payLetterText'
-import { unknownFields, CTA_LABELS, coachCountsText, type CustomLetter, type LetterButton } from '@/lib/customLetters'
+import { unknownFields, CTA_LABELS, coachCountsText, eventLiterals, withEventFields, eventDatesText, type CustomLetter, type LetterButton } from '@/lib/customLetters'
 import { AiWritePanel, AiRewriteBar, ButtonPicker, type AiLetter } from '@/components/comm/LetterAi'
 import toast, { Toaster } from 'react-hot-toast'
 import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail, Clock, FileText } from 'lucide-react'
@@ -756,6 +756,7 @@ export default function RegistrationsPage() {
   const [payOrgName, setPayOrgName] = useState('')
   const [payEventName, setPayEventName] = useState('')
   const [payStartDate, setPayStartDate] = useState('')
+  const [payEndDate, setPayEndDate] = useState('')
   const mergePayPreview = (text: string, reg: Registration) => {
     const paid = reg.payments.reduce((sum, p) => sum + p.amount, 0) + inFlightFor(reg.id)
     const bal = Math.max(0, reg.invoiceAmount - reg.discountAmount - paid)
@@ -845,7 +846,7 @@ export default function RegistrationsPage() {
     if (!customLetters) loadCustomLetters()
     if (!payEventName) {
       fetch(`/api/tournaments/${tournamentId}`).then(r => r.ok ? r.json() : null)
-        .then(d => { if (d?.name) { setPayEventName(d.name); setPayStartDate(d.startDate || '') } }).catch(() => {})
+        .then(d => { if (d?.name) { setPayEventName(d.name); setPayStartDate(d.startDate || ''); setPayEndDate(d.endDate || '') } }).catch(() => {})
     }
   }
   const mergeCommPreview = (text: string, reg: Registration) => {
@@ -858,7 +859,7 @@ export default function RegistrationsPage() {
       .replace(/\{org\}/g, payOrgName || 'the tournament team')
       .replace(/\{waiverLink\}/g, `${origin}/tournaments/${tournamentId}/player-waiver`)
       .replace(/\{scheduleLink\}/g, `${origin}/tournaments/${tournamentId}/public`)
-      .replace(/\{eventDates\}/g, 'the event dates')
+      .replace(/\{eventDates\}/g, eventDatesText(payStartDate, payEndDate) || 'the event dates')
       .replace(/\{teamsList\}/g, reg.teams.length ? reg.teams.map(t => `• ${t.teamName}${t.division ? ` — ${t.division}` : ''}`).join('\n') : '• (no teams listed yet)')
       .replace(/\{playerCounts\}/g, reg.teams.length
         ? reg.teams.map(t => `• ${t.teamName}${t.division ? ` — ${t.division}` : ''}: (registered count fills in)`).join('\n') + `\nTotal for ${reg.clubName}: (fills in)`
@@ -895,6 +896,18 @@ export default function RegistrationsPage() {
   const commLogKey = commKind === 'custom' ? `custom:${customId || 'oneoff'}` : commKind
   // A {field} the letter's merge doesn't know reaches every club as literal text.
   const commUnknown = commCur ? unknownFields(`${commCur.subject}\n${commCur.body}`, isPayLetter) : []
+  // Saved letters are reused at every event, so this event's name or dates typed
+  // into one would be wrong at the next (lib/customLetters eventLiterals).
+  const commReuse = commCur && payEventName
+    ? eventLiterals(`${commCur.subject}\n${commCur.body}`, payEventName, payStartDate, isPayLetter)
+    : { name: false, dates: false }
+  const swapInEventFields = () => {
+    if (!commCur) return
+    setCommCur({
+      subject: withEventFields(commCur.subject, payEventName, payStartDate, isPayLetter),
+      body: withEventFields(commCur.body, payEventName, payStartDate, isPayLetter),
+    })
+  }
   const unknownMsg = () => `${commUnknown.map(f => `{${f}}`).join(', ')} ${commUnknown.length === 1 ? "isn't a fill-in field" : "aren't fill-in fields"} for this letter. Fix it before sending.`
   // A club whose bank transfer is still clearing has paid: it is not on the "Owes" list.
   const regBalance = (r: Registration) => Math.max(0, r.invoiceAmount - r.discountAmount - r.payments.reduce((sum, p) => sum + p.amount, 0) - inFlightFor(r.id))
@@ -1745,6 +1758,7 @@ export default function RegistrationsPage() {
                       onChange={e => setCustomDraft(d => ({ ...d, name: e.target.value }))}
                       placeholder="What you'll call it, e.g. Pools are posted"
                       className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                    <p className="col-start-2 -mt-1 text-[11px] text-slate-400">Saved letters are templates: they show up here at every event, and the fill-ins change with each one.</p>
                     {customId && (<>
                       <span className="text-xs font-medium text-slate-600">Button</span>
                       <ButtonPicker value={customDraft.button} onChange={setCustomButton} />
@@ -1830,6 +1844,14 @@ export default function RegistrationsPage() {
                       {commUnknown.map(f => `{${f}}`).join(', ')} {commUnknown.length === 1 ? 'isn\u2019t a fill-in field' : 'aren\u2019t fill-in fields'} for this letter, so {commUnknown.length === 1 ? 'it' : 'they'} would reach every club exactly as typed. Fix or remove {commUnknown.length === 1 ? 'it' : 'them'} to send or save. A test to yourself still works.
                     </p>
                   )}
+                  {(commReuse.name || commReuse.dates) && (
+                    <p className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      This letter names {[commReuse.name ? payEventName : '', commReuse.dates ? 'its dates' : ''].filter(Boolean).join(' and ')} in plain text, so a saved copy would say {commReuse.name && commReuse.dates ? 'them' : 'it'} at your next event too.{' '}
+                      <button type="button" onClick={swapInEventFields} className="font-semibold underline underline-offset-2 hover:text-amber-950">
+                        Use {[commReuse.name ? '{event}' : '', commReuse.dates ? '{eventDates}' : ''].filter(Boolean).join(' and ')} instead
+                      </button>
+                    </p>
+                  )}
                   {commKind === 'custom' && !isPayLetter && (
                     <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
                       Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{event}'} {'{eventDates}'} {'{countdown}'} {'{teamsList}'} {'{playerCounts}'} {'{coachCounts}'} {'{org}'}
@@ -1888,7 +1910,7 @@ export default function RegistrationsPage() {
                       className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{commSending ? (commWhen === 'later' ? 'Scheduling…' : 'Sending…') : commWhen === 'later' ? `Schedule for ${commSel.size} club${commSel.size !== 1 ? 's' : ''}` : `Send to ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`}</button>
                     {commKind === 'custom'
                       ? <button onClick={saveCustomLetter} disabled={customSaving || commUnknown.length > 0}
-                          className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{customSaving ? 'Saving…' : customId ? 'Save changes' : 'Save as a new letter'}</button>
+                          className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{customSaving ? 'Saving…' : customId ? 'Save changes' : 'Save as a template'}</button>
                       : <button onClick={saveCommLetter} disabled={commSaving || commUnknown.length > 0}
                           className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{commSaving ? 'Saving…' : 'Save as default'}</button>}
                     <button onClick={sendCommTest} disabled={commTesting || commSending} title="One copy to your own inbox, merged from a real club. Nothing is recorded against them."

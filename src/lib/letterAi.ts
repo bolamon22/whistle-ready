@@ -65,6 +65,12 @@ export function letterAiPrompt(i: LetterAiInput): { system: string; user: string
     i.eventPlace ? `in ${i.eventPlace}` : '',
   ].filter(Boolean).join(', ')
   const tone = i.tone && TONE_NOTES[i.tone] ? `\nTone: ${TONE_NOTES[i.tone]}.` : ''
+  // Saved letters come back at the org's next events, so the event's own name and
+  // dates go in as fields, never as text (lib/customLetters eventLiterals).
+  const eventFields = ['event', 'eventDates', 'countdown'].filter(f => allowed.includes(f)).map(f => `{${f}}`)
+  const reuse = eventFields.length
+    ? `\n- Letters are saved and reused at later events, so never write this event's name or dates as plain text: use ${eventFields.length > 1 ? `${eventFields.slice(0, -1).join(', ')} or ${eventFields[eventFields.length - 1]}` : eventFields[0]} instead.`
+    : ''
 
   const system = `You write emails for ${i.orgName || 'a tournament organizer'}, the organizer of ${event}. Each email goes to the director of every registered club, who passes things on to their own coaches and families.
 
@@ -79,7 +85,7 @@ Rules:
 - Plain text only: no Markdown, no asterisks, no headings. Short paragraphs separated by one blank line. For a list, put each item on its own line starting with "• ".
 - Start with "Hi {contact}," on its own line. End with a short sign-off and "{org}" on its own line.
 - American English. Written by a tournament organizer to a club director they work with every season. Usually under 180 words unless the request needs more.
-- Subject: under 70 characters, specific to the email, no ALL CAPS, no emoji.${tone}
+- Subject: under 70 characters, specific to the email, no ALL CAPS, no emoji.${reuse}${tone}
 ${i.mode === 'rewrite'
     ? `
 You are revising an existing letter. Apply the instruction and change nothing it doesn't call for:

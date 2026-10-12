@@ -143,6 +143,63 @@ export function coachCountsText(
   return lines.join('\n')
 }
 
+// REUSE AT OTHER EVENTS. Saved letters are kept per org, not per event, so every
+// one shows up in Email clubs at every event (Bo, Oct 12 2026: "save the letters
+// we create as templates that I can reuse for future events"). A letter that
+// spells out this event's name or dates by hand would say them at the next event
+// too; {event} and {eventDates} never do. These find the hand-typed ones and
+// swap them in.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const ANY_MONTH = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?'
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** The event's name as a whole phrase (no lookbehind: older iPhones can't run
+ *  it), and its first day as people write it: "Oct 24", "October 24th",
+ *  "Oct. 24–25, 2026", "October 24 to 25". */
+function eventPatterns(eventName: string, startDate: string): { name: RegExp | null; dates: RegExp | null } {
+  const n = String(eventName || '').trim()
+  const name = n.length >= 3 ? new RegExp(`(^|[^A-Za-z0-9])${escRe(n)}(?![A-Za-z0-9])`, 'gi') : null
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(startDate || ''))
+  const mi = m ? Number(m[2]) - 1 : -1, day = m ? Number(m[3]) : 0
+  if (!m || mi < 0 || mi > 11 || day < 1 || day > 31) return { name, dates: null }
+  const full = MONTHS[mi]
+  const month = `(?:${full}|${full.slice(0, 3)}${mi === 8 ? '|Sept' : ''})\\.?`
+  const ord = '(?:st|nd|rd|th)?'
+  const dates = new RegExp(`\\b${month}\\s+${day}${ord}\\b(?:\\s*(?:-|–|—|to|through|and|&)\\s*(?:${ANY_MONTH}\\s+)?\\d{1,2}${ord}\\b)?(?:,?\\s+${m[1]})?`, 'gi')
+  return { name, dates }
+}
+
+/** Whether the letter spells out this event's name or dates by hand. Dates only
+ *  count in club letters: the payment letters' merge has no {eventDates}. */
+export function eventLiterals(text: string, eventName: string, startDate: string, pay: boolean): { name: boolean; dates: boolean } {
+  const p = eventPatterns(eventName, startDate)
+  const t = String(text || '')
+  return { name: !!p.name && p.name.test(t), dates: !pay && !!p.dates && p.dates.test(t) }
+}
+
+/** The same text with this event's name and dates swapped for {event} and
+ *  {eventDates}. */
+export function withEventFields(text: string, eventName: string, startDate: string, pay: boolean): string {
+  const p = eventPatterns(eventName, startDate)
+  let out = String(text || '')
+  if (p.name) out = out.replace(p.name, '$1{event}')
+  if (!pay && p.dates) out = out.replace(p.dates, '{eventDates}')
+  return out
+}
+
+/** {eventDates} as the send writes it (fmtDates in lib/commSend, on a UTC
+ *  server): "Oct 24–Oct 25", or the one day. Read from the date's own digits, so
+ *  a browser west of UTC doesn't preview the day before. */
+export function eventDatesText(start?: string | null, end?: string | null): string {
+  const f = (d?: string | null) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''))
+    const mon = m ? MONTHS[Number(m[2]) - 1] : ''
+    return m && mon ? `${mon.slice(0, 3)} ${Number(m[3])}` : ''
+  }
+  const s = f(start), e = f(end)
+  return s && e && s !== e ? `${s}–${e}` : s || e
+}
+
 export const LETTER_TONES = ['Friendly', 'Firm', 'Urgent'] as const
 export type LetterTone = (typeof LETTER_TONES)[number]
 
