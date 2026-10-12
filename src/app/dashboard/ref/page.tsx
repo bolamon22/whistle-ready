@@ -7,6 +7,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import StaffW9Card from '@/components/StaffW9Card'
 import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2 } from 'lucide-react'
+import StaffAlerts from '@/components/StaffAlerts'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number }
@@ -189,6 +190,9 @@ export default function RefDashboard() {
         <p className="text-sm text-gray-400">{roleLabel}</p>
         <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'} 👋</h1>
       </div>
+
+      {/* Game-day alerts for this phone (field requests) */}
+      <div className="mb-5"><StaffAlerts compact /></div>
 
       {/* My events — sign up for the tournaments you can work */}
       {portal && portal.events.length > 0 && (

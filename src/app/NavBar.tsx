@@ -375,6 +375,10 @@ export default function NavBar() {
                 </div>
               )}
 
+              {isStaffThemeRoute(pathname || '') && !['coach', 'parent', 'club_director'].includes(role) && (
+                <Link href="/dashboard/alerts" className={MOBILE_LINK}>Game-day alerts</Link>
+              )}
+
               {isStaffThemeRoute(pathname || '') && (
                 <div className="py-3 flex items-center justify-between gap-3">
                   <span className="text-sm text-slate-600">Appearance</span>

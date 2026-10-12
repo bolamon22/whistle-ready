@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { notifyFieldRequest, notifyRequester } from '@/lib/staffAlerts'
 
 // Internal game-day "ops" quick-messages between staff ("need a ball on Field 5",
 // "trainer to Field 7"). Stored as JSON in AppSetting key `opsMessages:<id>`.
@@ -60,13 +61,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       group: String(body.group || 'all'),
       from: session.user?.name || session.user?.email || 'Staff',
       fromRole: role || 'staff',
+      fromUserId: (session.user as any)?.id || undefined,
       createdAt: new Date().toISOString(),
       acks: [],
     }
     if (body.urgency) entry.urgency = String(body.urgency)
     const list = await readList(params.id)
     await writeList(params.id, [entry, ...list].slice(0, 60))
-    return NextResponse.json({ ok: true, message: entry })
+    // Buzz the phones of staff in that group, email the roster people whose job
+    // it is (lib/staffAlerts). Best-effort: the request is already saved.
+    const notified = await notifyFieldRequest(params.id, entry)
+    return NextResponse.json({ ok: true, message: entry, notified })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to post' }, { status: 500 })
   }
@@ -83,13 +88,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const mid = req.nextUrl.searchParams.get('id') || body.id
     const me = session.user?.name || session.user?.email || 'Staff'
     const list = await readList(params.id)
+    let added: any = null
     const next = list.map((m: any) => {
       if (m.id !== mid) return m
       const acks = Array.isArray(m.acks) ? m.acks : []
       const has = acks.some((a: any) => a.by === me)
+      if (!has) added = m
       return { ...m, acks: has ? acks.filter((a: any) => a.by !== me) : [...acks, { by: me, at: new Date().toISOString() }] }
     })
     await writeList(params.id, next)
+    // Tell whoever asked that help is coming (their phone, if alerts are on).
+    if (added) await notifyRequester(added.fromUserId, params.id, added.text, me)
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to update' }, { status: 500 })

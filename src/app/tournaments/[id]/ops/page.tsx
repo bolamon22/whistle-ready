@@ -7,6 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
 import { FIELD_REQUEST_TEMPLATES, FIELD_REQUEST_URGENCIES } from '@/lib/fieldRequests'
 import { Radio, Send, Trash2, ChevronLeft, Users, TrafficCone, HeartPulse, Flag, ClipboardList, ListChecks, Check } from 'lucide-react'
+import StaffAlerts from '@/components/StaffAlerts'
 
 const GROUPS: { key: string; label: string; Icon: any }[] = [
   { key: 'all', label: 'All staff', Icon: Users },
@@ -77,6 +78,8 @@ export default function OpsBoardPage({ embedded = false }: { embedded?: boolean 
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><Radio size={22} className="text-teal-600" /> Field Request</h1>
         <p className="text-sm text-slate-500 mb-5">Quick game-day requests to staff — “yellow balls on Field 5,” “trainer to Field 7.” Anyone on staff can post and acknowledge.</p>
       </>}
+
+      <div className="mb-4"><StaffAlerts tournamentId={String(id)} compact /></div>
 
       {/* composer */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6">
