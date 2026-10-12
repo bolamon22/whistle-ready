@@ -46,7 +46,7 @@ function staffRank(w:Worker):number{
 // Searchable dropdown component
 function SearchSelect({ value, onChange, options, placeholder, assigned, disabled, chip }: {
   value: string; onChange: (v:string)=>void
-  options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string}[]
+  options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string;busy?:string}[]
   placeholder: string; assigned: boolean; disabled: boolean
   /** Compact board: a one-line chip (role · last name · games) instead of the row select. */
   chip?: { short:string; color:string; display:string; count?:number; danger?:boolean; tone:'ref'|'sk'; title?:string }
@@ -63,12 +63,21 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
   },[])
 
   const selected=options.find(o=>o.id===value)
+  // People already working another game at this time sink to the bottom, greyed
+  // out and not pickable (the one already in this slot stays selectable).
+  const isBusy=(o:{id:string;busy?:string})=>!!o.busy&&o.id!==value
   const filtered=options.filter(o=>o.label.toLowerCase().includes(search.toLowerCase()))
+    .sort((a,b)=>Number(isBusy(a))-Number(isBusy(b)))
 
   const list=(
     <div className="max-h-48 overflow-y-auto">
       <div className="px-2 py-1.5 text-[10px] text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100" onClick={()=>{onChange('');setOpen(false);setSearch('')}}>— unassigned —</div>
-      {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>(
+      {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>isBusy(o)?(
+        <div key={o.id} aria-disabled="true" title={`Already working ${o.busy} at this time`} className="px-2 py-1.5 cursor-not-allowed bg-slate-50 opacity-60">
+          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 line-through decoration-slate-300">{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}{o.label}</div>
+          <div className="text-[10px] text-slate-500">Busy · on {o.busy}</div>
+        </div>
+      ):(
         <div key={o.id} onClick={()=>{onChange(o.id);setOpen(false);setSearch('')}}
           className={`px-2 py-1.5 cursor-pointer hover:bg-sky-50 ${o.id===value?'bg-sky-100':''}`}>
           <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}{o.warning?'⚠ ':''}{o.label}</div>
@@ -418,6 +427,21 @@ export default function GridPage({ params }: { params:{id:string} }) {
     const doubled=new Set<string>()
     workerGameCount.forEach((count,wid)=>{if(count>1)doubled.add(wid)})
     return doubled
+  }
+
+  // Who is already working each time slot (date|time -> worker -> games), so a
+  // pick list can grey out someone who is already on another field at that time.
+  // The doubled set above only caught people ALREADY on two games, so the list
+  // happily offered a person who was on one game at the same time.
+  const busyIndex=new Map<string,Map<string,{gameId:string;where:string}[]>>()
+  for(const g of games){
+    const k=g.date+'|'+g.startTime
+    let inner=busyIndex.get(k); if(!inner){inner=new Map();busyIndex.set(k,inner)}
+    for(const a of g.assignments){const l=inner.get(a.workerId)||[];l.push({gameId:g.id,where:`${(g.location||'').split(' - ').pop()} · #${g.gameNumber}`});inner.set(a.workerId,l)}
+  }
+  function busyFor(game:Game,workerId:string):string|undefined{
+    const l=busyIndex.get(game.date+'|'+game.startTime)?.get(workerId)
+    return l?.find(x=>x.gameId!==game.id)?.where
   }
 
   const rosterIds=new Set(roster.map(r=>r.workerId))
@@ -909,9 +933,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
                                 const role=i===0?'ref1':i===1?'ref2':'ref3'
                                 const roleObj={value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
                                 const existing=g.assignments.find(a=>a.role===role)
-                                return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id)}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
+                                return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
                               })}
-                              <div className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-emerald-600 w-6">SK</span><div className="flex-1"><SearchSelect value={g.assignments.find(a=>a.role==='scorekeeper')?.workerId??''} onChange={wid=>assign(g.id,'scorekeeper',wid)} options={rosterWorkers.filter(w=>canScorekeeper(w)).map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id)}})} placeholder="unassigned" assigned={!!g.assignments.find(a=>a.role==='scorekeeper')} disabled={assigningGame===g.id}/></div></div>
+                              <div className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-emerald-600 w-6">SK</span><div className="flex-1"><SearchSelect value={g.assignments.find(a=>a.role==='scorekeeper')?.workerId??''} onChange={wid=>assign(g.id,'scorekeeper',wid)} options={rosterWorkers.filter(w=>canScorekeeper(w)).map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!g.assignments.find(a=>a.role==='scorekeeper')} disabled={assigningGame===g.id}/></div></div>
                             </div>
                           </td>
                         </tr>
@@ -974,9 +998,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
                                   {Array.from({length:refCount},(_,i)=>{
                                     const role=i===0?'ref1':i===1?'ref2':'ref3'
                                     const existing=g.assignments.find(a=>a.role===role)
-                                    return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id)}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
+                                    return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
                                   })}
-                                  <div className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-emerald-600 w-6">SK</span><div className="flex-1"><SearchSelect value={g.assignments.find(a=>a.role==='scorekeeper')?.workerId??''} onChange={wid=>assign(g.id,'scorekeeper',wid)} options={rosterWorkers.filter(w=>canScorekeeper(w)).map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id)}})} placeholder="unassigned" assigned={!!g.assignments.find(a=>a.role==='scorekeeper')} disabled={assigningGame===g.id}/></div></div>
+                                  <div className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-emerald-600 w-6">SK</span><div className="flex-1"><SearchSelect value={g.assignments.find(a=>a.role==='scorekeeper')?.workerId??''} onChange={wid=>assign(g.id,'scorekeeper',wid)} options={rosterWorkers.filter(w=>canScorekeeper(w)).map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!g.assignments.find(a=>a.role==='scorekeeper')} disabled={assigningGame===g.id}/></div></div>
                                 </div>
                               </td>
                             </tr>
@@ -1199,10 +1223,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
             const nodes=slotRoles(rc).map((role,i)=>{
               const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
               const existing=game.assignments.find(a=>a.role===role)
-              return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
+              return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
             })
             const sk=game.assignments.find(a=>a.role==='scorekeeper')
-            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
+            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
             return nodes
           }
           // One line: status dot, game, division, the crew by last name. Used by the
@@ -1402,10 +1426,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
                               const role=i===0?'ref1':i===1?'ref2':'ref3'
                               const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
                               const existing=game.assignments.find(a=>a.role===role)
-                              return<div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":"+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+":"+role?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref"/></div>
+                              return<div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":"+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+":"+role?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref"/></div>
                             })}
                             {/* Scorekeeper */}
-                            <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper"/></div>
+                            <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper"/></div>
                           </div>
                           </>}
                         </td>
@@ -1530,10 +1554,12 @@ export default function GridPage({ params }: { params:{id:string} }) {
   )
 }
 
-function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,onAssign,getGameCount,doubled,slotType,chip,displayName }:{
+function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,onAssign,getGameCount,doubled,slotType,chip,displayName,busyFor }:{
   roleObj:{value:string;label:string;short:string;color:string};existing?:Assignment;workers:Worker[];avails:Availability[];date:string;time:string;disabled:boolean;division:string;onAssign:(w:string)=>void;getGameCount:(id:string)=>number;doubled:Set<string>;slotType:'ref'|'scorekeeper'
   /** Compact board chip; displayName is the short (last) name to show on it. */
   chip?:boolean;displayName?:string
+  /** Where this worker already is at this time (another game), if anywhere. */
+  busyFor?:(workerId:string)=>string|undefined
 }){
   const divLower=division.toLowerCase()
   const gameGender=divLower.includes('girl')||divLower.includes('women')?'girls':divLower.includes('boy')||divLower.includes('men')?'boys':'both'
@@ -1571,6 +1597,7 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
       dot:staffKind(w).dot,
       sublabel:`${certLabel(w.certLevel)}${!avail?' · ⚠ unavailable':''}${isDoubled?' · ⚠ double-booked':''}`,
       warning:!avail||isDoubled,
+      busy:busyFor?.(w.id),
     }
   })
 
