@@ -39,6 +39,9 @@ export default function GlobalChirp() {
   // The org website has the public Chirp in the same corner.
   if (pathname.startsWith('/login') || pathname.startsWith('/o/') || pathname.startsWith('/pay/') || pathname.startsWith('/confirm/')) return null
 
-  // key: a new tournament starts a new conversation.
-  return <ChatWidget key={tournamentId || 'app'} tournamentId={tournamentId || undefined} tournamentName={name} liftOnPhones={segment === 'builder'} />
+  // key: a new tournament starts a new conversation. The live scorer is a
+  // full-screen tool, so Chirp starts tucked into an edge tab there (its own
+  // remembered setting, separate from every other page).
+  return <ChatWidget key={tournamentId || 'app'} tournamentId={tournamentId || undefined} tournamentName={name} liftOnPhones={segment === 'builder'}
+    startHidden={/\/scorekeeper\/?$/.test(pathname)} />
 }

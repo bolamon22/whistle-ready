@@ -12,10 +12,29 @@ import ChirpAvatar from '@/components/ChirpAvatar'
 
 const NAVY = 'bg-[#0f1f3d]'
 
-/** The launcher: a labeled pill while closed, a round close button while open. */
-export function ChirpLauncher({ open, onToggle, sub = 'Help desk · answers 24/7', lift = false }: {
+/** Hidden-to-a-tab state, remembered on this device per `key`. */
+function useChirpHidden(hide?: { key: string; defaultHidden: boolean }): [boolean, (v: boolean) => void] {
+  const storeKey = hide ? `chirp-hidden:${hide.key}` : ''
+  const [hidden, setHidden] = useState(!!hide?.defaultHidden)
+  useEffect(() => {
+    if (!storeKey) return
+    let v: string | null = null
+    try { v = localStorage.getItem(storeKey) } catch {}
+    setHidden(v === '1' || v === '0' ? v === '1' : !!hide?.defaultHidden)   // the same widget moves between pages
+  }, [storeKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (v: boolean) => { setHidden(v); try { if (storeKey) localStorage.setItem(storeKey, v ? '1' : '0') } catch {} }
+  return [hidden, set]
+}
+
+/** The launcher: a labeled pill while closed, a round close button while open.
+ *  compactOnPhones: just the round Chirp face on phones (the labeled pill
+ *  covered a third of the screen, e.g. the live scorer's scoreboard).
+ *  hide: adds a small × that tucks Chirp into a tab on the screen edge. */
+export function ChirpLauncher({ open, onToggle, sub = 'Help desk · answers 24/7', lift = false, compactOnPhones = false, hide }: {
   open: boolean; onToggle: () => void; sub?: string; lift?: boolean
+  compactOnPhones?: boolean; hide?: { key: string; defaultHidden: boolean }
 }) {
+  const [hidden, setHidden] = useChirpHidden(hide)
   const pos = `fixed ${lift ? 'bottom-20' : 'bottom-4'} right-3 sm:bottom-6 sm:right-6 z-50`
   if (open) {
     return (
@@ -25,18 +44,34 @@ export function ChirpLauncher({ open, onToggle, sub = 'Help desk · answers 24/7
       </button>
     )
   }
+  if (hidden) {
+    return (
+      <button type="button" onClick={() => setHidden(false)} aria-label="Show Chirp, the help desk" title="Show Chirp"
+        className={`fixed ${lift ? 'bottom-20' : 'bottom-4'} sm:bottom-6 right-0 z-50 h-12 w-8 rounded-l-xl ${NAVY} opacity-80 hover:opacity-100 shadow-lg flex items-center justify-center transition-opacity`}>
+        <ChirpAvatar size={22} />
+      </button>
+    )
+  }
   return (
-    <button type="button" onClick={onToggle} aria-label="Ask Chirp, the help desk"
-      className={`${pos} h-14 rounded-full ${NAVY} shadow-[0_10px_28px_rgba(15,31,61,0.35)] hover:bg-slate-800 transition-colors flex items-center gap-2.5 pl-1.5 pr-4 sm:pr-5`}>
-      <span className="relative flex-none">
-        <ChirpAvatar size={44} />
-        <span className="absolute right-0 bottom-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-[#0f1f3d]" />
-      </span>
-      <span className="flex flex-col items-start leading-tight">
-        <span className="text-[15px] font-bold text-white">Ask Chirp</span>
-        <span className="hidden sm:block text-[11px] text-teal-200">{sub}</span>
-      </span>
-    </button>
+    <div className={pos}>
+      <button type="button" onClick={onToggle} aria-label="Ask Chirp, the help desk"
+        className={`h-14 rounded-full ${NAVY} shadow-[0_10px_28px_rgba(15,31,61,0.35)] hover:bg-slate-800 transition-colors flex items-center gap-2.5 ${compactOnPhones ? 'w-14 justify-center sm:w-auto sm:justify-start sm:pl-1.5 sm:pr-5' : 'pl-1.5 pr-4 sm:pr-5'}`}>
+        <span className="relative flex-none">
+          <ChirpAvatar size={44} />
+          <span className="absolute right-0 bottom-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-[#0f1f3d]" />
+        </span>
+        <span className={`${compactOnPhones ? 'hidden sm:flex' : 'flex'} flex-col items-start leading-tight`}>
+          <span className="text-[15px] font-bold text-white">Ask Chirp</span>
+          <span className="hidden sm:block text-[11px] text-teal-200">{sub}</span>
+        </span>
+      </button>
+      {hide && (
+        <button type="button" onClick={() => setHidden(true)} aria-label="Hide Chirp" title="Hide Chirp (tap the tab on the edge to bring it back)"
+          className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-slate-500 hover:bg-slate-700 text-white border-2 border-white flex items-center justify-center shadow after:content-[''] after:absolute after:-inset-2">
+          <X size={12} strokeWidth={3} />
+        </button>
+      )}
+    </div>
   )
 }
 

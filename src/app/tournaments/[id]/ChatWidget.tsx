@@ -12,7 +12,7 @@ import { ChirpLauncher, ChirpHeader, ChirpWelcome, ChirpNote, useChirpHistory, C
 // around one tournament. Answers are cut to the asker's role in lib/chirp.
 
 interface Message { role: 'user' | 'assistant'; content: string }
-interface Props { tournamentId?: string; tournamentName?: string; liftOnPhones?: boolean }
+interface Props { tournamentId?: string; tournamentName?: string; liftOnPhones?: boolean; startHidden?: boolean }
 
 const TOURNAMENT_TOPICS = [
   { label: 'Unscheduled games', q: 'How many games are unscheduled?', icon: <CalendarDays size={18} /> },
@@ -28,7 +28,7 @@ const APP_TOPICS = [
 ]
 const EXPAND_KEY = 'chirp-expanded'
 
-export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones }: Props) {
+export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones, startHidden }: Props) {
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
@@ -101,7 +101,8 @@ export default function ChatWidget({ tournamentId, tournamentName, liftOnPhones 
 
   return (
     <>
-      <ChirpLauncher open={open} onToggle={() => setOpen(o => !o)} sub="Help desk · ask anything" lift={liftOnPhones} />
+      <ChirpLauncher open={open} onToggle={() => setOpen(o => !o)} sub="Help desk · ask anything" lift={liftOnPhones}
+        compactOnPhones hide={{ key: startHidden ? 'scorer' : 'staff', defaultHidden: !!startHidden }} />
 
       {open && (
         <div
