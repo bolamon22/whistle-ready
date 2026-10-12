@@ -801,6 +801,9 @@ export default function RegistrationsPage() {
       .then(d => { if (Array.isArray(d?.letters)) setCustomLetters(d.letters) }).catch(() => {})
   }
   const [commSel, setCommSel] = useState<Set<string>>(new Set())
+  // Clubs a payment or account letter unticked because it would skip them. They
+  // are ticked again for the next letter that goes to every club (setCommAudience).
+  const commDropped = useRef<Set<string>>(new Set())
   const [commSending, setCommSending] = useState(false)
   const [commTesting, setCommTesting] = useState(false)
   const [commSaving, setCommSaving] = useState(false)
@@ -827,6 +830,7 @@ export default function RegistrationsPage() {
 
   const commLog = (reg: Registration): Record<string, string> => { try { return reg.commEmailLog ? JSON.parse(reg.commEmailLog) : {} } catch { return {} } }
   const openComm = (reg?: Registration, kind?: CommKind) => {
+    commDropped.current = new Set()
     setCommSel(new Set(reg ? [reg.id] : registrations.filter(r => r.contactEmail).map(r => r.id)))
     if (kind) setCommKind(kind)
     setCommWhen('now'); setCommAt('')
@@ -908,7 +912,6 @@ export default function RegistrationsPage() {
   // is a letter nobody has tested.
   const sendCommTest = async () => {
     if (!commCur) return
-    if (commUnknown.length) { toast.error(unknownMsg(), { duration: 6000 }); return }
     const sampleId = [...commSel][0] || registrations[0]?.id
     if (!sampleId) { toast.error('No clubs here to build a test from'); return }
     setCommTesting(true)
@@ -928,7 +931,11 @@ export default function RegistrationsPage() {
         toast.error(`Nothing sent: ${why}. Tick a different club and try again.`, { duration: 7000 })
         return
       }
-      toast.success(`Test copy sent to ${d.to}. If it does not arrive, check the SendGrid Activity feed — sends fail silently.`, { duration: 7000 })
+      // A test goes only to the sender, so it is allowed with a fill-in the send
+      // can't fill: seeing the raw braces in a real inbox is the point.
+      toast.success(commUnknown.length
+        ? `Test copy sent to ${d.to}. ${commUnknown.map(f => `{${f}}`).join(', ')} will show exactly as typed until you fix ${commUnknown.length === 1 ? 'it' : 'them'}.`
+        : `Test copy sent to ${d.to}. If it does not arrive, check the SendGrid Activity feed — sends fail silently.`, { duration: 7000 })
     } catch (e: any) {
       toast.error(e?.message || 'Test send failed')
     } finally {
@@ -982,23 +989,43 @@ export default function RegistrationsPage() {
       setRegistrations(rs => rs.map(r => r.id === reg.id ? { ...r, confirmStatus: d.status ?? 'awaiting', confirmNote: '', notes: d.notes ?? r.notes } : r))
     } else toast.error('Failed')
   }
+  // Who the letter goes to. Payment and account letters untick the clubs they
+  // would skip, and those clubs come back for the next letter that goes to every
+  // club. They used to stay unticked: at an event where every club had paid, one
+  // look at Payment reminder left Bo's coach letter with 0 clubs (Oct 12 2026).
+  const setCommAudience = (keep: ((r: Registration) => boolean) | null) => {
+    const base = new Set(commSel)
+    for (const id of commDropped.current) if (registrations.some(r => r.id === id && r.contactEmail)) base.add(id)
+    const next = new Set<string>()
+    const dropped = new Set<string>()
+    for (const id of base) {
+      const r = registrations.find(x => x.id === id)
+      if (!keep || (r && keep(r))) next.add(id)
+      else dropped.add(id)
+    }
+    commDropped.current = dropped
+    setCommSel(next)
+  }
   // Only clubs that owe -- what the Payment reminder pill does when it is picked.
   const narrowToOwing = () => {
     setCommPayFilter('owes')
-    setCommSel(sel => new Set([...sel].filter(id => { const r = registrations.find(x => x.id === id); return r ? regBalance(r) > 0 : false })))
+    setCommAudience(r => regBalance(r) > 0)
   }
   const startNewLetter = () => {
     setCommKind('custom'); setCustomId(''); setCustomDeleteAsk(false)
     setCustomDraft({ name: '', button: 'none', subject: '', body: '' })
+    setCommAudience(null)
   }
   const pickCustomLetter = (l: CustomLetter) => {
     setCommKind('custom'); setCustomId(l.id); setCustomDeleteAsk(false)
     setCustomDraft({ name: l.name, button: l.button, subject: l.subject, body: l.body })
     if (l.button === 'pay') narrowToOwing()
+    else setCommAudience(null)
   }
   const setCustomButton = (b: LetterButton) => {
     setCustomDraft(d => ({ ...d, button: b }))
     if (b === 'pay') narrowToOwing()
+    else setCommAudience(null)
   }
   // A fresh draft from the AI. It names the letter too, unless it already has a name.
   const applyAiDraft = (r: AiLetter) => setCustomDraft(d => ({ ...d, subject: r.subject, body: r.body, name: d.name.trim() ? d.name : (r.name || '') }))
@@ -1686,11 +1713,12 @@ export default function RegistrationsPage() {
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {(['waiver', 'schedule', 'confirm', 'payment', 'account', 'checklist'] as const).map(k => (
                   <button key={k} onClick={() => { setCommKind(k)
-                    if (k === 'account') setCommSel(sel => new Set([...sel].filter(id => { const r = registrations.find(x => x.id === id); return r ? !inPortal(r) : false })))
                     // A paid club left ticked from another letter is a send that does
                     // nothing -- commSend skips a zero balance -- but it still inflates
-                    // the "Send to 30 clubs" count on the button. Drop them here.
-                    if (k === 'payment') { setCommPayFilter('owes'); setCommSel(sel => new Set([...sel].filter(id => { const r = registrations.find(x => x.id === id); return r ? regBalance(r) > 0 : false }))) } }}
+                    // the "Send to 30 clubs" count on the button. Drop them here; the
+                    // next letter for every club ticks them again (setCommAudience).
+                    if (k === 'payment') { setCommPayFilter('owes'); setCommAudience(r => regBalance(r) > 0) }
+                    else setCommAudience(k === 'account' ? (r => !inPortal(r)) : null) }}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${commKind === k ? 'bg-teal-600 text-white border-teal-600' : 'text-slate-600 border-slate-300 hover:border-slate-400'}`}>
                     {COMM_KIND_LABELS[k]}
                   </button>
@@ -1799,7 +1827,7 @@ export default function RegistrationsPage() {
                     subject={commCur.subject} body={commCur.body} onResult={r => setCommCur({ subject: r.subject, body: r.body })} />
                   {commUnknown.length > 0 && (
                     <p role="alert" className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                      {commUnknown.map(f => `{${f}}`).join(', ')} {commUnknown.length === 1 ? 'isn\u2019t a fill-in field' : 'aren\u2019t fill-in fields'} for this letter, so {commUnknown.length === 1 ? 'it' : 'they'} would reach every club exactly as typed. Fix or remove {commUnknown.length === 1 ? 'it' : 'them'} to send.
+                      {commUnknown.map(f => `{${f}}`).join(', ')} {commUnknown.length === 1 ? 'isn\u2019t a fill-in field' : 'aren\u2019t fill-in fields'} for this letter, so {commUnknown.length === 1 ? 'it' : 'they'} would reach every club exactly as typed. Fix or remove {commUnknown.length === 1 ? 'it' : 'them'} to send or save. A test to yourself still works.
                     </p>
                   )}
                   {commKind === 'custom' && !isPayLetter && (
@@ -1863,7 +1891,7 @@ export default function RegistrationsPage() {
                           className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{customSaving ? 'Saving…' : customId ? 'Save changes' : 'Save as a new letter'}</button>
                       : <button onClick={saveCommLetter} disabled={commSaving || commUnknown.length > 0}
                           className="text-sm text-teal-700 border border-teal-200 hover:border-teal-400 px-3 py-2 rounded-lg disabled:opacity-50">{commSaving ? 'Saving…' : 'Save as default'}</button>}
-                    <button onClick={sendCommTest} disabled={commTesting || commSending || commUnknown.length > 0} title="One copy to your own inbox, merged from a real club. Nothing is recorded against them."
+                    <button onClick={sendCommTest} disabled={commTesting || commSending} title="One copy to your own inbox, merged from a real club. Nothing is recorded against them."
                       className="text-sm text-slate-600 border border-slate-300 hover:border-slate-400 px-3 py-2 rounded-lg disabled:opacity-50">{commTesting ? 'Sending test…' : 'Send a test to me'}</button>
                     <button onClick={() => setCommOpen(false)} className="text-sm text-slate-500 px-3 py-2">Cancel</button>
                     {commKind === 'custom' && customId && (customDeleteAsk

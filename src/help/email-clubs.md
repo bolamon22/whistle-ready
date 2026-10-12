@@ -32,7 +32,7 @@ For a coach letter, pick **Coach registration**: it puts the coach registration 
 
 **To rewrite any letter:** under **Letter**, click **More urgent**, **Friendlier**, **Shorter** or **Fix grammar**, or click **Tell it what to change…** and type or say it. **Undo the AI change** puts the old wording back.
 
-The AI writes the words only. Names, balances, team lists and links fill in from each club's record when it sends. A fill-in it doesn't recognize, like {payment_link}, shows in red, and the letter can't be sent or saved until you fix it.
+The AI writes the words only. Names, balances, team lists and links fill in from each club's record when it sends. A fill-in it doesn't recognize, like {payment_link}, shows in red, and the letter can't be sent or saved until you fix it. You can still send yourself a test.
 
 **To keep your wording:** click **Save as default**. The **Payment reminder** letters are saved separately. Your own letters use **Save changes**, and **Delete letter** removes one.
 
@@ -42,5 +42,6 @@ The AI writes the words only. Names, balances, team lists and links fill in from
 
 **Common problems:**
 - These emails go to clubs right away when you click **Send**.
+- **Send to 0 clubs** means no club is ticked. Click **All** above the list. A payment letter unticks clubs that owe nothing, and **Set up your account** unticks clubs already in the portal; they're ticked again when you pick a letter for every club.
 - Clubs already paid are skipped by payment reminders. **Set up your account** skips registrations someone can already open in the club portal; a contact who has a login but whose registration isn't on it yet still gets it, and links it with their existing password.
 - The **Pay reminder** column on each row shows the last reminder date.
