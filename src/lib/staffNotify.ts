@@ -29,6 +29,8 @@ export async function notifyStaffRegistered(opts: {
   roles: string[]
   source: 'signup' | 'claim' | 'invite'
   events?: string[]
+  /** Who they said referred them (signup form, optional). */
+  referredBy?: string | null
 }) {
   try {
     // Recipients: the org's configured staff-notify address (falls back to the shared
@@ -61,6 +63,7 @@ export async function notifyStaffRegistered(opts: {
             ${row('Email', esc(opts.email))}
             ${opts.phone ? row('Phone', esc(String(opts.phone))) : ''}
             ${opts.events?.length ? row('Working', esc(opts.events.join(', '))) : ''}
+            ${opts.referredBy ? row('Referred by', esc(opts.referredBy)) : ''}
           </table>
           <a href="${APP_URL}/staff"
             style="display: inline-block; margin-top: 18px; background: #14b8a6; color: white; font-weight: 600;

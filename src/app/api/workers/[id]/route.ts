@@ -20,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   // Mailing address + Venmo/Zelle handles (raw columns) — staff keep all three payment
   // routes on file so payroll can fall back when the preferred one bounces; payMethod
   // marks the preference and payHandle mirrors the preferred handle for old callers.
-  const RAW_TEXT_COLS: Array<[string, number]> = [['mailingAddress', 400], ['venmoHandle', 120], ['zelleHandle', 120]]
+  const RAW_TEXT_COLS: Array<[string, number]> = [['mailingAddress', 400], ['venmoHandle', 120], ['zelleHandle', 120], ['referredBy', 120]]
   for (const [col, max] of RAW_TEXT_COLS) {
     if (b[col] === undefined) continue
     try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "${col}" TEXT`) } catch { /* exists */ }

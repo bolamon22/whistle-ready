@@ -106,6 +106,9 @@ export async function POST(req: NextRequest) {
     const zelleHandle = body.zelleHandle ? String(body.zelleHandle).slice(0, 120) : null
     const mailingAddress = body.mailingAddress ? String(body.mailingAddress).slice(0, 400) : null
     const payHandle = payMethod === 'venmo' ? venmoHandle : payMethod === 'zelle' ? zelleHandle : null
+    // Optional "who referred you?" (Oct 2026): scorekeepers mostly come through other
+    // scorekeepers, and Bo pairs people who want to work together.
+    const referredBy = body.referredBy ? String(body.referredBy).trim().slice(0, 120) || null : null
 
     if (!name || !email || !password) return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 })
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
@@ -123,6 +126,7 @@ export async function POST(req: NextRequest) {
     try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "venmoHandle" TEXT`) } catch { /* exists */ }
     try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "zelleHandle" TEXT`) } catch { /* exists */ }
     try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "w9OnFile" INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
+    try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "referredBy" TEXT`) } catch { /* exists */ }
 
     // Duplicate guard: already in this org's pool by email → link, don't duplicate
     const wRes = await client.execute({ sql: `SELECT * FROM "Worker" WHERE lower(email) = ? AND orgId = ?`, args: [email, orgId] })
@@ -133,6 +137,9 @@ export async function POST(req: NextRequest) {
       workerId = String(w.id)
       linked = true
       // Fill gaps only — never overwrite what the organizer already entered
+      if (!w.referredBy && referredBy) {
+        await client.execute({ sql: `UPDATE "Worker" SET "referredBy" = ?, updatedAt = datetime('now') WHERE id = ?`, args: [referredBy, workerId] })
+      }
       if (!w.phone && phone) {
         await client.execute({ sql: `UPDATE "Worker" SET phone = ?, updatedAt = datetime('now') WHERE id = ?`, args: [phone, workerId] })
       }
@@ -150,6 +157,7 @@ export async function POST(req: NextRequest) {
               VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
         args: [workerId, name, email, phone, certLevel, role, JSON.stringify([role]), gender, payMethod, payHandle, venmoHandle, zelleHandle, mailingAddress, orgId],
       })
+      if (referredBy) await client.execute({ sql: `UPDATE "Worker" SET "referredBy" = ? WHERE id = ?`, args: [referredBy, workerId] })
     }
 
     // Optional headshot (client-compressed data URL) — goes on their staff ID card.
@@ -225,7 +233,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Office heads-up — Bo wants to know the moment someone registers
-    await notifyStaffRegistered({ org, orgId, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name) })
+    await notifyStaffRegistered({ org, orgId, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name), referredBy })
 
     return NextResponse.json({ ok: true, linked, workerId, events: joined.map(e => ({ name: e.name, logoUrl: e.logoUrl })) }, { status: 201 })
   } catch (e) {

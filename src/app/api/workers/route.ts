@@ -135,6 +135,11 @@ export async function POST(req: Request) {
     args: [id, name, email ?? null, phone ?? null, certLevel ?? 'youth', defaultRole ?? 'ref', JSON.stringify(roles ?? [defaultRole ?? 'ref']), isAssigner ? 1 : 0, gender ?? 'both', payRateOverride ?? null, hourlyRate ?? null, payMethod ?? 'check', payHandle ?? null, notes ?? null, association ?? null, orgId],
   })
 
+  if (body.referredBy) {
+    try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "referredBy" TEXT`) } catch { /* exists */ }
+    await client.execute({ sql: `UPDATE "Worker" SET "referredBy" = ? WHERE id = ?`, args: [String(body.referredBy).trim().slice(0, 120), id] })
+  }
+
   const created = await client.execute({ sql: `SELECT * FROM "Worker" WHERE id = ?`, args: [id] })
   return NextResponse.json(created.rows[0], { status: 201 })
 }
