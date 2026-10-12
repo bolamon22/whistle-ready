@@ -234,6 +234,37 @@ export function buildChecklist(f: ChecklistFacts, links: ChecklistLinks): Checkl
   return items
 }
 
+// THE URGENT PAYMENT LETTER'S LIST (Bo, Oct 12 2026). His four requirements for
+// keeping a spot, in his order and under his names: balance, player registrations,
+// coach registrations, final team confirmation. The rows come out of buildChecklist
+// itself, so whether a club is "done" can never differ between this letter and the
+// pre-event checklist. Login and hotel are not part of securing the spot, so the
+// facts that drive them are answered here only to drop or skip those rows.
+export type RequirementFacts = Pick<ChecklistFacts,
+  'eventName' | 'teamCount' | 'teamsConfirmed' | 'confirmedOn' | 'waiverTotal' | 'teamsWithNoWaivers'
+  | 'expectedLow' | 'expectedHigh' | 'coachTotal' | 'teamsWithNoCoach' | 'invoiced' | 'balance'>
+export type RequirementLinks = Pick<ChecklistLinks, 'confirmLink' | 'waiverLink' | 'coachLink' | 'payLink' | 'shareLink'>
+
+const REQUIREMENTS: { key: ChecklistItem['key']; open: string; done: string }[] = [
+  { key: 'balance', open: 'Balance payment', done: 'Balance paid' },
+  { key: 'waivers', open: 'Player registrations', done: 'Player registrations' },
+  { key: 'coaches', open: 'Coach registrations', done: 'Coach registrations' },
+  { key: 'teams', open: 'Final team confirmation', done: 'Teams confirmed' },
+]
+
+export function buildRequirements(f: RequirementFacts, links: RequirementLinks): ChecklistItem[] {
+  const all = buildChecklist({
+    ...f,
+    hasLogin: true, hasAccountElsewhere: false, loginEmail: '',
+    housingStatus: 'local', staffMarkedLocal: true, saidNeedsHotel: false, withinLocalRadius: true,
+    hotelName: '', hotelRooms: 0, housingContactName: '', housingContactEmail: '',
+  }, { ...links, accountLink: '', hotelLink: '', portalLink: '' })
+  return REQUIREMENTS.flatMap(r => {
+    const it = all.find(i => i.key === r.key)
+    return it ? [{ ...it, title: it.done ? r.done : r.open }] : []
+  })
+}
+
 export function openCount(items: ChecklistItem[]): number {
   return items.filter(i => !i.done).length
 }

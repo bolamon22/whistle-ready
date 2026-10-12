@@ -3,14 +3,14 @@ title: Email clubs and send pay reminders
 category: Registration & money
 order: 215
 routes: /tournaments/*/registrations
-keywords: email clubs pay reminder payment reminder waiver reminder schedule is ready confirm your teams set up your account letter bulk email schedule send later queued cancel template
+keywords: email clubs pay reminder payment reminder urgent final notice waiting list requirements waiver reminder schedule is ready confirm your teams set up your account pre-event checklist letter bulk email schedule send later queued cancel template
 ---
 The **Email clubs** dialog sends a letter to each club's contact (the team director), filled in per club. Use it for payment reminders, waiver pushes, schedule announcements, team confirmations and account setup.
 
 **Where:** People → Team registrations → **Email clubs** (or **Email** on one club's row)
 
 **To send a letter:**
-1. Pick the letter: **Player waiver reminder**, **Schedule is ready**, **Confirm your teams**, **Payment reminder** or **Set up your account**.
+1. Pick the letter: **Player waiver reminder**, **Schedule is ready**, **Confirm your teams**, **Payment reminder**, **Set up your account** or **Pre-event checklist**.
 2. Tick the clubs under **Send to**. **All** and **None** select everything shown. Clubs with **no email** can't be ticked.
 3. Edit the **Subject** and **Letter**. Words like {contact}, {club} and {event} fill in per club. Check the **Preview**.
 4. Choose **Send now** or **Schedule** and pick a date and time.
@@ -18,7 +18,7 @@ The **Email clubs** dialog sends a letter to each club's contact (the team direc
 
 **To send pay reminders:**
 1. Pick **Payment reminder**. The list opens on **Owes**; switch to **Paid** or **All** if needed. Each club shows what it owes.
-2. Pick **Standard** for the everyday ask, or **Waiting list** for a full event (it says unconfirmed spots get reassigned).
+2. Pick **Standard** for the everyday ask, **Waiting list** for a full event (it says unconfirmed spots get reassigned), or **Urgent** for the last push before the event. **Urgent** lists what each club still has open: balance, player registrations, coach registrations and final team confirmation. Anything a club has already done is checked off, and each open item has its own button. It also warns that the spot can go to a team on the waiting list.
 3. Each email includes the invoice, paid and balance table and a **Pay online** button.
 
 **To keep your wording:** click **Save as default**. The **Payment reminder** letters are saved separately.

@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
-import { payLetterFor, payLetterDefaults, payLetterKey, type PayLetterVariant } from '@/lib/payLetter'
+import { payLetterFor, payLetterDefaults, payLetterKey, asPayLetterVariant } from '@/lib/payLetter'
 
-// GET/PUT one of the org's two payment letters (see src/lib/payLetterText.ts):
-// 'reminder' is the everyday ask, 'final' the waiting-list escalation. No variant
-// means 'reminder', so an older caller keeps getting the letter it always got.
-const asVariant = (v: unknown): PayLetterVariant => (String(v || '') === 'final' ? 'final' : 'reminder')
+// GET/PUT one of the org's payment letters (see src/lib/payLetterText.ts):
+// 'reminder' is the everyday ask, 'final' the waiting-list escalation, 'urgent' the
+// last push with each club's open requirements. No variant means 'reminder', so an
+// older caller keeps getting the letter it always got.
+const asVariant = asPayLetterVariant
 
 export async function GET(req: Request) {
   const gate = await requireStaff()

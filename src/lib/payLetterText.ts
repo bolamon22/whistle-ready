@@ -34,10 +34,10 @@ export function countdownPhrase(startDate?: string | null, today = new Date()): 
   return `about ${spell(Math.round(days / 7))} weeks away`
 }
 
-export const PAY_LETTER_TOKENS = ['contact', 'club', 'event', 'balance', 'teams', 'org', 'countdown', 'eventTeams'] as const
+export const PAY_LETTER_TOKENS = ['contact', 'club', 'event', 'balance', 'teams', 'org', 'countdown', 'eventTeams', 'requirements'] as const
 
 export function mergePayLetter(text: string, vals: Record<string, string>): string {
-  return text.replace(/\{(contact|club|event|balance|teams|org|countdown|eventTeams)\}/g, (_m, k: string) => vals[k] ?? '')
+  return text.replace(/\{(contact|club|event|balance|teams|org|countdown|eventTeams|requirements)\}/g, (_m, k: string) => vals[k] ?? '')
 }
 
 // TWO payment letters, because a tournament that is full and a tournament that is
@@ -48,8 +48,15 @@ export function mergePayLetter(text: string, vals: Record<string, string>): stri
 //
 // {countdown} and {eventTeams} are computed at send time so either letter can sit
 // here for years without a hand-typed date or team count going stale.
+//
+// A third, 'urgent' (Bo, Oct 12 2026), is the last push before the event: the club
+// may lose its spot to the waiting list, and paying is only one of the four things
+// that keep it. {requirements} merges to THIS club's balance, player and coach
+// registrations and team confirmation, checked off where already done (built in
+// lib/checklistLetter by the same rules as the pre-event checklist).
 
-export type PayLetterVariant = 'reminder' | 'final'
+export type PayLetterVariant = 'reminder' | 'final' | 'urgent'
+export const PAY_LETTER_VARIANTS: readonly PayLetterVariant[] = ['reminder', 'final', 'urgent']
 
 /** The everyday ask. No waiting list, no reassignment, no deadline. */
 export const PAY_LETTER_DEFAULTS: { subject: string; body: string } = {
@@ -93,10 +100,43 @@ Thanks for being part of the event — we can't wait to see your teams out on th
 — {org}`,
 }
 
+/** The last push, for a full event: Bo's own letter (Oct 12 2026), with the
+ *  requirement list filled in per club. */
+export const PAY_LETTER_URGENT_DEFAULTS: { subject: string; body: string } = {
+  subject: "Action required: secure {club}'s spot at {event}",
+  body: `Hi {contact},
+
+{event} is just {countdown}, and {club} ({teams}) currently shows an outstanding balance of {balance}.
+
+We have hit a full house with {eventTeams} teams this year and are operating an active waiting list, with clubs reaching out daily for open spots. Payment and completed account setup are the only ways to fully secure your team's spot in the schedule.
+
+To ensure your team is confirmed, please complete the following basic tournament requirements immediately:
+
+{requirements}
+
+Please note: if we do not receive a response, see account activity, or receive completed registrations, we may be forced to remove your team from the list so we can release the spot to an eager waitlisted team.
+
+• Unable to attend? If for any reason your team can no longer participate, please reply to this email ASAP so we can offer the opening to a team on the waitlist.
+
+• Ready to pay? You can settle your balance online in about a minute using the button below. Bank transfers (ACH) have zero fees; credit card payments carry a 3% fee.
+
+• Check on the way? If a check has already been mailed or something looks incorrect, reply directly to this email right away so we can hold your spot while we get everything squared away.
+
+Thank you for being part of the event — we look forward to seeing your teams on the field!
+
+Best regards,
+{org}
+{event}`,
+}
+
 export const payLetterDefaults = (variant?: PayLetterVariant) =>
-  variant === 'final' ? PAY_LETTER_FINAL_DEFAULTS : PAY_LETTER_DEFAULTS
+  variant === 'final' ? PAY_LETTER_FINAL_DEFAULTS : variant === 'urgent' ? PAY_LETTER_URGENT_DEFAULTS : PAY_LETTER_DEFAULTS
+
+/** Anything that isn't a known letter reads as the everyday one. */
+export const asPayLetterVariant = (v: unknown): PayLetterVariant =>
+  PAY_LETTER_VARIANTS.includes(String(v || '') as PayLetterVariant) ? (String(v) as PayLetterVariant) : 'reminder'
 
 /** AppSetting key per variant. 'reminder' keeps the original key so nothing an org
  *  already saved is orphaned by the split. */
 export const payLetterKey = (orgId: string, variant?: PayLetterVariant) =>
-  `${variant === 'final' ? 'payLetterFinal' : 'payLetter'}:${orgId}`
+  `${variant === 'final' ? 'payLetterFinal' : variant === 'urgent' ? 'payLetterUrgent' : 'payLetter'}:${orgId}`

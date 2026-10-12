@@ -741,10 +741,11 @@ export default function RegistrationsPage() {
   // The payment letter is org-editable with tokens; the invoice table + Pay
   // button are fixed chrome the email always carries below it. Sent from the
   // Email clubs dialog's payment pill.
-  // Two payment letters, kept side by side so switching between them does not throw
+  // Three payment letters, kept side by side so switching between them does not throw
   // away an unsaved edit: 'reminder' is the everyday ask, 'final' the waiting-list
-  // escalation for a full event.
-  type PayVariant = 'reminder' | 'final'
+  // escalation for a full event, 'urgent' the last push, listing what each club
+  // still has open (lib/payLetterText).
+  type PayVariant = 'reminder' | 'final' | 'urgent'
   const [payVariant, setPayVariant] = useState<PayVariant>('reminder')
   const [payLetters, setPayLetters] = useState<Partial<Record<PayVariant, { subject: string; body: string }>>>({})
   const payLetter = payLetters[payVariant] ?? null
@@ -766,6 +767,9 @@ export default function RegistrationsPage() {
       // teams on this page.
       .replace(/\{countdown\}/g, countdownPhrase(payStartDate))
       .replace(/\{eventTeams\}/g, String(registrations.reduce((n, r) => n + r.teams.length, 0) || '') || 'a full field of')
+      // The real rows are built per club when it sends (lib/checklistLetter
+      // buildRequirements), from the balance, waivers, coach sign-ups and confirmation.
+      .replace(/\{requirements\}/g, `[ ] Balance payment — ${fmt(bal)} still outstanding\n[ ] Player registrations — …\n[ ] Coach registrations — …\n[ ] Final team confirmation — …\n(each one is checked off for this club if it's already done, with a button on the open ones)`)
   }
 
   // Pre-tournament club emails (Bo): waiver push, schedule announcement, team
@@ -799,7 +803,7 @@ export default function RegistrationsPage() {
     if (res.ok) { toast.success('Canceled'); setScheduled(s => s.filter(x => x.id !== id)) }
     else toast.error('Could not cancel — it may have already gone out')
   }
-  const loadPayLetter = (v: 'reminder' | 'final') => {
+  const loadPayLetter = (v: PayVariant) => {
     fetch(`/api/registrations/pay-letter?variant=${v}`).then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.letter) { setPayLetters(l => ({ ...l, [v]: { subject: d.letter.subject, body: d.letter.body } })); setPayOrgName(o => o || d.orgName || '') } })
       .catch(() => {})
@@ -1613,7 +1617,7 @@ export default function RegistrationsPage() {
               {commKind === 'payment' && (
                 <div className="mb-3">
                   <div className="flex items-center gap-1">
-                    {([['reminder', 'Standard'], ['final', 'Waiting list']] as const).map(([v, label]) => (
+                    {([['reminder', 'Standard'], ['final', 'Waiting list'], ['urgent', 'Urgent']] as const).map(([v, label]) => (
                       <button key={v}
                         onClick={() => { setPayVariant(v); if (!payLetters[v]) loadPayLetter(v) }}
                         className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${payVariant === v ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}>
@@ -1624,7 +1628,9 @@ export default function RegistrationsPage() {
                   <p className="text-[11px] text-slate-400 mt-1">
                     {payVariant === 'final'
                       ? 'For a full event — names the waiting list and says unconfirmed spots get reassigned.'
-                      : 'The everyday ask — no deadline, no waiting list. Each letter is saved separately.'}
+                      : payVariant === 'urgent'
+                        ? 'The last push — lists what each club still has open (balance, player and coach registrations, team confirmation) and warns the spot can go to the waiting list.'
+                        : 'The everyday ask — no deadline, no waiting list. Each letter is saved separately.'}
                   </p>
                 </div>
               )}
@@ -1681,7 +1687,7 @@ export default function RegistrationsPage() {
                       hand-typed "three weeks away" and "over 90 teams". */}
                   {commKind === 'payment' && (
                     <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                      Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{balance}'} {'{event}'} {'{org}'} · and per send: {'{countdown}'} (&ldquo;about three weeks away&rdquo;, from the event date) {'{eventTeams}'} (teams registered right now)
+                      Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{balance}'} {'{event}'} {'{org}'} · and per send: {'{countdown}'} (&ldquo;about three weeks away&rdquo;, from the event date) {'{eventTeams}'} (teams registered right now) · {'{requirements}'} (what the club still has open, checked off where done)
                     </p>
                   )}
                   {(() => {

@@ -11,7 +11,7 @@ import { deriveStatus, housingSettings } from '@/lib/housing'
 import { eventHotelInfo, hasHotelInfo } from '@/lib/hotelTarget'
 import { hotelDistance, HOTEL_RADIUS_MILES } from '@/lib/geoDistance'
 import { readConfirmMany } from '@/lib/changeRequest'
-import { buildChecklist, checklistHtml, checklistText, openCount, whatsLeftPhrase, expectedPlayers, CHECKLIST_SENTINEL } from '@/lib/checklistLetter'
+import { buildChecklist, buildRequirements, checklistHtml, checklistText, openCount, whatsLeftPhrase, expectedPlayers, CHECKLIST_SENTINEL } from '@/lib/checklistLetter'
 import { issueClaimToken, claimUrl } from '@/lib/claim'
 import { ensurePaymentGuard } from './paymentGuard'
 import { registrationRecipients, directorEmailsByRegistration } from '@/lib/clubDirectorLinks'
@@ -108,6 +108,9 @@ export async function runCommSend(args: {
   const letter = kind === 'payment' ? await payLetterFor(orgId) : await commLetterFor(orgId, kind)
   const subjectTpl = String(args.subject ?? '').trim().slice(0, 200) || letter.subject
   const bodyTpl = String(args.body ?? '').trim().slice(0, 4000) || letter.body
+  // A payment letter that carries {requirements} (the Urgent one does) needs the
+  // same status facts as the pre-event checklist: waivers, coaches, confirmations.
+  const needsReqs = kind === 'payment' && bodyTpl.includes('{requirements}')
 
   await ensurePaymentGuard()
   const regs = await prisma.teamRegistration.findMany({
@@ -119,8 +122,8 @@ export async function runCommSend(args: {
 
   // Registered-player counts per team, from completed waivers (Bo: directors should
   // see "you have 7 registered" and per-team splits so they know who's light).
-  const counts = kind === 'waiver' || kind === 'checklist' ? await waiverCounts(tournamentId) : null
-  const coaches = kind === 'checklist' ? await coachSignatures(tournamentId) : null
+  const counts = kind === 'waiver' || kind === 'checklist' || needsReqs ? await waiverCounts(tournamentId) : null
+  const coaches = kind === 'checklist' || needsReqs ? await coachSignatures(tournamentId) : null
   const playerCountsFor = (reg: { clubName: string; teams: { teamName: string; division: string; clubName?: string | null }[] }) => {
     if (!counts) return { text: '', total: 0 }
     const sum = summarizeClub(counts, reg.clubName, reg.teams)
@@ -175,7 +178,7 @@ export async function runCommSend(args: {
 
   // Checklist facts the other letters don't need: who has confirmed their teams,
   // and the hotel answers (raw columns, not in the Prisma schema).
-  const confirmStates = kind === 'checklist' ? await readConfirmMany(regs.map(r => r.id)) : null
+  const confirmStates = kind === 'checklist' || needsReqs ? await readConfirmMany(regs.map(r => r.id)) : null
   // Whether the contact has a Whistle Ready login AT ALL, which is a different
   // question from whether that login can open this registration (alreadyOpen,
   // above). The registrations page badge uses this one; the checklist needs
@@ -222,6 +225,31 @@ export async function runCommSend(args: {
   // the whole batch (lib/pendingTransfers).
   const clearing = kind === 'payment' || kind === 'checklist' ? await clearingTransfers(regs.map(r => r.id)) : {}
 
+  // The facts behind the teams, player, coach and balance rows. The checklist and
+  // the urgent payment letter both read them from here, so the two letters can't
+  // disagree about whether a club has done something.
+  const statusFacts = (reg: (typeof regs)[number], invoiced: number, balance: number) => {
+    const sum = counts ? summarizeClub(counts, reg.clubName, reg.teams) : { perTeam: [] as number[], matched: 0, unassigned: 0, total: 0 }
+    const expect = expectedPlayers(reg.teams.map(tm => tm.division || ''))
+    const confirmedAt = confirmStates?.get(reg.id)?.at || ''
+    return {
+      eventName: t.name || 'the tournament',
+      teamCount: reg.teams.length,
+      teamsConfirmed: (confirmStates?.get(reg.id)?.status || '') === 'confirmed',
+      confirmedOn: confirmedAt ? new Date(confirmedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '',
+      waiverTotal: sum.total,
+      teamsWithNoWaivers: reg.teams.filter((_tm, i) => (sum.perTeam[i] ?? 0) === 0).map(tm => tm.teamName),
+      expectedLow: expect.low,
+      expectedHigh: expect.high,
+      coachTotal: coaches ? coaches.forClub(reg.clubName).length : 0,
+      teamsWithNoCoach: coaches
+        ? reg.teams.filter(tm => coaches.forTeam(tm.clubName || reg.clubName, tm.teamName).length === 0).map(tm => tm.teamName)
+        : [],
+      invoiced,
+      balance,
+    }
+  }
+
   const results: SendResult[] = []
   // The first email that actually goes out is kept as the receipt's copy.
   let sample: { subject: string; html: string; to: string } | null = null
@@ -251,13 +279,22 @@ export async function runCommSend(args: {
       const due = (reg.invoiceAmount || 0) - (reg.discountAmount || 0)
       const balance = Math.round(Math.max(0, due - paid) * 100) / 100
       if (balance <= 0) { results.push({ regId: reg.id, club: reg.clubName, status: 'no_balance' }); continue }
+      const requirements = needsReqs
+        ? buildRequirements(statusFacts(reg, Math.round(Math.max(0, due) * 100) / 100, balance), {
+            confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
+            waiverLink,
+            coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
+            payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
+            shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
+          })
+        : null
       const { subject, html, text } = buildPayReminderEmail({
         clubName: reg.clubName, clubContact: reg.clubContact, teamsCount: reg.teams.length,
         tName: t.name || 'the tournament', link: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         due, paid, balance, orgName: org?.name || 'the tournament team',
         startDate: t.startDate, eventTeams,
         eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome, logoBox, footerLogoBox,
-        subjectTpl, bodyTpl,
+        subjectTpl, bodyTpl, requirements,
       })
       const rr = await sendEmail({
         to: recipients, text, ...orgSender(org),
@@ -282,15 +319,12 @@ export async function runCommSend(args: {
     // registrations page — nothing here is ticked by hand.
     let checkItems: ReturnType<typeof buildChecklist> | null = null
     if (kind === 'checklist') {
-      const sum = counts ? summarizeClub(counts, reg.clubName, reg.teams) : { perTeam: [] as number[], matched: 0, unassigned: 0, total: 0 }
       const paidSoFar = reg.payments.reduce((acc, pmt) => acc + pmt.amount, 0) + (clearing[reg.id]?.amount || 0)
       const invoiced = Math.round(Math.max(0, (reg.invoiceAmount || 0) - (reg.discountAmount || 0)) * 100) / 100
       const hotel = hotelById.get(reg.id) || {}
       // Free-text town vs free-text venue; null when either can't be placed,
       // and null must not read as local (lib/geoDistance).
       const miles = hotelDistance(reg.clubBasedIn, t.location as unknown as string)
-      const expect = expectedPlayers(reg.teams.map(tm => tm.division || ''))
-      const confirmedAt = confirmStates?.get(reg.id)?.at || ''
       let claimLink = ''
       if (!alreadyOpen.has(reg.id)) {
         if (testMode) claimLink = claimUrl(tournamentAbs(org?.slug, ''), TEST_CLAIM_TOKEN)
@@ -300,23 +334,10 @@ export async function runCommSend(args: {
         }
       }
       checkItems = buildChecklist({
-        eventName: t.name || 'the tournament',
-        teamCount: reg.teams.length,
-        teamsConfirmed: (confirmStates?.get(reg.id)?.status || '') === 'confirmed',
-        confirmedOn: confirmedAt ? new Date(confirmedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '',
+        ...statusFacts(reg, invoiced, Math.round(Math.max(0, invoiced - paidSoFar) * 100) / 100),
         hasLogin: alreadyOpen.has(reg.id),
         hasAccountElsewhere: accountEmails.has(String(reg.contactEmail || '').trim().toLowerCase()),
         loginEmail: String(reg.contactEmail || ''),
-        waiverTotal: sum.total,
-        teamsWithNoWaivers: reg.teams.filter((_tm, i) => (sum.perTeam[i] ?? 0) === 0).map(tm => tm.teamName),
-        expectedLow: expect.low,
-        expectedHigh: expect.high,
-        coachTotal: coaches ? coaches.forClub(reg.clubName).length : 0,
-        teamsWithNoCoach: coaches
-          ? reg.teams.filter(tm => coaches.forTeam(tm.clubName || reg.clubName, tm.teamName).length === 0).map(tm => tm.teamName)
-          : [],
-        invoiced,
-        balance: Math.round(Math.max(0, invoiced - paidSoFar) * 100) / 100,
         // The housing board's own call, so the email and the board agree.
         housingStatus: deriveStatus({ ...hotel, needsHotel: reg.needsHotel }),
         // Only a staff tick on the board counts as local. deriveStatus also

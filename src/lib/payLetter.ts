@@ -2,10 +2,11 @@ import { prisma } from '@/lib/db'
 import { renderEmail } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { mergePayLetter, countdownPhrase, payLetterDefaults, payLetterKey, type PayLetterVariant } from '@/lib/payLetterText'
+import { CHECKLIST_SENTINEL, checklistHtml, checklistText, type ChecklistItem } from '@/lib/checklistLetter'
 
 // The copy, the token merge and the countdown live in payLetterText (no prisma), so
 // the registrations page can preview exactly what the send path will produce.
-export { PAY_LETTER_DEFAULTS, PAY_LETTER_FINAL_DEFAULTS, payLetterDefaults, payLetterKey, mergePayLetter, countdownPhrase, PAY_LETTER_TOKENS } from '@/lib/payLetterText'
+export { PAY_LETTER_DEFAULTS, PAY_LETTER_FINAL_DEFAULTS, PAY_LETTER_URGENT_DEFAULTS, PAY_LETTER_VARIANTS, asPayLetterVariant, payLetterDefaults, payLetterKey, mergePayLetter, countdownPhrase, PAY_LETTER_TOKENS } from '@/lib/payLetterText'
 export type { PayLetterVariant } from '@/lib/payLetterText'
 
 export async function payLetterFor(orgId: string | null, variant: PayLetterVariant = 'reminder'): Promise<{ subject: string; body: string; custom: boolean }> {
@@ -38,6 +39,9 @@ export function buildPayReminderEmail(args: {
   /** Branding. Absolute URLs; omit and the shell simply renders without them. */
   eventLogo?: string; eventHref?: string; orgLogo?: string; orgHref?: string
   logoBox?: { w: number; h: number }; footerLogoBox?: { w: number; h: number }
+  /** This club's rows for the {requirements} token (lib/checklistLetter
+   *  buildRequirements). Omit and the token merges to nothing. */
+  requirements?: ChecklistItem[] | null
 }): { subject: string; html: string; text: string } {
   const teamsLabel = `${args.teamsCount} team${args.teamsCount !== 1 ? 's' : ''}`
   const vals = {
@@ -46,9 +50,19 @@ export function buildPayReminderEmail(args: {
     countdown: countdownPhrase(args.startDate),
     eventTeams: args.eventTeams && args.eventTeams > 0 ? String(args.eventTeams) : 'a full field of',
   }
-  const subject = mergePayLetter(args.subjectTpl, vals)
-  const letterText = mergePayLetter(args.bodyTpl, vals)
-  const body = `${letterBodyHtml(letterText)}
+  const reqs = args.requirements && args.requirements.length ? args.requirements : null
+  // Never a table in a subject line.
+  const subject = mergePayLetter(args.subjectTpl, { ...vals, requirements: '' })
+  // {requirements} merges to a placeholder, swapped for the real block once the
+  // letter is HTML -- spliced BETWEEN the paragraphs letterBodyHtml makes, never
+  // inside one (a table in a <p> breaks Outlook), same as the checklist letter.
+  // With no rows it merges to nothing, and the blank lines it leaves are closed up.
+  const letterText = mergePayLetter(args.bodyTpl, { ...vals, requirements: reqs ? CHECKLIST_SENTINEL : '' }).replace(/\n{3,}/g, '\n\n')
+  const letterHtml = reqs
+    ? letterText.split(CHECKLIST_SENTINEL).map(part => (part.trim() ? letterBodyHtml(part.trim()) : '')).join(checklistHtml(reqs))
+    : letterBodyHtml(letterText)
+  const plainLetter = reqs ? letterText.split(CHECKLIST_SENTINEL).join(checklistText(reqs)) : letterText
+  const body = `${letterHtml}
   <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
     <tr><td style="padding:6px 0;color:#64748b">Invoiced</td><td style="padding:6px 0;text-align:right">${fmt(args.due)}</td></tr>
     <tr><td style="padding:6px 0;color:#64748b">Paid</td><td style="padding:6px 0;text-align:right">${fmt(args.paid)}</td></tr>
@@ -67,6 +81,6 @@ export function buildPayReminderEmail(args: {
     body,
     footerNote: 'Prefer to pay by check? Just reply to this email.',
   })
-  const text = `${letterText}\n\nInvoiced: ${fmt(args.due)}\nPaid: ${fmt(args.paid)}\nBalance due: ${fmt(args.balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee):\n${args.link}`
+  const text = `${plainLetter}\n\nInvoiced: ${fmt(args.due)}\nPaid: ${fmt(args.paid)}\nBalance due: ${fmt(args.balance)}\n\nPay online — bank transfer (ACH, no fee) or card (3% fee):\n${args.link}`
   return { subject, html, text }
 }
