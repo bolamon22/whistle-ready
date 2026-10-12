@@ -139,6 +139,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [stickyScorekeeper,setStickyScorekeeper]=useState(true)
   // Which slots Auto-assign fills: scorekeepers, boys' refs, girls' refs, each on its own.
   const [aaFill,setAaFill]=useState({scorekeepers:true,boysRefs:true,girlsRefs:true})
+  // A scorekeeper picked for each field (optional), per day, remembered in this browser.
+  const [aaSkFields,setAaSkFieldsRaw]=useState<Record<string,string>>({})
+  const skKey=`wr-sk-fields:${params.id}:${activeDay}`
+  useEffect(()=>{try{setAaSkFieldsRaw(JSON.parse(localStorage.getItem(skKey)||'{}')||{})}catch{setAaSkFieldsRaw({})}},[skKey])
+  const setAaSkField=(field:string,wid:string)=>setAaSkFieldsRaw(m=>{const n={...m};if(wid)n[field]=wid;else delete n[field];try{localStorage.setItem(skKey,JSON.stringify(n))}catch{};return n})
   const [autoAssigning,setAutoAssigning]=useState(false)
   const [autoResult,setAutoResult]=useState<{assigned:number;gaps:GapEntry[];missingRefs:number;missingSKs:number;summary:string;preview?:boolean;proposals?:AaPick[]}|null>(null)
   // Preview first (Bo, Oct 12 2026): picks shown before anything is saved; untick to drop one.
@@ -256,7 +261,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
   async function runAutoAssign(preview=true){
     setAutoAssigning(true)
-    const res=await fetch(`/api/tournaments/${params.id}/auto-assign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:activeDay,stickyScorekeeper,fill:aaFill,preview})})
+    const res=await fetch(`/api/tournaments/${params.id}/auto-assign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:activeDay,stickyScorekeeper,fill:aaFill,preview,skFields:stickyScorekeeper&&aaFill.scorekeepers?aaSkFields:{}})})
     const data=await res.json().catch(()=>({}))
     if(res.ok){setAaDrop(new Set());setAutoResult(data);if(!preview)await load()}
     else toast.error(data.error||'Auto-assign failed')
@@ -544,6 +549,30 @@ export default function GridPage({ params }: { params:{id:string} }) {
                     <p className="text-xs text-slate-400 mt-0.5">Each scorekeeper stays on a single field for all games. Recommended for consistency.</p>
                   </div>
                 </label>}
+                {aaFill.scorekeepers&&stickyScorekeeper&&(()=>{
+                  const dayFields=[...new Set(dayGames.filter(g=>!g.isCanceled&&g.location).map(g=>g.location))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
+                  const sks=rosterWorkers.filter(w=>canScorekeeper(w)).sort((a,b)=>(a.defaultRole==='scorekeeper'?0:1)-(b.defaultRole==='scorekeeper'?0:1)||a.name.localeCompare(b.name))
+                  const fieldOf=new Map(Object.entries(aaSkFields).map(([f,w])=>[w,f]))
+                  const short=(f:string)=>f.split(' - ').pop()||f
+                  const picked=dayFields.filter(f=>aaSkFields[f]).length
+                  return(
+                    <details className="rounded-xl border border-slate-200 px-3 py-2" open={picked>0}>
+                      <summary className="cursor-pointer text-sm font-semibold text-slate-700">Pick the scorekeeper for each field <span className="font-normal text-slate-400">({picked} of {dayFields.length} set · the rest are automatic)</span></summary>
+                      <div className="grid grid-cols-1 gap-y-1.5 mt-2 max-h-56 overflow-y-auto pr-1">
+                        {dayFields.map(f=>(
+                          <label key={f} className="flex items-center gap-2 text-xs">
+                            <span className="w-24 truncate text-slate-600 font-medium" title={f}>{short(f)}</span>
+                            <select className="flex-1 min-w-0 border border-slate-200 rounded-lg px-1.5 py-1 text-xs bg-white" value={aaSkFields[f]??''} onChange={e=>setAaSkField(f,e.target.value)}>
+                              <option value="">Auto</option>
+                              {sks.map(w=>{const on=fieldOf.get(w.id);return<option key={w.id} value={w.id} disabled={!!on&&on!==f}>{w.name}{w.defaultRole!=='scorekeeper'?' (ref)':''}{on&&on!==f?` — on ${short(on)}`:''}</option>})}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                      {sks.length===0&&<p className="text-xs text-amber-600 mt-1">No scorekeepers on the roster yet.</p>}
+                    </details>
+                  )
+                })()}
                 <div className="flex gap-3">
                   <button className="btn-secondary flex-1" onClick={()=>setShowAutoAssign(false)}>Cancel</button>
                   <button className="btn-primary flex-1" onClick={()=>runAutoAssign(true)} disabled={autoAssigning||(!aaFill.scorekeepers&&!aaFill.boysRefs&&!aaFill.girlsRefs)}>{autoAssigning?'Working…':'Preview'}</button>

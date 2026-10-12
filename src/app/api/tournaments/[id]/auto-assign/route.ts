@@ -37,7 +37,7 @@ function canScorekeeper(w: WorkerRow): boolean {
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  const { date, stickyScorekeeper, fill, preview, apply } = await req.json()
+  const { date, stickyScorekeeper, fill, preview, apply, skFields } = await req.json()
   // What to fill (Bo, Oct 12 2026: "options to auto assign Score keepers, Girls Refs,
   // and Boys refs independently"). Leaving one out leaves its slots alone, so staff
   // can run girls' refs first, check them, then the rest. Default: everything.
@@ -179,10 +179,23 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const refSKs = scorekeepers
       .filter(w => w.defaultRole === 'ref')
       .filter(w => isAvailable(w.id, firstTime))
-    const orderedSKs = [...dedicatedSKs, ...refSKs]
+    // Scorekeepers the assigner put on a field by hand (Bo, Oct 12 2026: "choose which
+    // field I want to put the scorekeeper on for the day") go there first; the rest of
+    // the fields are dealt out as before from whoever is left.
+    const chosen = new Set<string>()
+    if (skFields && typeof skFields === 'object') {
+      for (const [field, wid] of Object.entries(skFields as Record<string, unknown>)) {
+        const sk = typeof wid === 'string' ? scorekeepers.find(w => w.id === wid) : undefined
+        if (!sk || !fields.includes(field) || chosen.has(sk.id)) continue
+        fieldScorekeeper.set(field, sk.id)
+        chosen.add(sk.id)
+        for (const time of times) if (isAvailable(sk.id, time)) markBusy(sk.id, time)
+      }
+    }
+    const orderedSKs = [...dedicatedSKs, ...refSKs].filter(w => !chosen.has(w.id))
 
     let skIdx = 0
-    for (const field of fields) {
+    for (const field of fields.filter(f => !fieldScorekeeper.has(f))) {
       if (skIdx >= orderedSKs.length) break
       const sk = orderedSKs[skIdx]
       fieldScorekeeper.set(field, sk.id)
