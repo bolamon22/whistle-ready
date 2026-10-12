@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
-import { Bookmark, Copy, ExternalLink, Inbox, Mail, Send, X } from 'lucide-react'
+import { Bookmark, Copy, ExternalLink, Inbox, Mail, Send, Sparkles, X } from 'lucide-react'
 import type { TaskTournament } from '@/lib/taskTemplate'
 import type { ContactRow, ContactView } from '@/lib/contactTypes'
 import { lastOrder } from '@/lib/costTypes'
 import { VENDOR_EMAILS, fillTemplate, gmailCompose, templateVars, toTemplate, vendorEmail, type VendorEmailKind } from '@/lib/vendorEmails'
 import { costLabel, useCosts } from '@/components/costs/useCosts'
+import { eventDates, greeting } from '@/lib/contactSend'
+import { AiRewriteBar, AiWritePanel } from '@/components/comm/LetterAi'
 
 // Write an email to a vendor from a ready-made one: ask for a quote (last
 // time's order filled in), approve it, confirm delivery, ask for the invoice --
@@ -16,6 +18,12 @@ import { costLabel, useCosts } from '@/components/costs/useCosts'
 // Send it from Whistle Ready (from the org sender, replies to Bo, a copy to
 // him), email it to Bo to forward, open it in Gmail, or copy it. Nothing goes
 // out until Bo presses a button.
+//
+// Write your own (Bo, Oct 12 2026): an email none of the ready-made ones covers,
+// like telling a company we can't take them as a vendor. Say what it's about,
+// typed or dictated, and the AI writes it (lib/vendorEmailAi); the rewrite
+// buttons under the message work on any of them. Same controls as the Email
+// clubs dialog (components/comm/LetterAi).
 
 const field = 'border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm text-slate-800 bg-white w-full min-w-0'
 
@@ -56,7 +64,7 @@ export default function VendorEmailDialog({ contact, tournaments, today, tournam
     return 'confirm'
   }, [event, cost, today])
   const hasSaved = !!(contact.emailBody || '').trim()
-  const [kind, setKind] = useState<VendorEmailKind | 'saved' | null>(null)
+  const [kind, setKind] = useState<VendorEmailKind | 'saved' | 'own' | null>(null)
   const k = kind || (hasSaved ? 'saved' : suggested)
 
   // Teams registered for the event, for {teams} in a saved email.
@@ -80,6 +88,12 @@ export default function VendorEmailDialog({ contact, tournaments, today, tournam
   const [logIt, setLogIt] = useState(true)
   useEffect(() => {
     if (edited) return
+    if (k === 'own') {
+      // Their own email starts blank, greeting and sign-off in place.
+      setSubject(event?.name || '')
+      setMessage(`${greeting([{ name: contact.name }])}\n\n\n\nThanks,\n${(myName || '').trim().split(/\s+/)[0] || ''}`.trim())
+      return
+    }
     if (k === 'saved') {
       setSubject(fillTemplate(contact.emailSubject || '', vars)); setMessage(fillTemplate(contact.emailBody || '', vars))
       return
@@ -91,6 +105,13 @@ export default function VendorEmailDialog({ contact, tournaments, today, tournam
     setSubject(d.subject); setMessage(d.message)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [k, eventId, cost?.id, cost?.status, last?.id, address, myName, edited, teams, contact.emailBody, contact.emailSubject])
+
+  // What the AI writer knows about this email (lib/vendorEmailAi).
+  const aiContext = {
+    contactName: contact.name, company: contact.company, category: contact.category,
+    eventName: event?.name || '', eventDates: event ? eventDates(event) : '', place: address || event?.location || '',
+  }
+  const takeAi = (r: { subject: string; body: string }) => { setSubject(r.subject); setMessage(r.body); setEdited(true) }
 
   const [busy, setBusy] = useState<'' | 'send' | 'me'>('')
   /** Through Whistle Ready: to them (copy and replies to Bo), or to Bo alone to forward. */
@@ -167,11 +188,16 @@ export default function VendorEmailDialog({ contact, tournaments, today, tournam
                 <span className={`block text-[11px] ${k === v.key ? 'text-slate-300' : 'text-slate-500'}`}>{v.key === suggested ? 'Up next' : v.when}</span>
               </button>
             ))}
+            <button type="button" onClick={() => { setKind('own'); setEdited(false) }} aria-pressed={k === 'own'}
+              className={`col-span-2 sm:col-span-4 px-2.5 py-1.5 rounded-xl text-left border ${k === 'own' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>
+              <span className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles size={14} className={k === 'own' ? 'text-teal-300' : 'text-teal-600'} />Write your own</span>
+              <span className={`block text-[11px] ${k === 'own' ? 'text-slate-300' : 'text-slate-500'}`}>Say what it&rsquo;s about and AI writes it, or type it yourself</span>
+            </button>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 min-w-0">Event
-              <select value={eventId} onChange={e => { setEventId(e.target.value); setKind(null); setEdited(false) }} className={field}>
+              <select value={eventId} onChange={e => { setEventId(e.target.value); if (k !== 'own') { setKind(null); setEdited(false) } }} className={field}>
                 {events.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 {!events.length && <option value="">No events</option>}
               </select>
@@ -185,16 +211,25 @@ export default function VendorEmailDialog({ contact, tournaments, today, tournam
           </label>
           {k === 'quote' && !last && <p className="-mt-2 text-xs text-slate-500">No past order from them in Costs yet, so fill in the list. Once a quote is in Costs, next year’s request lists it for you.</p>}
           {k === 'book' && !cost?.quoteRef && <p className="-mt-2 text-xs text-slate-500">Add their quote under Costs to put its number and total in this email.</p>}
+          {k === 'own' && (
+            <AiWritePanel tournamentId={eventId} endpoint="/api/contacts/email-ai" extra={aiContext} onResult={takeAi}
+              placeholder="Type it, or tap the mic and say it. e.g. Thank them for asking, but we can't add another food vendor this year because we have a contract with one."
+              note="Writes it from what you say, for this contact and event. Read it over before you send." />
+          )}
 
           <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">Subject
             <input value={subject} onChange={e => { setSubject(e.target.value); setEdited(true) }} className={field} />
           </label>
-          <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-            <span className="flex items-baseline justify-between">Message
-              {edited && <button type="button" onClick={() => setEdited(false)} className="font-semibold text-teal-700 hover:underline">Reset to the ready-made one</button>}
-            </span>
-            <textarea rows={11} value={message} onChange={e => { setMessage(e.target.value); setEdited(true) }} className={`${field} resize-y leading-relaxed`} />
-          </label>
+          <div>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              <span className="flex items-baseline justify-between">Message
+                {edited && <button type="button" onClick={() => setEdited(false)} className="font-semibold text-teal-700 hover:underline">{k === 'own' ? 'Start over' : 'Reset to the ready-made one'}</button>}
+              </span>
+              <textarea rows={11} value={message} onChange={e => { setMessage(e.target.value); setEdited(true) }} className={`${field} resize-y leading-relaxed`} />
+            </label>
+            <AiRewriteBar tournamentId={eventId} kind="vendor" subject={subject} body={message} onResult={takeAi}
+              endpoint="/api/contacts/email-ai" extra={aiContext} placeholder="e.g. Ask them to confirm by Friday" />
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={logIt} onChange={e => setLogIt(e.target.checked)} className="w-4 h-4 accent-teal-700" />Log today when I open it in Gmail or copy it{k === 'quote' || k === 'invoice' ? ' (and mark “Waiting on them”)' : ''}</label>
             <button type="button" onClick={saveAsUsual} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:underline"><Bookmark size={14} />{hasSaved ? 'Update their usual email' : 'Save as their usual email'}</button>

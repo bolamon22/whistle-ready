@@ -3,7 +3,7 @@ title: Keep track of tasks for each event
 category: Getting started
 order: 4
 routes: /tasks, /tasks/template, /tournaments/*/tasks
-keywords: tasks to do todo list reminders overdue due date badge permits paperwork city county rentals tents golf carts box truck grant checklist template starter check off steps notes general tracked
+keywords: tasks to do todo list reminders overdue due date badge permits paperwork city county rentals tents golf carts box truck grant checklist template starter check off steps notes general tracked email vendor contact write your own ai write with ai dictate dictation microphone rewrite quote
 ---
 **Tasks** is your to-do list for each event: field permits, rentals, staff, club emails and grant paperwork. Each task has a due date, and the red number on **Tasks** is how many are overdue.
 
@@ -22,6 +22,8 @@ To see the whole template first, click **Checklist template** and pick an event 
 - Click the circle to check it off. Click it again to reopen it.
 - Click the task to open its details: change the title, **Due** date or **Category**, add **Steps** and **Notes**, or **Delete** it.
 - The button on a task (like **Email clubs** or **Scheduler**) opens the page where it gets done.
+
+**To email a task's contact:** click **Email** and their name on the task (or **Write an email** on a contact). Pick a ready-made email, like **Ask for a quote**, or **Write your own**: under **Write it with AI**, say what the email is about (type it, or click the microphone and say it), pick the **Tone** and click **Write it**. Under **Message**, **More urgent**, **Friendlier**, **Shorter**, **Fix grammar** and **Tell it what to change…** rewrite any email, and **Undo the AI change** puts it back. Read it over, then click **Send**, **Email it to me**, **Open in Gmail** or **Copy**. The AI only uses what you tell it and the event's details, so check names, dates and amounts before you send.
 
 **Tracked tasks** show what Whistle Ready can see, like "4 clubs unpaid". Four check themselves off: **Publish the schedule** (when you publish), **Payment reminder to unpaid clubs** (when every club has paid), **Collect unpaid balances** (when every balance is paid) and **Officials assigned to every game** (when every game has its refs). If you reopen one, it stays open.
 
