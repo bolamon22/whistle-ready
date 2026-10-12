@@ -10,7 +10,7 @@ import RegPricingEditor from '@/components/RegPricingEditor'
 import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import { parsePricing, serializePricing, calcFee as calcRegFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { countdownPhrase } from '@/lib/payLetterText'
-import { unknownFields, CTA_LABELS, type CustomLetter, type LetterButton } from '@/lib/customLetters'
+import { unknownFields, CTA_LABELS, coachCountsText, type CustomLetter, type LetterButton } from '@/lib/customLetters'
 import { AiWritePanel, AiRewriteBar, ButtonPicker, type AiLetter } from '@/components/comm/LetterAi'
 import toast, { Toaster } from 'react-hot-toast'
 import { Plus, Upload, Download, Settings, ExternalLink, RefreshCw, Check, X, ChevronUp, ChevronDown, ChevronRight, Landmark, ImageUp, Merge, AlertTriangle, Mail, Clock, FileText } from 'lucide-react'
@@ -55,6 +55,8 @@ interface Registration {
   commEmailLog?: string
   confirmStatus?: string; confirmNote?: string; confirmAt?: string
   waiverUnassigned?: number
+  /** Everyone who signed the coach waiver for this club, team picked or not. */
+  coachesSigned?: string[]
   hasAccount?: boolean; accountRole?: string; accountUserId?: string; accountName?: string
   /** Club portal use (lib/portalVisits): null until the portal has been opened. */
   portal?: { last: string; first: string; lastBy: string; week: number; month: number; total: number; people: number } | null
@@ -858,6 +860,8 @@ export default function RegistrationsPage() {
         ? reg.teams.map(t => `• ${t.teamName}${t.division ? ` — ${t.division}` : ''}: (registered count fills in)`).join('\n') + `\nTotal for ${reg.clubName}: (fills in)`
         : '• (each team\u2019s registered player count fills in here)')
       .replace(/\{playerCount\}/g, '(count)')
+      // The real names, from the same coach waivers the send reads (lib/customLetters).
+      .replace(/\{coachCounts\}/g, coachCountsText(reg.clubName, reg.teams.map(t => ({ teamName: t.teamName, division: t.division, coaches: t.coachesSigned || [] })), reg.coachesSigned || []))
       .replace(/\{confirmLink\}/g, `${origin}/confirm/${reg.id}`)
       .replace(/\{accountLink\}/g, `${origin}/claim/…`)
       .replace(/\{payLink\}/g, `${origin}/pay/${reg.id}`)
@@ -1800,7 +1804,7 @@ export default function RegistrationsPage() {
                   )}
                   {commKind === 'custom' && !isPayLetter && (
                     <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                      Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{event}'} {'{eventDates}'} {'{countdown}'} {'{teamsList}'} {'{playerCounts}'} {'{org}'}
+                      Fills in per club: {'{contact}'} {'{club}'} {'{teams}'} {'{event}'} {'{eventDates}'} {'{countdown}'} {'{teamsList}'} {'{playerCounts}'} {'{coachCounts}'} {'{org}'}
                     </p>
                   )}
                   {/* Named here because a token nobody knows about never gets used --

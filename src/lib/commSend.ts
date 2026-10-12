@@ -18,7 +18,7 @@ import { registrationRecipients, directorEmailsByRegistration } from '@/lib/club
 import { directorsOf } from '@/lib/clubAccess'
 import { clearingTransfers } from '@/lib/pendingTransfers'
 import { countdownPhrase } from '@/lib/payLetterText'
-import { asLetterButton, CTA_LABELS } from '@/lib/customLetters'
+import { asLetterButton, CTA_LABELS, coachCountsText } from '@/lib/customLetters'
 
 // The club-letter send itself, lifted out of the route so the scheduler can run
 // exactly the same code later (Bo, Sep 10: "schedule when we send the email").
@@ -141,7 +141,9 @@ export async function runCommSend(args: {
   // see "you have 7 registered" and per-team splits so they know who's light).
   const customCounts = kind === 'custom' && /\{playerCounts?\}/.test(bodyTpl)
   const counts = kind === 'waiver' || kind === 'checklist' || needsReqs || customCounts ? await waiverCounts(tournamentId) : null
-  const coaches = kind === 'checklist' || needsReqs ? await coachSignatures(tournamentId) : null
+  // {coachCounts} works in any club letter whose text uses it (lib/customLetters).
+  const coachCountsWanted = kind !== 'payment' && /\{coachCounts\}/.test(bodyTpl)
+  const coaches = kind === 'checklist' || needsReqs || coachCountsWanted ? await coachSignatures(tournamentId) : null
   const playerCountsFor = (reg: { clubName: string; teams: { teamName: string; division: string; clubName?: string | null }[] }) => {
     if (!counts) return { text: '', total: 0 }
     const sum = summarizeClub(counts, reg.clubName, reg.teams)
@@ -175,6 +177,7 @@ export async function runCommSend(args: {
 
   const waiverLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/player-waiver`)
   const scheduleLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/public`)
+  const coachLink = tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`)
   const eventDates = fmtDates(t.startDate as unknown as string, t.endDate as unknown as string)
   const daysToEvent = (() => {
     const d = new Date(String(t.startDate || ''))
@@ -234,10 +237,10 @@ export async function runCommSend(args: {
   const kindMeta = kind === 'payment' || kind === 'custom' ? null : COMM_KINDS[kind]
   // An org letter carries the button it was saved with; None (and Pay balance,
   // whose button is the payment chrome) put no club-letter button under it.
-  const customCta = kind === 'custom' && custom && (custom.button === 'waiver' || custom.button === 'schedule' || custom.button === 'confirm') ? custom.button : null
+  const customCta = kind === 'custom' && custom && (custom.button === 'waiver' || custom.button === 'coach' || custom.button === 'schedule' || custom.button === 'confirm') ? custom.button : null
   const cta = kind === 'custom' ? customCta : (kindMeta?.cta ?? null)
   const ctaLabel = customCta ? CTA_LABELS[customCta] : (kindMeta?.ctaLabel ?? '')
-  const sharedCtaUrl = cta === 'waiver' ? waiverLink : cta === 'schedule' ? scheduleLink : ''
+  const sharedCtaUrl = cta === 'waiver' ? waiverLink : cta === 'coach' ? coachLink : cta === 'schedule' ? scheduleLink : ''
   const now = new Date().toISOString()
 
   // Directors linked to each club, read once for the whole batch. The account
@@ -335,7 +338,7 @@ export async function runCommSend(args: {
         ? buildRequirements({ ...statusFacts(reg, Math.round(Math.max(0, due) * 100) / 100, balance), ...login.facts }, {
             confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
             waiverLink,
-            coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
+            coachLink,
             payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
             shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
             ...login.links,
@@ -397,7 +400,7 @@ export async function runCommSend(args: {
       }, {
         confirmLink: tournamentAbs(org?.slug, `/confirm/${reg.id}`),
         waiverLink,
-        coachLink: tournamentAbs(org?.slug, `/tournaments/${tournamentId}/coach-waiver`),
+        coachLink,
         payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
         hotelLink,
         shareLink: tournamentAbs(org?.slug, `/share/${reg.id}`),
@@ -428,6 +431,9 @@ export async function runCommSend(args: {
         : '• (no teams listed yet — reply with your team names)',
       playerCounts: pc ? pc.text : '',
       playerCount: pc ? String(pc.total) : '',
+      coachCounts: coaches && coachCountsWanted
+        ? coachCountsText(reg.clubName, reg.teams.map((tm: { teamName: string; division: string; clubName?: string | null }) => ({ teamName: tm.teamName, division: tm.division, coaches: coaches.forTeam(tm.clubName || reg.clubName, tm.teamName) })), coaches.forClub(reg.clubName))
+        : '',
       confirmLink: cta === 'confirm' ? ctaUrl : tournamentAbs(org?.slug, `/confirm/${reg.id}`),
       accountLink: cta === 'account' ? ctaUrl : '',
       payLink: tournamentAbs(org?.slug, `/pay/${reg.id}`),
