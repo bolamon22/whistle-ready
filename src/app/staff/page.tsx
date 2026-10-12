@@ -334,7 +334,7 @@ export default function StaffPage() {
     e.preventDefault();setSaving(true)
     const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:(editForm.payMethod==='venmo'?editForm.venmoHandle:editForm.payMethod==='zelle'?editForm.zelleHandle:'')||null,venmoHandle:editForm.venmoHandle||null,zelleHandle:editForm.zelleHandle||null,mailingAddress:editForm.mailingAddress||null,notes:editForm.notes||null,roles:editForm.roles}
     const res=await fetch(`/api/workers/${workerId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-    if(res.ok){toast.success('Updated');setExpandedId(null);load()}else toast.error('Failed')
+    if(res.ok){toast.success('Updated');setExpandedId(null);load()}else{const j=await res.json().catch(()=>({}));toast.error(j.error||'Failed')}
     setSaving(false)
   }
 

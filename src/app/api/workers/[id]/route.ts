@@ -27,6 +27,14 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     try { await prisma.$executeRawUnsafe(`UPDATE "Worker" SET "${col}" = ? WHERE id = ?`, b[col] ? String(b[col]).slice(0, max) : null, params.id) } catch {}
     delete b[col]
   }
+  // Association: a raw column too. It left the Prisma schema on Jun 9 (ee0e621), so
+  // passing it to prisma.worker.update threw "Unknown argument" and every Staff Pool
+  // save failed. NOT NULL DEFAULT '' (the schema it was made from), so '' not null.
+  if (b.association !== undefined) {
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "association" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
+    try { await prisma.$executeRawUnsafe(`UPDATE "Worker" SET "association" = ? WHERE id = ?`, String(b.association ?? '').trim().slice(0, 120), params.id) } catch (e) { console.error('worker association', e) }
+    delete b.association
+  }
   if (Object.keys(b).length === 0) {
     const w = await prisma.worker.findUnique({ where: { id: params.id } })
     return NextResponse.json(w ? redactWorker(w, gate.role) : { ok: true })
@@ -40,22 +48,31 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
       return NextResponse.json(w ? redactWorker(w, gate.role) : { ok: true })
     }
   }
+  // The staff lists read Worker with raw SQL, where isAssigner is 0/1, and the edit forms
+  // send that back. Prisma takes only a boolean: "Expected Boolean ..., provided Int" was
+  // the "Failed" on every Staff roster and Staff Pool save that didn't touch the box.
+  const toBool = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true'
+  try {
   return NextResponse.json(redactWorker(await prisma.worker.update({where:{id:params.id},data:{
     ...(b.name!==undefined&&{name:b.name}),
     ...(b.email!==undefined&&{email:b.email||null}),
     ...(b.phone!==undefined&&{phone:b.phone||null}),
     ...(b.certLevel!==undefined&&{certLevel:b.certLevel}),
     ...(b.defaultRole!==undefined&&{defaultRole:b.defaultRole}),
-    ...(b.isAssigner!==undefined&&{isAssigner:b.isAssigner}),
+    ...(b.isAssigner!==undefined&&{isAssigner:toBool(b.isAssigner)}),
     ...(b.gender!==undefined&&{gender:b.gender}),
     ...(b.payRateOverride!==undefined&&{payRateOverride:b.payRateOverride??null}),
     ...(b.hourlyRate!==undefined&&{hourlyRate:b.hourlyRate??null}),
     ...(b.payMethod!==undefined&&{payMethod:b.payMethod}),
     ...(b.payHandle!==undefined&&{payHandle:b.payHandle||null}),
-    ...(b.notes!==undefined&&{notes:b.notes||null}),...(b.association!==undefined&&{association:b.association}),
+    ...(b.notes!==undefined&&{notes:b.notes||null}),
     ...(b.photoUrl!==undefined&&{photoUrl:b.photoUrl||null}),
     ...(b.roles!==undefined&&{roles:JSON.stringify(b.roles)}),
   }}), gate.role))
+  } catch (e) {
+    console.error('worker update', e)
+    return NextResponse.json({ error: 'That didn’t save. Please try again.' }, { status: 500 })
+  }
 }
 // Deleting a Worker cascades away their assignments, roster spots, availability, time
 // entries and pay records. The Staff Pool button for this used to say "Unassign ... from

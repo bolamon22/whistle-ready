@@ -68,7 +68,9 @@ export async function GET(req: Request) {
   // whose role does not cover them (the scheduler). This was readable by any
   // signed-in account in the org, coaches included.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  const shape = (rows: any[]) => rows.map(r => redactWorker(r, gate.role))
+  // isAssigner is 0/1 in raw SQL; a boolean everywhere else. The edit forms send back
+  // what they were given, and Prisma refuses a number for it (see [id]/route.ts).
+  const shape = (rows: any[]) => rows.map(r => redactWorker({ ...r, isAssigner: !!Number(r.isAssigner) }, gate.role))
   const { orgId, isAdmin } = await resolveOrgId(req)
   const client = db()
 

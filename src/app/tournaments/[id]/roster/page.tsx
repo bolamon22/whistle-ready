@@ -183,7 +183,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     e.preventDefault(); setEditSaving(true)
     const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:editForm.payHandle||null,notes:editForm.notes||null,roles:editForm.roles}
     const res=await fetch(`/api/workers/${workerId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-    if(res.ok){toast.success('Updated');setExpandedId(null);load()}else toast.error('Failed')
+    if(res.ok){toast.success('Updated');setExpandedId(null);load()}else{const j=await res.json().catch(()=>({}));toast.error(j.error||'Failed')}
     setEditSaving(false)
   }
 
