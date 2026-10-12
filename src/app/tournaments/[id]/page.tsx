@@ -15,6 +15,11 @@ interface Tournament { id:string;name:string;dates:string;startDate?:string;endD
 interface Availability { workerId:string;date:string;timeSlots:string }
 interface RosterEntry { workerId:string;gameTarget:number }
 interface GapEntry { gameNumber:string;division:string;location:string;missingRoles:string[] }
+// One pick from an Auto-assign preview, before it is saved.
+interface AaPick { gameId:string;role:string;workerId:string;workerName:string;workerGender:string;gameNumber:string;division:string;startTime:string;location:string }
+const aaKey=(p:{gameId:string;role:string})=>`${p.gameId}|${p.role}`
+const aaRole=(r:string)=>r==='scorekeeper'?'SK':r==='ref1'?'R1':r==='ref2'?'R2':'R3'
+const aaTime=(t:string)=>{const[h,m]=t.split(':').map(Number);return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`}
 
 const FIELD_LABELS=[{key:'gameNumber',label:'Game Number',required:true},{key:'date',label:'Game Date',required:true},{key:'startTime',label:'Start Time',required:true},{key:'division',label:'Division',required:true},{key:'location',label:'Location / Field',required:true},{key:'team1',label:'Team 1',required:true},{key:'team2',label:'Team 2',required:true},{key:'pool',label:'Pool',required:false}]
 
@@ -135,7 +140,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
   // Which slots Auto-assign fills: scorekeepers, boys' refs, girls' refs, each on its own.
   const [aaFill,setAaFill]=useState({scorekeepers:true,boysRefs:true,girlsRefs:true})
   const [autoAssigning,setAutoAssigning]=useState(false)
-  const [autoResult,setAutoResult]=useState<{assigned:number;gaps:GapEntry[];missingRefs:number;missingSKs:number;summary:string}|null>(null)
+  const [autoResult,setAutoResult]=useState<{assigned:number;gaps:GapEntry[];missingRefs:number;missingSKs:number;summary:string;preview?:boolean;proposals?:AaPick[]}|null>(null)
+  // Preview first (Bo, Oct 12 2026): picks shown before anything is saved; untick to drop one.
+  const [aaDrop,setAaDrop]=useState<Set<string>>(new Set())
 
   // Clear assignments state
   const [showClear,setShowClear]=useState(false)
@@ -247,12 +254,22 @@ export default function GridPage({ params }: { params:{id:string} }) {
     setImportStep('idle');setPendingFile(null);setHeaders([]);setPreview([]);setMapping({})
   }
 
-  async function runAutoAssign(){
+  async function runAutoAssign(preview=true){
     setAutoAssigning(true)
-    const res=await fetch(`/api/tournaments/${params.id}/auto-assign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:activeDay,stickyScorekeeper,fill:aaFill})})
-    const data=await res.json()
-    if(res.ok){setAutoResult(data);await load()}
+    const res=await fetch(`/api/tournaments/${params.id}/auto-assign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:activeDay,stickyScorekeeper,fill:aaFill,preview})})
+    const data=await res.json().catch(()=>({}))
+    if(res.ok){setAaDrop(new Set());setAutoResult(data);if(!preview)await load()}
     else toast.error(data.error||'Auto-assign failed')
+    setAutoAssigning(false)
+  }
+  async function applyAutoAssign(){
+    const picks=(autoResult?.proposals??[]).filter(p=>!aaDrop.has(aaKey(p))).map(p=>({gameId:p.gameId,role:p.role,workerId:p.workerId}))
+    if(!picks.length)return
+    setAutoAssigning(true)
+    const res=await fetch(`/api/tournaments/${params.id}/auto-assign`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:activeDay,apply:picks})})
+    const data=await res.json().catch(()=>({}))
+    if(res.ok){setAutoResult(data);await load();toast.success(data.summary||'Saved')}
+    else toast.error(data.error||'Save failed')
     setAutoAssigning(false)
   }
 
@@ -487,9 +504,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
       {/* Auto-assign modal */}
       {showAutoAssign&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div className={`bg-white rounded-2xl shadow-2xl w-full ${autoResult?.preview?'max-w-3xl':'max-w-md'} max-h-[92vh] flex flex-col`}>
             <div className="px-6 py-5 border-b border-slate-100">
-              <h2 className="text-lg font-bold">Auto-Assign — {formatDate(activeDay)}</h2>
+              <h2 className="text-lg font-bold">Auto-Assign{autoResult?.preview?' preview':''} — {formatDate(activeDay)}</h2>
               <p className="text-sm text-slate-500 mt-1">Fills unassigned slots based on availability, gender, and game targets. Won't touch existing assignments.</p>
             </div>
             {!autoResult?(
@@ -529,8 +546,61 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 </label>}
                 <div className="flex gap-3">
                   <button className="btn-secondary flex-1" onClick={()=>setShowAutoAssign(false)}>Cancel</button>
-                  <button className="btn-primary flex-1" onClick={runAutoAssign} disabled={autoAssigning||(!aaFill.scorekeepers&&!aaFill.boysRefs&&!aaFill.girlsRefs)}>{autoAssigning?'Assigning…':'Run Auto-Assign'}</button>
+                  <button className="btn-primary flex-1" onClick={()=>runAutoAssign(true)} disabled={autoAssigning||(!aaFill.scorekeepers&&!aaFill.boysRefs&&!aaFill.girlsRefs)}>{autoAssigning?'Working…':'Preview'}</button>
                 </div>
+                <button className="w-full text-xs text-slate-400 hover:text-slate-600" onClick={()=>runAutoAssign(false)} disabled={autoAssigning||(!aaFill.scorekeepers&&!aaFill.boysRefs&&!aaFill.girlsRefs)}>Skip the preview and assign now</button>
+              </div>
+            ):autoResult.preview?(
+              <div className="px-6 py-4 flex flex-col min-h-0 flex-1">
+                {(()=>{
+                  const picks=autoResult.proposals??[]
+                  const keep=picks.filter(p=>!aaDrop.has(aaKey(p))).length
+                  const byTime=new Map<string,AaPick[]>()
+                  for(const p of picks){const k=p.startTime;if(!byTime.has(k))byTime.set(k,[]);byTime.get(k)!.push(p)}
+                  const times=[...byTime.keys()].sort()
+                  const perPerson=new Map<string,number>()
+                  for(const p of picks)if(!aaDrop.has(aaKey(p)))perPerson.set(p.workerName,(perPerson.get(p.workerName)??0)+1)
+                  const toggle=(k:string)=>setAaDrop(d=>{const n=new Set(d);if(n.has(k))n.delete(k);else n.add(k);return n})
+                  return(<>
+                    <div className={`p-3 rounded-xl mb-3 text-sm ${autoResult.gaps.length===0?'bg-emerald-50 border border-emerald-200 text-emerald-800':'bg-amber-50 border border-amber-200 text-amber-800'}`}>
+                      <b>{picks.length} picks</b>, nothing saved yet. Untick any you don&apos;t want, then Save.{autoResult.gaps.length>0&&<> {autoResult.gaps.length} game{autoResult.gaps.length===1?'':'s'} would still be short: {autoResult.missingRefs>0&&`${autoResult.missingRefs} ref slot${autoResult.missingRefs===1?'':'s'}`}{autoResult.missingRefs>0&&autoResult.missingSKs>0&&', '}{autoResult.missingSKs>0&&`${autoResult.missingSKs} scorekeeper slot${autoResult.missingSKs===1?'':'s'}`}.</>}
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                      {picks.length===0&&<p className="text-sm text-slate-400 text-center py-8">Nothing to fill with these choices.</p>}
+                      {times.map(t=>(
+                        <div key={t}>
+                          <div className="sticky top-0 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-500 uppercase tracking-wide">{aaTime(t)}</div>
+                          {byTime.get(t)!.sort((a,b)=>a.location.localeCompare(b.location,undefined,{numeric:true})||a.role.localeCompare(b.role)).map(p=>{
+                            const k=aaKey(p),on=!aaDrop.has(k)
+                            return(
+                              <label key={k} className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-slate-50 ${on?'':'opacity-40 line-through'}`}>
+                                <input type="checkbox" checked={on} onChange={()=>toggle(k)}/>
+                                <span className="w-24 truncate text-slate-500">{(p.location||'').split(' - ').pop()}</span>
+                                <span className="w-16 font-mono text-slate-500">#{p.gameNumber}</span>
+                                <span className="flex-1 truncate text-slate-600">{p.division}</span>
+                                <span className={`w-7 text-center rounded font-bold text-[10px] py-0.5 ${p.role==='scorekeeper'?'bg-emerald-100 text-emerald-700':'bg-sky-100 text-sky-700'}`}>{aaRole(p.role)}</span>
+                                <span className="w-44 truncate font-semibold text-slate-800 inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.workerGender==='girls'?'bg-pink-500':p.workerGender==='boys'?'bg-sky-500':'bg-violet-500'}`}/>{p.workerName}<span className="font-normal text-slate-400">({perPerson.get(p.workerName)??0})</span></span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    {autoResult.gaps.length>0&&(
+                      <details className="mt-2 text-xs">
+                        <summary className="cursor-pointer text-slate-500 font-semibold">Games still short ({autoResult.gaps.length})</summary>
+                        <div className="max-h-32 overflow-y-auto mt-1 space-y-1">
+                          {autoResult.gaps.map((g,i)=>(<div key={i} className="flex justify-between bg-slate-50 rounded px-2 py-1"><span>#{g.gameNumber} · {g.division} · {(g.location||'').split(' - ').pop()}</span><span className="text-red-500">{g.missingRoles.join(', ')}</span></div>))}
+                        </div>
+                      </details>
+                    )}
+                    <p className="text-[11px] text-slate-400 mt-2">The number after a name is how many games this preview gives them today. Dot: pink girls&apos; ref, blue boys&apos;, purple both.</p>
+                    <div className="flex gap-3 mt-3">
+                      <button className="btn-secondary flex-1" onClick={()=>setAutoResult(null)} disabled={autoAssigning}>Back</button>
+                      <button className="btn-primary flex-1" onClick={applyAutoAssign} disabled={autoAssigning||keep===0}>{autoAssigning?'Saving…':`Save ${keep} assignment${keep===1?'':'s'}`}</button>
+                    </div>
+                  </>)
+                })()}
               </div>
             ):(
               <div className="px-6 py-5">
@@ -561,7 +631,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 )}
                 <div className="flex gap-3">
                   <button className="btn-secondary flex-1" onClick={()=>{setShowAutoAssign(false);setAutoResult(null)}}>Close</button>
-                  <button className="btn-primary flex-1" onClick={()=>{setAutoResult(null);runAutoAssign()}} disabled={autoAssigning}>Run Again</button>
+                  <button className="btn-primary flex-1" onClick={()=>{setAutoResult(null);runAutoAssign(true)}} disabled={autoAssigning}>Preview again</button>
                 </div>
               </div>
             )}

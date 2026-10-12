@@ -37,7 +37,7 @@ function canScorekeeper(w: WorkerRow): boolean {
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  const { date, stickyScorekeeper, fill } = await req.json()
+  const { date, stickyScorekeeper, fill, preview, apply } = await req.json()
   // What to fill (Bo, Oct 12 2026: "options to auto assign Score keepers, Girls Refs,
   // and Boys refs independently"). Leaving one out leaves its slots alone, so staff
   // can run girls' refs first, check them, then the rest. Default: everything.
@@ -53,6 +53,37 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const tournament = await prisma.tournament.findUnique({ where: { id: params.id } })
   if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const payRates = parsePayRates(tournament.payRates)
+
+  // ── Apply a preview the assigner approved (some picks may have been dropped) ──
+  // Each pick is saved only if its slot is still empty and the worker is still on the
+  // roster and free at that time, so a preview that went stale can't overwrite
+  // anything or double-book anyone.
+  if (Array.isArray(apply)) {
+    const picks = (apply as { gameId?: string; role?: string; workerId?: string }[])
+      .filter(x => x && typeof x.gameId === 'string' && typeof x.workerId === 'string' && ['ref1', 'ref2', 'ref3', 'scorekeeper'].includes(String(x.role)))
+    const gameIds = Array.from(new Set(picks.map(x => x.gameId!)))
+    const pickGames = await prisma.game.findMany({ where: { tournamentId: params.id, id: { in: gameIds } }, include: { assignments: true } })
+    const roster = await prisma.rosterEntry.findMany({ where: { tournamentId: params.id }, include: { worker: true } })
+    const onRoster = new Map<string, WorkerRow>(roster.map(e => [e.workerId, e.worker as unknown as WorkerRow] as [string, WorkerRow]))
+    const dates = Array.from(new Set(pickGames.map(g => g.date)))
+    const sameDay = await prisma.game.findMany({ where: { tournamentId: params.id, date: { in: dates } }, include: { assignments: true } })
+    const busyAt = new Set<string>()   // workerId|date|time
+    for (const g of sameDay) for (const a of g.assignments) busyAt.add(`${a.workerId}|${g.date}|${g.startTime}`)
+    let saved = 0, skipped = 0
+    for (const x of picks) {
+      const g = pickGames.find(y => y.id === x.gameId)
+      const w = onRoster.get(x.workerId!)
+      const k = `${x.workerId}|${g?.date}|${g?.startTime}`
+      if (!g || !w || g.assignments.some(a => a.role === x.role) || busyAt.has(k)) { skipped++; continue }
+      const payRate = w.payRateOverride ?? getPayRate(w.certLevel, x.role!, payRates)
+      await prisma.assignment.create({ data: { gameId: g.id, workerId: w.id, role: x.role!, payRate } })
+      g.assignments.push({ role: x.role! } as any)
+      busyAt.add(k)
+      saved++
+    }
+    return NextResponse.json({ assigned: saved, skipped, gaps: [], missingRefs: 0, missingSKs: 0,
+      summary: `Saved ${saved} assignment${saved === 1 ? '' : 's'}${skipped ? ` · ${skipped} skipped (slot filled or person busy since the preview)` : ''}.` })
+  }
   const divRules: Record<string,number> = parseJsonDeep(tournament.divisionRules, {})
 
   // The game's own count, the same one the assigner board shows. The division
@@ -128,7 +159,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return [...workers].sort((a, b) => (gameCounts.get(a.id) ?? 0) - (gameCounts.get(b.id) ?? 0))
   }
 
-  const created: { gameId: string; role: string; workerId: string }[] = []
+  const created: { gameId: string; role: string; workerId: string; payRate: number }[] = []
   const gaps: { gameNumber: string; division: string; location: string; missingRoles: string[] }[] = []
 
   // ── Sticky scorekeeper setup ──
@@ -205,14 +236,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         if (skId) {
           const worker = allWorkers.find(w => w.id === skId)!
           const payRate = worker.payRateOverride ?? getPayRate(worker.certLevel, 'scorekeeper', payRates)
-          await prisma.assignment.upsert({
-            where:  { gameId_role: { gameId: game.id, role: 'scorekeeper' } },
-            create: { gameId: game.id, workerId: skId, role: 'scorekeeper', payRate },
-            update: { workerId: skId, payRate },
-          })
           markBusy(skId, game.startTime)
           gameCounts.set(skId, (gameCounts.get(skId) ?? 0) + 1)
-          created.push({ gameId: game.id, role: 'scorekeeper', workerId: skId })
+          created.push({ gameId: game.id, role: 'scorekeeper', workerId: skId, payRate })
         } else {
           missingRoles.push('Scorekeeper')
         }
@@ -232,14 +258,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         const worker = eligible[0]
         if (worker) {
           const payRate = worker.payRateOverride ?? getPayRate(worker.certLevel, role, payRates)
-          await prisma.assignment.upsert({
-            where:  { gameId_role: { gameId: game.id, role } },
-            create: { gameId: game.id, workerId: worker.id, role, payRate },
-            update: { workerId: worker.id, payRate },
-          })
           markBusy(worker.id, game.startTime)
           gameCounts.set(worker.id, (gameCounts.get(worker.id) ?? 0) + 1)
-          created.push({ gameId: game.id, role, workerId: worker.id })
+          created.push({ gameId: game.id, role, workerId: worker.id, payRate })
         } else {
           missingRoles.push(role === 'ref1' ? 'Ref 1' : role === 'ref2' ? 'Ref 2' : 'Ref 3')
         }
@@ -257,16 +278,36 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (missingRefs > 0) needMore.push(`${missingRefs} more ref${missingRefs !== 1 ? 's' : ''}`)
   if (missingSKs  > 0) needMore.push(`${missingSKs} more scorekeeper${missingSKs !== 1 ? 's' : ''}`)
 
+  // Picks are made in memory and written together at the end, so a preview is the
+  // same run with the writes left out (Bo, Oct 12 2026: preview before saving).
+  if (!preview) {
+    for (const c of created) {
+      await prisma.assignment.upsert({
+        where:  { gameId_role: { gameId: c.gameId, role: c.role } },
+        create: { gameId: c.gameId, workerId: c.workerId, role: c.role, payRate: c.payRate },
+        update: { workerId: c.workerId, payRate: c.payRate },
+      })
+    }
+  }
+  const proposals = preview ? created.map(c => {
+    const g = games.find(x => x.id === c.gameId)!
+    const w = allWorkers.find(x => x.id === c.workerId)
+    return { ...c, workerName: w?.name ?? '?', workerGender: w?.gender ?? 'both', gameNumber: g.gameNumber, division: g.division, startTime: g.startTime, location: g.location }
+  }) : undefined
+
   const did = [want.sk && 'scorekeepers', want.boys && "boys' refs", want.girls && "girls' refs"].filter(Boolean) as string[]
   const scope = did.length === 3 ? '' : ` (${did.join(' and ')} only)`
   return NextResponse.json({
-    assigned: created.length,
+    assigned: preview ? 0 : created.length,
+    proposed: created.length,
+    preview: !!preview,
+    proposals,
     scope: did,
     gaps,
     missingRefs,
     missingSKs,
     summary: gaps.length === 0
-      ? `✅ All slots filled${scope} — ${created.length} assignments made!`
-      : `Filled ${created.length} slots${scope}. Still need ${needMore.join(' and ')} to cover all games.`,
+      ? `✅ ${preview ? 'Can fill' : 'All slots filled'}${scope} — ${created.length} assignments${preview ? ' proposed' : ' made'}!`
+      : `${preview ? 'Can fill' : 'Filled'} ${created.length} slots${scope}. Still need ${needMore.join(' and ')} to cover all games.`,
   })
 }
