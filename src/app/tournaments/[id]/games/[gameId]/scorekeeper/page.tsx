@@ -39,6 +39,30 @@ function saveDefaults(tid: string, patch: Partial<TournamentDefaults>): Tourname
   } catch { return loadDefaults(tid) }
 }
 
+/* ---- this phone's copy of a game in progress ----
+   The clock, period, penalty timers and goal scorers live only in the scorer's
+   browser (the server keeps the score). Saving them here lets a refresh, Exit or
+   a dead battery pick up where it left off; a running clock is caught up by the
+   time that passed. Old entries (6h+) are ignored. */
+interface SavedGame {
+  savedAt: number; clockMs: number; running: boolean; periodSecs: number; period: number
+  penalties: Penalty[]; scorers1: string[]; scorers2: string[]
+}
+const GAME_KEY = (gameId: string) => 'lw:game:' + gameId
+function loadGameState(gameId: string): SavedGame | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(GAME_KEY(gameId)) || 'null') as SavedGame | null
+    if (!v || typeof v.savedAt !== 'number' || Date.now() - v.savedAt > 6 * 3600_000) return null
+    return { ...v, penalties: Array.isArray(v.penalties) ? v.penalties : [], scorers1: v.scorers1 || [], scorers2: v.scorers2 || [] }
+  } catch { return null }
+}
+function saveGameState(gameId: string, v: SavedGame) {
+  try { localStorage.setItem(GAME_KEY(gameId), JSON.stringify(v)) } catch { /* private mode / full */ }
+}
+function clearGameState(gameId: string) {
+  try { localStorage.removeItem(GAME_KEY(gameId)) } catch { /* ignore */ }
+}
+
 export default function ScorekeeperPage({ params }: { params: { id: string; gameId: string } }) {
   const tid = params.id // tournament id
   const router = useRouter()
@@ -53,6 +77,9 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   const [clockMs, setClockMs] = useState(DEFAULTS_FALLBACK.periodSecs * 1000) // remaining
   const [clockRunning, setClockRunning] = useState(false)
   const clockRef = useRef<NodeJS.Timeout | null>(null)
+  const lastTickRef = useRef(0)          // wall-clock time the clock was last advanced to
+  const clockMsRef = useRef(0)           // mirror of clockMs for the tick (penalties can't outlast the clock)
+  const restoredRef = useRef(false)      // don't persist until this game's saved state has been restored
 
   const [penalties, setPenalties] = useState<Penalty[]>([])
   const [penOver, setPenOver] = useState<string[]>([])   // "penalty over" banners until dismissed
@@ -115,6 +142,19 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
       setSetupMin(Math.floor(d.periodSecs / 60)); setSetupSec(d.periodSecs % 60)
       setPenSecs(d.penaltySecs)
       if (g.score1 != null && g.score2 != null) setGameEnded(true)
+      // Pick up a game already in progress on this phone (refresh, Exit, phone
+      // died). A running clock kept running while they were away.
+      const saved = loadGameState(params.gameId)
+      if (saved && !(g.score1 != null && g.score2 != null)) {
+        const away = saved.running ? Math.max(0, Date.now() - saved.savedAt) : 0
+        const left = Math.max(0, saved.clockMs - away)
+        const penSecs = Math.floor(Math.min(away, saved.clockMs) / 1000)
+        setPeriodSecs(saved.periodSecs); setClockMs(left); setCurrentPeriod(saved.period)
+        setPenalties(saved.penalties.map(p => p.active && !p.paused ? { ...p, remaining: Math.max(0, p.remaining - penSecs), active: p.remaining - penSecs > 0 } : p))
+        setScorers1(saved.scorers1); setScorers2(saved.scorers2)
+        if (saved.running && left > 0) { setClockRunning(true); toast('⏱ Clock kept running — picked up where you left off') }
+      }
+      restoredRef.current = true
       setLoading(false)
     })
     return () => { if (clockRef.current) clearInterval(clockRef.current) }
@@ -159,18 +199,61 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     pushLive({ period: next, live: true })
   }
 
-  // tick: clock + penalties count down (skip paused)
+  clockMsRef.current = clockMs
+
+  // tick: clock + penalties count down (skip paused). Driven by the real time
+  // that has passed, not by counting timer ticks: phones throttle or freeze
+  // timers when the screen locks or the app is in the background, and the old
+  // count-the-ticks clock silently lost that time. Now it catches up the moment
+  // the scorer looks at the phone again.
   useEffect(() => {
-    if (clockRunning) {
-      clockRef.current = setInterval(() => {
-        setClockMs(prev => Math.max(0, prev - 1000))
-        setPenalties(prev => prev.map(p =>
-          p.active && !p.paused ? { ...p, remaining: p.remaining - 1, active: p.remaining - 1 > 0 } : p
-        ))
-      }, 1000)
-    } else if (clockRef.current) { clearInterval(clockRef.current) }
-    return () => { if (clockRef.current) clearInterval(clockRef.current) }
+    if (!clockRunning) { if (clockRef.current) clearInterval(clockRef.current); return }
+    lastTickRef.current = Date.now()
+    const step = () => {
+      const secs = Math.floor((Date.now() - lastTickRef.current) / 1000)
+      if (secs <= 0) return
+      lastTickRef.current += secs * 1000
+      const penSecs = Math.min(secs, Math.ceil(clockMsRef.current / 1000))
+      setClockMs(prev => Math.max(0, prev - secs * 1000))
+      if (penSecs > 0) setPenalties(prev => prev.map(p =>
+        p.active && !p.paused ? { ...p, remaining: Math.max(0, p.remaining - penSecs), active: p.remaining - penSecs > 0 } : p
+      ))
+    }
+    clockRef.current = setInterval(step, 250)
+    const onVis = () => { if (document.visibilityState === 'visible') step() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { if (clockRef.current) clearInterval(clockRef.current); document.removeEventListener('visibilitychange', onVis) }
   }, [clockRunning])
+
+  // Keep the screen on while the clock runs (Screen Wake Lock; recent Chrome and
+  // Safari). The browser drops the lock whenever the page is hidden, so ask again
+  // when it comes back.
+  useEffect(() => {
+    if (!clockRunning) return
+    type Lock = { release: () => Promise<void> }
+    let lock: Lock | null = null
+    let cancelled = false
+    const request = async () => {
+      try {
+        const wl = (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<Lock> } }).wakeLock
+        if (!wl || document.visibilityState !== 'visible') return
+        const l = await wl.request('screen')
+        if (cancelled) void l.release(); else lock = l
+      } catch { /* denied or unsupported (low battery mode, old browser) */ }
+    }
+    void request()
+    const onVis = () => { if (document.visibilityState === 'visible') void request() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); if (lock) void lock.release().catch(() => {}) }
+  }, [clockRunning])
+
+  // Remember the clock, period and penalties on this phone so a refresh, Exit
+  // or a dead battery doesn't lose them.
+  useEffect(() => {
+    if (!restoredRef.current) return
+    if (gameEnded) { clearGameState(params.gameId); return }
+    saveGameState(params.gameId, { savedAt: Date.now(), clockMs, running: clockRunning, periodSecs, period: currentPeriod, penalties, scorers1, scorers2 })
+  }, [clockMs, clockRunning, periodSecs, currentPeriod, penalties, scorers1, scorers2, gameEnded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Penalty over: buzz + beep (where the phone allows) and a banner that stays
   // until dismissed, so the scorer can wave the player back on even if the
@@ -231,17 +314,10 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
   // Leave the game. There was no way out before (scorers had to use the browser's
   // back button). Unsaved score changes are saved as a running (not final) score
-  // first so nothing is lost; the clock and penalty timers live on this screen only,
-  // so warn before dropping them.
+  // first so nothing is lost. The clock and penalty timers keep running while
+  // they're away (saved on this phone) and pick up when they reopen the game.
   async function exitGame() {
-    const activePens = penalties.filter(p => p.active).length
-    const warn = [
-      clockRunning ? 'the clock is running' : '',
-      activePens ? `${activePens} penalty timer${activePens === 1 ? ' is' : 's are'} running` : '',
-    ].filter(Boolean)
-    if (warn.length && !window.confirm(`Leave this game? ${warn.join(' and ')} — ${warn.length > 1 ? 'they' : 'it'} will stop. The score is kept.`)) return
     setExiting(true)
-    setClockRunning(false)
     const dirty = score1 !== savedScores.current.s1 || score2 !== savedScores.current.s2
     if (dirty && !gameEnded) {
       const ok = await saveScore()
@@ -552,7 +628,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
               </label>
               <button onClick={() => penaltyOverAlert()} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200">Test</button>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1 px-1">Saved on this phone. iPhones can&apos;t vibrate from a web page; they beep and show a banner.</p>
+            <p className="text-[11px] text-gray-500 mt-1 px-1">Saved on this phone. iPhones can&apos;t vibrate from a web page; they beep and show a banner. The screen stays on while the clock runs; if the phone locks anyway, the clock keeps time and catches up when it&apos;s unlocked.</p>
             <label className="flex items-center justify-between gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 cursor-pointer mt-3">
               <span className="text-sm text-gray-200">No ties — warn at final if the score is tied</span>
               <input type="checkbox" checked={noTies} onChange={e => { setNoTies(e.target.checked); saveConfig({ noTies: e.target.checked }) }} className="accent-emerald-600 w-5 h-5" />
