@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
-import { getSubmissionByPassToken, type FormSubmission } from '@/lib/formSubmissions'
+import { getSubmissionByPassToken, ensureVendorInvoiceColumns, type FormSubmission } from '@/lib/formSubmissions'
+import { vendorMoney, type VendorMoney, type VendorPayment } from '@/lib/vendorMoney'
 import { orgById, type Org } from '@/lib/org'
 import { vendorConfig, type VendorConfig } from '@/lib/vendorForm'
 
@@ -21,12 +22,19 @@ export type VendorApproval = {
   /** Dollars owed. Frozen at approval; falls back to the type's current price for
    *  rows approved before amountDue existed. */
   amount: number
+  /** Payments the office recorded by hand: checks, Zelle, cash (lib/vendorInvoiceStore). */
+  payments: VendorPayment[]
+  /** What has been paid, by hand and on this page, and what's left. */
+  money: VendorMoney
   approved: boolean
   declined: boolean
+  /** Nothing left to pay: paid on the booth page, or in full by hand. */
   paid: boolean
 }
 
 export async function loadVendorApproval(token: string): Promise<VendorApproval | null> {
+  // The invoice's columns are on the same row; make sure they exist before reading it.
+  await ensureVendorInvoiceColumns().catch(() => {})
   const sub = await getSubmissionByPassToken(token)
   if (!sub || sub.formType !== 'vendor') return null
 
@@ -48,6 +56,9 @@ export async function loadVendorApproval(token: string): Promise<VendorApproval 
   const frozen = Number(sub.amountDue) || 0
   const fromType = cfg.types.find(t => t.id === String(sub.data?.vendorType || ''))?.price || 0
   const fallback = Number(sub.data?.boothFee) || fromType
+  const amount = frozen > 0 ? frozen : fallback
+  const payments = sub.vendorPayments || []
+  const money = vendorMoney({ amountDue: amount, paymentStatus: sub.paymentStatus, stripeRef: sub.stripeRef }, payments)
 
   return {
     token,
@@ -57,10 +68,12 @@ export async function loadVendorApproval(token: string): Promise<VendorApproval 
     org,
     tournamentName,
     cfg,
-    amount: frozen > 0 ? frozen : fallback,
+    amount,
+    payments,
+    money,
     approved: sub.status === 'approved',
     declined: sub.status === 'declined',
-    paid: sub.paymentStatus === 'paid',
+    paid: sub.paymentStatus === 'paid' || (amount > 0 && money.balance <= 0),
   }
 }
 

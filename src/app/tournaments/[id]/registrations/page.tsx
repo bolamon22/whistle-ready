@@ -1984,7 +1984,7 @@ export default function RegistrationsPage() {
                   {qbo.settings.enabled ? (
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <p className="flex-1 text-sm text-slate-600">
-                        <span className="font-semibold text-green-700">On{since ? ` since ${since}` : ''}.</span> New registrations get the next QuickBooks invoice number, and changes and payments follow every 15 minutes.{lastRun ? ` Last run ${lastRun}.` : ''}
+                        <span className="font-semibold text-green-700">On{since ? ` since ${since}` : ''}.</span> New registrations and newly approved vendors get the next QuickBooks invoice number, and changes and payments follow every 15 minutes.{lastRun ? ` Last run ${lastRun}.` : ''}
                       </p>
                       <div className="flex gap-2 shrink-0">
                         <button onClick={qboRun} disabled={!!qboBusy || !qbo.connection.ok} className="text-sm border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={14} /> {qboBusy === 'run' ? 'Syncing…' : 'Sync now'}</button>
@@ -1994,7 +1994,7 @@ export default function RegistrationsPage() {
                   ) : (
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <p className="flex-1 text-sm text-slate-600">
-                        <span className="font-semibold text-slate-800">Off.</span> Turn it on and each new registration goes to QuickBooks with the next invoice number, and every payment recorded here follows it. Registrations from before stay out until you send them below.
+                        <span className="font-semibold text-slate-800">Off.</span> Turn it on and each new registration, and each vendor approved from then on, goes to QuickBooks with the next invoice number, and every payment recorded follows it. Ones from before stay out until you send them.
                       </p>
                       <button onClick={() => qboToggle(true)} disabled={!!qboBusy || !qbo.connection.ok} className="shrink-0 text-sm bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg">{qboBusy === 'enable' ? 'Turning on…' : 'Turn on'}</button>
                     </div>

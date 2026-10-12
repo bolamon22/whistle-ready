@@ -8,6 +8,10 @@ import { sendEmail, orgSender, emailEnabled } from '@/lib/email'
 import { vendorConfig, priceLabel } from '@/lib/vendorForm'
 import { renderEmail, detailRows, panel, button, absUrl, esc } from '@/lib/emailLayout'
 import { prisma } from '@/lib/db'
+import { canSeeMoney } from '@/lib/roleScope'
+import { ensureVendorInvoiceColumns, type FormSubmission } from '@/lib/formSubmissions'
+import { qboSettings } from '@/lib/qboSync'
+import { vendorInvoiceSummary, type VendorInvoiceSummary } from '@/lib/vendorInvoiceSummary'
 
 // Staff: vendor requests for THIS tournament (rows in "OrgFormSubmission" tagged with
 // the tournamentId — see src/lib/formSubmissions.ts).
@@ -22,12 +26,37 @@ async function gateForTournament(id: string) {
   return { gate, orgId }
 }
 
+// What only staff who can see money get on a vendor row: the payments recorded by
+// hand and the QuickBooks copy (vendor invoices, Oct 2026).
+const MONEY_KEYS = ['vendorPayments', 'invoiceSentAt', 'qboDocNumber', 'qboTxnDate', 'qboInvoiceId', 'qboSyncError', 'qboSyncedAt', 'qboOnlinePaymentId'] as const
+const forRole = (sub: FormSubmission, money: boolean) => {
+  if (money) return sub
+  const out: Record<string, unknown> = { ...sub }
+  for (const k of MONEY_KEYS) delete out[k]
+  return out
+}
+
+/** Each approved vendor's invoice (number, money, payments, QuickBooks), for staff who can see money. */
+async function invoicesFor(orgId: string, subs: FormSubmission[]): Promise<Record<string, VendorInvoiceSummary>> {
+  const org = await orgById(orgId)
+  const settings = await qboSettings(orgId)
+  const out: Record<string, VendorInvoiceSummary> = {}
+  for (const sub of subs) {
+    const inv = vendorInvoiceSummary(sub, org?.name || '', settings)
+    if (inv) out[sub.id] = inv
+  }
+  return out
+}
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const g = await gateForTournament(params.id)
   if ('res' in g) return g.res
   try {
+    await ensureVendorInvoiceColumns().catch(() => { /* the list still loads; invoices show once they can */ })
     const submissions = await listSubmissions({ orgId: g.orgId, formType: 'vendor', tournamentId: params.id, sort: 'oldest', limit: 5000 })
-    return NextResponse.json({ submissions })
+    const canMoney = canSeeMoney(g.gate.role)
+    const invoices = canMoney ? await invoicesFor(g.orgId, submissions).catch(() => ({})) : {}
+    return NextResponse.json({ submissions: submissions.map(x => forRole(x, canMoney)), canMoney, invoices })
   } catch {
     return NextResponse.json({ submissions: [] })
   }
@@ -41,6 +70,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const subId = String(new URL(req.url).searchParams.get('subId') || '')
   if (!subId) return NextResponse.json({ error: 'Missing subId' }, { status: 400 })
   try {
+    // An invoice in QuickBooks stays answerable to a row here: deleting the row would
+    // leave it open there with nothing pointing at it.
+    await ensureVendorInvoiceColumns().catch(() => {})
+    const cur = await getSubmission(g.orgId, subId)
+    if (cur?.qboInvoiceId) {
+      return NextResponse.json({ error: `This vendor's invoice ${cur.qboDocNumber} is in QuickBooks, so the request can't be deleted. Decline it instead, and void the invoice in QuickBooks.` }, { status: 409 })
+    }
     const removed = await deleteSubmission(g.orgId, subId, 'vendor', params.id)
     if (!removed) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ ok: true, removed: 1 })
@@ -69,6 +105,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const cur = await getSubmission(g.orgId, subId)
     if (!cur || cur.formType !== 'vendor') return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    // Money has come in against the approval: it can't be taken back from here.
+    if (action !== 'approve' && (cur.paymentStatus === 'paid' || (cur.vendorPayments || []).length)) {
+      return NextResponse.json({ error: 'This vendor has paid toward the booth. Take the payments off first.' }, { status: 409 })
+    }
+
     if (action !== 'approve') {
       const updated = await setSubmissionStatus(g.orgId, subId, action === 'decline' ? 'declined' : '', String(g.gate.session?.user?.email || '') || undefined)
       return NextResponse.json({ ok: true, submission: updated })
@@ -85,7 +126,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     let amount = Number(body.amount)
     if (!(amount > 0)) {
-      amount = cfgForMail.types.find(t => t.id === String(cur.data?.vendorType || ''))?.price || Number(cur.data?.boothFee) || 0
+      // The type's current price plus the web sponsorship they added on the form (it
+      // used to drop the sponsorship: a $450 booth + $150 web sponsorship was approved
+      // at $450), else what they were quoted.
+      const typePrice = cfgForMail.types.find(t => t.id === String(cur.data?.vendorType || ''))?.price || 0
+      const addOn = cur.data?.webSponsor === true ? Number(cur.data?.webSponsorFee) || 0 : 0
+      amount = typePrice ? typePrice + addOn : Number(cur.data?.boothFee) || 0
     }
 
     const token = await ensurePassToken(g.orgId, subId)
@@ -136,7 +182,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       } catch { /* the approval stands; staff can resend the link by hand */ }
     }
 
-    return NextResponse.json({ ok: true, submission: updated, token, emailed })
+    // The new invoice, for staff who can see money (Vendor requests draws it at once).
+    const invoice = updated && canSeeMoney(g.gate.role) ? (await invoicesFor(g.orgId, [updated]).catch(() => ({} as Record<string, VendorInvoiceSummary>)))[updated.id] || null : null
+    return NextResponse.json({ ok: true, submission: updated, token, emailed, invoice })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Could not update this application' }, { status: 500 })
   }

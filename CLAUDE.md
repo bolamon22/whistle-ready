@@ -174,6 +174,23 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Vendor invoices (Oct 12).** An approved vendor with a fee has an **Invoice** box on Vendor requests
+  (`vendor-requests/VendorInvoicePanel.tsx`, money roles only; the GET adds `canMoney` and `invoices`). PDF:
+  `lib/vendorInvoice.ts` (pure) builds an `InvoiceDoc` drawn by `buildInvoicePdf` (booth type line, web
+  sponsorship as its own line when approved as quoted, products in a DETAILS column, "Approved" date, no card
+  fee); public `GET /api/vendor/[token]/invoice` (token = auth, like the booth page, which links it). Office
+  actions: `POST /api/tournaments/[id]/vendor-requests/invoice` `email | pay | unpay | qbo`. Payments by hand
+  live on the row as JSON (`vendorPayments`, `lib/vendorInvoiceStore.ts`, written only if unchanged since read);
+  paid in full by hand sets `paymentStatus = 'paid'` like the webhook. The booth page's Stripe payment has no
+  amount on the row: `lib/vendorMoney.ts` counts it as what was left after the hand payments, and checkout
+  charges exactly that. New OrgFormSubmission columns (all TEXT '') are made by `ensureVendorInvoiceColumns`,
+  not `ensureSubmissionsTable`. QuickBooks (`lib/qboSync.ts` `syncVendor`, `pendingVendorsFor`,
+  `syncVendorsNow`): same number sequence and lock as the clubs, vendor company as customer (name clash ->
+  "(booth)"), per-event top-level item "Vendor Booth - <event> <year>" with the team fees' income account
+  (`settings.vendorItems`), payments into Undeposited Funds; the cron runs vendors after the clubs. Email
+  invoice syncs first when the sync is on. Decline/Undo refused once money is in; Delete refused while in
+  QuickBooks. Approving with a blank fee now adds the web sponsorship to the type's price (it was dropped).
+  Tests: 64 checks on the real Prisma engine over SQLite with a fake QuickBooks (scratch).
 - **Club letters you write + AI writer (Oct 12).** The Email clubs dialog (registrations page) has **Your
   letter**: saved letters live in AppSetting `commLetterCustom:{orgId}` = `{ letters }` (`lib/customLetters.ts`,
   pure and client-safe; 40 per org; name 40 / subject 200 / body 4000 chars), `GET/POST/PUT/DELETE

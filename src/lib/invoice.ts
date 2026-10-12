@@ -125,7 +125,8 @@ function asBytes(v: unknown): Uint8Array | null {
   return null
 }
 
-async function logoFor(logoUrl: string, orgBase: string): Promise<InvoiceDoc['logo']> {
+// Also a vendor's invoice (lib/vendorInvoiceStore).
+export async function logoFor(logoUrl: string, orgBase: string): Promise<InvoiceDoc['logo']> {
   const u = logoUrl.trim()
   if (!u) return null
   let bytes: Uint8Array | null = null

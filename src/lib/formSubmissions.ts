@@ -9,6 +9,7 @@
 // The first touch per org copies the old blob in (idempotent, keyed by id) and
 // leaves the blob in place as a backup — nothing ever deletes it.
 import { prisma } from '@/lib/db'
+import { parseVendorPayments, type VendorPayment } from '@/lib/vendorMoney'
 
 export type FormSubmission = {
   id: string
@@ -34,6 +35,18 @@ export type FormSubmission = {
   paymentStatus?: string
   paidAt?: string | null
   stripeRef?: string | null
+  /** Vendor invoices (Oct 2026, lib/vendorInvoiceStore): payments the office recorded
+   *  by hand, when the invoice was last emailed, and its QuickBooks copy (lib/qboSync).
+   *  Vendor rows only. */
+  vendorPayments?: VendorPayment[]
+  invoiceSentAt?: string
+  qboDocNumber?: string
+  qboTxnDate?: string
+  qboInvoiceId?: string
+  qboSyncError?: string
+  qboSyncedAt?: string
+  /** The QuickBooks payment the booth page's online payment was sent as. */
+  qboOnlinePaymentId?: string
   updatedAt?: string
 }
 
@@ -85,6 +98,30 @@ export function ensureSubmissionsTable(): Promise<void> {
   return tableReady
 }
 
+// Vendor invoices (Oct 2026): what the office records against an approved vendor,
+// and the invoice's QuickBooks copy (lib/vendorInvoiceStore, lib/qboSync). Made the
+// first time a vendor invoice is touched rather than in ensureSubmissionsTable, so
+// the waiver and pass routes don't pay ten more ALTERs on every cold start. One
+// read answers whether they're there: the last one is added last. Unquoted on
+// purpose, since SQLite reads a double-quoted name it can't find as a string.
+export const VENDOR_INVOICE_COLUMNS = ['vendorPayments', 'invoiceSentAt', 'qboInvoiceId', 'qboCustomerId', 'qboDocNumber', 'qboTxnDate', 'qboSyncedHash', 'qboSyncedAt', 'qboSyncError', 'qboOnlinePaymentId'] as const
+let vendorCols: Promise<void> | null = null
+export function ensureVendorInvoiceColumns(): Promise<void> {
+  if (!vendorCols) {
+    vendorCols = (async () => {
+      await ensureSubmissionsTable()
+      try {
+        await prisma.$queryRawUnsafe(`SELECT qboOnlinePaymentId FROM "OrgFormSubmission" LIMIT 1`)
+        return
+      } catch { /* not made yet */ }
+      for (const c of VENDOR_INVOICE_COLUMNS) {
+        try { await prisma.$executeRawUnsafe(`ALTER TABLE "OrgFormSubmission" ADD COLUMN "${c}" TEXT NOT NULL DEFAULT ''`) } catch { /* already there */ }
+      }
+    })().catch(e => { vendorCols = null; throw e })
+  }
+  return vendorCols
+}
+
 // ── derived columns ──────────────────────────────────────────────────────────
 const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature', 'photoUrl', 'cardLink'])
 function derived(data: any) {
@@ -128,6 +165,13 @@ function rowToSub(r: any): FormSubmission {
     status: String(r.status || ''), statusAt: r.statusAt || null, statusBy: r.statusBy || null,
     amountDue: Number(r.amountDue) || 0,
     paymentStatus: String(r.paymentStatus || ''), paidAt: r.paidAt || null, stripeRef: r.stripeRef || null,
+    ...(r.formType === 'vendor' ? {
+      vendorPayments: parseVendorPayments(r.vendorPayments),
+      invoiceSentAt: String(r.invoiceSentAt || ''),
+      qboDocNumber: String(r.qboDocNumber || ''), qboTxnDate: String(r.qboTxnDate || ''),
+      qboInvoiceId: String(r.qboInvoiceId || ''), qboSyncError: String(r.qboSyncError || ''), qboSyncedAt: String(r.qboSyncedAt || ''),
+      qboOnlinePaymentId: String(r.qboOnlinePaymentId || ''),
+    } : {}),
     updatedAt: r.updatedAt || undefined,
   }
 }

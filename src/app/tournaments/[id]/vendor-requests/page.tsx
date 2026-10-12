@@ -5,16 +5,19 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
 import { Inbox, ChevronRight, ExternalLink, Download, Trash2, Check, X, Link2 } from 'lucide-react'
+import VendorInvoicePanel, { type VendorInvoice } from './VendorInvoicePanel'
 
 type Sub = { id: string; submittedAt: string; data: any; status?: string; amountDue?: number; paymentStatus?: string; passToken?: string | null }
 
 const money = (n?: number) => (Number(n) > 0 ? `$${Number(n).toLocaleString('en-US')}` : '—')
 
 /** Where an application stands, in one chip. Paid outranks approved — that's the state
- *  anyone scanning this list actually cares about. */
-function StatusChip({ s }: { s: Sub }) {
+ *  anyone scanning this list actually cares about. Part paid shows to staff who can see
+ *  the invoice. */
+function StatusChip({ s, inv }: { s: Sub; inv?: VendorInvoice }) {
   const cls = 'text-[11px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 whitespace-nowrap'
   if (s.paymentStatus === 'paid') return <span className={`${cls} bg-teal-600 text-white`}>Paid</span>
+  if (s.status === 'approved' && inv && inv.money.paid > 0) return <span className={`${cls} bg-teal-50 text-teal-800 border border-teal-300`}>Part paid</span>
   if (s.status === 'approved') return <span className={`${cls} bg-teal-50 text-teal-700 border border-teal-200`}>Approved</span>
   if (s.status === 'declined') return <span className={`${cls} bg-slate-100 text-slate-500`}>Declined</span>
   return <span className={`${cls} bg-amber-50 text-amber-700 border border-amber-200`}>Needs review</span>
@@ -29,10 +32,18 @@ export default function VendorRequestEntries() {
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [acting, setActing] = useState<string | null>(null)
+  // Approved vendors' invoices (number, money, payments, QuickBooks): only staff who
+  // can see money get them.
+  const [canMoney, setCanMoney] = useState(false)
+  const [invoices, setInvoices] = useState<Record<string, VendorInvoice>>({})
 
   useEffect(() => {
     fetch(`/api/tournaments/${id}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setName(d.name || 'Tournament'); setLogo(d.logoUrl || undefined) } }).catch(() => {})
-    fetch(`/api/tournaments/${id}/vendor-requests`).then(r => r.ok ? r.json() : { submissions: [] }).then(d => setSubs(Array.isArray(d.submissions) ? d.submissions : [])).catch(() => {}).finally(() => setLoading(false))
+    fetch(`/api/tournaments/${id}/vendor-requests`).then(r => r.ok ? r.json() : { submissions: [] }).then(d => {
+      setSubs(Array.isArray(d.submissions) ? d.submissions : [])
+      setCanMoney(!!d.canMoney)
+      setInvoices(d.invoices && typeof d.invoices === 'object' ? d.invoices : {})
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [id])
 
   const rows = subs.slice().reverse()
@@ -60,9 +71,16 @@ export default function VendorRequestEntries() {
       const j = await res.json().catch(() => ({}))
       if (res.ok && j.submission) {
         setSubs(prev => prev.map(x => (x.id === s.id ? { ...x, ...j.submission } : x)))
+        setInvoices(prev => { const n = { ...prev }; if (action === 'approve' && j.invoice) n[s.id] = j.invoice; else delete n[s.id]; return n })
         if (action === 'approve') alert(j.emailed ? `Approved. ${company} has been emailed their booth page.` : `Approved — but the email didn't send. Copy their booth link from the row and send it yourself.`)
       } else alert(j.error || 'Could not update that application.')
     } catch { alert('Could not update that application.') } finally { setActing(null) }
+  }
+
+  /** One vendor changed on the invoice panel (a payment, an email, QuickBooks). */
+  const updateOne = (submission: Sub, invoice: VendorInvoice | null) => {
+    setSubs(prev => prev.map(x => (x.id === submission.id ? { ...x, ...submission } : x)))
+    setInvoices(prev => { const n = { ...prev }; if (invoice) n[submission.id] = invoice; else delete n[submission.id]; return n })
   }
 
   const boothLink = (s: Sub) => (s.passToken ? `${window.location.origin}/vendor/${s.passToken}` : '')
@@ -71,6 +89,8 @@ export default function VendorRequestEntries() {
   /** The approve / decline / copy-link row shown inside an expanded application. */
   function Actions({ s }: { s: Sub }) {
     const busy = acting === s.id
+    // Money has come in: the approval stands (take the payments off first).
+    const hasPaid = s.paymentStatus === 'paid' || (invoices[s.id]?.money.paid || 0) > 0
     const btn = 'text-xs font-semibold rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50'
     return (
       <div className="flex flex-wrap items-center justify-end gap-2 mt-3">
@@ -84,12 +104,12 @@ export default function VendorRequestEntries() {
             <Check size={13} /> {busy ? 'Working…' : 'Approve & send link'}
           </button>
         )}
-        {s.status !== 'declined' && s.paymentStatus !== 'paid' && (
+        {s.status !== 'declined' && !hasPaid && (
           <button onClick={e => { e.stopPropagation(); act(s, 'decline') }} disabled={busy} className={`${btn} text-slate-600 hover:bg-slate-100 border border-slate-200`}>
             <X size={13} /> Decline
           </button>
         )}
-        {(s.status === 'approved' || s.status === 'declined') && s.paymentStatus !== 'paid' && (
+        {(s.status === 'approved' || s.status === 'declined') && !hasPaid && (
           <button onClick={e => { e.stopPropagation(); act(s, 'reset') }} disabled={busy} className={`${btn} text-slate-500 hover:bg-slate-100`}>
             Undo
           </button>
@@ -104,7 +124,8 @@ export default function VendorRequestEntries() {
 
   // Deleting is permanent, so confirm first and name the company in the prompt.
   async function remove(s: Sub) {
-    if (!confirm(`Delete the vendor request from "${s.data?.companyName || 'this company'}"?\n\nThis can't be undone.`)) return
+    const paidSoFar = invoices[s.id]?.money.byHand || 0
+    if (!confirm(`Delete the vendor request from "${s.data?.companyName || 'this company'}"?${paidSoFar > 0 ? `\n\nThe payments recorded on it (${money(paidSoFar)}) go with it.` : ''}\n\nThis can't be undone.`)) return
     setDeleting(s.id)
     try {
       const res = await fetch(`/api/tournaments/${id}/vendor-requests?subId=${encodeURIComponent(s.id)}`, { method: 'DELETE' })
@@ -114,9 +135,13 @@ export default function VendorRequestEntries() {
   }
   const exportCsv = () => {
     const cols = ['companyName', 'companyContact', 'phone', 'email', 'website', 'level', 'products']
-    const head = ['Submitted', ...cols, 'Status', 'Fee', 'Payment'].join(',')
+    const head = ['Submitted', ...cols, 'Status', 'Fee', 'Payment', ...(canMoney ? ['Invoice', 'Paid', 'Balance'] : [])].join(',')
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = rows.map(s => [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.status || 'needs review', money(s.amountDue), s.paymentStatus || 'unpaid'].map(esc).join(','))
+    const lines = rows.map(s => {
+      const inv = invoices[s.id]
+      const extra = canMoney ? (inv ? [inv.number, inv.money.paid, inv.money.balance] : ['', '', '']) : []
+      return [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.status || 'needs review', money(s.amountDue), s.paymentStatus || 'unpaid', ...extra].map(esc).join(',')
+    })
     const blob = new Blob([[head, ...lines].join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'vendor-requests.csv'; a.click(); URL.revokeObjectURL(url)
   }
@@ -150,7 +175,7 @@ export default function VendorRequestEntries() {
                       <div className="font-semibold text-slate-800 truncate">{s.data?.companyName || '—'}</div>
                       <div className="text-sm text-slate-600 truncate">{s.data?.companyContact || '—'}{s.data?.email ? ` · ${s.data.email}` : ''}</div>
                       <div className="text-xs text-slate-400 truncate">{s.data?.level || '—'} · {fmt(s.submittedAt)}</div>
-                      <div className="mt-1.5"><StatusChip s={s} /></div>
+                      <div className="mt-1.5"><StatusChip s={s} inv={invoices[s.id]} /></div>
                     </div>
                     <ChevronRight size={16} className={`text-slate-400 flex-shrink-0 mt-1 transition-transform ${open === s.id ? 'rotate-90' : ''}`} />
                   </button>
@@ -161,6 +186,7 @@ export default function VendorRequestEntries() {
                           <div key={k} className="flex justify-between gap-4 border-b border-slate-100 py-1"><span className="text-slate-400 capitalize flex-shrink-0">{k.replace(/([A-Z])/g, ' $1')}</span><span className="text-slate-700 text-right break-words min-w-0">{String(v || '—')}</span></div>
                         ))}
                       </div>
+                      {canMoney && invoices[s.id] && <VendorInvoicePanel tournamentId={id} sub={s} inv={invoices[s.id]} onUpdate={updateOne} />}
                       <Actions s={s} />
                     </div>
                   )}
@@ -180,7 +206,7 @@ export default function VendorRequestEntries() {
                         <td className="px-4 py-2.5 font-medium text-slate-800">{s.data?.companyName || '—'}</td>
                         <td className="px-4 py-2.5 text-slate-600">{s.data?.companyContact || '—'}<br /><span className="text-xs text-slate-400">{s.data?.email}</span></td>
                         <td className="px-4 py-2.5 text-slate-600">{s.data?.level || '—'}</td>
-                        <td className="px-4 py-2.5"><StatusChip s={s} />{s.status === 'approved' && <div className="text-xs text-slate-400 mt-1 tabular-nums">{money(s.amountDue)}</div>}</td>
+                        <td className="px-4 py-2.5"><StatusChip s={s} inv={invoices[s.id]} />{s.status === 'approved' && <div className="text-xs text-slate-400 mt-1 tabular-nums">{(() => { const inv = invoices[s.id]; return inv && inv.money.paid > 0 && inv.money.balance > 0 ? `${money(inv.money.balance)} of ${money(inv.money.due)} due` : money(s.amountDue) })()}</div>}</td>
                         <td className="px-4 py-2.5 text-slate-500 text-xs">{fmt(s.submittedAt)}</td>
                         <td className="px-4 py-2.5 text-slate-400"><ChevronRight size={15} className={open === s.id ? 'rotate-90 transition-transform' : 'transition-transform'} /></td>
                       </tr>
@@ -191,6 +217,7 @@ export default function VendorRequestEntries() {
                               <div key={k} className="flex justify-between gap-4 border-b border-slate-100 py-1"><span className="text-slate-400 capitalize">{k.replace(/([A-Z])/g, ' $1')}</span><span className="text-slate-700 text-right">{String(v || '—')}</span></div>
                             ))}
                           </div>
+                          {canMoney && invoices[s.id] && <VendorInvoicePanel tournamentId={id} sub={s} inv={invoices[s.id]} onUpdate={updateOne} />}
                           <Actions s={s} />
                         </td></tr>
                       )}

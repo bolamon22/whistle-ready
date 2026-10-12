@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, FileText } from 'lucide-react'
 import { loadVendorApproval, filledInstructions } from '@/lib/vendorApproval'
 import { priceLabel } from '@/lib/vendorForm'
 import { mdToHtml } from '@/app/o/[slug]/_md'
@@ -30,6 +30,11 @@ export default async function VendorApprovalPage({ params, searchParams }: { par
   const typeName = String(d.vendorTypeName || d.level || '')
   const orgName = a.org?.name || 'Sunshine Events Group'
   const amountText = priceLabel(a.amount) || 'To be confirmed'
+  // Anything the office recorded by hand (a deposit by check, say) comes off what's
+  // paid here; checkout charges the rest (api/vendor/[token]/checkout).
+  const partPaid = a.money.byHand > 0 && a.money.balance > 0
+  // The invoice (lib/vendorInvoice), for an accounting office that pays by check.
+  const invoiceLink = a.approved && a.amount > 0 ? `/api/vendor/${a.token}/invoice` : ''
   const blocks = filledInstructions(a.cfg)
   // Stripe bounced them back with ?paid=1, but the WEBHOOK is what actually marks it
   // paid — and an ACH payment is still days from settling at that point. Say "received",
@@ -68,6 +73,9 @@ export default async function VendorApprovalPage({ params, searchParams }: { par
           <div className="bg-white border border-slate-200 rounded-2xl p-5">
             <h2 className="text-sm font-bold text-slate-800 mb-1">Paid in full</h2>
             <p className="text-sm text-slate-500">{amountText} received{a.submission.paidAt ? ` on ${new Date(a.submission.paidAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}. Nothing else to do — see you there.</p>
+            {invoiceLink && (
+              <a href={invoiceLink} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-800"><FileText size={15} /> Download your paid invoice (PDF)</a>
+            )}
           </div>
         )}
 
@@ -85,7 +93,17 @@ export default async function VendorApprovalPage({ params, searchParams }: { par
               <div className="text-3xl font-extrabold text-slate-900 tabular-nums">{amountText}</div>
             </div>
             <p className="text-sm text-slate-500 mb-5">{typeName}{a.tournamentName ? ` · ${a.tournamentName}` : ''}</p>
-            <PayButton token={a.token} amount={amountText} />
+            {partPaid && (
+              <div className="mb-5 -mt-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm flex flex-wrap justify-between gap-2">
+                <span className="text-slate-500">Paid so far <span className="font-semibold text-slate-700 tabular-nums">{priceLabel(a.money.paid)}</span></span>
+                <span className="text-slate-500">Left to pay <span className="font-semibold text-slate-900 tabular-nums">{priceLabel(a.money.balance)}</span></span>
+              </div>
+            )}
+            <PayButton token={a.token} amount={partPaid ? priceLabel(a.money.balance) : amountText} />
+            {invoiceLink && (
+              <a href={invoiceLink} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-800"><FileText size={15} /> Download invoice (PDF)</a>
+            )}
+            {invoiceLink && <p className="text-xs text-slate-400 mt-1">For your records, or for your accounting office if they pay by check.</p>}
           </div>
         )}
 

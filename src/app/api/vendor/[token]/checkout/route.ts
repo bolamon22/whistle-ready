@@ -19,6 +19,10 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
     if (!a.approved) return NextResponse.json({ error: 'This application has not been approved yet' }, { status: 409 })
     if (a.paid) return NextResponse.json({ error: 'This booth is already paid' }, { status: 409 })
     if (!(a.amount > 0)) return NextResponse.json({ error: 'No amount is set on this approval yet' }, { status: 409 })
+    // What's left after any payment the office recorded by hand (a deposit by check,
+    // say). lib/vendorMoney counts this payment as exactly that.
+    const due = a.money.balance
+    if (!(due > 0)) return NextResponse.json({ error: 'This booth is already paid' }, { status: 409 })
 
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`,
@@ -38,8 +42,8 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
     form.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
     form.append('line_items[0][price_data][currency]', 'usd')
     form.append('line_items[0][price_data][product_data][name]', `${typeName}${a.tournamentName ? ` — ${a.tournamentName}` : ''}`)
-    form.append('line_items[0][price_data][product_data][description]', `Vendor booth for ${company}`)
-    form.append('line_items[0][price_data][unit_amount]', String(Math.round(a.amount * 100)))
+    form.append('line_items[0][price_data][product_data][description]', `${a.money.byHand > 0 ? 'Balance of the vendor booth' : 'Vendor booth'} for ${company}`)
+    form.append('line_items[0][price_data][unit_amount]', String(Math.round(due * 100)))
     form.append('line_items[0][quantity]', '1')
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) form.append('customer_email', email)
     // The webhook has only what's in metadata to find this row again.

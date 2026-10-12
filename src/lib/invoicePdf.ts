@@ -34,7 +34,9 @@ export type InvoiceDoc = {
   dueText: string
   org: { name: string; address: string; email: string; phone: string; website: string }
   billTo: { name: string; attn: string; place: string }
-  event: { name: string; dates: string; location: string; registeredOn: string }
+  /** sinceLabel is the word before registeredOn: "Registered" when left out (a club),
+   *  "Approved" on a vendor's invoice (lib/vendorInvoice). */
+  event: { name: string; dates: string; location: string; registeredOn: string; sinceLabel?: string }
   lines: InvoiceLine[]
   /** False when per-team prices don't add up to the invoice (an amount the office
    *  set by hand, say): the teams are listed and one line carries the total. */
@@ -49,6 +51,11 @@ export type InvoiceDoc = {
   payUrl: string
   memo: string
   logo?: { bytes: Uint8Array; kind: 'png' | 'jpg' } | null
+  /** The line items' second column: "DIVISION" when left out, '' for no heading. */
+  detailHeading?: string
+  /** How paying online is described. Left out, it's the club pay page's "Bank transfer
+   *  (no fee) or card (3% fee)"; a vendor's booth page charges no card fee. */
+  onlineText?: string
 }
 
 const W = 612, H = 792, M = 50
@@ -350,17 +357,18 @@ export async function buildInvoicePdf(inv: InvoiceDoc): Promise<Uint8Array> {
   if (inv.billTo.attn) { draw(`Attn: ${inv.billTo.attn}`, M, by, { size: 10, color: MUTED }); by -= 13 }
   if (inv.billTo.place) { draw(inv.billTo.place, M, by, { size: 10, color: MUTED }); by -= 13 }
   for (const line of wrap(inv.event.name, bold, 12, W - M - col2)) { draw(line, col2, ey, { font: bold, size: 12 }); ey -= 15 }
-  for (const line of [inv.event.dates, inv.event.location, inv.event.registeredOn ? `Registered ${inv.event.registeredOn}` : ''].filter(Boolean)) {
+  for (const line of [inv.event.dates, inv.event.location, inv.event.registeredOn ? `${inv.event.sinceLabel || 'Registered'} ${inv.event.registeredOn}` : ''].filter(Boolean)) {
     draw(line, col2, ey, { size: 10, color: MUTED }); ey -= 13
   }
   y = Math.min(by, ey) - 20
 
   // ── Line items ───────────────────────────────────────────────────────────
   const xDiv = M + 250, xAmt = W - M - 8
+  const detailHead = inv.detailHeading ?? 'DIVISION'
   const head = () => {
     page.drawRectangle({ x: M, y: y - 20, width: W - 2 * M, height: 20, color: SHADE })
     draw('DESCRIPTION', M + 8, y - 13.5, { font: bold, size: 8, color: MUTED })
-    draw('DIVISION', xDiv, y - 13.5, { font: bold, size: 8, color: MUTED })
+    if (detailHead) draw(detailHead, xDiv, y - 13.5, { font: bold, size: 8, color: MUTED })
     drawRight('AMOUNT', xAmt, y - 13.5, { font: bold, size: 8, color: MUTED })
     y -= 20
   }
@@ -440,7 +448,7 @@ export async function buildInvoicePdf(inv: InvoiceDoc): Promise<Uint8Array> {
           + `Please write "${inv.memo}" on the memo line.`,
       })
     }
-    if (inv.payUrl) ways.push({ label: 'Online', text: `Bank transfer (no fee) or card (3% fee): ${inv.payUrl}`, url: inv.payUrl })
+    if (inv.payUrl) ways.push({ label: 'Online', text: `${inv.onlineText || 'Bank transfer (no fee) or card (3% fee)'}: ${inv.payUrl}`, url: inv.payUrl })
     if (inv.payTo.zelleHandle) ways.push({ label: 'Zelle', text: `Send to ${inv.payTo.zelleHandle} with "${inv.billTo.name}" in the memo.` })
     const blocks = ways.map(w => ({ ...w, lines: wrap(w.text, regular, 9.5, W - 2 * M - 100) }))
     const h = 34 + blocks.reduce((s, b) => s + b.lines.length * 12.5 + 7, 0)

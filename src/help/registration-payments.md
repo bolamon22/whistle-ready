@@ -31,7 +31,7 @@ Choosing **Credit Card**, **PayPal** or **ACH Bank Transfer (QBO)** charges the 
 
 **To remove a payment entered by mistake:** click **Delete** next to it and confirm.
 
-**To send the invoice to QuickBooks:** click **QB Sync**. Once done the row shows **QB synced**.
+**To send the invoice to QuickBooks:** click **Send to QB** on the club. Once it's there it shows **QB #** and the invoice number. Vendor booth invoices go to QuickBooks the same way (see **Vendor requests**).
 
 **Common problems:**
 - **Refund** only appears on online card or bank payments. Refunds go back through Stripe; bank refunds take about 5-10 days.

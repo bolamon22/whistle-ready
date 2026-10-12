@@ -22,6 +22,12 @@ export function eventLabel(t: { name: string; startDate?: string | null }): stri
 /** The QuickBooks item an event's team fees go under. */
 export const eventItemName = eventLabel
 
+/** The QuickBooks item an event's vendor booth fees go under (lib/qboSync's vendorItem):
+ *  "Vendor Booth - Monster Mash Lax Clash 2026", so they sort together in the item list. */
+export function vendorItemName(t: { name: string; startDate?: string | null }): string {
+  return cleanName(`Vendor Booth - ${eventLabel(t)}`, 100)
+}
+
 /** YYYY-MM-DD plus days, on the calendar (no time zones). */
 export function addDays(ymd: string, days: number): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || '')
@@ -58,12 +64,19 @@ export function invoiceLines(doc: InvoiceDoc, label: string): QboLine[] {
   }]
 }
 
-/** The "message on invoice": how to pay, matching the PDF. */
+/** A vendor's invoice lines: what the PDF lists (lib/vendorInvoice), under the event's name. */
+export function vendorInvoiceLines(doc: InvoiceDoc, label: string): QboLine[] {
+  return doc.lines.map(l => ({ description: `${label} - ${l.description}`, amount: round2(l.amount || 0) }))
+}
+
+/** The "message on invoice": how to pay, matching the PDF. A vendor's booth page
+ *  says it its own way (doc.onlineText); a club's reads as it always has, so no
+ *  club invoice's fingerprint changes. */
 export function invoiceMemo(doc: InvoiceDoc, docNumber: string): string {
   const parts = [
     doc.event.dates ? `${doc.event.name}, ${doc.event.dates}${doc.event.location ? `, ${doc.event.location}` : ''}.` : `${doc.event.name}.`,
     'Payment is due before the event.',
-    doc.payUrl ? `Pay online (bank transfer, no fee, or card): ${doc.payUrl}` : '',
+    doc.payUrl ? `Pay online (${doc.onlineText ? doc.onlineText.toLowerCase() : 'bank transfer, no fee, or card'}): ${doc.payUrl}` : '',
     doc.payTo.checkAddress ? `Or mail a check payable to ${doc.payTo.checkPayableTo} to ${doc.payTo.checkAddress}, with invoice ${docNumber} on the memo line.` : '',
   ]
   return parts.filter(Boolean).join(' ').slice(0, 1000)
