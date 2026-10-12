@@ -22,8 +22,10 @@ function workerRoles(w: WorkerRow): string[] {
   catch { return [w.defaultRole] }
 }
 
+// Anyone with Scorekeeper among their roles, whatever their main job (the board's rule,
+// tournaments/[id]/page.tsx). Refs only, before Oct 12 2026.
 function canScorekeeper(w: WorkerRow): boolean {
-  return w.defaultRole === 'scorekeeper' || (w.defaultRole === 'ref' && workerRoles(w).includes('scorekeeper'))
+  return w.defaultRole === 'scorekeeper' || workerRoles(w).includes('scorekeeper')
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -95,7 +97,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // Refs: only workers whose primary role is ref
   const refs = allWorkers.filter(w => w.defaultRole === 'ref')
-  // Scorekeepers: dedicated SKs + refs who have SK checked in their roles
+  // Scorekeepers: dedicated SKs + anyone else with SK checked in their roles
   const scorekeepers = allWorkers.filter(w => canScorekeeper(w))
 
   // Unavailability map — roster = available by default.
@@ -164,12 +166,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const times  = Array.from(new Set(games.map(g => g.startTime))).sort()
     const firstTime = times[0] ?? '08:00'
 
-    // Prefer dedicated scorekeepers first, then ref-SKs
+    // Prefer dedicated scorekeepers first, then everyone else who can keep score
     const dedicatedSKs = scorekeepers
       .filter(w => w.defaultRole === 'scorekeeper')
       .filter(w => isAvailable(w.id, firstTime))
-    const refSKs = scorekeepers
-      .filter(w => w.defaultRole === 'ref')
+    // Refs, field ops and trainers with Scorekeeper in their roles.
+    const otherSKs = scorekeepers
+      .filter(w => w.defaultRole !== 'scorekeeper')
       .filter(w => isAvailable(w.id, firstTime))
     // Scorekeepers the assigner put on a field by hand (Bo, Oct 12 2026: "choose which
     // field I want to put the scorekeeper on for the day") go there first; the rest of
@@ -184,7 +187,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         for (const time of times) if (isAvailable(sk.id, time)) markBusy(sk.id, time)
       }
     }
-    const orderedSKs = [...dedicatedSKs, ...refSKs].filter(w => !chosen.has(w.id))
+    const orderedSKs = [...dedicatedSKs, ...otherSKs].filter(w => !chosen.has(w.id))
 
     let skIdx = 0
     for (const field of fields.filter(f => !fieldScorekeeper.has(f))) {

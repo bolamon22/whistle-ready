@@ -25,8 +25,13 @@ const aaTime=(t:string)=>{const[h,m]=t.split(':').map(Number);return`${h%12||12}
 
 const FIELD_LABELS=[{key:'gameNumber',label:'Game Number',required:true},{key:'date',label:'Game Date',required:true},{key:'startTime',label:'Start Time',required:true},{key:'division',label:'Division',required:true},{key:'location',label:'Location / Field',required:true},{key:'team1',label:'Team 1',required:true},{key:'team2',label:'Team 2',required:true},{key:'pool',label:'Pool',required:false}]
 
+// A worker's main job, short, for "(Field ops→SK)" on a scorekeeper pick.
+const mainJob=(r:string)=>r==='ref'?'Ref':r==='field_ops'?'Field ops':r==='athletic_trainer'?'Trainer':r==='scorekeeper'?'SK':'Staff'
 function staffKind(w:Worker):{label:string;dot:string}{
   if(w.defaultRole==='scorekeeper')return{label:'Scorekeeper',dot:'bg-emerald-500'}
+  // Field ops and trainers are on the board when they also keep score. They are not refs,
+  // so they don't get a ref color.
+  if(w.defaultRole==='field_ops'||w.defaultRole==='athletic_trainer')return{label:mainJob(w.defaultRole),dot:'bg-slate-400'}
   if(w.gender==='boys')return{label:'Boys ref',dot:'bg-blue-500'}
   if(w.gender==='girls')return{label:'Girls ref',dot:'bg-pink-500'}
   return{label:'Boys & girls ref',dot:'bg-violet-500'}
@@ -442,7 +447,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
     return{parts,open,total:parts.length,dbl,full:open===0&&!dbl}
   }
   function workerRoles(w:Worker):string[]{try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.length?r:[w.defaultRole]}catch{return[w.defaultRole]}}
-  function canScorekeeper(w:Worker):boolean{return w.defaultRole==='scorekeeper'||(w.defaultRole==='ref'&&workerRoles(w).includes('scorekeeper'))}
+  // Anyone with Scorekeeper among their roles, whatever their main job. It used to take
+  // only scorekeepers and refs, so a field ops worker who also keeps score (Bo, Oct 12
+  // 2026) never appeared on an SK slot.
+  function canScorekeeper(w:Worker):boolean{return w.defaultRole==='scorekeeper'||workerRoles(w).includes('scorekeeper')}
 
   if(loading)return<div className="text-slate-400 text-center py-16">Loading…</div>
   if(!tournament)return<div className="text-red-500">Not found</div>
@@ -585,7 +593,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                             <span className="w-24 truncate text-slate-600 font-medium" title={f}>{short(f)}</span>
                             <select className="flex-1 min-w-0 border border-slate-200 rounded-lg px-1.5 py-1 text-xs bg-white" value={aaSkFields[f]??''} onChange={e=>setAaSkField(f,e.target.value)}>
                               <option value="">Auto</option>
-                              {sks.map(w=>{const on=fieldOf.get(w.id);return<option key={w.id} value={w.id} disabled={!!on&&on!==f}>{w.name}{w.defaultRole!=='scorekeeper'?' (ref)':''}{on&&on!==f?` — on ${short(on)}`:''}</option>})}
+                              {sks.map(w=>{const on=fieldOf.get(w.id);return<option key={w.id} value={w.id} disabled={!!on&&on!==f}>{w.name}{w.defaultRole!=='scorekeeper'?` (${mainJob(w.defaultRole).toLowerCase()})`:''}{on&&on!==f?` — on ${short(on)}`:''}</option>})}
                             </select>
                           </label>
                         ))}
@@ -1422,6 +1430,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-pink-500 inline-block"/> Girls ref</span>
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-violet-500 inline-block"/> Boys &amp; girls</span>
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/> Scorekeeper</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block"/> Field ops or trainer</span>
           <span className="text-slate-300">|</span>
           <span>Number after a name = games that day · drag a name onto a slot, or click the slot to pick · ⠿ drag a game · click a field header to collapse it</span>
         </div>
@@ -1535,13 +1544,14 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
     return slots.length===0||slots.includes(time)
   }).map(a=>a.workerId))
 
-  // For scorekeeper slot: dedicated scorekeepers + refs who have Scorekeeper checked in their roles
+  // For scorekeeper slot: dedicated scorekeepers, then anyone else with Scorekeeper checked
+  // in their roles (refs, field ops, trainers). It used to be refs only.
   // For ref slots: show only refs with gender match
   function hasSkRole(w:Worker){try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.includes('scorekeeper')}catch{return false}}
   const eligible=slotType==='scorekeeper'
     ?[
         ...workers.filter(w=>w.defaultRole==='scorekeeper'),
-        ...workers.filter(w=>w.defaultRole==='ref'&&hasSkRole(w)),
+        ...workers.filter(w=>w.defaultRole!=='scorekeeper'&&hasSkRole(w)),
       ]
     :workers.filter(w=>{
         if(w.defaultRole!=='ref')return false
@@ -1554,10 +1564,10 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
     const count=getGameCount(w.id)
     const avail=availableIds.has(w.id)
     const isDoubled=doubled.has(w.id)
-    const isRefAsSK=slotType==='scorekeeper'&&w.defaultRole==='ref'
+    const crossSK=slotType==='scorekeeper'&&w.defaultRole!=='scorekeeper'
     return{
       id:w.id,
-      label:`${w.name}${isRefAsSK?' (Ref→SK)':''} ${count}`,
+      label:`${w.name}${crossSK?` (${mainJob(w.defaultRole)}→SK)`:''} ${count}`,
       dot:staffKind(w).dot,
       sublabel:`${certLabel(w.certLevel)}${!avail?' · ⚠ unavailable':''}${isDoubled?' · ⚠ double-booked':''}`,
       warning:!avail||isDoubled,
