@@ -70,7 +70,7 @@ export function letterAiPrompt(i: LetterAiInput): { system: string; user: string
 
 The same letter goes to every club, so it is a template. Wherever something differs from club to club, use a fill-in field, written exactly as shown, braces included:
 ${fieldLines}
-Never use any other {field}, and never put braces around anything else.
+Never use any other {field}, and never put braces around anything else. If the request asks for something that differs from club to club and none of these fields provide it, say it in general words instead (for example "anything still open on your registration") or leave it out.
 
 ${belowTheLetter(i.kind, i.button)} Never write a URL or a link of your own.
 
@@ -109,6 +109,15 @@ export const LETTER_TOOL = {
     },
     required: ['name', 'subject', 'body'],
   },
+}
+
+/** The correction sent back when a draft uses {fields} the merge can't fill. The
+ *  model invents one when the request asks for something no field covers (Bo's
+ *  coach letter, Oct 12 2026, came back with {coachesRegistered}), and one more
+ *  turn with this note is usually enough for it to write around the gap. */
+export function fixFieldsNote(unknown: string[]): string {
+  const one = unknown.length === 1
+  return `${unknown.map(f => `{${f}}`).join(', ')} ${one ? 'is not a fill-in field' : 'are not fill-in fields'}, so ${one ? 'it' : 'they'} would reach every club exactly as typed. Call the "letter" tool again with the same letter, using only the fill-in fields in your instructions. Where it needed something none of them provide, say it in general words instead or leave it out. Change nothing else.`
 }
 
 /** Undo the Markdown a model sometimes adds anyway and hold the caps the send

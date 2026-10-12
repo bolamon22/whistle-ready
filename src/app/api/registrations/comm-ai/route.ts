@@ -6,7 +6,7 @@ import { orgForTournament } from '@/lib/org'
 import { COMM_KINDS } from '@/lib/commLetters'
 import { fmtRangeShort, shortLocation } from '@/lib/eventHero'
 import { asLetterButton, LETTER_TONES, unknownFields, type LetterTone } from '@/lib/customLetters'
-import { letterAiPrompt, LETTER_TOOL, tidyLetter, droppedFields } from '@/lib/letterAi'
+import { letterAiPrompt, LETTER_TOOL, tidyLetter, droppedFields, fixFieldsNote } from '@/lib/letterAi'
 
 export const runtime = 'nodejs'
 
@@ -56,22 +56,48 @@ export async function POST(req: Request) {
 
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const res = await client.messages.create({
+    const ask = (messages: Anthropic.MessageParam[]) => client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1500,
       system,
       tools: [LETTER_TOOL],
       tool_choice: { type: 'tool', name: LETTER_TOOL.name },
-      messages: [{ role: 'user', content: user }],
+      messages,
     })
-    const use = res.content.find(block => block.type === 'tool_use') as { input?: unknown } | undefined
-    const out = tidyLetter((use?.input || {}) as Record<string, unknown>)
-    if (!out.subject || !out.body) return NextResponse.json({ error: 'The AI came back without a letter. Try again.' }, { status: 502 })
+    type ToolUse = { id?: string; input?: unknown }
+    const toolUse = (r: Anthropic.Message) => r.content.find(block => block.type === 'tool_use') as ToolUse | undefined
     const pay = kind === 'payment' || button === 'pay'
+    const unknownIn = (l: { subject: string; body: string }) => unknownFields(`${l.subject}\n${l.body}`, pay)
+
+    const first: Anthropic.MessageParam[] = [{ role: 'user', content: user }]
+    const use = toolUse(await ask(first))
+    let out = tidyLetter((use?.input || {}) as Record<string, unknown>)
+    if (!out.subject || !out.body) return NextResponse.json({ error: 'The AI came back without a letter. Try again.' }, { status: 502 })
+    let unknown = unknownIn(out)
+    // A field the merge can't fill would reach every club as typed, so the model
+    // gets one turn to fix its own letter before anyone sees it. The better of the
+    // two drafts is kept; if the retry fails, the first one still comes back with
+    // its fields flagged.
+    if (unknown.length && use?.id) {
+      try {
+        const fix = toolUse(await ask([
+          ...first,
+          { role: 'assistant', content: [{ type: 'tool_use', id: use.id, name: LETTER_TOOL.name, input: use.input ?? {} }] },
+          { role: 'user', content: [{ type: 'tool_result', tool_use_id: use.id, is_error: true, content: fixFieldsNote(unknown) }] },
+        ]))
+        const again = tidyLetter((fix?.input || {}) as Record<string, unknown>)
+        if (again.subject && again.body && unknownIn(again).length < unknown.length) {
+          out = again
+          unknown = unknownIn(again)
+        }
+      } catch (e) {
+        console.error('[comm-ai] field fix', (e as Error)?.message || e)
+      }
+    }
     return NextResponse.json({
       ...out,
       // Shown under the letter, and the dialog won't send while any are there.
-      unknown: unknownFields(`${out.subject}\n${out.body}`, pay),
+      unknown,
       dropped: mode === 'rewrite' ? droppedFields(`${subject}\n${body}`, `${out.subject}\n${out.body}`) : [],
     })
   } catch (e) {
