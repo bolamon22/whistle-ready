@@ -13,9 +13,9 @@ interface Penalty {
   id: string; team: 1 | 2; playerNum: string
   remaining: number; total: number; active: boolean; paused: boolean
 }
-interface TournamentDefaults { periodSecs: number; penaltySecs: number; rulesUrl: string; askScorer: boolean; penaltyAlert: boolean }
+interface TournamentDefaults { periodSecs: number; penaltySecs: number; rulesUrl: string; askScorer: boolean; penaltyAlert: boolean; keepAwake: boolean }
 
-const DEFAULTS_FALLBACK: TournamentDefaults = { periodSecs: 20 * 60, penaltySecs: 120, rulesUrl: 'https://sunshineeventsgroup.com/rules/', askScorer: false, penaltyAlert: true }
+const DEFAULTS_FALLBACK: TournamentDefaults = { periodSecs: 20 * 60, penaltySecs: 120, rulesUrl: 'https://sunshineeventsgroup.com/rules/', askScorer: false, penaltyAlert: true, keepAwake: true }
 const PRESETS = [30, 60, 120, 180, 300] // :30, 1, 2, 3, 5 min
 
 function fmt(secs: number) {
@@ -229,7 +229,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   // Safari). The browser drops the lock whenever the page is hidden, so ask again
   // when it comes back.
   useEffect(() => {
-    if (!clockRunning) return
+    if (!clockRunning || !defaults.keepAwake) return
     type Lock = { release: () => Promise<void> }
     let lock: Lock | null = null
     let cancelled = false
@@ -245,7 +245,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     const onVis = () => { if (document.visibilityState === 'visible') void request() }
     document.addEventListener('visibilitychange', onVis)
     return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); if (lock) void lock.release().catch(() => {}) }
-  }, [clockRunning])
+  }, [clockRunning, defaults.keepAwake])
 
   // Remember the clock, period and penalties on this phone so a refresh, Exit
   // or a dead battery doesn't lose them.
@@ -342,6 +342,10 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     } catch { toast.error('Failed to save') } finally { setSavingCfg(false) }
   }
 
+  function setKeepAwake(val: boolean) {
+    if (!game) return
+    setDefaults(saveDefaults(game.tournamentId ?? tid, { keepAwake: val }))
+  }
   function setPenaltyAlert(val: boolean) {
     if (!game) return
     setDefaults(saveDefaults(game.tournamentId ?? tid, { penaltyAlert: val }))
@@ -628,7 +632,12 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
               </label>
               <button onClick={() => penaltyOverAlert()} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200">Test</button>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1 px-1">Saved on this phone. iPhones can&apos;t vibrate from a web page; they beep and show a banner. The screen stays on while the clock runs; if the phone locks anyway, the clock keeps time and catches up when it&apos;s unlocked.</p>
+            <p className="text-[11px] text-gray-500 mt-1 px-1">Saved on this phone. iPhones can&apos;t vibrate from a web page; they beep and show a banner.</p>
+            <label className="flex items-center justify-between gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 cursor-pointer mt-3">
+              <span className="text-sm text-gray-200">Keep screen on while the clock runs</span>
+              <input type="checkbox" checked={defaults.keepAwake} onChange={e => setKeepAwake(e.target.checked)} className="accent-emerald-600 w-5 h-5" />
+            </label>
+            <p className="text-[11px] text-gray-500 mt-1 px-1">Saved on this phone. Turn off to save battery. If the phone locks, the clock still keeps time and catches up when it&apos;s unlocked, but penalty alerts wait until then.</p>
             <label className="flex items-center justify-between gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 cursor-pointer mt-3">
               <span className="text-sm text-gray-200">No ties — warn at final if the score is tied</span>
               <input type="checkbox" checked={noTies} onChange={e => { setNoTies(e.target.checked); saveConfig({ noTies: e.target.checked }) }} className="accent-emerald-600 w-5 h-5" />
