@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
+import { FIELD_REQUEST_TEMPLATES, FIELD_REQUEST_URGENCIES } from '@/lib/fieldRequests'
 import { Radio, Send, Trash2, ChevronLeft, Users, TrafficCone, HeartPulse, Flag, ClipboardList, ListChecks, Check } from 'lucide-react'
 
 const GROUPS: { key: string; label: string; Icon: any }[] = [
@@ -17,16 +18,8 @@ const GROUPS: { key: string; label: string; Icon: any }[] = [
 ]
 const groupLabel = (k: string) => GROUPS.find(g => g.key === k)?.label || 'All staff'
 
-const TEMPLATES: { label: string; make: (f: string) => string; group: string }[] = [
-  { label: 'Trainer needed', make: f => `Trainer needed on Field ${f || '?'}`, group: 'medical' },
-  { label: 'Balls — yellow', make: f => `Yellow balls needed on Field ${f || '?'}`, group: 'fieldops' },
-  { label: 'Balls — white',  make: f => `White balls needed on Field ${f || '?'}`, group: 'fieldops' },
-  { label: 'Water needed',   make: f => `Water needed on Field ${f || '?'}`, group: 'fieldops' },
-  { label: 'Ref needed',     make: f => `Referee needed on Field ${f || '?'}`, group: 'refs' },
-  { label: 'No team at field', make: f => `No team at Field ${f || '?'}`, group: 'all' },
-]
-
-const URGENCIES = ['Low', 'Medium', 'High']
+const TEMPLATES = FIELD_REQUEST_TEMPLATES
+const URGENCIES = FIELD_REQUEST_URGENCIES
 // Solid colors so the urgency badge stays legible in both light and dark mode.
 const urgClass = (u: string) => u === 'High' ? 'bg-red-500 text-white' : u === 'Medium' ? 'bg-amber-500 text-slate-900' : 'bg-slate-500 text-white'
 

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { primeAlerts, penaltyOverAlert } from '@/lib/gameAlert'
+import { FIELD_REQUEST_TEMPLATES, FIELD_REQUEST_GROUPS, FIELD_REQUEST_URGENCIES, fieldNumberFrom } from '@/lib/fieldRequests'
 
 interface Game {
   id: string; tournamentId?: string; gameNumber: string; division: string; location: string
@@ -82,6 +83,16 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   const restoredRef = useRef(false)      // don't persist until this game's saved state has been restored
 
   const [penalties, setPenalties] = useState<Penalty[]>([])
+  // Field request sheet (balls, trainer, water…) without leaving the scorer.
+  // Requests sent from this game are remembered so the scorer sees who's coming.
+  const [showReq, setShowReq] = useState(false)
+  const [reqField, setReqField] = useState('')
+  const [reqText, setReqText] = useState('')
+  const [reqDetail, setReqDetail] = useState('')
+  const [reqGroup, setReqGroup] = useState('all')
+  const [reqUrg, setReqUrg] = useState('Medium')
+  const [reqSending, setReqSending] = useState(false)
+  const [myReqs, setMyReqs] = useState<{ id: string; text: string; at: string; acks: string[] }[]>([])
   const [penOver, setPenOver] = useState<string[]>([])   // "penalty over" banners until dismissed
   const prevActivePens = useRef<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
@@ -154,6 +165,11 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
         setScorers1(saved.scorers1); setScorers2(saved.scorers2)
         if (saved.running && left > 0) { setClockRunning(true); toast('⏱ Clock kept running — picked up where you left off') }
       }
+      setReqField(fieldNumberFrom(g.location))
+      try {
+        const r = JSON.parse(localStorage.getItem('lw:req:' + params.gameId) || '[]')
+        if (Array.isArray(r)) setMyReqs(r.filter((x: { at?: string }) => x && x.at && Date.now() - Date.parse(x.at) < 3 * 3600_000))
+      } catch { /* none */ }
       restoredRef.current = true
       setLoading(false)
     })
@@ -329,6 +345,60 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     else router.push(`/tournaments/${tid}/scoring`)
   }
 
+  // Watch this game's requests for "on my way" responses (every 15s while any
+  // are open) and say who's coming.
+  useEffect(() => {
+    try { localStorage.setItem('lw:req:' + params.gameId, JSON.stringify(myReqs)) } catch { /* ignore */ }
+    if (!myReqs.length) return
+    const poll = () => {
+      fetch(`/api/tournaments/${tid}/ops-messages`).then(r => r.ok ? r.json() : null).then(d => {
+        if (!d || !Array.isArray(d.messages)) return
+        const byId = new Map<string, { acks?: { by: string }[] }>(d.messages.map((m: { id: string }) => [m.id, m]))
+        setMyReqs(list => {
+          let changed = false
+          const next = list.filter(r => byId.has(r.id)).map(r => {
+            const acks = (byId.get(r.id)?.acks || []).map(a => a.by)
+            const fresh = acks.filter(a => !r.acks.includes(a))
+            if (fresh.length) { changed = true; fresh.forEach(by => toast.success(`${by} is on the way · ${r.text}`, { duration: 6000 })) }
+            if (acks.length !== r.acks.length) changed = true
+            return { ...r, acks }
+          })
+          return changed || next.length !== list.length ? next : list
+        })
+      }).catch(() => {})
+    }
+    poll()
+    const t = setInterval(poll, 15000)
+    return () => clearInterval(t)
+  }, [myReqs.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openRequest() {
+    setReqText(''); setReqDetail(''); setReqGroup('all'); setReqUrg('Medium')
+    if (game && !reqField) setReqField(fieldNumberFrom(game.location))
+    setShowReq(true)
+  }
+  function pickRequest(t: { make: (f: string) => string; group: string }) {
+    setReqText(t.make(reqField)); setReqGroup(t.group)
+  }
+  async function sendRequest() {
+    const base = reqText.trim()
+    if (!base) return
+    const medical = reqGroup === 'medical'
+    const text = reqDetail.trim() ? `${base} — ${reqDetail.trim()}` : base
+    setReqSending(true)
+    try {
+      const res = await fetch(`/api/tournaments/${tid}/ops-messages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, group: reqGroup, urgency: medical ? reqUrg : undefined }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'Request did not send — try again'); return }
+      if (d.message?.id) setMyReqs(l => [{ id: d.message.id, text: base, at: new Date().toISOString(), acks: [] }, ...l].slice(0, 8))
+      toast.success('Request sent')
+      setShowReq(false)
+    } catch { toast.error('Request did not send — check your signal') } finally { setReqSending(false) }
+  }
+
   function openSettings() { setShowSettings(true) }
   function openRules() { setShowRules(true) }
   async function saveConfig(patch: { rules?: string; noTies?: boolean; officialTimeOnField?: boolean; periodFormat?: string }) {
@@ -492,6 +562,11 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
           </div>
           {game.isChampionship && <span className="text-xs bg-amber-900/50 text-amber-400 px-2 py-1 rounded-full">🏆 Championship</span>}
           <div className="flex items-center gap-2">
+            <button onClick={openRequest} aria-label="Field request"
+              className="relative h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-gray-950 text-sm font-bold">
+              📣 Request
+              {myReqs.some(r => r.acks.length === 0) && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-gray-900" aria-label="Waiting for a response" />}
+            </button>
             <button onClick={openSettings} aria-label="Settings"
               className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-base">⚙</button>
             <button onClick={() => saveScore()} disabled={saving}
@@ -610,6 +685,73 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
               </div>
             ) : !rulesText.trim() && (
               <div className="p-6 text-center text-sm text-gray-400">This tournament has no rules on its event page yet.<br />Add them in the event page&apos;s Rules section and they show up here.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Field request sheet */}
+      {showReq && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center p-3" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setShowReq(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4 w-full max-w-sm max-h-[calc(100dvh-1.5rem)] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-white text-lg">📣 Field request</h3>
+              <label className="flex items-center gap-2 text-xs text-gray-400">Field
+                <input value={reqField} onChange={e => setReqField(e.target.value)} inputMode="numeric"
+                  className="w-14 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {FIELD_REQUEST_TEMPLATES.map(t => {
+                const on = reqText === t.make(reqField)
+                const med = t.group === 'medical'
+                return (
+                  <button key={t.label} type="button" onClick={() => pickRequest(t)}
+                    className={`min-h-[52px] px-3 rounded-xl text-sm font-bold text-left border transition-colors ${on ? (med ? 'bg-rose-600 border-rose-500 text-white' : 'bg-amber-500 border-amber-400 text-gray-950') : (med ? 'bg-rose-950/50 border-rose-900/60 text-rose-200 hover:bg-rose-900/50' : 'bg-gray-800 border-gray-700 text-gray-100 hover:bg-gray-700')}`}>
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+            <input value={reqText} onChange={e => setReqText(e.target.value)} placeholder="…or type your own request"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            {reqGroup === 'medical' && (
+              <div className="bg-rose-950/40 border border-rose-900/50 rounded-xl p-3 mb-3">
+                <p className="text-[11px] font-semibold text-rose-300 mb-2">Medical — for emergencies, call 911 first.</p>
+                <div className="flex gap-1.5 mb-2">
+                  {FIELD_REQUEST_URGENCIES.map(u => (
+                    <button key={u} type="button" onClick={() => setReqUrg(u)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold ${reqUrg === u ? (u === 'High' ? 'bg-red-500 text-white' : u === 'Medium' ? 'bg-amber-500 text-gray-950' : 'bg-gray-500 text-white') : 'bg-gray-800 text-gray-300'}`}>{u}</button>
+                  ))}
+                </div>
+                <input value={reqDetail} onChange={e => setReqDetail(e.target.value)} placeholder="What happened? e.g. #12 ankle, can't walk"
+                  className="w-full bg-gray-900 border border-rose-900/60 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+              </div>
+            )}
+            <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Send to</label>
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {FIELD_REQUEST_GROUPS.map(g => (
+                <button key={g.key} type="button" onClick={() => setReqGroup(g.key)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${reqGroup === g.key ? 'bg-teal-600 border-teal-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}`}>{g.label}</button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowReq(false)} className="px-4 py-3 rounded-xl bg-gray-800 text-gray-300 font-semibold">Cancel</button>
+              <button type="button" onClick={sendRequest} disabled={!reqText.trim() || reqSending}
+                className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold disabled:opacity-40">{reqSending ? 'Sending…' : 'Send request'}</button>
+            </div>
+            {myReqs.length > 0 && (
+              <div className="mt-4 border-t border-gray-800 pt-3">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Sent from this game</p>
+                <div className="space-y-1.5">
+                  {myReqs.map(r => (
+                    <div key={r.id} className="flex items-start justify-between gap-2 text-sm">
+                      <span className="text-gray-200 min-w-0">{r.text}<span className="text-gray-500"> · {new Date(r.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></span>
+                      <span className={`shrink-0 text-[11px] font-bold ${r.acks.length ? 'text-emerald-400' : 'text-amber-400'}`}>{r.acks.length ? `✓ ${r.acks.join(', ')} coming` : 'Waiting…'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
