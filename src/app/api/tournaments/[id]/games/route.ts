@@ -45,6 +45,8 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
 export async function POST(req: Request, { params }: { params:{id:string} }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  // Assigners staff games; adding or importing them is the scheduler's job (Bo, Oct 13 2026).
+  if (gate.role === 'assigner') return NextResponse.json({ error: 'Assigners can’t add or import games.' }, { status: 403 })
   const b = await req.json()
   const game = await prisma.game.create({ data:{
     tournamentId: params.id,

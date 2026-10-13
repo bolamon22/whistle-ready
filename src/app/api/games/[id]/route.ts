@@ -19,6 +19,12 @@ import { notifyFinal } from '@/lib/finalAlerts'
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const b = await req.json()
+  // Assigners staff games; they don't schedule them (Bo, Oct 13 2026: "they should not be able to
+  // move games, the schedule would do that"). The Scheduler page was already closed to them.
+  // The one game field they keep is how many refs it needs.
+  if (gate.role === 'assigner' && Object.keys(b || {}).some(k => k !== 'refCount')) {
+    return NextResponse.json({ error: 'Assigners can change refs per game only. Ask the scheduler to move or edit games.' }, { status: 403 })
+  }
   const touchesScore = b.score1 !== undefined || b.score2 !== undefined
   const before = touchesScore
     ? await prisma.game.findUnique({ where: { id: params.id }, select: { score1: true, score2: true } })
@@ -58,6 +64,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
 
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  if (gate.role === 'assigner') return NextResponse.json({ error: 'Assigners can’t delete games.' }, { status: 403 })
   await prisma.game.delete({ where:{id:params.id} })
   return NextResponse.json({ ok:true })
 }
