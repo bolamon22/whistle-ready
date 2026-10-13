@@ -60,7 +60,8 @@ export default function PublicGamePage(){
     if(!game) return null
     if(game.isCanceled) return {label:'Canceled',cls:'bg-slate-200 text-slate-500'}
     if(game.score1!=null&&game.score2!=null) return {label:'Final',cls:'bg-emerald-100 text-emerald-700'}
-    if(liveScore?.live) return {label:`Live${liveScore.periodLabel?` · ${liveScore.periodLabel}`:''}`,cls:'bg-red-100 text-red-700 animate-pulse'}
+    // LIVE only on game day: a scorekeeper test before the event must not show (see LiveTicker).
+    if(liveScore?.live&&game.date===new Date().toLocaleDateString('en-CA')) return {label:`Live${liveScore.periodLabel?` · ${liveScore.periodLabel}`:''}`,cls:'bg-red-100 text-red-700 animate-pulse'}
     const st=parseStartMs(game.date,game.startTime)
     if(st!=null&&Date.now()>=st&&Date.now()<=st+90*60000) return {label:'In progress',cls:'bg-red-50 text-red-600'}
     return {label:'Upcoming',cls:'bg-slate-100 text-slate-500'}
@@ -78,8 +79,9 @@ export default function PublicGamePage(){
   )
 
   const hs=game.score1!=null&&game.score2!=null
-  const s1=hs?game.score1:(liveScore?.live?liveScore.score1:null)
-  const s2=hs?game.score2:(liveScore?.live?liveScore.score2:null)
+  const liveToday=!!liveScore?.live&&game.date===new Date().toLocaleDateString('en-CA')
+  const s1=hs?game.score1:(liveToday?liveScore!.score1:null)
+  const s2=hs?game.score2:(liveToday?liveScore!.score2:null)
   const t1w=hs&&game.score1!>game.score2!, t2w=hs&&game.score2!>game.score1!
   const field=(game.location||'').split(' - ').pop()||game.location
 

@@ -4,30 +4,38 @@
 // most recent finals. Each card links to that game's public page. Hidden
 // entirely when there's nothing to show, so it costs nothing off-season.
 // Polls the live-scores endpoint (~30s) — same store the scorekeeper writes.
+//
+// Public: a game shows LIVE only on its scheduled date (Bo, Oct 12 2026: a
+// scorekeeper test on P1 twelve days before the event put "LIVE · HALF 1" on the
+// public page). Staff (`staff`, the Post scores page) see every live entry, with
+// the card opening the scorekeeper and a Stop live button, so a stray one can be
+// found and switched off.
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
 interface LiveScore { score1:number; score2:number; period:number; periodLabel:string; live:boolean; updatedAt:string }
 
-export default function LiveTicker({ tournamentId, games, logos }:{ tournamentId:string; games:Game[]; logos:Record<string,string> }){
-  const [liveScores,setLiveScores]=useState<Record<string,LiveScore>>({})
+export default function LiveTicker({ tournamentId, games, logos, staff=false, scores, onStop }:{ tournamentId:string; games:Game[]; logos:Record<string,string>; staff?:boolean; scores?:Record<string,LiveScore>; onStop?:(gameId:string)=>void }){
+  const [polled,setLiveScores]=useState<Record<string,LiveScore>>({})
+  const liveScores=scores??polled
 
-  useEffect(()=>{ if(!tournamentId) return
+  useEffect(()=>{ if(!tournamentId||scores) return
     const pull=()=>fetch(`/api/tournaments/${tournamentId}/live-scores`).then(r=>r.json()).then(d=>setLiveScores(d?.scores||{})).catch(()=>{})
     pull()
     const t=setInterval(pull,30000)
     return ()=>clearInterval(t)
-  },[tournamentId])
+  },[tournamentId,!!scores])
 
   const items=useMemo(()=>{
-    const live=games.filter(g=>!g.isCanceled&&g.score1==null&&liveScores[g.id]?.live)
+    const today=new Date().toLocaleDateString('en-CA')
+    const live=games.filter(g=>!g.isCanceled&&g.score1==null&&liveScores[g.id]?.live&&(staff||g.date===today))
       .sort((a,b)=>`${a.date}${a.startTime}`<`${b.date}${b.startTime}`?-1:1)
     const finals=games.filter(g=>!g.isCanceled&&g.score1!=null&&g.score2!=null)
       .sort((a,b)=>`${a.date}${a.startTime}`>`${b.date}${b.startTime}`?-1:1)
       .slice(0,Math.max(0,12-live.length))
     return [...live.map(g=>({g,ls:liveScores[g.id],live:true})),...finals.map(g=>({g,ls:undefined as LiveScore|undefined,live:false}))]
-  },[games,liveScores])
+  },[games,liveScores,staff])
 
   if(items.length===0) return null
 
@@ -46,8 +54,10 @@ export default function LiveTicker({ tournamentId, games, logos }:{ tournamentId
           const t1w=!live&&g.score1!=null&&g.score1>(g.score2??0), t2w=!live&&g.score2!=null&&g.score2>(g.score1??0)
           const field=(g.location||'').split(' - ').pop()||''
           return (
-            <Link key={g.id} href={`/tournaments/${tournamentId}/public/games/${g.id}`}
-              className={`w-[190px] flex-shrink-0 border rounded-lg px-2.5 py-1.5 hover:shadow-sm transition-shadow bg-white ${live?'border-red-200':'border-slate-200'}`}>
+            <div key={g.id} className={`w-[190px] flex-shrink-0 border rounded-lg hover:shadow-sm transition-shadow bg-white ${live?'border-red-200':'border-slate-200'}`}>
+            <Link href={staff&&live?`/tournaments/${tournamentId}/games/${g.id}/scorekeeper`:`/tournaments/${tournamentId}/public/games/${g.id}`}
+              title={staff&&live?'Open the scorekeeper for this game':undefined}
+              className="block px-2.5 py-1.5">
               <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wide mb-1">
                 {live
                   ? <span className="text-red-600 animate-pulse">● Live{ls!.periodLabel?` · ${ls!.periodLabel}`:''}</span>
@@ -66,6 +76,10 @@ export default function LiveTicker({ tournamentId, games, logos }:{ tournamentId
                 <span className="truncate ml-2">{field}</span>
               </div>
             </Link>
+            {staff&&live&&onStop&&(
+              <button type="button" onClick={()=>onStop(g.id)} className="w-full border-t border-red-100 text-[10px] font-bold uppercase tracking-wide text-red-700 hover:bg-red-50 py-1 rounded-b-lg">Stop live</button>
+            )}
+            </div>
           )
         })}
       </div>

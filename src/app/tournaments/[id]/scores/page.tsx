@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import TournamentNav from '../TournamentNav'
+import LiveTicker from '@/components/LiveTicker'
 import toast, { Toaster } from 'react-hot-toast'
 import { Search, X, ChevronDown, ChevronUp, Check, ClipboardCheck } from 'lucide-react'
 
@@ -13,7 +14,8 @@ interface Game {
 }
 type Draft = { s1: string; s2: string; note: string; dirty: boolean }
 type GroupBy = 'division' | 'field'
-type ShowFilter = 'all' | 'scored' | 'unscored'
+type ShowFilter = 'all' | 'scored' | 'unscored' | 'live'
+type LiveScore = { score1: number; score2: number; period: number; periodLabel: string; live: boolean; updatedAt: string }
 type SortBy = 'time' | 'game'
 
 function fmt12(t: string) {
@@ -53,6 +55,32 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
   // Phones get a card per game instead of the 12-column grid. Rendered conditionally
   // (not just CSS-hidden) so each score input registers exactly one ref for Enter/Tab hopping.
   const [isPhone, setIsPhone] = useState(false)
+  // Live scores the Scorekeeper screen saves (AppSetting liveScore:<gameId>), the same
+  // ones the public ticker shows. Bo (Oct 12 2026): a live game was showing on the
+  // public page and nothing here said where it was or how to turn it off.
+  const [liveScores, setLiveScores] = useState<Record<string, LiveScore>>({})
+  const [logos, setLogos] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const pull = () => fetch(`/api/tournaments/${params.id}/live-scores?fresh=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()).then(d => setLiveScores(d?.scores || {})).catch(() => {})
+    pull()
+    const t = setInterval(pull, 20000)
+    fetch(`/api/tournaments/${params.id}/team-logos`).then(r => r.ok ? r.json() : {}).then(l => setLogos(l || {})).catch(() => {})
+    return () => clearInterval(t)
+  }, [params.id])
+  const isLiveGame = (g: Game) => g.score1 == null && !!liveScores[g.id]?.live
+  // Stop live: the entry stays (scores, alerts already sent) with live off, so the
+  // game drops off the public ticker and game page. Reopening the scorekeeper and
+  // starting the clock puts it back.
+  async function stopLive(gameId: string) {
+    const g = games.find(x => x.id === gameId), ls = liveScores[gameId]
+    if (!ls) return
+    if (!confirm(`Stop showing ${g ? `${g.team1} vs ${g.team2}` : 'this game'} as live on the public page?`)) return
+    const r = await fetch(`/api/tournaments/${params.id}/live-scores`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId, score1: ls.score1, score2: ls.score2, period: ls.period, periodLabel: ls.periodLabel, live: false }) }).catch(() => null)
+    if (!r?.ok) { toast.error("Couldn't stop it. Try again."); return }
+    setLiveScores(m => ({ ...m, [gameId]: { ...m[gameId], live: false } }))
+    toast.success('No longer live')
+  }
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 639px)')
     const sync = () => setIsPhone(mq.matches)
@@ -117,6 +145,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
       const scored = g.score1 != null && g.score2 != null
       if (showFilter === 'scored') return scored
       if (showFilter === 'unscored') return !scored
+      if (showFilter === 'live') return isLiveGame(g)
       return true
     })
     .filter(g => !search || [g.team1, g.team2, g.location].some(s => s.toLowerCase().includes(search.toLowerCase())))
@@ -194,6 +223,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Toaster />
       <TournamentNav id={params.id} name={tName} logoUrl={tLogo} />
+      <LiveTicker tournamentId={params.id} games={games} logos={logos} staff scores={liveScores} onStop={stopLive} />
 
       {/* Page header */}
       <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-3 sm:py-4">
@@ -206,6 +236,11 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
               </span>
             </p>
           </div>
+          {games.some(isLiveGame) && (
+            <button onClick={() => { setShowFilter('live'); setSelGroup('__all__') }} className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-full px-3 py-1 hover:bg-red-100">
+              <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />{games.filter(isLiveGame).length} live now
+            </button>
+          )}
           <div className="text-right flex-shrink-0">
             <p className="text-2xl font-bold text-slate-900">{totalScored}<span className="text-slate-400 font-normal text-lg">/{totalGames}</span></p>
             <p className="text-xs text-slate-400">games scored</p>
@@ -344,6 +379,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                 <option value="all">Show all games</option>
                 <option value="scored">Show final games</option>
                 <option value="unscored">Show not final games</option>
+                <option value="live">Show live games ({games.filter(isLiveGame).length})</option>
               </select>
             </div>
           </div>
@@ -378,6 +414,12 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                           <span className="whitespace-nowrap">{fmtDate(game.date)}, {fmt12(game.startTime)}</span>
                         </div>
                         <div className="text-[11px] text-slate-400 truncate mb-2">{game.location}</div>
+                        {isLiveGame(game) && <div className="mb-2">{(
+                            <span className="inline-flex items-center gap-1.5 mt-1">
+                              <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
+                              <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>
+                            </span>
+                          )}</div>}
                         <div className="flex items-center gap-3">
                           <span className={`flex-1 min-w-0 truncate text-sm ${t1wins ? 'font-bold text-slate-900' : 'text-slate-700'}`}>{game.team1}</span>
                           <input ref={el => { inputRefs.current[`${game.id}-s1`] = el }}
@@ -435,6 +477,12 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                           <p className={`text-xs font-semibold ${game.isChampionship ? 'text-amber-600' : 'text-slate-700'}`}>{gameLabel(game)}</p>
                           <p className="text-xs text-slate-400">{fmtDate(game.date)}, {fmt12(game.startTime)}</p>
                           <p className="text-xs text-slate-400 truncate">{game.location}</p>
+                          {isLiveGame(game) && (
+                            <span className="inline-flex items-center gap-1.5 mt-1">
+                              <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
+                              <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>
+                            </span>
+                          )}
                         </div>
                         {/* Team 1 */}
                         <div className={`col-span-3 text-sm truncate ${t1wins ? 'font-bold text-slate-900' : 'text-slate-600'}`}>{game.team1}</div>
