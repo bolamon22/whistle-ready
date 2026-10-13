@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, Mail, PlayCircle, Search, Send, Users, X } from 'lucide-react'
-import { TRAINING_VIDEOS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo } from '@/lib/training'
+import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo } from '@/lib/training'
 import { HOW_TO_VIDEOS, howToSrc, howToPoster, howToMinutes } from '@/lib/howToVideos'
 import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
@@ -28,6 +28,26 @@ const SERIES: { key: Lib['series']; label: string; note: string }[] = [
   { key: 'family', label: 'Families & clubs', note: 'Public how-to videos, Sunshine Events Group branded: on the waiver, the club portal, club emails and sunshineeventsgroup.com/how-to. Not tracked.' },
 ]
 const ROLE_KEYS = ['scorekeeper', 'ref', 'field_ops', 'athletic_trainer', 'assigner']
+// "Who it's for" filter. Staff roles come from the Training page groups (a group with no
+// roles is for every staff role); the family how-to videos go by their audience.
+const FOR_FILTERS: [string, string][] = [...ROLE_KEYS.map(k => [k, TRAINING_ROLE_LABELS[k]] as [string, string]), ['parent', 'Parents'], ['club_director', 'Club directors']]
+function rolesOf(v: Lib): string[] {
+  if (v.series === 'family') return [/parent/i.test(v.audience) ? 'parent' : '', /club/i.test(v.audience) ? 'club_director' : ''].filter(Boolean)
+  const gs = TRAINING_GROUPS.filter(g => g.ids.includes(v.id))
+  return gs.some(g => !g.roles) ? ROLE_KEYS : Array.from(new Set(gs.flatMap(g => g.roles || [])))
+}
+/** "All of Assigner training (12)" when a whole series is picked, else the titles (first few). */
+function bundleSummary(ids: string[]): string {
+  const parts: string[] = []; const loose: string[] = []
+  for (const s of SERIES) {
+    const all = LIB.filter(v => v.series === s.key).map(v => v.id); const got = all.filter(id => ids.includes(id))
+    if (got.length && got.length === all.length && all.length > 1) parts.push(`all of ${s.label} (${all.length})`)
+    else loose.push(...got.map(id => LIB.find(v => v.id === id)!.title))
+  }
+  const shown = loose.slice(0, 3).join(', ') + (loose.length > 3 ? ` and ${loose.length - 3} more` : '')
+  const out = [...parts, shown].filter(Boolean).join(' + ')
+  return out.charAt(0).toUpperCase() + out.slice(1)
+}
 const fmtDate = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
 const noSave = { onContextMenu: (e: React.MouseEvent) => e.preventDefault(), controlsList: 'nodownload', disablePictureInPicture: true } as const
 
@@ -40,6 +60,12 @@ export default function VideoLibrary() {
   const [sending, setSending] = useState(false)
   const [people, setPeople] = useState<Person[] | null>(null)
   const [sends, setSends] = useState<SendLog[]>([])
+  const [fSeries, setFSeries] = useState<string>('all')
+  const [fFor, setFFor] = useState<string>('all')
+  const [fQ, setFQ] = useState('')
+  const shown = useMemo(() => LIB.filter(v => (fSeries === 'all' || v.series === fSeries) && (fFor === 'all' || rolesOf(v).includes(fFor))
+    && (!fQ.trim() || `${v.num} ${v.title} ${v.blurb}`.toLowerCase().includes(fQ.trim().toLowerCase()))), [fSeries, fFor, fQ])
+  const filtered = fSeries !== 'all' || fFor !== 'all' || !!fQ.trim()
 
   const loadPeople = () => fetch('/api/training?report=1').then(r => r.ok ? r.json() : null).then(d => setPeople(Array.isArray(d?.people) ? d.people : [])).catch(() => setPeople([]))
   const loadSends = () => fetch('/api/training/send').then(r => r.ok ? r.json() : null).then(d => setSends(Array.isArray(d?.sends) ? d.sends : [])).catch(() => {})
@@ -60,6 +86,9 @@ export default function VideoLibrary() {
   }, [people])
 
   const toggle = (id: string) => setPicked(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  // One box picks the whole bundle (every video showing in that section).
+  const toggleAll = (ids: string[]) => setPicked(s => { const n = new Set(s); const all = ids.every(id => n.has(id)); ids.forEach(id => all ? n.delete(id) : n.add(id)); return n })
+  const sendBundle = (ids: string[]) => { setPicked(new Set(ids)); setSending(true) }
 
   return (
     <div className="max-w-6xl mx-auto" data-testid="video-library">
@@ -82,12 +111,50 @@ export default function VideoLibrary() {
         ))}
       </div>
 
-      {tab === 'videos' && SERIES.map(s => (
+      {tab === 'videos' && (
+        <div className="bg-white border border-slate-200 rounded-xl p-3 mb-6 space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">Type</span>
+            {[['all', 'All'] as [string, string], ...SERIES.map(s => [s.key, s.label] as [string, string])].map(([k, label]) => {
+              const n = k === 'all' ? LIB.length : LIB.filter(v => v.series === k).length
+              return <Chip key={k} on={fSeries === k} onClick={() => setFSeries(k)}>{label} <span className="opacity-60">{n}</span></Chip>
+            })}
+            <div className="relative ml-auto w-full sm:w-56"><Search size={14} className="absolute left-3 top-2.5 text-slate-400" /><input value={fQ} onChange={e => setFQ(e.target.value)} placeholder="Search videos" aria-label="Search videos" className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-1.5 text-sm" /></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">For</span>
+            <Chip on={fFor === 'all'} onClick={() => setFFor('all')}>Everyone</Chip>
+            {FOR_FILTERS.map(([k, label]) => <Chip key={k} on={fFor === k} onClick={() => setFFor(k)}>{label}</Chip>)}
+            {filtered && <button type="button" onClick={() => { setFSeries('all'); setFFor('all'); setFQ('') }} className="text-xs font-semibold text-slate-500 hover:text-slate-800 ml-1">Clear filters</button>}
+          </div>
+        </div>
+      )}
+      {tab === 'videos' && filtered && shown.length === 0 && <p className="text-sm text-slate-400 text-center py-10">No videos match those filters.</p>}
+
+      {tab === 'videos' && SERIES.filter(s => shown.some(v => v.series === s.key)).map(s => {
+        const list = shown.filter(v => v.series === s.key); const ids = list.map(v => v.id); const bundle = s.key !== 'family'
+        const nOn = ids.filter(id => picked.has(id)).length
+        return (
         <section key={s.key} className="mb-8">
-          <h2 className="text-lg font-bold text-slate-900">{s.label}</h2>
-          <p className="text-sm text-slate-500 mb-3">{s.note}</p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {LIB.filter(v => v.series === s.key).map(v => {
+          <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">{s.label} <span className="text-sm font-semibold text-slate-400">{list.length}{filtered ? ` of ${LIB.filter(v => v.series === s.key).length}` : ''}</span></h2>
+              <p className="text-sm text-slate-500">{s.note}</p>
+            </div>
+            {bundle && (
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 cursor-pointer hover:border-teal-400">
+                  <AllBox checked={nOn === ids.length} mixed={nOn > 0 && nOn < ids.length} onChange={() => toggleAll(ids)} label={`Select all ${s.label}`} />
+                  Select all {ids.length}
+                </label>
+                <button type="button" onClick={() => sendBundle(ids)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-sm font-semibold hover:bg-teal-100">
+                  <Send size={14} /> Send all {ids.length}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {list.map(v => {
               const r = reach[v.id]; const sendable = v.series !== 'family'
               return (
                 <article key={v.id} className={`bg-white border rounded-xl overflow-hidden flex flex-col ${picked.has(v.id) ? 'border-teal-400 ring-2 ring-teal-100' : 'border-slate-200'}`}>
@@ -118,7 +185,18 @@ export default function VideoLibrary() {
             })}
           </div>
         </section>
-      ))}
+        )
+      })}
+
+      {tab === 'videos' && picked.size > 0 && !sending && (
+        <div className="sticky bottom-4 z-30 mt-2 flex justify-center">
+          <div className="flex items-center gap-3 bg-slate-900 text-white rounded-full pl-5 pr-2 py-2 shadow-lg text-sm">
+            <span className="font-semibold">{picked.size} selected</span>
+            <button type="button" onClick={() => setPicked(new Set())} className="text-slate-300 hover:text-white">Clear</button>
+            <button type="button" onClick={() => setSending(true)} className="inline-flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-white font-semibold rounded-full px-4 py-1.5"><Send size={14} /> Send</button>
+          </div>
+        </div>
+      )}
 
       {tab === 'watched' && <Watched people={people} />}
       {tab === 'sent' && (
@@ -127,7 +205,7 @@ export default function VideoLibrary() {
           {sends.map((s, i) => (
             <div key={i} className="p-4 text-sm">
               <div className="flex items-center justify-between gap-3"><span className="font-semibold text-slate-800">{s.sent} {s.sent === 1 ? 'person' : 'people'}</span><span className="text-xs text-slate-400">{new Date(s.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{s.by ? ` · ${s.by}` : ''}</span></div>
-              <p className="text-slate-600 mt-1">{s.videoIds.map(id => trainingVideo(id)?.title || id).join(', ')}</p>
+              <p className="text-slate-600 mt-1">{bundleSummary(s.videoIds)}</p>
               {s.roles.length > 0 && <p className="text-xs text-slate-400 mt-0.5">To: {s.roles.map(r => TRAINING_ROLE_LABELS[r] || r).join(', ')}{s.people.length ? ` + ${s.people.length} picked by name` : ''}</p>}
             </div>
           ))}
@@ -192,7 +270,8 @@ function ScriptPanel({ v, note, onClose, onSaved }: { v: Lib; note: string; onCl
 }
 
 function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: Person[]; onClose: () => void; onSent: () => void }) {
-  const [roles, setRoles] = useState<Set<string>>(new Set())
+  // A bundle of only assigner videos starts addressed to Assigners.
+  const [roles, setRoles] = useState<Set<string>>(() => new Set(ids.length && ids.every(id => trainingVideo(id)?.series === 'assigner') ? ['assigner'] : []))
   const [chosen, setChosen] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
@@ -222,7 +301,7 @@ function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: P
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-label="Send videos">
       <div className="bg-white rounded-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-3">
-          <div><h2 className="text-lg font-bold text-slate-900">Send {ids.length} video{ids.length === 1 ? '' : 's'}</h2><p className="text-sm text-slate-500">{ids.map(id => trainingVideo(id)?.title).join(', ')}</p></div>
+          <div><h2 className="text-lg font-bold text-slate-900">Send {ids.length} video{ids.length === 1 ? '' : 's'}</h2><p className="text-sm text-slate-500">{bundleSummary(ids)}</p></div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
         </div>
         <div>
@@ -318,4 +397,15 @@ function Watched({ people }: { people: Person[] | null }) {
       <p className="text-xs text-slate-400">A video counts as watched when it plays to 85%. Each time after that adds to the count.</p>
     </div>
   )
+}
+
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} aria-pressed={on}
+    className={`px-3 py-1 rounded-full text-sm font-semibold border ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-teal-400'}`}>{children}</button>
+}
+
+function AllBox({ checked, mixed, onChange, label }: { checked: boolean; mixed: boolean; onChange: () => void; label: string }) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (ref.current) ref.current.indeterminate = mixed }, [mixed])
+  return <input ref={ref} type="checkbox" checked={checked} onChange={onChange} aria-label={label} className="accent-teal-600" />
 }
