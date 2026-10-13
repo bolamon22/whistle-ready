@@ -14,7 +14,7 @@ export const HOW_TO_ORG_SLUG = 'sunshine-events-group'
 export type HowToVideo = { id: string; title: string; audience: string; blurb: string; secs: number }
 
 export const HOW_TO_VIDEOS: HowToVideo[] = [
-  { id: 'waiver', title: "Sign your player's waiver", audience: 'Parents', secs: 83,
+  { id: 'waiver', title: "Your player's waiver and parent account", audience: 'Parents', secs: 86,
     blurb: "Fill out and sign the online waiver, then save your info so siblings and the next event take a few clicks." },
   { id: 'club-portal', title: "Your club director's portal", audience: 'Club directors', secs: 69,
     blurb: 'Pay your balance, track waivers, request team changes, and register for future events.' },

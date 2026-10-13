@@ -428,8 +428,8 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "outro": "Whistle Ready. Every game staffed."
   },
   "waiver": {
-    "title": "Sign your player's waiver",
-    "intro": "Sunshine Events Group. Here's how to sign your player's waiver.",
+    "title": "Your player's waiver\nand parent account",
+    "intro": "Sunshine Events Group. Completing your player's waiver, and setting up your parent account.",
     "lines": [
       "Every player is required to have a signed waiver before they can play at Sunshine Events Group tournaments. Open the waiver link from your club, or from the event page.",
       "Add a photo or action shot if you like. It goes on your player's card, which builds itself as you type.",
@@ -443,7 +443,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Next, create a password to save your info. Your parent account is set up for you.",
       "Now you can add a brother or sister, or sign up for another event, in just a few clicks."
     ],
-    "outro": "Sunshine Events Group. See you on the field."
+    "outro": "Sunshine Events Group. We are there from registration to the final whistle, so you can focus on the game."
   },
   "club-portal": {
     "title": "Your club director's portal",
