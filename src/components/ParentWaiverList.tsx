@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarDays, ExternalLink, Pencil } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ExternalLink, Pencil } from 'lucide-react'
 import { PARENT_FIELD_GROUPS, type ParentField } from '@/lib/parentWaiverFields'
 
 // My Players on the parent page: the waivers in this parent's account (made at the
@@ -111,42 +111,44 @@ export default function ParentWaiverList({ waivers, onChange }: { waivers: Paren
         const where = [w.clubName, w.team].filter(Boolean).join(' · ')
         const first = w.playerName.trim().split(/\s+/)[0] || 'Player'
         return (
-          <div key={w.id} className="bg-white border border-gray-200 rounded-xl px-5 py-4" data-testid="parent-waiver">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="min-w-0">
-                <div className="font-semibold text-gray-800">
-                  {w.playerName || 'Player'}
-                  {f.jerseyNumber && <span className="ml-2 text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5 align-middle">#{f.jerseyNumber}</span>}
-                </div>
-                {w.eventName && (
-                  <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5">
-                    <CalendarDays size={14} className="text-gray-400 shrink-0" />
-                    <span>{w.eventName}{w.eventDates && <span className="text-gray-400"> · {w.eventDates}</span>}</span>
-                  </div>
-                )}
-                {where && <div className="text-xs text-gray-400 mt-0.5">{where}</div>}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {w.passUrl && (
-                  <a href={w.passUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">
-                    <ExternalLink size={13} /> Player card
-                  </a>
-                )}
-                {w.past
-                  ? <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">Event over</span>
-                  : editing !== w.id && (
-                    <button onClick={() => setEditing(w.id)} className="inline-flex items-center gap-1.5 text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg">
-                      <Pencil size={13} /> Edit details
-                    </button>
-                  )}
+          <div key={w.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden" data-testid="parent-waiver">
+            <div className="flex gap-3.5 items-center p-4">
+              <span aria-hidden className="w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br from-[#0b1f3a] to-[#0e7490] text-white text-[22px] font-extrabold flex items-center justify-center">{f.jerseyNumber || first[0]}</span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-xl font-bold text-slate-900 leading-tight">{w.playerName || 'Player'}</h3>
+                <div className="text-[13px] text-slate-600">{[f.position, f.grade && `Grade ${f.grade}`, f.jerseyNumber && `#${f.jerseyNumber}`].filter(Boolean).join(' · ')}</div>
               </div>
             </div>
+            <div className="px-4 pb-3.5 space-y-2">
+              {where && (
+                <div className="flex gap-2 flex-wrap items-center">
+                  <span className="font-semibold text-sm text-slate-900">{w.team || where}</span>
+                  {w.division && <span className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-2.5 py-0.5">{w.division}</span>}
+                </div>
+              )}
+              {w.eventName && (
+                <div className={`flex items-center gap-2 text-sm font-semibold ${w.past ? 'text-slate-500' : 'text-teal-700'}`}>
+                  {w.past ? <CalendarDays size={16} className="shrink-0" /> : <CheckCircle2 size={16} className="shrink-0" />}
+                  <span>{w.past ? 'Event over' : 'Waiver on file'} · {w.eventName}{w.eventDates && `, ${w.eventDates}`}</span>
+                </div>
+              )}
+            </div>
+            {(w.passUrl || (!w.past && editing !== w.id)) && (
+              <div className="grid grid-cols-2 border-t border-slate-200">
+                {w.passUrl
+                  ? <a href={w.passUrl} target="_blank" rel="noopener" className="min-h-[48px] flex items-center justify-center gap-1.5 text-sm font-bold text-teal-700 border-r border-slate-200"><ExternalLink size={14} /> Player card</a>
+                  : <span className="border-r border-slate-200" />}
+                {!w.past && editing !== w.id
+                  ? <button type="button" onClick={() => setEditing(w.id)} className="min-h-[48px] flex items-center justify-center gap-1.5 text-sm font-bold text-teal-700"><Pencil size={14} /> Edit details</button>
+                  : <span />}
+              </div>
+            )}
             {editing === w.id && !w.past && (
-              <Editor w={w} onCancel={() => setEditing('')} onSaved={fields => {
+              <div className="px-4 pb-4"><Editor w={w} onCancel={() => setEditing('')} onSaved={fields => {
                 onChange(waivers.map(x => x.id === w.id ? { ...x, fields } : x))
                 setEditing('')
                 toast.success(`Saved ${first}’s details`)
-              }} />
+              }} /></div>
             )}
           </div>
         )
