@@ -45,6 +45,7 @@ const ADMIN_LINKS = [
   { label: '🤝 Club database',       href: '/dashboard/org/clubs',      desc: 'Returning teams, history & win-back invites' },
   { label: '📣 Social scheduler',    href: '/dashboard/org/social',     desc: 'Schedule Instagram & Facebook posts — approve once, publishes itself' },
   { label: '📸 Photographers',      href: '/dashboard/org/photographers', desc: 'Who appears on Book photo & video, and what you ask of them' },
+  { label: '🎬 Video library',      href: '/dashboard/org/videos',     desc: 'Every training video, scripts, who watched, send to staff' },
   { label: '🏒 Club Director View', href: '/dashboard/club-director',  desc: 'Preview the Club Director dashboard' },
   { label: '👤 My Profile',         href: '/profile',                  desc: 'Edit your name, email and password' },
 ]
