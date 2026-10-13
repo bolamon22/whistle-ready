@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import StaffW9Card from '@/components/StaffW9Card'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2 } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight } from 'lucide-react'
+import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
@@ -46,6 +47,7 @@ export default function RefDashboard() {
   const [eventBusy, setEventBusy] = useState('')
   const [punchBusy, setPunchBusy] = useState(false)
   const [, setNowTick] = useState(0)                  // re-render the elapsed timer
+  const [training, setTraining] = useState<{ roles: string[]; watched: string[] } | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -55,6 +57,7 @@ export default function RefDashboard() {
       fetch('/api/tournaments').then(r => r.json()),
       fetch('/api/staff-portal').then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([a, t, p]) => {
+      fetch('/api/training').then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.watched)) setTraining({ roles: d.roles || [], watched: d.watched }) }).catch(() => {})
       setAssignments(Array.isArray(a) ? a : [])
       setTournaments(Array.isArray(t) ? t : [])
       setPortal(p && Array.isArray(p.events) ? p : null)
@@ -233,6 +236,23 @@ export default function RefDashboard() {
           {!portal.worker && <p className="text-[11px] text-gray-400 mt-2">Your login isn't linked to a staff record yet — contact your coordinator to sign up for events.</p>}
         </div>
       )}
+
+      {/* Training videos (Oct 2026): how-tos for this person's job, with progress */}
+      {training && (() => {
+        const want = videosFor(training.roles)
+        const done = want.filter(v => training.watched.includes(v)).length
+        const all = want.length > 0 && done === want.length
+        return (
+          <Link href="/dashboard/staff/training" className={`mb-5 flex items-center gap-3 rounded-2xl border p-4 card ${all ? 'border-slate-200 bg-white' : 'border-teal-200 bg-teal-50/60'}`}>
+            <span className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0"><GraduationCap size={20} /></span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold text-gray-800">Training videos</span>
+              <span className="block text-xs text-gray-500 mt-0.5">{all ? `All ${want.length} watched` : `${done} of ${want.length} watched · about a minute each`}</span>
+            </span>
+            <ChevronRight size={18} className="text-gray-400 shrink-0" />
+          </Link>
+        )
+      })()}
 
       {/* W-9: upload it here instead of emailing it (components/StaffW9Card) */}
       {portal?.worker && <StaffW9Card />}
