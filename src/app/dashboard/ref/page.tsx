@@ -10,6 +10,7 @@ import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play
 import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
 import { teamRefKey } from '@/lib/names'
+import SmsConsent from '@/components/SmsConsent'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number }
@@ -290,6 +291,11 @@ export default function RefDashboard() {
 
       {/* Game-day alerts for this phone (field requests) */}
       <div className="mb-5"><StaffAlerts compact /></div>
+
+      {/* Permission to text them, next to the push alerts because it is the same
+          question to whoever is reading it. Renders nothing for an account with
+          no staff record. */}
+      <div className="mb-5"><SmsConsent compact /></div>
 
       {/* My events — sign up for the tournaments you can work */}
       {portal && portal.events.length > 0 && (

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import StaffAlerts from '@/components/StaffAlerts'
+import SmsConsent from '@/components/SmsConsent'
 
 // One page to send staff to at check-in: turn on game-day alerts for this phone.
 // The QR code at the bottom points here, so a staffer can scan it off your phone.
@@ -20,6 +21,7 @@ export default function AlertsPage() {
         <p className="text-sm text-slate-500 mt-1">Get a buzz on your phone when someone needs a trainer, balls, water or a ref on a field, and when someone is on the way to your request.</p>
       </div>
       <StaffAlerts />
+      <SmsConsent />
       {qr && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center">
           <p className="font-bold text-slate-800">Setting up other staff?</p>
