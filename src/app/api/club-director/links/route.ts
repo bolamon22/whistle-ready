@@ -51,6 +51,14 @@ export async function GET(req: NextRequest) {
         orderBy: { startDate: 'desc' },
       })
     } catch { /* the picker falls back to nothing rather than 500ing */ }
+    // Each event's org slug, so the portal knows whose how-to video to offer
+    // (lib/howToVideos). Tournament.orgId is raw SQL, not in the Prisma schema.
+    try {
+      const slugs = await prisma.$queryRawUnsafe<{ id: string; slug: string | null }[]>(
+        `SELECT t."id" AS id, o."slug" AS slug FROM "Tournament" t LEFT JOIN "Organization" o ON o."id" = t."orgId" WHERE t."id" IN (${ids.map(() => '?').join(',')})`, ...ids)
+      const bySlug = new Map(slugs.map(r => [String(r.id), String(r.slug || '')]))
+      tournaments = tournaments.map(t => ({ ...t, orgSlug: bySlug.get(t.id) || '' }))
+    } catch { /* no slug: the portal just shows no video link */ }
   }
   return NextResponse.json({ links, tournaments, viewing })
 }

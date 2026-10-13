@@ -13,9 +13,11 @@ import {
 } from './PortalActions'
 import { nameKey } from '@/lib/names'
 import FamilyMessages from '@/components/FamilyMessages'
+import HowToVideoLink from '@/components/HowToVideoLink'
+import { hasHowTo } from '@/lib/howToVideos'
 import type { FamilyMessage } from '@/lib/familyMessages'
 
-interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string }
+interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string; orgSlug?: string }
 interface Waiver {
   id: string; playerName: string; team: string; club: string
   jersey: string | number | null; grade: string; parentName: string
@@ -703,7 +705,7 @@ export default function ClubDirectorDashboard() {
               ? <img src={heroLogo} alt="" className="h-14 w-14 rounded-xl object-contain bg-white border border-gray-200 shrink-0" />
               : <span aria-hidden="true" className="h-14 w-14 rounded-xl bg-violet-600 text-white text-lg font-bold flex items-center justify-center shrink-0">{initials(clubTitle)}</span>}
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-600">Club director</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-600">Club director{hasHowTo(selTournamentRow?.orgSlug) && <HowToVideoLink id="club-portal" label="Tour your portal" className="ml-3 normal-case tracking-normal" />}</p>
               <h1 className="text-2xl font-extrabold text-gray-900 leading-tight break-words">{clubTitle}</h1>
               {selTournamentName && tab !== 'history' && (
                 <div className="mt-1.5 flex items-center gap-x-2 gap-y-1 flex-wrap text-sm">
@@ -857,6 +859,7 @@ export default function ClubDirectorDashboard() {
                 changing tabs. */}
             {tab === 'overview' && (
               <div className="space-y-4">
+                {hasHowTo(selTournamentRow?.orgSlug) && <NewHereCard />}
                 {data?.registrations.length === 0 && (
                   <div className="text-center py-12 text-gray-400">No registration on file for this event yet.</div>
                 )}
@@ -1633,6 +1636,28 @@ export default function ClubDirectorDashboard() {
           </>
         )
       )}
+    </div>
+  )
+}
+
+/** First visit only: point new directors at the 1-minute portal tour. Dismissal is
+ *  remembered in this browser; the header link stays for anyone who wants it later. */
+function NewHereCard() {
+  const KEY = 'cd:tourSeen'
+  const [show, setShow] = useState(false)
+  useEffect(() => { try { setShow(!localStorage.getItem(KEY)) } catch { /* storage off: skip it */ } }, [])
+  if (!show) return null
+  const dismiss = () => { try { localStorage.setItem(KEY, '1') } catch {} ; setShow(false) }
+  return (
+    <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 flex items-start gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="font-bold text-gray-900 text-sm">New here?</p>
+        <p className="text-sm text-gray-600 mt-0.5">See everything your portal does in about a minute: paying, waivers, team changes and registering again.</p>
+        {/* Watching counts as seen, but the card stays put until they leave:
+            hiding it here would unmount the player mid-video. */}
+        <div className="mt-2" onClick={() => { try { localStorage.setItem(KEY, '1') } catch {} }}><HowToVideoLink id="club-portal" label="Watch the tour" /></div>
+      </div>
+      <button type="button" onClick={dismiss} className="text-xs font-semibold text-gray-400 hover:text-gray-700">Dismiss</button>
     </div>
   )
 }
