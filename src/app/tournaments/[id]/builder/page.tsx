@@ -215,6 +215,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const [showSaveGlobal, setShowSaveGlobal] = useState(false)
   const [poolTb, setPoolTb] = useState<string[]>(pad6(DEFAULT_TB))
   const [divTb, setDivTb] = useState<string[]>(pad6(DEFAULT_TB))
+  const [advanceBy, setAdvanceBy] = useState<'division' | 'pool'>('division')
   const [savingDefault, setSavingDefault] = useState(false)
   const [regConf, setRegConf] = useState<Partial<RegConfirmation>>({})
   const [orgRegDefault, setOrgRegDefault] = useState<RegConfirmation>(DEFAULT_REG_CONFIRMATION)
@@ -238,7 +239,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       setStartDate(t.startDate || ''); setEndDate(t.endDate || '')
       setLocation(t.location || ''); setLogoUrl(t.logoUrl || '')
       setScheduleIncrement(String(t.scheduleIncrement || 50))
-      try { const obj = JSON.parse(t.tiebreakers || '{}'); const pool = Array.isArray(obj)?obj:(obj.pool||[]); const division = Array.isArray(obj)?obj:(obj.division||[]); setPoolTb(pad6(pool.length?pool:DEFAULT_TB)); setDivTb(pad6(division.length?division:DEFAULT_TB)) } catch {}
+      try { const obj = JSON.parse(t.tiebreakers || '{}'); const pool = Array.isArray(obj)?obj:(obj.pool||[]); const division = Array.isArray(obj)?obj:(obj.division||[]); setPoolTb(pad6(pool.length?pool:DEFAULT_TB)); setDivTb(pad6(division.length?division:DEFAULT_TB)); setAdvanceBy(!Array.isArray(obj) && obj.advanceBy === 'pool' ? 'pool' : 'division') } catch {}
       const staffParsed = parseStaffPay(t.payRates)
       setStaffRoles(staffParsed.roles)
       // Load officials config — prefer v2 format, fall back to old divisionRules
@@ -327,7 +328,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           registrationPricing: serializePricing(pricing),
           ...registrationTypesPayload(regTypes),
           registrationDivisions: JSON.stringify(applyDivOrder(fromDivItems(divItems, customDivisions), divOrder)),
-          tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean) },
+          tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean), advanceBy },
           regConfirmationOverride: JSON.stringify(regConf),
         }),
       }),
@@ -431,6 +432,21 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
     if (activeSection === 'tiebreakers') return (
       <div className="space-y-5">
         <p className="text-sm text-slate-500">Set how teams that are level on points are ranked. Tie breaker #1 is applied first, then #2, and so on. Head-to-head currently compares two tied teams directly.</p>
+        <div>
+          <p className="text-sm font-semibold text-slate-700">How teams advance to the bracket</p>
+          <p className="text-xs text-slate-400 mb-2.5">Decides the seeds and the "Advances" line on the public standings.</p>
+          <div className="grid gap-2 max-w-lg">
+            {([
+              { v: 'division', l: 'By division', d: 'One ranking across all pools. The top teams in the division advance, however many come from each pool.' },
+              { v: 'pool', l: 'By pool', d: 'Each pool ranks its own teams. Pool winners seed first, then runners-up, and so on.' },
+            ] as const).map(o => (
+              <label key={o.v} className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer ${advanceBy === o.v ? 'border-teal-400 bg-teal-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                <input type="radio" name="advanceBy" checked={advanceBy === o.v} onChange={() => setAdvanceBy(o.v)} className="mt-0.5 accent-teal-600" />
+                <span><span className="block text-sm font-medium text-slate-700">{o.l}</span><span className="block text-xs text-slate-500">{o.d}</span></span>
+              </label>
+            ))}
+          </div>
+        </div>
         {[{ t:'Tie breakers within pools', d:'Applied when breaking ties within a pool.', arr: poolTb, set: setPoolTb },
           { t:'Tie breakers within divisions', d:'Applied when ranking teams across pools in a division (for seeding).', arr: divTb, set: setDivTb }].map(sec => (
           <div key={sec.t}>

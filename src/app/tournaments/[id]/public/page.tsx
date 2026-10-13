@@ -100,7 +100,7 @@ function calcStandings(games:Game[],division:string,pool?:string,tbs:string[]=DE
 // open -- the card is a roster. Grid first, alphabetical, no rank numbers, no
 // stat columns, nothing clickable, and a team count by the toggle. Separate
 // from `showSchedule`, which only governs the Schedule button.
-function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true,preSchedule=false,title}:{division:string;pool:string;standings:Standing[];games:Game[];followed:(team:string)=>boolean;onFollow:(team:string)=>void;tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean;preSchedule?:boolean;title?:string}) {
+function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,advanceCount,numPools,onScheduleClick,onTeamClick,showSchedule=true,preSchedule=false,title,cutLabel,note}:{division:string;pool:string;standings:Standing[];games:Game[];followed:(team:string)=>boolean;onFollow:(team:string)=>void;tiebreakers:string[];advanceCount:number;numPools:number;onScheduleClick:()=>void;onTeamClick:(team:string)=>void;showSchedule?:boolean;preSchedule?:boolean;title?:string;cutLabel?:string;note?:string}) {
   // The visitor's own toggle wins. Until they touch it, the default follows
   // preSchedule -- which can change after mount, because the visibility switch
   // arrives in its own request, so a plain useState default could stick on list.
@@ -203,13 +203,14 @@ function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,a
                       <td className="px-1 py-2.5"><FollowButton team={s.team} following={followed(s.team)} onToggle={onFollow} compact /></td>
                     </tr>
                     {cutoff>0 && cutoff<standings.length && i===cutoff-1 && (
-                      <tr><td colSpan={9} className="p-0"><div className="border-t-2 border-dashed border-teal-300 mx-3 relative h-0"><span className="absolute right-2 -top-2 bg-white px-2 text-[9px] font-semibold text-teal-600 uppercase tracking-wide">Advances &uarr;</span></div></td></tr>
+                      <tr><td colSpan={9} className="p-0"><div className="border-t-2 border-dashed border-teal-300 mx-3 relative h-0"><span className="absolute right-2 -top-2 bg-white px-2 text-[9px] font-semibold text-teal-600 uppercase tracking-wide">{cutLabel??'Advances'} &uarr;</span></div></td></tr>
                     )}
                   </Fragment>
                 )
               })}
             </tbody>
           </table>
+          {note && <div className="px-3 py-2 bg-teal-50 border-t border-teal-100 text-[11px] text-teal-800">{note}</div>}
           {tiebreakers.length>0 && <div className="px-3 py-2 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-400">Tiebreakers: {tiebreakers.map((tb,i)=>(i?' \u2192 ':'')+(TB_LABEL[tb]||tb)).join('')}</div>}
         </div>
       )}
@@ -221,7 +222,7 @@ function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,a
 
 type DivTab = 'standings'|'schedule'|'bracket'
 
-function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,scheduleLive=true,rosters=[],notes,poolOnly=false}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean}) {
+function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,divTiebreakers=tiebreakers,advanceBy='division',scheduleLive=true,rosters=[],notes,poolOnly=false}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];divTiebreakers?:string[];advanceBy?:'division'|'pool';scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean}) {
   // Every team on this view plays in `division`; follows are per (division, team).
   const followed=(team:string)=>isFollowed(division,team)
   const onFollow=(team:string)=>toggleFollow(division,team)
@@ -254,6 +255,17 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
   const pools=rosterPools.length?rosterPools:gamePools
   const rosterFor=(p:string)=>realRosters.find(r=>samePool(r.name,p))?.teams||[]
   const divRoster=Array.from(new Set(realRosters.flatMap(r=>r.teams)))
+  // How teams reach the bracket (Settings > Standings, lib/standings). By division
+  // (Bo, Oct 12 2026: how Monster Mash seeds), the pools show no "Advances" line --
+  // drawing the top two of each pool told families the wrong teams were through --
+  // and one overall card ranks the whole division with the cut where it really is.
+  // Pool games only: bracket games other than the final aren't flagged
+  // isChampionship, so an unfiltered division ranking would count semifinals.
+  const byDivision=advanceBy!=='pool'&&pools.length>1
+  const poolPlay=games.filter(g=>!(g.division===division&&/^B\d+$/i.test(g.gameNumber||'')))
+  const flights=bracketList.length>1
+  const overallCut=flights?(bracketList[0] as any).teamCount||0:advanceCount
+  const overallLabel=flights?`Flight ${(bracketList[0] as any).flight||'A'}`:'Advances'
   // isChampionship means THE FINAL -- the division tile names its winner as champion.
   // The bracket tree therefore cannot use it to decide which games to look at: it
   // resolves each bracket game by looking up the schedule game numbered B<n>, so it
@@ -297,12 +309,17 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
             // items-start: a 4-team pool beside a 6-team one stretched to match,
             // leaving a grey band inside its border (under the Schedule button,
             // once the schedule is live).
+            <>
+            {byDivision&&scheduleLive&&(
+              <PoolCard division={division} pool="" title={`${division} — Overall`} standings={calcStandings(poolPlay,division,undefined,divTiebreakers,divRoster)} games={poolPlay} followed={followed} onFollow={onFollow} tiebreakers={divTiebreakers} advanceCount={overallCut} numPools={1} cutLabel={overallLabel} note={`Bracket seeds come from this overall ranking across ${pools.length} pools, not from pool finish.`} showSchedule={false} onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               {pools.map(pool=>(
-                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={advanceCount} numPools={pools.length} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
+                <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={byDivision?0:advanceCount} numPools={pools.length} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
               ))}
               {loose && <PoolCard key="__loose" division={division} pool="" title={`${division} — Not in a pool yet`} standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={0} numPools={pools.length} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>}
             </div>
+            </>
           ) : loose
             // No pools set yet: every registered team in one card, same shape,
             // so the page doesn't change character once they are split up.
@@ -446,6 +463,8 @@ export default function PublicTournamentPage() {
   // flips the answer for anyone west of Greenwich.
   const [logos,setLogos]=useState<Record<string,string>>({})
   const [tiebreakers,setTiebreakers]=useState<string[]>(DEFAULT_TBS)
+  const [divTiebreakers,setDivTiebreakers]=useState<string[]>(DEFAULT_TBS)
+  const [advanceBy,setAdvanceBy]=useState<'division'|'pool'>('division')
   const [games,setGames]=useState<Game[]>([])
   const [loading,setLoading]=useState(true)
   const [selectedDiv,setSelectedDiv]=useState<string|null>(null)
@@ -488,7 +507,7 @@ export default function PublicTournamentPage() {
       fetch(`/api/tournaments/${id}`).then(r=>r.json()),
       fetch(`/api/tournaments/${id}/games?view=public`).then(r=>r.json()),
       fetch(`/api/tournaments/${id}/team-logos`).then(r=>r.ok?r.json():{}).catch(()=>({})),
-    ]).then(([t,g,lg])=>{setTournament(t);setGames(Array.isArray(g)?g:[]);setLogos(lg||{});try{const o=JSON.parse((t&&t.tiebreakers)||'{}');const pool=Array.isArray(o)?o:(o.pool||[]);if(pool.length)setTiebreakers(pool)}catch{};setLoading(false)})
+    ]).then(([t,g,lg])=>{setTournament(t);setGames(Array.isArray(g)?g:[]);setLogos(lg||{});try{const o=JSON.parse((t&&t.tiebreakers)||'{}');const pool=Array.isArray(o)?o:(o.pool||[]);if(pool.length)setTiebreakers(pool);const dv=Array.isArray(o)?o:(o.division||[]);setDivTiebreakers(dv.length?dv:(pool.length?pool:DEFAULT_TBS));setAdvanceBy(!Array.isArray(o)&&o.advanceBy==='pool'?'pool':'division')}catch{};setLoading(false)})
     const dev=getDeviceId(); setDevice(dev)
     ;(async()=>{
       // People who followed before follows were saved anywhere but their own
@@ -825,6 +844,8 @@ export default function PublicTournamentPage() {
               toggleFollow={toggleFollow}
               tournamentId={id as string}
               tiebreakers={tiebreakers}
+              divTiebreakers={divTiebreakers}
+              advanceBy={advanceBy}
               scheduleLive={pubVis.schedule==='live'}
               rosters={liveRosters.filter(r=>r.division===selectedDiv)}
               notes={{division:noteFor(selectedDiv),all:divNotes.all}}

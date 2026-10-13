@@ -46,3 +46,36 @@ export function calcStandings(games: Game[], division: string, pool?: string, tb
   }
   return Object.values(map).sort(cmp)
 }
+
+// How teams reach the bracket (Bo, Oct 12 2026: "we determine it by division in
+// this tournament ... we should be able to switch between"). Stored on the
+// tournament's tiebreakers JSON as `advanceBy`; anything but 'pool' means division.
+//   division - one ranking across every pool in the division; the top N seed.
+//   pool     - each pool ranks its own teams; seeds go by place (every pool
+//              winner, then every runner-up, ...), ties in a place broken by the
+//              division ranking.
+export type AdvanceBy = 'division' | 'pool'
+export type StandingsRules = { pool: string[]; division: string[]; advanceBy: AdvanceBy }
+
+export function parseStandingsRules(raw: unknown): StandingsRules {
+  let o: any = raw
+  if (typeof raw === 'string') { try { o = JSON.parse(raw || '{}') } catch { o = {} } }
+  if (Array.isArray(o)) return { pool: o, division: o, advanceBy: 'division' }
+  o = o || {}
+  const pool: string[] = Array.isArray(o.pool) && o.pool.length ? o.pool : DEFAULT_TBS
+  const division: string[] = Array.isArray(o.division) && o.division.length ? o.division : pool
+  return { pool, division, advanceBy: o.advanceBy === 'pool' ? 'pool' : 'division' }
+}
+
+/** Teams in seed order for the bracket, by the tournament's advance rule. */
+export function seedOrder(games: Game[], division: string, rules: StandingsRules): Standing[] {
+  const overall = calcStandings(games, division, undefined, rules.division)
+  if (rules.advanceBy !== 'pool') return overall
+  const pools = Array.from(new Set(games.filter(g => g.division === division && !g.isChampionship && g.pool).map(g => g.pool as string)))
+  if (pools.length < 2) return overall
+  const place: Record<string, number> = {}
+  for (const p of pools) calcStandings(games, division, p, rules.pool).forEach((s, i) => { if (place[s.team] === undefined) place[s.team] = i })
+  const rank: Record<string, number> = {}
+  overall.forEach((s, i) => { rank[s.team] = i })
+  return [...overall].sort((a, b) => (place[a.team] ?? 99) - (place[b.team] ?? 99) || rank[a.team] - rank[b.team])
+}

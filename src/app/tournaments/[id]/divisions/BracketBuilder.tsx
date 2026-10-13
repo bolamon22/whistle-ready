@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { TEMPLATE_CATALOG, BRACKET_TEMPLATES, getTemplate, type GameTemplate } from '@/lib/bracketTemplates'
 import { buildTemplate, bracketStats, type BracketStats } from '@/lib/bracketGen'
 import { CheckCircle2 } from 'lucide-react'
+import { parseStandingsRules, seedOrder, type Game as StGame } from '@/lib/standings'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -187,20 +188,27 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   // changes none of these, so it stays put.
   useEffect(() => { setTab(initialTab ?? 'seeding') }, [initialTab, division, openPreviewAt])
 
+  // Seeds follow the tournament's advance rule and tiebreakers (Settings > Standings,
+  // lib/standings), the same ranking the public standings page shows. This used to
+  // sort by wins, goal diff, goals for regardless of the tiebreakers set, so "Seed
+  // from standings" could disagree with what families saw.
+  const [advanceBy, setAdvanceBy] = useState<'division' | 'pool'>('division')
   const loadStandings = useCallback(async () => {
     try {
-      const pg = await fetch(`/api/tournaments/${tournamentId}/divisions/${division}/pool-games`).then(r => r.ok ? r.json() : [])
-      const stats: Record<string, { w: number; l: number; t: number; gf: number; ga: number }> = {}
-      const add = (team: string) => { if (team && !stats[team]) stats[team] = { w: 0, l: 0, t: 0, gf: 0, ga: 0 } }
-      for (const g of (Array.isArray(pg) ? pg : [])) {
-        add(g.team1); add(g.team2)
-        if (g.score1 == null || g.score2 == null || g.score1 === '' || g.score2 === '') continue
-        const s1 = Number(g.score1), s2 = Number(g.score2)
-        if (stats[g.team1]) { stats[g.team1].gf += s1; stats[g.team1].ga += s2; if (s1 > s2) stats[g.team1].w++; else if (s1 < s2) stats[g.team1].l++; else stats[g.team1].t++ }
-        if (stats[g.team2]) { stats[g.team2].gf += s2; stats[g.team2].ga += s1; if (s2 > s1) stats[g.team2].w++; else if (s2 < s1) stats[g.team2].l++; else stats[g.team2].t++ }
-      }
-      const rows = Object.entries(stats).map(([team, st]) => ({ team, ...st })).sort((a, b) => b.w - a.w || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf)
-      setStandings(rows)
+      const [pg, t] = await Promise.all([
+        fetch(`/api/tournaments/${tournamentId}/divisions/${division}/pool-games`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/tournaments/${tournamentId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      ])
+      const rules = parseStandingsRules(t?.tiebreakers)
+      setAdvanceBy(rules.advanceBy)
+      const list: StGame[] = (Array.isArray(pg) ? pg : []).map((g: any) => ({
+        ...g,
+        score1: g.score1 == null || g.score1 === '' ? null : Number(g.score1),
+        score2: g.score2 == null || g.score2 === '' ? null : Number(g.score2),
+        isCanceled: !!g.isCanceled, isChampionship: false,
+      }))
+      if (!list.length) { setStandings([]); return }
+      setStandings(seedOrder(list, list[0].division, rules).map(({ team, w, l, t, gf, ga }) => ({ team, w, l, t, gf, ga })))
     } catch { setStandings([]) }
   }, [tournamentId, division])
 
@@ -431,7 +439,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
     <div className="mb-5 rounded-xl border border-teal-500/40 bg-slate-800/80 p-5">
       <p className="text-base font-semibold text-white mb-1">Split into flights</p>
       <p className="text-sm text-slate-300 mb-4">
-        Two brackets, each with its own champion. Teams rank by pool standings, then split at the cutoff.
+        Two brackets, each with its own champion. Teams rank by {advanceBy === 'pool' ? 'pool finish' : 'division standings'}, then split at the cutoff.
       </p>
 
       <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Cutoff</label>
@@ -761,7 +769,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
           {standings.length > 0 && (
             <div className="mb-5 rounded-xl border border-slate-700 overflow-hidden bg-slate-800">
               <div className="flex items-center justify-between px-3 py-2 bg-slate-900">
-                <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Pool standings</span>
+                <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">{advanceBy === 'pool' ? 'Seed order · by pool finish' : 'Seed order · division standings'}</span>
                 <button onClick={() => { const next = { ...seeds }; standings.forEach((r, i) => { next[String(i + 1)] = r.team }); setSeeds(next) }}
                   className="text-[11px] text-teal-300 hover:text-teal-200">Seed from standings ↓</button>
               </div>

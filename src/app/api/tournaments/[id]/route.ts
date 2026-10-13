@@ -16,7 +16,14 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
     const hasOwn = Array.isArray(o) ? o.length : (((o.pool||[]).length) || ((o.division||[]).length))
     if (!hasOwn) {
       const def = await prisma.appSetting.findUnique({ where:{ key:'defaultTiebreakers' } }).catch(()=>null)
-      if (def && def.value) tiebreakers = def.value
+      if (def && def.value) {
+        tiebreakers = def.value
+        // The default supplies the tiebreak lists only; how teams advance (by pool
+        // or by division, lib/standings) is this tournament's own and must survive.
+        if (!Array.isArray(o) && o.advanceBy) {
+          try { const d = JSON.parse(def.value); tiebreakers = JSON.stringify(Array.isArray(d) ? { pool: d, division: d, advanceBy: o.advanceBy } : { ...d, advanceBy: o.advanceBy }) } catch {}
+        }
+      }
     }
   } catch {}
   let tagline = ''
