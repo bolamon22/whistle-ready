@@ -42,6 +42,12 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.gameNumber  !== undefined && { gameNumber:  String(b.gameNumber) }),
     ...(b.date        !== undefined && { date:        String(b.date) }),
   }})
+  // Back to not played (Scores page unchecks Final): drop the scorekeeper's live entry
+  // too, or the public page keeps showing the old live score and the start/halftime
+  // alert flags stay set for when the game is really played.
+  if (touchesScore && updated.score1 === null && updated.score2 === null) {
+    await prisma.appSetting.deleteMany({ where: { key: `liveScore:${params.id}` } }).catch(() => {})
+  }
   if (before && b.provisional !== true) {
     await notifyFinal(before, { ...updated, url: `/tournaments/${updated.tournamentId}/public/games/${updated.id}` })
   }

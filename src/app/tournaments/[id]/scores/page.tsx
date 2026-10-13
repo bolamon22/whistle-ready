@@ -140,22 +140,40 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
     setDrafts(d => ({ ...d, [id]: { ...d[id], [field]: val, dirty: true } }))
   }
 
-  async function saveGame(gameId: string) {
-    const draft = drafts[gameId]
+  // `override` is the draft to save when the caller can't wait for setDrafts to land
+  // (toggleFinal used to set dirty and then call saveGame, which still read the old,
+  // not-dirty draft from this render and returned without saving).
+  async function saveGame(gameId: string, override?: Draft) {
+    const draft = override ?? drafts[gameId]
     if (!draft?.dirty) return
     setSaving(s => ({ ...s, [gameId]: true }))
     const body = { score1: draft.s1 === '' ? null : Number(draft.s1), score2: draft.s2 === '' ? null : Number(draft.s2) }
-    await fetch(`/api/games/${gameId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(`/api/games/${gameId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
+    setSaving(s => ({ ...s, [gameId]: false }))
+    if (!r?.ok) { toast.error("Couldn't save that score. Try again."); return }
     setGames(gs => gs.map(g => g.id === gameId ? { ...g, ...body } : g))
     setDrafts(d => ({ ...d, [gameId]: { ...d[gameId], dirty: false } }))
-    setSaving(s => ({ ...s, [gameId]: false }))
   }
 
+  // Unchecking Final puts the game back to not played: both scores cleared, so it
+  // drops out of standings, the public page and the scored count. Bo (Oct 12 2026):
+  // test scores were stuck as final, and a scorer can score the wrong game on the day.
   async function toggleFinal(gameId: string, checked: boolean) {
     const draft = drafts[gameId]
-    if (checked && (draft.s1 === '' || draft.s2 === '')) { toast.error('Enter both scores first'); return }
-    setDrafts(d => ({ ...d, [gameId]: { ...d[gameId], dirty: true } }))
-    await saveGame(gameId)
+    if (checked) {
+      if (draft.s1 === '' || draft.s2 === '') { toast.error('Enter both scores first'); return }
+      await saveGame(gameId, { ...draft, dirty: true })
+      return
+    }
+    const g = games.find(x => x.id === gameId)
+    if (!confirm(`Mark ${g ? `${g.team1} vs ${g.team2}` : 'this game'} as not played? This clears its score everywhere, including the public page.`)) return
+    setSaving(s => ({ ...s, [gameId]: true }))
+    const r = await fetch(`/api/games/${gameId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score1: null, score2: null }) }).catch(() => null)
+    setSaving(s => ({ ...s, [gameId]: false }))
+    if (!r?.ok) { toast.error("Couldn't reset that game. Try again."); return }
+    setGames(gs => gs.map(x => x.id === gameId ? { ...x, score1: null, score2: null } : x))
+    setDrafts(d => ({ ...d, [gameId]: { ...d[gameId], s1: '', s2: '', dirty: false } }))
+    toast.success('Game reset to not played')
   }
 
   function handleKey(e: React.KeyboardEvent, gameId: string, field: 's1' | 's2') {
