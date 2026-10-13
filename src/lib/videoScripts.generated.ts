@@ -345,6 +345,6 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "When the schedule is posted, your games and pools show up here too. Check back the week of the event.",
       "Track your tournament history, and register for future events with just a few clicks."
     ],
-    "outro": "Sunshine Events Group. See you on the field."
+    "outro": "Sunshine Events Group. From registration to the final whistle, so you can focus on the game."
   }
 }
