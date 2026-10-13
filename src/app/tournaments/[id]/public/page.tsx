@@ -8,6 +8,7 @@ import FollowAlertsSheet from '@/components/FollowAlertsSheet'
 import { deviceId as getDeviceId } from '@/lib/pushClient'
 import { nameKey, teamRefKey } from '@/lib/names'
 import { BracketView, LogosContext, isPlaceholderTeam, type BkBracket } from '@/components/BracketDiagram'
+import BracketChart from '@/components/BracketChart'
 
 // Follower counts per team, from /follows. Bo wants Follow to read like Instagram --
 // "how many people are following a particular team" -- so the number sits under
@@ -451,7 +452,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
       })()}
 
       {scheduleLive && divTab==='bracket' && (
-        <BracketView bracketList={bracketList} scheduledGames={bracketGames} poolOnly={poolOnly}/>
+        <BracketChart bracketList={bracketList} scheduledGames={bracketGames} poolOnly={poolOnly}/>
       )}
     </div>
   )
