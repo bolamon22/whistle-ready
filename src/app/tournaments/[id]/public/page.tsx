@@ -24,7 +24,7 @@ function FollowerCount({division,team,className=''}:{division:string;team:string
   return <span className={`inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 ${className}`} title={`${n} follower${n===1?'':'s'}`}><Users size={10} aria-hidden/>{n} follower{n===1?'':'s'}</span>
 }
 import Link from 'next/link'
-import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Bell, X, Megaphone, Search, Info } from 'lucide-react'
+import { Users, Calendar, LayoutGrid, Trophy, Clock, ChevronDown, ChevronUp, Star, CalendarPlus, Medal, Bell, X, Megaphone, Search, Info, MapPin } from 'lucide-react'
 
 
 interface Tournament { id:string; name:string; startDate:string; endDate:string; location:string; logoUrl:string; sport:string }
@@ -231,8 +231,8 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
   const onFollow=(team:string)=>toggleFollow(division,team)
   const [divTab,setDivTab]=useState<DivTab>('standings')
   const [selectedTeam,setSelectedTeam]=useState<string|null>(null)
-  const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'>('all')
-  const [schedField,setSchedField]=useState('')
+  const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'|'mine'|'live'>('all')
+  const [schedDay,setSchedDay]=useState('')
   const [schedGroup,setSchedGroup]=useState<'time'|'field'>('time')
   const schedLogos=useContext(LogosContext)
   const [advanceCount,setAdvanceCount]=useState(0)
@@ -347,106 +347,149 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
       )}
 
       {scheduleLive && divTab==='schedule' && (() => {
+        // Schedule, redesigned (Bo, Oct 12 2026: "not really a big fan of how the
+        // schedule looks"; approved mockup on the Public Event Pages Redesign canvas).
+        // One day at a time; games grouped under their start time, each a card with
+        // the teams stacked and the score on the right; chips for my teams / live /
+        // final; By field lays the day out as fields across, times down.
         const now = Date.now()
+        const t12 = (t:string)=>{ const [h,m]=(t||'').split(':').map(Number); if(isNaN(h)) return t||'TBD'; return `${h%12||12}:${String(m||0).padStart(2,'0')} ${h>=12?'PM':'AM'}` }
         const all = [...divGames].sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):((parseStartMs(a.date,a.startTime)||0)-(parseStartMs(b.date,b.startTime)||0)))
         const isPlaceholder = (n:string)=>/^(seed\s|w-b|l-b|bracket\b|winner\b|loser\b|tbd$)/i.test((n||'').trim())
         const teamsInDiv = [...new Set(divGames.filter(g=>!g.isChampionship).flatMap(g=>[g.team1,g.team2]).filter(n=>!!n&&!isPlaceholder(n)))].sort()
         const realTeams = new Set(teamsInDiv)
-        const fieldsInDiv = [...new Set(divGames.map(g=>g.location).filter(Boolean))].sort()
+        const pretty = (n:string)=>(n||'TBD').replace(/^W-B(\d+)$/i,'Winner B$1').replace(/^L-B(\d+)$/i,'Loser B$1')
         const isLive = (g:Game)=>{ if(g.score1!=null) return false; const st=parseStartMs(g.date,g.startTime); return st!=null && now>=st && now<=st+90*60000 }
         const crest = (name:string)=> schedLogos[name]
-          ? <img src={schedLogos[name]} alt="" className="w-5 h-5 rounded-full object-contain bg-white border border-slate-200 flex-shrink-0"/>
-          : <span className="w-5 h-5 rounded-full bg-slate-300 text-white text-[9px] font-semibold flex items-center justify-center flex-shrink-0">{(name||'?').charAt(0).toUpperCase()}</span>
+          ? <img src={schedLogos[name]} alt="" className="w-7 h-7 rounded-full object-contain bg-white border border-slate-200 flex-shrink-0"/>
+          : isPlaceholder(name)||!name
+            ? <span className="w-7 h-7 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 text-[10px] font-bold flex items-center justify-center flex-shrink-0">?</span>
+            : <TeamAvatar name={name} size="sm"/>
         const downloadIcs = (g:Game)=>{ const st=parseStartMs(g.date,g.startTime); if(st==null) return; const fmt=(ms:number)=>new Date(ms).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z'; const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Whistle Ready//EN','BEGIN:VEVENT','UID:'+g.id+'@whistleready','DTSTART:'+fmt(st),'DTEND:'+fmt(st+3600000),'SUMMARY:'+g.team1+' vs '+g.team2,'LOCATION:'+(g.location||''),'DESCRIPTION:'+division,'END:VEVENT','END:VCALENDAR'].join('\r\n'); const blob=new Blob([ics],{type:'text/calendar'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=(g.team1+'-vs-'+g.team2).replace(/[^a-z0-9]+/gi,'-')+'.ics'; a.click(); URL.revokeObjectURL(url) }
-        const upNext = anyFollowed ? all.find(g=>g.score1==null && (isFollowed(g.division,g.team1)||isFollowed(g.division,g.team2))) : null
-        const base = all.filter(g=>{
+        const mineG = (g:Game)=>isFollowed(g.division,g.team1)||isFollowed(g.division,g.team2)
+        const upNext = anyFollowed ? all.find(g=>g.score1==null && mineG(g)) : null
+        const days = [...new Set(all.map(g=>g.date).filter(Boolean))].sort()
+        const todayIso = new Date().toLocaleDateString('en-CA')
+        const autoDay = days.includes(todayIso) ? todayIso : (days.find(d=>all.some(g=>g.date===d&&g.score1==null)) || days[0] || '')
+        const day = schedDay && days.includes(schedDay) ? schedDay : autoDay
+        const dayGames = all.filter(g=>g.date===day)
+        const shown = dayGames.filter(g=>{
           if(selectedTeam && g.team1!==selectedTeam && g.team2!==selectedTeam) return false
-          if(schedField && g.location!==schedField) return false
           const hs=g.score1!=null&&g.score2!=null
-          if(schedStatus==='final'&&!hs) return false
-          if(schedStatus==='upcoming'&&hs) return false
+          if(schedStatus==='final') return hs
+          if(schedStatus==='live') return isLive(g)
+          if(schedStatus==='mine') return mineG(g)
+          if(schedStatus==='upcoming') return !hs
           return true
         })
-        const groups = schedGroup==='time'
-          ? [...new Set(base.map(g=>g.date))].map(d=>({key:d,label:fmtDayHeader(d),sub:base.filter(g=>g.date===d).length+' games',games:base.filter(g=>g.date===d)}))
-          : [...new Set(base.map(g=>g.location||'TBD'))].sort().map(fl=>({key:fl,label:fl,sub:base.filter(g=>(g.location||'TBD')===fl).length+' games',games:base.filter(g=>(g.location||'TBD')===fl)}))
+        const field = (g:Game)=>(g.location||'').split(' - ').pop()||g.location||'TBD'
+        const slotTimes = [...new Set(shown.map(g=>g.startTime||''))]
         const card = (g:Game)=>{
           const hs=g.score1!=null&&g.score2!=null
           const live=isLive(g)
           const t1w=hs&&g.score1!>g.score2!, t2w=hs&&g.score2!>g.score1!
-          const isHL=isFollowed(g.division,g.team1)||isFollowed(g.division,g.team2)
-          const chipCls=g.isChampionship?'bg-amber-100 text-amber-800':'bg-teal-100 text-teal-700'
-          // "If needed": only played on a certain result (lib/ifNeeded), so families don't plan around it
-          const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-500'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.ifNeeded?{t:'If needed',c:'bg-violet-50 text-violet-700'}:g.isChampionship?{t:'Bracket',c:'bg-amber-50 text-amber-700'}:g.pool?{t:poolLabel(g.pool),c:'bg-teal-50 text-teal-700'}:{t:'Upcoming',c:'bg-slate-100 text-slate-500'}
-          return (
-            <div key={g.id} className={`bg-white border rounded-xl px-2.5 py-2 flex items-center gap-2.5 ${live?'border-red-200':isHL?'border-teal-300 bg-teal-50/30':'border-slate-200'}`}>
-              <Link href={`/tournaments/${tournamentId}/public/games/${g.id}`} title="Game page" className={`text-[10px] font-bold w-8 text-center py-0.5 rounded flex-shrink-0 hover:ring-2 hover:ring-teal-300 ${chipCls}`}>{g.gameNumber}</Link>
-              <div className="w-[58px] flex-shrink-0 text-center border-r border-slate-100 pr-2">
-                <div className="text-[12px] font-semibold text-slate-800">{g.startTime||'TBD'}</div>
-                <div className="text-[10px] text-slate-400 truncate">{(g.location||'').split(' - ').pop()||''}</div>
-              </div>
-              <div className="flex-1 flex items-center gap-1.5 min-w-0">
-                <div className="flex-1 flex items-center justify-end gap-1.5 min-w-0">
-                  <FollowButton team={g.team1} following={isFollowed(g.division,g.team1)} onToggle={t=>toggleFollow(g.division,t)} compact />
-                  {realTeams.has(g.team1)
-                    ? <button onClick={()=>setSelectedTeam(g.team1)} className={`text-[12.5px] truncate text-right hover:underline ${t1w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team1}</button>
-                    : <span className={`text-[12.5px] truncate ${t1w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team1||'TBD'}</span>}
-                  {crest(g.team1)}
-                </div>
-                {hs ? (
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className={`w-6 h-6 rounded text-[13px] font-bold flex items-center justify-center ${t1w?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-500'}`}>{g.score1}</span>
-                    <span className="text-slate-300 text-[10px]">–</span>
-                    <span className={`w-6 h-6 rounded text-[13px] font-bold flex items-center justify-center ${t2w?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-500'}`}>{g.score2}</span>
-                  </div>
-                ) : <span className="text-[11px] text-slate-400 font-medium flex-shrink-0">vs</span>}
-                <div className="flex-1 flex items-center gap-1.5 min-w-0">
-                  {crest(g.team2)}
-                  {realTeams.has(g.team2)
-                    ? <button onClick={()=>setSelectedTeam(g.team2)} className={`text-[12.5px] truncate text-left hover:underline ${t2w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team2}</button>
-                    : <span className={`text-[12.5px] truncate ${t2w?'font-semibold text-teal-700':'text-slate-700'}`}>{g.team2||'TBD'}</span>}
-                  <FollowButton team={g.team2} following={isFollowed(g.division,g.team2)} onToggle={t=>toggleFollow(g.division,t)} compact />
-                </div>
-              </div>
-              {!hs && parseStartMs(g.date,g.startTime)!=null && <button onClick={()=>downloadIcs(g)} title="Add to calendar" className="flex-shrink-0 text-slate-400 hover:text-teal-600"><CalendarPlus size={15}/></button>}
-              <span className={`text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0 ${pill.c}`}>{live?'● ':''}{pill.t}</span>
+          const mine=mineG(g)
+          const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-600'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.ifNeeded?{t:'If needed',c:'bg-violet-50 text-violet-700'}:{t:t12(g.startTime),c:'bg-teal-50 text-teal-700'}
+          const tag=g.pool?poolLabel(g.pool):g.isChampionship?'Championship':/^B\d+$/i.test(g.gameNumber)?'Bracket':''
+          const teamRow=(name:string,score:number|null,win:boolean,lose:boolean)=>(
+            <div className="flex items-center gap-2.5 min-h-[40px]">
+              {crest(name)}
+              {realTeams.has(name)
+                ? <button onClick={()=>setSelectedTeam(selectedTeam===name?null:name)} className={`flex-1 min-w-0 truncate text-left text-[14px] hover:underline ${lose?'text-slate-500':win?'font-bold text-slate-900':'font-semibold text-slate-800'} ${isFollowed(g.division,name)?'!text-teal-700':''}`}>{name}</button>
+                : <span className={`flex-1 min-w-0 truncate text-[14px] ${isPlaceholder(name)?'italic text-slate-400':'font-semibold text-slate-800'}`}>{pretty(name)}</span>}
+              {realTeams.has(name) && <FollowButton team={name} following={isFollowed(g.division,name)} onToggle={t=>toggleFollow(g.division,t)} compact />}
+              {hs && <span className={`text-[17px] font-extrabold min-w-[22px] text-right ${lose?'text-slate-400':'text-slate-900'}`}>{score}</span>}
             </div>
           )
+          return (
+            <article key={g.id} className={`bg-white rounded-2xl px-3.5 py-3 flex flex-col gap-1.5 border ${live?'border-red-200':mine?'border-teal-300 ring-1 ring-teal-100':'border-slate-200'} shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${pill.c}`}>{live?'● ':''}{pill.t}</span>
+                <span className="flex items-center gap-1 text-xs text-slate-500 truncate"><MapPin size={13} className="flex-shrink-0"/>{field(g)}</span>
+              </div>
+              {teamRow(g.team1,g.score1,t1w,t2w)}
+              <div className="h-px bg-slate-100"/>
+              {teamRow(g.team2,g.score2,t2w,t1w)}
+              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 pt-0.5">
+                <span className={`font-bold ${g.isChampionship?'text-teal-700':''}`}>{tag}</span>
+                <span className="flex items-center gap-3">
+                  {!hs && parseStartMs(g.date,g.startTime)!=null && <button onClick={()=>downloadIcs(g)} title="Add to calendar" aria-label="Add to calendar" className="text-slate-400 hover:text-teal-600"><CalendarPlus size={15}/></button>}
+                  <Link href={`/tournaments/${tournamentId}/public/games/${g.id}`} className="hover:text-teal-700 hover:underline">Game {g.gameNumber} ›</Link>
+                </span>
+              </div>
+            </article>
+          )
         }
+        const chip=(on:boolean)=>`min-h-[36px] px-3.5 rounded-full text-[13px] font-semibold whitespace-nowrap border transition-colors ${on?'bg-teal-600 text-white border-teal-600':'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`
+        const mineCount = dayGames.filter(mineG).length
+        const fields = [...new Set(dayGames.map(field))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
+        const times = [...new Set(dayGames.map(g=>g.startTime||''))].sort()
         return (
-          <div>
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <select value={selectedTeam||''} onChange={e=>setSelectedTeam(e.target.value||null)} className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex gap-2">
+                {days.map(d=>{ const dt=new Date(d+'T12:00:00'); const on=d===day; return (
+                  <button key={d} onClick={()=>setSchedDay(d)} className={`min-w-[72px] min-h-[62px] px-3 rounded-2xl flex flex-col items-center justify-center border transition-colors ${on?'bg-[#0B1F3A] text-white border-[#0B1F3A]':'bg-white text-slate-800 border-slate-200 hover:border-slate-300'}`}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{dt.toLocaleDateString('en-US',{weekday:'short'})}</span>
+                    <span className="text-lg font-extrabold leading-tight">{dt.getDate()}</span>
+                    <span className="text-[11px] opacity-80">{all.filter(g=>g.date===d).length} games</span>
+                  </button>)})}
+              </div>
+              <div className="flex p-1 gap-1 bg-slate-200 rounded-full">
+                {(['time','field'] as const).map(gp=><button key={gp} onClick={()=>setSchedGroup(gp)} className={`min-h-[36px] px-4 rounded-full text-[13px] font-bold transition-colors ${schedGroup===gp?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>By {gp}</button>)}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <button onClick={()=>setSchedStatus('all')} className={chip(schedStatus==='all')}>All games</button>
+              <button onClick={()=>setSchedStatus('mine')} className={chip(schedStatus==='mine')}><Star size={13} className="inline -mt-0.5 mr-1"/>My teams{mineCount?` (${mineCount})`:''}</button>
+              <button onClick={()=>setSchedStatus('live')} className={chip(schedStatus==='live')}>Live</button>
+              <button onClick={()=>setSchedStatus('final')} className={chip(schedStatus==='final')}>Final</button>
+              <select value={selectedTeam||''} onChange={e=>setSelectedTeam(e.target.value||null)} aria-label="Show one team" className="min-h-[36px] ml-auto bg-white border border-slate-200 rounded-full px-3 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
                 <option value="">All teams</option>
                 {teamsInDiv.map(t=><option key={t} value={t}>{t}</option>)}
               </select>
-              <select value={schedField} onChange={e=>setSchedField(e.target.value)} className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
-                <option value="">All fields</option>
-                {fieldsInDiv.map(fl=><option key={fl} value={fl}>{fl}</option>)}
-              </select>
-              <div className="flex bg-slate-100 rounded-lg p-0.5">
-                {(['all','upcoming','final'] as const).map(st=><button key={st} onClick={()=>setSchedStatus(st)} className={`text-[11px] px-2.5 py-1 rounded-md capitalize transition-colors ${schedStatus===st?'bg-white shadow text-teal-700 font-medium':'text-slate-500 hover:text-slate-700'}`}>{st}</button>)}
-              </div>
-              <div className="flex bg-slate-100 rounded-lg p-0.5 ml-auto">
-                {(['time','field'] as const).map(gp=><button key={gp} onClick={()=>setSchedGroup(gp)} className={`text-[11px] px-2.5 py-1 rounded-md transition-colors ${schedGroup===gp?'bg-white shadow text-teal-700 font-medium':'text-slate-500 hover:text-slate-700'}`}>By {gp}</button>)}
-              </div>
             </div>
             {upNext && (
-              <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 mb-3 flex items-center gap-2">
-                <Clock size={14} className="text-teal-600 flex-shrink-0"/>
-                <span className="text-xs text-teal-700 truncate"><b>Up next</b> · {upNext.startTime} · {upNext.team1} vs {upNext.team2}{upNext.location?' · '+(upNext.location.split(' - ').pop()):''}</span>
+              <div className="bg-teal-50 border border-teal-200 rounded-2xl px-3.5 py-2.5 flex items-center gap-2">
+                <Clock size={15} className="text-teal-600 flex-shrink-0"/>
+                <span className="text-[13px] text-teal-800 truncate"><b>Up next</b> · {fmtDayHeader(upNext.date).split(',')[0]} {t12(upNext.startTime)} · {upNext.team1} vs {upNext.team2} · {field(upNext)}</span>
               </div>
             )}
-            {groups.length===0 ? <div className="text-center py-12 text-slate-400">No games found.</div> : groups.map(grp=>(
-              <div key={grp.key} className="mb-4">
-                <div className="flex items-center gap-2 mb-2 mt-1">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{grp.label}</p>
-                  <span className="text-[10px] text-slate-400">{grp.sub}</span>
-                  <span className="flex-1 border-t border-slate-200"></span>
+            {schedGroup==='time' ? (
+              shown.length===0
+                ? <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-8 text-center text-sm text-slate-500">{schedStatus==='mine'?'None of your teams play this day. Tap the star on a team to follow it.':'No games match.'}</div>
+                : slotTimes.map(t=>{ const gs=shown.filter(g=>(g.startTime||'')===t); const live=gs.some(isLive); return (
+                  <section key={t} className="space-y-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`text-[15px] font-extrabold px-3 py-1 rounded-full ${live?'bg-red-100 text-red-700':'bg-white border border-slate-200 text-slate-900'}`}>{t12(t)}</span>
+                      <span className="text-xs text-slate-400">{gs.length} game{gs.length===1?'':'s'}</span>
+                      <span className="flex-1 border-t border-slate-200"/>
+                      {live&&<span className="text-[11px] font-bold uppercase tracking-wide text-red-700">Now</span>}
+                    </div>
+                    <div className="grid gap-2.5" style={{gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))'}}>{gs.map(card)}</div>
+                  </section>)})
+            ) : (
+              <div className="overflow-x-auto bg-white border border-slate-200 rounded-2xl p-3">
+                <div className="grid gap-2" style={{gridTemplateColumns:`64px repeat(${fields.length},minmax(160px,1fr))`,minWidth:64+fields.length*168}}>
+                  <span/>
+                  {fields.map(f=><span key={f} className="text-xs font-bold text-slate-500 px-2 py-1">{f}</span>)}
+                  {times.map(t=>(
+                    <Fragment key={t}>
+                      <span className="text-[13px] font-extrabold pt-2.5">{t12(t)}</span>
+                      {fields.map(f=>{ const g=dayGames.find(x=>(x.startTime||'')===t&&field(x)===f); if(!g) return <span key={f} className="min-h-[70px] rounded-xl bg-slate-50 border border-dashed border-slate-200"/>
+                        const hs=g.score1!=null&&g.score2!=null, live=isLive(g), dim=(selectedTeam&&g.team1!==selectedTeam&&g.team2!==selectedTeam)||(schedStatus==='mine'&&!mineG(g))
+                        const t1w=hs&&g.score1!>g.score2!, t2w=hs&&g.score2!>g.score1!
+                        return (
+                          <Link key={f} href={`/tournaments/${tournamentId}/public/games/${g.id}`} className={`min-h-[70px] rounded-xl px-2.5 py-2 flex flex-col gap-1 border transition-opacity ${live?'bg-red-50 border-red-200':mineG(g)?'bg-white border-teal-300':'bg-white border-slate-200 hover:border-slate-300'} ${dim?'opacity-40':''}`}>
+                            <span className="flex justify-between text-[10px] font-bold text-slate-400"><span>{g.gameNumber}{g.pool?` · ${poolLabel(g.pool)}`:''}</span><span className={live?'text-red-700':''}>{live?'LIVE':hs?'FINAL':''}</span></span>
+                            <span className="flex justify-between gap-1.5 text-[12.5px]"><span className={`truncate ${t1w?'font-bold text-slate-900':isPlaceholder(g.team1)?'italic text-slate-400':'text-slate-700'}`}>{pretty(g.team1)}</span>{hs&&<b>{g.score1}</b>}</span>
+                            <span className="flex justify-between gap-1.5 text-[12.5px]"><span className={`truncate ${t2w?'font-bold text-slate-900':isPlaceholder(g.team2)?'italic text-slate-400':'text-slate-700'}`}>{pretty(g.team2)}</span>{hs&&<b>{g.score2}</b>}</span>
+                          </Link>)})}
+                    </Fragment>
+                  ))}
                 </div>
-                <div className="space-y-2">{grp.games.map(card)}</div>
               </div>
-            ))}
+            )}
           </div>
         )
       })()}
