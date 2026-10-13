@@ -165,6 +165,17 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
         setScorers1(saved.scorers1); setScorers2(saved.scorers2)
         if (saved.running && left > 0) { setClockRunning(true); toast('⏱ Clock kept running — picked up where you left off') }
       }
+      // The running score lives on the server (live-scores), not on this phone: a
+      // refresh used to drop it back to the last Save. Take it from there.
+      if (!(g.score1 != null && g.score2 != null)) {
+        fetch(`/api/tournaments/${tid}/live-scores?fresh=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()).then(d => {
+          const ls = d?.scores?.[params.gameId]
+          if (!ls || !ls.live) return
+          startedRef.current = true
+          setScore1(Number(ls.score1) || 0); setScore2(Number(ls.score2) || 0)
+          if (!saved && ls.period) setCurrentPeriod(Number(ls.period) || 1)
+        }).catch(() => {})
+      }
       setReqField(fieldNumberFrom(g.location))
       try {
         const r = JSON.parse(localStorage.getItem('lw:req:' + params.gameId) || '[]')
@@ -201,14 +212,27 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     return `${PERIOD_NOUN[periodFormat] || 'Period'} ${n}`
   }
 
-  // push the live state so parents can follow on the public page
-  function pushLive(opts: { score1?: number; score2?: number; period?: number; live: boolean; event?: 'halftime' } = { live: true }) {
+  // push the live state so parents can follow on the public page. The clock goes
+  // with it (Bo, Oct 12 2026: Post scores and the ticker showed the half but never
+  // the time): time left and whether it's running, so viewers can count it down.
+  const startedRef = useRef(false)   // this game has been pushed live from this phone
+  function pushLive(opts: { score1?: number; score2?: number; period?: number; live: boolean; event?: 'halftime'; running?: boolean; ms?: number } = { live: true }) {
     const s1 = opts.score1 ?? score1, s2 = opts.score2 ?? score2, per = opts.period ?? currentPeriod
+    if (opts.live) startedRef.current = true
     fetch(`/api/tournaments/${tid}/live-scores`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameId: params.gameId, score1: s1, score2: s2, period: per, periodLabel: periodLabelFor(per), live: opts.live, ...(opts.event ? { event: opts.event } : {}) }),
+      body: JSON.stringify({ gameId: params.gameId, score1: s1, score2: s2, period: per, periodLabel: periodLabelFor(per), live: opts.live,
+        clockMs: opts.ms ?? clockMsRef.current, clockRunning: opts.live && (opts.running ?? clockRunning), ...(opts.event ? { event: opts.event } : {}) }),
     }).catch(() => {})
   }
+  // While the clock runs, resend every 30s: keeps viewers' countdown in step with
+  // this phone and tells the server the game is still going.
+  const pushRef = useRef(pushLive); pushRef.current = pushLive
+  useEffect(() => {
+    if (!clockRunning || gameEnded) return
+    const t = setInterval(() => pushRef.current({ live: true }), 30000)
+    return () => clearInterval(t)
+  }, [clockRunning, gameEnded])
   function changePeriod(delta: number) {
     const next = Math.max(1, Math.min(9, currentPeriod + delta))
     setCurrentPeriod(next)
@@ -288,7 +312,8 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     if (clockRunning && clockMs <= 0) {
       setClockRunning(false); toast('⏱ Period over')
       // End of the first half (or Q2): tell followers the halftime score.
-      if ((periodFormat === 'halves' && currentPeriod === 1) || (periodFormat === 'quarters' && currentPeriod === 2)) pushLive({ live: true, event: 'halftime' })
+      if ((periodFormat === 'halves' && currentPeriod === 1) || (periodFormat === 'quarters' && currentPeriod === 2)) pushLive({ live: true, event: 'halftime', running: false, ms: 0 })
+      else pushLive({ live: true, running: false, ms: 0 })
     }
   }, [clockMs, clockRunning])
 
@@ -297,17 +322,20 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     if (starting) primeAlerts()   // unlock sound with this tap so the penalty alert can play later
     if (starting && clockMs <= 0) setClockMs(periodSecs * 1000)
     setClockRunning(r => !r)
-    if (starting) pushLive({ live: true })
+    // Pause is sent too, so the ticker stops counting down when the scorer does.
+    if (starting || startedRef.current) pushLive({ live: true, running: starting, ms: starting && clockMs <= 0 ? periodSecs * 1000 : clockMs })
   }
   function resetClock() {
     if (!window.confirm('Reset the clock back to the full period? This clears the current running time.')) return
     setClockRunning(false); setClockMs(periodSecs * 1000)
+    if (startedRef.current) pushLive({ live: true, running: false, ms: periodSecs * 1000 })
   }
 
   function applyClockSetup() {
     if (!game) return
     const secs = Math.max(1, Number(setupMin) * 60 + Number(setupSec))
     setPeriodSecs(secs); setClockRunning(false); setClockMs(secs * 1000)
+    if (startedRef.current) pushLive({ live: true, running: false, ms: secs * 1000 })
     if (saveClockDefault) {
       setDefaults(saveDefaults(game.tournamentId ?? tid, { periodSecs: secs }))
       toast.success(`Saved ${fmt(secs)} as tournament default`)

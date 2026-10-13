@@ -11,7 +11,7 @@ import { ChevronLeft, Trophy, MapPin, Calendar, Clock, Share2, CalendarPlus } fr
 import { poolLabel } from '@/lib/poolNames'
 
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
-interface LiveScore { score1:number; score2:number; period:number; periodLabel:string; live:boolean; updatedAt:string }
+import { liveClockText, useNowTicking, type LiveScore } from '@/components/LiveTicker'
 
 const fmtDate=(d:string)=>{ if(!d) return ''; const [y,m,day]=d.split('-'); const dt=new Date(+y,+m-1,+day); return isNaN(dt.getTime())?d:dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) }
 const parseStartMs=(date:string,time:string)=>{ if(!date||!time) return null; const m=time.match(/(\d+):(\d+)\s*(AM|PM)?/i); if(!m) return null; let h=+m[1]; const min=+m[2]; const ap=(m[3]||'').toUpperCase(); if(ap==='PM'&&h!==12)h+=12; if(ap==='AM'&&h===12)h=0; const [y,mo,d]=date.split('-').map(Number); const dt=new Date(y,mo-1,d,h,min); return isNaN(dt.getTime())?null:dt.getTime() }
@@ -56,16 +56,17 @@ export default function PublicGamePage(){
     return ()=>{ if(timer) clearInterval(timer) }
   },[id,gameId])
 
+  const now=useNowTicking(!!liveScore?.live&&!!liveScore?.clockRunning)
   const status=useMemo(()=>{
     if(!game) return null
     if(game.isCanceled) return {label:'Canceled',cls:'bg-slate-200 text-slate-500'}
     if(game.score1!=null&&game.score2!=null) return {label:'Final',cls:'bg-emerald-100 text-emerald-700'}
     // LIVE only on game day: a scorekeeper test before the event must not show (see LiveTicker).
-    if(liveScore?.live&&game.date===new Date().toLocaleDateString('en-CA')) return {label:`Live${liveScore.periodLabel?` · ${liveScore.periodLabel}`:''}`,cls:'bg-red-100 text-red-700 animate-pulse'}
+    if(liveScore?.live&&game.date===new Date().toLocaleDateString('en-CA')) return {label:`Live${liveScore.periodLabel?` · ${liveScore.periodLabel}`:''}${liveClockText(liveScore,now)?` · ${liveClockText(liveScore,now)}${liveScore.clockRunning?'':' (clock stopped)'}`:''}`,cls:'bg-red-100 text-red-700 animate-pulse'}
     const st=parseStartMs(game.date,game.startTime)
     if(st!=null&&Date.now()>=st&&Date.now()<=st+90*60000) return {label:'In progress',cls:'bg-red-50 text-red-600'}
     return {label:'Upcoming',cls:'bg-slate-100 text-slate-500'}
-  },[game,liveScore])
+  },[game,liveScore,now])
 
   if(loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400">Loading…</div></div>
   if(!game) return (

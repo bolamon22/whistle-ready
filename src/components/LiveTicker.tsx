@@ -14,7 +14,23 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
-interface LiveScore { score1:number; score2:number; period:number; periodLabel:string; live:boolean; updatedAt:string }
+export interface LiveScore { score1:number; score2:number; period:number; periodLabel:string; live:boolean; updatedAt:string; clockMs?:number|null; clockRunning?:boolean }
+
+// The scorer's clock as a viewer should see it now: time left when it was sent,
+// less the time since if it is running. '' when the scorer's phone sent no clock.
+export function liveClockText(ls:LiveScore|undefined|null, now:number):string{
+  if(!ls||ls.clockMs==null) return ''
+  const sent=Date.parse(ls.updatedAt||'')
+  const ms=ls.clockRunning&&!isNaN(sent)?Math.max(0,ls.clockMs-Math.max(0,now-sent)):ls.clockMs
+  const s=Math.ceil(ms/1000)
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
+}
+// Re-render once a second while any clock is counting down.
+export function useNowTicking(on:boolean){
+  const [now,setNow]=useState(()=>Date.now())
+  useEffect(()=>{ if(!on) return; const t=setInterval(()=>setNow(Date.now()),1000); return ()=>clearInterval(t) },[on])
+  return now
+}
 
 export default function LiveTicker({ tournamentId, games, logos, staff=false, scores, onStop }:{ tournamentId:string; games:Game[]; logos:Record<string,string>; staff?:boolean; scores?:Record<string,LiveScore>; onStop?:(gameId:string)=>void }){
   const [polled,setLiveScores]=useState<Record<string,LiveScore>>({})
@@ -37,6 +53,7 @@ export default function LiveTicker({ tournamentId, games, logos, staff=false, sc
     return [...live.map(g=>({g,ls:liveScores[g.id],live:true})),...finals.map(g=>({g,ls:undefined as LiveScore|undefined,live:false}))]
   },[games,liveScores,staff])
 
+  const now=useNowTicking(items.some(x=>x.live&&x.ls?.clockRunning))
   if(items.length===0) return null
 
   const crest=(team:string)=>{
@@ -60,7 +77,7 @@ export default function LiveTicker({ tournamentId, games, logos, staff=false, sc
               className="block px-2.5 py-1.5">
               <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wide mb-1">
                 {live
-                  ? <span className="text-red-600 animate-pulse">● Live{ls!.periodLabel?` · ${ls!.periodLabel}`:''}</span>
+                  ? <span className="text-red-600"><span className="animate-pulse">●</span> Live{ls!.periodLabel?` · ${ls!.periodLabel}`:''}{liveClockText(ls,now)?<> · <span className="tabular-nums">{liveClockText(ls,now)}</span>{ls!.clockRunning?'':' ⏸'}</>:''}</span>
                   : <span className="text-emerald-600">Final</span>}
                 {g.gameNumber&&<span className="text-slate-300">#{g.gameNumber}</span>}
               </div>

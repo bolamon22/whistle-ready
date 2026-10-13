@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import TournamentNav from '../TournamentNav'
-import LiveTicker from '@/components/LiveTicker'
+import LiveTicker, { liveClockText, useNowTicking } from '@/components/LiveTicker'
 import toast, { Toaster } from 'react-hot-toast'
 import { Search, X, ChevronDown, ChevronUp, Check, ClipboardCheck } from 'lucide-react'
 
@@ -15,7 +15,7 @@ interface Game {
 type Draft = { s1: string; s2: string; note: string; dirty: boolean }
 type GroupBy = 'division' | 'field'
 type ShowFilter = 'all' | 'scored' | 'unscored' | 'live'
-type LiveScore = { score1: number; score2: number; period: number; periodLabel: string; live: boolean; updatedAt: string }
+type LiveScore = { score1: number; score2: number; period: number; periodLabel: string; live: boolean; updatedAt: string; clockMs?: number | null; clockRunning?: boolean }
 type SortBy = 'time' | 'game'
 
 function fmt12(t: string) {
@@ -68,6 +68,8 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
     return () => clearInterval(t)
   }, [params.id])
   const isLiveGame = (g: Game) => g.score1 == null && !!liveScores[g.id]?.live
+  const nowTick = useNowTicking(Object.values(liveScores).some(v => v.live && v.clockRunning))
+  const clockOf = (id: string) => { const t = liveClockText(liveScores[id], nowTick); return t ? ` · ${t}${liveScores[id].clockRunning ? '' : ' ⏸'}` : '' }
   // Stop live: the entry stays (scores, alerts already sent) with live off, so the
   // game drops off the public ticker and game page. Reopening the scorekeeper and
   // starting the clock puts it back.
@@ -416,7 +418,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                         <div className="text-[11px] text-slate-400 truncate mb-2">{game.location}</div>
                         {isLiveGame(game) && <div className="mb-2">{(
                             <span className="inline-flex items-center gap-1.5 mt-1">
-                              <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
+                              <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''}{clockOf(game.id)} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
                               <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>
                             </span>
                           )}</div>}
@@ -479,7 +481,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                           <p className="text-xs text-slate-400 truncate">{game.location}</p>
                           {isLiveGame(game) && (
                             <span className="inline-flex items-center gap-1.5 mt-1">
-                              <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
+                              <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''}{clockOf(game.id)} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
                               <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>
                             </span>
                           )}

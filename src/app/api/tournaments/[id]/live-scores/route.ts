@@ -6,7 +6,9 @@ import { notifyGameMoment, pastHalftime } from '@/lib/finalAlerts'
 
 // Live in-progress scores so parents can follow on the public page (no login).
 // Each game's live state is stored in AppSetting under key `liveScore:<gameId>`:
-//   { score1, score2, period, periodLabel, live, updatedAt }
+//   { score1, score2, period, periodLabel, live, clockMs, clockRunning, updatedAt }
+// clockMs is the time left on the scorer's clock at updatedAt; while clockRunning,
+// viewers count it down from there (LiveTicker liveClockText).
 // GET is public (returns a map keyed by gameId). POST requires a staffer (the scorekeeper).
 
 // Guarded so the CREATE TABLE statement runs once per warm serverless
@@ -80,6 +82,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       period: Number(body.period) || 1,
       periodLabel: String(body.periodLabel || ''),
       live: !!body.live,
+      clockMs: body.clockMs == null || isNaN(Number(body.clockMs)) ? null : Math.max(0, Math.round(Number(body.clockMs))),
+      clockRunning: !!body.clockRunning,
       updatedAt: new Date().toISOString(),
       alerts: { ...prevAlerts },
     }
