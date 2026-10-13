@@ -312,6 +312,15 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   them too. Middleware lets `.mp4/.webm` through like other static files. The videos were filmed
   from the real components with mocked data (project doc `claude/staff-training-videos.md`);
   re-film when those screens change.
+- **Family & club how-to videos (Oct 13).** Public, branded "Sunshine Events Group, powered by
+  Whistle Ready", so `lib/howToVideos.ts` gates everything on `hasHowTo(orgSlug)` (SEG only).
+  Files `public/how-to/<id>.mp4` + `.jpg` (ids `waiver`, `club-portal`). Page `/o/[slug]/how-to`
+  (= sunshineeventsgroup.com/how-to, `?v=<id>` opens one). `components/HowToVideoLink` plays in a
+  modal, no sign-in: on the player waiver form (`howTo` prop), the event page's "For players &
+  parents" box, and the club portal header + a first-visit "New here?" card (portal gets the
+  slug from `/api/club-director/links` -> `tournaments[].orgSlug`). Emails: registration
+  confirmation links row, every club letter (commSend) and the pay reminder (`videoHtml`) carry
+  `howToEmailLinks`. Scripts live in the "Family & Club Video Scripts" doc; re-film when screens change.
 - **Financials redesign (Oct 5).** `/tournaments/[id]/financials` tabs: **Overview**
   (`components/financials/OverviewTab`), **Budget** (`BudgetTab`), **Other entries** (hand-typed
   transactions only; a bill's synced expense is hidden there). All money math is in `lib/finance.ts`
