@@ -9,6 +9,7 @@ import StaffW9Card from '@/components/StaffW9Card'
 import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search } from 'lucide-react'
 import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
+import { teamRefKey } from '@/lib/names'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number }
@@ -58,6 +59,8 @@ export default function RefDashboard() {
   const [view, setView] = useState<'mine' | 'all'>('mine')
   const [showPast, setShowPast] = useState(false)
   const [q, setQ] = useState('')
+  // Coach names per team, by event (api/ref/coaches): teamRefKey(division, team) -> name.
+  const [coaches, setCoaches] = useState<Record<string, Record<string, string>>>({})
   const [loading, setLoading] = useState(true)
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set())
   const [punch, setPunch] = useState<any>(null)      // { worker, open, entries }
@@ -133,6 +136,16 @@ export default function RefDashboard() {
     return () => clearInterval(t)
   }, [selTournament])
 
+  const coachEvents = Array.from(new Set([selTournament, ...assignments.map(a => a.game.tournamentId)].filter(Boolean))).sort().join(',')
+  useEffect(() => {
+    for (const tid of coachEvents ? coachEvents.split(',') : []) {
+      if (coaches[tid]) continue
+      fetch(`/api/ref/coaches?t=${encodeURIComponent(tid)}`).then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.coaches) setCoaches(c => ({ ...c, [tid]: d.coaches })) }).catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachEvents])
+
   const nowHHMM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
   const todayYMD = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
   function teHours(e: any): number {
@@ -163,6 +176,12 @@ export default function RefDashboard() {
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
 
   const myGameIds = new Set(assignments.map(a => a.game.id))
+  const coachOf = (g: Game, team: string) => coaches[g.tournamentId]?.[teamRefKey(g.division, team)] || ''
+  function Coaches({ g }: { g: Game }) {
+    const c1 = coachOf(g, g.team1), c2 = coachOf(g, g.team2)
+    if (!c1 && !c2) return null
+    return <p className="text-xs text-gray-500 mt-0.5">Coaches: {[c1 && `${c1} (${g.team1})`, c2 && `${c2} (${g.team2})`].filter(Boolean).join(' · ')}</p>
+  }
   const myWorkerId = portal?.worker?.id || ''
   const myName = (portal?.worker?.name || session?.user?.name || '').trim().toLowerCase()
   const sortKey = (g: Game) => `${g.date || ''}${g.startTime || ''}`
@@ -188,7 +207,7 @@ export default function RefDashboard() {
   const ql = q.trim().toLowerCase()
   const crewOf = (g: Game) => (g.assignments || []).slice().sort((a, b) => slotOrder(a.role) - slotOrder(b.role))
   const allShown = allGames.filter(g => g.tournamentId === selTournament && !g.isCanceled).filter(g => !ql ||
-    [g.team1, g.team2, g.location, g.division, g.gameNumber, ...crewOf(g).map(a => a.worker?.name || '')].some(x => String(x || '').toLowerCase().includes(ql)))
+    [g.team1, g.team2, g.location, g.division, g.gameNumber, coachOf(g, g.team1), coachOf(g, g.team2), ...crewOf(g).map(a => a.worker?.name || '')].some(x => String(x || '').toLowerCase().includes(ql)))
   const isMe = (a: { workerId: string; worker?: { name: string } }) => (myWorkerId && a.workerId === myWorkerId) || (!!myName && (a.worker?.name || '').trim().toLowerCase() === myName)
 
   const roleLabel = friendlyRole(punch?.worker?.defaultRole || portal?.worker?.defaultRole)
@@ -208,6 +227,7 @@ export default function RefDashboard() {
         </div>
         <p className="text-sm font-semibold text-gray-800">{g.team1} <span className="text-gray-400 font-normal">vs</span> {g.team2}</p>
         <p className="text-xs text-gray-400">{g.division}{g.payRate ? ' · $' + g.payRate : ''}</p>
+        <Coaches g={g} />
         {g.crew?.length > 0 && (
           <div className="mt-2.5 pt-2.5 border-t border-gray-100 space-y-1.5">
             {g.crew.slice().sort((a: Crew, b: Crew) => slotOrder(a.role) - slotOrder(b.role)).map((c: Crew) => (
@@ -247,6 +267,7 @@ export default function RefDashboard() {
         </div>
         <p className="text-sm font-semibold text-gray-800 mt-1">{g.team1} <span className="text-gray-400 font-normal">vs</span> {g.team2}</p>
         <p className="text-xs text-gray-400">{g.division}</p>
+        <Coaches g={g} />
         <p className="text-xs mt-1.5 leading-relaxed">
           {crew.length === 0 ? <span className="text-gray-400">No officials yet</span> : crew.map((a, i) => (
             <span key={a.role}>{i > 0 && <span className="text-gray-300"> · </span>}
@@ -376,6 +397,7 @@ export default function RefDashboard() {
           </div>
           <p className="text-base font-bold text-gray-800">{upNext.team1} vs {upNext.team2}</p>
           <p className="text-xs text-gray-500">{time12(upNext.startTime)} · {upNext.location || 'Field TBD'} · {slotLabel(upNext.role)}</p>
+          <Coaches g={upNext} />
           <p className="text-xs text-gray-400 mb-3">{upNext.division}{upNext.crew?.length ? ` · with ${upNext.crew.map((c: Crew) => c.name.split(' ')[0]).join(', ')}` : ''}</p>
           <div className="flex gap-2">
             <button onClick={() => checkIn(upNext.id)} disabled={checkedIn.has(upNext.id)}
