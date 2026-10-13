@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { cloneElement } from 'react'
 import { createClient } from '@libsql/client'
-import { Trophy, MapPin, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap, ArrowRight } from 'lucide-react'
+import { Trophy, MapPin, ClipboardList, ScrollText, Utensils, ListChecks, Phone, Mail, ExternalLink, Hotel, Zap, ArrowRight, PlayCircle } from 'lucide-react'
+import { hasHowTo, howToPath } from '@/lib/howToVideos'
 import { mdToHtml } from '@/app/o/[slug]/_md'
 import FieldMap from '@/components/FieldMap'
 import EventHero from '../_eventHero'
@@ -565,6 +566,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
             <h3 className="font-bold text-slate-900 text-sm mb-2">For players &amp; parents</h3>
             <div className="flex flex-col gap-1.5">
               <Link href={`${base}/player-waiver`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ScrollText size={12} /> Player waiver</Link>
+              {hasHowTo(org.slug) && <Link href={`${orgBase(org.slug)}${howToPath('waiver')}`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><PlayCircle size={12} /> How to sign the waiver (1 min video)</Link>}
               {hasRules && <Link href={`${base}/rules`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ScrollText size={12} /> Rules &amp; policies</Link>}
               <Link href={`${base}/public`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><ListChecks size={12} /> Schedule &amp; live scores</Link>
               <Link href={`${base}/today`} className="text-xs font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1.5"><Zap size={12} /> Game day hub</Link>

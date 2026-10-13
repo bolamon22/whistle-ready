@@ -6,6 +6,7 @@ import { fmtRange, playerPassConfig, orgSiteConfig, eventQrFor, appBaseUrl } fro
 import { headers } from 'next/headers'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 import PublicChirp from '@/components/PublicChirp'
+import { hasHowTo } from '@/lib/howToVideos'
 
 // Cache policy for published pages.
 //
@@ -160,7 +161,7 @@ export default async function TournamentPlayerWaiver({ params }: { params: { id:
     <div className="min-h-screen bg-slate-50">
       <PlayerRegForm orgId={orgId} fields={fields} waiverTitle={waiverTitle} waiverHtml={waiverHtml} confirmationTitle={confirmationTitle} confirmationHtml={confirmationHtml} teams={teams} clubs={clubs} tournamentId={t.id} tournamentName={t.name} sampleCard={sampleCard}
         header={{ logoUrl: String(t.logoUrl || org.logoUrl || ''), title: String(t.name || '') }}
-        cardContext={cardContext} />
+        cardContext={cardContext} howTo={hasHowTo(String(org.slug || ''))} />
       <PublicChirp tournamentId={String(t.id)} tournamentName={String(t.name || '')} />
     </div>
   )

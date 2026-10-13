@@ -11,6 +11,7 @@ import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
 import { SAMPLE_PLAYER } from '@/lib/samplePlayerCard'
 import CardPreview from './CardPreview'
 import ParentAccountOffer from '@/components/ParentAccountOffer'
+import HowToVideoLink from '@/components/HowToVideoLink'
 import WaiverPrefillBar from '@/components/WaiverPrefillBar'
 import type { AccountOffer } from '@/lib/parentWaiverFields'
 
@@ -262,7 +263,9 @@ function CardFields({ photoUrl, cardLink, onPhoto, onLink, preview, qrText, qr2T
   )
 }
 
-export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header, cardContext, sampleCard }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader; cardContext?: CardContext; sampleCard?: SampleCard }) {
+export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, confirmationTitle, confirmationHtml, teams, clubs, tournamentId, tournamentName, header, cardContext, sampleCard, howTo = false }: { orgId: string; fields: Fields; waiverTitle: string; waiverHtml: string; confirmationTitle: string; confirmationHtml: string; teams?: string[]; clubs?: ClubOption[]; tournamentId?: string; tournamentName?: string; header?: FormHeader; cardContext?: CardContext; sampleCard?: SampleCard
+  /** Show the "Watch how" waiver video link (lib/howToVideos: only the org the video is branded for). */
+  howTo?: boolean }) {
   // Tournament forms pass the registered clubs with their teams: the parent picks the club,
   // then the team on it, and we store "Club — Team" so staff rosters line up exactly.
   const clubMode = !!clubs && clubs.length > 0
@@ -462,7 +465,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
           )}
         </div>
       </header>
-      {!done && <p className={`${cardOn ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl'} mx-auto px-6 pt-6 text-sm text-slate-500`}>All players must complete this waiver to compete. Required fields are marked *.</p>}
+      {!done && <p className={`${cardOn ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl'} mx-auto px-6 pt-6 text-sm text-slate-500`}>All players must complete this waiver to compete. Required fields are marked *.{howTo && <> <HowToVideoLink id="waiver" label="See how it works" className="ml-1 align-middle" /></>}</p>}
     </>
   ) : null
   const resolvedTeam: string = (() => {
