@@ -357,6 +357,22 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
+  "asg-send": {
+    "title": "Send training videos to your refs",
+    "intro": "Whistle Ready assigner training. Send training videos to your refs.",
+    "lines": [
+      "On your assigner home, click Training.",
+      "These are the training videos for your officials. Click Ref training to see the ref videos.",
+      "Click Send all to send the whole set at once. You can also tick just the videos you want.",
+      "Pick the event. Only people working it are included.",
+      "Then pick your group: Boys refs, or Girls refs. Refs who do both are in both groups.",
+      "The message is written for you, with the event and the dates. Change anything you like. First name fills in for each ref.",
+      "On the right is the exact email they will get.",
+      "Check who it is going to, then click Send. You will see every name once more before it goes.",
+      "Afterward, open Who’s watched. You can see who finished, who is in progress, and remind anyone who has not started."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
   "waiver": {
     "title": "Sign your player's waiver",
     "intro": "Sunshine Events Group. Here's how to sign your player's waiver.",

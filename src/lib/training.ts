@@ -37,6 +37,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'asg-swaps', num: 'A10', series: 'assigner', title: 'Game-day swaps', blurb: 'Replace someone, fix a double-booking, lock the board.', secs: 43 },
   { id: 'asg-refneeded', num: 'A11', series: 'assigner', title: 'Ref needed alerts', blurb: 'Answer a Ref needed request on game day.', secs: 34 },
   { id: 'asg-pay', num: 'A12', series: 'assigner', title: 'Paying your officials', blurb: 'Totals, each official’s games, Mark Paid and CSV.', secs: 42 },
+  { id: 'asg-send', num: 'A13', series: 'assigner', title: 'Send training videos to your refs', blurb: 'Pick the event and your refs, the message, the preview, and Who’s watched.', secs: 58 },
 ]
 
 // roles: null = everyone. Worker roles: ref, scorekeeper, field_ops, athletic_trainer.
@@ -46,7 +47,7 @@ export const TRAINING_GROUPS: TrainingGroup[] = [
   { key: 'refs', label: 'Refs', roles: ['ref'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'incidents'] },
   { key: 'fieldops', label: 'Field ops', roles: ['field_ops'], ids: ['checklist', 'incidents'] },
   { key: 'trainers', label: 'Athletic trainers', roles: ['athletic_trainer'], ids: ['incidents'] },
-  { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-pay'] },
+  { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-pay', 'asg-send'] },
 ]
 
 export const trainingVideo = (id: string) => TRAINING_VIDEOS.find(v => v.id === id) || null
