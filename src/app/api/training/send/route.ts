@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { HOW_TO_ORG_SLUG } from '@/lib/howToVideos'
+import { payScopeFor } from '@/lib/payScope'
+import { seesPay, workerPayGroups } from '@/lib/payGroups'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, emailEnabled, orgSender } from '@/lib/email'
@@ -21,15 +23,20 @@ import { trainingVideo, workerRoles, minutesLabel } from '@/lib/training'
 // isn't on staff yet, so their email leads with the org's staff signup link (/join) --
 // the videos only play inside a login -- and the video links work once they've joined.
 // Each send is logged in AppSetting `trainingSends` (newest 50) for the library.
+// Assigners can send too (Bo, Oct 13 2026), from /dashboard/assigner/videos: staff
+// videos only, to the staff groups they run (lib/payScope), and they see only their
+// own sends in the log.
 
 type Row = Record<string, unknown>
 const LOG = 'trainingSends'
 
 export async function POST(req: NextRequest) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  if (gate.role !== 'admin' && gate.role !== 'director') return NextResponse.json({ error: 'Directors only' }, { status: 403 })
+  const director = gate.role === 'admin' || gate.role === 'director'
+  if (!director && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors and assigners only' }, { status: 403 })
+  const scope = director ? null : await payScopeFor(gate.role, gate.userId)
   const b = await req.json().catch(() => ({} as any))
-  const videoIds: string[] = (Array.isArray(b.videoIds) ? b.videoIds : []).map(String).filter((id: string) => trainingVideo(id))
+  const videoIds: string[] = (Array.isArray(b.videoIds) ? b.videoIds : []).map(String).filter((id: string) => trainingVideo(id) && (director || trainingVideo(id)!.series !== 'assigner'))
   const roles: string[] = (Array.isArray(b.roles) ? b.roles : []).map(String)
   const picked = new Set<string>((Array.isArray(b.workerIds) ? b.workerIds : []).map(String))
   const note = String(b.note || '').slice(0, 800).trim()
@@ -40,10 +47,11 @@ export async function POST(req: NextRequest) {
   if (!videoIds.length) return NextResponse.json({ error: 'Pick at least one video.' }, { status: 400 })
 
   const ws = gate.orgId
-    ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner FROM "Worker" WHERE orgId = ?`, gate.orgId)
-    : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner FROM "Worker"`)
+    ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ?`, gate.orgId)
+    : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker"`)
+  const mine = scope ? ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any))) : ws
   const em = (w: Row) => String(w.email || '').trim().toLowerCase()
-  const to = ws.filter((w: Row) => picked.has(String(w.id)) || workerRoles(w).some(r => roles.includes(r)) || typed.includes(em(w)))
+  const to = mine.filter((w: Row) => picked.has(String(w.id)) || workerRoles(w).some(r => roles.includes(r)) || typed.includes(em(w)))
     .sort((a: Row, c: Row) => String(a.name).localeCompare(String(c.name)))
   const noEmail = to.filter((w: Row) => !em(w)).map((w: Row) => String(w.name))
   const withEmail: Row[] = to.filter((w: Row) => em(w))
@@ -101,7 +109,7 @@ export async function POST(req: NextRequest) {
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: LOG } })
     const log = row?.value ? JSON.parse(row.value) : []
-    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), videoIds, roles, people: Array.from(picked), emails: typed, meCopy: !!b.meCopy, sent, to: went, failed }
+    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), byUserId: gate.userId || '', videoIds, roles, people: Array.from(picked), emails: typed, meCopy: !!b.meCopy, sent, to: went, failed }
     const value = JSON.stringify([entry, ...(Array.isArray(log) ? log : [])].slice(0, 50))
     await prisma.appSetting.upsert({ where: { key: LOG }, update: { value }, create: { key: LOG, value } })
   } catch { /* the emails went; only the log is lost */ }
@@ -110,6 +118,10 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  if (gate.role !== 'admin' && gate.role !== 'director') return NextResponse.json({ error: 'Directors only' }, { status: 403 })
-  try { const row = await prisma.appSetting.findUnique({ where: { key: LOG } }); return NextResponse.json({ sends: row?.value ? JSON.parse(row.value) : [] }) } catch { return NextResponse.json({ sends: [] }) }
+  const director = gate.role === 'admin' || gate.role === 'director'
+  if (!director && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors and assigners only' }, { status: 403 })
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: LOG } }); const all = row?.value ? JSON.parse(row.value) : []
+    return NextResponse.json({ sends: director ? all : (Array.isArray(all) ? all.filter((e: any) => e.byUserId && e.byUserId === gate.userId) : []) })
+  } catch { return NextResponse.json({ sends: [] }) }
 }

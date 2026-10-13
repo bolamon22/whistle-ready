@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { TRAINING_VIDEOS, videosFor, workerRoles } from '@/lib/training'
+import { payScopeFor } from '@/lib/payScope'
+import { seesPay, workerPayGroups } from '@/lib/payGroups'
 
 // Staff training videos: which ones a person has watched.
 //
@@ -47,10 +49,14 @@ export async function GET(req: NextRequest) {
     // The Video library's "Who's watched": every Staff Pool person, what they should
     // watch, and per video how many times and when (directors and admins).
     if (req.nextUrl.searchParams.get('report')) {
-      if (gate.role !== 'admin' && gate.role !== 'director') return NextResponse.json({ error: 'Directors only' }, { status: 403 })
-      const ws = gate.orgId
-        ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner FROM "Worker" WHERE orgId = ? ORDER BY name`, gate.orgId)
-        : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner FROM "Worker" ORDER BY name`)
+      // An assigner sees only the staff groups they run (boys refs, girls refs, ...).
+      const director = gate.role === 'admin' || gate.role === 'director'
+      if (!director && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors and assigners only' }, { status: 403 })
+      const scope = director ? null : await payScopeFor(gate.role, gate.userId)
+      let ws = gate.orgId
+        ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ? ORDER BY name`, gate.orgId)
+        : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" ORDER BY name`)
+      if (scope) ws = ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any)))
       const ids = ws.map((w: Row) => String(w.id))
       const seen: Row[] = []
       for (let i = 0; i < ids.length; i += 400) {

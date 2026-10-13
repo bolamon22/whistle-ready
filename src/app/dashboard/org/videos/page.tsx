@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, Mail, PlayCircle, Search, Send, Users, X } from 'lucide-react'
 import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo } from '@/lib/training'
@@ -52,6 +53,13 @@ const fmtDate = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-US',
 const noSave = { onContextMenu: (e: React.MouseEvent) => e.preventDefault(), controlsList: 'nodownload', disablePictureInPicture: true } as const
 
 export default function VideoLibrary() {
+  // The same page at /dashboard/assigner/videos is the assigner's view (Bo, Oct 13
+  // 2026: assigners send the videos to their officials). Staff videos only; the API
+  // keeps their people and sends to the staff groups they run (lib/payScope).
+  const asg = (usePathname() || '').startsWith('/dashboard/assigner')
+  const lib = asg ? LIB.filter(v => v.series === 'staff') : LIB
+  const series = asg ? SERIES.filter(s => s.key === 'staff') : SERIES
+  const forFilters = asg ? FOR_FILTERS.filter(([k]) => !['assigner', 'parent', 'club_director'].includes(k)) : FOR_FILTERS
   const [tab, setTab] = useState<'videos' | 'watched' | 'sent'>('videos')
   const [playing, setPlaying] = useState<Lib | null>(null)
   const [scriptFor, setScriptFor] = useState<Lib | null>(null)
@@ -63,7 +71,7 @@ export default function VideoLibrary() {
   const [fSeries, setFSeries] = useState<string>('all')
   const [fFor, setFFor] = useState<string>('all')
   const [fQ, setFQ] = useState('')
-  const shown = useMemo(() => LIB.filter(v => (fSeries === 'all' || v.series === fSeries) && (fFor === 'all' || rolesOf(v).includes(fFor))
+  const shown = useMemo(() => lib.filter(v => (fSeries === 'all' || v.series === fSeries) && (fFor === 'all' || rolesOf(v).includes(fFor))
     && (!fQ.trim() || `${v.num} ${v.title} ${v.blurb}`.toLowerCase().includes(fQ.trim().toLowerCase()))), [fSeries, fFor, fQ])
   const filtered = fSeries !== 'all' || fFor !== 'all' || !!fQ.trim()
 
@@ -92,11 +100,11 @@ export default function VideoLibrary() {
 
   return (
     <div className="max-w-6xl mx-auto" data-testid="video-library">
-      <Link href="/" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Home</Link>
+      <Link href={asg ? '/dashboard/assigner' : '/'} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Home</Link>
       <div className="flex items-end justify-between gap-4 flex-wrap mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Video library</h1>
-          <p className="text-sm text-slate-500 mt-1">{LIB.length} videos. Play them, read the scripts, send them to your staff, and see who has watched.</p>
+          <h1 className="text-2xl font-bold text-slate-900">{asg ? 'Training videos' : 'Video library'}</h1>
+          <p className="text-sm text-slate-500 mt-1">{asg ? `${lib.length} videos for your officials. Send them out, and see who has watched.` : `${lib.length} videos. Play them, read the scripts, send them to your staff, and see who has watched.`}</p>
         </div>
         <button type="button" disabled={!picked.size} onClick={() => setSending(true)}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold">
@@ -114,9 +122,9 @@ export default function VideoLibrary() {
       {tab === 'videos' && (
         <div className="bg-white border border-slate-200 rounded-xl p-3 mb-6 space-y-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">Type</span>
-            {[['all', 'All'] as [string, string], ...SERIES.map(s => [s.key, s.label] as [string, string])].map(([k, label]) => {
-              const n = k === 'all' ? LIB.length : LIB.filter(v => v.series === k).length
+            {series.length > 1 && <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">Type</span>}
+            {series.length > 1 && [['all', 'All'] as [string, string], ...series.map(s => [s.key, s.label] as [string, string])].map(([k, label]) => {
+              const n = k === 'all' ? lib.length : lib.filter(v => v.series === k).length
               return <Chip key={k} on={fSeries === k} onClick={() => setFSeries(k)}>{label} <span className="opacity-60">{n}</span></Chip>
             })}
             <div className="relative ml-auto w-full sm:w-56"><Search size={14} className="absolute left-3 top-2.5 text-slate-400" /><input value={fQ} onChange={e => setFQ(e.target.value)} placeholder="Search videos" aria-label="Search videos" className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-1.5 text-sm" /></div>
@@ -124,21 +132,21 @@ export default function VideoLibrary() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">For</span>
             <Chip on={fFor === 'all'} onClick={() => setFFor('all')}>Everyone</Chip>
-            {FOR_FILTERS.map(([k, label]) => <Chip key={k} on={fFor === k} onClick={() => setFFor(k)}>{label}</Chip>)}
+            {forFilters.map(([k, label]) => <Chip key={k} on={fFor === k} onClick={() => setFFor(k)}>{label}</Chip>)}
             {filtered && <button type="button" onClick={() => { setFSeries('all'); setFFor('all'); setFQ('') }} className="text-xs font-semibold text-slate-500 hover:text-slate-800 ml-1">Clear filters</button>}
           </div>
         </div>
       )}
       {tab === 'videos' && filtered && shown.length === 0 && <p className="text-sm text-slate-400 text-center py-10">No videos match those filters.</p>}
 
-      {tab === 'videos' && SERIES.filter(s => shown.some(v => v.series === s.key)).map(s => {
+      {tab === 'videos' && series.filter(s => shown.some(v => v.series === s.key)).map(s => {
         const list = shown.filter(v => v.series === s.key); const ids = list.map(v => v.id); const bundle = s.key !== 'family'
         const nOn = ids.filter(id => picked.has(id)).length
         return (
         <section key={s.key} className="mb-8">
           <div className="flex items-end justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{s.label} <span className="text-sm font-semibold text-slate-400">{list.length}{filtered ? ` of ${LIB.filter(v => v.series === s.key).length}` : ''}</span></h2>
+              <h2 className="text-lg font-bold text-slate-900">{s.label} <span className="text-sm font-semibold text-slate-400">{list.length}{filtered ? ` of ${lib.filter(v => v.series === s.key).length}` : ''}</span></h2>
               <p className="text-sm text-slate-500">{s.note}</p>
             </div>
             {bundle && (
@@ -222,13 +230,13 @@ export default function VideoLibrary() {
           </div>
         </div>
       )}
-      {scriptFor && <ScriptPanel v={scriptFor} note={notes[scriptFor.id]?.text || ''} onClose={() => setScriptFor(null)} onSaved={n => setNotes(n)} />}
-      {sending && <SendDialog ids={Array.from(picked)} people={people || []} onClose={() => setSending(false)} onSent={() => { setSending(false); setPicked(new Set()); loadSends(); setTab('sent') }} />}
+      {scriptFor && <ScriptPanel readOnly={asg} v={scriptFor} note={notes[scriptFor.id]?.text || ''} onClose={() => setScriptFor(null)} onSaved={n => setNotes(n)} />}
+      {sending && <SendDialog roleKeys={asg ? ROLE_KEYS.filter(r => r !== 'assigner' && (people || []).some(p => p.roles.includes(r))) : ROLE_KEYS} ids={Array.from(picked)} people={people || []} onClose={() => setSending(false)} onSent={() => { setSending(false); setPicked(new Set()); loadSends(); setTab('sent') }} />}
     </div>
   )
 }
 
-function ScriptPanel({ v, note, onClose, onSaved }: { v: Lib; note: string; onClose: () => void; onSaved: (n: any) => void }) {
+function ScriptPanel({ v, note, onClose, onSaved, readOnly }: { v: Lib; note: string; onClose: () => void; onSaved: (n: any) => void; readOnly?: boolean }) {
   const s = VIDEO_SCRIPTS[v.id]
   const [text, setText] = useState(note)
   const [busy, setBusy] = useState(false)
@@ -257,7 +265,7 @@ function ScriptPanel({ v, note, onClose, onSaved }: { v: Lib; note: string; onCl
             {s.outro && <li className="rounded-lg bg-slate-50 border border-slate-200 p-3"><span className="text-[11px] font-bold text-slate-400 block">CLOSING</span>{s.outro}</li>}
           </ol>
         )}
-        <div>
+        {!readOnly && <div>
           <label htmlFor="script-note" className="text-sm font-semibold text-slate-800">Changes you want</label>
           <p className="text-xs text-slate-500 mb-1.5">Write the new wording, or what to change (e.g. “Step 3: say the ref tent is by Field 1”). Changing words is quick; a new screen means filming it again.</p>
           <textarea id="script-note" value={text} onChange={e => setText(e.target.value)} rows={6} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
@@ -265,13 +273,13 @@ function ScriptPanel({ v, note, onClose, onSaved }: { v: Lib; note: string; onCl
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600">Cancel</button>
             <button type="button" onClick={save} disabled={busy} className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-60">{busy ? 'Saving…' : 'Save changes'}</button>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   )
 }
 
-function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: Person[]; onClose: () => void; onSent: () => void }) {
+function SendDialog({ ids, people, roleKeys, onClose, onSent }: { ids: string[]; people: Person[]; roleKeys: string[]; onClose: () => void; onSent: () => void }) {
   // Nobody is picked to start: a send goes only to who you choose (Bo, Oct 13 2026 --
   // an Assigners pre-pick sent a "sample to myself" to the assigners too).
   const [roles, setRoles] = useState<Set<string>>(new Set())
@@ -316,7 +324,7 @@ function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: P
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">To everyone who is a…</p>
           <div className="flex flex-wrap gap-2">
-            {ROLE_KEYS.map(r => (
+            {roleKeys.map(r => (
               <button key={r} type="button" onClick={() => flip(roles, setRoles, r)} aria-pressed={roles.has(r)}
                 className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${roles.has(r) ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600'}`}>{TRAINING_ROLE_LABELS[r]}</button>
             ))}

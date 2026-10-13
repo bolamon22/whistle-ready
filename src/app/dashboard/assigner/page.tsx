@@ -1,12 +1,13 @@
 'use client'
 
-import { Flag, ListChecks, Users, CalendarClock, Wallet } from 'lucide-react'
+import { Flag, ListChecks, Users, CalendarClock, Wallet, GraduationCap } from 'lucide-react'
 import RoleHome from '@/components/RoleHome'
 
 // The assigner's home, the same layout as the scheduler's (Oct 2026). Every button is a
 // page the assigner role can open: the Assigner board, the per-official Assignments
 // view, the staff roster, availability and ref pay. The old card linked to Field
-// Requests (game-day ops), which the role no longer opens.
+// Requests (game-day ops), which the role no longer opens. Training (Oct 13 2026)
+// sends staff training videos to the officials they run.
 export default function AssignerDashboard() {
   return (
     <RoleHome
@@ -19,6 +20,7 @@ export default function AssignerDashboard() {
         { href: `/tournaments/${id}/roster`,       Icon: Users,         label: 'Roster' },
         { href: `/tournaments/${id}/availability`, Icon: CalendarClock, label: 'Availability' },
         { href: `/tournaments/${id}/pay-summary`,  Icon: Wallet,        label: 'Ref pay' },
+        { href: '/dashboard/assigner/videos',     Icon: GraduationCap, label: 'Training' },
       ]}
     />
   )
