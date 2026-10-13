@@ -195,6 +195,24 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
+  "injury-report": {
+    "title": "Log an injury",
+    "intro": "Log an injury report, in Whistle Ready.",
+    "lines": [
+      "Care for the player first. For an emergency, call 9 1 1. Then log the injury while it is fresh.",
+      "Open Incidents from your home page. Medical, injury, is already picked, so the injury report opens.",
+      "Tap who was hurt, then add their name and jersey number.",
+      "Start typing the team, and it fills in from the schedule. If the team has two divisions, pick one. Add the game number too.",
+      "Pick the injury, and check the time.",
+      "Any sign of a concussion? Check Suspected concussion. No return today without written clearance from a doctor.",
+      "Add the field, what happened, and the treatment you gave.",
+      "Pick the outcome, and whether a parent was told. If yes, add their name and phone.",
+      "Tap Save injury report. Only trainers, directors, and the person who logged it can see the details.",
+      "Later, tap Follow-up to add what happened next, like a doctor visit, and update the outcome.",
+      "At the end of the day, tap Injury log to download every injury for the event."
+    ],
+    "outro": "Whistle Ready. Game day, run from your phone."
+  },
   "asg-home": {
     "title": "Your assigner home",
     "intro": "Whistle Ready assigner training. Your assigner home.",

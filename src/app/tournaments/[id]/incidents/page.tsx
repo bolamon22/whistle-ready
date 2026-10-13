@@ -108,7 +108,7 @@ export default function IncidentsPage({ embedded = false }: { embedded?: boolean
         <Link href={`/tournaments/${id}/dashboard`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Dashboard</Link>
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><TriangleAlert size={22} className="text-teal-600" /> Incidents</h1>
         <p className="text-sm text-slate-500 mb-5">Log injuries and safety or facility issues so the team can track them. For emergencies, call 911 first.</p>
-        <TrainingLink id="incidents" className="-mt-3 mb-5" />
+        <TrainingLink id={type === 'Medical' ? 'injury-report' : 'incidents'} className="-mt-3 mb-5" />
       </>}
 
       {/* report form */}
