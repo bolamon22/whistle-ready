@@ -64,6 +64,38 @@ function clearGameState(gameId: string) {
   try { localStorage.removeItem(GAME_KEY(gameId)) } catch { /* ignore */ }
 }
 
+// The tournament rules' overtime section, split into its subsections ("Pool Play
+// Games", "Playoff Games", "Championship Games" in the SEG rules), so a tied game
+// can show the scorer the one that applies. Ends at the next heading of the same
+// level or a --- rule.
+function overtimeSections(rules: string): { title: string; body: string[] }[] {
+  const lines = (rules || '').split(/\r?\n/)
+  const start = lines.findIndex(l => /^#{1,4}\s.*overtime/i.test(l.trim()))
+  if (start < 0) return []
+  const level = (lines[start].trim().match(/^#+/) || ['##'])[0].length
+  const out: { title: string; body: string[] }[] = []
+  let cur: { title: string; body: string[] } = { title: '', body: [] }
+  for (let i = start + 1; i < lines.length; i++) {
+    const t = lines[i].trim()
+    const h = t.match(/^(#+)\s+(.*)$/)
+    if ((h && h[1].length <= level) || /^-{3,}$/.test(t)) break
+    if (h) { if (cur.title || cur.body.length) out.push(cur); cur = { title: h[2], body: [] }; continue }
+    if (t) cur.body.push(t)
+  }
+  if (cur.title || cur.body.length) out.push(cur)
+  return out
+}
+function RuleLines({ lines }: { lines: string[] }) {
+  const inline = (t: string) => t.split(/(\*\*[^*]+\*\*)/).map((part, i) => /^\*\*[^*]+\*\*$/.test(part) ? <strong key={i} className="text-white">{part.slice(2, -2)}</strong> : <span key={i}>{part}</span>)
+  return (
+    <ul className="space-y-1.5">
+      {lines.map((l, i) => /^[*-]\s/.test(l)
+        ? <li key={i} className="flex gap-2 text-sm text-gray-200 leading-relaxed"><span className="text-amber-400">•</span><span>{inline(l.replace(/^[*-]\s+/, ''))}</span></li>
+        : <li key={i} className="text-sm text-gray-300 leading-relaxed">{inline(l)}</li>)}
+    </ul>
+  )
+}
+
 export default function ScorekeeperPage({ params }: { params: { id: string; gameId: string } }) {
   const tid = params.id // tournament id
   const router = useRouter()
@@ -122,6 +154,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
   // rules slide-over (viewer) + shared scoring config (rules text + no-ties)
   const [showRules, setShowRules] = useState(false)
+  const [showOT, setShowOT] = useState(false)   // tie in a no-ties event: tell the ref, show overtime rules
   const [rulesText, setRulesText] = useState('')          // optional scorer notes (scoringConfig.rules)
   const [eventRules, setEventRules] = useState('')        // the tournament's published rules, looked up automatically
   const [eventRulesSource, setEventRulesSource] = useState('')
@@ -766,18 +799,72 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
       {/* End game */}
       <div className="px-4 pb-6 pt-3 border-t border-gray-800">
+        {/* A tie can't be posted when the event allows no ties (Bo, Oct 12 2026): the
+            scorer is told to get the referee and is shown the overtime rule for this
+            game instead of being offered "post it as a tie anyway". Staff can still
+            enter a tie on Post scores if the tournament director decides to. */}
+        {noTies && score1 === score2 && !gameEnded ? (
+          <button onClick={() => setShowOT(true)}
+            className="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold text-base active:scale-[.98] transition-all">
+            Tied {score1}–{score2} · No ties allowed — Overtime rules
+          </button>
+        ) : (
         <button onClick={() => {
-            if (noTies && score1 === score2) { if (!window.confirm('The score is tied and this tournament doesn’t allow ties. Post it as a tie anyway?')) return }
+            if (noTies && score1 === score2) { setShowOT(true); return }
             if (!window.confirm(`Post the final score?\n\n${game.team1} ${score1} – ${score2} ${game.team2}`)) return
             setClockRunning(false); saveScore({ final: true }).then(ok => { if (ok) { setGameEnded(true); pushLive({ live: false }) } })
           }}
           className="w-full py-4 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-base active:scale-[.98] transition-all">End Game &amp; Post Score</button>
+        )}
         {gameEnded && (<p className="text-center text-xs text-emerald-400 mt-2">Final: {game.team1} {score1} – {score2} {game.team2}</p>)}
-        {noTies && score1 === score2 && (<p className="text-center text-xs text-amber-400 mt-2">⚠️ This tournament doesn’t allow ties — enter a winner.</p>)}
+        {noTies && score1 === score2 && !gameEnded && (<p className="text-center text-xs text-amber-300 mt-2">Tell the referee: ties aren&apos;t allowed, this game goes to overtime. The score can be posted once a team is ahead.</p>)}
         <button onClick={openRules} className="w-full mt-3 text-xs text-gray-400 hover:text-gray-200 flex items-center justify-center gap-1.5">
           📖 Rules
         </button>
       </div>
+
+      {/* Tie in a no-ties event: notify the ref, show the overtime rule for this game */}
+      {showOT && (() => {
+        const secs = overtimeSections(eventRules + '\n' + rulesText)
+        const want = game.isChampionship ? /champion/i : /^B\d+$/i.test(game.gameNumber || '') ? /playoff|bracket|elimination|semi|quarter/i : /pool/i
+        const mine = secs.find(x => want.test(x.title))
+        const others = secs.filter(x => x !== mine)
+        return (
+          <div className="fixed inset-0 z-[66] flex flex-col bg-gray-950" data-testid="overtime-sheet">
+            <div className="flex items-center justify-between px-4 py-3 bg-amber-500 text-gray-950">
+              <h3 className="font-extrabold">⚠️ Tie game — no ties allowed</h3>
+              <button onClick={() => setShowOT(false)} className="text-xs bg-gray-950/15 hover:bg-gray-950/25 px-3 py-1.5 rounded-lg font-bold">✕ Back to scoring</button>
+            </div>
+            <div className="flex-1 overflow-auto p-5">
+              <div className="max-w-2xl mx-auto space-y-4">
+                <div className="rounded-2xl border border-amber-500/50 bg-amber-950/40 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-400 mb-1">Tell the referee now</p>
+                  <p className="text-lg font-bold text-white leading-snug">{game.team1} {score1} – {score2} {game.team2} is tied. This tournament doesn&apos;t allow ties: the game goes to overtime.</p>
+                  <p className="text-xs text-gray-400 mt-2">The score can&apos;t be posted as a tie. Keep scoring through overtime, then End Game once a team is ahead.</p>
+                </div>
+                {mine ? (
+                  <div className="rounded-2xl border border-gray-700 bg-gray-900 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-2">Overtime for this game · {mine.title}</p>
+                    <RuleLines lines={mine.body} />
+                  </div>
+                ) : secs.length === 0 && (
+                  <div className="rounded-2xl border border-gray-700 bg-gray-900 p-4 text-sm text-gray-300">This tournament&apos;s rules have no overtime section. Ask the tournament director how overtime is played.</div>
+                )}
+                {others.length > 0 && (
+                  <details className="rounded-2xl border border-gray-800 bg-gray-900/60 p-4" open={!mine}>
+                    <summary className="text-xs font-bold uppercase tracking-wide text-gray-400 cursor-pointer">{mine ? 'Other overtime rules' : 'Overtime rules'}</summary>
+                    <div className="mt-3 space-y-4">
+                      {others.map((x, i) => (<div key={i}>{x.title && <p className="text-sm font-bold text-gray-200 mb-1">{x.title}</p>}<RuleLines lines={x.body} /></div>))}
+                    </div>
+                  </details>
+                )}
+                <button onClick={() => { setShowOT(false); openRules() }} className="w-full text-xs text-gray-400 hover:text-gray-200">📖 All tournament rules</button>
+                <button onClick={() => setShowOT(false)} className="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold">Got it — back to scoring</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Rules reference slide-over — in-app tournament rules, ✕ returns to scoring */}
       {showRules && (
