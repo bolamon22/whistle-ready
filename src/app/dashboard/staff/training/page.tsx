@@ -26,8 +26,8 @@ export default function TrainingPage() {
   // (Read from the URL here, not useSearchParams, which would need a Suspense boundary.)
   useEffect(() => { const v = new URLSearchParams(window.location.search).get('v'); if (v && trainingVideo(v)) setPlaying(v) }, [])
 
+  // Called once per viewing (the player guards it), so every rewatch adds to the play count.
   function markWatched(id: string) {
-    if (watched.has(id)) return
     setWatched(s => new Set(s).add(id))
     fetch('/api/training', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoId: id }) }).catch(() => {})
   }
@@ -106,7 +106,10 @@ function Player({ id, next, onClose, onWatched, onNext }: { id: string; next: st
   const v = trainingVideo(id)
   const ref = useRef<HTMLVideoElement>(null)
   const [ended, setEnded] = useState(false)
-  useEffect(() => { setEnded(false) }, [id])
+  // One count per viewing: reset when a new video opens or this one is replayed from the start.
+  const counted = useRef(false)
+  useEffect(() => { setEnded(false); counted.current = false }, [id])
+  const count = () => { if (!counted.current) { counted.current = true; onWatched(id) } }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey)
@@ -121,9 +124,11 @@ function Player({ id, next, onClose, onWatched, onNext }: { id: string; next: st
       </div>
       <div className="flex-1 min-h-0 flex items-center justify-center px-3">
         <video key={id} ref={ref} src={videoSrc(id)} poster={posterSrc(id)} controls autoPlay playsInline preload="metadata"
+          controlsList="nodownload noplaybackrate" disablePictureInPicture onContextMenu={e => e.preventDefault()}
           className="max-h-full max-w-full rounded-xl bg-black"
-          onTimeUpdate={e => { const t = e.currentTarget; if (t.duration && t.currentTime / t.duration >= 0.85) onWatched(id) }}
-          onEnded={() => { onWatched(id); setEnded(true) }} />
+          onTimeUpdate={e => { const t = e.currentTarget; if (t.duration && t.currentTime / t.duration >= 0.85) count() }}
+          onPlay={e => { if (e.currentTarget.currentTime < 1) counted.current = false }}
+          onEnded={() => { count(); setEnded(true) }} />
       </div>
       <div className="px-4 py-3 flex justify-end gap-2">
         {nv && (
