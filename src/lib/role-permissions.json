@@ -283,7 +283,7 @@
       "tournament_scores": false,
       "game_scorekeeper": false,
       "social_scheduler": false,
-      "staff_gameday": false,
+      "staff_gameday": true,
       "tournament_people": false,
       "tournament_setup": false,
       "staff_applications": true,
