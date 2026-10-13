@@ -3,7 +3,7 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games
+keywords: notify officials, send assignments, email refs, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
@@ -23,9 +23,17 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **Other views:** **List**, **Division** and **Staff** (pick a name under **View schedule for:** to see one person's games). In the list view, click a game to open **Assign Staff** and pick names for each slot.
 
+**Tell your officials (Notify officials):**
+1. When the assignments are ready, click **Notify officials** at the top of the Assigner.
+2. Choose **Every day of the event** or **Just** the day you're on, add an optional **Note** (for example where to check in), and check the count.
+3. Click **Send to N officials**. Each official gets an email with only their own games (day, time, field, game, teams and whether they're a referee or scorekeeper) and an **Open My games** button. Anyone who turned on Whistle Ready alerts gets a phone alert too.
+4. After you make changes, send again with **Only officials whose games changed since the last send** ticked, so everyone else isn't emailed twice.
+
+**Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games or enter scores. Ask the scheduler or director.
+
 **To prevent accidental changes:** tick **Lock editing**. This applies on your own browser only.
 
 **Common problems:**
 - Assigning someone already on a game at the same time asks you to confirm before it double-books them.
 - Only people on the tournament's **Staff roster** appear here.
-- Assigning a game does not email or text the staff member.
+- Assigning a game doesn't tell the official by itself. Use **Notify officials** when you're ready. People with no email on the Roster are listed in the Notify box.

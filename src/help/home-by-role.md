@@ -14,7 +14,8 @@ After you sign in, Whistle Ready opens a home page that fits your role. Each one
 - Clicking **Tournaments** in the top bar opens the full tournaments list.
 
 **Assigner home:**
-- Each tournament has **Schedule**, **Assign**, **Avail** and **Field Req**.
+- Find your event with **Find a tournament**. The **Up next** card shows how many games have their full ref crew.
+- Each tournament has **Assign** (the Assigner board), **By official**, **Roster**, **Availability** and **Ref pay**.
 
 **Scheduler home:**
 - The next event shows under **Up next**.

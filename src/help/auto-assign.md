@@ -12,7 +12,7 @@ Auto-assign fills a day's open ref and scorekeeper slots for you. Clear removes 
 **To auto-assign:**
 1. Click **Auto-assign**.
 2. Leave **Keep scorekeepers on one field all day** ticked if each scorekeeper should stay on one field.
-3. Click **Run Auto-Assign**. It fills open slots based on availability, gender and game targets, and doesn't touch assignments you already made.
+3. Click **Run Auto-Assign**. It fills open slots using availability and gender, giving each one to whoever has the fewest games so far, and doesn't touch assignments you already made.
 4. Read the result: how many slots were filled, **Games needing staff**, and how many more refs or scorekeepers you'd need to fill everything.
 5. Click **Run Again** to retry, or **Close**.
 
