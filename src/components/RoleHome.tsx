@@ -23,9 +23,14 @@ interface Props {
   /** Where the tournament name links to. */
   homeHref: (id: string) => string
   progress: RoleProgress
+  /** What to say when this person has no tournaments at all. */
+  emptyText?: string
 }
 
 type Filter = 'upcoming' | 'past' | 'all'
+
+// Written out so Tailwind keeps them (it can't see a class built from a number).
+const SM_COLS: Record<number, string> = { 1: 'sm:grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4', 5: 'sm:grid-cols-5', 6: 'sm:grid-cols-6' }
 
 // Local calendar day as YYYY-MM-DD, matching how tournament dates are stored.
 const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -76,14 +81,14 @@ function Progress({ t, wide, progress }: { t: Tournament; wide?: boolean; progre
   return (
     <div className={`flex items-center gap-2 ${wide ? '' : 'min-w-0'}`} title={`${placed} of ${total} ${progress.title}`}>
       <span className={`text-xs whitespace-nowrap ${done ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`}>{total} games · {done ? `all ${progress.verb}` : `${placed} ${progress.verb}`}</span>
-      <span className={`${wide ? 'w-40' : 'w-16'} h-1.5 rounded-full bg-slate-100 overflow-hidden flex-shrink-0`}>
+      <span className={`${wide ? 'w-24 sm:w-40' : 'w-16'} h-1.5 rounded-full bg-slate-100 overflow-hidden flex-shrink-0`}>
         <span className={`block h-full rounded-full ${done ? 'bg-emerald-500' : 'bg-teal-500'}`} style={{ width: `${pct}%` }} />
       </span>
     </div>
   )
 }
 
-export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, progress }: Props) {
+export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, progress, emptyText }: Props) {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
@@ -172,7 +177,7 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
       </div>
 
       {tournaments.length === 0 ? (
-        <div className="text-center py-20 text-slate-400">No tournaments yet.</div>
+        <div className="text-center py-20 text-slate-400">{emptyText ?? 'No tournaments yet.'}</div>
       ) : upcoming.length + pastList.length === 0 ? (
         <div className="text-center py-20 text-slate-400">{q ? `Nothing matches “${q}”.` : filter === 'upcoming' ? 'Nothing coming up.' : 'Nothing here.'}</div>
       ) : (
@@ -195,10 +200,11 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
                     </div>
                     <Link href={`/tournaments/${next.id}/public`} title="Public view" className="text-slate-400 hover:text-teal-600 flex-shrink-0"><Globe size={16} /></Link>
                   </div>
-                  <div className="grid gap-2 mt-4" style={{ gridTemplateColumns: `repeat(${actionsFor(next.id).length}, minmax(0, 1fr))` }}>
+                  {/* Three to a row on phones (six squeezed into one row overlapped), all in one row from sm up. */}
+                  <div className={`grid grid-cols-3 gap-2 mt-4 ${SM_COLS[actionsFor(next.id).length] ?? 'sm:grid-cols-6'}`}>
                     {actionsFor(next.id).map((a, i) => (
                       <Link key={a.label} href={a.href}
-                        className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors ${i === 0 ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
+                        className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors ${i === 0 ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
                         <a.Icon size={16} className={i === 0 ? 'text-white' : 'text-teal-600'} />{a.label}
                       </Link>
                     ))}

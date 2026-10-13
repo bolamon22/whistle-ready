@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, isStaffRequest, viewer } from '@/lib/apiAuth'
-import { redactWorkerPay } from '@/lib/roleScope'
+import { redactWorker, redactWorkerPay } from '@/lib/roleScope'
 import { assignmentPayGroups, seesPay } from '@/lib/payGroups'
 import { payScopeFor } from '@/lib/payScope'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
@@ -40,7 +40,8 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
       assignments: g.assignments.map(a => ({
         ...a,
         payRate: seesPay(scope, assignmentPayGroups(a.role, g.division, a.worker?.gender)) ? a.payRate : null,
-        worker: redactWorkerPay(a.worker, who.role, scope),
+        // A field director also gets the email and phone of their own staff only, not refs'.
+        worker: who.role === 'field_director' ? redactWorker(a.worker, who.role, scope) : redactWorkerPay(a.worker, who.role, scope),
       })),
     }))
     const [ids, meta] = await Promise.all([getIfNeeded(params.id), bracketMeta(params.id)])

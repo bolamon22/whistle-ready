@@ -7,6 +7,8 @@ import { Users, Calendar, Clock, Wallet, Link2, Mail, UserPlus, ShieldCheck } fr
 import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
 import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
+import { useRole } from '@/lib/role-context'
+import { canSeeStaffPay } from '@/lib/roleScope'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
 interface RosterEntry { id:string;workerId:string;gameTarget:number;notes:string|null }
@@ -84,6 +86,13 @@ function EditForm({ form, setForm, onSubmit, onCancel, saving }: {
 }
 
 export default function RosterPage({ params }: { params:{id:string} }) {
+  // A field director (Oct 13 2026) confirms, invites and calls their scorekeepers,
+  // athletic trainers and field ops here, but doesn't edit Staff Pool records, sees no
+  // pay, and leaves the county affidavit (Exhibit A) to the director.
+  const { effectiveRole } = useRole()
+  const canEdit = effectiveRole !== 'field_director'
+  const showPay = canSeeStaffPay(effectiveRole)
+  const cols = 9 - (canEdit ? 0 : 1) - (showPay ? 0 : 1)
   const [tournament, setTournament] = useState<Tournament|null>(null)
   const [allWorkers, setAllWorkers] = useState<Worker[]>([])
   const [roster, setRoster] = useState<RosterEntry[]>([])
@@ -228,7 +237,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                 {!!w.isAssigner&&<span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200">Assigner</span>}
               </div>
             </div>
-            <button onClick={()=>expand(w,'edit')} className="text-xs text-teal-300 hover:text-white border border-teal-400/40 hover:border-teal-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>
+            {canEdit&&<button onClick={()=>expand(w,'edit')} className="text-xs text-teal-300 hover:text-white border border-teal-400/40 hover:border-teal-300 px-3 py-1.5 rounded-lg transition-colors shrink-0">Edit →</button>}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-3 mt-4 text-sm">
             {w.phone&&<div><p className="text-slate-400 text-xs mb-0.5">Phone</p><a href={`tel:${w.phone}`} className="text-teal-200">{w.phone}</a></div>}
@@ -237,7 +246,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p>{certLabel(w.certLevel)}</p></div>
               <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p>{gLabel(w.gender)}</p></div>
             </>}
-            <div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p>{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>
+            {showPay&&<div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p>{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>}
             {!!w.payRateOverride&&<div><p className="text-slate-400 text-xs mb-0.5">Rate Override</p><p>${w.payRateOverride}/game</p></div>}
             {!!w.hourlyRate&&<div><p className="text-slate-400 text-xs mb-0.5">Hourly Rate</p><p>${w.hourlyRate}/hr</p></div>}
           </div>
@@ -414,10 +423,10 @@ export default function RosterPage({ params }: { params:{id:string} }) {
             title="Copy your public staff signup link to send in your own email">
             <Link2 size={15} />{copyingLink ? 'Copying\u2026' : 'Copy signup link'}
           </button>
-          <Link href={`/tournaments/${params.id}/roster/exhibit-a`}
+          {canEdit&&<Link href={`/tournaments/${params.id}/roster/exhibit-a`}
             className="btn-secondary btn-sm flex items-center gap-2" title="County background-check affidavit table, filled from this roster">
             <ShieldCheck size={15} />Exhibit A
-          </Link>
+          </Link>}
           <button onClick={() => setShowInvite(true)}
             className="btn-primary btn-sm flex items-center gap-2">
             <UserPlus size={15} />Invite Staff
@@ -462,7 +471,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                 <select aria-label="Missing info" className={`select !w-auto text-sm flex-shrink-0 ${infoFilter!=='all'?'!border-amber-400 !text-amber-800':''}`} value={infoFilter} onChange={e=>setInfoFilter(e.target.value as 'all'|'contact'|'pay')}>
                   <option value="all">Any info</option>
                   <option value="contact">No phone/email</option>
-                  <option value="pay">No pay details</option>
+                  {showPay&&<option value="pay">No pay details</option>}
                 </select>
               </div>
               <div className="flex items-center gap-3 text-xs text-slate-400">
@@ -472,7 +481,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
             </div>
           </div>
 
-          {selected.size>0&&(
+          {canEdit&&selected.size>0&&(
             <div className="flex items-center gap-2 sm:gap-3 mb-3 p-3 bg-teal-50 border border-teal-200 rounded-lg flex-wrap">
               <span className="text-sm font-medium text-teal-700">{selected.size} selected</span>
               <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}>
@@ -498,7 +507,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               return(
                 <div key={w.id} className={`card overflow-hidden ${selected.has(w.id)?'border-teal-300 bg-teal-50':''}`}>
                   <div className="px-3 pt-2.5 pb-2 flex items-start gap-2.5">
-                    <input type="checkbox" className="mt-1 flex-shrink-0" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/>
+                    {canEdit&&<input type="checkbox" className="mt-1 flex-shrink-0" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/>}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <button onClick={()=>expand(w,'profile')} className="font-semibold text-slate-900 text-left leading-tight">{w.name}</button>
@@ -510,7 +519,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                           <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
                           <span className="badge bg-white border border-slate-200 text-slate-500">{gLabel(w.gender)}</span>
                         </>}
-                        <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</span>
+                        {showPay&&<span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</span>}
                         <span className={`badge ${gameCount[w.id]?'bg-sky-50 text-sky-700':'bg-amber-50 text-amber-700'}`}>{gamesLabel(w.id)} game{(gameCount[w.id]??0)===1?'':'s'}</span>
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
@@ -522,7 +531,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   </div>
                   <div className="px-3 pb-2.5 flex items-center justify-end gap-4 text-xs">
                     <button onClick={()=>expand(w,'profile')} className={`font-medium ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-500'}`}>Profile</button>
-                    <button onClick={()=>expand(w,'edit')} className={`font-medium ${isExpanded&&expandMode==='edit'?'text-teal-800 underline':'text-teal-600'}`}>Edit</button>
+                    {canEdit&&<button onClick={()=>expand(w,'edit')} className={`font-medium ${isExpanded&&expandMode==='edit'?'text-teal-800 underline':'text-teal-600'}`}>Edit</button>}
                     <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="text-red-400">Remove</button>
                   </div>
                   {isExpanded&&expandMode==='profile'&&<div className="border-t border-slate-200">{renderProfile(w,wRoles)}</div>}
@@ -540,13 +549,13 @@ export default function RosterPage({ params }: { params:{id:string} }) {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 w-8"><input type="checkbox" checked={selected.size===filteredOnRoster.length&&filteredOnRoster.length>0} onChange={toggleAll}/></th>
+                  {canEdit&&<th className="px-4 py-3 w-8"><input type="checkbox" checked={selected.size===filteredOnRoster.length&&filteredOnRoster.length>0} onChange={toggleAll}/></th>}
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('name')}>Name {sortArrow('name')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('defaultRole')}>Roles {sortArrow('defaultRole')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('certLevel')}>Cert {sortArrow('certLevel')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('games')} title="Games assigned at this tournament (of the target, when one is set)">Games {sortArrow('games')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide" title="Training videos watched, of the ones for their job">Training</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>
+                  {showPay&&<th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>}
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Contact</th>
                   <th className="px-4 py-3"/>
                 </tr>
@@ -558,7 +567,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   return(
                   <>
                     <tr key={w.id} className={`border-b border-slate-100 ${selected.has(w.id)?'bg-teal-50':isExpanded?'bg-slate-50 border-b-0':'hover:bg-slate-50'}`}>
-                      <td className="px-4 py-2"><input type="checkbox" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/></td>
+                      {canEdit&&<td className="px-4 py-2"><input type="checkbox" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/></td>}
                       <td className="px-4 py-2 font-semibold text-slate-900 cursor-pointer hover:text-teal-600 transition-colors" onClick={()=>expand(w,'profile')}>
                         {w.name}{!!w.isAssigner&&<span className="ml-2 badge bg-amber-100 text-amber-700">Assigner</span>}
                       </td>
@@ -583,10 +592,10 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                           ? <span className={`text-sm font-semibold tabular-nums ${training[w.id].watched>=training[w.id].total?'text-emerald-700':training[w.id].watched?'text-slate-700':'text-amber-600'}`}>{training[w.id].watched}/{training[w.id].total}</span>
                           : <span className="text-slate-400">—</span>}
                       </td>
-                      <td className="px-4 py-2">
+                      {showPay&&<td className="px-4 py-2">
                         <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}</span>
                         {w.payHandle && <div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}
-                      </td>
+                      </td>}
                       <td className="px-4 py-2 text-xs text-slate-500">
                         {w.phone&&<div>{w.phone}</div>}
                         {w.email&&<div>{w.email}</div>}
@@ -594,7 +603,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                       </td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
                         <button onClick={()=>expand(w,'profile')} className={`text-xs mr-2 font-medium transition-colors ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-400 hover:text-slate-700'}`}>Profile</button>
-                        <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-teal-800 underline':'text-teal-600 hover:text-teal-800'}`}>Edit</button>
+                        {canEdit&&<button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-teal-800 underline':'text-teal-600 hover:text-teal-800'}`}>Edit</button>}
                         <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="text-xs text-red-400 hover:text-red-600 transition-colors">Remove</button>
                       </td>
                     </tr>
@@ -602,14 +611,14 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     {/* Profile panel */}
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
-                        <td colSpan={9} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
+                        <td colSpan={cols} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
                       </tr>
                     )}
 
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={9} className="px-6 py-5 bg-teal-50/40 border-b border-slate-200">
+                        <td colSpan={cols} className="px-6 py-5 bg-teal-50/40 border-b border-slate-200">
                           <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving}/>
                         </td>
                       </tr>

@@ -41,5 +41,5 @@ export function presenceLabel(w: { appStatus?: string | null; lastSeenAt?: strin
 
 /** Roles that run events and may see who else is on. Refs/staff, coaches,
  *  parents and club directors do not. */
-export const PRESENCE_VIEWER_ROLES = ['admin', 'director', 'assigner', 'scheduler']
+export const PRESENCE_VIEWER_ROLES = ['admin', 'director', 'assigner', 'scheduler', 'field_director']
 export function canSeePresence(role: string | null | undefined): boolean { return PRESENCE_VIEWER_ROLES.includes(String(role || '')) }

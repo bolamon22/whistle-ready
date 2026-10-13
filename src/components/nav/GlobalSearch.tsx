@@ -18,7 +18,7 @@ type Hit = { group: string; label: string; sub: string; href: string }
 const JOB: Record<string, string> = { ref: 'Ref', scorekeeper: 'Scorekeeper', athletic_trainer: 'Athletic trainer', field_ops: 'Field ops' }
 const ROLE: Record<string, string> = {
   admin: 'Admin', director: 'Director', club_director: 'Club director', assigner: 'Assigner',
-  scheduler: 'Scheduler', coach: 'Coach', staff: 'Staff', parent: 'Parent',
+  scheduler: 'Scheduler', field_director: 'Field director', coach: 'Coach', staff: 'Staff', parent: 'Parent',
 }
 function jobsOf(w: { roles?: unknown; defaultRole?: string | null }): string[] {
   let r: unknown = w.roles

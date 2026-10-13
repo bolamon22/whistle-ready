@@ -238,7 +238,7 @@ export default function OrgEditPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Role</label>
                 <select value={newRole} onChange={e => setNewRole(e.target.value)} className={inp}>
-                  {['director', 'scheduler', 'assigner', 'coach', 'staff'].map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                  {['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff'].map(r => <option key={r} value={r}>{r === 'field_director' ? 'Field Director' : r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
                 </select>
               </div>
               <label className="flex items-center gap-1.5 text-xs text-slate-600 pb-2 whitespace-nowrap">

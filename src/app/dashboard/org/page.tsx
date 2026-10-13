@@ -7,10 +7,11 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { Users, UserPlus, Trash2, Link2, ChevronLeft } from 'lucide-react'
 import AssignerPayAccess from '@/components/AssignerPayAccess'
+import FieldDirectorEvents, { type FieldDirectorEvent } from '@/components/FieldDirectorEvents'
 import { DEFAULT_ASSIGNER_GROUPS, type PayGroup } from '@/lib/payGroups'
 
-const ROLES = ['director', 'scheduler', 'assigner', 'coach', 'staff']
-const ROLE_LABEL: Record<string, string> = { director: 'Director', scheduler: 'Scheduler', assigner: 'Assigner', coach: 'Coach', staff: 'Staff' }
+const ROLES = ['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff']
+const ROLE_LABEL: Record<string, string> = { director: 'Director', scheduler: 'Scheduler', assigner: 'Assigner', field_director: 'Field Director', coach: 'Coach', staff: 'Staff' }
 
 export default function OrgTeamPage() {
   const { data: session, status } = useSession()
@@ -26,6 +27,8 @@ export default function OrgTeamPage() {
   const [lastLink, setLastLink] = useState('')
   // Which staff pay each assigner sees (lib/payGroups).
   const [payAccess, setPayAccess] = useState<Record<string, { groups: PayGroup[]; custom: boolean }>>({})
+  // Which events each field director works (lib/fieldDirector).
+  const [fd, setFd] = useState<{ fieldDirectors: Record<string, { orgId: string | null; events: string[] }>; events: FieldDirectorEvent[] }>({ fieldDirectors: {}, events: [] })
 
   useEffect(() => {
     if (status === 'loading') return
@@ -37,6 +40,7 @@ export default function OrgTeamPage() {
   async function load() {
     try { const d = await fetch('/api/org/users').then(r => r.ok ? r.json() : null); if (d) { setUsers(d.users || []); setInvites(d.invites || []) } } catch {} finally { setLoading(false) }
     try { const p = await fetch('/api/assigner-pay').then(r => r.ok ? r.json() : null); if (p?.assigners) setPayAccess(p.assigners) } catch {}
+    try { const f = await fetch('/api/field-director-events').then(r => r.ok ? r.json() : null); if (f?.fieldDirectors) setFd({ fieldDirectors: f.fieldDirectors, events: Array.isArray(f.events) ? f.events : [] }) } catch {}
   }
   async function add() {
     if (!email.trim()) return
@@ -98,6 +102,13 @@ export default function OrgTeamPage() {
                 <AssignerPayAccess key={u.id + ':' + (payAccess[u.id]?.groups ?? []).join(',')} userId={u.id}
                   groups={payAccess[u.id]?.groups ?? DEFAULT_ASSIGNER_GROUPS} custom={payAccess[u.id]?.custom}
                   onSaved={groups => setPayAccess(p => ({ ...p, [u.id]: { groups, custom: true } }))} />
+              </div>
+            )}
+            {u.role === 'field_director' && (
+              <div className="mt-2 pt-2 border-t border-slate-100">
+                <FieldDirectorEvents key={u.id + ':' + (fd.fieldDirectors[u.id]?.events ?? []).join(',') + ':' + fd.events.length} userId={u.id} events={fd.events}
+                  selected={fd.fieldDirectors[u.id]?.events ?? []}
+                  onSaved={events => setFd(p => ({ ...p, fieldDirectors: { ...p.fieldDirectors, [u.id]: { orgId: p.fieldDirectors[u.id]?.orgId ?? null, events } } }))} />
               </div>
             )}
           </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest, eventGate } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { notifyFinal } from '@/lib/finalAlerts'
 
@@ -24,6 +24,16 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   // The one game field they keep is how many refs it needs.
   if (gate.role === 'assigner' && Object.keys(b || {}).some(k => k !== 'refCount')) {
     return NextResponse.json({ error: 'Assigners can change refs per game only. Ask the scheduler to move or edit games.' }, { status: 403 })
+  }
+  // A field director posts scores, at their own events (lib/fieldDirector), and changes nothing else.
+  if (gate.role === 'field_director') {
+    if (Object.keys(b || {}).some(k => !['score1', 'score2', 'provisional'].includes(k))) {
+      return NextResponse.json({ error: 'Field directors can post scores only. Ask the scheduler to move or edit games.' }, { status: 403 })
+    }
+    if (gate.events) {
+      const g = await prisma.game.findUnique({ where: { id: params.id }, select: { tournamentId: true } })
+      const refused = eventGate(gate, g?.tournamentId); if (refused) return refused
+    }
   }
   const touchesScore = b.score1 !== undefined || b.score2 !== undefined
   const before = touchesScore
@@ -64,7 +74,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
 
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  if (gate.role === 'assigner') return NextResponse.json({ error: 'Assigners can’t delete games.' }, { status: 403 })
+  if (gate.role === 'assigner' || gate.role === 'field_director') return NextResponse.json({ error: 'Only the scheduler or director can delete games.' }, { status: 403 })
   await prisma.game.delete({ where:{id:params.id} })
   return NextResponse.json({ ok:true })
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, eventGate } from '@/lib/apiAuth'
+import { fieldDirectorSees } from '@/lib/roleScope'
+import { rosterWorkerIds } from '@/lib/fieldDirector'
 import { tournamentOrgId } from '@/lib/org'
 import { TRAINING_VIDEOS, videosFor, workerRoles } from '@/lib/training'
 import { payScopeFor } from '@/lib/payScope'
@@ -49,14 +51,20 @@ export async function GET(req: NextRequest) {
     // The Video library's "Who's watched": every Staff Pool person, what they should
     // watch, and per video how many times and when (directors and admins).
     if (req.nextUrl.searchParams.get('report')) {
-      // An assigner sees only the staff groups they run (boys refs, girls refs, ...).
+      // An assigner sees only the staff groups they run (boys refs, girls refs, ...); a
+      // field director the scorekeepers, athletic trainers and field ops on their events.
       const director = gate.role === 'admin' || gate.role === 'director'
-      if (!director && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors and assigners only' }, { status: 403 })
-      const scope = director ? null : await payScopeFor(gate.role, gate.userId)
+      const fd = gate.role === 'field_director'
+      if (!director && gate.role !== 'assigner' && !fd) return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
+      const scope = director || fd ? null : await payScopeFor(gate.role, gate.userId)
       let ws = gate.orgId
         ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ? ORDER BY name`, gate.orgId)
         : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" ORDER BY name`)
       if (scope) ws = ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any)))
+      if (fd) {
+        const on = gate.events ? await rosterWorkerIds(gate.events) : null
+        ws = ws.filter((w: Row) => fieldDirectorSees(w) && (!on || on.has(String(w.id))))
+      }
       const ids = ws.map((w: Row) => String(w.id))
       const seen: Row[] = []
       for (let i = 0; i < ids.length; i += 400) {
@@ -90,7 +98,7 @@ export async function GET(req: NextRequest) {
       const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10)
       const events = tids.length
         ? (await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, startDate, endDate FROM "Tournament" WHERE id IN (${tids.map(() => '?').join(', ')})`, ...tids))
-            .filter((t: Row) => String(t.endDate || t.startDate || '9999') >= cutoff)
+            .filter((t: Row) => String(t.endDate || t.startDate || '9999') >= cutoff && (!gate.events || gate.events.includes(String(t.id))))
             .sort((a: Row, b: Row) => String(a.startDate).localeCompare(String(b.startDate)))
             .map((t: Row) => ({ id: String(t.id), name: String(t.name || ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || '') }))
         : []
@@ -100,9 +108,11 @@ export async function GET(req: NextRequest) {
     }
     const tid = req.nextUrl.searchParams.get('tournamentId')
     if (tid) {
-      if (gate.role !== 'admin' && gate.role !== 'director') return NextResponse.json({ error: 'Directors only' }, { status: 403 })
+      if (gate.role !== 'admin' && gate.role !== 'director' && gate.role !== 'field_director') return NextResponse.json({ error: 'Directors only' }, { status: 403 })
+      const refused = eventGate(gate, tid); if (refused) return refused
       if (gate.role !== 'admin' && gate.orgId && (await tournamentOrgId(tid)) !== gate.orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
-      const roster = await prisma.$queryRawUnsafe<Row[]>(`SELECT w.id, w.roles, w.defaultRole, w.isAssigner FROM "RosterEntry" r JOIN "Worker" w ON w.id = r.workerId WHERE r.tournamentId = ?`, tid)
+      const all = await prisma.$queryRawUnsafe<Row[]>(`SELECT w.id, w.roles, w.defaultRole, w.isAssigner FROM "RosterEntry" r JOIN "Worker" w ON w.id = r.workerId WHERE r.tournamentId = ?`, tid)
+      const roster = gate.role === 'field_director' ? all.filter((w: Row) => fieldDirectorSees(w)) : all
       const ids = roster.map((r: Row) => String(r.id))
       const seen = ids.length
         ? await prisma.$queryRawUnsafe<Row[]>(`SELECT workerKey, videoId FROM "StaffTraining" WHERE workerKey IN (${ids.map(() => '?').join(', ')})`, ...ids)

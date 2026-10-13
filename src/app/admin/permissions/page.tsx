@@ -15,13 +15,14 @@ interface Feature {
 
 type RolePermissions = Record<string, Record<string, boolean>>
 
-const ROLES = ['director', 'assigner', 'scheduler', 'staff', 'club_director', 'coach', 'parent']
+const ROLES = ['director', 'assigner', 'scheduler', 'field_director', 'staff', 'club_director', 'coach', 'parent']
 
 const ROLE_LABELS: Record<string, string> = {
   director:      'Tournament Dir.',
   club_director: 'Club Director',
   assigner:      'Assigner',
   scheduler:     'Scheduler',
+  field_director: 'Field Dir.',
   coach:         'Coach',
   staff:         'Staff',
   parent:        'Parent',
@@ -32,6 +33,7 @@ const ROLE_COLORS: Record<string, string> = {
   club_director: 'bg-violet-100 text-violet-700',
   assigner:      'bg-indigo-100 text-indigo-700',
   scheduler:     'bg-cyan-100 text-cyan-700',
+  field_director: 'bg-orange-100 text-orange-700',
   coach:         'bg-blue-100 text-blue-700',
   staff:         'bg-teal-100 text-teal-700',
   parent:        'bg-pink-100 text-pink-700',

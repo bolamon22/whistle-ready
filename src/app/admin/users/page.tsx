@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { agoLabel, isOnline, parseDbTime } from '@/lib/presenceTime'
 import toast, { Toaster } from 'react-hot-toast'
 import AssignerPayAccess from '@/components/AssignerPayAccess'
+import FieldDirectorEvents, { type FieldDirectorEvent } from '@/components/FieldDirectorEvents'
 import { DEFAULT_ASSIGNER_GROUPS, type PayGroup } from '@/lib/payGroups'
 
 // staff: the Staff Pool record with this email (jobs = its roles); clubs: club names
@@ -22,7 +23,7 @@ interface ClubLink { id: string; tournamentId: string; clubName: string }
 interface Tournament { id: string; name: string }
 interface Registration { clubName: string; tournamentId: string }
 
-const ROLES = ['admin','director','club_director','assigner','scheduler','coach','staff','parent']
+const ROLES = ['admin','director','club_director','assigner','scheduler','field_director','coach','staff','parent']
 
 const ROLE_LABELS: Record<string, string> = {
   scorekeeper:   'Scorekeeper (old role)',
@@ -32,6 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
   club_director: 'Club Director',
   assigner:      'Assigner',
   scheduler:     'Scheduler',
+  field_director: 'Field Director',
   coach:         'Coach',
   staff:         'Staff',
   parent:        'Parent',
@@ -43,6 +45,7 @@ const ROLE_COLORS: Record<string, string> = {
   club_director: 'bg-violet-100 text-violet-700',
   assigner:      'bg-indigo-100 text-indigo-700',
   scheduler:     'bg-cyan-100 text-cyan-700',
+  field_director: 'bg-orange-100 text-orange-700',
   coach:         'bg-blue-100 text-blue-700',
   staff:         'bg-teal-100 text-teal-700',
   parent:        'bg-pink-100 text-pink-700',
@@ -58,7 +61,7 @@ const WHO: { key: Who; label: string }[] = [
   { key: 'clubs', label: 'Clubs & coaches' }, { key: 'parents', label: 'Parents' },
 ]
 const whoOf = (role: string): Who =>
-  ['admin', 'director', 'scheduler', 'assigner'].includes(role) ? 'office'
+  ['admin', 'director', 'scheduler', 'assigner', 'field_director'].includes(role) ? 'office'
   : ['club_director', 'coach'].includes(role) ? 'clubs'
   : role === 'parent' ? 'parents' : 'staff'
 const JOBS: { key: string; label: string }[] = [
@@ -114,6 +117,8 @@ function AdminUsersInner() {
   const [resetting, setResetting] = useState(false)
   // Which staff pay each assigner sees (one runs boys refs, one girls refs).
   const [payAccess, setPayAccess] = useState<Record<string, { groups: PayGroup[]; custom: boolean }>>({})
+  // Which events each field director works (lib/fieldDirector).
+  const [fd, setFd] = useState<{ fieldDirectors: Record<string, { orgId: string | null; events: string[] }>; events: FieldDirectorEvent[] }>({ fieldDirectors: {}, events: [] })
 
   // Club linking
   const [linkingUser, setLinkingUser] = useState<User | null>(null)
@@ -134,6 +139,7 @@ function AdminUsersInner() {
   const load = () => {
     fetch('/api/admin/users').then(r => r.json()).then(d => { setUsers(d); setLoading(false) })
     fetch('/api/assigner-pay').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.assigners) setPayAccess(d.assigners) }).catch(() => {})
+    fetch('/api/field-director-events').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.fieldDirectors) setFd({ fieldDirectors: d.fieldDirectors, events: Array.isArray(d.events) ? d.events : [] }) }).catch(() => {})
   }
 
   const changeRole = async (id: string, role: string) => {
@@ -550,6 +556,20 @@ function AdminUsersInner() {
                   </td>
                 </tr>
               )}
+              {u.role === 'field_director' && (() => {
+                const mine = fd.fieldDirectors[u.id]
+                const evs = fd.events.filter(e => !mine?.orgId || e.orgId === mine.orgId)
+                return (
+                  <tr className="!border-t-0">
+                    <td colSpan={6} className="px-4 pb-3 pt-0">
+                      <div className="max-w-[calc(100vw-4rem)] sm:max-w-none">
+                        <FieldDirectorEvents key={u.id + ':' + (mine?.events ?? []).join(',') + ':' + evs.length} userId={u.id} events={evs} selected={mine?.events ?? []}
+                          onSaved={events => setFd(p => ({ ...p, fieldDirectors: { ...p.fieldDirectors, [u.id]: { orgId: p.fieldDirectors[u.id]?.orgId ?? null, events } } }))} />
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })()}
               </Fragment>
             ))}
             {filtered.length === 0 && (

@@ -4,13 +4,25 @@ import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 import crypto from 'crypto'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
+import { requireFeature, eventGate } from '@/lib/apiAuth'
+import { tournamentOrgId } from '@/lib/org'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 
+// "Invite Staff" on a tournament's Staff roster. It took no login at all (found Oct 13
+// 2026), so anyone could send invites from the organization's address. Now it's for
+// staff who can open the roster, for their own organization's events; a field
+// director (lib/fieldDirector) for their own events.
 export async function POST(req: NextRequest) {
+  const gate = await requireFeature('tournament_roster'); if (!gate.ok) return gate.res
   try {
     const { email, name, tournamentId } = await req.json()
     if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+    if (!tournamentId && gate.role !== 'admin' && gate.role !== 'director') return NextResponse.json({ error: 'Pick the event to invite them to' }, { status: 400 })
+    if (tournamentId) {
+      const refused = eventGate(gate, String(tournamentId)); if (refused) return refused
+      if (gate.role !== 'admin' && gate.orgId && (await tournamentOrgId(String(tournamentId))) !== gate.orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
+    }
 
     await ensureStaffInviteTable()
 

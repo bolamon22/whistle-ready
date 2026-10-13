@@ -35,6 +35,9 @@ export default function VendorRequestEntries() {
   // Approved vendors' invoices (number, money, payments, QuickBooks): only staff who
   // can see money get them.
   const [canMoney, setCanMoney] = useState(false)
+  // Approve, decline and delete are the director's. A field director reads the list:
+  // who's coming and how to reach them, without fees or payments (Oct 13 2026).
+  const [canManage, setCanManage] = useState(false)
   const [invoices, setInvoices] = useState<Record<string, VendorInvoice>>({})
 
   useEffect(() => {
@@ -42,6 +45,7 @@ export default function VendorRequestEntries() {
     fetch(`/api/tournaments/${id}/vendor-requests`).then(r => r.ok ? r.json() : { submissions: [] }).then(d => {
       setSubs(Array.isArray(d.submissions) ? d.submissions : [])
       setCanMoney(!!d.canMoney)
+      setCanManage(!!d.canManage)
       setInvoices(d.invoices && typeof d.invoices === 'object' ? d.invoices : {})
     }).catch(() => {}).finally(() => setLoading(false))
   }, [id])
@@ -135,12 +139,12 @@ export default function VendorRequestEntries() {
   }
   const exportCsv = () => {
     const cols = ['companyName', 'companyContact', 'phone', 'email', 'website', 'level', 'products']
-    const head = ['Submitted', ...cols, 'Status', 'Fee', 'Payment', ...(canMoney ? ['Invoice', 'Paid', 'Balance'] : [])].join(',')
+    const head = ['Submitted', ...cols, 'Status', ...(canMoney ? ['Fee', 'Payment', 'Invoice', 'Paid', 'Balance'] : [])].join(',')
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = rows.map(s => {
       const inv = invoices[s.id]
       const extra = canMoney ? (inv ? [inv.number, inv.money.paid, inv.money.balance] : ['', '', '']) : []
-      return [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.status || 'needs review', money(s.amountDue), s.paymentStatus || 'unpaid', ...extra].map(esc).join(',')
+      return [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.status || 'needs review', ...(canMoney ? [money(s.amountDue), s.paymentStatus || 'unpaid'] : []), ...extra].map(esc).join(',')
     })
     const blob = new Blob([[head, ...lines].join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'vendor-requests.csv'; a.click(); URL.revokeObjectURL(url)
@@ -187,7 +191,7 @@ export default function VendorRequestEntries() {
                         ))}
                       </div>
                       {canMoney && invoices[s.id] && <VendorInvoicePanel tournamentId={id} sub={s} inv={invoices[s.id]} onUpdate={updateOne} />}
-                      <Actions s={s} />
+                      {canManage && <Actions s={s} />}
                     </div>
                   )}
                 </div>
@@ -206,7 +210,7 @@ export default function VendorRequestEntries() {
                         <td className="px-4 py-2.5 font-medium text-slate-800">{s.data?.companyName || '—'}</td>
                         <td className="px-4 py-2.5 text-slate-600">{s.data?.companyContact || '—'}<br /><span className="text-xs text-slate-400">{s.data?.email}</span></td>
                         <td className="px-4 py-2.5 text-slate-600">{s.data?.level || '—'}</td>
-                        <td className="px-4 py-2.5"><StatusChip s={s} inv={invoices[s.id]} />{s.status === 'approved' && <div className="text-xs text-slate-400 mt-1 tabular-nums">{(() => { const inv = invoices[s.id]; return inv && inv.money.paid > 0 && inv.money.balance > 0 ? `${money(inv.money.balance)} of ${money(inv.money.due)} due` : money(s.amountDue) })()}</div>}</td>
+                        <td className="px-4 py-2.5"><StatusChip s={s} inv={invoices[s.id]} />{s.status === 'approved' && canMoney && <div className="text-xs text-slate-400 mt-1 tabular-nums">{(() => { const inv = invoices[s.id]; return inv && inv.money.paid > 0 && inv.money.balance > 0 ? `${money(inv.money.balance)} of ${money(inv.money.due)} due` : money(s.amountDue) })()}</div>}</td>
                         <td className="px-4 py-2.5 text-slate-500 text-xs">{fmt(s.submittedAt)}</td>
                         <td className="px-4 py-2.5 text-slate-400"><ChevronRight size={15} className={open === s.id ? 'rotate-90 transition-transform' : 'transition-transform'} /></td>
                       </tr>
@@ -218,7 +222,7 @@ export default function VendorRequestEntries() {
                             ))}
                           </div>
                           {canMoney && invoices[s.id] && <VendorInvoicePanel tournamentId={id} sub={s} inv={invoices[s.id]} onUpdate={updateOne} />}
-                          <Actions s={s} />
+                          {canManage && <Actions s={s} />}
                         </td></tr>
                       )}
                     </>

@@ -68,11 +68,17 @@ const noSave = { onContextMenu: (e: React.MouseEvent) => e.preventDefault(), con
 export default function VideoLibrary() {
   // The same page at /dashboard/assigner/videos is the assigner's view (Bo, Oct 13
   // 2026: assigners send the videos to their officials). Staff videos only; the API
-  // keeps their people and sends to the staff groups they run (lib/payScope).
-  const asg = (usePathname() || '').startsWith('/dashboard/assigner')
-  const lib = asg ? LIB.filter(v => v.series === 'staff' || v.series === 'ref') : LIB
-  const series = asg ? SERIES.filter(s => s.key === 'staff' || s.key === 'ref') : SERIES
-  const forFilters = asg ? FOR_FILTERS.filter(([k]) => !['assigner', 'parent', 'club_director'].includes(k)) : FOR_FILTERS
+  // keeps their people and sends to the staff groups they run (lib/payScope). At
+  // /dashboard/field-director/videos it's the field director's: staff videos, for the
+  // scorekeepers, athletic trainers and field ops on their events (lib/fieldDirector).
+  const path = usePathname() || ''
+  const asg = path.startsWith('/dashboard/assigner')
+  const fd = path.startsWith('/dashboard/field-director')
+  const lead = asg || fd
+  const keep = (k: string) => k === 'staff' || (asg && k === 'ref')
+  const lib = lead ? LIB.filter(v => keep(v.series)) : LIB
+  const series = lead ? SERIES.filter(s => keep(s.key)) : SERIES
+  const forFilters = lead ? FOR_FILTERS.filter(([k]) => !['assigner', 'parent', 'club_director', ...(fd ? ['ref'] : [])].includes(k)) : FOR_FILTERS
   const [tab, setTab] = useState<'videos' | 'watched' | 'sent'>('videos')
   const [playing, setPlaying] = useState<Lib | null>(null)
   const [scriptFor, setScriptFor] = useState<Lib | null>(null)
@@ -125,11 +131,11 @@ export default function VideoLibrary() {
 
   return (
     <div className="max-w-6xl mx-auto" data-testid="video-library">
-      <Link href={asg ? '/dashboard/assigner' : '/'} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Home</Link>
+      <Link href={asg ? '/dashboard/assigner' : fd ? '/dashboard/field-director' : '/'} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Home</Link>
       <div className="flex items-end justify-between gap-4 flex-wrap mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{asg ? 'Training videos' : 'Video library'}</h1>
-          <p className="text-sm text-slate-500 mt-1">{asg ? `${lib.length} videos for your officials. Send them out, and see who has watched.` : `${lib.length} videos. Play them, read the scripts, send them to your staff, and see who has watched.`}</p>
+          <h1 className="text-2xl font-bold text-slate-900">{lead ? 'Training videos' : 'Video library'}</h1>
+          <p className="text-sm text-slate-500 mt-1">{asg ? `${lib.length} videos for your officials. Send them out, and see who has watched.` : fd ? `${lib.length} videos for your scorekeepers, athletic trainers and field ops. Send them out, and see who has watched.` : `${lib.length} videos. Play them, read the scripts, send them to your staff, and see who has watched.`}</p>
         </div>
         <button type="button" disabled={!picked.size} onClick={() => setSending(true)}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold">
@@ -260,8 +266,8 @@ export default function VideoLibrary() {
           </div>
         </div>
       )}
-      {scriptFor && <ScriptPanel readOnly={asg} v={scriptFor} note={notes[scriptFor.id]?.text || ''} onClose={() => setScriptFor(null)} onSaved={n => setNotes(n)} />}
-      {sending && <SendDialog events={events} initialChosen={preChosen} roleKeys={asg ? SEND_GROUPS.filter(r => r !== 'assigner' && (people || []).some(p => inSendGroup(p.roles, p.gender, r))) : SEND_GROUPS} ids={Array.from(picked)} people={people || []} onClose={() => { setSending(false); setPreChosen([]) }} onSent={() => { setSending(false); setPreChosen([]); setPicked(new Set()); loadSends(); setTab('sent') }} />}
+      {scriptFor && <ScriptPanel readOnly={lead} v={scriptFor} note={notes[scriptFor.id]?.text || ''} onClose={() => setScriptFor(null)} onSaved={n => setNotes(n)} />}
+      {sending && <SendDialog events={events} initialChosen={preChosen} roleKeys={lead ? SEND_GROUPS.filter(r => r !== 'assigner' && !(fd && r.startsWith('ref')) && (people || []).some(p => inSendGroup(p.roles, p.gender, r))) : SEND_GROUPS} ids={Array.from(picked)} people={people || []} onClose={() => { setSending(false); setPreChosen([]) }} onSent={() => { setSending(false); setPreChosen([]); setPicked(new Set()); loadSends(); setTab('sent') }} />}
     </div>
   )
 }

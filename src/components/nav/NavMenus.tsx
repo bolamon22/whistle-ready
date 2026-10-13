@@ -5,7 +5,8 @@ import { ChevronDown } from 'lucide-react'
 import type { NavMenu, NavMenuKey } from './navConfig'
 
 // The four header menus at desktop width (xl and up). A menu with one link is
-// just that link. Open state lives in NavBar so only one menu is open at a time,
+// just that link, under the link's own name (a field director's People menu is only
+// Training videos). Open state lives in NavBar so only one menu is open at a time,
 // and a click outside, Escape or a page change closes it.
 export default function NavMenus({ menus, open, setOpen, current, overdue }: {
   menus: NavMenu[]
@@ -22,7 +23,7 @@ export default function NavMenus({ menus, open, setOpen, current, overdue }: {
         const trigger = `relative flex items-center gap-1 h-9 px-3 rounded-full text-sm font-semibold transition-colors ${isOpen ? 'bg-teal-50 text-teal-700' : isCurrent ? 'text-teal-700 hover:bg-slate-50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`
         const mark = isCurrent && !isOpen ? <span aria-hidden className="absolute left-3 right-3 -bottom-[14px] h-0.5 rounded-full bg-teal-600" /> : null
         if (m.items.length === 1) {
-          return <Link key={m.key} href={m.items[0].href} className={trigger} aria-current={isCurrent ? 'page' : undefined}>{m.label}{mark}</Link>
+          return <Link key={m.key} href={m.items[0].href} className={trigger} aria-current={isCurrent ? 'page' : undefined}>{m.items[0].label}{mark}</Link>
         }
         return (
           <div key={m.key} className="relative" data-nav-pop={m.key}>

@@ -162,12 +162,19 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     const email = invite.email
 
     // Resolve orgId: prefer the invite's own org (org-level invite), else the tournament's.
+    // An invite from Your team also carries the login role the director picked.
     let orgId: string | null = null
+    let loginRole = 'staff'
     const oc = db()
     try {
       const inv = await oc.execute({ sql: `SELECT orgId FROM "StaffInvite" WHERE token = ?`, args: [params.token] })
       orgId = (inv.rows[0]?.orgId as string) ?? null
     } catch { /* column may not exist yet */ }
+    try {
+      const inv = await oc.execute({ sql: `SELECT loginRole FROM "StaffInvite" WHERE token = ?`, args: [params.token] })
+      const picked = String(inv.rows[0]?.loginRole || '')
+      if (['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff'].includes(picked)) loginRole = picked
+    } catch { /* column may not exist yet: Staff */ }
     if (!orgId && invite.tournamentId) {
       const res = await oc.execute({ sql: `SELECT orgId FROM "Tournament" WHERE id = ?`, args: [invite.tournamentId] })
       orgId = (res.rows[0]?.orgId as string) ?? null
@@ -202,7 +209,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     const existingUser = await prisma.user.findUnique({ where: { email } })
     if (!existingUser) {
       await prisma.user.create({
-        data: { name, email, password: hashed, role: 'staff' },
+        data: { name, email, password: hashed, role: loginRole },
       })
     }
     // Scope the new/linked user to the invite's org so they only see that org.

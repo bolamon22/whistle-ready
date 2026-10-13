@@ -31,6 +31,7 @@ export const NAV_MENUS: NavMenu[] = [
     { href: '/dashboard/org', label: 'Your team', desc: 'Add people to your organization and set roles', icon: UserCog, roles: ['director'] },
     { href: '/dashboard/org/videos', label: 'Training videos', desc: 'Send videos to staff and see who watched', icon: GraduationCap, roles: ['admin', 'director'] },
     { href: '/dashboard/assigner/videos', label: 'Training videos', desc: 'Send videos to the officials you run', icon: GraduationCap, roles: ['assigner'] },
+    { href: '/dashboard/field-director/videos', label: 'Training videos', desc: 'Send videos to your scorekeepers, trainers and field ops', icon: GraduationCap, roles: ['field_director'] },
   ] },
   { key: 'org', label: 'Organization', items: [
     { href: '/dashboard/org/site', label: 'Website', desc: 'Your public site and event pages', icon: Globe },
@@ -112,21 +113,22 @@ export function whenLabel(e: NavEvent, today: string): string {
   return days === 1 ? 'Tomorrow' : `in ${days} days`
 }
 
-/** Where an event opens for this role: its dashboard, else the board, else the scheduler. */
+/** Where an event opens for this role: its dashboard, else the board, else the
+ *  scheduler, else game day (a field director). */
 export function eventHref(role: string, id: string): string {
   const base = `/tournaments/${id}`
-  return [`${base}/dashboard`, base, `${base}/scheduler`].find(h => roleCanAccess(role, h)) ?? base
+  return [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/communications`, `${base}/roster`].find(h => roleCanAccess(role, h)) ?? base
 }
 
 // ── Roles, for the account menu and View as ──
 export const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin', director: 'Tournament Director', club_director: 'Club Director', assigner: 'Assigner',
-  scheduler: 'Scheduler', coach: 'Coach', staff: 'Staff', parent: 'Parent',
+  scheduler: 'Scheduler', field_director: 'Field Director', coach: 'Coach', staff: 'Staff', parent: 'Parent',
 }
 export const ROLE_COLORS: Record<string, string> = {
   admin: 'bg-red-100 text-red-700', director: 'bg-purple-100 text-purple-700', club_director: 'bg-violet-100 text-violet-700',
-  assigner: 'bg-indigo-100 text-indigo-700', scheduler: 'bg-cyan-100 text-cyan-700', coach: 'bg-blue-100 text-blue-700',
+  assigner: 'bg-indigo-100 text-indigo-700', scheduler: 'bg-cyan-100 text-cyan-700', field_director: 'bg-orange-100 text-orange-700', coach: 'bg-blue-100 text-blue-700',
   staff: 'bg-teal-100 text-teal-700', parent: 'bg-pink-100 text-pink-700',
 }
 /** The roles an admin can preview the app as. */
-export const VIEW_AS_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'coach', 'staff', 'parent']
+export const VIEW_AS_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'field_director', 'coach', 'staff', 'parent']

@@ -8,6 +8,7 @@
 export const BROADCAST_ROLE_OPTIONS = [
   { key: 'scheduler', label: 'Schedulers' },
   { key: 'assigner', label: 'Assigners' },
+  { key: 'field_director', label: 'Field directors' },
   { key: 'staff', label: 'Staff (field ops, medical, etc.)' },
   { key: 'scorekeeper', label: 'Scorekeepers' },
   { key: 'ref', label: 'Referees' },

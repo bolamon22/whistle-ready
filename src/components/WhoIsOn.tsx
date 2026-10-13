@@ -9,7 +9,7 @@ interface Row { id: string; name: string; role: string; lastSeenAt: string | nul
 
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Admin', director: 'Director', club_director: 'Club director', assigner: 'Assigner',
-  scheduler: 'Scheduler', coach: 'Coach', staff: 'Staff', parent: 'Parent', viewer: 'Viewer',
+  scheduler: 'Scheduler', field_director: 'Field director', coach: 'Coach', staff: 'Staff', parent: 'Parent', viewer: 'Viewer',
 }
 
 export default function WhoIsOn() {

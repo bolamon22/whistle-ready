@@ -133,8 +133,9 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   const { effectiveRole } = useRole()
   const canOpen = (href: string) => status !== 'authenticated' || roleCanAccess(effectiveRole, href)
   // The name and logo go to the first page this role can open: the dashboard for most,
-  // the Assigner for an assigner (who has no tournament dashboard).
-  const home = [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/assignments`].find(canOpen) ?? `${base}/dashboard`
+  // the Assigner for an assigner (who has no tournament dashboard), game day for a
+  // field director.
+  const home = [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/assignments`, `${base}/communications`, `${base}/roster`].find(canOpen) ?? `${base}/dashboard`
   const groups: NavGroup[] = allGroups
     .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href) && !(i.unlessCan && status === 'authenticated' && canOpen(i.unlessCan))) } : g)
     .filter(g => g.href ? canOpen(g.href) : (g.items?.length ?? 0) > 0)

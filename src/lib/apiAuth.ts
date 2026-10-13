@@ -23,8 +23,25 @@ import { roleHasFeature } from './routeAccess'
 const EXTERNAL_ROLES = ['coach', 'parent', 'club_director']
 
 export type AuthResult =
-  | { ok: true; session: any; role: string; userId: string; orgId: string | null }
+  | { ok: true; session: any; role: string; userId: string; orgId: string | null; events: string[] | null }
   | { ok: false; res: NextResponse }
+
+/** The events a signed-in field director works (lib/fieldDirector), from the login
+ *  token; null for everyone else, an admin previewing the role included, which
+ *  means "not limited to some events". */
+function eventsOf(session: any): string[] | null {
+  const u = session?.user as { role?: string; events?: unknown } | undefined
+  if (u?.role !== 'field_director') return null
+  return Array.isArray(u.events) ? u.events.map(String) : []
+}
+
+/** A field director works only their own events. Returns the refusal to send back,
+ *  or null when this request may use this event. */
+export function eventGate(gate: { events: string[] | null }, tournamentId: string | null | undefined): NextResponse | null {
+  if (!gate.events) return null
+  if (tournamentId && gate.events.includes(String(tournamentId))) return null
+  return NextResponse.json({ error: 'That event is not one of yours.' }, { status: 403 })
+}
 
 // "View as": an admin previewing a role gets that role's answers from the API
 // too, not just its pages. Otherwise the preview showed the pages a scheduler
@@ -54,10 +71,10 @@ export async function viewerRole(): Promise<string> {
 }
 
 /** viewerRole plus the account id, for answers that differ per person (an
- *  assigner's pay groups, lib/payScope). Never blocks. */
-export async function viewer(): Promise<{ role: string; userId: string }> {
+ *  assigner's pay groups, lib/payScope; a field director's events). Never blocks. */
+export async function viewer(): Promise<{ role: string; userId: string; events: string[] | null }> {
   const b = await base()
-  return 'res' in b ? { role: '', userId: '' } : { role: b.role, userId: ((b.session.user as any)?.id as string) || '' }
+  return 'res' in b ? { role: '', userId: '', events: null } : { role: b.role, userId: ((b.session.user as any)?.id as string) || '', events: eventsOf(b.session) }
 }
 
 function ok(session: any, role?: string): AuthResult {
@@ -67,6 +84,7 @@ function ok(session: any, role?: string): AuthResult {
     role: role ?? (((session.user as any)?.role as string) || ''),
     userId: (session.user as any)?.id as string,
     orgId: ((session.user as any)?.orgId as string | null) ?? null,
+    events: eventsOf(session),
   }
 }
 

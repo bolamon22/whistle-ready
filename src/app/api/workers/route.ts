@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
-import { redactWorker } from '@/lib/roleScope'
+import { redactWorker, fieldDirectorSees } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
 import { createClient } from '@libsql/client'
 import { presenceByEmail, canSeePresence } from '@/lib/presence'
@@ -74,7 +74,11 @@ export async function GET(req: Request) {
   const scope = await payScopeFor(gate.role, gate.userId)
   // isAssigner is 0/1 in raw SQL; a boolean everywhere else. The edit forms send back
   // what they were given, and Prisma refuses a number for it (see [id]/route.ts).
-  const shape = (rows: any[]) => rows.map(r => redactWorker({ ...r, isAssigner: !!Number(r.isAssigner) }, gate.role, scope))
+  // A field director (lib/fieldDirector) sees the scorekeepers, athletic trainers and
+  // field ops in the pool, to add them to their events, and never refs.
+  const shape = (rows: any[]) => rows
+    .filter(r => gate.role !== 'field_director' || fieldDirectorSees(r))
+    .map(r => redactWorker({ ...r, isAssigner: !!Number(r.isAssigner) }, gate.role, scope))
   const { orgId, isAdmin } = await resolveOrgId(req)
   const client = db()
 
@@ -105,6 +109,8 @@ export async function POST(req: Request) {
   // so nothing unauthenticated needs to create workers here anymore.
   const gatePost = await requireStaff()
   if (!gatePost.ok) return gatePost.res
+  // Field directors bring people in with an invite or the signup link instead.
+  if (gatePost.role === 'field_director') return NextResponse.json({ error: 'Invite them from the Staff roster instead.' }, { status: 403 })
 
   const session = await getServerSession(authOptions)
   const role = (session?.user as any)?.role

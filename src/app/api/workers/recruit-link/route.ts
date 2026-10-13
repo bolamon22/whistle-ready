@@ -17,6 +17,12 @@ export async function POST(req: Request) {
 
   let body: { regenerate?: unknown; viewOrgId?: unknown } = {}
   try { body = await req.json() } catch { /* optional body */ }
+  // A new code turns off every link already shared, so only a director or admin may
+  // rotate it. Any staff could (found Oct 13 2026, adding field directors, who copy
+  // this link from the Staff roster).
+  if (body.regenerate === true && gate.role !== 'admin' && gate.role !== 'director') {
+    return NextResponse.json({ error: 'Only a director can make a new signup link.' }, { status: 403 })
+  }
 
   const orgId = gate.role === 'admin'
     ? String(body.viewOrgId || gate.orgId || '')

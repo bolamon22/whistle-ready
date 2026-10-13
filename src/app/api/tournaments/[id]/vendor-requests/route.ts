@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireFeature } from '@/lib/apiAuth'
+import { roleHasFeature } from '@/lib/routeAccess'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, deleteSubmission, getSubmission, setSubmissionStatus, ensurePassToken } from '@/lib/formSubmissions'
 import { orgById, orgLogoUrl } from '@/lib/org'
@@ -15,8 +16,10 @@ import { vendorInvoiceSummary, type VendorInvoiceSummary } from '@/lib/vendorInv
 
 // Staff: vendor requests for THIS tournament (rows in "OrgFormSubmission" tagged with
 // the tournamentId — see src/lib/formSubmissions.ts).
-async function gateForTournament(id: string) {
-  const gate = await requireFeature('tournament_people')
+// Reading the list takes the Vendor list feature (directors and field directors);
+// approving, declining, invoicing and deleting stay with tournament_people (directors).
+async function gateForTournament(id: string, feature = 'tournament_people') {
+  const gate = await requireFeature(feature)
   if (!gate.ok) return { res: gate.res }
   const orgId = await tournamentOrgId(id)
   if (!orgId) return { res: NextResponse.json({ error: 'Tournament not found', submissions: [] }, { status: 404 }) }
@@ -27,12 +30,21 @@ async function gateForTournament(id: string) {
 }
 
 // What only staff who can see money get on a vendor row: the payments recorded by
-// hand and the QuickBooks copy (vendor invoices, Oct 2026).
-const MONEY_KEYS = ['vendorPayments', 'invoiceSentAt', 'qboDocNumber', 'qboTxnDate', 'qboInvoiceId', 'qboSyncError', 'qboSyncedAt', 'qboOnlinePaymentId'] as const
+// hand and the QuickBooks copy (vendor invoices, Oct 2026); and since field directors
+// read this list (Oct 13 2026), the fee, the payment and the booth link (it opens the
+// vendor's page, which shows what they owe), on the row and in the form answers.
+const MONEY_KEYS = ['vendorPayments', 'invoiceSentAt', 'qboDocNumber', 'qboTxnDate', 'qboInvoiceId', 'qboSyncError', 'qboSyncedAt', 'qboOnlinePaymentId',
+  'amountDue', 'paymentStatus', 'paidAt', 'stripeRef', 'passToken'] as const
+const MONEY_ANSWERS = ['boothFee', 'webSponsorFee'] as const
 const forRole = (sub: FormSubmission, money: boolean) => {
   if (money) return sub
   const out: Record<string, unknown> = { ...sub }
   for (const k of MONEY_KEYS) delete out[k]
+  if (sub.data && typeof sub.data === 'object') {
+    const data: Record<string, unknown> = { ...(sub.data as Record<string, unknown>) }
+    for (const k of MONEY_ANSWERS) delete data[k]
+    out.data = data
+  }
   return out
 }
 
@@ -49,14 +61,15 @@ async function invoicesFor(orgId: string, subs: FormSubmission[]): Promise<Recor
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const g = await gateForTournament(params.id)
+  const g = await gateForTournament(params.id, 'tournament_vendors')
   if ('res' in g) return g.res
   try {
     await ensureVendorInvoiceColumns().catch(() => { /* the list still loads; invoices show once they can */ })
     const submissions = await listSubmissions({ orgId: g.orgId, formType: 'vendor', tournamentId: params.id, sort: 'oldest', limit: 5000 })
     const canMoney = canSeeMoney(g.gate.role)
     const invoices = canMoney ? await invoicesFor(g.orgId, submissions).catch(() => ({})) : {}
-    return NextResponse.json({ submissions: submissions.map(x => forRole(x, canMoney)), canMoney, invoices })
+    const canManage = g.gate.role === 'admin' || roleHasFeature(g.gate.role, 'tournament_people')
+    return NextResponse.json({ submissions: submissions.map(x => forRole(x, canMoney)), canMoney, canManage, invoices })
   } catch {
     return NextResponse.json({ submissions: [] })
   }

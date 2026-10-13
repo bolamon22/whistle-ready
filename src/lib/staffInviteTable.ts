@@ -24,4 +24,7 @@ export async function ensureStaffInviteTable(): Promise<void> {
   // Raw columns deliberately NOT in schema.prisma (same pattern as Organization / Tournament.orgId)
   try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "orgId" TEXT`) } catch { /* exists */ }
   try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "workerId" TEXT`) } catch { /* exists */ }
+  // The login role a director picked on Your team, applied when the invite is accepted
+  // (Oct 13 2026: everyone invited there became Staff, whatever role was picked).
+  try { await client.execute(`ALTER TABLE "StaffInvite" ADD COLUMN "loginRole" TEXT`) } catch { /* exists */ }
 }

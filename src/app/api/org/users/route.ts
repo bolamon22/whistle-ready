@@ -13,7 +13,7 @@ import crypto from 'crypto'
 // guarded ALTER and write it with the libsql client.
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
-const ASSIGNABLE_ROLES = ['director', 'scheduler', 'assigner', 'coach', 'staff']
+const ASSIGNABLE_ROLES = ['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff']
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     await prisma.staffInvite.create({ data: { token, email, name, tournamentId: null, expiresAt } })
-    await client.execute({ sql: `UPDATE "StaffInvite" SET orgId = ? WHERE token = ?`, args: [orgId, token] })
+    await client.execute({ sql: `UPDATE "StaffInvite" SET orgId = ?, loginRole = ? WHERE token = ?`, args: [orgId, newRole, token] })
     const inviteUrl = `${APP_URL}/invite/${token}`
 
     // email optional — owner can copy the link; sendEmail never throws

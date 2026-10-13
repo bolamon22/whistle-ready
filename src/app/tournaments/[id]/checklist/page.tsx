@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
+import EventBackLink from '@/components/EventBackLink'
 import { ClipboardCheck, ChevronLeft } from 'lucide-react'
 import SetupChecklist from '@/components/SetupChecklist'
 import TrainingLink from '@/components/TrainingLink'
@@ -17,7 +18,7 @@ export default function ChecklistPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <Toaster position="top-right" />
-      <Link href={`/tournaments/${id}/dashboard`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Dashboard</Link>
+      <EventBackLink id={id} />
       <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><ClipboardCheck size={22} className="text-teal-600" /> Tournament setup checklist</h1>
       <p className="text-sm text-slate-500 mb-5">A shared setup list for the whole event. Anyone on staff can check items off and add their own.</p>
       <TrainingLink id="checklist" className="-mt-3 mb-5" />

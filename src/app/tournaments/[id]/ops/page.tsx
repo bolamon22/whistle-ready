@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
+import EventBackLink from '@/components/EventBackLink'
 import { FIELD_REQUEST_TEMPLATES, FIELD_REQUEST_URGENCIES } from '@/lib/fieldRequests'
 import { Radio, Send, Trash2, ChevronLeft, Users, TrafficCone, HeartPulse, Flag, ClipboardList, ListChecks, Check } from 'lucide-react'
 import StaffAlerts from '@/components/StaffAlerts'
@@ -75,7 +76,7 @@ export default function OpsBoardPage({ embedded = false }: { embedded?: boolean 
     <div className="max-w-2xl mx-auto">
       <Toaster position="top-right" />
       {!embedded && <>
-        <Link href={`/tournaments/${id}/dashboard`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Dashboard</Link>
+        <EventBackLink id={id} />
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><Radio size={22} className="text-teal-600" /> Field Request</h1>
         <p className="text-sm text-slate-500 mb-5">Quick game-day requests to staff — “yellow balls on Field 5,” “trainer to Field 7.” Anyone on staff can post and acknowledge.</p>
         <TrainingLink id="field-request" className="-mt-3 mb-5" />

@@ -174,6 +174,31 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Field Director role (Oct 13).** Login role `field_director` runs game day at the events assigned to them
+  (Bo: Jamie Wolf "is just going to be working the event"; several can share an event). Their events: AppSetting
+  `fieldDirectorEvents:{userId}` = { events, by, at } (`lib/fieldDirector.ts`), picked with the **Works** pills
+  on Logins and Your team (`components/FieldDirectorEvents.tsx`, `GET/PUT /api/field-director-events`, admin any,
+  director own org). The list rides in the login token: the `lib/auth` jwt callback now re-reads role, orgId and a
+  field director's events from the database at most once a minute (cached per server instance), so role changes
+  no longer need a sign-out; `session.user.events` exists for field directors only. Middleware sends a field
+  director's staff pages of other events home, and passes their `/api/tournaments/<id>/...` calls for other
+  events through with the cookie header removed (they get the public answer). Routes that take the event from
+  the body or query use `eventGate(gate, tournamentId)` (lib/apiAuth; `gate.events` is null for everyone but a
+  signed-in field director, so admin View as is not limited). Features: tournaments_list, roster, availability,
+  staff_applications, staff_gameday, scores, game_scorekeeper and the new `tournament_vendors` (vendor list,
+  moved out of tournament_people; approving, declining and deleting still need tournament_people). Staff they see:
+  `FIELD_DIRECTOR_JOBS` = scorekeeper, athletic_trainer, field_ops (`roleScope.fieldDirectorSees`) on roster,
+  workers, availability, staff applications (ref-only applicants dropped) and training; `redactWorker` keeps those
+  people's email and phone for them (never pay, notes or mailing address); the games list hides refs' contacts
+  from them. They can't create, edit or delete Staff Pool records, create events, or change a game beyond
+  score1/score2/provisional. The vendor list strips amountDue, paymentStatus, paidAt, stripeRef, passToken,
+  data.boothFee and data.webSponsorFee for roles without money and returns `canManage`. Home
+  `/dashboard/field-director` (RoleHome; its action buttons now go three to a row on phones), videos
+  `/dashboard/field-director/videos` (the org video page in field-director mode). Fixed on the way: `/api/invite`
+  and `/api/availability` took no login; only directors and admins may rotate the signup link (`regenerate`);
+  the roster POST answer is redacted; Your team invites now keep the picked login role (raw column
+  `StaffInvite.loginRole`); the game-day pages' back link (`components/EventBackLink`) goes home for roles
+  without the event dashboard.
 - **Header redesign (Oct 13).** `src/app/NavBar.tsx` composes `src/components/nav/`. `navConfig.ts` (pure; not `navMenus.ts`, which a case-insensitive disk confuses with `NavMenus.tsx`):
   `NAV_MENUS` = Events / People / Organization / Admin; `visibleMenus(role)` keeps each link only if
   `roleCanAccess` allows it (plus an optional `roles` list) and drops empty menus, so adding a page to the header

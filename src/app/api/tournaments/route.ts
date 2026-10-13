@@ -76,11 +76,13 @@ export async function GET(req: Request) {
     return NextResponse.json(await withPlaced(all.map(shape)))
   }
 
-  // Org user: scope to their org
+  // Org user: scope to their org. A field director sees only the events assigned to
+  // them (lib/fieldDirector).
   if (orgId) {
     const client = db()
     const res = await client.execute({ sql: 'SELECT id FROM "Tournament" WHERE orgId = ?', args: [orgId] })
-    const ids = res.rows.map((r: any) => r.id as string)
+    const mine: string[] | null = role === 'field_director' ? ((session?.user as any)?.events ?? []) : null
+    const ids = res.rows.map((r: any) => r.id as string).filter(id => !mine || mine.includes(id))
     if (ids.length === 0) return NextResponse.json([])
     const tournaments = await prisma.tournament.findMany({
       where: { id: { in: ids } },
@@ -103,6 +105,7 @@ export async function POST(req: Request) {
   // could put a tournament on the site. The rest of the write routes were gated in
   // 188bc8e; this collection route was missed.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  if (gate.role === 'field_director') return NextResponse.json({ error: 'Field directors can’t create events.' }, { status: 403 })
   const session = gate.session
   const role = (session?.user as any)?.role
   const sessionOrgId = (session?.user as any)?.orgId ?? null

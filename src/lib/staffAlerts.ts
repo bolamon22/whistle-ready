@@ -76,7 +76,7 @@ const workerGroups = (w: { defaultRole?: unknown; roles?: unknown; isAssigner?: 
 /** A sensible starting choice for a person turning alerts on: event runners get
  *  everything; staff get the groups that match their job in the Staff Pool. */
 export async function defaultGroupsFor(email: string, role: string): Promise<AlertGroup[]> {
-  if (['admin', 'director', 'assigner', 'scheduler'].includes(role)) return [...ALERT_GROUPS]
+  if (['admin', 'director', 'assigner', 'scheduler', 'field_director'].includes(role)) return [...ALERT_GROUPS]
   try {
     const rows: any[] = await prisma.$queryRawUnsafe('SELECT defaultRole, roles, isAssigner FROM "Worker" WHERE lower(email) = lower(?)', email)
     const g = new Set<AlertGroup>()

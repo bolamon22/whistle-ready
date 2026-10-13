@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import EventBackLink from '@/components/EventBackLink'
 import { Phone, MessageSquare, Search, ChevronLeft, Users } from 'lucide-react'
 import TrainingLink from '@/components/TrainingLink'
 
@@ -50,7 +51,7 @@ export default function DirectoryPage({ embedded = false }: { embedded?: boolean
   return (
     <div className="max-w-2xl mx-auto">
       {!embedded && <>
-        <Link href={`/tournaments/${id}/dashboard`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Dashboard</Link>
+        <EventBackLink id={id} />
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><Users size={22} className="text-teal-600" /> Staff directory</h1>
       </>}
       <p className="text-sm text-slate-500 mb-4">{total} staff on this tournament’s roster. Tap to call or text.</p>

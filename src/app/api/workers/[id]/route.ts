@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
-import { redactWorker, stripWorkerUpdate } from '@/lib/roleScope'
+import { redactWorker, stripWorkerUpdate, fieldDirectorSees } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
 // Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
 // handles or edit/delete workers). An assigner reads and edits pay only for staff in
@@ -10,12 +10,15 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
   const [w, scope] = await Promise.all([prisma.worker.findUnique({ where:{id:params.id} }), payScopeFor(gate.role, gate.userId)])
-  if (!w) return NextResponse.json({ error:'Not found' }, { status:404 })
+  // A field director sees only scorekeepers, athletic trainers and field ops.
+  if (!w || (gate.role === 'field_director' && !fieldDirectorSees(w))) return NextResponse.json({ error:'Not found' }, { status:404 })
   return NextResponse.json(redactWorker(w, gate.role, scope))
 }
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
+  // Field directors invite and roster staff; the Staff Pool records are the director's.
+  if (gate.role === 'field_director') return NextResponse.json({ error: 'Ask your director to change Staff Pool details.' }, { status: 403 })
   const scope = await payScopeFor(gate.role, gate.userId)
   // Pay groups go by the record as stored, so an assigner can't move someone into
   // their groups and set the pay in the same save.
@@ -87,6 +90,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
+  if (gate.role === 'field_director') return NextResponse.json({ error: 'Ask your director to remove Staff Pool records.' }, { status: 403 })
   const [games, roster, pay, time] = await Promise.all([
     prisma.assignment.count({ where: { workerId: params.id } }),
     prisma.rosterEntry.count({ where: { workerId: params.id } }),

@@ -6,7 +6,9 @@ import { tournamentOrgId } from '@/lib/org'
 import { payScopeFor } from '@/lib/payScope'
 import { seesPay, workerPayGroups } from '@/lib/payGroups'
 import { prisma } from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, eventGate } from '@/lib/apiAuth'
+import { fieldDirectorSees } from '@/lib/roleScope'
+import { rosterWorkerIds } from '@/lib/fieldDirector'
 import { sendEmail, emailEnabled, orgSender } from '@/lib/email'
 import { renderEmail, esc, button } from '@/lib/emailLayout'
 import { orgById } from '@/lib/org'
@@ -30,7 +32,9 @@ import { trainingVideo, workerRoles, minutesLabel, trainingLetter, inSendGroup }
 // Each send is logged in AppSetting `trainingSends` (newest 50) for the library.
 // Assigners can send too (Bo, Oct 13 2026), from /dashboard/assigner/videos: staff
 // videos only, to the staff groups they run (lib/payScope), and they see only their
-// own sends in the log.
+// own sends in the log. So can field directors (Oct 13 2026), from
+// /dashboard/field-director/videos: staff videos, to the scorekeepers, athletic
+// trainers and field ops on their own events (lib/fieldDirector).
 
 type Row = Record<string, unknown>
 const LOG = 'trainingSends'
@@ -38,8 +42,9 @@ const LOG = 'trainingSends'
 export async function POST(req: NextRequest) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const director = gate.role === 'admin' || gate.role === 'director'
-  if (!director && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors and assigners only' }, { status: 403 })
-  const scope = director ? null : await payScopeFor(gate.role, gate.userId)
+  const fd = gate.role === 'field_director'
+  if (!director && gate.role !== 'assigner' && !fd) return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
+  const scope = director || fd ? null : await payScopeFor(gate.role, gate.userId)
   const b = await req.json().catch(() => ({} as any))
   const videoIds: string[] = (Array.isArray(b.videoIds) ? b.videoIds : []).map(String).filter((id: string) => trainingVideo(id) && (director || trainingVideo(id)!.series !== 'assigner'))
   const roles: string[] = (Array.isArray(b.roles) ? b.roles : []).map(String)
@@ -56,12 +61,16 @@ export async function POST(req: NextRequest) {
   const ws = gate.orgId
     ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ?`, gate.orgId)
     : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker"`)
-  const mine = scope ? ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any))) : ws
+  const fdOn = fd && gate.events ? await rosterWorkerIds(gate.events) : null
+  const mine = scope ? ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any)))
+    : fd ? ws.filter((w: Row) => fieldDirectorSees(w) && (!fdOn || fdOn.has(String(w.id))))
+    : ws
   // An event narrows the role picks to the people on its staff roster; with no role
   // picked it means everyone working it. Named people and typed addresses still go.
   const eventId = String(b.eventId || '')
   let onEvent: Set<string> | null = null; let eventName = ''
   if (eventId) {
+    const refused = eventGate(gate, eventId); if (refused) return refused
     if (gate.role !== 'admin' && gate.orgId && (await tournamentOrgId(eventId)) !== gate.orgId) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     const rs = await prisma.$queryRawUnsafe<Row[]>(`SELECT workerId FROM "RosterEntry" WHERE tournamentId = ?`, eventId)
     onEvent = new Set(rs.map((r: Row) => String(r.workerId)))
@@ -157,7 +166,7 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const director = gate.role === 'admin' || gate.role === 'director'
-  if (!director && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors and assigners only' }, { status: 403 })
+  if (!director && gate.role !== 'assigner' && gate.role !== 'field_director') return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: LOG } }); const all = row?.value ? JSON.parse(row.value) : []
     return NextResponse.json({ sends: director ? all : (Array.isArray(all) ? all.filter((e: any) => e.byUserId && e.byUserId === gate.userId) : []) })

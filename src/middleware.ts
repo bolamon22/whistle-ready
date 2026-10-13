@@ -19,6 +19,7 @@ const ROLE_HOME: Record<string, string> = {
   club_director: '/dashboard/club-director',
   assigner:      '/dashboard/assigner',
   scheduler:     '/dashboard/scheduler',
+  field_director: '/dashboard/field-director',
   coach:         '/dashboard/coach',
   staff:         '/dashboard/staff',
   parent:        '/dashboard/parent',
@@ -121,6 +122,19 @@ export async function middleware(req: NextRequest) {
 
   // Always allow public routes, auth API, and all other API routes (they handle own auth)
   if (PUBLIC_ROUTES.some(r => pathname.startsWith(r))) return NextResponse.next()
+  // A field director works only the events assigned to them (lib/fieldDirector; the
+  // list rides in the login token). A call to any other event's API goes through
+  // without the login, so they get what the public gets there and no staff data. One
+  // check here instead of one in every /api/tournaments/<id> route.
+  const eventApi = /^\/api\/tournaments\/([^/]+)(?:\/|$)/.exec(pathname)
+  if (eventApi && req.cookies.getAll().some(c => c.name.includes('next-auth.session-token'))) {
+    const t = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    if (t?.role === 'field_director' && !(Array.isArray(t.events) && t.events.includes(eventApi[1]))) {
+      const anonymous = new Headers(req.headers)
+      anonymous.delete('cookie')
+      return NextResponse.next({ request: { headers: anonymous } })
+    }
+  }
   if (pathname.startsWith('/api/')) return NextResponse.next()
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) return NextResponse.next()
   // SEO / crawler files — always public
@@ -198,6 +212,13 @@ export async function middleware(req: NextRequest) {
   // Redirect non-privileged roles from home
   if (pathname === '/' && role !== 'admin' && role !== 'director') {
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/dashboard/staff', req.url))
+  }
+
+  // A field director's staff pages are only for their own events (public event pages
+  // returned above, as for anyone). Not when an admin previews the role.
+  const eventPage = /^\/tournaments\/([^/]+)(?:\/|$)/.exec(pathname)
+  if (realRole === 'field_director' && eventPage && !(Array.isArray(token.events) && token.events.includes(eventPage[1]))) {
+    return NextResponse.redirect(new URL(ROLE_HOME.field_director, req.url))
   }
 
   // Check permissions
