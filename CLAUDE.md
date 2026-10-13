@@ -301,6 +301,17 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   as their usual email" tokenizes what's in the box. **Send** / **Email it to me** go through
   `/api/contacts/send` with `plain=1` (no attachment; org sender, cc + reply-to the signed-in user,
   a dated note on the contact) — the only sends from this dialog; Gmail/Copy still never send.
+- **Staff training videos (Oct 13).** 11 narrated how-to MP4s (~1 min, 18 MB total) in
+  `public/training/<id>.mp4` + `<id>.jpg` poster; catalog and role groups in `lib/training.ts`
+  (client-safe). Page `/dashboard/staff/training` (role groups first, "More videos" folded,
+  `?v=<id>` opens one); a video counts as watched at 85% (`POST /api/training`, raw table
+  `StaffTraining` keyed by Worker id matched on session email, else `user:<id>`). Staff home card
+  shows "X of Y watched"; Staff roster has a **Training** column (`GET /api/training?tournamentId=`,
+  directors). `components/TrainingLink` = "Watch how" links on the scorer (settings, penalty form,
+  overtime sheet, bottom), Field Request, Incidents, Checklist and Directory; help articles link
+  them too. Middleware lets `.mp4/.webm` through like other static files. The videos were filmed
+  from the real components with mocked data (project doc `claude/staff-training-videos.md`);
+  re-film when those screens change.
 - **Financials redesign (Oct 5).** `/tournaments/[id]/financials` tabs: **Overview**
   (`components/financials/OverviewTab`), **Budget** (`BudgetTab`), **Other entries** (hand-typed
   transactions only; a bill's synced expense is hidden there). All money math is in `lib/finance.ts`
