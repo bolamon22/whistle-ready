@@ -22,7 +22,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'directory', num: '10', title: 'Find and call any staff member', blurb: 'Search the staff list, then call or text.', secs: 38 },
   { id: 'injury-report', num: '11', title: 'Log an injury', blurb: 'Who was hurt, a suspected concussion, treatment, parent told, follow-ups and the injury log.', secs: 73 },
   { id: 'trainer-call', num: '12', title: 'Answer a trainer call', blurb: 'Turn on game-day alerts, get the call, tap Respond, then log the injury.', secs: 57 },
-  { id: 'game-day-prep', num: '13', title: 'Game day prep for scorekeepers', blurb: 'When to arrive, checking your field, and what to bring for a day outside.', secs: 57 },
+  { id: 'game-day-prep', num: '13', title: 'Game day prep for scorekeepers', blurb: 'When to arrive, checking your field, covering breaks, and what to bring for a day outside.', secs: 76 },
   { id: 'ref-games', num: 'R1', series: 'ref', title: 'Your games as a ref', blurb: 'Up next, your games by day, coaches, your crew to call or text, and your pay.', secs: 57 },
   { id: 'ref-find', num: 'R2', series: 'ref', title: 'Find your name on the schedule', blurb: 'All games with every official, Find my name, and search by team, coach or field.', secs: 40 },
   { id: 'ref-gameday', num: 'R3', series: 'ref', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 48 },
