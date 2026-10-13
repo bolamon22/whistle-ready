@@ -229,6 +229,22 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
+  "game-day-prep": {
+    "title": "Game day prep\nfor scorekeepers",
+    "intro": "Game day prep for scorekeepers, in Whistle Ready.",
+    "lines": [
+      "Start with your first game. It is at the top of your home page, under Up next.",
+      "Plan to arrive at least 30 minutes before that first game.",
+      "Be at your scorer table, set up and ready, at least 10 minutes before the game starts.",
+      "Then check your field has what it needs to get the game going: score sheets, game balls, and pens.",
+      "Something missing? Open your scorer, tap Field request, tap what you need, and send it. Field Ops will bring it.",
+      "You are outside all day, so pack for it. Lunch is provided, but bring snacks, and a water bottle or a small cooler.",
+      "Bring a portable phone charger if you have one. Scoring live all day uses a lot of battery.",
+      "Pack rain gear, sunscreen, a hat, and sunglasses.",
+      "And keep an eye on the weather all day. Thanks for helping run a great event."
+    ],
+    "outro": "Whistle Ready. Game day, run from your phone."
+  },
   "asg-home": {
     "title": "Your assigner home",
     "intro": "Whistle Ready assigner training. Your assigner home.",

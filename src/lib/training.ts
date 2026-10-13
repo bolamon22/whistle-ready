@@ -22,6 +22,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'directory', num: '10', title: 'Find and call any staff member', blurb: 'Search the staff list, then call or text.', secs: 38 },
   { id: 'injury-report', num: '11', title: 'Log an injury', blurb: 'Who was hurt, a suspected concussion, treatment, parent told, follow-ups and the injury log.', secs: 73 },
   { id: 'trainer-call', num: '12', title: 'Answer a trainer call', blurb: 'Turn on game-day alerts, get the call, tap Respond, then log the injury.', secs: 57 },
+  { id: 'game-day-prep', num: '13', title: 'Game day prep for scorekeepers', blurb: 'When to arrive, checking your field, and what to bring for a day outside.', secs: 57 },
   { id: 'ref-games', num: 'R1', series: 'ref', title: 'Your games as a ref', blurb: 'Up next, your games by day, coaches, your crew to call or text, and your pay.', secs: 57 },
   { id: 'ref-find', num: 'R2', series: 'ref', title: 'Find your name on the schedule', blurb: 'All games with every official, Find my name, and search by team, coach or field.', secs: 40 },
   { id: 'ref-gameday', num: 'R3', series: 'ref', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 48 },
@@ -45,7 +46,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
 // roles: null = everyone. Worker roles: ref, scorekeeper, field_ops, athletic_trainer.
 export const TRAINING_GROUPS: TrainingGroup[] = [
   { key: 'start', label: 'Start here', roles: null, ids: ['sign-up', 'home', 'staff-id', 'field-request', 'directory'] },
-  { key: 'scorekeepers', label: 'Scorekeepers', roles: ['scorekeeper'], ids: ['keep-score', 'penalties', 'scorer-settings', 'post-final'] },
+  { key: 'scorekeepers', label: 'Scorekeepers', roles: ['scorekeeper'], ids: ['game-day-prep', 'keep-score', 'penalties', 'scorer-settings', 'post-final'] },
   { key: 'refs', label: 'Refs', roles: ['ref'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'incidents'] },
   { key: 'fieldops', label: 'Field ops', roles: ['field_ops'], ids: ['checklist', 'incidents'] },
   { key: 'trainers', label: 'Athletic trainers', roles: ['athletic_trainer'], ids: ['trainer-call', 'injury-report', 'incidents', 'field-request', 'directory'] },
@@ -105,7 +106,7 @@ export function audienceFor(id: string): string {
  *  goes out). Only {firstName} is left to fill per person, at send time. The email's
  *  footer already says "Questions? Reply to this email", so the letter doesn't. */
 const ROLE_LINES: Record<string, string> = {
-  scorekeeper: 'They show how to run the game clock, keep score, and post the final score from your phone.',
+  scorekeeper: 'They show when to arrive and what to bring, how to run the game clock, keep score, and post the final score from your phone.',
   ref: 'They show how to find your games and your crew, find your name on the schedule, and what to do on game day.',
   field_ops: 'They show the setup checklist, field requests, and how to reach anyone on staff.',
   athletic_trainer: 'They show how to log an injury report, field requests, and how to reach anyone on staff.',
