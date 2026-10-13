@@ -3,7 +3,7 @@ title: Post or fix final scores
 category: Game day
 order: 520
 routes: /tournaments/*/scores
-keywords: post scores enter scores final score results fix score correct score wrong score scores page scored games standings
+keywords: post scores enter scores final score results fix score correct score wrong score scores page scored games standings your club plays someone else posts its score no boxes own club
 ---
 Post scores lists every game so you can type in final scores quickly, check what's missing, and fix mistakes. Scores feed the standings and brackets on the public page.
 
@@ -28,5 +28,6 @@ The count at the top right shows how many games are scored out of the total.
 - During the event's dates, saving a final alerts phones following either team. A corrected score replaces the earlier alert on their phones.
 - **Enter both scores first.** You can't tick **Final** with one box empty.
 - The **Note…** box is not saved.
+- **Your club plays in this game, so someone else posts its score.** Your login is linked to one of the teams' clubs, so that game shows its score with no boxes. Admins and tournament directors can post every game.
 
 **Watch:** [End the game and post the final](/dashboard/staff/training?v=post-final) (about a minute each, in **Training videos** on your home page).

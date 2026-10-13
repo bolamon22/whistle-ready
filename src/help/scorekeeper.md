@@ -31,5 +31,6 @@ The scorekeeper screen runs the game clock and the score on your phone. Goals sh
 - If the event doesn't allow ties, a tied score warns you before posting.
 - The clock is for reference when **Official game time is kept on the field by the referees** shows.
 - There is no back button on this screen. Use your phone's back button.
+- **Your club plays in this game:** your login is linked to one of the teams' clubs, so someone else keeps that score. Tap **Pick another game**.
 
 **Watch:** [Keep score live](/dashboard/staff/training?v=keep-score) (about a minute each, in **Training videos** on your home page).

@@ -174,6 +174,25 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Own club's games: someone else posts the score (Oct 13).** Bo, on Terry Crowley (club director who works
+  events as a field director): one login, both hats, and "have someone else post the scores ... if we set the role
+  up for someone else in the future, it will already be that way." `lib/ownClub.ts`: a login that can open a
+  club's registration at the event (ClubRegAccess, lib/clubAccess) can't post, change or clear the score of a game
+  where either team's nameKey is one of the club's RegisteredTeam names or its club name, whatever its staff role;
+  admin and director are exempt. Enforced in PATCH /api/games/[id] (only when score1/score2 actually change, so a
+  scheduler's game form that echoes the score still saves), POST live-scores (now `requireStaff`; also refuses a
+  game id from another event, 400) and POST import-results. Answer: 403 `{ error, ownClub: true }`. The staff game
+  reads (GET /api/tournaments/[id]/games, GET /api/games/[id]) mark those games `ownClub: true`; Post scores shows
+  the score without boxes plus a banner, Live scoring lists them without a link, the scorekeeper shows a "Your club
+  plays in this game" screen, and the schedule grid's score boxes are disabled. Not checked: the old division
+  Bracket page (/tournaments/[id]/divisions/[division]/bracket, linked from nowhere) PATCHes bracket games with
+  score1/score2, which BracketGame doesn't have, so every save there fails with a 500 (real Prisma client, Oct 13).
+  Two hats: any role but parent gets **Clubs** on Logins (and counts under Clubs & coaches when linked);
+  `/api/club-director/permissions` gives a staff login with an openable registration club_director's cd_* tabs on
+  its own portal; `/api/club-director/data` shows the draft schedule only to admin/director (`viewerRole`), so
+  other staff with a club see it when every club does; Club portal link in AccountMenu and the phone menu (NavBar
+  asks `/api/club-director/links` once, the first time a menu opens; not for club_director/coach/parent) and a
+  **Your club portal** card on RoleHome (field director, scheduler, assigner homes).
 - **Field Director role (Oct 13).** Login role `field_director` runs game day at the events assigned to them
   (Bo: Jamie Wolf "is just going to be working the event"; several can share an event). Their events: AppSetting
   `fieldDirectorEvents:{userId}` = { events, by, at } (`lib/fieldDirector.ts`), picked with the **Works** pills
