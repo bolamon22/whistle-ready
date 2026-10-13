@@ -16,7 +16,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'penalties', num: '05', title: 'Penalty time', blurb: 'Start a penalty, match the ref, and release the player.', secs: 48 },
   { id: 'scorer-settings', num: '05b', title: 'Scorer settings', blurb: 'Player numbers on goals, the penalty alert, keep screen on, period length.', secs: 50 },
   { id: 'post-final', num: '06', title: 'End the game and post the final', blurb: 'Check with the ref, ties and overtime, and posting the final.', secs: 47 },
-  { id: 'field-request', num: '07', title: 'Send and answer a field request', blurb: 'Ask for a trainer, balls or a ref, and see who is on the way.', secs: 38 },
+  { id: 'field-request', num: '07', title: 'Send and answer a field request', blurb: 'Ask for a trainer, balls or a ref, see who is on the way, and what to do if no one answers.', secs: 45 },
   { id: 'incidents', num: '08', title: 'Log an incident', blurb: 'Injuries, safety and facility problems, and complaints.', secs: 48 },
   { id: 'checklist', num: '09', title: 'The setup checklist', blurb: 'Check off setup items and add your own.', secs: 33 },
   { id: 'directory', num: '10', title: 'Find and call any staff member', blurb: 'Search the staff list, then call or text.', secs: 38 },

@@ -154,7 +154,8 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "It's already set to go to Medical. Tap Send request.",
       "The trainer gets a phone alert, and the request shows up on the Field Request board.",
       "They tap Respond, so you know help is coming.",
-      "Back on your scorer, you'll see who's on the way. Keep the game going."
+      "Back on your scorer, you'll see who's on the way. Keep the game going.",
+      "No answer in a few minutes? Don't wait. Open Staff contacts, and text or call Field Ops or the trainer straight from your phone."
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
