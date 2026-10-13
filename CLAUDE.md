@@ -312,6 +312,14 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   them too. Middleware lets `.mp4/.webm` through like other static files. The videos were filmed
   from the real components with mocked data (project doc `claude/staff-training-videos.md`);
   re-film when those screens change.
+- **Parent dashboard redesign (Oct 13).** `/dashboard/parent` is phone-first: tabs Home /
+  Schedule / Players / Events (bottom bar on phones, `?tab=` still takes the old teams/discover).
+  Home = next game (their teams' first upcoming game, `liveScores` decide Live/Final), Live now,
+  Before game day, players, events, website + how-to links. Follow on Schedule is the SAME
+  device-keyed follow as `/public` (`/api/tournaments/[id]/follows` + `FollowAlertsSheet`), so it
+  drives the phone alerts. Directions / Field map come from the event's venues via
+  `GET /api/public/event-info?ids=` (public; also returns the org slug for the SEG logo).
+  Live scores poll every 30s while the tab is visible. Mockup: "Parent Dashboard Redesign" canvas.
 - **Family & club how-to videos (Oct 13).** Public, branded "Sunshine Events Group, powered by
   Whistle Ready", so `lib/howToVideos.ts` gates everything on `hasHowTo(orgSlug)` (SEG only).
   Files `public/how-to/<id>.mp4` + `.jpg` (ids `waiver`, `club-portal`). Page `/o/[slug]/how-to`
