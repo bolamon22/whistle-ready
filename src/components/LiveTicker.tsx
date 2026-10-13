@@ -14,7 +14,17 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
-export interface LiveScore { score1:number; score2:number; period:number; periodLabel:string; live:boolean; updatedAt:string; clockMs?:number|null; clockRunning?:boolean }
+export interface LivePenalty { team:1|2; num:string; secs:number; paused:boolean }
+export interface LiveScore { score1:number; score2:number; period:number; periodLabel:string; live:boolean; updatedAt:string; clockMs?:number|null; clockRunning?:boolean; penalties?:LivePenalty[] }
+const mss=(s:number)=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
+// Players in the box now, with time left: penalty timers run only while the game
+// clock runs (as on the scorekeeper), and never past the clock's own time left.
+export function livePenalties(ls:LiveScore|undefined|null, now:number):(LivePenalty&{left:number;text:string})[]{
+  if(!ls||!ls.live||!Array.isArray(ls.penalties)) return []
+  const sent=Date.parse(ls.updatedAt||'')
+  const ran=ls.clockRunning&&!isNaN(sent)?Math.floor(Math.min(Math.max(0,now-sent),ls.clockMs??Infinity)/1000):0
+  return ls.penalties.map(p=>{const left=Math.max(0,p.secs-(p.paused?0:ran));return {...p,left,text:mss(left)}}).filter(p=>p.left>0).sort((a,b)=>a.left-b.left)
+}
 
 // The scorer's clock as a viewer should see it now: time left when it was sent,
 // less the time since if it is running. '' when the scorer's phone sent no clock.
@@ -23,7 +33,7 @@ export function liveClockText(ls:LiveScore|undefined|null, now:number):string{
   const sent=Date.parse(ls.updatedAt||'')
   const ms=ls.clockRunning&&!isNaN(sent)?Math.max(0,ls.clockMs-Math.max(0,now-sent)):ls.clockMs
   const s=Math.ceil(ms/1000)
-  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
+  return mss(s)
 }
 // Re-render once a second while any clock is counting down.
 export function useNowTicking(on:boolean){
@@ -81,13 +91,15 @@ export default function LiveTicker({ tournamentId, games, logos, staff=false, sc
                   : <span className="text-emerald-600">Final</span>}
                 {g.gameNumber&&<span className="text-slate-300">#{g.gameNumber}</span>}
               </div>
-              {[{t:g.team1,s:s1,w:t1w},{t:g.team2,s:s2,w:t2w}].map((r,i)=>(
+              {[{t:g.team1,s:s1,w:t1w},{t:g.team2,s:s2,w:t2w}].map((r,i)=>{
+                const pens=live?livePenalties(ls,now).filter(p=>p.team===i+1):[]
+                return (
                 <div key={i} className="flex items-center gap-1.5 py-0.5">
                   {crest(r.t)}
                   <span className={`text-[11px] truncate flex-1 ${r.w?'font-bold text-slate-900':'text-slate-600'}`}>{r.t||'TBD'}</span>
+                  {pens.length>0&&<span title={pens.map(p=>`${p.num?'#'+p.num+' ':''}${p.text}`).join(', ')} className="text-[9px] font-bold tabular-nums text-amber-800 bg-amber-100 rounded px-1 flex-shrink-0">{pens[0].num?`#${pens[0].num} `:''}{pens[0].text}{pens.length>1?` +${pens.length-1}`:''}</span>}
                   <span className={`text-[12px] tabular-nums ${r.w?'font-bold text-slate-900':'font-semibold text-slate-500'}`}>{r.s??''}</span>
-                </div>
-              ))}
+                </div>)})}
               <div className="flex items-center justify-between text-[9px] text-slate-400 mt-0.5">
                 <span className="truncate">{g.division}</span>
                 <span className="truncate ml-2">{field}</span>

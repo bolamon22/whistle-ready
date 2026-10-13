@@ -11,7 +11,7 @@ import { ChevronLeft, Trophy, MapPin, Calendar, Clock, Share2, CalendarPlus } fr
 import { poolLabel } from '@/lib/poolNames'
 
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
-import { liveClockText, useNowTicking, type LiveScore } from '@/components/LiveTicker'
+import { liveClockText, livePenalties, useNowTicking, type LiveScore } from '@/components/LiveTicker'
 
 const fmtDate=(d:string)=>{ if(!d) return ''; const [y,m,day]=d.split('-'); const dt=new Date(+y,+m-1,+day); return isNaN(dt.getTime())?d:dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) }
 const parseStartMs=(date:string,time:string)=>{ if(!date||!time) return null; const m=time.match(/(\d+):(\d+)\s*(AM|PM)?/i); if(!m) return null; let h=+m[1]; const min=+m[2]; const ap=(m[3]||'').toUpperCase(); if(ap==='PM'&&h!==12)h+=12; if(ap==='AM'&&h===12)h=0; const [y,mo,d]=date.split('-').map(Number); const dt=new Date(y,mo-1,d,h,min); return isNaN(dt.getTime())?null:dt.getTime() }
@@ -85,6 +85,13 @@ export default function PublicGamePage(){
   const s2=hs?game.score2:(liveToday?liveScore!.score2:null)
   const t1w=hs&&game.score1!>game.score2!, t2w=hs&&game.score2!>game.score1!
   const field=(game.location||'').split(' - ').pop()||game.location
+  // While live: the scorer's clock and who is in the box, both counting down.
+  const clockNow=liveToday&&!hs?liveClockText(liveScore,now):''
+  const pens=liveToday&&!hs?livePenalties(liveScore,now):[]
+  const penList=(team:1|2)=>{ const ps=pens.filter(p=>p.team===team); return ps.length?(
+    <div className="flex flex-wrap justify-center gap-1 mt-1" data-testid={`penalties-${team}`}>
+      {ps.map((p,i)=><span key={i} className={`text-[11px] font-bold tabular-nums rounded-full px-2 py-0.5 ${p.paused?'bg-slate-100 text-slate-500':'bg-amber-100 text-amber-800'}`}>{p.num?`#${p.num} · `:'Penalty · '}{p.text}{p.paused?' ⏸':''}</span>)}
+    </div>):null }
 
   const share=async()=>{
     const url=window.location.href
@@ -128,6 +135,7 @@ export default function PublicGamePage(){
             <div className="flex flex-col items-center gap-2 text-center min-w-0">
               <Crest team={game.team1} logos={logos}/>
               <div className={`text-sm sm:text-base leading-tight ${t1w?'font-bold text-teal-700':'font-semibold text-slate-800'}`}>{game.team1||'TBD'}{t1w&&game.isChampionship&&<Trophy size={15} className="inline ml-1.5 text-amber-500 align-text-top"/>}</div>
+              {penList(1)}
             </div>
             <div className="text-center">
               {s1!=null&&s2!=null
@@ -137,10 +145,17 @@ export default function PublicGamePage(){
                     <span className={t2w?'text-slate-900':hs?'text-slate-400':'text-slate-900'}>{s2}</span>
                   </div>
                 : <div className="text-xl font-semibold text-slate-300">vs</div>}
+              {clockNow&&(
+                <div className="mt-2 flex flex-col items-center" data-testid="live-clock">
+                  <span className={`text-2xl font-extrabold tabular-nums ${liveScore!.clockRunning?'text-red-600':'text-slate-500'}`}>{clockNow}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{liveScore!.periodLabel}{liveScore!.clockRunning?'':' · clock stopped'}</span>
+                </div>
+              )}
             </div>
             <div className="flex flex-col items-center gap-2 text-center min-w-0">
               <Crest team={game.team2} logos={logos}/>
               <div className={`text-sm sm:text-base leading-tight ${t2w?'font-bold text-teal-700':'font-semibold text-slate-800'}`}>{game.team2||'TBD'}{t2w&&game.isChampionship&&<Trophy size={15} className="inline ml-1.5 text-amber-500 align-text-top"/>}</div>
+              {penList(2)}
             </div>
           </div>
           <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-2 flex-wrap text-[11px]">

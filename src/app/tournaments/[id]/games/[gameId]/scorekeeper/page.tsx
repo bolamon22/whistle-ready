@@ -173,6 +173,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
           if (!ls || !ls.live) return
           startedRef.current = true
           setScore1(Number(ls.score1) || 0); setScore2(Number(ls.score2) || 0)
+          savedScores.current = { s1: Number(ls.score1) || 0, s2: Number(ls.score2) || 0 }
           if (!saved && ls.period) setCurrentPeriod(Number(ls.period) || 1)
         }).catch(() => {})
       }
@@ -219,15 +220,26 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   function pushLive(opts: { score1?: number; score2?: number; period?: number; live: boolean; event?: 'halftime'; running?: boolean; ms?: number } = { live: true }) {
     const s1 = opts.score1 ?? score1, s2 = opts.score2 ?? score2, per = opts.period ?? currentPeriod
     if (opts.live) startedRef.current = true
-    fetch(`/api/tournaments/${tid}/live-scores`, {
+    return fetch(`/api/tournaments/${tid}/live-scores`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId: params.gameId, score1: s1, score2: s2, period: per, periodLabel: periodLabelFor(per), live: opts.live,
-        clockMs: opts.ms ?? clockMsRef.current, clockRunning: opts.live && (opts.running ?? clockRunning), ...(opts.event ? { event: opts.event } : {}) }),
-    }).catch(() => {})
+        clockMs: opts.ms ?? clockMsRef.current, clockRunning: opts.live && (opts.running ?? clockRunning),
+        penalties: penalties.filter(p => p.active && p.remaining > 0).map(p => ({ team: p.team, num: p.playerNum, secs: p.remaining, paused: p.paused })),
+        ...(opts.event ? { event: opts.event } : {}) }),
+    }).then(r => r.ok).catch(() => false)
   }
   // While the clock runs, resend every 30s: keeps viewers' countdown in step with
   // this phone and tells the server the game is still going.
   const pushRef = useRef(pushLive); pushRef.current = pushLive
+  // A penalty added, changed, paused or cleared goes out right away (Bo, Oct 12
+  // 2026: penalty time on the ticker and game page). Flagged by the handlers, sent
+  // after the render so the push carries the new list.
+  const penPushRef = useRef(false)
+  useEffect(() => {
+    if (!penPushRef.current) return
+    penPushRef.current = false
+    if (startedRef.current && !gameEnded) pushLive({ live: true })
+  }, [penalties]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!clockRunning || gameEnded) return
     const t = setInterval(() => pushRef.current({ live: true }), 30000)
@@ -343,17 +355,22 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     setShowClockSetup(false)
   }
 
-  // The top-bar Save keeps the running score on the server so a dropped phone or
-  // a refresh loses nothing; only "End Game & Post Score" is the final. The
-  // server tells followers about finals, so mid-game saves say `provisional`.
+  // The top-bar Save (and Exit) keep the running score on the server so a dropped
+  // phone or a refresh loses nothing; only "End Game & Post Score" is the final.
+  // Mid-game saves go to the live score, not the game's score: writing 1-3 into
+  // the game made it a final everywhere -- off the live ticker, "Final" on Post
+  // scores and the public page -- and unchecking Final then wiped the live entry
+  // (Bo, Oct 12 2026: "it keeps disappearing").
   async function saveScore(opts: { final?: boolean } = {}) {
     setSaving(true)
-    const res = await fetch(`/api/games/${params.gameId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ score1, score2, ...(opts.final ? {} : { provisional: true }) }),
-    }).catch(() => null)
+    const ok = opts.final
+      ? await fetch(`/api/games/${params.gameId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ score1, score2 }),
+        }).then(r => r.ok).catch(() => false)
+      : await pushLive({ live: true })
     setSaving(false)
-    if (!res || !res.ok) { toast.error('Could not save — check your signal and try again'); return false }
+    if (!ok) { toast.error('Could not save — check your signal and try again'); return false }
     savedScores.current = { s1: score1, s2: score2 }
     setSaved(true); toast.success(opts.final ? 'Final posted!' : 'Score saved!')
     setTimeout(() => setSaved(false), 2000)
@@ -479,6 +496,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     if (!showPenaltyForm || !game) return
     primeAlerts()
     const total = Math.max(1, chosenSecs())
+    penPushRef.current = true
     setPenalties(p => [...p, {
       id: Math.random().toString(36).slice(2), team: showPenaltyForm, playerNum: penPlayer,
       remaining: total, total, active: true, paused: false,
@@ -491,17 +509,19 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   }
 
   function adjustPenalty(id: string, delta: number) {
+    penPushRef.current = true
     setPenalties(p => p.map(x => {
       if (x.id !== id) return x
       const remaining = Math.max(0, Math.min(x.remaining + delta, 3600))
       return { ...x, remaining, total: Math.max(x.total, remaining), active: remaining > 0 }
     }))
   }
-  function togglePausePenalty(id: string) { setPenalties(p => p.map(x => x.id === id ? { ...x, paused: !x.paused } : x)) }
-  function removePenalty(id: string) { setPenalties(p => p.filter(x => x.id !== id)) }
+  function togglePausePenalty(id: string) { penPushRef.current = true; setPenalties(p => p.map(x => x.id === id ? { ...x, paused: !x.paused } : x)) }
+  function removePenalty(id: string) { penPushRef.current = true; setPenalties(p => p.filter(x => x.id !== id)) }
   function openEdit(p: Penalty) { setEditingId(p.id); setEditMin(Math.floor(p.remaining / 60)); setEditSec(p.remaining % 60) }
   function saveEdit() {
     const remaining = Math.max(0, Number(editMin) * 60 + Number(editSec))
+    penPushRef.current = true
     setPenalties(p => p.map(x => x.id === editingId ? { ...x, remaining, total: Math.max(x.total, remaining), active: remaining > 0 } : x))
     setEditingId(null); toast.success(`Penalty set to ${fmt(remaining)}`)
   }
