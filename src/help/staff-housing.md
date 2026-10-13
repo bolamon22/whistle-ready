@@ -7,7 +7,7 @@ keywords: housing hotel team housing housing company report weekly report bookin
 ---
 Team Housing sends your housing company a regular report of which clubs need hotels, and gives them a private booking board to log bookings. Bookings show up in each event's **Travel & hotels** totals.
 
-**Where:** **Staff** in the top bar, then **Housing**. **People → Travel & hotels** also links here.
+**Where:** **People** → **Staff Pool** in the top bar, then **Housing**. **People → Travel & hotels** also links here.
 
 **To set up the report:**
 1. Under **Housing reports**, fill in **Housing contact** and **Email the report to**. Each field saves when you click out of it.

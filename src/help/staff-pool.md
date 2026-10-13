@@ -7,7 +7,7 @@ keywords: staff pool staff database add staff edit staff refs referees scorekeep
 ---
 The Staff Pool is your organization's master list of everyone who works your events: refs, scorekeepers, athletic trainers and field operations. Each tournament's roster is picked from this pool.
 
-**Where:** **Staff** in the top bar (on a phone, open the menu, then **Staff**).
+**Where:** **People** → **Staff Pool** in the top bar (on a phone, open the menu, then **Staff Pool**).
 
 **To add one person:**
 1. Click **+ Add Staff**.

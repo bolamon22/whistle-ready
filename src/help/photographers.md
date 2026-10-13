@@ -7,7 +7,7 @@ keywords: photographers book photo video media credential shoot with us packages
 ---
 The **Photographers** page controls who appears on your Book photo & video page and what you ask of photographers in return for a credential.
 
-**Where:** Home → **Admin** → **Photographers**.
+**Where:** **Organization** → **Photographers** in the top bar.
 
 **To set what you ask of photographers:**
 1. Under **What we ask photographers for**, set **Minimum photos** and **Within (days)**.

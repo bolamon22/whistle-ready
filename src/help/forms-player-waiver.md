@@ -7,7 +7,7 @@ keywords: forms player waiver release liability player registration optional fie
 ---
 The **Forms** page holds your organization's reusable forms. New tournaments copy these as their starting point. This page covers **Player Waiver**: the waiver and optional questions players complete to compete. For **Registration Confirmation**, see "Who gets new-registration emails".
 
-**Where:** Home → **Admin** → **Forms** (admins). Directors can open [Forms](/dashboard/org/forms) directly.
+**Where:** **Organization** → **Forms** in the top bar.
 
 **To edit the player waiver:**
 1. Click **Player Waiver** to open it. The public link is shown at the top with **View** and **Copy**.

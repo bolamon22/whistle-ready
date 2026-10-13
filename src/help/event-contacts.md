@@ -7,7 +7,7 @@ keywords: contacts event contacts directory who to call city parks and rec count
 ---
 **Event contacts** is your directory of everyone you work with to put on an event: the city and its fields, the county, the sports commission, safety and medical, rentals, food and vendors, officials, insurance and housing. Each contact shows what you get from them, what they need from you, and who owes the next reply.
 
-**Where:** **Contacts** in the top bar (on a phone, **Event contacts** in the menu). A tournament's own contacts are on its **Contacts** tab.
+**Where:** **Events** → **Event contacts** in the top bar (on a phone, open the menu). A tournament's own contacts are on its **Contacts** tab.
 
 **To add a contact:**
 1. Click **Add contact**.

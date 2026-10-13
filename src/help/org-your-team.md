@@ -7,7 +7,7 @@ keywords: your team invite add user staff admin director scheduler assigner coac
 ---
 The **Your team** page is where a director adds people to the organization, changes their role, or removes them. New people get an email to set up their account.
 
-**Where:** your director home → **Your team**. This page is for the Director role; admins manage people from **Users** and **Organizations** instead.
+**Where:** **People** → **Your team** in the top bar, or **Your team** on your director home. This page is for the Director role; admins manage people from **Logins** and **Organizations** instead.
 
 **To add or invite someone:**
 1. Enter their **Email** and, if you like, **Name (optional)**.

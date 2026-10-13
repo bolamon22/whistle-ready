@@ -7,7 +7,7 @@ keywords: club database returning teams clubs history win-back reinvite import r
 ---
 The **Club database** lists every club that has registered for your events, with each club's history of events, teams and divisions. Use it to find returning clubs and invite back the ones who skipped.
 
-**Where:** Home → **Admin** → **Club database**.
+**Where:** **Organization** → **Club database** in the top bar. Searching a club's name in the top bar and picking it opens this page filtered to that club.
 
 **To build or update it:**
 1. Click **Import registration exports** (or **Import more** once you have data).

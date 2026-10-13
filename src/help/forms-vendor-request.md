@@ -7,7 +7,7 @@ keywords: vendor request form booth booth types vendor application approval noti
 ---
 The **Vendor request** form lets vendors apply for a booth. You approve them, then they pay.
 
-**Where:** Home → **Admin** → **Forms** → **Vendor request** (admins). Directors can open [Forms](/dashboard/org/forms) directly.
+**Where:** **Organization** → **Forms** in the top bar, then **Vendor request**.
 
 **To edit the vendor form:**
 1. Open **Vendor request** and click **Edit**. The public link is shown at the top with **View** and **Copy**.

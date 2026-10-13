@@ -7,7 +7,7 @@ keywords: organizations orgs platform dashboard new org create organization owne
 ---
 The **Platform Dashboard** and **Organizations** pages are for platform admins who run more than one customer organization.
 
-**Where:** top bar → **Dashboard**. On admin pages the dark bar has **Dashboard**, **Organizations**, **Users**, **Permissions** and **Roadmap**, plus a menu to switch organization.
+**Where:** **Admin** → **Platform dashboard** in the top bar. Admin pages have tabs for **Platform dashboard**, **Organizations**, **Logins**, **Permissions**, **Roadmap** and **Payment providers**, and **Viewing** on the right switches organization.
 
 **The Platform Dashboard** shows totals (**Organizations**, **Tournaments**, **Staff Members**, **Users**), **Customer Organizations** and **Recent Tournaments**. Hover an org for **View Portal →**, **Website** and **Edit**.
 
@@ -25,6 +25,6 @@ The **Platform Dashboard** and **Organizations** pages are for platform admins w
 3. Use **Make owner** or **Remove** on existing members.
 
 **Common problems:**
-- The user must already have an account. Create it first in **Users**.
+- The user must already have an account. Create it first in **Logins**.
 - Changing the slug changes the org's public web address.
 - **Run DB Migration** and **Migrate: Flights** on the dashboard are maintenance tools. Do not use them unless asked.

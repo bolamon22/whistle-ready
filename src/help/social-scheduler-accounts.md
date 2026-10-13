@@ -7,7 +7,7 @@ keywords: connect instagram facebook meta account disconnect queue times import 
 ---
 Before you can schedule posts, connect your Instagram and Facebook accounts. You can also set queue times and see how posts performed.
 
-**Where:** top bar → **Social** → the **Accounts & queue times** button.
+**Where:** **Organization** → **Social scheduler** in the top bar, then the **Accounts & queue times** button.
 
 **To connect accounts:**
 1. Click **Connect Instagram + Facebook** (or **Add another account**).

@@ -11,7 +11,7 @@ After you sign in, Whistle Ready opens a home page that fits your role. Each one
 - Shows **Hi, (your name)** and a **Your team** button for adding staff.
 - Each tournament has **Manage**, **Scores**, **Field Req** and **Broadcast**.
 - With no tournaments yet, it shows two starting steps: **Add your first tournament** and **Add your staff & admins**.
-- Clicking **Tournaments** in the top bar opens the full tournaments list.
+- **Events** → **All tournaments** in the top bar opens the full tournaments list.
 
 **Assigner home:**
 - Find your event with **Find a tournament**. The **Up next** card shows how many games have their full ref crew.
@@ -25,4 +25,4 @@ After you sign in, Whistle Ready opens a home page that fits your role. Each one
 **Admins** land on the tournaments list, with the **Admin** menu for org tools.
 
 **Common problems:**
-- If you see a page you did not expect, your role may be different from what you think. Ask an admin to check it in **Users**.
+- If you see a page you did not expect, your role may be different from what you think. Ask an admin to check it in **Logins**.

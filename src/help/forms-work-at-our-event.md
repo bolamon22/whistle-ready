@@ -7,7 +7,7 @@ keywords: work at our event staff application work with us apply referee officia
 ---
 The **Work at our event** form is where referees, scorekeepers, trainers and event staff apply to work your events.
 
-**Where:** Home → **Admin** → **Forms** → **Work at our event** (admins). Directors can open [Forms](/dashboard/org/forms) directly.
+**Where:** **Organization** → **Forms** in the top bar, then **Work at our event**.
 
 **To edit the staff application form:**
 1. Open **Work at our event** and click **Edit**. The public link is shown at the top with **View** and **Copy**.

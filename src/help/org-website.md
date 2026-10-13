@@ -7,7 +7,7 @@ keywords: website public site org site hero about sponsors partners info pages f
 ---
 The **Website** page edits your organization's public site: logo, hero, about section, sponsors, info pages, photo gallery and contact details. Each tournament's own event page is edited from here too.
 
-**Where:** Home → **Website**.
+**Where:** **Organization** → **Website** in the top bar, or **Website** on your home page.
 
 **To edit the site:** click a section to open it, make changes, then click **Save** at the top. Use **View site** to see it live.
 

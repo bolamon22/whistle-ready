@@ -3,17 +3,17 @@ title: Add a user and set their role
 category: Admin
 order: 700
 routes: /admin/users, /profile/*
-keywords: user management users add user create account role change role reset password delete user club links club director link coach assigner pay access sees pay for boys refs girls refs scorekeepers field ops filter staff job trainer athletic trainer referee scorekeeper office parents clubs coaches last on who uses the app no staff record staff record
+keywords: logins login user management users add user create account role change role reset password delete user club links club director link coach assigner pay access sees pay for boys refs girls refs scorekeepers field ops filter staff job trainer athletic trainer referee scorekeeper office parents clubs coaches last on who uses the app no staff record staff record
 ---
-**User Management** is the admin list of every account. Add users, change roles, reset passwords, link club directors to their clubs, or delete accounts.
+**Logins** (once called User Management) is the admin list of every account. Add users, change roles, reset passwords, link club directors to their clubs, or delete accounts.
 
-**Where:** top bar → **Users**, or Home → **Admin** → **User Management**. The app's top bar stays on admin pages, and **← Back** in the dark admin bar returns to the page you were on before.
+**Where:** **People** → **Logins** in the top bar, or the **Logins** tab on any admin page. Searching a name or email in the top bar and picking it under **Logins** opens this page filtered to that person.
 
 **To add a user:**
-1. Click **+ Add User**.
+1. Click **+ Add login**.
 2. Enter **Full Name**, **Email** and a **Password** (at least 6 characters).
 3. Pick a **Role**.
-4. Click **Add User**. Share the password with them yourself.
+4. Click **Add login**. Share the password with them yourself.
 
 **To change a role:** pick a new role in the **Role** column. It saves right away.
 

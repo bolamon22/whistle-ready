@@ -7,7 +7,7 @@ keywords: duplicate staff merge duplicates same person twice two records combine
 ---
 When the same person ends up in the Staff Pool twice (for example imported as "Kathryn" and signed up as "Katie"), merge the two records into one so their roster spots, availability, assignments and pay history stay together.
 
-**Where:** **Staff** in the top bar.
+**Where:** **People** → **Staff Pool** in the top bar.
 
 **To merge a suggested pair:**
 1. If the app spots likely duplicates, a **possible duplicates** button appears above the list. Click it.

@@ -7,7 +7,7 @@ keywords: tasks to do todo list reminders overdue due date badge permits paperwo
 ---
 **Tasks** is your to-do list for each event: field permits, rentals, staff, club emails and grant paperwork. Each task has a due date, and the red number on **Tasks** is how many are overdue.
 
-**Where:** **Tasks** in the top bar shows every event. A tournament's own list is the **Tasks** tab in its menu. Both the **Tournaments** page and a tournament's **Dashboard** have a **Tasks** box with what's up next.
+**Where:** **Events** → **Tasks** in the top bar, or the checklist button next to search (it shows a red number when tasks are overdue), shows every event. A tournament's own list is the **Tasks** tab in its menu. Both the **Tournaments** page and a tournament's **Dashboard** have a **Tasks** box with what's up next.
 
 **To start an event's list from the template:**
 1. On the event's **Tasks** tab, click **Choose items** (or **Add from template** once it has tasks). On the all-events page, click the event's name under **Start from the checklist template**.

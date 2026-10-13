@@ -7,7 +7,7 @@ keywords: rules library rule sets sixes traditional tournament rules policies ap
 ---
 The **Rules library** holds reusable rule sets, like Sixes or Traditional rules. Apply a set to many events and edits flow to every linked event. An event can still use its own custom rules on its event page.
 
-**Where:** Home → **Admin** → **Rules library**.
+**Where:** **Organization** → **Rules library** in the top bar.
 
 **To create a rule set:**
 1. Click **New rule set**.

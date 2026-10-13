@@ -7,7 +7,7 @@ keywords: brand media library assets logos documents maps promo flyers upload fi
 ---
 The **Brand & media library** keeps your logos, documents, maps and promo graphics in one place so you can reuse them on your event pages. Image and file pickers across the app can pull from here.
 
-**Where:** Home → **Admin** → **Brand & media** (admins), or the **Brand & media** button on the **Website** page.
+**Where:** **Organization** → **Brand & media** in the top bar, or the **Brand & media** button on the **Website** page.
 
 **To upload files:**
 1. Pick a category in **Add to**: **Logos**, **Documents**, **Maps** or **Promo**.

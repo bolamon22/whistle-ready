@@ -7,7 +7,7 @@ keywords: roadmap feature request todo to do in progress done task subtasks note
 ---
 The **Feature Roadmap** is an internal board for tracking feature requests and fixes.
 
-**Where:** top bar → **Roadmap** (admins only).
+**Where:** **Admin** → **Roadmap** in the top bar (admins only).
 
 **To add an item:**
 1. Under **Add Feature Request**, enter a **Title** (required), and optionally a description and an estimate (for example 1 hr).

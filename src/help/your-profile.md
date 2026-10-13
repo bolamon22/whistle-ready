@@ -7,7 +7,7 @@ keywords: profile my profile change password reset password name email photo ava
 ---
 Your profile holds your name, email, photo and password.
 
-**Where:** click your name or initials in the top bar. Admins can also use Home → **Admin** → **My Profile**.
+**Where:** click your initials at the top right, then **Profile** (on a phone, open the menu and tap **Profile**). Admins can also use Home → **Admin** → **My Profile**.
 
 **To change your photo:** click the camera icon on your picture and choose an image. Use **Remove photo** to clear it.
 
@@ -25,4 +25,4 @@ If you are a club director, **Club Links** lists the tournaments and clubs you a
 **Common problems:**
 - After changing your password you are signed out and need to sign in again with the new one.
 - "Passwords do not match" means the two new-password boxes differ.
-- Forgot your password? Use **Forgot password?** on the sign-in page. An admin can also reset it from **Users**.
+- Forgot your password? Use **Forgot password?** on the sign-in page. An admin can also reset it from **Logins**.

@@ -27,4 +27,4 @@ The Staff Roster is the list of people confirmed to work this tournament. Only p
 
 **Common problems:**
 - **Remove** happens right away with no confirmation.
-- If **Available to Add** is empty, the person isn't in your Staff Pool yet. Add them under **Staff** in the top bar first.
+- If **Available to Add** is empty, the person isn't in your Staff Pool yet. Add them under **People** → **Staff Pool** in the top bar first.

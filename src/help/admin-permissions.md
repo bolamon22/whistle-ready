@@ -7,7 +7,7 @@ keywords: permissions role permissions access control what can a role see hide t
 ---
 **Role Permissions** decides which parts of the app each role can open. Admin always has full access.
 
-**Where:** top bar → **Perms**, or Home → **Admin** → **Permissions**.
+**Where:** **Admin** → **Permissions** in the top bar, or the **Permissions** tab on any admin page.
 
 **The grid:** each row is a feature, grouped under **Tournaments**, **Staff**, **Finance**, **Registrations**, **Admin** and **Club Director**. Each column is a role: **Tournament Dir.**, **Assigner**, **Scheduler**, **Staff**, **Club Director**, **Coach**, **Parent**.
 
@@ -19,7 +19,7 @@ keywords: permissions role permissions access control what can a role see hide t
 
 The button reads **✓ Saved** when there is nothing left to save.
 
-**To check the result:** use **View as** in the top bar to see the app as that role.
+**To check the result:** use **View as** (in the top bar, or in your account menu) to see the app as that role.
 
 **Common problems:**
 - Changes do nothing until you save. "You have unsaved changes" shows while there are any.

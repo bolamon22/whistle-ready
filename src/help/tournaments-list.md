@@ -7,10 +7,10 @@ keywords: tasks overdue new tournament create add tournament copy duplicate next
 ---
 The **Tournaments** page is your home page. It lists every tournament, with the next one first.
 
-**Where:** click **Tournaments** in the top bar.
+**Where:** **Events** → **All tournaments** in the top bar, or **All tournaments** under the event button next to your logo.
 
 **To create a tournament:**
-1. Click **+ New Tournament**.
+1. Click **+ New Tournament** (or **+ New tournament** under the event button in the top bar).
 2. Fill in **Tournament Name** (required), **Sport**, **Start Date**, **End Date** and **Location**.
 3. Optional: **Schedule Increment (minutes)**, **Number of fields** (Whistle Ready sets up Field 1 to N for you), **Daily start time** and **Daily end time**.
 4. Under **Team registration**, pick **Use built-in registration** (enter a **Team registration fee**) or **Import from another platform (CSV)**.

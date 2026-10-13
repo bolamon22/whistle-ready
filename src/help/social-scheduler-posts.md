@@ -7,7 +7,7 @@ keywords: social scheduler instagram facebook post schedule approve approval sto
 ---
 The **Social scheduler** schedules Instagram and Facebook posts. Approve a post once and it publishes itself at the scheduled time. Nothing publishes without approval.
 
-**Where:** top bar → **Social**, or Home → **Admin** → **Social scheduler**.
+**Where:** **Organization** → **Social scheduler** in the top bar.
 
 **To create a post:**
 1. Click **Create post**, or the + on any day in the **Calendar**.
