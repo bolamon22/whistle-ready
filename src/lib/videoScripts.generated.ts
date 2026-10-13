@@ -13,7 +13,8 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "When you get to your field, tap Check in.",
       "These totals show how many games you have, and what they pay.",
       "Below that, My games lists every game you are on, day by day.",
-      "Each game shows who you're working with: the other official, and the scorekeeper.",
+      "When a team's coach is on file, you'll see the coach's name under the teams. Not every team has one listed, so it won't always be there.",
+      "Each game also shows who you're working with: the other official, and the scorekeeper.",
       "Tap the phone to call them, or the message button to send a text. It makes finding your partner easy.",
       "Games that are already over move to Show past games, at the bottom."
     ],
@@ -26,7 +27,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Want to see the whole schedule? On your home page, tap All games.",
       "Every game for the event is listed by day, with the officials and the scorekeeper on each one.",
       "Tap Find my name. Every game you are on turns green, and your name is highlighted.",
-      "The search box works for any name, team, or field. Here is everything on Field 3.",
+      "The search box works for any name, team, coach, or field. Here is everything on Field 3.",
       "Or type a team, to see who is reffing their games.",
       "Working more than one event? Pick the event from the list.",
       "Tap My games to go back to just your games."

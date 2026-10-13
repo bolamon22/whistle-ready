@@ -20,8 +20,8 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'incidents', num: '08', title: 'Log an incident', blurb: 'Injuries, safety and facility problems, and complaints.', secs: 48 },
   { id: 'checklist', num: '09', title: 'The setup checklist', blurb: 'Check off setup items and add your own.', secs: 33 },
   { id: 'directory', num: '10', title: 'Find and call any staff member', blurb: 'Search the staff list, then call or text.', secs: 38 },
-  { id: 'ref-games', num: 'R1', title: 'Your games as a ref', blurb: 'Up next, your games by day, your crew to call or text, and your pay.', secs: 48 },
-  { id: 'ref-find', num: 'R2', title: 'Find your name on the schedule', blurb: 'All games with every official, Find my name, and search by team or field.', secs: 39 },
+  { id: 'ref-games', num: 'R1', title: 'Your games as a ref', blurb: 'Up next, your games by day, coaches, your crew to call or text, and your pay.', secs: 57 },
+  { id: 'ref-find', num: 'R2', title: 'Find your name on the schedule', blurb: 'All games with every official, Find my name, and search by team, coach or field.', secs: 40 },
   { id: 'ref-gameday', num: 'R3', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 48 },
   // Assigner training (Oct 13 2026): filmed on a computer screen, for the people who staff
   // Sunshine Events Group games.
