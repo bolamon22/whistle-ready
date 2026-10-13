@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament, orgLogoUrl } from '@/lib/org'
 import { tournamentAbs } from '@/lib/seo'
+import { howToEmailLinks } from '@/lib/howToVideos'
 import { renderEmail, absUrl, imageSize, fitBox } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
@@ -241,6 +242,11 @@ export async function runCommSend(args: {
   const cta = kind === 'custom' ? customCta : (kindMeta?.cta ?? null)
   const ctaLabel = customCta ? CTA_LABELS[customCta] : (kindMeta?.ctaLabel ?? '')
   const sharedCtaUrl = cta === 'waiver' ? waiverLink : cta === 'coach' ? coachLink : cta === 'schedule' ? scheduleLink : ''
+  // How-to video links (lib/howToVideos; this org only): the waiver video under a
+  // waiver button, the portal tour on every club letter.
+  const absPath = (path: string) => tournamentAbs(org?.slug, path)
+  const portalVideo = howToEmailLinks(org?.slug, absPath, ['club-portal'])
+  const letterVideo = howToEmailLinks(org?.slug, absPath, cta === 'waiver' ? ['waiver', 'club-portal'] : ['club-portal'])
   const now = new Date().toISOString()
 
   // Directors linked to each club, read once for the whole batch. The account
@@ -351,6 +357,7 @@ export async function runCommSend(args: {
         startDate: t.startDate, eventTeams,
         eventLogo, eventHref: eventHome, orgLogo: segLogo, orgHref: orgHome, logoBox, footerLogoBox,
         subjectTpl, bodyTpl, requirements,
+        videoHtml: portalVideo.html, videoText: portalVideo.text,
       })
       const rr = await sendEmail({
         to: recipients, text, ...orgSender(org),
@@ -453,10 +460,10 @@ export async function runCommSend(args: {
       footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
       body: `${checklistBodyHtml(bodyText, checkItems)}
   ${ctaUrl ? `<p style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block">${ctaLabel}</a></p>
-  <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${ctaUrl}</p>` : ''}`,
+  <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${ctaUrl}</p>` : ''}${letterVideo.html}`,
       footerNote: 'Questions? Just reply to this email.',
     })
-    const text = `${checkItems ? splitOnSentinel(bodyText, checklistText(checkItems)) : bodyText}${ctaUrl ? `\n\n${ctaLabel}: ${ctaUrl}` : ''}`
+    const text = `${checkItems ? splitOnSentinel(bodyText, checklistText(checkItems)) : bodyText}${ctaUrl ? `\n\n${ctaLabel}: ${ctaUrl}` : ''}${letterVideo.text ? `\n\n${letterVideo.text}` : ''}`
     const r = await sendEmail({
       to: recipients, text, ...orgSender(org),
       subject: testMode ? `[TEST] ${subject}` : subject,

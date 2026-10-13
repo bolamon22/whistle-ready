@@ -73,6 +73,9 @@ export type RegLetterData = {
   gameDayUrl?: string
   /** Public online player-waiver form for this tournament (waivers are in-app now). */
   waiverUrl?: string
+  /** How-to video links (lib/howToVideos), only for the org the videos are branded for. */
+  waiverVideoUrl?: string
+  portalVideoUrl?: string
   /** One-time "claim your team" link — invites the coach to set up portal access. */
   claimUrl?: string
   /** True when the contact email already has a Whistle Ready account — the
@@ -205,6 +208,8 @@ export function letterToEmailHtml(letter: RegLetter, d: RegLetterData): string {
   if (d.eventUrl) links.push(`<a href="${d.eventUrl}" style="color:#0f766e">Event page</a>`)
   if (d.waiverUrl) links.push(`<a href="${d.waiverUrl}" style="color:#0f766e">Player waiver form</a>`)
   if (d.gameDayUrl) links.push(`<a href="${d.gameDayUrl}" style="color:#0f766e">Game day</a>`)
+  if (d.portalVideoUrl) links.push(`<a href="${d.portalVideoUrl}" style="color:#0f766e">Club portal tour (1 min video)</a>`)
+  if (d.waiverVideoUrl) links.push(`<a href="${d.waiverVideoUrl}" style="color:#0f766e">How families sign the waiver (video)</a>`)
   const linksRow = links.length ? `<p style="margin:14px 0 0;font-size:14px;color:#475569">${links.join(' &nbsp;·&nbsp; ')}</p>` : ''
   // Account CTA — the main action we want the coach to take after registering.
   // New contact → the claim link creates their Whistle Ready login.
