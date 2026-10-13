@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Phone, MessageSquare, Search, ChevronLeft, Users } from 'lucide-react'
+import TrainingLink from '@/components/TrainingLink'
 
 interface Worker { id: string; name: string; email?: string | null; phone?: string | null; defaultRole?: string; isAssigner?: boolean; photoUrl?: string | null }
 interface RosterEntry { id: string; worker: Worker }
@@ -53,6 +54,7 @@ export default function DirectoryPage({ embedded = false }: { embedded?: boolean
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><Users size={22} className="text-teal-600" /> Staff directory</h1>
       </>}
       <p className="text-sm text-slate-500 mb-4">{total} staff on this tournament’s roster. Tap to call or text.</p>
+      <TrainingLink id="directory" className="-mt-2 mb-4" />
 
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

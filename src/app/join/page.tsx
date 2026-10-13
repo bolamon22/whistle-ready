@@ -242,7 +242,8 @@ function JoinForm() {
         <div className="text-left mt-6 space-y-3">
           {['Sign in to your staff portal — your events and schedule live there.',
             'Set your availability for each event you signed up for.',
-            'Game assignments land in your portal; pay follows each event.'].map((step, i) => (
+            'Game assignments land in your portal; pay follows each event.',
+            'Watch the training videos for your job in your portal, about a minute each.'].map((step, i) => (
             <div key={i} className="flex gap-3 items-start">
               <div className="w-6 h-6 rounded-full bg-[#0f1f3d] text-white text-xs font-extrabold flex items-center justify-center shrink-0">{i + 1}</div>
               <p className="text-xs text-slate-600 leading-relaxed pt-1">{step}</p>

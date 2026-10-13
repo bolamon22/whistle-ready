@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
 import { TriangleAlert, ChevronLeft, Trash2, Check } from 'lucide-react'
+import TrainingLink from '@/components/TrainingLink'
 
 const TYPES = ['Medical', 'Safety', 'Facility', 'Weather', 'Other']
 const SEVERITIES = ['Low', 'Medium', 'High']
@@ -59,6 +60,7 @@ export default function IncidentsPage({ embedded = false }: { embedded?: boolean
         <Link href={`/tournaments/${id}/dashboard`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ChevronLeft size={15} /> Dashboard</Link>
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><TriangleAlert size={22} className="text-teal-600" /> Incidents</h1>
         <p className="text-sm text-slate-500 mb-5">Log medical, safety, or facility issues so the team can track and resolve them. For emergencies, call 911 first.</p>
+        <TrainingLink id="incidents" className="-mt-3 mb-5" />
       </>}
 
       {/* report form */}

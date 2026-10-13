@@ -4,6 +4,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { primeAlerts, penaltyOverAlert } from '@/lib/gameAlert'
 import { FIELD_REQUEST_TEMPLATES, FIELD_REQUEST_GROUPS, FIELD_REQUEST_URGENCIES, fieldNumberFrom } from '@/lib/fieldRequests'
+import TrainingLink from '@/components/TrainingLink'
 
 interface Game {
   id: string; tournamentId?: string; gameNumber: string; division: string; location: string
@@ -824,6 +825,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
         <button onClick={openRules} className="w-full mt-3 text-xs text-gray-400 hover:text-gray-200 flex items-center justify-center gap-1.5">
           📖 Rules
         </button>
+        <div className="text-center mt-2"><TrainingLink id="keep-score" dark /></div>
       </div>
 
       {/* Tie in a no-ties event: notify the ref, show the overtime rule for this game */}
@@ -862,6 +864,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
                   </details>
                 )}
                 <button onClick={() => { setShowOT(false); openRules() }} className="w-full text-xs text-gray-400 hover:text-gray-200">📖 All tournament rules</button>
+                <div className="text-center"><TrainingLink id="post-final" dark /></div>
                 <button onClick={() => setShowOT(false)} className="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold">Got it — back to scoring</button>
               </div>
             </div>
@@ -967,6 +970,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="font-bold text-white mb-1">⚙ Settings</h3>
+            <TrainingLink id="scorer-settings" dark className="mb-2" />
             <p className="text-xs text-gray-500 mb-4">Saved for the whole tournament.</p>
             <label className="flex items-center justify-between gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 cursor-pointer">
               <span className="text-sm text-gray-200">Ask for player&nbsp;# when a goal is scored</span>
@@ -1061,7 +1065,8 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
       {showPenaltyForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 w-full max-w-sm">
-            <h3 className="font-bold text-white mb-4">Penalty — {showPenaltyForm === 1 ? game.team1 : game.team2}</h3>
+            <h3 className="font-bold text-white mb-1">Penalty — {showPenaltyForm === 1 ? game.team1 : game.team2}</h3>
+            <TrainingLink id="penalties" dark className="mb-4" />
             <div className="space-y-4">
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Player # (optional)</label>
