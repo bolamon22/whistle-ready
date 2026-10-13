@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import StaffW9Card from '@/components/StaffW9Card'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search } from 'lucide-react'
 import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
 
@@ -24,12 +24,28 @@ const TOOLS: { href: string; label: string; icon: React.ComponentType<{ size?: n
   { href: 'directory',      label: 'Staff contacts',  icon: Users,          roles: null },
   { href: 'checklist',      label: 'Setup checklist', icon: ClipboardCheck, roles: ['field_ops'] },
   { href: 'incidents',      label: 'Incidents',       icon: TriangleAlert,  roles: null },
+  { href: 'rules',          label: 'Rules',           icon: BookOpen,       roles: ['ref', 'scorekeeper'] },
 ]
-interface Assignment { id: string; role: string; payRate: number; game: Game }
+interface Crew { role: string; name: string; phone: string }
+interface Assignment { id: string; role: string; payRate: number; game: Game; crew?: Crew[] }
 interface Game {
   id: string; gameNumber: string; date: string; startTime: string
   division: string; location: string; team1: string; team2: string
   isCanceled: boolean; tournamentId: string
+  assignments?: { role: string; workerId: string; worker?: { name: string; phone?: string | null } }[]
+}
+
+// Assignment slots are stored as ref1/ref2/ref3 and scorekeeper; say them the way the
+// assigner board does.
+const slotLabel = (r?: string) => !r ? '' : r === 'scorekeeper' ? 'Scorekeeper' : /^ref(\d)$/.test(r) ? `Official ${r.slice(3)}` : r === 'ref' ? 'Official' : r
+const slotOrder = (r: string) => r === 'scorekeeper' ? 9 : Number(r.replace(/\D/g, '') || 0)
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const minsOf = (t?: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null }
+const time12 = (t?: string) => { const m = minsOf(t); if (m == null) return t || 'TBD'; const h = Math.floor(m / 60), mm = m % 60; return `${h % 12 || 12}:${String(mm).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}` }
+const dayLabel = (d?: string) => { if (!d) return 'Date TBD'; const t = new Date(d + 'T12:00:00'); return isNaN(t.getTime()) ? d : t.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) }
+function byDay<T extends { date: string }>(list: T[]): [string, T[]][] {
+  const m = new Map<string, T[]>(); for (const g of list) { const k = g.date || ''; m.set(k, [...(m.get(k) || []), g]) }
+  return Array.from(m.entries())
 }
 
 export default function RefDashboard() {
@@ -40,6 +56,8 @@ export default function RefDashboard() {
   const [allGames, setAllGames] = useState<Game[]>([])
   const [selTournament, setSelTournament] = useState('')
   const [view, setView] = useState<'mine' | 'all'>('mine')
+  const [showPast, setShowPast] = useState(false)
+  const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set())
   const [punch, setPunch] = useState<any>(null)      // { worker, open, entries }
@@ -145,34 +163,66 @@ export default function RefDashboard() {
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
 
   const myGameIds = new Set(assignments.map(a => a.game.id))
+  const myWorkerId = portal?.worker?.id || ''
+  const myName = (portal?.worker?.name || session?.user?.name || '').trim().toLowerCase()
   const sortKey = (g: Game) => `${g.date || ''}${g.startTime || ''}`
-  const mine = assignments
+  const mineAll = assignments
     .filter(a => !a.game.isCanceled)
-    .map(a => ({ ...a.game, role: a.role, payRate: a.payRate }))
+    .map(a => ({ ...a.game, role: a.role, payRate: a.payRate, crew: a.crew || [] }))
     .sort((a, b) => sortKey(a) < sortKey(b) ? -1 : 1)
-  const upNext = mine[0]
+  // Up next is the next game that hasn't finished (one in the last hour still counts as
+  // on now), not the first game ever assigned -- that kept showing last weekend's game.
+  const today = ymd(new Date()); const nowM = new Date().getHours() * 60 + new Date().getMinutes()
+  const isAhead = (g: Game) => !!g.date && (g.date > today || (g.date === today && (minsOf(g.startTime) ?? 24 * 60) >= nowM - 60))
+  const upcoming = mineAll.filter(isAhead)
+  const past = mineAll.filter(g => !isAhead(g))
+  const mine = showPast ? mineAll : upcoming
+  const upNext = upcoming[0]
+  const startsIn = (g: Game) => {
+    if (g.date !== today) return ''
+    const d = (minsOf(g.startTime) ?? 0) - nowM
+    return d <= 0 ? 'On now' : d < 60 ? `Starts in ${d} min` : `Starts in ${Math.floor(d / 60)}h ${d % 60}m`
+  }
 
-  const displayGames: any[] = view === 'mine'
-    ? mine
-    : allGames.filter(g => g.tournamentId === selTournament)
+  // All games: every official's name on each game, so a ref can find theirs.
+  const ql = q.trim().toLowerCase()
+  const crewOf = (g: Game) => (g.assignments || []).slice().sort((a, b) => slotOrder(a.role) - slotOrder(b.role))
+  const allShown = allGames.filter(g => g.tournamentId === selTournament && !g.isCanceled).filter(g => !ql ||
+    [g.team1, g.team2, g.location, g.division, g.gameNumber, ...crewOf(g).map(a => a.worker?.name || '')].some(x => String(x || '').toLowerCase().includes(ql)))
+  const isMe = (a: { workerId: string; worker?: { name: string } }) => (myWorkerId && a.workerId === myWorkerId) || (!!myName && (a.worker?.name || '').trim().toLowerCase() === myName)
 
-  const roleLabel = punch?.worker?.defaultRole ? friendlyRole(punch.worker.defaultRole) : 'Staff'
+  const roleLabel = friendlyRole(punch?.worker?.defaultRole || portal?.worker?.defaultRole)
 
-  function GameCard({ g }: { g: any }) {
+  const tel = (p: string) => p.replace(/[^\d+]/g, '')
+  function MyGame({ g }: { g: any }) {
     const isScorekeeper = g.role === 'scorekeeper'
     return (
-      <div className={`rounded-2xl border p-4 ${myGameIds.has(g.id) && view === 'all' ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white'} card`}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="font-bold text-gray-700">{g.startTime || 'TBD'}</span>
-            <span>·</span><span>{g.location || '—'}</span>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 card">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 min-w-0">
+            <span className="font-bold text-gray-800 text-sm">{time12(g.startTime)}</span>
+            <span>·</span><span className="truncate">{g.location || 'Field TBD'}</span>
             {g.gameNumber && <><span>·</span><span>#{g.gameNumber}</span></>}
           </div>
-          {g.role && <span className="text-[10px] font-bold uppercase tracking-wide bg-green-100 text-green-700 px-2 py-0.5 rounded-full capitalize">{g.role}</span>}
+          {g.role && <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{slotLabel(g.role)}</span>}
         </div>
         <p className="text-sm font-semibold text-gray-800">{g.team1} <span className="text-gray-400 font-normal">vs</span> {g.team2}</p>
-        <p className="text-xs text-gray-400 mb-3">{g.division}{g.date ? ' · ' + g.date : ''}{g.payRate ? ' · $' + g.payRate : ''}</p>
-        <div className="flex gap-2">
+        <p className="text-xs text-gray-400">{g.division}{g.payRate ? ' · $' + g.payRate : ''}</p>
+        {g.crew?.length > 0 && (
+          <div className="mt-2.5 pt-2.5 border-t border-gray-100 space-y-1.5">
+            {g.crew.slice().sort((a: Crew, b: Crew) => slotOrder(a.role) - slotOrder(b.role)).map((c: Crew) => (
+              <div key={c.role} className="flex items-center gap-2 text-xs">
+                <span className="text-gray-400 w-20 shrink-0">{slotLabel(c.role)}</span>
+                <span className="font-semibold text-gray-700 flex-1 truncate">{c.name}</span>
+                {c.phone && <>
+                  <a href={`tel:${tel(c.phone)}`} aria-label={`Call ${c.name}`} className="p-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-teal-50 hover:text-teal-700"><Phone size={13} /></a>
+                  <a href={`sms:${tel(c.phone)}`} aria-label={`Text ${c.name}`} className="p-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-teal-50 hover:text-teal-700"><MessageSquare size={13} /></a>
+                </>}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 mt-3">
           <button onClick={() => checkIn(g.id)} disabled={checkedIn.has(g.id)}
             className="flex-1 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-60">
             {checkedIn.has(g.id) ? '📍 Checked in' : '📍 Check in'}
@@ -182,6 +232,29 @@ export default function RefDashboard() {
               className="flex-1 text-center py-2 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white">Open scorer →</a>
           )}
         </div>
+      </div>
+    )
+  }
+
+  function AnyGame({ g }: { g: Game }) {
+    const mineHere = myGameIds.has(g.id)
+    const crew = crewOf(g)
+    return (
+      <div className={`rounded-2xl border p-3.5 ${mineHere ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-white'} card`}>
+        <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+          <span className="min-w-0 truncate"><b className="text-gray-800">{time12(g.startTime)}</b> · {g.location || 'Field TBD'}{g.gameNumber ? ` · #${g.gameNumber}` : ''}</span>
+          {mineHere && <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-emerald-600 text-white px-2 py-0.5 rounded-full">You</span>}
+        </div>
+        <p className="text-sm font-semibold text-gray-800 mt-1">{g.team1} <span className="text-gray-400 font-normal">vs</span> {g.team2}</p>
+        <p className="text-xs text-gray-400">{g.division}</p>
+        <p className="text-xs mt-1.5 leading-relaxed">
+          {crew.length === 0 ? <span className="text-gray-400">No officials yet</span> : crew.map((a, i) => (
+            <span key={a.role}>{i > 0 && <span className="text-gray-300"> · </span>}
+              <span className={isMe(a) ? 'font-bold text-emerald-800 bg-emerald-100 rounded px-1' : 'text-gray-600'}>{a.worker?.name || '—'}</span>
+              <span className="text-gray-400"> {a.role === 'scorekeeper' ? '(SK)' : `(${a.role.replace(/\D/g, '') || ''})`}</span>
+            </span>
+          ))}
+        </p>
       </div>
     )
   }
@@ -299,10 +372,11 @@ export default function RefDashboard() {
         <div className="rounded-2xl border border-gray-200 bg-white card p-4 mb-5">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">● Up next</span>
-            <span className="text-xs text-gray-500">{upNext.startTime || 'TBD'} · {upNext.location || '—'}</span>
+            <span className="text-xs font-semibold text-emerald-700">{startsIn(upNext) || dayLabel(upNext.date)}</span>
           </div>
           <p className="text-base font-bold text-gray-800">{upNext.team1} vs {upNext.team2}</p>
-          <p className="text-xs text-gray-400 mb-3">{upNext.division}</p>
+          <p className="text-xs text-gray-500">{time12(upNext.startTime)} · {upNext.location || 'Field TBD'} · {slotLabel(upNext.role)}</p>
+          <p className="text-xs text-gray-400 mb-3">{upNext.division}{upNext.crew?.length ? ` · with ${upNext.crew.map((c: Crew) => c.name.split(' ')[0]).join(', ')}` : ''}</p>
           <div className="flex gap-2">
             <button onClick={() => checkIn(upNext.id)} disabled={checkedIn.has(upNext.id)}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-60">
@@ -315,7 +389,7 @@ export default function RefDashboard() {
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-gray-200 bg-white card p-5 mb-5 text-center text-sm text-gray-400">No upcoming assignments.</div>
+        <div className="rounded-2xl border border-gray-200 bg-white card p-5 mb-5 text-center text-sm text-gray-400">No upcoming games yet. Your assigner puts you on games; you'll see them here.</div>
       )}
 
       {/* Stats */}
@@ -338,25 +412,51 @@ export default function RefDashboard() {
       <div className="flex items-center gap-2 mb-3">
         <button onClick={() => setView('mine')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view === 'mine' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-300 text-gray-600'}`}>
-          My games ({assignments.length})
+          My games ({upcoming.length})
         </button>
         <button onClick={() => setView('all')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view === 'all' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600'}`}>
           All games
         </button>
-        {view === 'all' && (
+        {view === 'all' && tournaments.length > 1 && (
           <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadAllGames(e.target.value) }}
-            className="ml-auto select border border-gray-300 rounded-lg px-2 py-1.5 text-xs">
+            className="ml-auto select border border-gray-300 rounded-lg px-2 py-1.5 text-xs max-w-[45%]">
             {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         )}
       </div>
 
-      <div className="space-y-2 pb-8">
-        {displayGames.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">{view === 'mine' ? 'No assignments yet.' : 'No games found.'}</div>
+      {view === 'all' && (
+        <div className="relative mb-3">
+          <Search size={15} className="absolute left-3 top-3 text-gray-400" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a name, team or field" aria-label="Find a name, team or field"
+            className="w-full rounded-xl border border-gray-300 bg-white pl-9 pr-3 py-2.5 text-sm" />
+          {myName && !q && <button type="button" onClick={() => setQ(portal?.worker?.name || session?.user?.name || '')} className="mt-1.5 text-xs font-semibold text-teal-700">Find my name</button>}
+        </div>
+      )}
+
+      <div className="pb-8">
+        {view === 'mine' ? (
+          mine.length === 0 ? <div className="text-center py-10 text-gray-400 text-sm">No games yet.</div> :
+          byDay(mine).map(([d, list]) => (
+            <div key={d} className="mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{dayLabel(d)} · {list.length} game{list.length === 1 ? '' : 's'}</p>
+              <div className="space-y-2">{list.map((g: any) => <MyGame key={g.id} g={g} />)}</div>
+            </div>
+          ))
         ) : (
-          displayGames.map((g: any) => <GameCard key={g.id} g={g} />)
+          allShown.length === 0 ? <div className="text-center py-10 text-gray-400 text-sm">{q ? 'No games match.' : 'No games posted yet.'}</div> :
+          byDay(allShown).map(([d, list]) => (
+            <div key={d} className="mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{dayLabel(d)} · {list.length} game{list.length === 1 ? '' : 's'}</p>
+              <div className="space-y-2">{list.map(g => <AnyGame key={g.id} g={g} />)}</div>
+            </div>
+          ))
+        )}
+        {view === 'mine' && past.length > 0 && (
+          <button type="button" onClick={() => setShowPast(v => !v)} className="w-full text-center text-xs font-semibold text-gray-500 hover:text-gray-800 py-2">
+            {showPast ? 'Hide past games' : `Show past games (${past.length})`}
+          </button>
         )}
       </div>
     </div>
