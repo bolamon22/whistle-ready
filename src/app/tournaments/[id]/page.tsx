@@ -1564,9 +1564,12 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
   const divLower=division.toLowerCase()
   const gameGender=divLower.includes('girl')||divLower.includes('women')?'girls':divLower.includes('boy')||divLower.includes('men')?'boys':'both'
 
-  const availableIds=new Set(avails.filter(a=>{
+  // Availability records are UNavailability (see the Availability page): [] = out all
+  // day, ['08:00',...] = out at those start times. No record = available. This read
+  // them as "available", so the warning landed on everyone who hadn't marked anything.
+  const outIds=new Set(avails.filter(a=>{
     if(a.date!==date)return false
-    const slots:string[]=JSON.parse(a.timeSlots)
+    let slots:string[]=[]; try{ slots=JSON.parse(a.timeSlots||'[]') }catch{}
     return slots.length===0||slots.includes(time)
   }).map(a=>a.workerId))
 
@@ -1588,7 +1591,7 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
 
   const options=eligible.map(w=>{
     const count=getGameCount(w.id)
-    const avail=availableIds.has(w.id)
+    const avail=!outIds.has(w.id)
     const isDoubled=doubled.has(w.id)
     const crossSK=slotType==='scorekeeper'&&w.defaultRole!=='scorekeeper'
     return{
