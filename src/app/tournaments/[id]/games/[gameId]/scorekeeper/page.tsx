@@ -493,6 +493,9 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   // Watch this game's requests for "on my way" responses (every 15s while any
   // are open) and say who's coming.
   useEffect(() => {
+    // Not before the game has loaded: this ran first with an empty list and wiped the
+    // saved requests, so a scorer who left and came back never heard "on the way".
+    if (!restoredRef.current) return
     try { localStorage.setItem('lw:req:' + params.gameId, JSON.stringify(myReqs)) } catch { /* ignore */ }
     if (!myReqs.length) return
     const poll = () => {
