@@ -12,7 +12,7 @@ import { roleCanAccess } from '../src/lib/routeAccess'
 import { ARTICLE_ROUTES, PUBLIC_ARTICLE_ROUTES } from '../src/lib/helpArticles'
 
 const APP = path.join(__dirname.includes('scripts') ? path.join(__dirname, '..') : process.cwd(), 'src/app')
-const ROLES = ['admin', 'director', 'assigner', 'scheduler', 'staff', 'public']
+const ROLES = ['admin', 'director', 'assigner', 'scheduler', 'field_director', 'staff', 'public']
 
 // Kept in step with src/middleware.ts (PUBLIC_ROUTES, PUBLIC_TOURNAMENT_PATH and its
 // passthrough list). Oct 12 2026: /share, /privacy, /terms and the event's hotels

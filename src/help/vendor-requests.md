@@ -19,6 +19,8 @@ Vendor requests lists businesses that applied for a booth. You approve them with
 
 **To decline:** click **Decline** and confirm. Nothing is charged.
 
+**Field directors** see this list for their own events, with contacts and status, but no fees, payments or booth links, and no buttons to approve, decline or delete.
+
 **To undo an approval or decline:** click **Undo**.
 
 **To resend the booth page:** click **Copy booth link** on an approved vendor and send it yourself.

@@ -24,7 +24,7 @@ Staff need their own login to see their games, open the scorekeeper and use the 
 3. Edit the **Subject** and **Letter**. **Reset to default** puts back the standard wording.
 4. Under **Send it now**, type up to 10 email addresses, separated by commas, and click **Save + send**. Existing staff each get their own login link; new recruits get your signup link.
 
-**To invite one person to a single tournament:** on **People → Staff roster**, click **Invite Staff**, enter **Email address** and an optional **Name**, and click **Send Invite**. They receive an email to set up their profile.
+**To invite one person to a single tournament:** on **People → Staff roster**, click **Invite Staff**, enter **Email address** and an optional **Name**, and click **Send Invite**. They receive an email to set up their profile. Field directors can do this for their own events.
 
 **Common problems:**
 - Every invite option above sends a real email to the staff member.

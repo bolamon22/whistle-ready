@@ -21,6 +21,8 @@ keywords: logins login user management users add user create account role change
 
 **To pick which staff pay an assigner sees:** under an Assigner's row, click the groups next to **Sees pay for**: **Boys refs**, **Girls refs**, **Scorekeepers**, **Field ops & trainers**. Each click saves. **Default until you pick** means they see boys and girls refs only. Tick all four when one person runs everybody. This sets what they see on **Staff pay**, **Assignments**, the staff roster and the Staff Pool.
 
+**To pick a field director's events:** under a Field Director's row, click the events next to **Works**. Each click saves, and they see only those events. See "Field directors: what they see and do".
+
 **To link a club director or coach to a club:**
 1. Click **Clubs** on their row (shown for Club Director, Coach and Admin).
 2. Pick a tournament from **Select tournament…**, then pick a club or type a club name.
@@ -35,7 +37,7 @@ A link opens that club's registrations at that tournament as they are when you a
 
 **To find people:**
 - Type in **Search people, jobs, clubs…**: a name, email, role, staff job (for example "trainer" or "ref") or club name.
-- Click a chip: **Everyone**, **Office** (admins, directors, schedulers, assigners), **Staff**, **Clubs & coaches** or **Parents**. Each shows how many match.
+- Click a chip: **Everyone**, **Office** (admins, directors, schedulers, assigners, field directors), **Staff**, **Clubs & coaches** or **Parents**. Each shows how many match.
 - Under **Staff**, pick a job: **Refs**, **Scorekeepers**, **Athletic trainers**, **Field ops**, or **No staff record**.
 - **Last on** narrows to people on now, on in the last 7 or 30 days, or with **No visit recorded**. Visits are recorded from Oct 12, 2026.
 - Sort by **Newest first**, **Name A–Z** or **Last on**. **Clear filters** resets.

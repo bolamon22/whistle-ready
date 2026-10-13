@@ -20,7 +20,7 @@ The top bar is the same on every page, and it shows only what your role can open
 - **View as** (admins, on wide screens) shows the app as another role.
 - **Your initials** open your account menu: **Profile**, **Game-day alerts**, **Appearance** (**Light** or **Dark**), **View as** (admins) and **Sign out**.
 
-The menu holding the page you're on is underlined. A menu with nothing your role can open isn't shown.
+The menu holding the page you're on is underlined. A menu with nothing your role can open isn't shown, and a menu with only one page is just that page's link (a field director sees **All tournaments** and **Training videos**).
 
 **On phones and tablets:** tap the menu button at the top right. It holds search, the event button, every menu, your account, **Dark mode** and **Sign out**. Tap **Organization** or **Admin** to open them.
 

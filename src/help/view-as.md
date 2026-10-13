@@ -10,7 +10,7 @@ keywords: view as preview role previewing see what staff see impersonate test pe
 **Where:** **View as** in the top bar on wide screens, or your account menu (your initials, top right). On phones and tablets, open the menu and use **View as**.
 
 **To preview a role:**
-1. Pick a role: **Tournament Director**, **Club Director**, **Assigner**, **Scheduler**, **Coach**, **Staff** or **Parent**.
+1. Pick a role: **Tournament Director**, **Club Director**, **Assigner**, **Scheduler**, **Field Director**, **Coach**, **Staff** or **Parent**.
 2. The page reloads. A yellow bar reads "Previewing as ..." and the pages and data match that role.
 
 **To stop previewing:** click **Exit Preview** in the yellow bar, or pick **Admin (you)** in **View as**.
@@ -18,4 +18,5 @@ keywords: view as preview role previewing see what staff see impersonate test pe
 **Common problems:**
 - The preview lasts until you exit it, even across pages, for up to a day.
 - Admin pages like **Logins** stay open to you while previewing.
+- Previewing as a **Field Director** shows every event. A real field director sees only the events picked for them next to **Works**.
 - Admins with more than one organization can also pick an organization from the menu next to **Admin** on the tournaments list (**All Orgs** shows everything).
