@@ -4,7 +4,7 @@ category: Public pages
 order: 968
 audience: both
 routes: /dashboard/coach, /dashboard/parent
-keywords: coach dashboard, parent dashboard, my team, games, follow tournament, my players, discover, schedule, wins, losses, switch team, edit waiver, change jersey number, update emergency contact, parent account, change hotel, my team's games, follow my team, sibling, brother, sister
+keywords: next game, live score, directions, field map, phone alerts, coach dashboard, parent dashboard, my team, games, follow tournament, my players, discover, schedule, wins, losses, switch team, edit waiver, change jersey number, update emergency contact, parent account, change hotel, my team's games, follow my team, sibling, brother, sister
 ---
 Coaches and parents each have a simple dashboard that opens after signing in.
 
@@ -15,24 +15,24 @@ Coaches and parents each have a simple dashboard that opens after signing in.
 2. You'll see your number of **Games**, **Wins** and **Losses**, and each game with date, time, opponent, division, location and game number. Played games show the score; others say **Upcoming**.
 3. Tap **Switch Team** to follow a different team or tournament.
 
-**Parent Dashboard:** it has four tabs.
-1. **Discover**: upcoming events. Tap **Follow** on any you want to keep an eye on (**Unfollow** to stop).
-2. **Schedule**: your players' events are there already, plus any you follow. Tap an event to see its games. **My teams' games** shows only your players' teams (matched by division, so another team with the same name in a different division isn't mixed in), each tagged with your player's name. **All games** shows the whole event. Nothing shows until the event's schedule is published.
-3. **My Teams**: your players' teams for upcoming events, from their waivers: club, team, division and event. **Games** opens that team's games; **Event page** opens the public schedule, where **Follow** on the team sends phone alerts when the schedule comes out or a game ends.
-4. **My Players**: your players' waivers. A waiver lands here when you create a password at the end of it (or were signed in as that parent when you filled it out). Each shows the event and dates, club and team, jersey number, and a **Player card** link.
+**Parent Dashboard:** four tabs along the bottom of your phone (along the top on a computer).
+1. **Home**: your next game (time, teams, field) with **Directions** and **Full schedule**, any game your player is in that's **Live now** with the score, **Before game day** (each player's waiver on file, and whether phone alerts are on), your players, upcoming events, and links to the website and how-to videos.
+2. **Schedule**: the event's logo, dates and place, then a day picker. **My teams** shows only your players' teams (matched by division, so another team with the same name in a different division isn't mixed in), each tagged with your player's name; **All games** shows the whole event. Each game shows **Final**, **Live** with the score, or **Next up**. Under **Alerts for your teams**, tap **Follow** on a team to get phone alerts when the schedule comes out, a game moves, or a game ends (the same Follow as the public schedule). **Directions** and **Field map** are at the bottom when the event has them. Nothing shows until the event's schedule is published.
+3. **Players**: your players' waivers. A waiver lands here when you create a password at the end of it (or were signed in as that parent when you filled it out). Each shows jersey, position, grade, team and division, and **Waiver on file** for the event, with **Player card** and **Edit details**. Past events are listed below.
+4. **Events**: upcoming events. Events your players are in say who's playing and open their **Schedule**; for others tap **Follow** to add them to your Schedule (**Unfollow** to stop). **Event info** opens the event page.
 
 **Change a player's details:**
-1. On **My Players**, tap **Edit details** on the waiver.
+1. On **Players**, tap **Edit details** on the player.
 2. Change the jersey number, position, grade, USA Lacrosse member #, player email, parent name and phone, **Parent 2** details, emergency contact, or hotel (whichever the event's waiver asks). Answering **No** or **Maybe** to the hotel question clears where you were staying.
 3. Tap **Save changes** (or **Cancel**). The change goes straight to the event's waiver list.
 
 The player's name, date of birth and team can't be changed here; ask your club director or the event office. Once an event is over its waiver shows **Event over** and can't be changed.
 
-**Signing up a brother or sister?** Under your players on **My Players**, tap the event. Their waiver opens with your family's details filled in, and it goes into this account too.
+**Signing up a brother or sister?** On **Players**, tap **Add a player** (or the event's name). Their waiver opens with your family's details filled in, and it goes into this account too.
 
 **Common problems:**
-- "You're not following any tournaments yet." Go to **Discover** and tap **Follow**.
+- "No events here yet." Go to **Events** and tap **Follow**.
 - "No games yet for this tournament." or "No games scheduled yet." means the schedule hasn't been posted.
-- A waiver isn't on **My Players**: only waivers saved to your account at the end of the waiver are listed, not ones filled out before you had an account.
+- A waiver isn't on **Players**: only waivers saved to your account at the end of the waiver are listed, not ones filled out before you had an account.
 - "can't be blank": parent name and phone, emergency contact, USA Lacrosse member # and grade can be changed but not emptied.
 - Club directors have their own portal; see "Use your club portal (club directors)".
