@@ -108,6 +108,16 @@ export default function VideoLibrary() {
     return m
   }, [people])
 
+  // A viewing here counts like one on the Training page (85%, once per opening). The
+  // assigners' Training button opens this page, so without this their watching went
+  // uncounted (Bo, Oct 13 2026: Paul showed 2 videos when he had watched more).
+  const counted = useRef(false)
+  useEffect(() => { counted.current = false }, [playing])
+  const countView = (v: Lib) => {
+    if (counted.current || v.series === 'family') return
+    counted.current = true
+    fetch('/api/training', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoId: v.id }) }).then(() => loadPeople()).catch(() => {})
+  }
   const toggle = (id: string) => setPicked(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   // One box picks the whole bundle (every video showing in that section).
   const toggleAll = (ids: string[]) => setPicked(s => { const n = new Set(s); const all = ids.every(id => n.has(id)); ids.forEach(id => all ? n.delete(id) : n.add(id)); return n })
@@ -243,7 +253,10 @@ export default function VideoLibrary() {
         <div className="fixed inset-0 z-50 bg-slate-950/95 flex flex-col" role="dialog" aria-label={playing.title} onClick={() => setPlaying(null)}>
           <div className="flex items-center justify-between px-4 py-3 text-white"><p className="text-sm font-semibold">{playing.num} · {playing.title}</p><button type="button" aria-label="Close" className="p-2"><X size={20} /></button></div>
           <div className="flex-1 min-h-0 flex items-center justify-center p-3" onClick={e => e.stopPropagation()}>
-            <video src={playing.src} poster={playing.poster} controls autoPlay playsInline {...noSave} className="max-h-full max-w-full rounded-xl bg-black" />
+            <video key={playing.id} src={playing.src} poster={playing.poster} controls autoPlay playsInline {...noSave} className="max-h-full max-w-full rounded-xl bg-black"
+              onPlay={e => { if (e.currentTarget.currentTime < 1) counted.current = false }}
+              onTimeUpdate={e => { const t = e.currentTarget; if (t.duration && t.currentTime / t.duration >= 0.85) countView(playing) }}
+              onEnded={() => countView(playing)} />
           </div>
         </div>
       )}
