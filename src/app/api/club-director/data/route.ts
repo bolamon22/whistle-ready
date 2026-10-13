@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
 import { rosterLock } from '@/lib/rosterLock'
-import { isStaffRequest } from '@/lib/apiAuth'
+import { viewerRole } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { readConfirmMany } from '@/lib/changeRequest'
 import { eventInfo, divisionFull, addPolicy, addBlock } from '@/lib/clubPortal'
@@ -100,8 +100,11 @@ export async function GET(req: NextRequest) {
   // Club directors see the schedule when the public does, not while it's being
   // built. Staff opening a club's portal (?userId=) get the club's view too: that
   // view is for seeing exactly what the club sees, and showing staff the draft
-  // made it look as if clubs could read it (Bo, Oct 4 2026).
-  const clubView = as.viewingOther || !(await isStaffRequest())
+  // made it look as if clubs could read it (Bo, Oct 4 2026). So does a staff login
+  // that directs a club itself (a field director with a club, Oct 13 2026): their
+  // club learns the schedule when every other club does. Only the admin and the
+  // tournament director, who build it, see the draft here.
+  const clubView = as.viewingOther || !['admin', 'director'].includes(await viewerRole())
   const vis = await getPublicVisibility(tournamentId)
   const games = clubView ? applyPublicView(rawGames, vis) : rawGames
 

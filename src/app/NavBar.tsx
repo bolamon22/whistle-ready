@@ -132,6 +132,20 @@ export default function NavBar() {
     if (canTasks && Date.now() - tasksAt.current > 60000) loadOverdue()
   }, [pathname, canTasks, loadOverdue])
 
+  // A staff login that also directs a club (a field director who runs his own
+  // club, Oct 13 2026) reaches the club portal from the account menu. Asked once,
+  // the first time a menu opens; club directors, coaches and parents already
+  // land on their portal.
+  const [clubPortal, setClubPortal] = useState(false)
+  const clubsAsked = useRef(false)
+  useEffect(() => {
+    if (clubsAsked.current || !signedIn || !(open === 'account' || sheet)) return
+    if (['club_director', 'coach', 'parent'].includes(realRole)) return
+    clubsAsked.current = true
+    fetch('/api/club-director/links').then(r => r.ok ? r.json() : null)
+      .then(d => setClubPortal(Array.isArray(d?.links) && d.links.length > 0)).catch(() => {})
+  }, [open, sheet, signedIn, realRole])
+
   function toggleTheme() {
     const next = !dark
     setDark(next)
@@ -224,7 +238,7 @@ export default function NavBar() {
             <div className="hidden flex-shrink-0 xl:block">
               <AccountMenu name={session.user?.name} image={session.user?.image} role={role} isAdmin={isAdmin}
                 isPreview={isPreview} setPreviewRole={setPreviewRole} open={open === 'account'} setOpen={o => setOpen(o ? 'account' : null)}
-                showAlerts={showAlerts} showTheme={showTheme} dark={dark} toggleTheme={toggleTheme} poweredBy={hasOrg} />
+                showAlerts={showAlerts} showTheme={showTheme} dark={dark} toggleTheme={toggleTheme} poweredBy={hasOrg} clubPortal={clubPortal} />
             </div>
 
             {/* Below 1280px (phones and tablets) one menu holds everything */}
@@ -306,6 +320,7 @@ export default function NavBar() {
                   {canSeePresence(role) && <WhoIsOn />}
                 </div>
                 {showAlerts && <Link href="/dashboard/alerts" onClick={() => setSheet(false)} className={SHEET_LINK}>Game-day alerts</Link>}
+                {clubPortal && <Link href="/dashboard/club-director" onClick={() => setSheet(false)} className={SHEET_LINK}>Club portal</Link>}
                 {isAdmin && <div className="-mx-2"><ViewAsSelect role={role} isPreview={isPreview} setPreviewRole={setPreviewRole} variant="row" /></div>}
                 <div className="flex gap-2.5 pt-2">
                   {showTheme && (

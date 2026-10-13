@@ -64,6 +64,9 @@ const whoOf = (role: string): Who =>
   ['admin', 'director', 'scheduler', 'assigner', 'field_director'].includes(role) ? 'office'
   : ['club_director', 'coach'].includes(role) ? 'clubs'
   : role === 'parent' ? 'parents' : 'staff'
+// A login that directs a club shows under Clubs & coaches too, whatever its role: a
+// field director who runs his own club is in both lists (Oct 13 2026).
+const inWho = (u: User, w: Who) => w === 'all' || whoOf(u.role) === w || (w === 'clubs' && (u.clubs?.length ?? 0) > 0)
 const JOBS: { key: string; label: string }[] = [
   { key: 'ref', label: 'Refs' }, { key: 'scorekeeper', label: 'Scorekeepers' },
   { key: 'athletic_trainer', label: 'Athletic trainers' }, { key: 'field_ops', label: 'Field ops' },
@@ -251,11 +254,11 @@ function AdminUsersInner() {
   const now = Date.now()
   const q = search.trim().toLowerCase()
   const base = users.filter(u => (!q || searchText(u).includes(q)) && seenMatches(u, seen, now))
-  const whoCount = (w: Who) => (w === 'all' ? base.length : base.filter(u => whoOf(u.role) === w).length)
+  const whoCount = (w: Who) => base.filter(u => inWho(u, w)).length
   const staffBase = base.filter(u => whoOf(u.role) === 'staff')
   const jobMatch = (u: User, j: string) => (j === 'all' ? true : j === 'none' ? !u.staff : !!u.staff?.jobs.includes(j))
   const filtered = base
-    .filter(u => who === 'all' || whoOf(u.role) === who)
+    .filter(u => inWho(u, who))
     .filter(u => who !== 'staff' || jobMatch(u, job))
     .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name)
       : sort === 'last' ? (lastOn(b) - lastOn(a)) || a.name.localeCompare(b.name)
@@ -526,7 +529,9 @@ function AdminUsersInner() {
                       className="text-xs text-sky-600 border border-sky-200 hover:border-sky-400 px-2.5 py-1 rounded-lg">
                       👤 Profile
                     </Link>
-                    {(u.role === 'club_director' || u.role === 'coach' || u.role === 'admin') && (
+                    {/* Any login but a parent's can direct a club: a field director who runs
+                        their own club keeps their role and gets the club here (Oct 13 2026). */}
+                    {u.role !== 'parent' && (
                       <button onClick={() => openLinking(u)}
                         className="text-xs text-violet-600 border border-violet-200 hover:border-violet-400 px-2.5 py-1 rounded-lg">
                         🔗 Clubs

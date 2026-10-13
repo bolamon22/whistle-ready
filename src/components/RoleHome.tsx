@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Globe, Search, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Globe, Search, ChevronDown, ChevronRight, Shield, type LucideIcon } from 'lucide-react'
 
 // The landing page for a role that works across tournaments (scheduler, assigner):
 // the soonest event as one large card with that role's buttons, the rest of what's
@@ -96,12 +96,18 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
   const [filter, setFilter] = useState<Filter>('upcoming')
   const [q, setQ] = useState('')
   const [pastOpen, setPastOpen] = useState(false)
+  const [clubs, setClubs] = useState<string[]>([])
   const today = todayKey()
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
     if (status !== 'authenticated') return
     fetch('/api/tournaments').then(r => r.json()).then(d => { setTournaments(Array.isArray(d) ? d : []); setLoading(false) })
+    // A login that also directs a club (Terry Crowley, a field director with his own
+    // club, Oct 13 2026) gets a way into its club portal from here.
+    fetch('/api/club-director/links').then(r => r.ok ? r.json() : null)
+      .then(d => setClubs([...new Set(((d?.links ?? []) as { clubName?: string }[]).map(l => l.clubName || '').filter(Boolean))]))
+      .catch(() => {})
   }, [status])
 
   // Soonest first for what's ahead, most recent first for what's done. Anything
@@ -175,6 +181,18 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
           </div>
         </div>
       </div>
+
+      {clubs.length > 0 && (
+        <Link href="/dashboard/club-director"
+          className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:shadow-sm">
+          <Shield size={18} aria-hidden className="flex-shrink-0 text-violet-600" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-slate-800">Your club portal</span>
+            <span className="block truncate text-xs text-slate-500">{clubs.join(', ')} · teams, players, schedule and billing</span>
+          </span>
+          <ChevronRight size={16} aria-hidden className="flex-shrink-0 text-slate-400" />
+        </Link>
+      )}
 
       {tournaments.length === 0 ? (
         <div className="text-center py-20 text-slate-400">{emptyText ?? 'No tournaments yet.'}</div>

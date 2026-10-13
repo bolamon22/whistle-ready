@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import { openableRegistrations } from '@/lib/clubAccess'
 
 const PERMS_PATH = path.join(process.cwd(), 'src', 'lib', 'role-permissions.json')
 
@@ -19,7 +20,13 @@ export async function GET(req: NextRequest) {
   // Without this a director viewing a club would get every tab hidden, because
   // the director role has no cd_* keys at all.
   const viewingOther = !!req.nextUrl.searchParams.get('userId')
-  const effectiveRole = viewingOther ? 'club_director' : role
+  let effectiveRole = viewingOther ? 'club_director' : role
+  // A staff login can direct a club too: Terry Crowley works events as a field
+  // director and runs his own club (Oct 13 2026). On their own portal they get a
+  // club director's tabs as soon as they can open one of the club's registrations
+  // (lib/clubAccess), the same grant any club director has.
+  if (!viewingOther && !['admin', 'club_director', 'coach', 'parent'].includes(role)
+    && (await openableRegistrations(String(session.user.id || ''))).length > 0) effectiveRole = 'club_director'
 
   // Admin always gets all CD permissions
   if (effectiveRole === 'admin') {

@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { signOut } from 'next-auth/react'
-import { BellRing, ChevronDown, Eye, LogOut, UserRound } from 'lucide-react'
+import { BellRing, ChevronDown, Eye, LogOut, Shield, UserRound } from 'lucide-react'
 import { ROLE_COLORS, ROLE_LABELS, VIEW_AS_ROLES } from './navConfig'
 
 // The avatar menu at the right of the header (Bo, Oct 13 2026): your name and
 // role, Profile, Game-day alerts, Light/Dark, View as (admins) and Sign out.
-// These used to be separate controls in the bar itself.
+// These used to be separate controls in the bar itself. Club portal is there for a
+// staff login that also directs a club (a field director with a club of his own).
 
 export function initials(name?: string | null): string {
   return (name || '').split(/\s+/).filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U'
@@ -63,7 +64,7 @@ export function ViewAsSelect({ role, isPreview, setPreviewRole, variant }: {
 const ROW = 'flex min-h-[40px] items-center gap-2.5 rounded-xl px-3 text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none'
 const ITEM = `${ROW} font-medium text-slate-900`
 
-export default function AccountMenu({ name, image, role, isAdmin, isPreview, setPreviewRole, open, setOpen, showAlerts, showTheme, dark, toggleTheme, poweredBy }: {
+export default function AccountMenu({ name, image, role, isAdmin, isPreview, setPreviewRole, open, setOpen, showAlerts, showTheme, dark, toggleTheme, poweredBy, clubPortal = false }: {
   name?: string | null
   image?: string | null
   role: string
@@ -77,6 +78,7 @@ export default function AccountMenu({ name, image, role, isAdmin, isPreview, set
   dark: boolean
   toggleTheme: () => void
   poweredBy: boolean
+  clubPortal?: boolean        // this login can open a club's portal (lib/clubAccess)
 }) {
   const label = ROLE_LABELS[role] ?? role
   return (
@@ -100,6 +102,7 @@ export default function AccountMenu({ name, image, role, isAdmin, isPreview, set
           <div className="mx-1 my-1 h-px bg-slate-200" />
           <Link href="/profile" onClick={() => setOpen(false)} className={ITEM}><UserRound size={16} aria-hidden className="text-slate-500" />Profile</Link>
           {showAlerts && <Link href="/dashboard/alerts" onClick={() => setOpen(false)} className={ITEM}><BellRing size={16} aria-hidden className="text-slate-500" />Game-day alerts</Link>}
+          {clubPortal && <Link href="/dashboard/club-director" onClick={() => setOpen(false)} className={ITEM}><Shield size={16} aria-hidden className="text-slate-500" />Club portal</Link>}
           {showTheme && (
             <div className="flex min-h-[44px] items-center justify-between gap-3 px-3">
               <span className="text-sm font-medium text-slate-900">Appearance</span>
