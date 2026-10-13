@@ -16,7 +16,7 @@ import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
 type Lib = { id: string; num: string; title: string; blurb: string; secs: number; series: 'staff' | 'assigner' | 'family'; audience: string; src: string; poster: string }
 type Person = { id: string; name: string; email: string; roles: string[]; assigned: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
-type SendLog = { at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number }
+type SendLog = { at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
 
 const LIB: Lib[] = [
   ...TRAINING_VIDEOS.map(v => ({ ...v, series: (v.series || 'staff') as 'staff' | 'assigner', audience: audienceFor(v.id), src: videoSrc(v.id), poster: posterSrc(v.id) })),
@@ -207,6 +207,8 @@ export default function VideoLibrary() {
               <div className="flex items-center justify-between gap-3"><span className="font-semibold text-slate-800">{s.sent} {s.sent === 1 ? 'person' : 'people'}</span><span className="text-xs text-slate-400">{new Date(s.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{s.by ? ` · ${s.by}` : ''}</span></div>
               <p className="text-slate-600 mt-1">{bundleSummary(s.videoIds)}</p>
               {(() => { const to = [...s.roles.map(r => TRAINING_ROLE_LABELS[r] || r), ...(s.people.length ? [`${s.people.length} picked by name`] : []), ...(s.emails || []), ...(s.meCopy ? ['you'] : [])]; return to.length ? <p className="text-xs text-slate-400 mt-0.5">To: {to.join(', ')}</p> : null })()}
+              {s.to && s.to.length > 0 && <p className="text-xs text-slate-600 mt-1">Sent to: {s.to.map(t => t.name && t.name !== t.email ? `${t.name} (${t.email})` : t.email).join(', ')}</p>}
+              {s.failed && s.failed.length > 0 && <p className="text-xs text-red-600 mt-0.5">Didn’t go through: {s.failed.join(', ')}</p>}
             </div>
           ))}
         </div>
@@ -270,8 +272,9 @@ function ScriptPanel({ v, note, onClose, onSaved }: { v: Lib; note: string; onCl
 }
 
 function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: Person[]; onClose: () => void; onSent: () => void }) {
-  // A bundle of only assigner videos starts addressed to Assigners.
-  const [roles, setRoles] = useState<Set<string>>(() => new Set(ids.length && ids.every(id => trainingVideo(id)?.series === 'assigner') ? ['assigner'] : []))
+  // Nobody is picked to start: a send goes only to who you choose (Bo, Oct 13 2026 --
+  // an Assigners pre-pick sent a "sample to myself" to the assigners too).
+  const [roles, setRoles] = useState<Set<string>>(new Set())
   const [chosen, setChosen] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
@@ -292,6 +295,8 @@ function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: P
   const flip = (set: Set<string>, setter: (s: Set<string>) => void, k: string) => { const n = new Set(set); n.has(k) ? n.delete(k) : n.add(k); setter(n) }
   const matches = q.trim() ? people.filter(p => p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : []
   const send = async () => {
+    const list = preview?.names || []
+    if (!confirm(`Email ${ids.length === 1 ? 'this video' : `these ${ids.length} videos`} to ${list.length} ${list.length === 1 ? 'person' : 'people'}?\n\n${list.join('\n')}`)) return
     setBusy(true)
     const r = await fetch('/api/training/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body({}) }).catch(() => null)
     const d = r ? await r.json().catch(() => ({})) : {}

@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   const base = 'https://whistleready.app/dashboard/staff/training'
   const vids = videoIds.map(id => trainingVideo(id)!)
   const list = vids.map(v => `<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0"><a href="${base}?v=${encodeURIComponent(v.id)}" style="color:#0f766e;font-weight:700;text-decoration:none">${esc(v.title)}</a><br><span style="color:#64748b;font-size:13px">${esc(v.blurb)} · ${minutesLabel(v.secs)}</span></td></tr>`).join('')
-  let sent = 0; const failed: string[] = []
+  let sent = 0; const failed: string[] = []; const went: { name: string; email: string }[] = []
   const one = async (w: Row) => {
     const first = String(w.name || '').split(/\s+/)[0] || 'there'
     const fresh = !!w.newPerson
@@ -94,14 +94,14 @@ export async function POST(req: NextRequest) {
     })
     const text = `Hi ${first},\n\n${note || 'Please watch these short training videos before your next event.'}\n\n` + (fresh && joinUrl ? `First, create your staff login (use this email address): ${joinUrl}\n\n` : '') + vids.map(v => `${v.title}: ${base}?v=${v.id}`).join('\n') + '\n\nSign in to Whistle Ready with this email address.'
     const r = await sendEmail({ to: String(w.email).trim(), subject: vids.length === 1 ? `Training video: ${vids[0].title}` : `${vids.length} Whistle Ready training videos to watch`, html, text, ...orgSender(org as any) })
-    if (r.ok) sent++; else failed.push(label(w))
+    if (r.ok) { sent++; went.push({ name: label(w), email: String(w.email).trim() }) } else failed.push(label(w))
   }
   for (let i = 0; i < withEmail.length; i += 8) await Promise.all(withEmail.slice(i, i + 8).map(one))
 
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: LOG } })
     const log = row?.value ? JSON.parse(row.value) : []
-    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), videoIds, roles, people: Array.from(picked), emails: typed, meCopy: !!b.meCopy, sent }
+    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), videoIds, roles, people: Array.from(picked), emails: typed, meCopy: !!b.meCopy, sent, to: went, failed }
     const value = JSON.stringify([entry, ...(Array.isArray(log) ? log : [])].slice(0, 50))
     await prisma.appSetting.upsert({ where: { key: LOG }, update: { value }, create: { key: LOG, value } })
   } catch { /* the emails went; only the log is lost */ }
