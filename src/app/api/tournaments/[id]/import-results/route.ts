@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { ownClubTeams, isOwnClubGame, OWN_CLUB_REFUSAL } from '@/lib/ownClub'
 
 // Create many games at once, WITH their scores.
 //
@@ -106,6 +107,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const bad = rows.findIndex(r => !r.date || !r.startTime)
     if (bad >= 0) return NextResponse.json({ error: `Row ${bad + 1} (${rows[bad].gameNumber}) is missing date or start time` }, { status: 400 })
+
+    // A result for a game this login's own club played comes from someone else (lib/ownClub).
+    const mine = await ownClubTeams(gate.role, gate.userId, params.id)
+    const own = rows.find(r => (r.score1 !== null || r.score2 !== null) && isOwnClubGame(mine, r))
+    if (own) return NextResponse.json({ error: `${OWN_CLUB_REFUSAL} (${own.team1} vs ${own.team2})`, ownClub: true }, { status: 403 })
 
     // replace is opt-in: re-running an import should not silently wipe a live
     // schedule someone has already staffed.

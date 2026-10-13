@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import TournamentNav from '../TournamentNav'
 import LiveTicker, { liveClockText, useNowTicking } from '@/components/LiveTicker'
 import toast, { Toaster } from 'react-hot-toast'
-import { Search, X, ChevronDown, ChevronUp, Check, ClipboardCheck } from 'lucide-react'
+import { Search, X, ChevronDown, ChevronUp, Check, ClipboardCheck, Lock } from 'lucide-react'
 
 interface Game {
   id: string; gameNumber: string; date: string; startTime: string
@@ -11,7 +11,10 @@ interface Game {
   team1: string; team2: string
   score1: number | null; score2: number | null
   isCanceled: boolean; isChampionship: boolean
+  ownClub?: boolean   // the viewer's own club plays: someone else posts the score (lib/ownClub)
 }
+// Said wherever a score box would be for those games (Bo, Oct 13 2026).
+const OWN_CLUB = 'Your club plays in this game, so someone else posts its score.'
 type Draft = { s1: string; s2: string; note: string; dirty: boolean }
 type GroupBy = 'division' | 'field'
 type ShowFilter = 'all' | 'scored' | 'unscored' | 'live'
@@ -76,6 +79,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
   async function stopLive(gameId: string) {
     const g = games.find(x => x.id === gameId), ls = liveScores[gameId]
     if (!ls) return
+    if (g?.ownClub) { toast.error(OWN_CLUB); return }
     if (!confirm(`Stop showing ${g ? `${g.team1} vs ${g.team2}` : 'this game'} as live on the public page?`)) return
     const r = await fetch(`/api/tournaments/${params.id}/live-scores`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, score1: ls.score1, score2: ls.score2, period: ls.period, periodLabel: ls.periodLabel, live: false }) }).catch(() => null)
@@ -181,7 +185,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
     const body = { score1: draft.s1 === '' ? null : Number(draft.s1), score2: draft.s2 === '' ? null : Number(draft.s2) }
     const r = await fetch(`/api/games/${gameId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
     setSaving(s => ({ ...s, [gameId]: false }))
-    if (!r?.ok) { toast.error("Couldn't save that score. Try again."); return }
+    if (!r?.ok) { const j = r ? await r.json().catch(() => null) : null; toast.error(j?.error || "Couldn't save that score. Try again."); return }
     setGames(gs => gs.map(g => g.id === gameId ? { ...g, ...body } : g))
     setDrafts(d => ({ ...d, [gameId]: { ...d[gameId], dirty: false } }))
   }
@@ -210,7 +214,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
   function handleKey(e: React.KeyboardEvent, gameId: string, field: 's1' | 's2') {
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault(); saveGame(gameId)
-      const keys = panelGames.flatMap(g => [`${g.id}-s1`, `${g.id}-s2`])
+      const keys = panelGames.filter(g => !g.ownClub).flatMap(g => [`${g.id}-s1`, `${g.id}-s2`])
       const next = keys[keys.indexOf(`${gameId}-${field}`) + 1]
       if (next) inputRefs.current[next]?.focus()
     }
@@ -249,6 +253,12 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       </div>
+
+      {games.some(g => g.ownClub) && (
+        <div className="bg-amber-50 border-b border-amber-200 px-3 sm:px-6 py-2 text-xs font-medium text-amber-900 flex items-center gap-2">
+          <Lock size={13} className="flex-shrink-0" aria-hidden /> Games your club plays show their score but no boxes. Someone else posts those scores.
+        </div>
+      )}
 
       {/* Top toolbar */}
       <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
@@ -419,27 +429,34 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                         {isLiveGame(game) && <div className="mb-2">{(
                             <span className="inline-flex items-center gap-1.5 mt-1">
                               <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''}{clockOf(game.id)} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
-                              <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>
+                              {!game.ownClub && <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>}
                             </span>
                           )}</div>}
                         <div className="flex items-center gap-3">
                           <span className={`flex-1 min-w-0 truncate text-sm ${t1wins ? 'font-bold text-slate-900' : 'text-slate-700'}`}>{game.team1}</span>
+                          {game.ownClub ? <span className="w-16 text-center text-lg font-bold text-slate-700">{game.score1 ?? '–'}</span> : (
                           <input ref={el => { inputRefs.current[`${game.id}-s1`] = el }}
                             type="number" inputMode="numeric" min="0" max="99" className={scoreCls(t1wins)}
                             value={draft.s1} placeholder="–"
                             onChange={e => setDraft(game.id, 's1', e.target.value)}
                             onKeyDown={e => handleKey(e, game.id, 's1')}
                             onBlur={() => saveGame(game.id)} />
+                          )}
                         </div>
                         <div className="flex items-center gap-3 mt-1.5">
                           <span className={`flex-1 min-w-0 truncate text-sm ${t2wins ? 'font-bold text-slate-900' : 'text-slate-700'}`}>{game.team2}</span>
+                          {game.ownClub ? <span className="w-16 text-center text-lg font-bold text-slate-700">{game.score2 ?? '–'}</span> : (
                           <input ref={el => { inputRefs.current[`${game.id}-s2`] = el }}
                             type="number" inputMode="numeric" min="0" max="99" className={scoreCls(t2wins)}
                             value={draft.s2} placeholder="–"
                             onChange={e => setDraft(game.id, 's2', e.target.value)}
                             onKeyDown={e => handleKey(e, game.id, 's2')}
                             onBlur={() => saveGame(game.id)} />
+                          )}
                         </div>
+                        {game.ownClub ? (
+                          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500"><Lock size={12} className="flex-shrink-0" aria-hidden />{OWN_CLUB}</p>
+                        ) : (
                         <div className="flex items-center gap-3 mt-2">
                           <input className="flex-1 min-w-0 text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-300 text-slate-600"
                             value={draft.note} placeholder="Note…"
@@ -451,6 +468,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                             Final
                           </label>
                         </div>
+                        )}
                       </div>
                     )
                   })}
@@ -482,7 +500,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                           {isLiveGame(game) && (
                             <span className="inline-flex items-center gap-1.5 mt-1">
                               <a href={`/tournaments/${params.id}/games/${game.id}/scorekeeper`} className="text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 hover:bg-red-100">● Live{liveScores[game.id].periodLabel ? ` · ${liveScores[game.id].periodLabel}` : ''}{clockOf(game.id)} · {liveScores[game.id].score1}–{liveScores[game.id].score2}</a>
-                              <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>
+                              {!game.ownClub && <button onClick={() => stopLive(game.id)} className="text-[10px] font-semibold text-slate-500 hover:text-red-700 underline">Stop live</button>}
                             </span>
                           )}
                         </div>
@@ -490,6 +508,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                         <div className={`col-span-3 text-sm truncate ${t1wins ? 'font-bold text-slate-900' : 'text-slate-600'}`}>{game.team1}</div>
                         {/* Scores */}
                         <div className="col-span-2 flex items-center gap-1 justify-center">
+                          {game.ownClub ? <span className="text-sm font-bold text-slate-700">{isScored ? `${game.score1} – ${game.score2}` : '–'}</span> : (<>
                           <input ref={el => { inputRefs.current[`${game.id}-s1`] = el }}
                             type="number" min="0" max="99"
                             className={`w-12 text-center text-sm font-bold border rounded-lg px-1 py-1 focus:outline-none focus:ring-2 focus:ring-teal-400 ${t1wins ? 'border-emerald-300 bg-emerald-50' : 'border-slate-300'}`}
@@ -505,9 +524,15 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                             onChange={e => setDraft(game.id, 's2', e.target.value)}
                             onKeyDown={e => handleKey(e, game.id, 's2')}
                             onBlur={() => saveGame(game.id)} />
+                          </>)}
                         </div>
                         {/* Team 2 */}
                         <div className={`col-span-2 text-sm truncate ${t2wins ? 'font-bold text-slate-900' : 'text-slate-600'}`}>{game.team2}</div>
+                        {game.ownClub ? (
+                          <div className="col-span-2 flex items-center gap-1.5 text-[11px] leading-tight text-slate-500" title={OWN_CLUB}>
+                            <Lock size={12} className="flex-shrink-0" aria-hidden /><span>Your club · someone else posts this score</span>
+                          </div>
+                        ) : (<>
                         {/* Note */}
                         <div className="col-span-1">
                           <input className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-300 text-slate-600"
@@ -526,6 +551,7 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
                               className="w-4 h-4 accent-teal-600 cursor-pointer" />
                           )}
                         </div>
+                        </>)}
                       </div>
                     )
                   })}

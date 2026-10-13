@@ -8,6 +8,7 @@ import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { getIfNeeded, withIfNeeded, bracketMeta } from '@/lib/ifNeeded'
 import { refsLookup } from '@/lib/refRules'
 import { syncBracketPlaceholders } from '@/lib/bracketPlaceholders'
+import { ownClubTeams, isOwnClubGame } from '@/lib/ownClub'
 
 // Two audiences, two URLs:
 //   ?view=public  -> what the public schedule may show. Never includes staff
@@ -44,8 +45,12 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
         worker: who.role === 'field_director' ? redactWorker(a.worker, who.role, scope) : redactWorkerPay(a.worker, who.role, scope),
       })),
     }))
+    // Games this login's own club plays are marked: someone else posts those scores
+    // (lib/ownClub), and Post scores and Live scoring show them without the boxes.
+    const mine = await ownClubTeams(who.role, who.userId, params.id).catch(() => new Set<string>())
+    const marked = mine.size ? games.map(g => isOwnClubGame(mine, g) ? { ...g, ownClub: true } : g) : games
     const [ids, meta] = await Promise.all([getIfNeeded(params.id), bracketMeta(params.id)])
-    return NextResponse.json(withIfNeeded(games, ids, meta), { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json(withIfNeeded(marked, ids, meta), { headers: { 'Cache-Control': 'private, no-store' } })
   }
   const [games, vis, ifNeeded, meta] = await Promise.all([
     prisma.game.findMany({ where: { tournamentId: params.id }, orderBy }),

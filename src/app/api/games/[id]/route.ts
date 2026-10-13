@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff, isStaffRequest, eventGate } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest, eventGate, viewer } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { notifyFinal } from '@/lib/finalAlerts'
+import { ownClubTeams, isOwnClubGame, ownClubRefusal } from '@/lib/ownClub'
 
 // Middleware lets every /api/* request through, so the gate has to live here.
 // Without it this route rewrote or deleted any game by id with no login at all —
@@ -37,8 +38,14 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   }
   const touchesScore = b.score1 !== undefined || b.score2 !== undefined
   const before = touchesScore
-    ? await prisma.game.findUnique({ where: { id: params.id }, select: { score1: true, score2: true } })
+    ? await prisma.game.findUnique({ where: { id: params.id }, select: { score1: true, score2: true, tournamentId: true, team1: true, team2: true } })
     : null
+  // Never a game this login's own club plays (lib/ownClub). Only a real change
+  // counts: Post scores sends both boxes, and an unchanged score changes nothing.
+  const asScore = (v: unknown) => v === '' || v === null ? null : Number(v)
+  if (before && ((b.score1 !== undefined && asScore(b.score1) !== before.score1) || (b.score2 !== undefined && asScore(b.score2) !== before.score2))) {
+    const refused = await ownClubRefusal(gate, before.tournamentId, [before.team1, before.team2, b.team1, b.team2]); if (refused) return refused
+  }
   const updated = await prisma.game.update({ where:{id:params.id}, data:{
     // null and '' both mean "no score". Number(null) is 0, so the old ''-only check
     // turned the Scores page's empty box (it sends null) into a 0 -- filling in the
@@ -82,7 +89,13 @@ export async function DELETE(_: Request, { params }: { params:{id:string} }) {
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const game = await prisma.game.findUnique({ where: { id: params.id } })
   if (!game) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (await isStaffRequest()) return NextResponse.json(game)
+  if (await isStaffRequest()) {
+    // The scorekeeper page shows a game the viewer's own club plays without the
+    // controls: someone else keeps that score (lib/ownClub).
+    const who = await viewer()
+    const mine = await ownClubTeams(who.role, who.userId, game.tournamentId).catch(() => new Set<string>())
+    return NextResponse.json(isOwnClubGame(mine, game) ? { ...game, ownClub: true } : game)
+  }
   const [visible] = applyPublicView([game], await getPublicVisibility(game.tournamentId))
   if (!visible) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(visible)

@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Timer, Search, ChevronLeft } from 'lucide-react'
+import { Timer, Search, ChevronLeft, Lock } from 'lucide-react'
 
 interface Game {
   id: string; gameNumber: string; date: string; startTime: string
   division: string; location: string; team1: string; team2: string
   score1: number | null; score2: number | null; isCanceled: boolean
+  ownClub?: boolean   // the viewer's own club plays: someone else keeps score (lib/ownClub)
 }
 
 function fmt12(t: string) {
@@ -55,8 +56,8 @@ export default function LiveScoringPicker() {
       <div className="space-y-2">
         {filtered.map(g => {
           const scored = g.score1 != null && g.score2 != null
-          return (
-            <Link key={g.id} href={`/tournaments/${id}/games/${g.id}/scorekeeper`} className="block bg-white border border-slate-200 rounded-xl p-3 hover:border-teal-300">
+          const inner = (
+            <>
               <div className="flex items-center gap-2 text-xs text-slate-500 mb-0.5">
                 <span className="font-bold text-slate-700">{fmt12(g.startTime)}</span>
                 <span>·</span><span>{g.location || '—'}</span>
@@ -65,6 +66,18 @@ export default function LiveScoringPicker() {
               </div>
               <p className="text-sm font-semibold text-slate-800">{g.team1} <span className="text-slate-400 font-normal">vs</span> {g.team2}</p>
               <p className="text-xs text-slate-400">{g.division}</p>
+            </>
+          )
+          // Your own club's game: listed, not opened. Someone else keeps that score.
+          if (g.ownClub) return (
+            <div key={g.id} className="block bg-slate-50 border border-slate-200 rounded-xl p-3">
+              {inner}
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Lock size={12} className="flex-shrink-0" aria-hidden />Your club plays in this game, so someone else keeps score.</p>
+            </div>
+          )
+          return (
+            <Link key={g.id} href={`/tournaments/${id}/games/${g.id}/scorekeeper`} className="block bg-white border border-slate-200 rounded-xl p-3 hover:border-teal-300">
+              {inner}
             </Link>
           )
         })}

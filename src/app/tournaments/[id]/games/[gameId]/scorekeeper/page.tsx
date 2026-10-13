@@ -10,6 +10,7 @@ interface Game {
   id: string; tournamentId?: string; gameNumber: string; division: string; location: string
   team1: string; team2: string; score1: number | null; score2: number | null
   isChampionship: boolean; isCanceled: boolean
+  ownClub?: boolean   // the viewer's own club plays: someone else keeps score (lib/ownClub)
 }
 interface Penalty {
   id: string; team: 1 | 2; playerNum: string
@@ -181,6 +182,8 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     fetch(`/api/games/${params.gameId}`).then(r => r.json()).then((g: Game) => {
       const d = loadDefaults(g.tournamentId ?? tid)
       setGame(g); setDefaults(d)
+      // Your own club's game: nothing to restore or pick up, the page only says so.
+      if (g.ownClub) { setLoading(false); return }
       setScore1(g.score1 ?? 0); setScore2(g.score2 ?? 0)
       savedScores.current = { s1: g.score1 ?? 0, s2: g.score2 ?? 0 }
       setPeriodSecs(d.periodSecs); setClockMs(d.periodSecs * 1000)
@@ -684,6 +687,17 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
 
   if (loading || !game) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">Loading…</div>
+  )
+
+  // Someone else keeps score when the scorer's own club plays (Bo, Oct 13 2026; lib/ownClub).
+  if (game.ownClub) return (
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center px-6 text-center">
+      <p className="text-4xl mb-3" aria-hidden>🔒</p>
+      <h1 className="text-xl font-bold mb-1">Your club plays in this game</h1>
+      <p className="text-sm text-gray-300 mb-1">{game.team1} vs {game.team2}</p>
+      <p className="text-sm text-gray-400 max-w-xs mb-6">Someone else keeps score and posts the final, so nobody can question the result.</p>
+      <a href={`/tournaments/${tid}/scoring`} className="px-5 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm font-semibold text-gray-100">Pick another game</a>
+    </div>
   )
 
   return (

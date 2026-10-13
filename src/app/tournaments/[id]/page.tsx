@@ -13,7 +13,8 @@ import { useRole } from '@/lib/role-context'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number|null;worker:Worker }
-interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[] }
+interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[];ownClub?:boolean }
+// ownClub: the viewer's own club plays, so someone else posts the score (lib/ownClub).
 interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string }
 interface Availability { workerId:string;date:string;timeSlots:string }
 interface RosterEntry { workerId:string;gameTarget:number }
@@ -408,7 +409,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
   }
 
   async function saveScore(gameId:string,field:'score1'|'score2',val:string){
-    await fetch(`/api/games/${gameId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:val})})
+    const r=await fetch(`/api/games/${gameId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:val})}).catch(()=>null)
+    if(!r?.ok){const j=r?await r.json().catch(()=>null):null;toast.error(j?.error||'Could not save that score')}
     await load()
   }
   async function setRefCount(gameId:string,n:number){
@@ -1419,8 +1421,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
                             {game.isChampionship&&<span className="text-[9px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded-full shrink-0">★</span>}
                           </div>
                           <div className="mb-2 space-y-1">
-                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team1}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked} defaultValue={game.score1??''} onBlur={e=>saveScore(game.id,'score1',e.target.value)} placeholder="—"/></div>
-                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team2}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked} defaultValue={game.score2??''} onBlur={e=>saveScore(game.id,'score2',e.target.value)} placeholder="—"/></div>
+                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team1}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked||!!game.ownClub} title={game.ownClub?'Your club plays in this game, so someone else posts its score.':undefined} defaultValue={game.score1??''} onBlur={e=>saveScore(game.id,'score1',e.target.value)} placeholder="—"/></div>
+                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team2}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked||!!game.ownClub} title={game.ownClub?'Your club plays in this game, so someone else posts its score.':undefined} defaultValue={game.score2??''} onBlur={e=>saveScore(game.id,'score2',e.target.value)} placeholder="—"/></div>
                           </div>
                           <div className="space-y-0.5 pt-1" style={{borderTop:`1px solid ${dc.border}`}}>
                             <div className="flex items-center justify-between mb-1">

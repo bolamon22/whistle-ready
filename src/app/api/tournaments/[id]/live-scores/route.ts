@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 import { notifyGameMoment, pastHalftime } from '@/lib/finalAlerts'
+import { ownClubRefusal } from '@/lib/ownClub'
 
 // Live in-progress scores so parents can follow on the public page (no login).
 // Each game's live state is stored in AppSetting under key `liveScore:<gameId>`:
@@ -24,9 +24,6 @@ async function ensureTable() {
     appSettingTableEnsured = true
   } catch { /* ignore, will retry next request */ }
 }
-
-const EXTERNAL_ROLES = ['coach', 'parent', 'club_director']
-const isStaff = (role?: string) => !!role && !EXTERNAL_ROLES.includes(role)
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -59,15 +56,20 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    const role = (session?.user as any)?.role as string | undefined
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (!isStaff(role)) return NextResponse.json({ error: 'Staff only' }, { status: 403 })
+    const gate = await requireStaff(); if (!gate.ok) return gate.res
 
     await ensureTable()
     const body = await req.json().catch(() => ({}))
     const gameId = String(body.gameId || '').trim()
     if (!gameId) return NextResponse.json({ error: 'gameId required' }, { status: 400 })
+    // The game has to be at this event: a field director's login reaches only their
+    // own events' URLs (middleware), and the game id rides in the body. And someone
+    // else keeps score when the scorer's own club is playing (lib/ownClub).
+    const game = await prisma.game.findUnique({ where: { id: gameId }, select: { tournamentId: true, team1: true, team2: true } }).catch(() => null)
+    if (game) {
+      if (game.tournamentId !== params.id) return NextResponse.json({ error: 'That game is not at this event.' }, { status: 400 })
+      const refused = await ownClubRefusal(gate, game.tournamentId, [game.team1, game.team2]); if (refused) return refused
+    }
 
     const k = `liveScore:${gameId}`
     // What followers have already been told about this game (start/halftime),
