@@ -122,6 +122,8 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const [bulkSaving, setBulkSaving] = useState(false)
 
   const [expandedId, setExpandedId] = useState<string|null>(null)
+  // Training videos watched, per worker (api/training), for the Training column.
+  const [training, setTraining] = useState<Record<string,{watched:number;total:number}>>({})
   const [expandMode, setExpandMode] = useState<ExpandMode>('profile')
   const [editForm, setEditForm] = useState<Record<string,unknown>>({})
 
@@ -144,6 +146,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     for (const e of r) t2[e.workerId]=String(e.gameTarget)
     setTargets(t2)
     setLoading(false)
+    fetch(`/api/training?tournamentId=${params.id}`).then(x=>x.ok?x.json():null).then(d=>{if(d?.counts)setTraining(d.counts)}).catch(()=>{})
   }
   useEffect(()=>{load()},[])
 
@@ -540,6 +543,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('defaultRole')}>Roles {sortArrow('defaultRole')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('certLevel')}>Cert {sortArrow('certLevel')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('games')} title="Games assigned at this tournament (of the target, when one is set)">Games {sortArrow('games')}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide" title="Training videos watched, of the ones for their job">Training</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Contact</th>
                   <th className="px-4 py-3"/>
@@ -573,6 +577,11 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                         <span className={`text-sm font-bold tabular-nums ${gameCount[w.id]?'text-slate-800':'text-amber-600'}`}>{gamesLabel(w.id)}</span>
                       </td>
                       <td className="px-4 py-2">
+                        {training[w.id]
+                          ? <span className={`text-sm font-semibold tabular-nums ${training[w.id].watched>=training[w.id].total?'text-emerald-700':training[w.id].watched?'text-slate-700':'text-amber-600'}`}>{training[w.id].watched}/{training[w.id].total}</span>
+                          : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-2">
                         <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}</span>
                         {w.payHandle && <div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}
                       </td>
@@ -591,14 +600,14 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     {/* Profile panel */}
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
-                        <td colSpan={8} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
+                        <td colSpan={9} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
                       </tr>
                     )}
 
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={8} className="px-6 py-5 bg-teal-50/40 border-b border-slate-200">
+                        <td colSpan={9} className="px-6 py-5 bg-teal-50/40 border-b border-slate-200">
                           <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving}/>
                         </td>
                       </tr>
