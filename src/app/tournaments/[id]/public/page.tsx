@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo, useContext, createContext, Fragment } from 'react'
+import { useEffect, useState, useMemo, useCallback, useContext, createContext, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
 import LiveTicker from '@/components/LiveTicker'
@@ -148,7 +148,7 @@ function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,a
             </div>
           ) : (
             <div key={s.team} className="flex flex-col items-center py-4 px-3 gap-2 w-full">
-              <button onClick={()=>onTeamClick(s.team)} className="flex flex-col items-center gap-2 w-full rounded-lg hover:bg-teal-50 transition-colors cursor-pointer py-1" title={`View ${s.team} schedule`}>
+              <button onClick={()=>onTeamClick(s.team)} className="flex flex-col items-center gap-2 w-full rounded-lg hover:bg-teal-50 transition-colors cursor-pointer py-1" title={`View ${s.team}`}>
                 <TeamAvatar name={s.team}/>
                 <div className="text-center">
                   <div className="text-xs text-slate-400 mb-0.5">{i+1}</div>
@@ -225,12 +225,161 @@ function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,a
 
 type DivTab = 'standings'|'schedule'|'bracket'
 
+// Bracket games are stored as W-B3 / L-B3 / Seed 2 until staff fill the names in.
+// `sides(g)` gives the two real teams where the scores and the bracket's seeds
+// already decide them (null where they don't yet); `bkOf` is each B<n> game's
+// place in its bracket. Shared by the team sheet and the schedule's team filter.
+function bracketResolver(divGames:Game[],bracketList:BkBracket[]) {
+  const byNum=new Map(divGames.map(g=>[(g.gameNumber||'').toUpperCase(),g]))
+  const seedName:Record<string,{1?:string;2?:string}>={}
+  // Each schedule game B<n>'s place in the bracket: its seeds, and its round, counted
+  // back from the final (isChampionship marks the final only).
+  const bkOf:Record<string,{section:string;round:number;label:string|null;max:number}>={}
+  bracketList.forEach(b=>{const off=b.numberOffset??0;const max=Math.max(0,...(b.games||[]).filter(bg=>bg.section==='winners'||bg.section==='championship').map(bg=>bg.round));(b.games||[]).forEach(bg=>{const sd=(src:string)=>src&&src.startsWith('seed:')?(b.seeds?.[src.slice(5)]||undefined):undefined;const k=`B${bg.gameNumber+off}`;seedName[k]={1:sd(bg.team1Source),2:sd(bg.team2Source)};bkOf[k]={section:bg.section,round:bg.round,label:bg.label,max}})})
+  const memo=new Map<string,[string|null,string|null]>()
+  const sides=(g:Game):[string|null,string|null]=>{
+    if(memo.has(g.id)) return memo.get(g.id)!
+    memo.set(g.id,[null,null])
+    const one=(name:string,i:1|2):string|null=>{
+      if(name&&!isPlaceholderTeam(name)) return name
+      const m=(name||'').trim().match(/^(W|L|Winner|Loser)[-\s]+B(\d+)$/i)
+      if(m){ const src=byNum.get(`B${m[2]}`); if(src&&src.score1!=null&&src.score2!=null&&src.score1!==src.score2){ const [a,b]=sides(src); return (src.score1>src.score2)===(m[1][0].toUpperCase()==='W')?a:b } return null }
+      return seedName[(g.gameNumber||'').toUpperCase()]?.[i]||null
+    }
+    const r:[string|null,string|null]=[one(g.team1,1),one(g.team2,2)]
+    memo.set(g.id,r); return r
+  }
+  return {sides,bkOf}
+}
+
+// Team sheet (Bo, Oct 12 2026: approved redesign, "Phone: team sheet" on the
+// Public Event Pages Redesign canvas). Tapping a team in the standings or on a
+// schedule card opens one place with its record, rank, next game, where a bracket
+// win (or loss) sends it, and every game it plays. A side panel on desktop, a
+// bottom sheet on phones. Bracket games are stored as W-B3 / Seed 2 until staff
+// fill the names in, so the sheet resolves those from scores and bracket seeds --
+// otherwise a team that just won its semifinal would show no next game.
+function TeamSheet({division,team,divGames,pool,poolRows,overallRows,bracketList,following,onFollow,onClose,onShowSchedule,tournamentId}:{division:string;team:string;divGames:Game[];pool:string;poolRows:Standing[]|null;overallRows:Standing[]|null;bracketList:BkBracket[];following:boolean;onFollow:()=>void;onClose:()=>void;onShowSchedule:()=>void;tournamentId:string}) {
+  const logos=useContext(LogosContext)
+  useEffect(()=>{
+    const k=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()}
+    window.addEventListener('keydown',k)
+    const prev=document.body.style.overflow; document.body.style.overflow='hidden'
+    return ()=>{window.removeEventListener('keydown',k);document.body.style.overflow=prev}
+  },[onClose])
+  const t12=(t:string)=>{ const [h,m]=(t||'').split(':').map(Number); if(isNaN(h)) return t||'TBD'; return `${h%12||12}:${String(m||0).padStart(2,'0')} ${h>=12?'PM':'AM'}` }
+  const dayShort=(d:string)=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short'}):''
+  const field=(g:Game)=>(g.location||'').split(' - ').pop()||g.location||'TBD'
+  const pretty=(n:string)=>(n||'TBD').replace(/^W-B(\d+)$/i,'Winner B$1').replace(/^L-B(\d+)$/i,'Loser B$1')
+  const {sides,bkOf}=bracketResolver(divGames,bracketList)
+  const ms=(g:Game)=>parseStartMs(g.date,g.startTime)||0
+  const now=Date.now()
+  const isFinal=(g:Game)=>g.score1!=null&&g.score2!=null
+  const isLive=(g:Game)=>{ if(isFinal(g)) return false; const st=parseStartMs(g.date,g.startTime); return st!=null&&now>=st&&now<=st+90*60000 }
+  const mine=divGames.map(g=>{const [a,b]=sides(g); return a===team?{g,us:1 as const,opp:b??pretty(g.team2)}:b===team?{g,us:2 as const,opp:a??pretty(g.team1)}:null})
+    .filter((x):x is {g:Game;us:1|2;opp:string}=>!!x).sort((x,y)=>x.g.date!==y.g.date?(x.g.date<y.g.date?-1:1):ms(x.g)-ms(y.g))
+  const next=mine.find(x=>!isFinal(x.g))
+  // Where the next bracket game leads: the game whose slot reads W-B<n> / L-B<n>.
+  const fedBy=(num:string,kind:'W'|'L')=>divGames.find(g=>[g.team1,g.team2].some(n=>{const m=(n||'').trim().match(/^(W|L|Winner|Loser)[-\s]+B(\d+)$/i);return !!m&&m[1][0].toUpperCase()===kind&&`B${m[2]}`===num.toUpperCase()}))
+  const stepsToFinal=(g:Game):number=>{let d=0,cur:Game|undefined=g;while(cur&&!cur.isChampionship&&d<8){cur=fedBy(cur.gameNumber,'W');d++}return cur?.isChampionship?d:-1}
+  const roundName=(g:Game)=>{
+    const k=bkOf[(g.gameNumber||'').toUpperCase()]
+    const d=k?(k.section==='championship'?0:k.section==='winners'?k.max-k.round:-2):stepsToFinal(g)
+    return d===0?'championship':d===1?'semifinal':d===2?'quarterfinal':d===-2?(k?.label||'bracket game'):'next round'
+  }
+  const tagOf=(g:Game)=>{ if(g.pool) return poolLabel(g.pool); if(!/^B\d+$/i.test(g.gameNumber||'')) return g.isChampionship?'Championship':''; const r=roundName(g); return r==='next round'?'Bracket':r.charAt(0).toUpperCase()+r.slice(1) }
+  let ifWin='',ifLose=''
+  if(next&&/^B\d+$/i.test(next.g.gameNumber||'')){
+    const w=fedBy(next.g.gameNumber,'W'), l=fedBy(next.g.gameNumber,'L')
+    if(w) ifWin=`Win and play the ${roundName(w)}, ${dayShort(w.date)} ${t12(w.startTime)} on ${field(w)}.`
+    if(l) ifLose=`Lose and play ${(l.gameNumber||'').toUpperCase()}, ${dayShort(l.date)} ${t12(l.startTime)} on ${field(l)}.`
+    else if(w) ifLose='Lose and the tournament ends here.'
+  }
+  const pr=poolRows?.find(r=>r.team===team)
+  const prRank=poolRows?poolRows.findIndex(r=>r.team===team)+1:0
+  const ovRank=overallRows?overallRows.findIndex(r=>r.team===team)+1:0
+  const seeded=bracketList.map(b=>{const n=Object.entries(b.seeds||{}).find(([,t])=>t===team)?.[0];return n?{n,flight:bracketList.length>1?(b.flight||''):''}:null}).find(Boolean)
+  const played=pr?pr.w+pr.l+pr.t:0
+  const rec=pr?`${pr.w}–${pr.l}${pr.t?`–${pr.t}`:''}`:'0–0'
+  const gd=pr?pr.gf-pr.ga:0
+  const line=[played?`${rec} in pool play`:'Pool play not started',seeded?`${seeded.flight?`Flight ${seeded.flight} `:''}seed ${seeded.n}`:ovRank&&played?`#${ovRank} of ${overallRows!.length} in division`:''].filter(Boolean).join(' · ')
+  const stats=[{v:rec,k:'Record'},{v:`${gd>0?'+':''}${gd}`,k:'Goal diff'},{v:prRank?`#${prRank}`:'—',k:pool?`${poolLabel(pool)} rank`:'Rank'}]
+  return (
+    <>
+      <button type="button" onClick={onClose} aria-label="Close team" className="fixed inset-0 z-[70] bg-slate-900/45 cursor-default"/>
+      <aside role="dialog" aria-modal="true" aria-label={`${team} details`} data-testid="team-sheet"
+        className="fixed z-[71] left-0 right-0 bottom-0 max-h-[88vh] rounded-t-[20px] sm:left-auto sm:top-0 sm:w-[420px] sm:max-h-none sm:rounded-tr-none sm:rounded-l-[20px] bg-white overflow-y-auto shadow-2xl flex flex-col">
+        <div className="text-white px-[18px] pt-[18px] pb-5 flex flex-col gap-3.5" style={{background:'linear-gradient(135deg,#0B1F3A 0%,#0E7490 55%,#0B1F3A 100%)'}}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold tracking-[0.8px] uppercase text-teal-200 truncate">{division}{pool?` · ${poolLabel(pool)}`:''}</span>
+            <button type="button" onClick={onClose} aria-label="Close" className="w-11 h-11 rounded-full border border-white/30 flex items-center justify-center hover:bg-white/10 flex-shrink-0"><X size={18}/></button>
+          </div>
+          <div className="flex items-center gap-3.5">
+            {logos[team]
+              ? <div className="w-14 h-14 rounded-full overflow-hidden bg-white border-2 border-white/60 flex-shrink-0"><img src={logos[team]} alt="" className="w-full h-full object-contain"/></div>
+              : <div className="rounded-full border-2 border-white/60 flex-shrink-0"><TeamAvatar name={team} size="md"/></div>}
+            <div className="flex flex-col gap-1 min-w-0">
+              <h2 className="m-0 text-2xl font-extrabold leading-tight break-words">{team}</h2>
+              <span className="text-[13px] text-teal-100">{line}</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {stats.map(st=>(
+              <div key={st.k} className="bg-white/[0.08] border border-white/15 rounded-2xl px-3 py-2.5 flex flex-col gap-0.5 min-w-0">
+                <span className="text-xl font-extrabold">{st.v}</span>
+                <span className="text-xs text-teal-100 truncate">{st.k}</span>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={onFollow} aria-pressed={following}
+            className={`min-h-[44px] rounded-full flex items-center justify-center gap-2 text-sm font-bold transition-colors ${following?'bg-white/10 text-white border border-white/40 hover:bg-white/20':'bg-white text-[#0B1F3A] border border-white hover:bg-teal-50'}`}>
+            <Star size={18} fill={following?'currentColor':'none'}/>{following?'Following · alerts on':'Follow for game alerts'}
+          </button>
+        </div>
+        <div className="px-[18px] pt-4 pb-7 flex flex-col gap-3.5">
+          {next&&(
+            <div className={`rounded-2xl p-3.5 flex flex-col gap-1 border ${isLive(next.g)?'bg-red-50 border-red-200':'bg-teal-50 border-teal-100'}`}>
+              <span className={`text-[10px] font-bold tracking-[0.8px] uppercase ${isLive(next.g)?'text-red-700':'text-teal-700'}`}>{isLive(next.g)?'Playing now':'Next game'}</span>
+              <span className="text-base font-extrabold text-slate-900">{tagOf(next.g)?`${tagOf(next.g)} vs `:'vs '}{next.opp}</span>
+              <span className="text-[13px] text-slate-700">{dayShort(next.g.date)} {t12(next.g.startTime)} · {field(next.g)}</span>
+              {ifWin&&<span className="text-xs text-slate-600 mt-1">{ifWin}</span>}
+              {ifLose&&<span className="text-xs text-slate-500">{ifLose}</span>}
+            </div>
+          )}
+          <div className="flex items-center justify-between mt-1">
+            <h3 className="m-0 text-[13px] font-bold tracking-[0.6px] uppercase text-slate-600">Games</h3>
+            <button type="button" onClick={onShowSchedule} className="text-[13px] font-semibold text-teal-700 hover:underline">Show on schedule ›</button>
+          </div>
+          {mine.length===0
+            ? <p className="text-sm text-slate-500">No games scheduled yet.</p>
+            : <div className="flex flex-col">{mine.map(({g,us,opp})=>{
+                const fin=isFinal(g), live=isLive(g)
+                const my=us===1?g.score1:g.score2, op=us===1?g.score2:g.score1
+                const res=live?'LIVE':fin?(my!>op!?'W':my!<op!?'L':'T'):'—'
+                const rc=live?'bg-red-100 text-red-700 text-[9px]':res==='W'?'bg-teal-600 text-white':res==='L'||res==='T'?'bg-slate-200 text-slate-700':'bg-slate-100 text-slate-400'
+                return (
+                  <Link key={g.id} href={`/tournaments/${tournamentId}/public/games/${g.id}`} className="grid items-center gap-3 py-2.5 border-b border-slate-200 hover:bg-slate-50 -mx-2 px-2 rounded-lg" style={{gridTemplateColumns:'34px minmax(0,1fr) auto'}}>
+                    <span className={`w-[34px] h-[34px] rounded-full text-[13px] font-extrabold flex items-center justify-center ${rc}`}>{res}</span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-sm font-bold text-slate-900 truncate">vs {opp}</span>
+                      <span className="text-xs text-slate-600 truncate">{dayShort(g.date)} {t12(g.startTime)} · {field(g)}{tagOf(g)?` · ${tagOf(g)}`:''}</span>
+                    </span>
+                    <span className="text-[15px] font-extrabold text-slate-900">{fin?`${my}–${op}`:''}</span>
+                  </Link>)})}
+              </div>}
+        </div>
+      </aside>
+    </>
+  )
+}
+
 function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,divTiebreakers=tiebreakers,advanceBy='division',scheduleLive=true,rosters=[],notes,poolOnly=false}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];divTiebreakers?:string[];advanceBy?:'division'|'pool';scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean}) {
   // Every team on this view plays in `division`; follows are per (division, team).
   const followed=(team:string)=>isFollowed(division,team)
   const onFollow=(team:string)=>toggleFollow(division,team)
   const [divTab,setDivTab]=useState<DivTab>('standings')
   const [selectedTeam,setSelectedTeam]=useState<string|null>(null)
+  const [sheetTeam,setSheetTeam]=useState<string|null>(null)
   const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'|'mine'|'live'>('all')
   const [schedDay,setSchedDay]=useState('')
   const [schedGroup,setSchedGroup]=useState<'time'|'field'>('time')
@@ -244,7 +393,8 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
       setAdvanceCount(fl.reduce((acc:number,x:any)=>acc+(x.teamCount||0),0))
     }).catch(()=>{setBracketList([]);setAdvanceCount(0)})
   },[tournamentId,division])
-  const handleTeamClick=(team:string)=>{if(!scheduleLive)return;setSelectedTeam(team);setDivTab('schedule')}
+  const handleTeamClick=(team:string)=>{if(!scheduleLive)return;setSheetTeam(team)}
+  const closeSheet=useCallback(()=>setSheetTeam(null),[])
   const divGames=games.filter(g=>g.division===division&&!g.isCanceled)
   // Pools come from what staff assigned, so a division shows its pools before a
   // single game exists -- and still shows them if the schedule is wiped. Only a
@@ -277,6 +427,11 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
   // with "Not scheduled" captions.
   const scheduleGames=divGames.sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)
   const bracketGames=divGames
+  // Who really plays each game, bracket placeholders resolved where scores and seeds
+  // decide them: the team filter and the team sheet go by this, so a team's Sunday
+  // bracket games (still stored as Seed 1 / W-B1) show up under its name.
+  const {sides:teamsOf}=bracketResolver(divGames,bracketList)
+  const playsIn=(g:Game,team:string)=>g.team1===team||g.team2===team||teamsOf(g).includes(team)
 
   // Before the schedule is published there is only the roster, so no tab bar
   // at all -- it used to show a lone "Standings" tab over a division with no games.
@@ -366,7 +521,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
             ? <span className="w-7 h-7 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 text-[10px] font-bold flex items-center justify-center flex-shrink-0">?</span>
             : <TeamAvatar name={name} size="sm"/>
         const downloadIcs = (g:Game)=>{ const st=parseStartMs(g.date,g.startTime); if(st==null) return; const fmt=(ms:number)=>new Date(ms).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z'; const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Whistle Ready//EN','BEGIN:VEVENT','UID:'+g.id+'@whistleready','DTSTART:'+fmt(st),'DTEND:'+fmt(st+3600000),'SUMMARY:'+g.team1+' vs '+g.team2,'LOCATION:'+(g.location||''),'DESCRIPTION:'+division,'END:VEVENT','END:VCALENDAR'].join('\r\n'); const blob=new Blob([ics],{type:'text/calendar'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=(g.team1+'-vs-'+g.team2).replace(/[^a-z0-9]+/gi,'-')+'.ics'; a.click(); URL.revokeObjectURL(url) }
-        const mineG = (g:Game)=>isFollowed(g.division,g.team1)||isFollowed(g.division,g.team2)
+        const mineG = (g:Game)=>{ const [a,b]=teamsOf(g); return isFollowed(g.division,a??g.team1)||isFollowed(g.division,b??g.team2) }
         const upNext = anyFollowed ? all.find(g=>g.score1==null && mineG(g)) : null
         const days = [...new Set(all.map(g=>g.date).filter(Boolean))].sort()
         const todayIso = new Date().toLocaleDateString('en-CA')
@@ -374,7 +529,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
         const day = schedDay && days.includes(schedDay) ? schedDay : autoDay
         const dayGames = all.filter(g=>g.date===day)
         const shown = dayGames.filter(g=>{
-          if(selectedTeam && g.team1!==selectedTeam && g.team2!==selectedTeam) return false
+          if(selectedTeam && !playsIn(g,selectedTeam)) return false
           const hs=g.score1!=null&&g.score2!=null
           if(schedStatus==='final') return hs
           if(schedStatus==='live') return isLive(g)
@@ -391,11 +546,12 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
           const mine=mineG(g)
           const pill=hs?{t:'Final',c:'bg-slate-100 text-slate-600'}:live?{t:'Live',c:'bg-red-100 text-red-700'}:g.ifNeeded?{t:'If needed',c:'bg-violet-50 text-violet-700'}:{t:t12(g.startTime),c:'bg-teal-50 text-teal-700'}
           const tag=g.pool?poolLabel(g.pool):g.isChampionship?'Championship':/^B\d+$/i.test(g.gameNumber)?'Bracket':''
+          const [n1,n2]=teamsOf(g)
           const teamRow=(name:string,score:number|null,win:boolean,lose:boolean)=>(
             <div className="flex items-center gap-2.5 min-h-[40px]">
               {crest(name)}
               {realTeams.has(name)
-                ? <button onClick={()=>setSelectedTeam(selectedTeam===name?null:name)} className={`flex-1 min-w-0 truncate text-left text-[14px] hover:underline ${lose?'text-slate-500':win?'font-bold text-slate-900':'font-semibold text-slate-800'} ${isFollowed(g.division,name)?'!text-teal-700':''}`}>{name}</button>
+                ? <button onClick={()=>setSheetTeam(name)} className={`flex-1 min-w-0 truncate text-left text-[14px] hover:underline ${lose?'text-slate-500':win?'font-bold text-slate-900':'font-semibold text-slate-800'} ${isFollowed(g.division,name)?'!text-teal-700':''}`}>{name}</button>
                 : <span className={`flex-1 min-w-0 truncate text-[14px] ${isPlaceholder(name)?'italic text-slate-400':'font-semibold text-slate-800'}`}>{pretty(name)}</span>}
               {realTeams.has(name) && <FollowButton team={name} following={isFollowed(g.division,name)} onToggle={t=>toggleFollow(g.division,t)} compact />}
               {hs && <span className={`text-[17px] font-extrabold min-w-[22px] text-right ${lose?'text-slate-400':'text-slate-900'}`}>{score}</span>}
@@ -407,9 +563,9 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
                 <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${pill.c}`}>{live?'● ':''}{pill.t}</span>
                 <span className="flex items-center gap-1 text-xs text-slate-500 truncate"><MapPin size={13} className="flex-shrink-0"/>{field(g)}</span>
               </div>
-              {teamRow(g.team1,g.score1,t1w,t2w)}
+              {teamRow(n1??g.team1,g.score1,t1w,t2w)}
               <div className="h-px bg-slate-100"/>
-              {teamRow(g.team2,g.score2,t2w,t1w)}
+              {teamRow(n2??g.team2,g.score2,t2w,t1w)}
               <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 pt-0.5">
                 <span className={`font-bold ${g.isChampionship?'text-teal-700':''}`}>{tag}</span>
                 <span className="flex items-center gap-3">
@@ -452,7 +608,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
             {upNext && (
               <div className="bg-teal-50 border border-teal-200 rounded-2xl px-3.5 py-2.5 flex items-center gap-2">
                 <Clock size={15} className="text-teal-600 flex-shrink-0"/>
-                <span className="text-[13px] text-teal-800 truncate"><b>Up next</b> · {fmtDayHeader(upNext.date).split(',')[0]} {t12(upNext.startTime)} · {upNext.team1} vs {upNext.team2} · {field(upNext)}</span>
+                <span className="text-[13px] text-teal-800 truncate"><b>Up next</b> · {fmtDayHeader(upNext.date).split(',')[0]} {t12(upNext.startTime)} · {pretty(teamsOf(upNext)[0]??upNext.team1)} vs {pretty(teamsOf(upNext)[1]??upNext.team2)} · {field(upNext)}</span>
               </div>
             )}
             {schedGroup==='time' ? (
@@ -477,13 +633,14 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
                     <Fragment key={t}>
                       <span className="text-[13px] font-extrabold pt-2.5">{t12(t)}</span>
                       {fields.map(f=>{ const g=dayGames.find(x=>(x.startTime||'')===t&&field(x)===f); if(!g) return <span key={f} className="min-h-[70px] rounded-xl bg-slate-50 border border-dashed border-slate-200"/>
-                        const hs=g.score1!=null&&g.score2!=null, live=isLive(g), dim=(selectedTeam&&g.team1!==selectedTeam&&g.team2!==selectedTeam)||(schedStatus==='mine'&&!mineG(g))
+                        const hs=g.score1!=null&&g.score2!=null, live=isLive(g), dim=(selectedTeam&&!playsIn(g,selectedTeam))||(schedStatus==='mine'&&!mineG(g))
                         const t1w=hs&&g.score1!>g.score2!, t2w=hs&&g.score2!>g.score1!
+                        const [n1,n2]=teamsOf(g), a=n1??g.team1, b=n2??g.team2
                         return (
                           <Link key={f} href={`/tournaments/${tournamentId}/public/games/${g.id}`} className={`min-h-[70px] rounded-xl px-2.5 py-2 flex flex-col gap-1 border transition-opacity ${live?'bg-red-50 border-red-200':mineG(g)?'bg-white border-teal-300':'bg-white border-slate-200 hover:border-slate-300'} ${dim?'opacity-40':''}`}>
                             <span className="flex justify-between text-[10px] font-bold text-slate-400"><span>{g.gameNumber}{g.pool?` · ${poolLabel(g.pool)}`:''}</span><span className={live?'text-red-700':''}>{live?'LIVE':hs?'FINAL':''}</span></span>
-                            <span className="flex justify-between gap-1.5 text-[12.5px]"><span className={`truncate ${t1w?'font-bold text-slate-900':isPlaceholder(g.team1)?'italic text-slate-400':'text-slate-700'}`}>{pretty(g.team1)}</span>{hs&&<b>{g.score1}</b>}</span>
-                            <span className="flex justify-between gap-1.5 text-[12.5px]"><span className={`truncate ${t2w?'font-bold text-slate-900':isPlaceholder(g.team2)?'italic text-slate-400':'text-slate-700'}`}>{pretty(g.team2)}</span>{hs&&<b>{g.score2}</b>}</span>
+                            <span className="flex justify-between gap-1.5 text-[12.5px]"><span className={`truncate ${t1w?'font-bold text-slate-900':isPlaceholder(a)?'italic text-slate-400':'text-slate-700'}`}>{pretty(a)}</span>{hs&&<b>{g.score1}</b>}</span>
+                            <span className="flex justify-between gap-1.5 text-[12.5px]"><span className={`truncate ${t2w?'font-bold text-slate-900':isPlaceholder(b)?'italic text-slate-400':'text-slate-700'}`}>{pretty(b)}</span>{hs&&<b>{g.score2}</b>}</span>
                           </Link>)})}
                     </Fragment>
                   ))}
@@ -497,6 +654,15 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
       {scheduleLive && divTab==='bracket' && (
         <BracketChart bracketList={bracketList} scheduledGames={bracketGames} poolOnly={poolOnly}/>
       )}
+
+      {sheetTeam && (()=>{
+        const pool=realRosters.find(r=>r.teams.includes(sheetTeam))?.name||divGames.find(g=>g.pool&&(g.team1===sheetTeam||g.team2===sheetTeam))?.pool||''
+        return <TeamSheet division={division} team={sheetTeam} divGames={divGames} pool={pool}
+          poolRows={pool?calcStandings(games,division,pool,tiebreakers,rosterFor(pool)):calcStandings(games,division,undefined,tiebreakers,divRoster)}
+          overallRows={byDivision?calcStandings(poolPlay,division,undefined,divTiebreakers,divRoster):null}
+          bracketList={bracketList} following={followed(sheetTeam)} onFollow={()=>onFollow(sheetTeam)} onClose={closeSheet}
+          onShowSchedule={()=>{const tg=divGames.filter(g=>playsIn(g,sheetTeam));const nx=tg.find(g=>g.score1==null)||tg[tg.length-1];if(nx)setSchedDay(nx.date);setSelectedTeam(sheetTeam);setSchedStatus('all');setDivTab('schedule');setSheetTeam(null)}} tournamentId={tournamentId}/>
+      })()}
     </div>
   )
 }
