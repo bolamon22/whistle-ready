@@ -19,6 +19,12 @@ export default function SuperAdminBar() {
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const dropRef = useRef<HTMLDivElement>(null)
+  // Back to the last page outside /admin (NavBar remembers it), so opening Users
+  // from a tournament doesn't strand you here.
+  const [back, setBack] = useState('/')
+  useEffect(() => {
+    try { const p = sessionStorage.getItem('wr-last-app-path'); if (p && p.startsWith('/') && !p.startsWith('//')) setBack(p) } catch { /* storage off */ }
+  }, [])
 
   useEffect(() => {
     fetch('/api/admin/orgs').then(r => r.json()).then(d => setOrgs(Array.isArray(d) ? d : []))
@@ -58,21 +64,26 @@ export default function SuperAdminBar() {
   ]
 
   return (
-    <div className="w-full bg-[#0a0a1a] border-b border-white/10 text-white text-sm">
-      <div className="max-w-7xl mx-auto px-4 flex items-center gap-6 h-11">
+    <div className="w-full bg-[#0a0a1a] rounded-xl text-white text-sm">
+      <div className="max-w-7xl mx-auto px-4 flex items-center gap-3 sm:gap-6 h-11">
+
+        <Link href={back} title="Back to the page you came from"
+          className="shrink-0 px-2 py-1 rounded text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+          ← Back
+        </Link>
 
         {/* Brand */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="hidden md:flex items-center gap-2 shrink-0">
           <span className="text-xs font-black tracking-widest text-white/40 uppercase">Whistle Ready</span>
           <span className="w-px h-4 bg-white/20" />
           <span className="text-xs font-semibold text-white/80">Super Admin</span>
         </div>
 
         {/* Nav links */}
-        <nav className="flex items-center gap-1 flex-1">
+        <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
           {navLinks.map(l => (
             <Link key={l.href} href={l.href}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+              className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
                 (l.href === '/admin' ? pathname === '/admin' : pathname.startsWith(l.href))
                   ? 'bg-white/15 text-white'
                   : 'text-white/50 hover:text-white hover:bg-white/10'

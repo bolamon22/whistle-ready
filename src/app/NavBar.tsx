@@ -76,6 +76,11 @@ export default function NavBar() {
 
   // Close the phone menu whenever the route changes
   useEffect(() => { setMenuOpen(false) }, [pathname])
+  // The last page outside /admin, for the admin bar's Back link (SuperAdminBar).
+  useEffect(() => {
+    if (!pathname || pathname.startsWith('/admin')) return
+    try { sessionStorage.setItem('wr-last-app-path', pathname + window.location.search) } catch { /* storage off */ }
+  }, [pathname])
 
   // Light/Dark lives in <ThemeShell> (localStorage + body class); the phone menu
   // flips the same key and both sides sync over a 'gd-theme' window event.
@@ -121,8 +126,10 @@ export default function NavBar() {
     window.dispatchEvent(new CustomEvent('gd-theme', { detail: { dark: next } }))
   }
 
-  // Admin pages use SuperAdminBar as sole header
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/o/')) return null
+  // Admin pages keep this header, with the admin bar (SuperAdminBar) under it. It used
+  // to be their only header, so opening Users left no way back to the app (Bo, Oct 13
+  // 2026). The public org website (/o/) has its own.
+  if (pathname?.startsWith('/o/')) return null
   // Public pay-by-link pages present as the tournament org (Sunshine Events Group), not Whistle Ready.
   if (pathname?.startsWith('/pay')) return null
 

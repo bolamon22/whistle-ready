@@ -19,9 +19,9 @@ export function isStaffThemeRoute(pathname: string) {
 export default function ThemeShell() {
   const pathname = usePathname() || ''
   const isStaff = isStaffThemeRoute(pathname)
-  // /admin has no <NavBar> (SuperAdminBar instead), so keep the floating button there at every width.
-  // Elsewhere the button only shows at xl+, where NavBar has no compact menu (its Appearance switch covers smaller screens).
-  const fabOnPhones = pathname.startsWith('/admin')
+  // The button only shows at xl+, where NavBar has no compact menu (its Appearance switch
+  // covers smaller screens). /admin used to have no NavBar and showed it at every width.
+  const fabOnPhones = false
   const [dark, setDark] = useState(false)
 
   useEffect(() => {

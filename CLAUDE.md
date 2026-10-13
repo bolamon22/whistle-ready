@@ -174,6 +174,14 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Users page filters and the admin header (Oct 13).** `GET /api/admin/users` adds per login: `staff` (the
+  Staff Pool record with the same email: oldest record's id, jobs merged across duplicates, gender, count),
+  `clubs` (club names from ClubRegAccess), `players` (ParentWaiverLink count). The page shows those under the
+  name and has Who chips (Office = admin/director/scheduler/assigner; Staff = staff and any other role; Clubs &
+  coaches; Parents), Job chips under Staff (including No staff record), a Last on filter (visits recorded from
+  Oct 12) and sort; search matches jobs and club names. NavBar no longer hides on /admin (only /o/), so admin
+  pages keep the app header with SuperAdminBar under it; its **← Back** goes to the last page outside /admin
+  (sessionStorage `wr-last-app-path`, written by NavBar).
 - **Assigner pay groups (Oct 13).** Staff pay is split into groups (`lib/payGroups.ts`, pure): `boys` and
   `girls` (ref slots, by the game's division through `gameGender`; a division that says neither follows the
   ref's own gender), `scorekeepers`, and `ops` (field ops, trainers, hourly time). Each assigner's groups are
