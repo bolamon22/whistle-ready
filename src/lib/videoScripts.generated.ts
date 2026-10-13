@@ -213,6 +213,22 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
+  "trainer-call": {
+    "title": "Answer a trainer call",
+    "intro": "Answer a trainer call, in Whistle Ready.",
+    "lines": [
+      "First, turn on game-day alerts, so a call for a trainer buzzes your phone. They are on the Field Request board.",
+      "Medical is already on for trainers. Tap Turn on alerts. On an iPhone, the app first shows you how to add it to your Home Screen.",
+      "Tap Send a test, and make sure it pops up on your phone.",
+      "When a field needs you, your phone buzzes with the field, how urgent it is, and what happened.",
+      "Tap the alert to open the Field Request board.",
+      "Tap Respond. Whoever asked gets a buzz that you are on the way.",
+      "Everyone on staff can see who is responding. Tapped it by mistake? Tap it again to undo.",
+      "If your alerts are off, the request comes by email instead, but alerts are much faster.",
+      "Once the player is cared for, open Incidents and log the injury. There is a video for that too."
+    ],
+    "outro": "Whistle Ready. Game day, run from your phone."
+  },
   "asg-home": {
     "title": "Your assigner home",
     "intro": "Whistle Ready assigner training. Your assigner home.",

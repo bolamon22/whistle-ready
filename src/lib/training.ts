@@ -21,6 +21,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'checklist', num: '09', title: 'The setup checklist', blurb: 'Check off setup items and add your own.', secs: 33 },
   { id: 'directory', num: '10', title: 'Find and call any staff member', blurb: 'Search the staff list, then call or text.', secs: 38 },
   { id: 'injury-report', num: '11', title: 'Log an injury', blurb: 'Who was hurt, a suspected concussion, treatment, parent told, follow-ups and the injury log.', secs: 73 },
+  { id: 'trainer-call', num: '12', title: 'Answer a trainer call', blurb: 'Turn on game-day alerts, get the call, tap Respond, then log the injury.', secs: 57 },
   { id: 'ref-games', num: 'R1', series: 'ref', title: 'Your games as a ref', blurb: 'Up next, your games by day, coaches, your crew to call or text, and your pay.', secs: 57 },
   { id: 'ref-find', num: 'R2', series: 'ref', title: 'Find your name on the schedule', blurb: 'All games with every official, Find my name, and search by team, coach or field.', secs: 40 },
   { id: 'ref-gameday', num: 'R3', series: 'ref', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 48 },
@@ -47,7 +48,7 @@ export const TRAINING_GROUPS: TrainingGroup[] = [
   { key: 'scorekeepers', label: 'Scorekeepers', roles: ['scorekeeper'], ids: ['keep-score', 'penalties', 'scorer-settings', 'post-final'] },
   { key: 'refs', label: 'Refs', roles: ['ref'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'incidents'] },
   { key: 'fieldops', label: 'Field ops', roles: ['field_ops'], ids: ['checklist', 'incidents'] },
-  { key: 'trainers', label: 'Athletic trainers', roles: ['athletic_trainer'], ids: ['injury-report', 'incidents', 'field-request', 'directory'] },
+  { key: 'trainers', label: 'Athletic trainers', roles: ['athletic_trainer'], ids: ['trainer-call', 'injury-report', 'incidents', 'field-request', 'directory'] },
   { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-pay', 'asg-send'] },
 ]
 
