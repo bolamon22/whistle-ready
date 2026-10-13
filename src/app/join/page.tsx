@@ -68,6 +68,7 @@ function compressPhoto(file: File): Promise<string> {
 }
 
 import { Suspense } from 'react'
+import { smsConsentText } from '@/lib/smsConsent'
 
 function JoinForm() {
   const searchParams = useSearchParams()
@@ -83,6 +84,7 @@ function JoinForm() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [smsOk, setSmsOk] = useState(false)
   const [role, setRole] = useState(ROLES.some(r => r.value === roleParam) ? roleParam : '')
   const [gender, setGender] = useState('both')
   const [certLevel, setCertLevel] = useState('youth')
@@ -160,7 +162,7 @@ function JoinForm() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        org: orgId, code, name, email, phone: phone || null, role, gender, certLevel, password,
+        org: orgId, code, name, email, phone: phone || null, smsConsent: !!(phone.trim() && smsOk), role, gender, certLevel, password,
         tournamentIds: Array.from(selEvents), photo: photo || null, hp_extra: hpExtra,
         payMethod, venmoHandle: venmoHandle || null, zelleHandle: zelleHandle || null, mailingAddress: mailingAddress || null,
         referredBy: referredBy.trim() || null,
@@ -302,6 +304,24 @@ function JoinForm() {
                 value={phone} onChange={e => setPhone(e.target.value)} type="tel" placeholder="(555) 000-0000" autoComplete="tel" />
             </div>
           </div>
+
+          {/* Permission to text, in their own words and their own tick. Shown only
+              once there is a number to text. This screen is also the opt-in proof
+              a toll-free verification asks for, so the wording lives in one place
+              (src/lib/smsConsent.ts) and must match what we actually send. */}
+          {!!phone.trim() && (
+            <label className="flex gap-3 items-start bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 cursor-pointer">
+              <input type="checkbox" checked={smsOk} onChange={e => setSmsOk(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-teal-600" />
+              <span className="text-xs leading-relaxed text-slate-600">
+                {smsConsentText(orgName || 'Whistle Ready')}{' '}
+                <a href="/terms" target="_blank" rel="noreferrer" className="text-teal-700 underline underline-offset-2">Terms</a>
+                {' · '}
+                <a href="/privacy" target="_blank" rel="noreferrer" className="text-teal-700 underline underline-offset-2">Privacy</a>
+                <span className="block mt-1 text-slate-400">Optional — you can sign up without this, and change it later.</span>
+              </span>
+            </label>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Email address *</label>

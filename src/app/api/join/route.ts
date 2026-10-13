@@ -23,6 +23,7 @@ async function upcomingEvents(client: ReturnType<typeof db>, orgId: string) {
     .map(t => ({ id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''), location: String(t.location || ''), logoUrl: String(t.logoUrl || '') }))
 }
 import { allowRequest, clientIp, rateLimitedResponse } from '@/lib/rateLimit'
+import { setSmsConsent } from '@/lib/smsConsentDb'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
     const name = String(body.name ?? '').trim()
     const email = String(body.email ?? '').trim().toLowerCase()
     const phone = body.phone ? String(body.phone).trim() : null
+    const smsConsent = !!phone && body.smsConsent === true
     const role = ROLES.has(String(body.role)) ? String(body.role) : 'ref'
     const gender = GENDERS.has(String(body.gender)) ? String(body.gender) : 'both'
     const certLevel = CERTS.has(String(body.certLevel)) ? String(body.certLevel) : 'youth'
@@ -231,6 +233,13 @@ export async function POST(req: NextRequest) {
         </div>
       `,
     })
+
+    // Permission to text them, recorded against the worker record.
+    // Only a YES is written. An unticked box is left alone rather than written
+    // as a no, because someone re-signing up for a second event must not
+    // silently revoke a yes they gave the first time — absence already means no
+    // to every reader (see smsConsentFor).
+    if (smsConsent && workerId) await setSmsConsent(workerId, true, 'join')
 
     // Office heads-up — Bo wants to know the moment someone registers
     await notifyStaffRegistered({ org, orgId, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name), referredBy })
