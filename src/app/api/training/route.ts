@@ -63,10 +63,18 @@ export async function GET(req: NextRequest) {
         const part = ids.slice(i, i + 400)
         seen.push(...await prisma.$queryRawUnsafe<Row[]>(`SELECT workerKey, videoId, watchedAt, plays, lastWatchedAt FROM "StaffTraining" WHERE workerKey IN (${part.map(() => '?').join(', ')})`, ...part))
       }
+      // Views saved while a login had no Staff Pool record with the same email are kept
+      // under user:<id>. Fold them into the person whose email matches that login now,
+      // so nobody's watching goes missing from the report (Bo, Oct 13 2026).
+      const byEmail = new Map(ws.filter((w: Row) => w.email).map((w: Row) => [String(w.email).trim().toLowerCase(), String(w.id)]))
+      const orphan = await prisma.$queryRawUnsafe<Row[]>(`SELECT s.workerKey, s.videoId, s.watchedAt, s.plays, s.lastWatchedAt, lower(u.email) AS email FROM "StaffTraining" s JOIN "User" u ON s.workerKey = 'user:' || u.id`).catch(() => [] as Row[])
+      for (const r of orphan) { const wid = byEmail.get(String(r.email || '')); if (wid) seen.push({ ...r, workerKey: wid }) }
       const by = new Map<string, Record<string, { plays: number; first: string; last: string }>>()
       for (const r of seen) {
         const k = String(r.workerKey); const m = by.get(k) || {}
-        m[String(r.videoId)] = { plays: Number(r.plays ?? 1) || 1, first: String(r.watchedAt || ''), last: String(r.lastWatchedAt || r.watchedAt || '') }
+        const v = { plays: Number(r.plays ?? 1) || 1, first: String(r.watchedAt || ''), last: String(r.lastWatchedAt || r.watchedAt || '') }
+        const o = m[String(r.videoId)]
+        m[String(r.videoId)] = o ? { plays: o.plays + v.plays, first: o.first < v.first ? o.first : v.first, last: o.last > v.last ? o.last : v.last } : v
         by.set(k, m)
       }
       // Which events each person is on the staff roster for, so the library can pick
