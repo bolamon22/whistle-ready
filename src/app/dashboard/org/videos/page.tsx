@@ -16,7 +16,7 @@ import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
 type Lib = { id: string; num: string; title: string; blurb: string; secs: number; series: 'staff' | 'assigner' | 'family'; audience: string; src: string; poster: string }
 type Person = { id: string; name: string; email: string; roles: string[]; assigned: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
-type SendLog = { at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; sent: number }
+type SendLog = { at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number }
 
 const LIB: Lib[] = [
   ...TRAINING_VIDEOS.map(v => ({ ...v, series: (v.series || 'staff') as 'staff' | 'assigner', audience: audienceFor(v.id), src: videoSrc(v.id), poster: posterSrc(v.id) })),
@@ -206,7 +206,7 @@ export default function VideoLibrary() {
             <div key={i} className="p-4 text-sm">
               <div className="flex items-center justify-between gap-3"><span className="font-semibold text-slate-800">{s.sent} {s.sent === 1 ? 'person' : 'people'}</span><span className="text-xs text-slate-400">{new Date(s.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{s.by ? ` · ${s.by}` : ''}</span></div>
               <p className="text-slate-600 mt-1">{bundleSummary(s.videoIds)}</p>
-              {s.roles.length > 0 && <p className="text-xs text-slate-400 mt-0.5">To: {s.roles.map(r => TRAINING_ROLE_LABELS[r] || r).join(', ')}{s.people.length ? ` + ${s.people.length} picked by name` : ''}</p>}
+              {(() => { const to = [...s.roles.map(r => TRAINING_ROLE_LABELS[r] || r), ...(s.people.length ? [`${s.people.length} picked by name`] : []), ...(s.emails || []), ...(s.meCopy ? ['you'] : [])]; return to.length ? <p className="text-xs text-slate-400 mt-0.5">To: {to.join(', ')}</p> : null })()}
             </div>
           ))}
         </div>
@@ -275,16 +275,20 @@ function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: P
   const [chosen, setChosen] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
-  const [preview, setPreview] = useState<{ count: number; names: string[]; noEmail: string[]; emailOn: boolean } | null>(null)
+  const [meCopy, setMeCopy] = useState(true)
+  const [emailsText, setEmailsText] = useState('')
+  const emails = emailsText.split(/[\s,;]+/).map(e => e.trim()).filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+  const emailsKey = emails.join(',')
+  const [preview, setPreview] = useState<{ count: number; names: string[]; noEmail: string[]; newPeople?: string[]; emailOn: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
-  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), note, ...extra })
+  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), emails, meCopy, note, ...extra })
   useEffect(() => {
-    if (!roles.size && !chosen.size) { setPreview(null); return }
+    if (!roles.size && !chosen.size && !meCopy && !emails.length) { setPreview(null); return }
     let live = true
     fetch('/api/training/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body({ preview: true }) }).then(r => r.ok ? r.json() : null).then(d => { if (live) setPreview(d) }).catch(() => {})
     return () => { live = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roles, chosen])
+  }, [roles, chosen, meCopy, emailsKey])
   const flip = (set: Set<string>, setter: (s: Set<string>) => void, k: string) => { const n = new Set(set); n.has(k) ? n.delete(k) : n.add(k); setter(n) }
   const matches = q.trim() ? people.filter(p => p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : []
   const send = async () => {
@@ -322,13 +326,20 @@ function SendDialog({ ids, people, onClose, onSent }: { ids: string[]; people: P
           {chosen.size > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{Array.from(chosen).map(id => { const p = people.find(x => x.id === id); return <span key={id} className="inline-flex items-center gap-1 text-xs bg-slate-100 rounded-full pl-2.5 pr-1 py-1">{p?.name}<button type="button" aria-label="Remove" onClick={() => flip(chosen, setChosen, id)}><X size={12} /></button></span> })}</div>}
         </div>
         <div>
+          <label htmlFor="send-emails" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">…and/or email addresses</label>
+          <input id="send-emails" value={emailsText} onChange={e => setEmailsText(e.target.value)} placeholder="name@example.com, another@example.com" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <p className="text-[11px] text-slate-400 mt-1">Someone not on staff yet gets a link to create their login first, then the videos.</p>
+          <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer"><input type="checkbox" checked={meCopy} onChange={e => setMeCopy(e.target.checked)} className="accent-teal-600" /> Send me a copy too</label>
+        </div>
+        <div>
           <label htmlFor="send-note" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Note (optional)</label>
           <textarea id="send-note" value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={800} placeholder="Please watch these before Monster Mash on Oct 24." className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700" aria-live="polite">
-          {!preview ? <span className="text-slate-400">Pick a role or a person.</span> : <>
+          {!preview ? <span className="text-slate-400">Pick a role, a person or an email address.</span> : <>
             <p><b>{preview.count}</b> {preview.count === 1 ? 'person' : 'people'} will get an email with a link to watch inside their login.</p>
             {preview.names.length > 0 && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{preview.names.join(', ')}</p>}
+            {(preview.newPeople?.length || 0) > 0 && <p className="text-xs text-teal-700 mt-1">Not on staff yet (gets the create-your-login link): {preview.newPeople!.join(', ')}</p>}
             {preview.noEmail.length > 0 && <p className="text-xs text-amber-700 mt-1">No email on file: {preview.noEmail.join(', ')}</p>}
           </>}
         </div>
