@@ -10,7 +10,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, emailEnabled, orgSender } from '@/lib/email'
 import { renderEmail, esc, button } from '@/lib/emailLayout'
 import { orgById } from '@/lib/org'
-import { trainingVideo, workerRoles, minutesLabel, trainingLetter } from '@/lib/training'
+import { trainingVideo, workerRoles, minutesLabel, trainingLetter, inSendGroup } from '@/lib/training'
 
 // Video library -> "Send videos": email chosen training videos to Staff Pool people by
 // role (refs, scorekeepers, field ops, trainers, assigners) and/or by name (Bo, Oct 13
@@ -67,7 +67,8 @@ export async function POST(req: NextRequest) {
     onEvent = new Set(rs.map((r: Row) => String(r.workerId)))
     const t = await prisma.$queryRawUnsafe<Row[]>(`SELECT name FROM "Tournament" WHERE id = ?`, eventId); eventName = String(t[0]?.name || '')
   }
-  const byRole = (w: Row) => onEvent ? onEvent.has(String(w.id)) && (!roles.length || workerRoles(w).some(r => roles.includes(r))) : workerRoles(w).some(r => roles.includes(r))
+  const hasRole = (w: Row) => { const rs = workerRoles(w); return roles.some(k => inSendGroup(rs, w.gender, k)) }
+  const byRole = (w: Row) => onEvent ? onEvent.has(String(w.id)) && (!roles.length || hasRole(w)) : hasRole(w)
   const em = (w: Row) => String(w.email || '').trim().toLowerCase()
   const to = mine.filter((w: Row) => picked.has(String(w.id)) || byRole(w) || typed.includes(em(w)))
     .sort((a: Row, c: Row) => String(a.name).localeCompare(String(c.name)))

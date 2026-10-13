@@ -79,7 +79,18 @@ export function workerRoles(w: { roles?: unknown; defaultRole?: unknown; isAssig
 }
 
 /** Who a video is for, in words, from the groups it's in. */
-export const TRAINING_ROLE_LABELS: Record<string, string> = { ref: 'Refs', scorekeeper: 'Scorekeepers', field_ops: 'Field ops', athletic_trainer: 'Athletic trainers', assigner: 'Assigners' }
+export const TRAINING_ROLE_LABELS: Record<string, string> = { ref: 'Refs', ref_boys: 'Boys refs', ref_girls: 'Girls refs', scorekeeper: 'Scorekeepers', field_ops: 'Field ops', athletic_trainer: 'Athletic trainers', assigner: 'Assigners' }
+
+/** Who a training email can go to. Refs split by the games they work (Bo, Oct 13 2026:
+ *  a boys assigner and a girls assigner each send to their own refs). A ref set to
+ *  "both" is in both groups. */
+export const SEND_GROUPS = ['scorekeeper', 'ref_boys', 'ref_girls', 'field_ops', 'athletic_trainer', 'assigner']
+export function inSendGroup(roles: string[], gender: unknown, key: string): boolean {
+  const g = String(gender || 'both')
+  if (key === 'ref_boys') return roles.includes('ref') && g !== 'girls'
+  if (key === 'ref_girls') return roles.includes('ref') && g !== 'boys'
+  return roles.includes(key)
+}
 export function audienceFor(id: string): string {
   const gs = TRAINING_GROUPS.filter(g => g.ids.includes(id))
   if (gs.some(g => !g.roles)) return 'All staff'
@@ -98,12 +109,13 @@ const ROLE_LINES: Record<string, string> = {
   assigner: 'They walk through building your crew and assigning officials.',
 }
 export function trainingLetter(o: { eventName?: string; dates?: string; roles: string[]; sender?: string; count: number }): { subject: string; body: string } {
-  const plural = o.roles.length === 1 ? (TRAINING_ROLE_LABELS[o.roles[0]] || '').toLowerCase() : ''
+  const PLURAL: Record<string, string> = { ref_boys: 'officials for the boys\u2019 games', ref_girls: 'officials for the girls\u2019 games' }
+  const plural = o.roles.length === 1 ? (PLURAL[o.roles[0]] || (TRAINING_ROLE_LABELS[o.roles[0]] || '').toLowerCase()) : ''
   const these = o.count === 1 ? 'this short video' : 'these short videos'
   const thanks = o.eventName
     ? `Thanks for working ${o.eventName}${o.dates ? ` (${o.dates})` : ''}${plural ? ` as one of our ${plural}` : ''}. Please watch ${these} before the event.`
     : `Please watch ${these} before your next event${plural ? ` as one of our ${plural}` : ''}.`
-  const line = (o.roles.length === 1 && ROLE_LINES[o.roles[0]]) || 'They show exactly what you’ll do in the app on game day.'
+  const line = (o.roles.length === 1 && (ROLE_LINES[o.roles[0]] || ROLE_LINES[o.roles[0].replace(/_(boys|girls)$/, '')])) || 'They show exactly what you’ll do in the app on game day.'
   const body = [`Hi {firstName},`, `${thanks} Each one is about a minute. ${line}`, o.sender ? `Thanks,\n${o.sender}` : ''].filter(Boolean).join('\n\n')
   const subject = o.eventName ? `${o.eventName}: your training videos` : 'Your Whistle Ready training videos'
   return { subject, body }

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
 import { CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, Mail, PlayCircle, Search, Send, Users, X } from 'lucide-react'
-import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo, trainingLetter } from '@/lib/training'
+import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo, trainingLetter, SEND_GROUPS, inSendGroup } from '@/lib/training'
 import { HOW_TO_VIDEOS, howToSrc, howToPoster, howToMinutes } from '@/lib/howToVideos'
 import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
@@ -17,7 +17,7 @@ import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 // (api/training/video) -- there is deliberately no download.
 
 type Lib = { id: string; num: string; title: string; blurb: string; secs: number; series: 'staff' | 'ref' | 'assigner' | 'family'; audience: string; src: string; poster: string }
-type Person = { id: string; name: string; email: string; roles: string[]; assigned: string[]; events?: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
+type Person = { id: string; name: string; email: string; roles: string[]; gender?: string; assigned: string[]; events?: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
 type Ev = { id: string; name: string; startDate: string; endDate?: string }
 /** "Oct 24–25", "Oct 31 – Nov 1" */
 function evDates(e?: Ev | null): string {
@@ -248,7 +248,7 @@ export default function VideoLibrary() {
         </div>
       )}
       {scriptFor && <ScriptPanel readOnly={asg} v={scriptFor} note={notes[scriptFor.id]?.text || ''} onClose={() => setScriptFor(null)} onSaved={n => setNotes(n)} />}
-      {sending && <SendDialog events={events} initialChosen={preChosen} roleKeys={asg ? ROLE_KEYS.filter(r => r !== 'assigner' && (people || []).some(p => p.roles.includes(r))) : ROLE_KEYS} ids={Array.from(picked)} people={people || []} onClose={() => { setSending(false); setPreChosen([]) }} onSent={() => { setSending(false); setPreChosen([]); setPicked(new Set()); loadSends(); setTab('sent') }} />}
+      {sending && <SendDialog events={events} initialChosen={preChosen} roleKeys={asg ? SEND_GROUPS.filter(r => r !== 'assigner' && (people || []).some(p => inSendGroup(p.roles, p.gender, r))) : SEND_GROUPS} ids={Array.from(picked)} people={people || []} onClose={() => { setSending(false); setPreChosen([]) }} onSent={() => { setSending(false); setPreChosen([]); setPicked(new Set()); loadSends(); setTab('sent') }} />}
     </div>
   )
 }
@@ -439,7 +439,7 @@ function Watched({ people, events, onNudge }: { people: Person[] | null; events:
   const [open, setOpen] = useState<string | null>(null)
   if (!people) return <p className="text-sm text-slate-400 p-6 text-center">Loading…</p>
   const secsOf = (id: string) => trainingVideo(id)?.secs || 0
-  const rows = people.filter(p => (!ev || p.events?.includes(ev)) && (!role || p.roles.includes(role)) && (!video || p.assigned.includes(video)) && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())))
+  const rows = people.filter(p => (!ev || p.events?.includes(ev)) && (!role || inSendGroup(p.roles, p.gender, role)) && (!video || p.assigned.includes(video)) && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())))
     .map(p => {
       const ids = video ? [video] : p.assigned
       const done = ids.filter(id => p.watched[id]).length
@@ -481,7 +481,7 @@ function Watched({ people, events, onNudge }: { people: Person[] | null; events:
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative"><Search size={14} className="absolute left-3 top-2.5 text-slate-400" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a name" className="rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm w-48" /></div>
-        <select value={role} onChange={e => setRole(e.target.value)} aria-label="Role" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"><option value="">All roles</option>{ROLE_KEYS.map(r => <option key={r} value={r}>{TRAINING_ROLE_LABELS[r]}</option>)}</select>
+        <select value={role} onChange={e => setRole(e.target.value)} aria-label="Role" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"><option value="">All roles</option>{SEND_GROUPS.map(r => <option key={r} value={r}>{TRAINING_ROLE_LABELS[r]}</option>)}</select>
         <select value={video} onChange={e => setVideo(e.target.value)} aria-label="Video" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-xs"><option value="">Every video</option>{TRAINING_VIDEOS.map(v => <option key={v.id} value={v.id}>{v.num} {v.title}</option>)}</select>
         {events.length > 0 && <select value={ev} onChange={e => setEv(e.target.value)} aria-label="Event" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-[14rem]"><option value="">Any event</option>{events.map(x => <option key={x.id} value={x.id}>Working {x.name}</option>)}</select>}
         <select value={sort} onChange={e => setSort(e.target.value as Sort)} aria-label="Sort" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">

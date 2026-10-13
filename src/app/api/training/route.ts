@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
             .map((t: Row) => ({ id: String(t.id), name: String(t.name || ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || '') }))
         : []
       const live = new Set(events.map(e => e.id))
-      const people = ws.map((w: Row) => { const roles = workerRoles(w); return { id: String(w.id), name: String(w.name || ''), email: String(w.email || ''), roles, assigned: videosFor(roles), watched: by.get(String(w.id)) || {}, events: (onEvent.get(String(w.id)) || []).filter(t => live.has(t)) } })
+      const people = ws.map((w: Row) => { const roles = workerRoles(w); return { id: String(w.id), name: String(w.name || ''), email: String(w.email || ''), roles, gender: String(w.gender || 'both'), assigned: videosFor(roles), watched: by.get(String(w.id)) || {}, events: (onEvent.get(String(w.id)) || []).filter(t => live.has(t)) } })
       return NextResponse.json({ people, events })
     }
     const tid = req.nextUrl.searchParams.get('tournamentId')
