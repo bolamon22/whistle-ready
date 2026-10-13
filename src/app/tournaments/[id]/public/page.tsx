@@ -303,7 +303,7 @@ function TeamSheet({division,team,divGames,pool,poolRows,overallRows,bracketList
   const rec=pr?`${pr.w}–${pr.l}${pr.t?`–${pr.t}`:''}`:'0–0'
   const gd=pr?pr.gf-pr.ga:0
   const line=[played?`${rec} in pool play`:'Pool play not started',seeded?`${seeded.flight?`Flight ${seeded.flight} `:''}seed ${seeded.n}`:ovRank&&played?`#${ovRank} of ${overallRows!.length} in division`:''].filter(Boolean).join(' · ')
-  const stats=[{v:rec,k:'Record'},{v:`${gd>0?'+':''}${gd}`,k:'Goal diff'},{v:prRank?`#${prRank}`:'—',k:pool?`${poolLabel(pool)} rank`:'Rank'}]
+  const stats=[{v:rec,k:'Record'},{v:`${gd>0?'+':''}${gd}`,k:'Goal diff'},{v:prRank&&played?`#${prRank}`:'—',k:pool?`${poolLabel(pool)} rank`:'Rank'}]
   return (
     <>
       <button type="button" onClick={onClose} aria-label="Close team" className="fixed inset-0 z-[70] bg-slate-900/45 cursor-default"/>
@@ -367,6 +367,9 @@ function TeamSheet({division,team,divGames,pool,poolRows,overallRows,bracketList
                     <span className="text-[15px] font-extrabold text-slate-900">{fin?`${my}–${op}`:''}</span>
                   </Link>)})}
               </div>}
+          {bracketList.length>0&&!mine.some(x=>/^B\d+$/i.test(x.g.gameNumber||''))&&!seeded&&(
+            <p className="text-xs text-slate-500">Bracket games show up here once pool play sets the seeds.</p>
+          )}
         </div>
       </aside>
     </>
