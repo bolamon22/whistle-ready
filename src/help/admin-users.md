@@ -3,11 +3,11 @@ title: Add a user and set their role
 category: Admin
 order: 700
 routes: /admin/users, /profile/*
-keywords: user management users add user create account role change role reset password delete user club links club director link coach assigner pay access sees pay for boys refs girls refs scorekeepers field ops
+keywords: user management users add user create account role change role reset password delete user club links club director link coach assigner pay access sees pay for boys refs girls refs scorekeepers field ops filter staff job trainer athletic trainer referee scorekeeper office parents clubs coaches last on who uses the app no staff record staff record
 ---
 **User Management** is the admin list of every account. Add users, change roles, reset passwords, link club directors to their clubs, or delete accounts.
 
-**Where:** top bar → **Users**, or Home → **Admin** → **User Management**.
+**Where:** top bar → **Users**, or Home → **Admin** → **User Management**. The app's top bar stays on admin pages, and **← Back** in the dark admin bar returns to the page you were on before.
 
 **To add a user:**
 1. Click **+ Add User**.
@@ -33,7 +33,14 @@ A link opens that club's registrations at that tournament as they are when you a
 
 **To delete a user:** click **Delete** and confirm.
 
-Use **Search users…** to filter by name, email or role.
+**To find people:**
+- Type in **Search people, jobs, clubs…**: a name, email, role, staff job (for example "trainer" or "ref") or club name.
+- Click a chip: **Everyone**, **Office** (admins, directors, schedulers, assigners), **Staff**, **Clubs & coaches** or **Parents**. Each shows how many match.
+- Under **Staff**, pick a job: **Refs**, **Scorekeepers**, **Athletic trainers**, **Field ops**, or **No staff record**.
+- **Last on** narrows to people on now, on in the last 7 or 30 days, or with **No visit recorded**. Visits are recorded from Oct 12, 2026.
+- Sort by **Newest first**, **Name A–Z** or **Last on**. **Clear filters** resets.
+
+Every ref, scorekeeper, trainer and field ops worker logs in as **Staff**. Their job comes from their Staff Pool profile with the same email, shown under their name with a **Staff record →** link. **No staff record** means no Staff Pool profile has that email, so the app doesn't know their job: add one in the Staff Pool, or fix the email on either side. Club directors and coaches show the clubs they can open; parents show how many player waivers they're linked to.
 
 **Common problems:**
 - Delete cannot be undone. You cannot delete your own account.

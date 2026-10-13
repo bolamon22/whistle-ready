@@ -6,12 +6,18 @@ import PasswordInput from '@/components/PasswordInput'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { agoLabel, isOnline } from '@/lib/presenceTime'
+import { agoLabel, isOnline, parseDbTime } from '@/lib/presenceTime'
 import toast, { Toaster } from 'react-hot-toast'
 import AssignerPayAccess from '@/components/AssignerPayAccess'
 import { DEFAULT_ASSIGNER_GROUPS, type PayGroup } from '@/lib/payGroups'
 
-interface User { id: string; name: string; email: string; role: string; createdAt: string; lastSeenAt?: string | null; lastLoginAt?: string | null }
+// staff: the Staff Pool record with this email (jobs = its roles); clubs: club names
+// this login can open in the portal; players: player waivers a parent is linked to.
+interface User {
+  id: string; name: string; email: string; role: string; createdAt: string; lastSeenAt?: string | null; lastLoginAt?: string | null
+  staff?: { workerId: string; jobs: string[]; gender: string; records: number } | null
+  clubs?: string[]; players?: number
+}
 interface ClubLink { id: string; tournamentId: string; clubName: string }
 interface Tournament { id: string; name: string }
 interface Registration { clubName: string; tournamentId: string }
@@ -19,6 +25,8 @@ interface Registration { clubName: string; tournamentId: string }
 const ROLES = ['admin','director','club_director','assigner','scheduler','coach','staff','parent']
 
 const ROLE_LABELS: Record<string, string> = {
+  scorekeeper:   'Scorekeeper (old role)',
+  viewer:        'Viewer (no role)',
   admin:         'Admin',
   director:      'Tournament Director',
   club_director: 'Club Director',
@@ -40,12 +48,57 @@ const ROLE_COLORS: Record<string, string> = {
   parent:        'bg-pink-100 text-pink-700',
 }
 
+// Who a login is, for the filter chips. Every event worker (ref, scorekeeper, athletic
+// trainer, field ops) logs in as Staff; their job comes from their Staff Pool record,
+// matched by email. Bo, Oct 13 2026: a trainer showed only as "Staff" and searching
+// "trainer" found nobody.
+type Who = 'all' | 'office' | 'staff' | 'clubs' | 'parents'
+const WHO: { key: Who; label: string }[] = [
+  { key: 'all', label: 'Everyone' }, { key: 'office', label: 'Office' }, { key: 'staff', label: 'Staff' },
+  { key: 'clubs', label: 'Clubs & coaches' }, { key: 'parents', label: 'Parents' },
+]
+const whoOf = (role: string): Who =>
+  ['admin', 'director', 'scheduler', 'assigner'].includes(role) ? 'office'
+  : ['club_director', 'coach'].includes(role) ? 'clubs'
+  : role === 'parent' ? 'parents' : 'staff'
+const JOBS: { key: string; label: string }[] = [
+  { key: 'ref', label: 'Refs' }, { key: 'scorekeeper', label: 'Scorekeepers' },
+  { key: 'athletic_trainer', label: 'Athletic trainers' }, { key: 'field_ops', label: 'Field ops' },
+]
+const JOB_LABEL: Record<string, string> = { ref: 'Ref', scorekeeper: 'Scorekeeper', athletic_trainer: 'Athletic trainer', field_ops: 'Field ops' }
+const jobLabel = (j: string, gender?: string) =>
+  j === 'ref' && (gender === 'boys' || gender === 'girls') ? `Ref · ${gender}` : (JOB_LABEL[j] ?? j.replace(/_/g, ' '))
+const lastOn = (u: User) => Math.max(parseDbTime(u.lastSeenAt) ?? 0, parseDbTime(u.lastLoginAt) ?? 0)
+const searchText = (u: User) => [
+  u.name, u.email, u.role, ROLE_LABELS[u.role] ?? '',
+  ...(u.staff?.jobs ?? []).map(j => jobLabel(j, u.staff?.gender) + (j === 'ref' ? ' referee official' : '')),
+  ...(u.clubs ?? []),
+].join(' ').toLowerCase()
+type Seen = 'any' | 'now' | 'week' | 'month' | 'never'
+const SEEN: { key: Seen; label: string }[] = [
+  { key: 'any', label: 'Last on: any time' }, { key: 'now', label: 'On now' }, { key: 'week', label: 'On in the last 7 days' },
+  { key: 'month', label: 'On in the last 30 days' }, { key: 'never', label: 'No visit recorded' },
+]
+const DAY = 86_400_000
+function seenMatches(u: User, f: Seen, now: number): boolean {
+  if (f === 'any') return true
+  if (f === 'now') return isOnline(u.lastSeenAt, now)
+  const t = lastOn(u)
+  if (f === 'never') return !t
+  return !!t && now - t <= (f === 'week' ? 7 : 30) * DAY
+}
+const chip = (on: boolean) => `text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${on ? 'bg-gray-800 border-gray-800 text-white' : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'}`
+
 export default function AdminUsersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [who, setWho] = useState<Who>('all')
+  const [job, setJob] = useState('all')
+  const [seen, setSeen] = useState<Seen>('any')
+  const [sort, setSort] = useState<'newest' | 'name' | 'last'>('newest')
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -183,9 +236,21 @@ export default function AdminUsersPage() {
     load()
   }
 
-  const filtered = users.filter(u =>
-    !search || [u.name, u.email, u.role].some(v => v.toLowerCase().includes(search.toLowerCase()))
-  )
+  // Search and Last on narrow everything; the chip counts follow them, so "trainer"
+  // shows how many staff match before you pick a chip.
+  const now = Date.now()
+  const q = search.trim().toLowerCase()
+  const base = users.filter(u => (!q || searchText(u).includes(q)) && seenMatches(u, seen, now))
+  const whoCount = (w: Who) => (w === 'all' ? base.length : base.filter(u => whoOf(u.role) === w).length)
+  const staffBase = base.filter(u => whoOf(u.role) === 'staff')
+  const jobMatch = (u: User, j: string) => (j === 'all' ? true : j === 'none' ? !u.staff : !!u.staff?.jobs.includes(j))
+  const filtered = base
+    .filter(u => who === 'all' || whoOf(u.role) === who)
+    .filter(u => who !== 'staff' || jobMatch(u, job))
+    .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name)
+      : sort === 'last' ? (lastOn(b) - lastOn(a)) || a.name.localeCompare(b.name)
+      : 0)   // newest: the order the API sends
+  const filtersOn = !!q || who !== 'all' || seen !== 'any'
 
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
 
@@ -198,13 +263,54 @@ export default function AdminUsersPage() {
           <p className="text-sm text-gray-500 mt-0.5">{users.length} registered users · <a href="/admin/permissions" className="text-sky-600 hover:underline">Manage Permissions →</a></p>
         </div>
         <div className="flex gap-2 items-center">
-          <input type="search" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)}
+          <input type="search" placeholder="Search people, jobs, clubs…" value={search} onChange={e => setSearch(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-sky-500" />
           <button onClick={() => setShowAdd(v => !v)}
             className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
             + Add User
           </button>
         </div>
+      </div>
+
+      {/* Filters */}
+      <div className="mb-4 space-y-2">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Who">
+          {WHO.map(w => (
+            <button key={w.key} type="button" aria-pressed={who === w.key} className={chip(who === w.key)}
+              onClick={() => { setWho(w.key); setJob('all') }}>
+              {w.label} <span className="opacity-60 font-medium">{whoCount(w.key)}</span>
+            </button>
+          ))}
+          <span className="flex-1" />
+          <select aria-label="Last on" value={seen} onChange={e => setSeen(e.target.value as Seen)}
+            className={`border rounded-lg px-2 py-1 text-xs bg-white ${seen !== 'any' ? 'border-sky-400 text-sky-800' : 'border-gray-300 text-gray-600'}`}
+            title="Visits are recorded from Oct 12, 2026">
+            {SEEN.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+          <select aria-label="Sort" value={sort} onChange={e => setSort(e.target.value as 'newest' | 'name' | 'last')}
+            className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white text-gray-600">
+            <option value="newest">Newest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="last">Last on</option>
+          </select>
+        </div>
+        {who === 'staff' && (
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Job">
+            <span className="text-xs text-gray-500 mr-0.5">Job</span>
+            {[{ key: 'all', label: 'All staff' }, ...JOBS, { key: 'none', label: 'No staff record' }].map(j => (
+              <button key={j.key} type="button" aria-pressed={job === j.key} className={chip(job === j.key)} onClick={() => setJob(j.key)}
+                title={j.key === 'none' ? 'Staff logins with no Staff Pool profile under the same email, so the app does not know their job' : undefined}>
+                {j.label} <span className="opacity-60 font-medium">{staffBase.filter(u => jobMatch(u, j.key)).length}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {filtersOn && (
+          <p className="text-xs text-gray-400">
+            Showing {filtered.length} of {users.length} ·{' '}
+            <button type="button" className="underline hover:text-gray-600" onClick={() => { setSearch(''); setWho('all'); setJob('all'); setSeen('any') }}>Clear filters</button>
+          </p>
+        )}
       </div>
 
       {/* Add user form */}
@@ -359,7 +465,35 @@ export default function AdminUsersPage() {
             {filtered.map(u => (
               <Fragment key={u.id}>
               <tr className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
+                <td className="px-4 py-3">
+                  <div className="font-medium text-gray-800">{u.name}</div>
+                  {(u.staff || whoOf(u.role) === 'staff' || (u.clubs?.length ?? 0) > 0 || (u.players ?? 0) > 0) && (
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      {u.staff?.jobs.map(j => (
+                        <span key={j} className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">{jobLabel(j, u.staff?.gender)}</span>
+                      ))}
+                      {u.staff && (
+                        <Link href={`/staff/${u.staff.workerId}`} className="text-[11px] text-sky-600 hover:underline"
+                          title={u.staff.records > 1 ? `${u.staff.records} Staff Pool profiles use this email; merge them in the Staff Pool` : 'Their Staff Pool profile'}>
+                          Staff record{u.staff.records > 1 ? ` (${u.staff.records})` : ''} →
+                        </Link>
+                      )}
+                      {!u.staff && whoOf(u.role) === 'staff' && (
+                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700"
+                          title="No Staff Pool profile has this email, so the app doesn't know their job">No staff record</span>
+                      )}
+                      {(u.clubs ?? []).slice(0, 2).map(c => (
+                        <span key={c} className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 text-violet-700">{c}</span>
+                      ))}
+                      {(u.clubs?.length ?? 0) > 2 && (
+                        <span className="text-[11px] text-violet-600" title={(u.clubs ?? []).join(', ')}>+{(u.clubs?.length ?? 0) - 2} more</span>
+                      )}
+                      {(u.players ?? 0) > 0 && (
+                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700">{u.players} player{u.players === 1 ? '' : 's'}</span>
+                      )}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-500">{u.email}</td>
                 <td className="px-4 py-3">
                   <select
@@ -367,7 +501,7 @@ export default function AdminUsersPage() {
                     onChange={e => changeRole(u.id, e.target.value)}
                     className={`text-xs font-semibold px-2 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 ${ROLE_COLORS[u.role] || ROLE_COLORS.viewer}`}
                   >
-                    {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
+                    {(ROLES.includes(u.role) ? ROLES : [u.role, ...ROLES]).map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
                   </select>
                 </td>
                 <td className="px-4 py-3 text-gray-400">{new Date(u.createdAt).toLocaleDateString()}</td>
