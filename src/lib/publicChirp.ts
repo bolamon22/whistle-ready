@@ -71,6 +71,53 @@ async function publicTeams(tournamentId: string, withUnpooled: boolean): Promise
   } catch { return '' }
 }
 
+// ---- The schedule as Chirp reads it ----
+//
+// Every game the public schedule shows, so Chirp can answer "when do we play",
+// "what's next" and "who do we play in the playoffs" for any team. It reads
+// the database on each question, through the same published view as the
+// public page, so a republished schedule is what Chirp knows on the next
+// question. No copy to refresh.
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function dayLabel(d: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || '')
+  if (!m) return d || 'Day TBD'
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return `${DAYS[dt.getDay()]} ${MONTHS[dt.getMonth()]} ${dt.getDate()}`
+}
+function timeLabel(t: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t || '')
+  if (!m) return t || 'time TBD'
+  if (/[ap]m/i.test(t)) return t.toUpperCase().replace(/\s+/g, ' ')
+  const h = Number(m[1])
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`
+}
+const minutes = (t: string) => { const m = /^(\d{1,2}):(\d{2})\s*([ap]m)?/i.exec(t || ''); if (!m) return 9999; let h = Number(m[1]) % 12; if (m[3] ? /p/i.test(m[3]) : Number(m[1]) >= 12) h += 12; return h * 60 + Number(m[2]) }
+
+export function nowET(): string {
+  return new Date().toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+export const SCHEDULE_KEY = `HOW TO READ THE SCHEDULE: game numbers starting with P are pool games; B are playoff (bracket) games. In a playoff game, "Seed 3" means the team that finishes 3rd in that division after pool play (set by the standings), "W-B5" means the winner of game B5 and "L-B5" the loser. Once pool play ends and scores are in, the real team names replace these.`
+
+/** One line per game, in time order, venue name shortened when it repeats. */
+export function scheduleText(games: any[], max = 700): string {
+  const sorted = [...games].sort((a, b) => String(a.date).localeCompare(String(b.date)) || minutes(a.startTime) - minutes(b.startTime) || String(a.location).localeCompare(String(b.location)))
+  // "Village Park Athletics Complex - Field 2A" on every line: say the venue once.
+  const prefixes = new Map<string, number>()
+  for (const g of sorted) { const i = String(g.location || '').lastIndexOf(' - '); if (i > 0) { const p = g.location.slice(0, i); prefixes.set(p, (prefixes.get(p) || 0) + 1) } }
+  const common = [...prefixes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+  const where = (l: string) => common && l?.startsWith(common + ' - ') ? l.slice(common.length + 3) : (l || 'field TBD')
+  const lines = sorted.slice(0, max).map((g: any) => {
+    const final = g.score1 != null && g.score2 != null ? ` (final ${g.score1}-${g.score2})` : ''
+    const pool = g.pool ? ` Pool ${g.pool}` : ''
+    return `${g.gameNumber || ''} | ${dayLabel(g.date)} ${timeLabel(g.startTime)} | ${where(g.location)} | ${g.division}${pool} | ${g.team1} vs ${g.team2}${final}`
+  })
+  return (common ? `(All fields are at ${common} unless named otherwise.)\n` : '') + lines.join('\n')
+}
+
 /** One tournament's public facts. */
 export async function tournamentScope(tournamentId: string, userTeam?: string): Promise<PublicScope | null> {
   const [t, allGames, site, vis] = await Promise.all([
@@ -91,8 +138,7 @@ export async function tournamentScope(tournamentId: string, userTeam?: string): 
   const divisions: string[] = (() => { try { const d = JSON.parse(tt.registrationDivisions || '[]'); return Array.isArray(d) ? d.filter(Boolean) : [] } catch { return [] } })()
   const fees = (() => { try { return feeScheduleLines(parsePricing(tt.registrationPricing)) } catch { return [] } })()
   const locations: any[] = Array.isArray(c.locations) ? c.locations : []
-  const sched = games.slice(0, 90).map((g: any) =>
-    `${g.date} ${g.startTime || 'TBD'} | ${g.location || 'TBD'} | ${g.division}${g.pool ? ' ' + g.pool : ''} | ${g.team1} vs ${g.team2}${g.score1 != null && g.score2 != null ? ` (final ${g.score1}-${g.score2})` : ''}`).join('\n')
+  const sched = scheduleText(games)
   const org = await orgById(await tournamentOrgId(tournamentId))
   // The rules the public Rules page shows: a linked library set (Settings → Rules)
   // wins over the event's own text, same as /tournaments/[id]/rules.
@@ -105,7 +151,7 @@ DATES: ${tt.startDate || 'TBA'}${tt.endDate && tt.endDate !== tt.startDate ? ` t
 LOCATION: ${tt.location || 'TBA'}
 LINKS: event page ${base}/event | schedule & standings ${base}/public | game day ${base}/today | register a team ${base}/register | player waiver ${base}/player-waiver
 DIVISIONS (${divisions.length}): ${divisions.join(', ') || 'TBA'}
-${fees.length ? `FEES (per team):\n${fees.join('\n')}\n` : ''}${c.hotelsUrl || c.hotels ? `HOTELS: ${c.hotelsUrl ? `book at ${c.hotelsUrl}` : ''}${c.hotels ? ` ${clip(c.hotels, 400)}` : ''}\n` : ''}${locations.length ? `VENUES:\n${locations.map((l: any) => `- ${l.name || 'Venue'}${l.address ? ` — ${l.address}` : ''}`).join('\n')}\n` : ''}${c.overview ? `OVERVIEW:\n${clip(c.overview, 800)}\n` : ''}${rules ? `RULES (from the Rules page ${base}/rules):\n${clip(rules, 6000)}\n` : ''}${teams ? `TEAMS BY DIVISION AND POOL (as listed on the schedule page):\n${teams}\n` : ''}${released ? `SCHEDULE (${games.length} games):\n${sched}` : `SCHEDULE: NOT RELEASED YET. The organizer hasn't published game times, fields or opponents. Once it's released, every team's games appear on the schedule page (${base}/public).`}`
+${fees.length ? `FEES (per team):\n${fees.join('\n')}\n` : ''}${c.hotelsUrl || c.hotels ? `HOTELS: ${c.hotelsUrl ? `book at ${c.hotelsUrl}` : ''}${c.hotels ? ` ${clip(c.hotels, 400)}` : ''}\n` : ''}${locations.length ? `VENUES:\n${locations.map((l: any) => `- ${l.name || 'Venue'}${l.address ? ` — ${l.address}` : ''}`).join('\n')}\n` : ''}${c.overview ? `OVERVIEW:\n${clip(c.overview, 800)}\n` : ''}${rules ? `RULES (from the Rules page ${base}/rules):\n${clip(rules, 6000)}\n` : ''}${teams ? `TEAMS BY DIVISION AND POOL (as listed on the schedule page):\n${teams}\n` : ''}${released ? `NOW: ${nowET()} (Eastern)\n${SCHEDULE_KEY}\nSCHEDULE (${games.length} games, in time order):\n${sched}` : `SCHEDULE: NOT RELEASED YET. The organizer hasn't published game times, fields or opponents. Once it's released, every team's games appear on the schedule page (${base}/public).`}`
   if (org) facts += await orgPagesText(org.id)
   if (userTeam) facts += `\n\nThe person chatting is with team "${clip(userTeam, 60)}". For "my team", their schedule or results, focus on that team's games.`
   return { key: tournamentId, title: tt.name, org, facts, tournamentId }
@@ -154,6 +200,7 @@ THEY ARE ON: ${page || 'unknown page'}
 ${who ? `WHO IS ASKING: ${who.prompt} (they told us). Answer for them.\n` : ''}
 HOW TO ANSWER
 - Answer only from EVENT INFO and the HOW-TO pages below. Never invent dates, times, fields, prices, policies, rules, buttons or features, and never fill a gap with what seems likely: if the pages don't say (for example whether a player on two teams signs twice), treat it as unknown.
+- Schedule questions, when SCHEDULE lists games: find every game for the team they mean (match the name loosely; the same club can have teams in several divisions, so if it's unclear which one, list each or ask). Give the games in order with day, time, field and opponent, one per line. Using NOW, say which game is next and leave out ones already played unless asked. For "what's next after pool play" or "when are the playoffs", explain from HOW TO READ THE SCHEDULE that their playoff game depends on where they finish, and name the first playoff time and field for the seeds they could be, without guessing their seed. Link the schedule page so they can follow changes. Never invent a game, time or field that isn't in SCHEDULE.
 - If SCHEDULE says NOT RELEASED YET and they ask when, where or who their team plays: say first that the schedule hasn't been released yet and that their games will show on the schedule page once it is (link it). Don't give steps for finding games, and don't guess a release date. If their team is in TEAMS BY DIVISION AND POOL, confirm its division and pool. Don't start with "${NOT_KNOWN}" for this.
 - A message that is just a team name means they're telling you their team: answer about that team.
 - How-to questions (register, pay, waivers, schedule, alerts): give short numbered steps with the exact button names in **bold**, from the HOW-TO pages.
