@@ -312,15 +312,17 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
             // leaving a grey band inside its border (under the Schedule button,
             // once the schedule is live).
             <>
-            {byDivision&&scheduleLive&&(
-              <PoolCard division={division} pool="" title={`${division} — Overall`} standings={calcStandings(poolPlay,division,undefined,divTiebreakers,divRoster)} games={poolPlay} followed={followed} onFollow={onFollow} tiebreakers={divTiebreakers} advanceCount={overallCut} numPools={1} cutLabel={overallLabel} note={`Bracket seeds come from this overall ranking across ${pools.length} pools, not from pool finish.`} showSchedule={false} onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>
-            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               {pools.map(pool=>(
                 <PoolCard key={pool} division={division} pool={pool} standings={calcStandings(games,division,pool,tiebreakers,rosterFor(pool))} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={byDivision?0:advanceCount} numPools={pools.length} showSchedule={scheduleLive} preSchedule={!scheduleLive} onScheduleClick={()=>setDivTab('schedule')} onTeamClick={handleTeamClick}/>
               ))}
               {loose && <PoolCard key="__loose" division={division} pool="" title={`${division} — Not in a pool yet`} standings={calcStandings(games,division,undefined,tiebreakers,loose.teams)} games={games} followed={followed} onFollow={onFollow} tiebreakers={tiebreakers} advanceCount={0} numPools={pools.length} showSchedule={false} preSchedule onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>}
             </div>
+            {/* Below the pools (Bo, Oct 12 2026): families look for their pool first; the
+                overall ranking that decides the seeds follows it. */}
+            {byDivision&&scheduleLive&&(
+              <PoolCard division={division} pool="" title={`${division} — Overall`} standings={calcStandings(poolPlay,division,undefined,divTiebreakers,divRoster)} games={poolPlay} followed={followed} onFollow={onFollow} tiebreakers={divTiebreakers} advanceCount={overallCut} numPools={1} cutLabel={overallLabel} note={`Bracket seeds come from this overall ranking across ${pools.length} pools, not from pool finish.`} showSchedule={false} onScheduleClick={()=>{}} onTeamClick={handleTeamClick}/>
+            )}
             </>
           ) : loose
             // No pools set yet: every registered team in one card, same shape,
