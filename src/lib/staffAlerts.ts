@@ -157,3 +157,17 @@ export async function notifyRequester(fromUserId: string | undefined, tournament
     if (subs.length) await sendToSubscriptions(subs, { title: `${by} is on the way`, body: text, url: `/tournaments/${tournamentId}/communications`, tag: `fr-ack:${text}` })
   } catch { /* best-effort */ }
 }
+
+/** Phone alerts to the staff whose alert subscription carries one of these emails
+ *  (the assigner's "Notify officials" sends each person their own games). */
+export async function pushToStaffEmails(emails: string[], payload: { title: string; body: string; url: string; tag: string }): Promise<number> {
+  try {
+    const want = new Set(emails.map(e => e.trim().toLowerCase()).filter(Boolean))
+    if (!want.size) return 0
+    const subs = (await readAll()).filter(s => s.email && want.has(String(s.email).toLowerCase()))
+    if (!subs.length) return 0
+    const r = await sendToSubscriptions(subs, payload)
+    if (r.gone.length) await writeAll((await readAll()).filter(s => !r.gone.includes(s.endpoint)))
+    return r.sent
+  } catch { return 0 }
+}

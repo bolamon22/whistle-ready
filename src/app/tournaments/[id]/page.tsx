@@ -4,11 +4,12 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send } from 'lucide-react'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
 import { gameGender } from '@/lib/gameGender'
 import { isOnline, presenceLabel } from '@/lib/presenceTime'
+import { useRole } from '@/lib/role-context'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
@@ -192,6 +193,12 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [dragWorker,setDragWorker]=useState<Worker|null>(null)
   const [dragSlot,setDragSlot]=useState<string|null>(null)
   const [locked,setLocked]=useState(false)
+  // Assigners staff games; the scheduler moves and edits them (Bo, Oct 13 2026). They keep
+  // refs per game. The API refuses the rest too (api/games/[id], games POST, import).
+  const { effectiveRole }=useRole()
+  const noSchedule=effectiveRole==='assigner'
+  const gameLocked=locked||noSchedule
+  const [showNotify,setShowNotify]=useState(false)
   const [gamesPerRef,setGamesPerRef]=useState(6)
   const [reqsOpen,setReqsOpen]=useState(false)
 
@@ -323,7 +330,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
     setClearSaving(false)
   }
 
-  function openEditGame(g:Game){setEditGame(g);setGameForm({gameNumber:g.gameNumber,date:g.date,startTime:g.startTime,location:g.location,division:g.division,pool:g.pool??'',team1:g.team1,team2:g.team2,refCount:g.refCount,isChampionship:g.isChampionship,isCanceled:g.isCanceled})}
+  function openEditGame(g:Game){if(noSchedule)return;setEditGame(g);setGameForm({gameNumber:g.gameNumber,date:g.date,startTime:g.startTime,location:g.location,division:g.division,pool:g.pool??'',team1:g.team1,team2:g.team2,refCount:g.refCount,isChampionship:g.isChampionship,isCanceled:g.isCanceled})}
   function openAddGame(){setShowAddGame(true);setGameForm({gameNumber:'',date:activeDay||dates[0]||'',startTime:'08:00',location:'',division:'',pool:'',team1:'TBD',team2:'TBD',refCount:2,isChampionship:false})}
 
   async function saveGameEdit(e:React.FormEvent){
@@ -559,13 +566,14 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
 
+      {showNotify && <NotifyOfficials tournamentId={params.id} day={activeDay} dayLabel={activeDay?formatDate(activeDay):''} onClose={()=>setShowNotify(false)} />}
       {/* Auto-assign modal */}
       {showAutoAssign&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className={`bg-white rounded-2xl shadow-2xl w-full ${autoResult?.preview?'max-w-3xl':'max-w-md'} max-h-[92vh] flex flex-col`}>
             <div className="px-6 py-5 border-b border-slate-100">
               <h2 className="text-lg font-bold">Auto-Assign{autoResult?.preview?' preview':''} — {formatDate(activeDay)}</h2>
-              <p className="text-sm text-slate-500 mt-1">Fills unassigned slots based on availability, gender, and game targets. Won't touch existing assignments.</p>
+              <p className="text-sm text-slate-500 mt-1">Fills open slots using availability and gender, giving each game to whoever has the fewest so far. Won't touch existing assignments.</p>
             </div>
             {!autoResult?(
               <div className="px-6 py-5 space-y-4">
@@ -835,10 +843,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
           </div>
         )}
         <div className="flex items-center gap-1.5">
+          {games.length > 0 && <button onClick={() => setShowNotify(true)} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 border border-teal-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Send size={13} /> Notify officials</button>}
           {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="text-xs font-semibold text-purple-700 border border-purple-200 hover:bg-purple-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Zap size={13} /> Auto-assign</button>}
           {dayGames.length > 0 && <button onClick={() => { resetClear(); setShowClear(true) }} className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Trash2 size={13} /> Clear</button>}
-          <button onClick={openAddGame} className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Plus size={13} /> Game</button>
-          <label className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"><Upload size={13} /> Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>
+          {!noSchedule&&<button onClick={openAddGame} className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Plus size={13} /> Game</button>}
+          {!noSchedule&&<label className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"><Upload size={13} /> Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>}
         </div>
       </div>
 
@@ -921,7 +930,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                         </td>
                         <td className="px-4 py-3">{g.isCanceled?<span className="badge bg-red-100 text-red-600">Canceled</span>:g.assignments.length===0?<span className="badge bg-amber-100 text-amber-600">Unassigned</span>:<span className="badge bg-emerald-100 text-emerald-700">Assigned</span>}</td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <button onClick={e=>{e.stopPropagation();openEditGame(g)}} className="text-xs text-slate-400 hover:text-slate-600 font-medium">Edit</button>
+                          {!noSchedule&&<button onClick={e=>{e.stopPropagation();openEditGame(g)}} className="text-xs text-slate-400 hover:text-slate-600 font-medium">Edit</button>}
                         </td>
                       </tr>
                       {isAssignOpen&&(
@@ -987,7 +996,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                             </td>
                             <td className="px-4 py-2.5">{g.isCanceled&&<span className="badge bg-red-100 text-red-600">Canceled</span>}</td>
                             <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                              <button onClick={e=>{e.stopPropagation();openEditGame(g)}} className="text-xs text-slate-400 hover:text-slate-600 font-medium">Edit</button>
+                              {!noSchedule&&<button onClick={e=>{e.stopPropagation();openEditGame(g)}} className="text-xs text-slate-400 hover:text-slate-600 font-medium">Edit</button>}
                             </td>
                           </tr>
                           {isAssignOpen&&(
@@ -1258,7 +1267,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
             return(
               <div className={`relative group/card rounded-lg border border-slate-200 px-1.5 py-1 flex flex-col gap-0.5 min-w-0 ${game.isCanceled?'opacity-40':''}`} style={{borderLeft:`4px solid ${dc.border}`,background:dc.bg}}>
                 <div className="flex items-center gap-1 text-[9px] text-slate-500 whitespace-nowrap overflow-hidden leading-none">
-                  <span draggable={!locked} onDragStart={e=>{e.dataTransfer.setData('gameId',game.id);e.dataTransfer.effectAllowed='move';setDragGame(game)}} onDragEnd={()=>{setDragGame(null);setDragOver(null)}} className={`select-none text-[11px] leading-none ${locked?'text-slate-200':'cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500'}`} title="Drag to move game">⠿</span>
+                  <span draggable={!gameLocked} onDragStart={e=>{e.dataTransfer.setData('gameId',game.id);e.dataTransfer.effectAllowed='move';setDragGame(game)}} onDragEnd={()=>{setDragGame(null);setDragOver(null)}} className={`select-none text-[11px] leading-none ${gameLocked?'hidden':'cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500'}`} title="Drag to move game">⠿</span>
                   <b className="text-slate-900">#{game.gameNumber}</b>
                   <span className="font-bold truncate" style={{color:dc.text}} title={game.division}>{divisionAbbr(game.division)}</span>
                   {game.pool&&<span className="truncate" title={game.pool}>· {String(game.pool).replace(/^(pool|group)\s*/i,'')}</span>}
@@ -1268,7 +1277,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                     <button type="button" onClick={()=>setRefCount(game.id,refCount-1)} disabled={refCount<=1||locked} className="w-3 h-3 flex items-center justify-center rounded border border-slate-300 text-slate-500 text-[10px] leading-none hover:bg-white disabled:opacity-30 opacity-0 group-hover/card:opacity-100 transition-opacity" title="One ref fewer on this game">−</button>
                     <span className="font-bold text-slate-600">{refCount}<span className="font-medium text-slate-400">R</span></span>
                     <button type="button" onClick={()=>setRefCount(game.id,refCount+1)} disabled={refCount>=3||locked} className="w-3 h-3 flex items-center justify-center rounded border border-slate-300 text-slate-500 text-[10px] leading-none hover:bg-white disabled:opacity-30 opacity-0 group-hover/card:opacity-100 transition-opacity" title="One more ref on this game">+</button>
-                    {!locked&&<button type="button" className="ml-0.5 text-slate-400 hover:text-slate-700 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={e=>{e.stopPropagation();openEditGame(game)}} title="Edit game">✎</button>}
+                    {!gameLocked&&<button type="button" className="ml-0.5 text-slate-400 hover:text-slate-700 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={e=>{e.stopPropagation();openEditGame(game)}} title="Edit game">✎</button>}
                   </span>
                 </div>
                 <div className="text-[11px] font-bold text-slate-900 truncate leading-tight" title={`${game.team1} v ${game.team2}`}>{game.team1}<span className="font-normal text-slate-400 px-1">v</span>{game.team2}</div>
@@ -1357,7 +1366,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                           className={`border-r border-t border-slate-300 last:border-r-0 transition-colors ${density==='mini'?'h-8':'min-h-[80px]'} ${isDragTarget?dropHasConflict?'bg-red-100 ring-2 ring-inset ring-red-400':'bg-emerald-100 ring-2 ring-inset ring-emerald-400':'bg-white'}`}
                           onDragOver={e=>{e.preventDefault();if(dragGame)setDragOver({time,field})}}
                           onDragLeave={()=>setDragOver(null)}
-                          onDrop={e=>{e.preventDefault();const gId=e.dataTransfer.getData('gameId');if(gId&&!locked)handleDrop(gId,time,field,activeDay);setDragOver(null)}}
+                          onDrop={e=>{e.preventDefault();const gId=e.dataTransfer.getData('gameId');if(gId&&!gameLocked)handleDrop(gId,time,field,activeDay);setDragOver(null)}}
                         />
                       )
                       const dc=dcOf(game)
@@ -1372,7 +1381,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                           style={isDragTarget||mode!=='full'?{}:{background:dc.bg}}
                           onDragOver={e=>{e.preventDefault();if(dragGame&&dragGame.id!==game.id)setDragOver({time,field})}}
                           onDragLeave={()=>setDragOver(null)}
-                          onDrop={e=>{e.preventDefault();const gId=e.dataTransfer.getData('gameId');if(gId&&gId!==game.id&&!locked)handleDrop(gId,time,field,activeDay);else if(!gId&&mode==='mini')dropWorkerOnGame(e,game);setDragOver(null)}}
+                          onDrop={e=>{e.preventDefault();const gId=e.dataTransfer.getData('gameId');if(gId&&gId!==game.id&&!gameLocked)handleDrop(gId,time,field,activeDay);else if(!gId&&mode==='mini')dropWorkerOnGame(e,game);setDragOver(null)}}
                         >
                           {mode==='mini'&&renderMini(game,doubled,()=>setMiniOpen(s=>{const n=new Set(s);n.has(game.id)?n.delete(game.id):n.add(game.id);return n}),'click to open the card')}
                           {mode==='compact'&&(
@@ -1391,13 +1400,14 @@ export default function GridPage({ params }: { params:{id:string} }) {
                               </div>
                             )
                           })()}
-                          {!locked&&<button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[9px] text-slate-400 hover:text-slate-700 transition-opacity" onClick={e=>{e.stopPropagation();openEditGame(game)}}>✎</button>}
+                          {!gameLocked&&<button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[9px] text-slate-400 hover:text-slate-700 transition-opacity" onClick={e=>{e.stopPropagation();openEditGame(game)}}>✎</button>}
                           <div
                             className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-opacity text-[12px] leading-none select-none"
-                            draggable={!locked}
+                            draggable={!gameLocked}
                             onDragStart={e=>{e.dataTransfer.setData('gameId',game.id);e.dataTransfer.effectAllowed='move';setDragGame(game)}}
                             onDragEnd={()=>{setDragGame(null);setDragOver(null)}}
                             title="Drag to move game"
+                            hidden={gameLocked}
                           >⠿</div>
                           <div className="flex items-center justify-between mb-1.5 pb-1.5 pl-3" style={{borderBottom:`2px solid ${dc.border}`}}>
                             <div className="flex items-center gap-1 min-w-0">
@@ -1409,8 +1419,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
                             {game.isChampionship&&<span className="text-[9px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded-full shrink-0">★</span>}
                           </div>
                           <div className="mb-2 space-y-1">
-                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team1}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={locked} defaultValue={game.score1??''} onBlur={e=>saveScore(game.id,'score1',e.target.value)} placeholder="—"/></div>
-                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team2}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={locked} defaultValue={game.score2??''} onBlur={e=>saveScore(game.id,'score2',e.target.value)} placeholder="—"/></div>
+                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team1}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked} defaultValue={game.score1??''} onBlur={e=>saveScore(game.id,'score1',e.target.value)} placeholder="—"/></div>
+                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team2}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked} defaultValue={game.score2??''} onBlur={e=>saveScore(game.id,'score2',e.target.value)} placeholder="—"/></div>
                           </div>
                           <div className="space-y-0.5 pt-1" style={{borderTop:`1px solid ${dc.border}`}}>
                             <div className="flex items-center justify-between mb-1">
@@ -1480,14 +1490,14 @@ export default function GridPage({ params }: { params:{id:string} }) {
             {unscheduledGames.map(g=>(
               <div
                 key={g.id}
-                draggable={!locked}
+                draggable={!gameLocked}
                 onDragStart={e=>{e.dataTransfer.setData('gameId',g.id);e.dataTransfer.effectAllowed='move';setDragGame(g)}}
                 onDragEnd={()=>{setDragGame(null);setDragOver(null)}}
                 className={`card p-3 cursor-grab active:cursor-grabbing w-48 border-2 border-dashed border-slate-300 hover:border-sky-400 transition-colors ${dragGame?.id===g.id?'opacity-40':''}`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-slate-400">#{g.gameNumber}</span>
-                  <button onClick={()=>openEditGame(g)} className="text-[10px] text-sky-600 hover:text-sky-800 font-medium">Edit</button>
+                  {!noSchedule&&<button onClick={()=>openEditGame(g)} className="text-[10px] text-sky-600 hover:text-sky-800 font-medium">Edit</button>}
                 </div>
                 <div className="text-xs font-semibold text-slate-700 mb-0.5">{g.division}</div>
                 <div className="text-xs text-slate-600">{g.team1}</div>
@@ -1621,6 +1631,75 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
       <div className="flex-1 relative">
         {isDoubledAssigned&&<div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full z-10"/>}
         <SearchSelect value={existing?.workerId??''} onChange={onAssign} options={options} placeholder="unassigned" assigned={!!existing} disabled={disabled}/>
+      </div>
+    </div>
+  )
+}
+
+/** "Notify officials": email (and phone-alert) each official their own games, once
+ *  the assignments are ready (api/tournaments/[id]/notify-officials). */
+function NotifyOfficials({ tournamentId, day, dayLabel, onClose }: { tournamentId: string; day: string; dayLabel: string; onClose: () => void }) {
+  const [scope,setScope]=useState<'all'|'day'>('all')
+  const [onlyChanged,setOnlyChanged]=useState(false)
+  const [note,setNote]=useState('')
+  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean}|null>(null)
+  const [sending,setSending]=useState(false)
+  const [primed,setPrimed]=useState(false)
+  const body=(extra:object)=>JSON.stringify({date:scope==='day'?day:'',onlyChanged,note,...extra})
+  useEffect(()=>{
+    let live=true
+    fetch(`/api/tournaments/${tournamentId}/notify-officials`,{method:'POST',headers:{'Content-Type':'application/json'},body:body({preview:true})})
+      .then(r=>r.ok?r.json():null).then(d=>{ if(!live||!d) return; setPreview(d)
+        // Sent before? Default to only the people whose games changed since.
+        if(!primed){ setPrimed(true); if(d.lastSentAt&&!onlyChanged) setOnlyChanged(true) } })
+      .catch(()=>{})
+    return()=>{live=false}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[scope,onlyChanged,tournamentId])
+  const send=async()=>{
+    setSending(true)
+    try{
+      const r=await fetch(`/api/tournaments/${tournamentId}/notify-officials`,{method:'POST',headers:{'Content-Type':'application/json'},body:body({})})
+      const d=await r.json().catch(()=>({}))
+      if(!r.ok){toast.error(d.error||'That didn’t send. Try again.');return}
+      toast.success(`Sent to ${d.emailed} official${d.emailed===1?'':'s'} by email${d.pushed?` · ${d.pushed} phone alert${d.pushed===1?'':'s'}`:''}`)
+      if(d.failed?.length) toast.error(`Didn’t go through for: ${d.failed.join(', ')}`)
+      onClose()
+    }finally{setSending(false)}
+  }
+  const last=preview?.lastSentAt?new Date(preview.lastSentAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Notify officials">
+      <div className="card w-full max-w-lg p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">Notify officials</h2>
+            <p className="text-sm text-slate-500 mt-1">Emails each official their own games, with a link to My games. Anyone with Whistle Ready alerts on gets a phone alert too.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Which games</p>
+          <label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='all'} onChange={()=>setScope('all')} className="accent-teal-600"/> Every day of the event</label>
+          {day&&<label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='day'} onChange={()=>setScope('day')} className="accent-teal-600"/> Just {dayLabel}</label>}
+          <label className="flex items-center gap-2 text-sm pt-1"><input type="checkbox" checked={onlyChanged} onChange={e=>setOnlyChanged(e.target.checked)} className="accent-teal-600"/> Only officials whose games changed since the last send</label>
+        </div>
+        <div>
+          <label htmlFor="notify-note" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Note (optional)</label>
+          <textarea id="notify-note" value={note} onChange={e=>setNote(e.target.value)} rows={3} maxLength={600} className="input mt-1 w-full text-sm" placeholder="Check in at the ref tent 30 minutes before your first game."/>
+        </div>
+        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 space-y-1" aria-live="polite">
+          {!preview?<p className="text-slate-400">Counting…</p>:<>
+            <p><span className="font-bold">{preview.targets}</span> official{preview.targets===1?'':'s'} · {preview.games} game{preview.games===1?'':'s'}{preview.unchanged>0&&onlyChanged?<span className="text-slate-500"> · {preview.unchanged} unchanged, skipped</span>:''}</p>
+            {last&&<p className="text-xs text-slate-500">Last sent {last}</p>}
+            {preview.noEmail.length>0&&<p className="text-xs text-amber-700">No email on file: {preview.noEmail.join(', ')}. Add one on the Roster.</p>}
+            {!preview.emailOn&&<p className="text-xs text-red-600">Email isn’t set up on this server, so only phone alerts will go out.</p>}
+          </>}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-primary inline-flex items-center gap-1.5 disabled:opacity-50" disabled={sending||!preview||preview.targets===0} onClick={send}><Send size={14}/>{sending?'Sending…':`Send to ${preview?.targets??0} official${preview?.targets===1?'':'s'}`}</button>
+        </div>
       </div>
     </div>
   )
