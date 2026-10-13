@@ -85,3 +85,26 @@ export function audienceFor(id: string): string {
   if (gs.some(g => !g.roles)) return 'All staff'
   return Array.from(new Set(gs.flatMap(g => g.roles || []).map(r => TRAINING_ROLE_LABELS[r] || r))).join(', ')
 }
+
+/** The suggested training email, filled in for the event and roles picked (Bo, Oct 13
+ *  2026: "pre-filled ... pertinent to each event or the role", and he sees exactly what
+ *  goes out). Only {firstName} is left to fill per person, at send time. The email's
+ *  footer already says "Questions? Reply to this email", so the letter doesn't. */
+const ROLE_LINES: Record<string, string> = {
+  scorekeeper: 'They show how to run the game clock, keep score, and post the final score from your phone.',
+  ref: 'They show how to find your games and your crew, find your name on the schedule, and what to do on game day.',
+  field_ops: 'They show the setup checklist, field requests, and how to reach anyone on staff.',
+  athletic_trainer: 'They show field requests, logging an incident, and how to reach anyone on staff.',
+  assigner: 'They walk through building your crew and assigning officials.',
+}
+export function trainingLetter(o: { eventName?: string; dates?: string; roles: string[]; sender?: string; count: number }): { subject: string; body: string } {
+  const plural = o.roles.length === 1 ? (TRAINING_ROLE_LABELS[o.roles[0]] || '').toLowerCase() : ''
+  const these = o.count === 1 ? 'this short video' : 'these short videos'
+  const thanks = o.eventName
+    ? `Thanks for working ${o.eventName}${o.dates ? ` (${o.dates})` : ''}${plural ? ` as one of our ${plural}` : ''}. Please watch ${these} before the event.`
+    : `Please watch ${these} before your next event${plural ? ` as one of our ${plural}` : ''}.`
+  const line = (o.roles.length === 1 && ROLE_LINES[o.roles[0]]) || 'They show exactly what you’ll do in the app on game day.'
+  const body = [`Hi {firstName},`, `${thanks} Each one is about a minute. ${line}`, o.sender ? `Thanks,\n${o.sender}` : ''].filter(Boolean).join('\n\n')
+  const subject = o.eventName ? `${o.eventName}: your training videos` : 'Your Whistle Ready training videos'
+  return { subject, body }
+}

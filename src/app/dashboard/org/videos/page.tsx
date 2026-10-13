@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
 import { CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, Mail, PlayCircle, Search, Send, Users, X } from 'lucide-react'
-import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo } from '@/lib/training'
+import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo, trainingLetter } from '@/lib/training'
 import { HOW_TO_VIDEOS, howToSrc, howToPoster, howToMinutes } from '@/lib/howToVideos'
 import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
@@ -17,8 +18,18 @@ import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
 type Lib = { id: string; num: string; title: string; blurb: string; secs: number; series: 'staff' | 'ref' | 'assigner' | 'family'; audience: string; src: string; poster: string }
 type Person = { id: string; name: string; email: string; roles: string[]; assigned: string[]; events?: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
-type Ev = { id: string; name: string; startDate: string }
-type SendLog = { event?: string; at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
+type Ev = { id: string; name: string; startDate: string; endDate?: string }
+/** "Oct 24–25", "Oct 31 – Nov 1" */
+function evDates(e?: Ev | null): string {
+  if (!e?.startDate) return ''
+  const d = (x: string) => new Date(x + 'T12:00:00')
+  const a = d(e.startDate), b = e.endDate && e.endDate !== e.startDate ? d(e.endDate) : null
+  if (isNaN(a.getTime())) return ''
+  const m = (x: Date) => x.toLocaleDateString('en-US', { month: 'short' })
+  if (!b || isNaN(b.getTime())) return `${m(a)} ${a.getDate()}`
+  return m(a) === m(b) ? `${m(a)} ${a.getDate()}\u2013${b.getDate()}` : `${m(a)} ${a.getDate()} \u2013 ${m(b)} ${b.getDate()}`
+}
+type SendLog = { event?: string; subject?: string; at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
 
 const LIB: Lib[] = [
   ...TRAINING_VIDEOS.map(v => ({ ...v, series: (v.series || 'staff') as 'staff' | 'ref' | 'assigner', audience: audienceFor(v.id), src: videoSrc(v.id), poster: posterSrc(v.id) })),
@@ -220,6 +231,7 @@ export default function VideoLibrary() {
               <p className="text-slate-600 mt-1">{bundleSummary(s.videoIds)}</p>
               {(() => { const to = [...s.roles.map(r => TRAINING_ROLE_LABELS[r] || r), ...(s.people.length ? [`${s.people.length} picked by name`] : []), ...(s.emails || []), ...(s.meCopy ? ['you'] : [])]; return to.length ? <p className="text-xs text-slate-400 mt-0.5">To: {to.join(', ')}</p> : null })()}
               {s.event && <p className="text-xs text-slate-500 mt-0.5">Event: {s.event}</p>}
+              {s.subject && <p className="text-xs text-slate-500 mt-0.5">Subject: {s.subject}</p>}
               {s.to && s.to.length > 0 && <p className="text-xs text-slate-600 mt-1">Sent to: {s.to.map(t => t.name && t.name !== t.email ? `${t.name} (${t.email})` : t.email).join(', ')}</p>}
               {s.failed && s.failed.length > 0 && <p className="text-xs text-red-600 mt-0.5">Didn’t go through: {s.failed.join(', ')}</p>}
             </div>
@@ -292,21 +304,33 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
   const onEv = eventId ? people.filter(p => p.events?.includes(eventId)) : people
   const [chosen, setChosen] = useState<Set<string>>(() => new Set(initialChosen || []))
   const [q, setQ] = useState('')
-  const [note, setNote] = useState('')
   const [meCopy, setMeCopy] = useState(true)
+  // The message: suggested for the event and roles picked, then Bo's to edit. Once he
+  // edits it, picking another event or role no longer rewrites what he wrote.
+  const { data: session } = useSession()
+  const sender = String(session?.user?.name || '')
+  const ev = events.find(e => e.id === eventId) || null
+  const suggested = trainingLetter({ eventName: ev?.name, dates: evDates(ev), roles: Array.from(roles), sender, count: ids.length })
+  const [subject, setSubject] = useState(suggested.subject)
+  const [msg, setMsg] = useState(suggested.body)
+  const [edited, setEdited] = useState(false)
+  useEffect(() => { if (!edited) { setSubject(suggested.subject); setMsg(suggested.body) } },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [suggested.subject, suggested.body])
   const [emailsText, setEmailsText] = useState('')
   const emails = emailsText.split(/[\s,;]+/).map(e => e.trim()).filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
   const emailsKey = emails.join(',')
-  const [preview, setPreview] = useState<{ count: number; names: string[]; noEmail: string[]; newPeople?: string[]; emailOn: boolean } | null>(null)
+  const [preview, setPreview] = useState<{ count: number; names: string[]; noEmail: string[]; newPeople?: string[]; emailOn: boolean; sample?: { to: string; subject: string; html: string } | null } | null>(null)
   const [busy, setBusy] = useState(false)
-  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), emails, meCopy, eventId, note, ...extra })
+  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), emails, meCopy, eventId, subject, body: msg, ...extra })
   useEffect(() => {
     if (!roles.size && !chosen.size && !meCopy && !emails.length && !eventId) { setPreview(null); return }
     let live = true
-    fetch('/api/training/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body({ preview: true }) }).then(r => r.ok ? r.json() : null).then(d => { if (live) setPreview(d) }).catch(() => {})
-    return () => { live = false }
+    // Short wait so typing in the message doesn't fetch on every key.
+    const t = setTimeout(() => fetch('/api/training/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body({ preview: true }) }).then(r => r.ok ? r.json() : null).then(d => { if (live) setPreview(d) }).catch(() => {}), 400)
+    return () => { live = false; clearTimeout(t) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roles, chosen, meCopy, emailsKey, eventId])
+  }, [roles, chosen, meCopy, emailsKey, eventId, subject, msg])
   const flip = (set: Set<string>, setter: (s: Set<string>) => void, k: string) => { const n = new Set(set); n.has(k) ? n.delete(k) : n.add(k); setter(n) }
   const matches = q.trim() ? people.filter(p => p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : []
   const send = async () => {
@@ -323,7 +347,8 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
   }
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-label="Send videos">
-      <div className="bg-white rounded-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl w-full max-w-6xl max-h-[92vh] overflow-y-auto grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+       <div className="p-6 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div><h2 className="text-lg font-bold text-slate-900">Send {ids.length} video{ids.length === 1 ? '' : 's'}</h2><p className="text-sm text-slate-500">{bundleSummary(ids)}</p></div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
@@ -362,8 +387,13 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
           <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer"><input type="checkbox" checked={meCopy} onChange={e => setMeCopy(e.target.checked)} className="accent-teal-600" /> Send me a copy too</label>
         </div>
         <div>
-          <label htmlFor="send-note" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Note (optional)</label>
-          <textarea id="send-note" value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={800} placeholder="Please watch these before Monster Mash on Oct 24." className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <div className="flex items-baseline justify-between gap-2">
+            <label htmlFor="send-subject" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Message</label>
+            {edited && <button type="button" onClick={() => { setEdited(false); setSubject(suggested.subject); setMsg(suggested.body) }} className="text-xs font-semibold text-teal-700 hover:text-teal-900">Use the suggested message</button>}
+          </div>
+          <input id="send-subject" value={subject} onChange={e => { setSubject(e.target.value); setEdited(true) }} maxLength={200} aria-label="Subject" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold" />
+          <textarea value={msg} onChange={e => { setMsg(e.target.value); setEdited(true) }} rows={9} maxLength={4000} aria-label="Message" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm leading-relaxed" />
+          <p className="text-[11px] text-slate-400 mt-1"><b>{'{firstName}'}</b> becomes each person&apos;s first name. The video list and the Watch button are added below your message. The preview shows exactly what they get.</p>
         </div>
         <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700" aria-live="polite">
           {!preview ? <span className="text-slate-400">Pick a role, a person or an email address.</span> : <>
@@ -375,8 +405,19 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600">Cancel</button>
-          <button type="button" onClick={send} disabled={busy || !preview?.count} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-50"><Mail size={14} />{busy ? 'Sending…' : `Send to ${preview?.count ?? 0}`}</button>
+          <button type="button" onClick={send} disabled={busy || !preview?.count || !msg.trim()} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-50"><Mail size={14} />{busy ? 'Sending…' : `Send to ${preview?.count ?? 0}`}</button>
         </div>
+       </div>
+       <div className="bg-slate-100 border-t lg:border-t-0 lg:border-l border-slate-200 p-4 flex flex-col min-h-[420px]">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Preview</p>
+        {preview?.sample ? <>
+          <div className="mt-2 rounded-t-lg bg-white border border-slate-200 px-3 py-2 text-xs text-slate-600 space-y-0.5">
+            <p><span className="text-slate-400">To:</span> {preview.sample.to}{preview.count > 1 ? <span className="text-slate-400"> (each of the {preview.count} gets their own first name)</span> : null}</p>
+            <p><span className="text-slate-400">Subject:</span> <b className="text-slate-800">{preview.sample.subject}</b></p>
+          </div>
+          <iframe title="Email preview" srcDoc={preview.sample.html} sandbox="" className="flex-1 w-full min-h-[480px] bg-white border border-t-0 border-slate-200 rounded-b-lg" />
+        </> : <p className="mt-6 text-sm text-slate-400 text-center">Pick who it goes to, and the email shows here.</p>}
+       </div>
       </div>
     </div>
   )
