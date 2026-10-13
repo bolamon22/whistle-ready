@@ -16,8 +16,9 @@ import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 // (api/training/video) -- there is deliberately no download.
 
 type Lib = { id: string; num: string; title: string; blurb: string; secs: number; series: 'staff' | 'ref' | 'assigner' | 'family'; audience: string; src: string; poster: string }
-type Person = { id: string; name: string; email: string; roles: string[]; assigned: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
-type SendLog = { at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
+type Person = { id: string; name: string; email: string; roles: string[]; assigned: string[]; events?: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
+type Ev = { id: string; name: string; startDate: string }
+type SendLog = { event?: string; at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
 
 const LIB: Lib[] = [
   ...TRAINING_VIDEOS.map(v => ({ ...v, series: (v.series || 'staff') as 'staff' | 'ref' | 'assigner', audience: audienceFor(v.id), src: videoSrc(v.id), poster: posterSrc(v.id) })),
@@ -69,6 +70,7 @@ export default function VideoLibrary() {
   const [sending, setSending] = useState(false)
   const [preChosen, setPreChosen] = useState<string[]>([])
   const [people, setPeople] = useState<Person[] | null>(null)
+  const [events, setEvents] = useState<Ev[]>([])
   const [sends, setSends] = useState<SendLog[]>([])
   const [fSeries, setFSeries] = useState<string>('all')
   const [fFor, setFFor] = useState<string>('all')
@@ -77,7 +79,7 @@ export default function VideoLibrary() {
     && (!fQ.trim() || `${v.num} ${v.title} ${v.blurb}`.toLowerCase().includes(fQ.trim().toLowerCase()))), [fSeries, fFor, fQ])
   const filtered = fSeries !== 'all' || fFor !== 'all' || !!fQ.trim()
 
-  const loadPeople = () => fetch('/api/training?report=1').then(r => r.ok ? r.json() : null).then(d => setPeople(Array.isArray(d?.people) ? d.people : [])).catch(() => setPeople([]))
+  const loadPeople = () => fetch('/api/training?report=1').then(r => r.ok ? r.json() : null).then(d => { setPeople(Array.isArray(d?.people) ? d.people : []); setEvents(Array.isArray(d?.events) ? d.events : []) }).catch(() => setPeople([]))
   const loadSends = () => fetch('/api/training/send').then(r => r.ok ? r.json() : null).then(d => setSends(Array.isArray(d?.sends) ? d.sends : [])).catch(() => {})
   useEffect(() => {
     fetch('/api/training/script-notes').then(r => r.ok ? r.json() : null).then(d => { if (d?.notes) setNotes(d.notes) }).catch(() => {})
@@ -208,7 +210,7 @@ export default function VideoLibrary() {
         </div>
       )}
 
-      {tab === 'watched' && <Watched people={people} onNudge={(w, v) => { setPicked(new Set(v)); setPreChosen(w); setSending(true) }} />}
+      {tab === 'watched' && <Watched people={people} events={events} onNudge={(w, v) => { setPicked(new Set(v)); setPreChosen(w); setSending(true) }} />}
       {tab === 'sent' && (
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
           {sends.length === 0 && <p className="p-6 text-sm text-slate-400 text-center">Nothing sent yet. Tick videos on the Videos tab, then Send.</p>}
@@ -217,6 +219,7 @@ export default function VideoLibrary() {
               <div className="flex items-center justify-between gap-3"><span className="font-semibold text-slate-800">{s.sent} {s.sent === 1 ? 'person' : 'people'}</span><span className="text-xs text-slate-400">{new Date(s.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{s.by ? ` · ${s.by}` : ''}</span></div>
               <p className="text-slate-600 mt-1">{bundleSummary(s.videoIds)}</p>
               {(() => { const to = [...s.roles.map(r => TRAINING_ROLE_LABELS[r] || r), ...(s.people.length ? [`${s.people.length} picked by name`] : []), ...(s.emails || []), ...(s.meCopy ? ['you'] : [])]; return to.length ? <p className="text-xs text-slate-400 mt-0.5">To: {to.join(', ')}</p> : null })()}
+              {s.event && <p className="text-xs text-slate-500 mt-0.5">Event: {s.event}</p>}
               {s.to && s.to.length > 0 && <p className="text-xs text-slate-600 mt-1">Sent to: {s.to.map(t => t.name && t.name !== t.email ? `${t.name} (${t.email})` : t.email).join(', ')}</p>}
               {s.failed && s.failed.length > 0 && <p className="text-xs text-red-600 mt-0.5">Didn’t go through: {s.failed.join(', ')}</p>}
             </div>
@@ -233,7 +236,7 @@ export default function VideoLibrary() {
         </div>
       )}
       {scriptFor && <ScriptPanel readOnly={asg} v={scriptFor} note={notes[scriptFor.id]?.text || ''} onClose={() => setScriptFor(null)} onSaved={n => setNotes(n)} />}
-      {sending && <SendDialog initialChosen={preChosen} roleKeys={asg ? ROLE_KEYS.filter(r => r !== 'assigner' && (people || []).some(p => p.roles.includes(r))) : ROLE_KEYS} ids={Array.from(picked)} people={people || []} onClose={() => { setSending(false); setPreChosen([]) }} onSent={() => { setSending(false); setPreChosen([]); setPicked(new Set()); loadSends(); setTab('sent') }} />}
+      {sending && <SendDialog events={events} initialChosen={preChosen} roleKeys={asg ? ROLE_KEYS.filter(r => r !== 'assigner' && (people || []).some(p => p.roles.includes(r))) : ROLE_KEYS} ids={Array.from(picked)} people={people || []} onClose={() => { setSending(false); setPreChosen([]) }} onSent={() => { setSending(false); setPreChosen([]); setPicked(new Set()); loadSends(); setTab('sent') }} />}
     </div>
   )
 }
@@ -281,10 +284,12 @@ function ScriptPanel({ v, note, onClose, onSaved, readOnly }: { v: Lib; note: st
   )
 }
 
-function SendDialog({ ids, people, roleKeys, initialChosen, onClose, onSent }: { ids: string[]; people: Person[]; roleKeys: string[]; initialChosen?: string[]; onClose: () => void; onSent: () => void }) {
+function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onSent }: { ids: string[]; people: Person[]; events: Ev[]; roleKeys: string[]; initialChosen?: string[]; onClose: () => void; onSent: () => void }) {
   // Nobody is picked to start: a send goes only to who you choose (Bo, Oct 13 2026 --
   // an Assigners pre-pick sent a "sample to myself" to the assigners too).
   const [roles, setRoles] = useState<Set<string>>(new Set())
+  const [eventId, setEventId] = useState('')
+  const onEv = eventId ? people.filter(p => p.events?.includes(eventId)) : people
   const [chosen, setChosen] = useState<Set<string>>(() => new Set(initialChosen || []))
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
@@ -294,14 +299,14 @@ function SendDialog({ ids, people, roleKeys, initialChosen, onClose, onSent }: {
   const emailsKey = emails.join(',')
   const [preview, setPreview] = useState<{ count: number; names: string[]; noEmail: string[]; newPeople?: string[]; emailOn: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
-  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), emails, meCopy, note, ...extra })
+  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), emails, meCopy, eventId, note, ...extra })
   useEffect(() => {
-    if (!roles.size && !chosen.size && !meCopy && !emails.length) { setPreview(null); return }
+    if (!roles.size && !chosen.size && !meCopy && !emails.length && !eventId) { setPreview(null); return }
     let live = true
     fetch('/api/training/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body({ preview: true }) }).then(r => r.ok ? r.json() : null).then(d => { if (live) setPreview(d) }).catch(() => {})
     return () => { live = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roles, chosen, meCopy, emailsKey])
+  }, [roles, chosen, meCopy, emailsKey, eventId])
   const flip = (set: Set<string>, setter: (s: Set<string>) => void, k: string) => { const n = new Set(set); n.has(k) ? n.delete(k) : n.add(k); setter(n) }
   const matches = q.trim() ? people.filter(p => p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : []
   const send = async () => {
@@ -323,8 +328,18 @@ function SendDialog({ ids, people, roleKeys, initialChosen, onClose, onSent }: {
           <div><h2 className="text-lg font-bold text-slate-900">Send {ids.length} video{ids.length === 1 ? '' : 's'}</h2><p className="text-sm text-slate-500">{bundleSummary(ids)}</p></div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
         </div>
+        {events.length > 0 && (
+          <div>
+            <label htmlFor="send-event" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Working an event</label>
+            <select id="send-event" value={eventId} onChange={e => setEventId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+              <option value="">Any event (whole Staff Pool)</option>
+              {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name} · {people.filter(p => p.events?.includes(ev.id)).length} on staff</option>)}
+            </select>
+            {eventId && <p className="text-[11px] text-slate-500 mt-1">Only people on this event&apos;s staff roster. Pick a role below to narrow it, or none for everyone working it ({onEv.length}).</p>}
+          </div>
+        )}
         <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">To everyone who is a…</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{eventId ? 'Who is a…' : 'To everyone who is a…'}</p>
           <div className="flex flex-wrap gap-2">
             {roleKeys.map(r => (
               <button key={r} type="button" onClick={() => flip(roles, setRoles, r)} aria-pressed={roles.has(r)}
@@ -373,16 +388,17 @@ function SendDialog({ ids, people, roleKeys, initialChosen, onClose, onSent }: {
 type Sort = 'recent' | 'most' | 'least' | 'time' | 'name'
 type Status = '' | 'done' | 'started' | 'none'
 const minsOf = (secs: number) => Math.round(secs / 60)
-function Watched({ people, onNudge }: { people: Person[] | null; onNudge: (workerIds: string[], videoIds: string[]) => void }) {
+function Watched({ people, events, onNudge }: { people: Person[] | null; events: Ev[]; onNudge: (workerIds: string[], videoIds: string[]) => void }) {
   const [role, setRole] = useState('')
   const [video, setVideo] = useState('')
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<Sort>('recent')
+  const [ev, setEv] = useState('')
   const [status, setStatus] = useState<Status>('')
   const [open, setOpen] = useState<string | null>(null)
   if (!people) return <p className="text-sm text-slate-400 p-6 text-center">Loading…</p>
   const secsOf = (id: string) => trainingVideo(id)?.secs || 0
-  const rows = people.filter(p => (!role || p.roles.includes(role)) && (!video || p.assigned.includes(video)) && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())))
+  const rows = people.filter(p => (!ev || p.events?.includes(ev)) && (!role || p.roles.includes(role)) && (!video || p.assigned.includes(video)) && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())))
     .map(p => {
       const ids = video ? [video] : p.assigned
       const done = ids.filter(id => p.watched[id]).length
@@ -426,6 +442,7 @@ function Watched({ people, onNudge }: { people: Person[] | null; onNudge: (worke
         <div className="relative"><Search size={14} className="absolute left-3 top-2.5 text-slate-400" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a name" className="rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm w-48" /></div>
         <select value={role} onChange={e => setRole(e.target.value)} aria-label="Role" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"><option value="">All roles</option>{ROLE_KEYS.map(r => <option key={r} value={r}>{TRAINING_ROLE_LABELS[r]}</option>)}</select>
         <select value={video} onChange={e => setVideo(e.target.value)} aria-label="Video" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-xs"><option value="">Every video</option>{TRAINING_VIDEOS.map(v => <option key={v.id} value={v.id}>{v.num} {v.title}</option>)}</select>
+        {events.length > 0 && <select value={ev} onChange={e => setEv(e.target.value)} aria-label="Event" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-[14rem]"><option value="">Any event</option>{events.map(x => <option key={x.id} value={x.id}>Working {x.name}</option>)}</select>}
         <select value={sort} onChange={e => setSort(e.target.value as Sort)} aria-label="Sort" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
           <option value="recent">Most recent viewers</option><option value="most">Most complete</option><option value="least">Least complete</option><option value="time">Most time watching</option><option value="name">Name A–Z</option>
         </select>

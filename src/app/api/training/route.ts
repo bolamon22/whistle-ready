@@ -69,8 +69,26 @@ export async function GET(req: NextRequest) {
         m[String(r.videoId)] = { plays: Number(r.plays ?? 1) || 1, first: String(r.watchedAt || ''), last: String(r.lastWatchedAt || r.watchedAt || '') }
         by.set(k, m)
       }
-      const people = ws.map((w: Row) => { const roles = workerRoles(w); return { id: String(w.id), name: String(w.name || ''), email: String(w.email || ''), roles, assigned: videosFor(roles), watched: by.get(String(w.id)) || {} } })
-      return NextResponse.json({ people })
+      // Which events each person is on the staff roster for, so the library can pick
+      // "everyone working Monster Mash" (Bo, Oct 13 2026). Current and upcoming events
+      // only (ended more than two weeks ago drops off).
+      const onEvent = new Map<string, string[]>()
+      for (let i = 0; i < ids.length; i += 400) {
+        const part = ids.slice(i, i + 400)
+        const rs = await prisma.$queryRawUnsafe<Row[]>(`SELECT workerId, tournamentId FROM "RosterEntry" WHERE workerId IN (${part.map(() => '?').join(', ')})`, ...part)
+        for (const r of rs) onEvent.set(String(r.workerId), [...(onEvent.get(String(r.workerId)) || []), String(r.tournamentId)])
+      }
+      const tids = Array.from(new Set(Array.from(onEvent.values()).flat()))
+      const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10)
+      const events = tids.length
+        ? (await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, startDate, endDate FROM "Tournament" WHERE id IN (${tids.map(() => '?').join(', ')})`, ...tids))
+            .filter((t: Row) => String(t.endDate || t.startDate || '9999') >= cutoff)
+            .sort((a: Row, b: Row) => String(a.startDate).localeCompare(String(b.startDate)))
+            .map((t: Row) => ({ id: String(t.id), name: String(t.name || ''), startDate: String(t.startDate || '') }))
+        : []
+      const live = new Set(events.map(e => e.id))
+      const people = ws.map((w: Row) => { const roles = workerRoles(w); return { id: String(w.id), name: String(w.name || ''), email: String(w.email || ''), roles, assigned: videosFor(roles), watched: by.get(String(w.id)) || {}, events: (onEvent.get(String(w.id)) || []).filter(t => live.has(t)) } })
+      return NextResponse.json({ people, events })
     }
     const tid = req.nextUrl.searchParams.get('tournamentId')
     if (tid) {

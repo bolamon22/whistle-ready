@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { HOW_TO_ORG_SLUG } from '@/lib/howToVideos'
+import { tournamentOrgId } from '@/lib/org'
 import { payScopeFor } from '@/lib/payScope'
 import { seesPay, workerPayGroups } from '@/lib/payGroups'
 import { prisma } from '@/lib/db'
@@ -50,8 +51,19 @@ export async function POST(req: NextRequest) {
     ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ?`, gate.orgId)
     : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker"`)
   const mine = scope ? ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any))) : ws
+  // An event narrows the role picks to the people on its staff roster; with no role
+  // picked it means everyone working it. Named people and typed addresses still go.
+  const eventId = String(b.eventId || '')
+  let onEvent: Set<string> | null = null; let eventName = ''
+  if (eventId) {
+    if (gate.role !== 'admin' && gate.orgId && (await tournamentOrgId(eventId)) !== gate.orgId) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    const rs = await prisma.$queryRawUnsafe<Row[]>(`SELECT workerId FROM "RosterEntry" WHERE tournamentId = ?`, eventId)
+    onEvent = new Set(rs.map((r: Row) => String(r.workerId)))
+    const t = await prisma.$queryRawUnsafe<Row[]>(`SELECT name FROM "Tournament" WHERE id = ?`, eventId); eventName = String(t[0]?.name || '')
+  }
+  const byRole = (w: Row) => onEvent ? onEvent.has(String(w.id)) && (!roles.length || workerRoles(w).some(r => roles.includes(r))) : workerRoles(w).some(r => roles.includes(r))
   const em = (w: Row) => String(w.email || '').trim().toLowerCase()
-  const to = mine.filter((w: Row) => picked.has(String(w.id)) || workerRoles(w).some(r => roles.includes(r)) || typed.includes(em(w)))
+  const to = mine.filter((w: Row) => picked.has(String(w.id)) || byRole(w) || typed.includes(em(w)))
     .sort((a: Row, c: Row) => String(a.name).localeCompare(String(c.name)))
   const noEmail = to.filter((w: Row) => !em(w)).map((w: Row) => String(w.name))
   const withEmail: Row[] = to.filter((w: Row) => em(w))
@@ -109,7 +121,7 @@ export async function POST(req: NextRequest) {
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: LOG } })
     const log = row?.value ? JSON.parse(row.value) : []
-    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), byUserId: gate.userId || '', videoIds, roles, people: Array.from(picked), emails: typed, meCopy: !!b.meCopy, sent, to: went, failed }
+    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), byUserId: gate.userId || '', videoIds, roles, people: Array.from(picked), emails: typed, meCopy: !!b.meCopy, event: eventName, sent, to: went, failed }
     const value = JSON.stringify([entry, ...(Array.isArray(log) ? log : [])].slice(0, 50))
     await prisma.appSetting.upsert({ where: { key: LOG }, update: { value }, create: { key: LOG, value } })
   } catch { /* the emails went; only the log is lost */ }
