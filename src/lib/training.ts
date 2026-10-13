@@ -5,7 +5,7 @@
 //
 // Pure -- no database import -- so client pages can use it.
 
-export type TrainingVideo = { id: string; num: string; title: string; blurb: string; secs: number; series?: 'staff' | 'assigner' }
+export type TrainingVideo = { id: string; num: string; title: string; blurb: string; secs: number; series?: 'staff' | 'ref' | 'assigner' }
 export type TrainingGroup = { key: string; label: string; roles: string[] | null; ids: string[] }
 
 export const TRAINING_VIDEOS: TrainingVideo[] = [
@@ -20,9 +20,9 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'incidents', num: '08', title: 'Log an incident', blurb: 'Injuries, safety and facility problems, and complaints.', secs: 48 },
   { id: 'checklist', num: '09', title: 'The setup checklist', blurb: 'Check off setup items and add your own.', secs: 33 },
   { id: 'directory', num: '10', title: 'Find and call any staff member', blurb: 'Search the staff list, then call or text.', secs: 38 },
-  { id: 'ref-games', num: 'R1', title: 'Your games as a ref', blurb: 'Up next, your games by day, coaches, your crew to call or text, and your pay.', secs: 57 },
-  { id: 'ref-find', num: 'R2', title: 'Find your name on the schedule', blurb: 'All games with every official, Find my name, and search by team, coach or field.', secs: 40 },
-  { id: 'ref-gameday', num: 'R3', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 48 },
+  { id: 'ref-games', num: 'R1', series: 'ref', title: 'Your games as a ref', blurb: 'Up next, your games by day, coaches, your crew to call or text, and your pay.', secs: 57 },
+  { id: 'ref-find', num: 'R2', series: 'ref', title: 'Find your name on the schedule', blurb: 'All games with every official, Find my name, and search by team, coach or field.', secs: 40 },
+  { id: 'ref-gameday', num: 'R3', series: 'ref', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 48 },
   // Assigner training (Oct 13 2026): filmed on a computer screen, for the people who staff
   // Sunshine Events Group games.
   { id: 'asg-home', num: 'A01', series: 'assigner', title: 'Your assigner home', blurb: 'Your next event, how many games are reffed, and the five buttons.', secs: 50 },
@@ -46,7 +46,7 @@ export const TRAINING_GROUPS: TrainingGroup[] = [
   { key: 'refs', label: 'Refs', roles: ['ref'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'incidents'] },
   { key: 'fieldops', label: 'Field ops', roles: ['field_ops'], ids: ['checklist', 'incidents'] },
   { key: 'trainers', label: 'Athletic trainers', roles: ['athletic_trainer'], ids: ['incidents'] },
-  { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-pay'] },
+  { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-pay'] },
 ]
 
 export const trainingVideo = (id: string) => TRAINING_VIDEOS.find(v => v.id === id) || null

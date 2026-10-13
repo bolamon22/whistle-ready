@@ -15,16 +15,17 @@ import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 // who has watched what and how many times. Staff videos play only inside a login
 // (api/training/video) -- there is deliberately no download.
 
-type Lib = { id: string; num: string; title: string; blurb: string; secs: number; series: 'staff' | 'assigner' | 'family'; audience: string; src: string; poster: string }
+type Lib = { id: string; num: string; title: string; blurb: string; secs: number; series: 'staff' | 'ref' | 'assigner' | 'family'; audience: string; src: string; poster: string }
 type Person = { id: string; name: string; email: string; roles: string[]; assigned: string[]; watched: Record<string, { plays: number; first: string; last: string }> }
 type SendLog = { at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
 
 const LIB: Lib[] = [
-  ...TRAINING_VIDEOS.map(v => ({ ...v, series: (v.series || 'staff') as 'staff' | 'assigner', audience: audienceFor(v.id), src: videoSrc(v.id), poster: posterSrc(v.id) })),
+  ...TRAINING_VIDEOS.map(v => ({ ...v, series: (v.series || 'staff') as 'staff' | 'ref' | 'assigner', audience: audienceFor(v.id), src: videoSrc(v.id), poster: posterSrc(v.id) })),
   ...HOW_TO_VIDEOS.map((v, i) => ({ id: v.id, num: `F0${i + 1}`, title: v.title, blurb: v.blurb, secs: v.secs, series: 'family' as const, audience: v.audience, src: howToSrc(v.id), poster: howToPoster(v.id) })),
 ]
 const SERIES: { key: Lib['series']; label: string; note: string }[] = [
   { key: 'staff', label: 'Staff training', note: 'Phone videos for scorekeepers, refs, field ops and trainers. Inside their login on the Training page, and linked from the screens they teach.' },
+  { key: 'ref', label: 'Ref training', note: 'Phone videos for referees: their games and crew, finding their name on the schedule, and game day. Assigners watch these too.' },
   { key: 'assigner', label: 'Assigner training', note: 'Computer videos for the people who staff your games. Inside their login on the Training page.' },
   { key: 'family', label: 'Families & clubs', note: 'Public how-to videos, Sunshine Events Group branded: on the waiver, the club portal, club emails and sunshineeventsgroup.com/how-to. Not tracked.' },
 ]
@@ -57,8 +58,8 @@ export default function VideoLibrary() {
   // 2026: assigners send the videos to their officials). Staff videos only; the API
   // keeps their people and sends to the staff groups they run (lib/payScope).
   const asg = (usePathname() || '').startsWith('/dashboard/assigner')
-  const lib = asg ? LIB.filter(v => v.series === 'staff') : LIB
-  const series = asg ? SERIES.filter(s => s.key === 'staff') : SERIES
+  const lib = asg ? LIB.filter(v => v.series === 'staff' || v.series === 'ref') : LIB
+  const series = asg ? SERIES.filter(s => s.key === 'staff' || s.key === 'ref') : SERIES
   const forFilters = asg ? FOR_FILTERS.filter(([k]) => !['assigner', 'parent', 'club_director'].includes(k)) : FOR_FILTERS
   const [tab, setTab] = useState<'videos' | 'watched' | 'sent'>('videos')
   const [playing, setPlaying] = useState<Lib | null>(null)
