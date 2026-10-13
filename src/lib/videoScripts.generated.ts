@@ -4,6 +4,49 @@
 // Do not edit by hand -- run tools/videos/genscripts.js.
 export type VideoScript = { title: string; intro: string; lines: string[]; outro: string }
 export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
+  "ref-games": {
+    "title": "Your games as a ref",
+    "intro": "Your games as a ref, in Whistle Ready.",
+    "lines": [
+      "When you sign in, your home page has everything for your games. My events shows the events you are working.",
+      "Up next is your next game: the teams, the time, the field, and your spot on the crew. On game day, it counts down to the start.",
+      "When you get to your field, tap Check in.",
+      "These totals show how many games you have, and what they pay.",
+      "Below that, My games lists every game you are on, day by day.",
+      "Each game shows who you're working with: the other official, and the scorekeeper.",
+      "Tap the phone to call them, or the message button to send a text. It makes finding your partner easy.",
+      "Games that are already over move to Show past games, at the bottom."
+    ],
+    "outro": "Whistle Ready. Game day, run from your phone."
+  },
+  "ref-find": {
+    "title": "Find your name\non the schedule",
+    "intro": "Find your name on the schedule, in Whistle Ready.",
+    "lines": [
+      "Want to see the whole schedule? On your home page, tap All games.",
+      "Every game for the event is listed by day, with the officials and the scorekeeper on each one.",
+      "Tap Find my name. Every game you are on turns green, and your name is highlighted.",
+      "The search box works for any name, team, or field. Here is everything on Field 3.",
+      "Or type a team, to see who is reffing their games.",
+      "Working more than one event? Pick the event from the list.",
+      "Tap My games to go back to just your games."
+    ],
+    "outro": "Whistle Ready. Game day, run from your phone."
+  },
+  "ref-gameday": {
+    "title": "Game day as a ref",
+    "intro": "Game day as a ref, in Whistle Ready.",
+    "lines": [
+      "Your game day tools are on your home page.",
+      "Need water, balls, or a trainer at your field? Open Field Request.",
+      "Type your field number, then tap what you need. It goes to the right staff, and buzzes their phones.",
+      "Staff contacts lists everyone working the event, with buttons to call or text.",
+      "If a scorekeeper is missing, you can run the game clock and score with Live scoring, then post the final with Post scores.",
+      "Rules has the tournament rules. Incidents is where you log an injury or a problem, so the tournament director can follow up.",
+      "For any emergency, call 9 1 1 first. Then let the tournament director know."
+    ],
+    "outro": "Whistle Ready. Game day, run from your phone."
+  },
   "sign-up": {
     "title": "Sign up and get\nthe app on your phone",
     "intro": "How to sign up for Whistle Ready, and get it on your phone.",
