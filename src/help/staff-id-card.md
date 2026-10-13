@@ -19,3 +19,5 @@ Tap **My portal** to go back to your home page.
 
 **Common problems:**
 - **Your login isn't linked to a staff record yet.** Contact your coordinator.
+
+**Watch:** [Your staff ID](/dashboard/staff/training?v=staff-id) (about a minute each, in **Training videos** on your home page).

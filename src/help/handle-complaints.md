@@ -17,3 +17,5 @@ Complaints come up every weekend: a referee's calls, a player someone thinks is 
 **Afterward:** if it was more than a quick question, log it in **Incidents** (Type **Other**, or **Safety** for anything physical) with the field and what happened, so the tournament director can follow up.
 
 **What the rules say** (for your own answers): players may play on more than one team only if the teams are in different divisions, there's no roster switching in playoff games, and divisions follow USA Lacrosse age guidelines with no age or grad-year exemptions.
+
+**Watch:** [Log an incident](/dashboard/staff/training?v=incidents) (about a minute each, in **Training videos** on your home page).

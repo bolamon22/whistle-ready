@@ -21,3 +21,5 @@ Incidents is a shared log of medical, safety, facility and weather issues so the
 **Common problems:**
 - **Log incident** stays grayed out until **What happened** is filled in.
 - The trash icon deletes an incident for good.
+
+**Watch:** [Log an incident](/dashboard/staff/training?v=incidents) (about a minute each, in **Training videos** on your home page).

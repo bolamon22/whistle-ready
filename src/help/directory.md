@@ -16,3 +16,5 @@ The staff directory lists everyone on this tournament's staff roster, grouped by
 **Common problems:**
 - **no #** means there is no phone number on file. An organizer can add it in the Staff Pool.
 - Only people on the tournament's **Staff roster** appear here.
+
+**Watch:** [Find and call any staff member](/dashboard/staff/training?v=directory) (about a minute each, in **Training videos** on your home page).

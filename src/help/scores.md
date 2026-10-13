@@ -28,3 +28,5 @@ The count at the top right shows how many games are scored out of the total.
 - During the event's dates, saving a final alerts phones following either team. A corrected score replaces the earlier alert on their phones.
 - **Enter both scores first.** You can't tick **Final** with one box empty.
 - The **Note…** box is not saved.
+
+**Watch:** [End the game and post the final](/dashboard/staff/training?v=post-final) (about a minute each, in **Training videos** on your home page).

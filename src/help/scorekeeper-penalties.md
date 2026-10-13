@@ -31,3 +31,5 @@ Tap **Done** to close.
 **Common problems:**
 - Penalties and goal-scorer numbers are kept on this phone only and are lost if the page reloads.
 - **Ask for player #** and the default penalty and period times are remembered on this phone only, even though they say tournament default. The other settings and the rules are saved for the whole tournament.
+
+**Watch:** [Penalty time](/dashboard/staff/training?v=penalties) · [Scorer settings](/dashboard/staff/training?v=scorer-settings) (about a minute each, in **Training videos** on your home page).

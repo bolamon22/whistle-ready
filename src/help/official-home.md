@@ -32,3 +32,5 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 - **Check in** marks the game on your phone only; it doesn't notify anyone.
 - **No upcoming assignments.** You haven't been put on a game yet.
 - "Upload the W-9 as a PDF or a photo": other file types (Word documents, for example) aren't taken. Save it as a PDF or take a photo of the signed form.
+
+**Watch:** [Your staff home page](/dashboard/staff/training?v=home) (about a minute each, in **Training videos** on your home page).

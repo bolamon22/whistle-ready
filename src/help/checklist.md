@@ -18,3 +18,5 @@ The top shows how many items are done and a progress bar. Changes save automatic
 
 **Common problems:**
 - The **Tasks** tab and this page show the same list, so a check-off in one shows in the other.
+
+**Watch:** [The setup checklist](/dashboard/staff/training?v=checklist) (about a minute each, in **Training videos** on your home page).

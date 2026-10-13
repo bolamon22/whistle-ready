@@ -23,3 +23,5 @@ The **Recent** list refreshes by itself. A request nobody has answered shows **N
 
 **Common problems:**
 - **Send** stays grayed out until you type a message.
+
+**Watch:** [Send and answer a field request](/dashboard/staff/training?v=field-request) (about a minute each, in **Training videos** on your home page).
