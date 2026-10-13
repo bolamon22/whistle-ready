@@ -174,7 +174,27 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
           startedRef.current = true
           setScore1(Number(ls.score1) || 0); setScore2(Number(ls.score2) || 0)
           savedScores.current = { s1: Number(ls.score1) || 0, s2: Number(ls.score2) || 0 }
-          if (!saved && ls.period) setCurrentPeriod(Number(ls.period) || 1)
+          // The clock and penalties too, when the server heard about this game more
+          // recently than this phone did (Bo, Oct 12 2026: opening the game from the
+          // live card showed 20:00 and Start while the game was running elsewhere).
+          const sent = Date.parse(ls.updatedAt || '')
+          const serverNewer = !isNaN(sent) && !(saved && saved.savedAt > sent)
+          if (!serverNewer) return
+          if (ls.period) setCurrentPeriod(Number(ls.period) || 1)
+          if (ls.clockMs != null) {
+            const ran = ls.clockRunning ? Math.max(0, Date.now() - sent) : 0
+            const left = Math.max(0, Number(ls.clockMs) - ran)
+            setClockMs(left)
+            setClockRunning(!!ls.clockRunning && left > 0)
+            if (Array.isArray(ls.penalties)) {
+              const ranSecs = Math.floor(Math.min(ran, Number(ls.clockMs)) / 1000)
+              setPenalties(ls.penalties.map((p: { team: number; num: string; secs: number; paused: boolean }) => {
+                const remaining = Math.max(0, p.secs - (p.paused ? 0 : ranSecs))
+                return { id: Math.random().toString(36).slice(2), team: p.team === 2 ? 2 : 1, playerNum: p.num || '', remaining, total: p.secs, active: remaining > 0, paused: !!p.paused } as Penalty
+              }).filter((p: Penalty) => p.active))
+            }
+            if (ls.clockRunning && left > 0) toast('⏱ Picked up the running clock')
+          }
         }).catch(() => {})
       }
       setReqField(fieldNumberFrom(g.location))
