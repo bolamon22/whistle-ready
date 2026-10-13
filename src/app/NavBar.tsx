@@ -4,86 +4,99 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
-import { Menu, X, Sun, Moon } from 'lucide-react'
+import { ChevronDown, Eye, ListChecks, Menu, Moon, Sun, X } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { useOrg } from '@/lib/org-context'
 import { isStaffThemeRoute } from './ThemeShell'
 import { roleCanAccess } from '@/lib/routeAccess'
 import WhoIsOn from '@/components/WhoIsOn'
 import { canSeePresence } from '@/lib/presenceTime'
+import NavMenus from '@/components/nav/NavMenus'
+import EventSwitcher from '@/components/nav/EventSwitcher'
+import GlobalSearch from '@/components/nav/GlobalSearch'
+import AccountMenu, { Avatar, ViewAsSelect } from '@/components/nav/AccountMenu'
+import { type NavEvent, ROLE_LABELS, currentEvent, currentMenu, todayYmd, visibleMenus } from '@/components/nav/navConfig'
 
-interface Tournament {
-  id: string
-  name: string
-  logoUrl: string
-}
+// The app header (redesigned Oct 13 2026; Bo: "we are due for a little bit of a
+// redesign now that we've added a lot of stuff to it"). Left to right: logo, the
+// event you're working on (a switcher), four menus (Events, People, Organization,
+// Admin) holding only the links this role can open, then search (Ctrl K), Tasks
+// with the overdue count, who's on, View as, and the account menu. Below 1280px
+// the menus fold into one phone menu.
 
-const ROLE_COLORS: Record<string, string> = {
-  admin:          'bg-red-100 text-red-700',
-  director:       'bg-purple-100 text-purple-700',
-  club_director:  'bg-violet-100 text-violet-700',
-  assigner:       'bg-indigo-100 text-indigo-700',
-  scheduler:      'bg-cyan-100 text-cyan-700',
-  coach:          'bg-blue-100 text-blue-700',
-  staff:          'bg-teal-100 text-teal-700',
-  parent:         'bg-pink-100 text-pink-700',
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  admin:          'Admin',
-  director:       'Tournament Director',
-  club_director:  'Club Director',
-  assigner:       'Assigner',
-  scheduler:      'Scheduler',
-  coach:          'Coach',
-  staff:          'Staff',
-  parent:         'Parent',
-}
+const SHEET_LINK = 'flex min-h-[44px] items-center justify-between gap-3 px-1 text-[15px] font-medium text-slate-900 hover:text-teal-700'
 
 export default function NavBar() {
-  const pathname = usePathname()
-  const [tournaments, setTournaments] = useState<Tournament[]>([])
-  const [menuOpen, setMenuOpen] = useState(false)   // phone hamburger menu
-  const [dark, setDark] = useState(false)           // mirrors <ThemeShell>'s preference
+  const pathname = usePathname() || ''
+  const [tournaments, setTournaments] = useState<NavEvent[]>([])
+  const [previewOrgId, setPreviewOrgId] = useState<string | null>(null)
+  const [open, setOpen] = useState<string | null>(null)       // which desktop menu is open
+  const [sheet, setSheet] = useState(false)                    // phone menu
+  const [sheetEvent, setSheetEvent] = useState(false)          // event list inside it
+  const [sheetGroup, setSheetGroup] = useState<string | null>(null)
+  const [dark, setDark] = useState(false)                      // mirrors <ThemeShell>'s preference
+  const [today, setToday] = useState('')
   const org = useOrg()
   const { data: session } = useSession()
   const { effectiveRole, isPreview, setPreviewRole } = useRole()
 
   const realRole = session?.user?.role ?? 'staff'
   const role = effectiveRole
-
-  const roleColor = ROLE_COLORS[role] || 'bg-slate-100 text-slate-600'
   const isAdmin = realRole === 'admin'
   const hasOrg = !!org?.id
+  const signedIn = !!session
 
   useEffect(() => {
     function fetchTournaments() {
       const previewOrg = document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
-      const previewOrgId = previewOrg ? decodeURIComponent(previewOrg[1]) : null
-      const url = isAdmin && previewOrgId
-        ? `/api/tournaments?viewOrgId=${previewOrgId}`
+      const orgId = previewOrg ? decodeURIComponent(previewOrg[1]) : null
+      setPreviewOrgId(orgId)
+      const url = isAdmin && orgId
+        ? `/api/tournaments?viewOrgId=${encodeURIComponent(orgId)}`
         : '/api/tournaments'
       fetch(url)
         .then(r => r.json())
-        .then((data: Tournament[]) => Array.isArray(data) ? setTournaments(data) : [])
+        .then((data: NavEvent[]) => { if (Array.isArray(data)) setTournaments(data) })
         .catch(() => {})
     }
 
+    if (!signedIn) return
     fetchTournaments()
     window.addEventListener('preview-org-changed', fetchTournaments)
     return () => window.removeEventListener('preview-org-changed', fetchTournaments)
-  }, [isAdmin])
+  }, [isAdmin, signedIn])
 
-  // Close the phone menu whenever the route changes
-  useEffect(() => { setMenuOpen(false) }, [pathname])
-  // The last page outside /admin, for the admin bar's Back link (SuperAdminBar).
+  // Today's date on this device, set after the first render so the server's
+  // clock never decides "On now" / "in 3 days".
+  useEffect(() => { setToday(todayYmd()) }, [pathname])
+
+  // Close menus whenever the page changes.
+  useEffect(() => { setOpen(null); setSheet(false); setSheetEvent(false) }, [pathname])
+
+  // A click outside the open menu, or Escape, closes it.
   useEffect(() => {
-    if (!pathname || pathname.startsWith('/admin')) return
-    try { sessionStorage.setItem('wr-last-app-path', pathname + window.location.search) } catch { /* storage off */ }
-  }, [pathname])
+    if (!open && !sheet) return
+    const onDown = (e: MouseEvent) => {
+      if (!open) return
+      const pop = (e.target as Element | null)?.closest?.('[data-nav-pop]')
+      if (!pop || pop.getAttribute('data-nav-pop') !== open) setOpen(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (open) {
+        const trigger = document.querySelector<HTMLElement>(`[data-nav-pop="${open}"] > button`)
+        setOpen(null)
+        trigger?.focus()
+      }
+      setSheet(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open, sheet])
 
-  // Light/Dark lives in <ThemeShell> (localStorage + body class); the phone menu
-  // flips the same key and both sides sync over a 'gd-theme' window event.
+  // Light/Dark lives in <ThemeShell> (localStorage + body class); the account
+  // menu flips the same key and both sides sync over a 'gd-theme' window event.
   useEffect(() => {
     try { setDark(localStorage.getItem('gd-staff-theme') === 'dark') } catch {}
     const onTheme = (e: Event) => setDark(!!(e as CustomEvent).detail?.dark)
@@ -91,10 +104,10 @@ export default function NavBar() {
     return () => window.removeEventListener('gd-theme', onTheme)
   }, [])
 
-  // Overdue tasks, as a red count on Tasks (and a dot on the phone menu button).
-  // Overdue only: a badge that also counted "due this week" was always lit.
-  // Reloaded when a task changes, when the admin switches org, and on page
-  // changes at most once a minute (a new day makes more tasks overdue).
+  // Overdue tasks, as a red count on Tasks. Overdue only: a badge that also
+  // counted "due this week" was always lit. Reloaded when a task changes, when
+  // the admin switches org, and on page changes at most once a minute (a new
+  // day makes more tasks overdue).
   const canTasks = !!session && roleCanAccess(role, '/tasks')
   const [overdue, setOverdue] = useState(0)
   const tasksAt = useRef(0)
@@ -126,290 +139,193 @@ export default function NavBar() {
     window.dispatchEvent(new CustomEvent('gd-theme', { detail: { dark: next } }))
   }
 
-  // Admin pages keep this header, with the admin bar (SuperAdminBar) under it. It used
-  // to be their only header, so opening Users left no way back to the app (Bo, Oct 13
-  // 2026). The public org website (/o/) has its own.
-  if (pathname?.startsWith('/o/')) return null
+  // The public org website (/o/) has its own header.
+  if (pathname.startsWith('/o/')) return null
   // Public pay-by-link pages present as the tournament org (Sunshine Events Group), not Whistle Ready.
-  if (pathname?.startsWith('/pay')) return null
-
+  if (pathname.startsWith('/pay')) return null
   // The public marketing landing, the /find look-up and the privacy and terms
   // pages have their own header.
   if (!session && (pathname === '/' || pathname === '/find' || pathname === '/privacy' || pathname === '/terms')) return null
+
+  const menus = session ? visibleMenus(role) : []
+  const current = currentMenu(menus, pathname)
+  const canEvents = !!session && roleCanAccess(role, '/')
+  const event = canEvents && today ? currentEvent(tournaments, pathname, today) : null
+  const canCreate = role === 'admin' || role === 'director'
+  const showTheme = isStaffThemeRoute(pathname)
+  const showAlerts = !['coach', 'parent', 'club_director'].includes(role)
+  const roleLabel = ROLE_LABELS[role] ?? role
+  const taskLabel = overdue > 0 ? `Tasks, ${overdue} overdue` : 'Tasks'
+
+  const brand = hasOrg ? (
+    <a href="/" aria-label={`${org.name} home`} className="flex min-w-0 flex-1 items-center gap-2.5 xl:flex-none xl:flex-shrink-0">
+      {org.logoUrl
+        ? <img src={org.logoUrl} alt="" className="h-9 w-9 flex-shrink-0 rounded-[10px] border border-slate-200 bg-white object-contain p-[3px]" />
+        : <span aria-hidden className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] bg-slate-700 text-sm font-bold text-white">{org.name?.charAt(0) ?? '?'}</span>}
+      <span className="min-w-0 truncate text-[15px] font-extrabold tracking-tight text-slate-900 xl:hidden min-[1400px]:block min-[1400px]:max-w-[220px]">{org.name}</span>
+    </a>
+  ) : (
+    <a href="/" aria-label="Whistle Ready home" className="flex min-w-0 flex-1 items-center gap-2 xl:flex-none xl:flex-shrink-0">
+      <img src="/whistle-ready-icon.png" alt="" className="h-9 w-9 flex-shrink-0 rounded-[10px] object-contain" />
+      <span className="truncate text-[15px] font-extrabold tracking-tight text-slate-900 xl:hidden min-[1400px]:block">Whistle Ready</span>
+    </a>
+  )
 
   return (
     <div data-app-chrome className="sticky top-0 z-40">
       {/* Preview banner */}
       {isPreview && (
         <div className="bg-amber-400 text-amber-900 text-xs font-semibold px-4 py-1.5 flex items-center justify-between">
-          <span>👁 Previewing as <strong>{role.charAt(0).toUpperCase() + role.slice(1)}</strong> — this is how the app looks to that role</span>
+          <span className="flex items-center gap-1.5"><Eye size={14} aria-hidden /><span>Previewing as <strong>{roleLabel}</strong> — this is how the app looks to that role</span></span>
           <button onClick={() => setPreviewRole(null)} className="underline hover:no-underline ml-4">Exit Preview</button>
         </div>
       )}
 
-      <nav className="bg-white border-b border-slate-200 px-3 xl:px-4 py-2 xl:py-2.5 flex items-center gap-2 xl:gap-3 shadow-sm">
+      <header className="relative flex h-[60px] items-center gap-2 border-b border-slate-200 bg-white px-3 xl:h-16 xl:gap-3 xl:px-5">
+        {brand}
 
-        {/* ── LEFT: Brand ── */}
-        {hasOrg ? (
-          /* Org user: org logo + name on the left */
-          <a href="/" className="flex items-center gap-2.5 min-w-0 xl:flex-shrink-0 group">
-            {org.logoUrl ? (
-              <img
-                src={org.logoUrl}
-                alt={org.name}
-                className="w-9 h-9 object-contain rounded-xl border border-slate-200 bg-white group-hover:border-sky-300 transition-colors"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-xl bg-slate-700 flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-sm">{org.name?.charAt(0) ?? '?'}</span>
-              </div>
-            )}
-            <span className="font-bold text-slate-800 text-base tracking-tight leading-tight min-w-0 truncate">
-              {org.name}
-            </span>
-          </a>
-        ) : (
-          /* Admin / no-org: Whistle Ready brand */
-          <a href="/" className="flex items-center gap-2 text-sky-700 font-bold text-lg tracking-tight flex-shrink-0">
-            <img src="/whistle-ready-icon.png" alt="" className="w-8 h-8 rounded-lg object-contain flex-shrink-0" />
-            Whistle Ready
-          </a>
+        {event && (
+          <>
+            <span aria-hidden className="hidden h-6 w-px flex-shrink-0 bg-slate-200 xl:block" />
+            <div className="hidden flex-shrink-0 xl:block">
+              <EventSwitcher events={tournaments} current={event} role={role} today={today} canCreate={canCreate}
+                open={open === 'event'} setOpen={o => setOpen(o ? 'event' : null)} variant="pill" />
+            </div>
+          </>
         )}
 
-        <div className="hidden xl:block h-5 w-px bg-slate-200 flex-shrink-0"/>
+        <NavMenus menus={menus} open={open} setOpen={setOpen} current={current} overdue={overdue} />
+        {session && menus.length === 0 && (
+          <a href="/" className="hidden h-9 items-center rounded-full px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 xl:flex">Home</a>
+        )}
 
-        {/* Nav links */}
-        <a href="/" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Tournaments</a>
+        <div className="hidden flex-1 xl:block" />
+
+        {canEvents && (
+          <div className="hidden min-w-[180px] max-w-[300px] shrink basis-[300px] xl:block">
+            <GlobalSearch role={role} menus={menus} events={tournaments} previewOrgId={previewOrgId} hotkey />
+          </div>
+        )}
+
         {canTasks && (
-          <Link href="/tasks" className="hidden xl:flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">
-            Tasks
-            {overdue > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold leading-[18px] text-center">{overdue}<span className="sr-only"> overdue</span></span>}
+          <Link href="/tasks" aria-label={taskLabel} title={taskLabel}
+            className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:border-slate-300 xl:h-10 xl:w-10">
+            <ListChecks size={18} aria-hidden />
+            {overdue > 0 && (
+              <span aria-hidden className="absolute -right-1 -top-1 h-[18px] min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[11px] font-bold leading-[18px] text-white">{overdue}</span>
+            )}
           </Link>
         )}
-        {canTasks && (
-          <Link href="/contacts" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Contacts</Link>
-        )}
 
-        {/* Tournament quick-links */}
-        {tournaments.length > 0 && (
+        {session ? (
           <>
-            <div className="hidden xl:block h-5 w-px bg-slate-200 flex-shrink-0"/>
-            <div className="hidden xl:flex items-center gap-3 flex-shrink-0">
-              {tournaments.slice(0, 4).map(t => (
-                <Link
-                  key={t.id}
-                  href={`/tournaments/${t.id}/dashboard`}
-                  title={t.name}
-                  className="flex-shrink-0 group relative"
-                >
-                  {t.logoUrl ? (
-                    <img src={t.logoUrl} alt={t.name}
-                      className="h-8 w-8 object-contain rounded-lg border border-slate-200 bg-slate-50 group-hover:border-sky-400 group-hover:shadow-sm transition-all" />
-                  ) : (
-                    <div className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:border-sky-400 transition-all">
-                      {t.name.charAt(0)}
-                    </div>
-                  )}
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                    {t.name}
-                  </span>
-                </Link>
-              ))}
+            {canSeePresence(role) && <div className="hidden flex-shrink-0 xl:block"><WhoIsOn /></div>}
+            {isAdmin && <ViewAsSelect role={role} isPreview={isPreview} setPreviewRole={setPreviewRole} variant="chip" />}
+            <div className="hidden flex-shrink-0 xl:block">
+              <AccountMenu name={session.user?.name} image={session.user?.image} role={role} isAdmin={isAdmin}
+                isPreview={isPreview} setPreviewRole={setPreviewRole} open={open === 'account'} setOpen={o => setOpen(o ? 'account' : null)}
+                showAlerts={showAlerts} showTheme={showTheme} dark={dark} toggleTheme={toggleTheme} poweredBy={hasOrg} />
             </div>
+
+            {/* Below 1280px (phones and tablets) one menu holds everything */}
+            <button type="button" onClick={() => { setSheet(s => !s); setOpen(null) }}
+              aria-label={sheet ? 'Close menu' : 'Open menu'} aria-expanded={sheet}
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-900 xl:hidden">
+              {sheet ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
+            </button>
           </>
+        ) : (
+          <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+            <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-slate-700 hover:text-teal-700">Sign in</Link>
+            <Link href="/register" className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Register</Link>
+          </div>
         )}
+      </header>
 
-        {(role === 'admin' || role === 'director' || role === 'assigner' || role === 'scheduler') && (
-          <a href="/staff" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Staff</a>
-        )}
-        {(role === 'admin' || role === 'director') && (
-          <Link href="/dashboard/org/social" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Social</Link>
-        )}
-
-        {/* Admin-only links */}
-        {isAdmin && (
-          <>
-            <Link href="/admin" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Dashboard</Link>
-            <Link href="/admin/users" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Users</Link>
-            <Link href="/admin/permissions" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Perms</Link>
-            <Link href="/admin/roadmap" className="hidden xl:block text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors flex-shrink-0">Roadmap</Link>
-          </>
-        )}
-
-        {/* ── RIGHT: Whistle Ready badge (org users only) + auth ── */}
-        <div className="ml-auto flex items-center gap-2 xl:gap-3 flex-shrink-0">
-
-          {/* Whistle Ready platform badge — shown to org users */}
-          {hasOrg && (
-            <div className="hidden xl:flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50">
-              <div className="w-4 h-4 bg-sky-600 rounded flex items-center justify-center flex-shrink-0">
-                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="2.5" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <span className="text-xs font-semibold text-slate-500 tracking-tight">Whistle Ready</span>
-            </div>
-          )}
-
-          {session ? (
-            <>
-              {/* View As dropdown — admin only */}
-              {isAdmin && (
-                <div className="hidden xl:flex items-center gap-1.5">
-                  <span className="text-xs text-slate-400">View as:</span>
-                  <select
-                    value={isPreview ? role : ''}
-                    onChange={e => setPreviewRole(e.target.value || null)}
-                    className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400 ${isPreview ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
-                  >
-                    <option value="">Admin (you)</option>
-                    {['director','club_director','assigner','scheduler','coach','staff','parent'].map(r => (
-                      <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {canSeePresence(role) && <WhoIsOn />}
-
-              <span className={`hidden xl:inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>
-                {ROLE_LABELS[role] ?? role}
-              </span>
-
-              <Link href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                {session.user?.image ? (
-                  <img src={session.user.image} alt="Profile" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-sky-100 text-sky-700 text-xs font-bold flex items-center justify-center border border-slate-200">
-                    {(session.user?.name || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)}
-                  </div>
-                )}
-                <span className="text-sm text-slate-600 hidden xl:block">{session.user?.name}</span>
-              </Link>
-
-              <button onClick={() => signOut({ callbackUrl: '/login' })}
-                className="hidden xl:inline-block text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-300 px-3 py-1 rounded-lg transition-colors">
-                Sign out
-              </button>
-
-              {/* Below 1280px (phones AND tablets — the full admin bar needs ~1,250px): hamburger replaces the links, role badge, View-as and Sign out */}
-              <button type="button" onClick={() => setMenuOpen(o => !o)}
-                aria-label={menuOpen ? 'Close menu' : overdue > 0 ? `Open menu (${overdue} overdue ${overdue === 1 ? 'task' : 'tasks'})` : 'Open menu'} aria-expanded={menuOpen}
-                className="xl:hidden relative w-9 h-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center">
-                {menuOpen ? <X size={18} /> : <Menu size={18} />}
-                {overdue > 0 && !menuOpen && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-600 ring-2 ring-white" aria-hidden />}
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors">Sign in</Link>
-              <Link href="/register" className="text-sm font-medium bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg transition-colors">Register</Link>
-            </>
-          )}
-        </div>
-      </nav>
-
-      {/* Compact menu — everything the desktop bar shows, stacked under the bar */}
-      {menuOpen && session && (
+      {/* Phone and tablet menu */}
+      {sheet && session && (
         <div className="xl:hidden">
-          <div className="absolute inset-x-0 top-full h-screen bg-black/30" onClick={() => setMenuOpen(false)} />
-          <div className="absolute inset-x-0 top-full bg-white border-b border-slate-200 shadow-lg max-h-[80vh] overflow-y-auto">
-            <div className="px-3 divide-y divide-slate-100">
+          <div className="absolute inset-x-0 top-full h-screen bg-black/30" onClick={() => setSheet(false)} aria-hidden />
+          <nav aria-label="Menu" className="absolute inset-x-0 top-full max-h-[calc(100dvh-60px)] overflow-y-auto border-b border-slate-200 bg-white px-4 pb-5 pt-3 shadow-lg">
+            <div className="mx-auto flex max-w-xl flex-col gap-1.5">
+              {canEvents && (
+                <GlobalSearch role={role} menus={menus} events={tournaments} previewOrgId={previewOrgId} variant="sheet" onDone={() => setSheet(false)} />
+              )}
+              {event && (
+                <EventSwitcher events={tournaments} current={event} role={role} today={today} canCreate={canCreate}
+                  open={sheetEvent} setOpen={setSheetEvent} variant="card" />
+              )}
 
-              <Link href="/profile" className="flex items-center gap-3 py-3">
-                {session.user?.image ? (
-                  <img src={session.user.image} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-200 flex-shrink-0" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-sky-100 text-sky-700 text-xs font-bold flex items-center justify-center border border-slate-200 flex-shrink-0">
-                    {(session.user?.name || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)}
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-slate-800 truncate">{session.user?.name}</div>
-                  <span className={`inline-block mt-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>{ROLE_LABELS[role] ?? role}</span>
-                </div>
-                <span className="text-sm font-medium text-sky-600">Profile</span>
-              </Link>
-
-              <div className="py-1.5">
-                <a href="/" className={MOBILE_LINK}>Tournaments</a>
-                {canTasks && (
-                  <Link href="/tasks" className={MOBILE_LINK}>
-                    Tasks
-                    {overdue > 0 && <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold">{overdue} overdue</span>}
-                  </Link>
-                )}
-                {canTasks && <Link href="/contacts" className={MOBILE_LINK}>Event contacts</Link>}
-                {tournaments.slice(0, 4).map(t => (
-                  <Link key={t.id} href={`/tournaments/${t.id}/dashboard`} className={MOBILE_LINK}>
-                    {t.logoUrl ? (
-                      <img src={t.logoUrl} alt="" className="h-7 w-7 object-contain rounded-md border border-slate-200 bg-slate-50 flex-shrink-0" />
-                    ) : (
-                      <div className="h-7 w-7 rounded-md border border-slate-200 bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">{t.name.charAt(0)}</div>
-                    )}
-                    <span className="truncate">{t.name}</span>
-                  </Link>
-                ))}
-                {(role === 'admin' || role === 'director' || role === 'assigner' || role === 'scheduler') && (
-                  <a href="/staff" className={MOBILE_LINK}>Staff</a>
-                )}
-                {(role === 'admin' || role === 'director') && (
-                  <Link href="/dashboard/org/social" className={MOBILE_LINK}>Social</Link>
-                )}
-                {isAdmin && (
-                  <>
-                    <Link href="/admin" className={MOBILE_LINK}>Dashboard</Link>
-                    <Link href="/admin/users" className={MOBILE_LINK}>Users</Link>
-                    <Link href="/admin/permissions" className={MOBILE_LINK}>Perms</Link>
-                    <Link href="/admin/roadmap" className={MOBILE_LINK}>Roadmap</Link>
-                  </>
-                )}
-              </div>
-
-              {isAdmin && (
-                <div className="py-3 flex items-center justify-between gap-3">
-                  <span className="text-sm text-slate-600">View as</span>
-                  <select
-                    value={isPreview ? role : ''}
-                    onChange={e => setPreviewRole(e.target.value || null)}
-                    className={`text-sm font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-amber-400 ${isPreview ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
-                  >
-                    <option value="">Admin (you)</option>
-                    {['director','club_director','assigner','scheduler','coach','staff','parent'].map(r => (
-                      <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
+              {menus.length === 0 && <a href="/" className={SHEET_LINK}>Home</a>}
+              {menus.map(m => {
+                const folded = m.key === 'org' || m.key === 'admin'
+                if (folded) {
+                  const isOpen = sheetGroup === m.key
+                  const names = m.items.map(i => i.label)
+                  const summary = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ')
+                  return (
+                    <div key={m.key} className="border-t border-slate-200 pt-1">
+                      <button type="button" aria-expanded={isOpen} onClick={() => setSheetGroup(isOpen ? null : m.key)}
+                        className="flex min-h-[48px] w-full items-center justify-between gap-3 px-1 text-left">
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-[15px] font-semibold text-slate-900">{m.label}</span>
+                          <span className="truncate text-xs text-slate-600">{summary}</span>
+                        </span>
+                        <ChevronDown size={18} aria-hidden className={`flex-shrink-0 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isOpen && (
+                        <div className="pb-1 pl-3">
+                          {m.items.map(i => <Link key={i.href} href={i.href} onClick={() => setSheet(false)} className={SHEET_LINK}>{i.label}</Link>)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+                return (
+                  <div key={m.key}>
+                    <p className="px-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{m.label}</p>
+                    {m.items.map(i => (
+                      <Link key={i.href} href={i.href} onClick={() => setSheet(false)} className={SHEET_LINK}>
+                        {i.label}
+                        {i.badge === 'overdue' && overdue > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">{overdue} overdue</span>}
+                      </Link>
                     ))}
-                  </select>
+                  </div>
+                )
+              })}
+
+              <div className="mt-1 border-t border-slate-200 pt-2">
+                <div className="flex min-h-[48px] items-center justify-between gap-3 px-1">
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Avatar name={session.user?.name} image={session.user?.image} size="h-8 w-8 text-[11px]" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-bold text-slate-900">{session.user?.name}</span>
+                      <span className="text-xs text-slate-600">{isPreview ? `Previewing as ${roleLabel}` : roleLabel} · <Link href="/profile" onClick={() => setSheet(false)} className="font-semibold text-teal-700 underline-offset-2 hover:underline">Profile</Link></span>
+                    </span>
+                  </span>
+                  {canSeePresence(role) && <WhoIsOn />}
                 </div>
-              )}
-
-              {isStaffThemeRoute(pathname || '') && !['coach', 'parent', 'club_director'].includes(role) && (
-                <Link href="/dashboard/alerts" className={MOBILE_LINK}>Game-day alerts</Link>
-              )}
-
-              {isStaffThemeRoute(pathname || '') && (
-                <div className="py-3 flex items-center justify-between gap-3">
-                  <span className="text-sm text-slate-600">Appearance</span>
-                  <button type="button" onClick={toggleTheme}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-1.5">
-                    {dark ? <Sun size={15} /> : <Moon size={15} />}
-                    {dark ? 'Switch to light' : 'Switch to dark'}
+                {showAlerts && <Link href="/dashboard/alerts" onClick={() => setSheet(false)} className={SHEET_LINK}>Game-day alerts</Link>}
+                {isAdmin && <div className="-mx-2"><ViewAsSelect role={role} isPreview={isPreview} setPreviewRole={setPreviewRole} variant="row" /></div>}
+                <div className="flex gap-2.5 pt-2">
+                  {showTheme && (
+                    <button type="button" onClick={toggleTheme}
+                      className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-900">
+                      {dark ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
+                      {dark ? 'Light mode' : 'Dark mode'}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => signOut({ callbackUrl: '/login' })}
+                    className="h-11 flex-1 rounded-full border border-red-200 bg-white text-sm font-semibold text-red-700">
+                    Sign out
                   </button>
                 </div>
-              )}
-
-              <div className="py-3">
-                <button onClick={() => signOut({ callbackUrl: '/login' })}
-                  className="w-full text-sm font-medium text-slate-600 hover:text-red-600 border border-slate-200 hover:border-red-300 px-3 py-2 rounded-lg transition-colors">
-                  Sign out
-                </button>
+                {hasOrg && <p className="px-1 pt-3 text-[11px] text-slate-500">Powered by Whistle Ready</p>}
               </div>
-
             </div>
-          </div>
+          </nav>
         </div>
       )}
     </div>
   )
 }
-
-const MOBILE_LINK = 'flex items-center gap-3 py-2.5 text-[15px] font-medium text-slate-700 hover:text-sky-600'

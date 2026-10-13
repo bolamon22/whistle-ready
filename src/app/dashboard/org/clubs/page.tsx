@@ -170,6 +170,9 @@ function ClubsInner(){
   const [loading,setLoading]=useState(true)
   const [importing,setImporting]=useState(false)
   const [search,setSearch]=useState('')
+  // The header search opens a club here as ?q=<club name>.
+  const qParam=params.get('q')
+  useEffect(()=>{ if(qParam!==null) setSearch(qParam) },[qParam])
   const [filter,setFilter]=useState<'all'|'returning'|'winback'>('all')
   const [eventFilter,setEventFilter]=useState('')
   const [showArchived,setShowArchived]=useState(false)

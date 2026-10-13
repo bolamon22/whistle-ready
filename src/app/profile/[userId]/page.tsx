@@ -69,7 +69,7 @@ export default function AdminUserProfilePage() {
 
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
   if (!user || (user as { error?: string }).error) return (
-    <div className="p-10 text-center text-gray-400">User not found. <Link href="/admin/users" className="text-sky-600 underline">Back to users</Link></div>
+    <div className="p-10 text-center text-gray-400">User not found. <Link href="/admin/users" className="text-sky-600 underline">Back to logins</Link></div>
   )
 
   const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -78,7 +78,7 @@ export default function AdminUserProfilePage() {
   return (
     <div className="max-w-2xl mx-auto py-8">
       <div className="mb-5">
-        <Link href="/admin/users" className="text-sm text-sky-600 hover:underline">← Back to User Management</Link>
+        <Link href="/admin/users" className="text-sm text-sky-600 hover:underline">← Back to Logins</Link>
       </div>
 
       {/* Profile header */}
@@ -101,9 +101,9 @@ export default function AdminUserProfilePage() {
           <p className="text-xs text-gray-400 mt-1">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
         </div>
         <div className="ml-auto flex flex-col gap-2">
-          <Link href={`/admin/users`}
+          <Link href={`/admin/users?q=${encodeURIComponent(user.email)}`}
             className="text-xs text-violet-600 border border-violet-200 hover:border-violet-400 px-3 py-1.5 rounded-lg text-center">
-            ✏️ Edit in User Mgmt
+            ✏️ Edit in Logins
           </Link>
         </div>
       </div>

@@ -50,6 +50,12 @@ body.gd-dark .border-slate-200, body.gd-dark .border-gray-200, body.gd-dark .bor
 body.gd-dark .input, body.gd-dark .select, body.gd-dark input, body.gd-dark select, body.gd-dark textarea { background:#1f2937 !important; color:#f1f5f9 !important; border-color:#374151 !important; }
 body.gd-dark .btn-secondary { background:#1f2937 !important; color:#e5e7eb !important; border-color:#374151 !important; }
 body.gd-dark .shadow-sm, body.gd-dark .shadow-md, body.gd-dark .shadow-lg, body.gd-dark .shadow-xl { box-shadow:0 1px 0 rgba(255,255,255,0.05) !important; }
+/* The header and admin tabs: readable teal and red text and plain role badges on the dark bar. */
+body.gd-dark :is([data-app-chrome], [data-admin-tabs]) .text-teal-700 { color:#5eead4 !important; }
+body.gd-dark :is([data-app-chrome], [data-admin-tabs]) .text-red-700 { color:#fca5a5 !important; }
+body.gd-dark :is([data-app-chrome], [data-admin-tabs]) .border-red-200 { border-color:#7f1d1d !important; }
+body.gd-dark [data-app-chrome] [data-role-badge] { background:#1f2937 !important; color:#e5e7eb !important; }
+body.gd-dark [data-app-chrome] label > input[type="search"] { background:transparent !important; }
 
 /* Autofill detection.
    Chrome marks an autofilled field with :-webkit-autofill but does not always fire an

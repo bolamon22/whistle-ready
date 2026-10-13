@@ -2,6 +2,7 @@
 import OrgLogoMark from '@/app/OrgLogoMark'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { formatDate } from '@/lib/utils'
 import { daysUntil } from '@/lib/eventDays'
@@ -37,7 +38,7 @@ const DEFAULT_DIVISIONS = [
 const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50', numFields:'', dayStart:'08:00', dayEnd:'18:00', regMode:'builtin', teamFee:'1495' }
 
 const ADMIN_LINKS = [
-  { label: '👥 User Management',    href: '/admin/users',              desc: 'Add, edit, delete users and assign roles' },
+  { label: '👥 Logins',             href: '/admin/users',              desc: 'Who can sign in, their roles, and when they were last on' },
   { label: '🔐 Permissions',        href: '/admin/permissions',        desc: 'Control what each role can access' },
   { label: '📋 Forms',              href: '/dashboard/org/forms',      desc: 'Reusable forms — player waiver, vendor' },
   { label: '📜 Rules library',       href: '/dashboard/org/rules',      desc: 'Reusable rule sets — Sixes, Traditional' },
@@ -76,6 +77,14 @@ export default function TournamentsDashboard() {
   const setListView = (v: 'upcoming' | 'past' | 'all') => { setListViewState(v); try { localStorage.setItem('wr-tournaments-view', v) } catch {} }
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  // "+ New tournament" in the header's event menu links here as /?new=1.
+  const params = useSearchParams()
+  const router = useRouter()
+  useEffect(() => {
+    if (params?.get('new') !== '1') return
+    setShowForm(true)
+    router.replace('/', { scroll: false })
+  }, [params, router])
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [createLogoUrl, setCreateLogoUrl] = useState('')

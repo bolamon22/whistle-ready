@@ -3,6 +3,11 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { ArrowRight, Check, ChevronDown, Pencil } from 'lucide-react'
+
+// The admin pages' tabs, under the app header. Light, like the rest of the app,
+// since the Oct 13 2026 header redesign (it was a dark bar with its own brand and
+// a Back link). Users is called Logins now, to match the People menu.
 
 interface Org { id: string; name: string; slug: string; subscriptionTier: string }
 
@@ -12,34 +17,40 @@ const TIER_DOT: Record<string, string> = {
   enterprise: 'bg-purple-500',
 }
 
+const TABS = [
+  { href: '/admin', label: 'Platform dashboard' },
+  { href: '/admin/orgs', label: 'Organizations' },
+  { href: '/admin/users', label: 'Logins' },
+  { href: '/admin/permissions', label: 'Permissions' },
+  { href: '/admin/roadmap', label: 'Roadmap' },
+  { href: '/admin/payment-providers', label: 'Payment providers' },
+]
+
 export default function SuperAdminBar() {
-  const pathname = usePathname()
+  const pathname = usePathname() || ''
   const router = useRouter()
   const [orgs, setOrgs] = useState<Org[]>([])
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const dropRef = useRef<HTMLDivElement>(null)
-  // Back to the last page outside /admin (NavBar remembers it), so opening Users
-  // from a tournament doesn't strand you here.
-  const [back, setBack] = useState('/')
-  useEffect(() => {
-    try { const p = sessionStorage.getItem('wr-last-app-path'); if (p && p.startsWith('/') && !p.startsWith('//')) setBack(p) } catch { /* storage off */ }
-  }, [])
 
   useEffect(() => {
-    fetch('/api/admin/orgs').then(r => r.json()).then(d => setOrgs(Array.isArray(d) ? d : []))
+    fetch('/api/admin/orgs').then(r => r.json()).then(d => setOrgs(Array.isArray(d) ? d : [])).catch(() => {})
     // Read current preview-org cookie
     const match = document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
     setActiveOrgId(match ? decodeURIComponent(match[1]) : null)
   }, [])
 
   useEffect(() => {
-    function handler(e: MouseEvent) {
+    if (!open) return
+    function onDown(e: MouseEvent) {
       if (dropRef.current && !dropRef.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
 
   async function switchOrg(orgId: string | null, navigate?: string) {
     await fetch('/api/admin/preview-org', {
@@ -55,116 +66,74 @@ export default function SuperAdminBar() {
   }
 
   const activeOrg = orgs.find(o => o.id === activeOrgId)
-  const navLinks = [
-    { href: '/admin', label: 'Dashboard' },
-    { href: '/admin/orgs', label: 'Organizations' },
-    { href: '/admin/users', label: 'Users' },
-    { href: '/admin/permissions', label: 'Permissions' },
-    { href: '/admin/roadmap', label: 'Roadmap' },
-  ]
 
   return (
-    <div className="w-full bg-[#0a0a1a] rounded-xl text-white text-sm">
-      <div className="max-w-7xl mx-auto px-4 flex items-center gap-3 sm:gap-6 h-11">
+    <div data-admin-tabs className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white pl-3 pr-2">
+      <span className="hidden flex-shrink-0 pr-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 md:block">Admin</span>
 
-        <Link href={back} title="Back to the page you came from"
-          className="shrink-0 px-2 py-1 rounded text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors">
-          ← Back
-        </Link>
-
-        {/* Brand */}
-        <div className="hidden md:flex items-center gap-2 shrink-0">
-          <span className="text-xs font-black tracking-widest text-white/40 uppercase">Whistle Ready</span>
-          <span className="w-px h-4 bg-white/20" />
-          <span className="text-xs font-semibold text-white/80">Super Admin</span>
-        </div>
-
-        {/* Nav links */}
-        <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
-          {navLinks.map(l => (
-            <Link key={l.href} href={l.href}
-              className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
-                (l.href === '/admin' ? pathname === '/admin' : pathname.startsWith(l.href))
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/50 hover:text-white hover:bg-white/10'
-              }`}>
-              {l.label}
+      <nav aria-label="Admin" className="flex min-w-0 flex-1 items-center overflow-x-auto">
+        {TABS.map(t => {
+          const active = t.href === '/admin' ? pathname === '/admin' : pathname === t.href || pathname.startsWith(t.href + '/')
+          return (
+            <Link key={t.href} href={t.href} aria-current={active ? 'page' : undefined}
+              className={`flex h-12 flex-shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${active ? 'border-teal-600 font-bold text-teal-700' : 'border-transparent font-semibold text-slate-600 hover:text-slate-900'}`}>
+              {t.label}
             </Link>
-          ))}
-        </nav>
+          )
+        })}
+      </nav>
 
-        {/* Org switcher */}
-        <div className="relative shrink-0" ref={dropRef}>
-          <button
-            onClick={() => setOpen(o => !o)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-xs font-medium">
-            {activeOrg ? (
-              <>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${TIER_DOT[activeOrg.subscriptionTier] ?? 'bg-slate-400'}`} />
-                <span className="max-w-[140px] truncate">{activeOrg.name}</span>
-              </>
-            ) : (
-              <>
-                <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                <span>All Orgs (Platform)</span>
-              </>
-            )}
-            <svg className="w-3 h-3 text-white/50 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+      {/* Which organization the admin pages and the app show */}
+      <div className="relative flex-shrink-0" ref={dropRef}>
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="true"
+          className="flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:border-slate-300">
+          <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${activeOrg ? TIER_DOT[activeOrg.subscriptionTier] ?? 'bg-slate-400' : 'bg-emerald-500'}`} />
+          <span className="hidden font-medium text-slate-600 sm:inline">Viewing</span>
+          <span className="max-w-[130px] truncate font-bold text-slate-900 sm:max-w-[200px]">{activeOrg ? activeOrg.name : 'All organizations'}</span>
+          <ChevronDown size={13} aria-hidden className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
 
-          {open && (
-            <div className="absolute right-0 top-full mt-1 w-64 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-              <div className="px-3 py-2 border-b border-white/10">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Switch Organization</p>
-              </div>
-              {/* Platform view */}
-              <button
-                onClick={() => switchOrg(null)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs hover:bg-white/10 transition-colors ${!activeOrgId ? 'bg-white/10' : ''}`}>
-                <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                <div className="text-left">
-                  <p className="font-semibold text-white">Platform View</p>
-                  <p className="text-white/40">See all orgs</p>
-                </div>
-                {!activeOrgId && <span className="ml-auto text-green-400 text-[10px] font-bold">ACTIVE</span>}
-              </button>
-              <div className="border-t border-white/10" />
-              {orgs.map(org => (
-                <div key={org.id} className={`flex items-center group ${activeOrgId === org.id ? 'bg-white/10' : ''}`}>
-                  <button
-                    onClick={() => switchOrg(org.id)}
-                    className="flex items-center gap-3 px-3 py-2.5 text-xs hover:bg-white/10 transition-colors flex-1 min-w-0">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${TIER_DOT[org.subscriptionTier] ?? 'bg-slate-400'}`} />
-                    <div className="text-left min-w-0">
-                      <p className="font-semibold text-white truncate">{org.name}</p>
-                      <p className="text-white/40 capitalize">{org.subscriptionTier}</p>
-                    </div>
-                    {activeOrgId === org.id && <span className="ml-auto text-blue-400 text-[10px] font-bold shrink-0">ACTIVE</span>}
-                  </button>
-                  <button
-                    onClick={() => switchOrg(org.id, '/')}
-                    title="View portal"
-                    className="px-2 py-2.5 text-white/20 hover:text-white/80 transition-colors shrink-0 opacity-0 group-hover:opacity-100">
-                    →
-                  </button>
-                  <Link
-                    href={`/admin/orgs/${org.id}`}
-                    onClick={() => setOpen(false)}
-                    title="Edit org"
-                    className="px-2 py-2.5 text-white/20 hover:text-white/80 transition-colors shrink-0 opacity-0 group-hover:opacity-100">
-                    ✏️
-                  </Link>
-                </div>
-              ))}
-              {orgs.length === 0 && (
-                <p className="px-3 py-3 text-white/30 text-xs">No organizations yet</p>
-              )}
+        {open && (
+          <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+            <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Switch organization</p>
+            <button type="button" onClick={() => switchOrg(null)} aria-current={!activeOrgId ? 'true' : undefined}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-50 ${!activeOrgId ? 'bg-teal-50' : ''}`}>
+              <span aria-hidden className="h-2 w-2 flex-shrink-0 rounded-full bg-emerald-500" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-slate-900">Platform view</span>
+                <span className="block text-xs text-slate-600">Every organization</span>
+              </span>
+              {!activeOrgId && <Check size={16} aria-hidden className="flex-shrink-0 text-teal-700" />}
+            </button>
+            <div className="mx-1 my-1 h-px bg-slate-200" />
+            <div className="max-h-[50vh] overflow-y-auto">
+              {orgs.map(org => {
+                const on = activeOrgId === org.id
+                return (
+                  <div key={org.id} className={`flex items-center rounded-xl ${on ? 'bg-teal-50' : 'hover:bg-slate-50'}`}>
+                    <button type="button" onClick={() => switchOrg(org.id)} aria-current={on ? 'true' : undefined} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left">
+                      <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${TIER_DOT[org.subscriptionTier] ?? 'bg-slate-400'}`} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-slate-900">{org.name}</span>
+                        <span className="block text-xs capitalize text-slate-600">{org.subscriptionTier}</span>
+                      </span>
+                      {on && <Check size={16} aria-hidden className="ml-auto flex-shrink-0 text-teal-700" />}
+                    </button>
+                    <button type="button" onClick={() => switchOrg(org.id, '/')} title="Open its tournaments" aria-label={`Open ${org.name}'s tournaments`}
+                      className="flex-shrink-0 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-900">
+                      <ArrowRight size={15} aria-hidden />
+                    </button>
+                    <Link href={`/admin/orgs/${org.id}`} onClick={() => setOpen(false)} title="Edit organization" aria-label={`Edit ${org.name}`}
+                      className="mr-1 flex-shrink-0 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-900">
+                      <Pencil size={14} aria-hidden />
+                    </Link>
+                  </div>
+                )
+              })}
+              {orgs.length === 0 && <p className="px-3 py-3 text-sm text-slate-600">No organizations yet</p>}
             </div>
-          )}
-        </div>
-
+          </div>
+        )}
       </div>
     </div>
   )

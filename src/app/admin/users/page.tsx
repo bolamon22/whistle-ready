@@ -1,10 +1,10 @@
 'use client'
 
 import OrgLogoMark from '@/app/OrgLogoMark'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, Suspense, useEffect, useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { agoLabel, isOnline, parseDbTime } from '@/lib/presenceTime'
 import toast, { Toaster } from 'react-hot-toast'
@@ -89,12 +89,16 @@ function seenMatches(u: User, f: Seen, now: number): boolean {
 }
 const chip = (on: boolean) => `text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${on ? 'bg-gray-800 border-gray-800 text-white' : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'}`
 
-export default function AdminUsersPage() {
+function AdminUsersInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  // The header search opens a login here as ?q=<email>.
+  const params = useSearchParams()
+  const qParam = params?.get('q') ?? null
+  useEffect(() => { if (qParam !== null) setSearch(qParam) }, [qParam])
   const [who, setWho] = useState<Who>('all')
   const [job, setJob] = useState('all')
   const [seen, setSeen] = useState<Seen>('any')
@@ -259,15 +263,15 @@ export default function AdminUsersPage() {
       <Toaster />
       <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="text-2xl font-bold text-gray-800">User Management</h1></div>
-          <p className="text-sm text-gray-500 mt-0.5">{users.length} registered users · <a href="/admin/permissions" className="text-sky-600 hover:underline">Manage Permissions →</a></p>
+          <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="text-2xl font-bold text-gray-800">Logins</h1></div>
+          <p className="text-sm text-gray-500 mt-0.5">{users.length} {users.length === 1 ? 'login' : 'logins'} · <a href="/admin/permissions" className="text-sky-600 hover:underline">Manage Permissions →</a></p>
         </div>
         <div className="flex gap-2 items-center">
           <input type="search" placeholder="Search people, jobs, clubs…" value={search} onChange={e => setSearch(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-sky-500" />
           <button onClick={() => setShowAdd(v => !v)}
             className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-            + Add User
+            + Add login
           </button>
         </div>
       </div>
@@ -347,7 +351,7 @@ export default function AdminUsersPage() {
           <div className="flex gap-2 mt-4">
             <button type="submit" disabled={adding}
               className="bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium">
-              {adding ? 'Adding…' : 'Add User'}
+              {adding ? 'Adding…' : 'Add login'}
             </button>
             <button type="button" onClick={() => setShowAdd(false)}
               className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
@@ -549,11 +553,15 @@ export default function AdminUsersPage() {
               </Fragment>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No users found</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No logins found</td></tr>
             )}
           </tbody>
         </table>
       </div>
     </div>
   )
+}
+
+export default function AdminUsersPage() {
+  return <Suspense fallback={<div className="p-10 text-center text-gray-400">Loading…</div>}><AdminUsersInner /></Suspense>
 }

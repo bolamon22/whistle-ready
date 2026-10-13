@@ -108,7 +108,7 @@ export default function PermissionsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/admin/users" className="text-sm text-blue-600 hover:underline mb-1 block">← Back to Users</Link>
+          <Link href="/admin/users" className="text-sm text-blue-600 hover:underline mb-1 block">← Back to Logins</Link>
           <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="text-2xl font-bold text-gray-800">Role Permissions</h1></div>
           <p className="text-sm text-gray-500 mt-0.5">Check the boxes to grant access. Admin always has full access.</p>
         </div>

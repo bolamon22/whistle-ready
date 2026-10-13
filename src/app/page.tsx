@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import Landing from './Landing'
 import TournamentsDashboard from './TournamentsDashboard'
@@ -16,5 +17,5 @@ export default function HomePage() {
   }
 
   // Authenticated (admin/director) — the tournaments dashboard, unchanged.
-  return <TournamentsDashboard />
+  return <Suspense fallback={null}><TournamentsDashboard /></Suspense>
 }

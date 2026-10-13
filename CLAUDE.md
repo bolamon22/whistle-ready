@@ -174,14 +174,30 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Header redesign (Oct 13).** `src/app/NavBar.tsx` composes `src/components/nav/`. `navConfig.ts` (pure; not `navMenus.ts`, which a case-insensitive disk confuses with `NavMenus.tsx`):
+  `NAV_MENUS` = Events / People / Organization / Admin; `visibleMenus(role)` keeps each link only if
+  `roleCanAccess` allows it (plus an optional `roles` list) and drops empty menus, so adding a page to the header
+  is one item in NAV_MENUS gated by role-permissions.json. Event helpers: `currentEvent` (the event whose
+  `/tournaments/<id>` page you're on, else the next upcoming, else the latest), `dateRange`, `whenLabel`,
+  `eventHref` (dashboard, else board, else scheduler, by role). `NavMenus` = the xl+ dropdowns; `EventSwitcher` =
+  the pill in the bar and the card in the phone menu (`+ New tournament` → `/?new=1`, which TournamentsDashboard
+  opens through useSearchParams; page.tsx wraps it in Suspense); `GlobalSearch` (Ctrl/Cmd K) loads /api/workers,
+  /api/admin/users (admins) and /api/org-clubs on first focus, with the same role gates as those pages; login hits
+  go to `/admin/users?q=` and clubs to `/dashboard/org/clubs?q=`, and both pages prefill their search from `q`.
+  `AccountMenu` holds Profile, Game-day alerts, Appearance, View as and Sign out. One popover open at a time:
+  NavBar's `open` key matches the `data-nav-pop` value on each popover root; a mousedown outside it, Escape or a
+  page change closes it. Below xl one phone menu holds everything (Organization and Admin fold). The floating
+  Light/Dark button is gone (ThemeShell only sets the body class). SuperAdminBar is light Admin tabs (Users is
+  called **Logins** everywhere now) plus the org switcher; its ← Back link and `wr-last-app-path` are gone. Dark
+  mode: globals.css recolors teal-700/red-700 text and role badges inside `[data-app-chrome]` and
+  `[data-admin-tabs]`. Help: `src/help/top-bar.md`, and "top bar → X" wording updated across the help pages.
 - **Users page filters and the admin header (Oct 13).** `GET /api/admin/users` adds per login: `staff` (the
   Staff Pool record with the same email: oldest record's id, jobs merged across duplicates, gender, count),
   `clubs` (club names from ClubRegAccess), `players` (ParentWaiverLink count). The page shows those under the
   name and has Who chips (Office = admin/director/scheduler/assigner; Staff = staff and any other role; Clubs &
   coaches; Parents), Job chips under Staff (including No staff record), a Last on filter (visits recorded from
   Oct 12) and sort; search matches jobs and club names. NavBar no longer hides on /admin (only /o/), so admin
-  pages keep the app header with SuperAdminBar under it; its **← Back** goes to the last page outside /admin
-  (sessionStorage `wr-last-app-path`, written by NavBar).
+  pages keep the app header with SuperAdminBar (the Admin tabs) under it.
 - **Assigner pay groups (Oct 13).** Staff pay is split into groups (`lib/payGroups.ts`, pure): `boys` and
   `girls` (ref slots, by the game's division through `gameGender`; a division that says neither follows the
   ref's own gender), `scorekeepers`, and `ops` (field ops, trainers, hourly time). Each assigner's groups are
