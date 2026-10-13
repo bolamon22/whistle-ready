@@ -5,7 +5,9 @@ import toast from 'react-hot-toast'
 import { certLabel, PAY_METHODS, WORKER_ROLES, formatDate } from '@/lib/utils'
 
 interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;defaultRole:string;gender:string;payMethod:string;payHandle:string|null;isAssigner:boolean;hourlyRate:number|null;payRateOverride:number|null;notes:string|null;photoUrl:string|null }
-interface PayRecord { id:string;amount:number;method:string;paidAt:string;notes:string|null;tournament:{id:string;name:string;startDate:string|null} }
+// amount is null for an assigner when part of that event's pay is in a group they
+// don't run (lib/payGroups); the record still shows they were paid.
+interface PayRecord { id:string;amount:number|null;method:string;paidAt:string;notes:string|null;tournament:{id:string;name:string;startDate:string|null} }
 
 const pmLabel=(p:string)=>PAY_METHODS.find(x=>x.value===p)?.label??p
 const rLabel=(r:string)=>WORKER_ROLES.find(x=>x.value===r)?.label??r
@@ -62,7 +64,7 @@ export default function StaffProfilePage({ params }: { params:{id:string} }) {
   if(loading)return<div className="text-slate-400 text-center py-12">Loading…</div>
   if(!worker)return<div className="text-red-500">Not found</div>
 
-  const totalEarned=payments.reduce((s,p)=>s+p.amount,0)
+  const totalEarned=payments.reduce((s,p)=>s+(p.amount??0),0)
   const totalGames=payments.reduce((s,p)=>s+parseGames(p.notes),0)
   const uniqueTournaments=new Set(payments.map(p=>p.tournament.id)).size
 
@@ -182,7 +184,7 @@ export default function StaffProfilePage({ params }: { params:{id:string} }) {
                     <td className="px-4 py-3"><span className="badge bg-slate-100 text-slate-600">{pmLabel(p.method)}</span></td>
                     <td className="px-4 py-3 text-slate-400 text-xs">{p.notes||'—'}</td>
                     <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">{new Date(p.paidAt).toLocaleDateString()}</td>
-                    <td className="px-5 py-3 text-right font-bold text-emerald-600">${p.amount.toFixed(2)}</td>
+                    <td className="px-5 py-3 text-right font-bold text-emerald-600">{p.amount!=null?`$${p.amount.toFixed(2)}`:<span className="text-slate-300 font-medium" title="Part of this pay is in a group you don’t run">—</span>}</td>
                   </tr>
                 )
               })}

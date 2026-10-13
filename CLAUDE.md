@@ -174,6 +174,20 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Assigner pay groups (Oct 13).** Staff pay is split into groups (`lib/payGroups.ts`, pure): `boys` and
+  `girls` (ref slots, by the game's division through `gameGender`; a division that says neither follows the
+  ref's own gender), `scorekeepers`, and `ops` (field ops, trainers, hourly time). Each assigner's groups are
+  AppSetting `assignerPay:{userId}` = `{ groups, by, at }` (`lib/payScope.ts`, server only); unset = boys +
+  girls; all four = `scope.all`, which also shows event-wide pay totals. `payScopeFor(role, userId)`: admin and
+  director all, assigner their groups, everyone else none ("View as" an assigner gets the default). Applied in
+  pay-summary (`scope` in the answer, `partial` per person), payment-records (a record shows only when that
+  person's pay at the event is in scope, amount null when partial; POST and DELETE need all of it, and an
+  assigner's POST amount is the server's total), assignments and games GET (`payRate` null outside scope; the
+  games list no longer hands rates or payout handles to schedulers or staff), workers, roster and time entries
+  (`redactWorker(w, role, scope)`, `stripWorkerUpdate(body, role, scope, stored)`), the dashboard's pay totals
+  (scope.all only) and the auto-assign preview (no payRate). Set on Users (admin) and Your team (director)
+  with `components/AssignerPayAccess.tsx` -> `GET/PUT /api/assigner-pay` (a director only for their own org;
+  User.orgId is raw). Tests: 60 checks on the real Prisma engine over SQLite (scratch).
 - **Vendor invoices (Oct 12).** An approved vendor with a fee has an **Invoice** box on Vendor requests
   (`vendor-requests/VendorInvoicePanel.tsx`, money roles only; the GET adds `canMoney` and `invoices`). PDF:
   `lib/vendorInvoice.ts` (pure) builds an `InvoiceDoc` drawn by `buildInvoicePdf` (booth type line, web

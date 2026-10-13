@@ -3,7 +3,7 @@ title: Add a user and set their role
 category: Admin
 order: 700
 routes: /admin/users, /profile/*
-keywords: user management users add user create account role change role reset password delete user club links club director link coach
+keywords: user management users add user create account role change role reset password delete user club links club director link coach assigner pay access sees pay for boys refs girls refs scorekeepers field ops
 ---
 **User Management** is the admin list of every account. Add users, change roles, reset passwords, link club directors to their clubs, or delete accounts.
 
@@ -18,6 +18,8 @@ keywords: user management users add user create account role change role reset p
 **To change a role:** pick a new role in the **Role** column. It saves right away.
 
 **To reset a password:** click **Reset PW**, enter the new password, and click **Reset Password**.
+
+**To pick which staff pay an assigner sees:** under an Assigner's row, click the groups next to **Sees pay for**: **Boys refs**, **Girls refs**, **Scorekeepers**, **Field ops & trainers**. Each click saves. **Default until you pick** means they see boys and girls refs only. Tick all four when one person runs everybody. This sets what they see on **Staff pay**, **Assignments**, the staff roster and the Staff Pool.
 
 **To link a club director or coach to a club:**
 1. Click **Clubs** on their row (shown for Club Director, Coach and Admin).

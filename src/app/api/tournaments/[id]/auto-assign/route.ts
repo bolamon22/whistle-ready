@@ -297,7 +297,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       })
     }
   }
-  const proposals = preview ? created.map(c => {
+  // No pay rate in the preview: the board doesn't show it, and an assigner sees
+  // pay only for their own pay groups (lib/payGroups).
+  const proposals = preview ? created.map(({ payRate: _rate, ...c }) => {
     const g = games.find(x => x.id === c.gameId)!
     const w = allWorkers.find(x => x.id === c.workerId)
     return { ...c, workerName: w?.name ?? '?', workerGender: w?.gender ?? 'both', gameNumber: g.gameNumber, division: g.division, startTime: g.startTime, location: g.location }

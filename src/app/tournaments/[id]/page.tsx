@@ -12,7 +12,7 @@ import { isOnline, presenceLabel } from '@/lib/presenceTime'
 import { useRole } from '@/lib/role-context'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null }
-interface Assignment { id:string;workerId:string;role:string;payRate:number;worker:Worker }
+interface Assignment { id:string;workerId:string;role:string;payRate:number|null;worker:Worker }
 interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[] }
 interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string }
 interface Availability { workerId:string;date:string;timeSlots:string }
@@ -1058,7 +1058,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                                 <td className="px-4 py-3"><span className="badge bg-slate-100 text-slate-700">{g.division}</span></td>
                                 <td className="px-4 py-3 text-slate-800">{g.team1} vs {g.team2}</td>
                                 <td className="px-4 py-3"><span className="badge bg-sky-100 text-sky-700">{myRole?.role.replace('ref1','Ref 1').replace('ref2','Ref 2').replace('ref3','Ref 3').replace('scorekeeper','Scorekeeper')}</span></td>
-                                {myRole&&<td className="px-4 py-3 text-slate-500 text-xs">${myRole.payRate}/game</td>}
+                                {myRole&&<td className="px-4 py-3 text-slate-500 text-xs">{myRole.payRate!=null?`$${myRole.payRate}/game`:''}</td>}
                               </tr>
                             )
                           })}

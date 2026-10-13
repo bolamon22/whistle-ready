@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { Users, UserPlus, Trash2, Link2, ChevronLeft } from 'lucide-react'
+import AssignerPayAccess from '@/components/AssignerPayAccess'
+import { DEFAULT_ASSIGNER_GROUPS, type PayGroup } from '@/lib/payGroups'
 
 const ROLES = ['director', 'scheduler', 'assigner', 'coach', 'staff']
 const ROLE_LABEL: Record<string, string> = { director: 'Director', scheduler: 'Scheduler', assigner: 'Assigner', coach: 'Coach', staff: 'Staff' }
@@ -22,6 +24,8 @@ export default function OrgTeamPage() {
   const [newRole, setNewRole] = useState('staff')
   const [busy, setBusy] = useState(false)
   const [lastLink, setLastLink] = useState('')
+  // Which staff pay each assigner sees (lib/payGroups).
+  const [payAccess, setPayAccess] = useState<Record<string, { groups: PayGroup[]; custom: boolean }>>({})
 
   useEffect(() => {
     if (status === 'loading') return
@@ -32,6 +36,7 @@ export default function OrgTeamPage() {
 
   async function load() {
     try { const d = await fetch('/api/org/users').then(r => r.ok ? r.json() : null); if (d) { setUsers(d.users || []); setInvites(d.invites || []) } } catch {} finally { setLoading(false) }
+    try { const p = await fetch('/api/assigner-pay').then(r => r.ok ? r.json() : null); if (p?.assigners) setPayAccess(p.assigners) } catch {}
   }
   async function add() {
     if (!email.trim()) return
@@ -80,12 +85,21 @@ export default function OrgTeamPage() {
       <div className="space-y-2 mb-6">
         {users.length === 0 && <p className="text-sm text-slate-400">No users yet.</p>}
         {users.map(u => (
-          <div key={u.id} className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
-            <div className="min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p><p className="text-xs text-slate-400 truncate">{u.email}</p></div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <select value={ROLES.includes(u.role) ? u.role : 'staff'} onChange={e => changeRole(u.id, e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">{ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select>
-              <button onClick={() => removeUser(u.id)} className="text-slate-300 hover:text-red-500" title="Remove"><Trash2 size={15} /></button>
+          <div key={u.id} className="bg-white border border-slate-200 rounded-xl p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p><p className="text-xs text-slate-400 truncate">{u.email}</p></div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <select value={ROLES.includes(u.role) ? u.role : 'staff'} onChange={e => changeRole(u.id, e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">{ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select>
+                <button onClick={() => removeUser(u.id)} className="text-slate-300 hover:text-red-500" title="Remove"><Trash2 size={15} /></button>
+              </div>
             </div>
+            {u.role === 'assigner' && (
+              <div className="mt-2 pt-2 border-t border-slate-100">
+                <AssignerPayAccess key={u.id + ':' + (payAccess[u.id]?.groups ?? []).join(',')} userId={u.id}
+                  groups={payAccess[u.id]?.groups ?? DEFAULT_ASSIGNER_GROUPS} custom={payAccess[u.id]?.custom}
+                  onSaved={groups => setPayAccess(p => ({ ...p, [u.id]: { groups, custom: true } }))} />
+              </div>
+            )}
           </div>
         ))}
       </div>

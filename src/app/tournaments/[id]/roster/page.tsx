@@ -267,7 +267,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     .filter(w=>certFilter==='all'||(parseRoles(w).includes('ref')&&w.certLevel===certFilter))
     .filter(w=>matchesRefGender(w,gender))
     .filter(w=>gamesFilter==='all'||(gamesFilter==='none'?!gameCount[w.id]:!!gameCount[w.id]))
-    .filter(w=>infoFilter==='all'||(infoFilter==='contact'?(!w.phone||!w.email):(!w.payMethod||(needsHandleFor(w.payMethod)&&!w.payHandle))))
+    // payMethod is never null in the database, so null means pay this viewer isn't
+    // shown (an assigner's other pay groups): not "missing", just not theirs.
+    .filter(w=>infoFilter==='all'||(infoFilter==='contact'?(!w.phone||!w.email):(w.payMethod!==null&&(!w.payMethod||(needsHandleFor(w.payMethod)&&!w.payHandle)))))
     .filter(w=>!search||w.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
       if(sortKey==='games'){const d=(gameCount[a.id]??0)-(gameCount[b.id]??0);return (sortDir==='asc'?d:-d)||a.name.localeCompare(b.name)}

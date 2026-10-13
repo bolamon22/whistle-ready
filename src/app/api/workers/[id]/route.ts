@@ -2,19 +2,25 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { redactWorker, stripWorkerUpdate } from '@/lib/roleScope'
+import { payScopeFor } from '@/lib/payScope'
 // Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
-// handles or edit/delete workers).
+// handles or edit/delete workers). An assigner reads and edits pay only for staff in
+// their pay groups (lib/payGroups, Oct 13 2026).
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
-  const w = await prisma.worker.findUnique({ where:{id:params.id} })
+  const [w, scope] = await Promise.all([prisma.worker.findUnique({ where:{id:params.id} }), payScopeFor(gate.role, gate.userId)])
   if (!w) return NextResponse.json({ error:'Not found' }, { status:404 })
-  return NextResponse.json(redactWorker(w, gate.role))
+  return NextResponse.json(redactWorker(w, gate.role, scope))
 }
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
-  const b = stripWorkerUpdate(await req.json(), gate.role) as any
+  const scope = await payScopeFor(gate.role, gate.userId)
+  // Pay groups go by the record as stored, so an assigner can't move someone into
+  // their groups and set the pay in the same save.
+  const stored = scope.all ? null : await prisma.worker.findUnique({ where: { id: params.id }, select: { roles: true, defaultRole: true, gender: true } })
+  const b = stripWorkerUpdate(await req.json(), gate.role, scope, stored) as any
   // Background-check date (Aug 2026): raw column, not in the Prisma schema.
   // Used by the county Exhibit A affidavit -- re-screen required every 12 months.
   // Mailing address + Venmo/Zelle handles (raw columns) — staff keep all three payment
@@ -37,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   }
   if (Object.keys(b).length === 0) {
     const w = await prisma.worker.findUnique({ where: { id: params.id } })
-    return NextResponse.json(w ? redactWorker(w, gate.role) : { ok: true })
+    return NextResponse.json(w ? redactWorker(w, gate.role, scope) : { ok: true })
   }
   if (b.bgCheckDate !== undefined) {
     try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "bgCheckDate" TEXT NOT NULL DEFAULT ''`) } catch { /* exists */ }
@@ -45,7 +51,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     const rest = { ...b }; delete rest.bgCheckDate
     if (Object.keys(rest).length === 0) {
       const w = await prisma.worker.findUnique({ where: { id: params.id } })
-      return NextResponse.json(w ? redactWorker(w, gate.role) : { ok: true })
+      return NextResponse.json(w ? redactWorker(w, gate.role, scope) : { ok: true })
     }
   }
   // The staff lists read Worker with raw SQL, where isAssigner is 0/1, and the edit forms
@@ -68,7 +74,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.notes!==undefined&&{notes:b.notes||null}),
     ...(b.photoUrl!==undefined&&{photoUrl:b.photoUrl||null}),
     ...(b.roles!==undefined&&{roles:JSON.stringify(b.roles)}),
-  }}), gate.role))
+  }}), gate.role, scope))
   } catch (e) {
     console.error('worker update', e)
     return NextResponse.json({ error: 'That didn’t save. Please try again.' }, { status: 500 })

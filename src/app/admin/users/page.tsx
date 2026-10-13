@@ -1,13 +1,15 @@
 'use client'
 
 import OrgLogoMark from '@/app/OrgLogoMark'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { agoLabel, isOnline } from '@/lib/presenceTime'
 import toast, { Toaster } from 'react-hot-toast'
+import AssignerPayAccess from '@/components/AssignerPayAccess'
+import { DEFAULT_ASSIGNER_GROUPS, type PayGroup } from '@/lib/payGroups'
 
 interface User { id: string; name: string; email: string; role: string; createdAt: string; lastSeenAt?: string | null; lastLoginAt?: string | null }
 interface ClubLink { id: string; tournamentId: string; clubName: string }
@@ -53,6 +55,8 @@ export default function AdminUsersPage() {
   const [resetUserId, setResetUserId] = useState<string | null>(null)
   const [resetPassword, setResetPassword] = useState('')
   const [resetting, setResetting] = useState(false)
+  // Which staff pay each assigner sees (one runs boys refs, one girls refs).
+  const [payAccess, setPayAccess] = useState<Record<string, { groups: PayGroup[]; custom: boolean }>>({})
 
   // Club linking
   const [linkingUser, setLinkingUser] = useState<User | null>(null)
@@ -72,6 +76,7 @@ export default function AdminUsersPage() {
 
   const load = () => {
     fetch('/api/admin/users').then(r => r.json()).then(d => { setUsers(d); setLoading(false) })
+    fetch('/api/assigner-pay').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.assigners) setPayAccess(d.assigners) }).catch(() => {})
   }
 
   const changeRole = async (id: string, role: string) => {
@@ -338,7 +343,7 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
@@ -352,7 +357,8 @@ export default function AdminUsersPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.map(u => (
-              <tr key={u.id} className="hover:bg-gray-50">
+              <Fragment key={u.id}>
+              <tr className="hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
                 <td className="px-4 py-3 text-gray-500">{u.email}</td>
                 <td className="px-4 py-3">
@@ -395,6 +401,18 @@ export default function AdminUsersPage() {
                   </div>
                 </td>
               </tr>
+              {u.role === 'assigner' && (
+                <tr className="!border-t-0">
+                  <td colSpan={6} className="px-4 pb-3 pt-0">
+                    <div className="max-w-[calc(100vw-4rem)] sm:max-w-none">
+                    <AssignerPayAccess key={u.id + ':' + (payAccess[u.id]?.groups ?? []).join(',')} userId={u.id}
+                      groups={payAccess[u.id]?.groups ?? DEFAULT_ASSIGNER_GROUPS} custom={payAccess[u.id]?.custom}
+                      onSaved={groups => setPayAccess(p => ({ ...p, [u.id]: { groups, custom: true } }))} />
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             {filtered.length === 0 && (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No users found</td></tr>

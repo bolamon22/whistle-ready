@@ -7,6 +7,12 @@
 // team is paid but not how much ... red flags if a team is in jeopardy of a no
 // show". So money is a separate permission from staff access, and payment
 // STATUS (paid / partial / unpaid) is not money.
+//
+// Staff pay is split further by group (boys refs, girls refs, scorekeepers, field
+// ops & trainers; lib/payGroups). An assigner sees only the groups set for them;
+// pass their PayScope (lib/payScope) as `scope` and pay outside it comes back blank.
+
+import { type PayScope, seesPay, workerPayGroups } from './payGroups'
 
 /** Roles an admin can preview with "View as". */
 export const PREVIEW_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'coach', 'staff', 'parent'] as const
@@ -36,10 +42,18 @@ export function payStatus(invoiced: number, received: number): PayStatus {
 const WORKER_PAY_KEYS = ['payRateOverride', 'hourlyRate', 'payMethod', 'payHandle', 'venmoHandle', 'zelleHandle']
 const WORKER_CONTACT_KEYS = ['email', 'phone', 'notes', 'mailingAddress']
 
+/** Whether this viewer sees this staff member's rate and payout details: a role
+ *  with staff pay, and (for an assigner) a pay group the person works in. */
+export function seesWorkerPay(w: unknown, role: string, scope?: PayScope | null): boolean {
+  if (!canSeeStaffPay(role)) return false
+  if (!scope || scope.all) return true
+  return seesPay(scope, workerPayGroups(w as { roles?: string; defaultRole?: string; gender?: string }))
+}
+
 /** Remove what this role may not see from a worker row. Returns a copy. */
-export function redactWorker<T>(w: T, role: string): T {
+export function redactWorker<T>(w: T, role: string, scope?: PayScope | null): T {
   if (!w || typeof w !== 'object') return w
-  const pay = canSeeStaffPay(role), contacts = canSeeContacts(role)
+  const pay = seesWorkerPay(w, role, scope), contacts = canSeeContacts(role)
   if (pay && contacts) return w
   const out: Record<string, unknown> = { ...(w as Record<string, unknown>) }
   if (!pay) for (const k of WORKER_PAY_KEYS) if (k in out) out[k] = null
@@ -47,11 +61,21 @@ export function redactWorker<T>(w: T, role: string): T {
   return out as T
 }
 
+/** Blank only the pay and payout fields this viewer may not see. For lists such as
+ *  the game schedule that never carried the contact rules. */
+export function redactWorkerPay<T>(w: T, role: string, scope?: PayScope | null): T {
+  if (!w || typeof w !== 'object' || seesWorkerPay(w, role, scope)) return w
+  const out: Record<string, unknown> = { ...(w as Record<string, unknown>) }
+  for (const k of WORKER_PAY_KEYS) if (k in out) out[k] = null
+  return out as T
+}
+
 /** Drop the fields this role is shown blank from an update body, so saving a
- *  form it cannot fully see does not write those blanks over real values. */
-export function stripWorkerUpdate(body: Record<string, unknown>, role: string): Record<string, unknown> {
+ *  form it cannot fully see does not write those blanks over real values. Pass the
+ *  stored worker with the scope: an assigner can't change pay outside their groups. */
+export function stripWorkerUpdate(body: Record<string, unknown>, role: string, scope?: PayScope | null, stored?: unknown): Record<string, unknown> {
   const out = { ...body }
-  if (!canSeeStaffPay(role)) for (const k of WORKER_PAY_KEYS) delete out[k]
+  if (!canSeeStaffPay(role) || (scope && !scope.all && stored && !seesWorkerPay(stored, role, scope))) for (const k of WORKER_PAY_KEYS) delete out[k]
   if (!canSeeContacts(role)) for (const k of WORKER_CONTACT_KEYS) delete out[k]
   return out
 }

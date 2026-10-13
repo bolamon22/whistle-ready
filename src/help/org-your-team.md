@@ -3,7 +3,7 @@ title: Add staff and admins to your organization
 category: Organization
 order: 600
 routes: /dashboard/org
-keywords: your team invite add user staff admin director scheduler assigner coach role change remove invite link pending invites members
+keywords: your team invite add user staff admin director scheduler assigner coach role change remove invite link pending invites members pay access sees pay for boys refs girls refs scorekeepers
 ---
 The **Your team** page is where a director adds people to the organization, changes their role, or removes them. New people get an email to set up their account.
 
@@ -16,6 +16,8 @@ The **Your team** page is where a director adds people to the organization, chan
 4. If they already have an account you will see "Added to your org". If not, you will see "Invite sent" and a link you can **Copy** and send yourself.
 
 **To change someone's role:** under **Members**, pick a new role from the menu next to their name. It saves right away.
+
+**To pick which staff pay an assigner sees:** on an Assigner's card, click the groups next to **Sees pay for**: **Boys refs**, **Girls refs**, **Scorekeepers**, **Field ops & trainers**. Each click saves. **Default until you pick** means they see boys and girls refs only. Tick all four when one person runs everybody.
 
 **To remove someone:** click the trash icon next to their name and confirm. This removes them from your organization.
 

@@ -53,6 +53,13 @@ export async function viewerRole(): Promise<string> {
   return 'res' in b ? '' : b.role
 }
 
+/** viewerRole plus the account id, for answers that differ per person (an
+ *  assigner's pay groups, lib/payScope). Never blocks. */
+export async function viewer(): Promise<{ role: string; userId: string }> {
+  const b = await base()
+  return 'res' in b ? { role: '', userId: '' } : { role: b.role, userId: ((b.session.user as any)?.id as string) || '' }
+}
+
 function ok(session: any, role?: string): AuthResult {
   return {
     ok: true,

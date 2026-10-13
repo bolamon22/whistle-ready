@@ -9,9 +9,12 @@ import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/St
 
 interface GameEntry{gameNumber:string;date:string;startTime:string;division:string;location:string;role:string;pay:number}
 interface TERow{date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;hours:number;pay:number}
-interface WS{worker:{id:string;name:string;certLevel:string;defaultRole:string;roles?:string;gender?:string;hourlyRate:number|null;payMethod:string;payHandle:string|null;photoUrl:string|null};games:GameEntry[];timeEntries:TERow[];totalPay:number}
-interface Data{summary:WS[];tournamentName:string;tournamentLogo:string}
-interface PayRecord{id:string;workerId:string;amount:number;method:string;paidAt:string;notes:string|null}
+// partial: this person also has pay in a group the viewer doesn't run (an assigner
+// set to boys refs looking at a ref who also scorekept). Only the director marks
+// them paid, since one pay record covers all of their pay at the event.
+interface WS{worker:{id:string;name:string;certLevel:string;defaultRole:string;roles?:string;gender?:string;hourlyRate:number|null;payMethod:string;payHandle:string|null;photoUrl:string|null};games:GameEntry[];timeEntries:TERow[];totalPay:number;partial?:boolean}
+interface Data{summary:WS[];tournamentName:string;tournamentLogo:string;scope?:{all:boolean;groups:string[];label:string}}
+interface PayRecord{id:string;workerId:string;amount:number|null;method:string;paidAt:string;notes:string|null}
 
 const rLabel=(r:string)=>ALL_ROLES.find(x=>x.value===r)?.label??WORKER_ROLES.find(x=>x.value===r)?.label??r
 const pmLabel=(p:string)=>PAY_METHODS.find(x=>x.value===p)?.label??p
@@ -26,6 +29,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   const [roleFilter,setRoleFilter]=useState('all')
   const [gender,setGender]=useRefGender(params.id)
   const [payNote,setPayNote]=useState('')
+  const [err,setErr]=useState('')
 
   async function load(){
     const [dr,pr]=await Promise.all([
@@ -43,12 +47,15 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   async function markPaid(ws:WS){
     const method=ws.worker.payMethod||'check'
     const res=await fetch('/api/payment-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerId:ws.worker.id,tournamentId:params.id,amount:ws.totalPay,method,notes:payNote||null})})
-    if(res.ok){setPayNote('');await load()}
+    if(res.ok){setPayNote('');setErr('');await load()}
+    else setErr((await res.json().catch(()=>({})))?.error||'That didn’t save. Please try again.')
   }
 
   async function unmarkPaid(recordId:string){
     if(!confirm('Remove payment record?'))return
-    await fetch(`/api/payment-records/${recordId}`,{method:'DELETE'})
+    const res=await fetch(`/api/payment-records/${recordId}`,{method:'DELETE'})
+    if(!res.ok)setErr((await res.json().catch(()=>({})))?.error||'That didn’t save. Please try again.')
+    else setErr('')
     await load()
   }
 
@@ -69,7 +76,12 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   if(loading)return<div className="text-slate-400 text-center py-12">Loading…</div>
   if(!data)return<div className="text-red-500">Not found</div>
   const total=data.summary.reduce((s,w)=>s+w.totalPay,0)
-  const totalPaid=payRecords.reduce((s,r)=>s+r.amount,0)
+  // An assigner sees part of the event's pay (data.scope), and a record's amount can
+  // cover pay outside it, so their Paid is the pay they see for people marked paid.
+  const scoped=!!data.scope&&!data.scope.all
+  const totalPaid=scoped
+    ?data.summary.reduce((s,w)=>s+(isPaid(w.worker.id)?w.totalPay:0),0)
+    :payRecords.reduce((s,r)=>s+(r.amount??0),0)
   const outstanding=total-totalPaid
   const filtered=data.summary
     .filter(ws=>roleFilter==='all'||ws.worker.defaultRole===roleFilter)
@@ -111,11 +123,13 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
             <span className="text-sm text-emerald-600">Paid: <strong>${totalPaid.toFixed(2)}</strong></span>
             {outstanding>0&&<span className="text-sm text-amber-600">Outstanding: <strong>${outstanding.toFixed(2)}</strong></span>}
           </div>
+          {scoped&&<p className="text-xs text-slate-500 mt-1.5">Showing pay for <strong className="text-slate-700">{data.scope!.label}</strong>. The director picks which groups you see.</p>}
+          {err&&<p className="text-sm text-red-600 mt-1.5" role="alert">{err}</p>}
         </div>
         <button onClick={exportCSV} className="btn-primary btn-sm" disabled={!data.summary.length}><Download size={14} className="inline align-text-bottom mr-1" />CSV</button>
       </div>
 
-      {data.summary.length===0?<div className="card p-12 text-center text-slate-400"><p className="font-medium">No assignments yet</p></div>:(
+      {data.summary.length===0?<div className="card p-12 text-center text-slate-400"><p className="font-medium">{scoped&&!data.scope!.groups.length?'You don’t see any staff pay yet. Ask the director to pick your pay groups.':scoped?`No pay yet for ${data.scope!.label}`:'No assignments yet'}</p></div>:(
         <div className="space-y-3">
           {/* Filter bar */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
@@ -157,12 +171,15 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                         {ws.worker.payHandle&&<span className="text-xs text-slate-400">{ws.worker.payHandle}</span>}
                         {ws.games.length>0&&<span className="text-xs text-slate-400">{ws.games.length} games</span>}
                         {pr&&<span className="badge bg-emerald-100 text-emerald-700">✓ Paid {new Date(pr.paidAt).toLocaleDateString()}</span>}
+                        {ws.partial&&<span className="badge bg-amber-50 text-amber-700" title="This person also has pay in a group you don’t run. The director marks them paid.">Your part only</span>}
                       </div>
                     </div>
                   </button>
                   <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
                     <span className={`text-lg sm:text-xl font-bold ${pr?'text-emerald-600':'text-slate-900'}`}>${ws.totalPay.toFixed(2)}</span>
-                    {pr?(
+                    {ws.partial?(
+                      !pr&&<span className="hidden sm:inline text-xs text-slate-400">Director marks paid</span>
+                    ):pr?(
                       <button onClick={()=>unmarkPaid(pr.id)} className="text-xs text-red-400 hover:text-red-600 font-medium">Unpay</button>
                     ):(
                       <button onClick={()=>setPaying(p=>p===ws.worker.id?null:ws.worker.id)} className="hidden sm:inline-flex btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">Mark Paid</button>
@@ -170,13 +187,14 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                     <button onClick={()=>toggle(ws.worker.id)} className="text-slate-400 p-1 -mr-1" aria-label="Details">{isExpanded?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
                   </div>
                 </div>
-                {!pr&&(
+                {!pr&&!ws.partial&&(
                   <button onClick={()=>setPaying(p=>p===ws.worker.id?null:ws.worker.id)} className="sm:hidden btn-secondary btn-sm w-full mt-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">{isPaying?'Cancel':'Mark Paid'}</button>
                 )}
+                {!pr&&ws.partial&&<p className="sm:hidden text-xs text-slate-400 mt-2">Director marks paid</p>}
                 </div>
 
                 {/* Pay form */}
-                {isPaying&&!pr&&(
+                {isPaying&&!pr&&!ws.partial&&(
                   <div className="px-3 sm:px-5 py-3 bg-emerald-50 border-t border-emerald-100 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <span className="text-sm font-semibold text-emerald-800">Confirm payment of ${ws.totalPay.toFixed(2)} via {pmLabel(ws.worker.payMethod)}</span>
                     <input className="input flex-1 py-1 text-sm" placeholder="Notes (optional)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>

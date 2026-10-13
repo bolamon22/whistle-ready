@@ -6,7 +6,9 @@ import toast, { Toaster } from 'react-hot-toast'
 import { X } from 'lucide-react'
 
 interface Worker { id: string; name: string; certLevel: string; defaultRole: string }
-interface Assignment { id: string; role: string; payRate: number; worker: Worker }
+// payRate is null when this viewer doesn't see that pay: the scheduler, or an
+// assigner for a group they don't run (lib/payGroups).
+interface Assignment { id: string; role: string; payRate: number | null; worker: Worker }
 interface Game {
   id: string; gameNumber: string; date: string; startTime: string
   division: string; location: string; team1: string; team2: string
@@ -89,7 +91,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
   const pct = totalSlots > 0 ? Math.round(filledSlots / totalSlots * 100) : 0
 
   // Staff view — group by worker
-  const staffMap = new Map<string, { worker: Worker; games: { game: Game; role: string; payRate: number; assignmentId: string }[] }>()
+  const staffMap = new Map<string, { worker: Worker; games: { game: Game; role: string; payRate: number | null; assignmentId: string }[] }>()
   games.filter(g => !g.isCanceled && (!selDate || g.date === selDate) && (!selDiv || g.division === selDiv))
     .forEach(g => g.assignments.forEach(a => {
       if (!staffMap.has(a.worker.id)) staffMap.set(a.worker.id, { worker: a.worker, games: [] })
@@ -180,7 +182,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
                         <div key={a.id} className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg ${ROLE_COLORS[a.role] || 'bg-slate-100 text-slate-600'}`}>
                           <span className="font-medium">{a.worker.name}</span>
                           <span className="opacity-70">· {ROLE_LABELS[a.role] || a.role}</span>
-                          <span className="opacity-60">· ${a.payRate}</span>
+                          {a.payRate != null && <span className="opacity-60">· ${a.payRate}</span>}
                           <button onClick={() => removeAssignment(a.id)} disabled={removing === a.id}
                             className="ml-1 opacity-50 hover:opacity-100 transition-opacity text-current"><X size={12} /></button>
                         </div>
@@ -198,7 +200,8 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
           <div className="space-y-3">
             {staffList.length === 0 && <div className="text-center py-12 text-slate-400">No assignments in this view.</div>}
             {staffList.map(({ worker, games: wGames }) => {
-              const totalPay = wGames.reduce((s, g) => s + g.payRate, 0)
+              const priced = wGames.filter(g => g.payRate != null)
+              const totalPay = priced.reduce((s, g) => s + (g.payRate ?? 0), 0)
               return (
                 <div key={worker.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                   <div className="flex items-center gap-3 px-3 sm:px-5 py-3 border-b border-slate-50 bg-slate-50">
@@ -207,7 +210,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
                     </div>
                     <span className="font-semibold text-slate-800 flex-1">{worker.name}</span>
                     <span className="text-xs text-slate-400">{wGames.length} game{wGames.length !== 1 ? 's' : ''}</span>
-                    <span className="text-sm font-semibold text-emerald-700">${totalPay.toFixed(0)}</span>
+                    {priced.length > 0 && <span className="text-sm font-semibold text-emerald-700" title={priced.length < wGames.length ? 'Pay for the games in your pay groups' : undefined}>${totalPay.toFixed(0)}</span>}
                   </div>
                   <div className="divide-y divide-slate-50">
                     {wGames.sort((a, b) => `${a.game.date}${a.game.startTime}` < `${b.game.date}${b.game.startTime}` ? -1 : 1).map(({ game, role, payRate, assignmentId }) => (
@@ -215,7 +218,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
                         <div className="flex items-center gap-2 sm:contents">
                           <span className="text-xs text-slate-400 sm:w-10">{fmt12(game.startTime)}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[role] || 'bg-slate-100 text-slate-600'}`}>{ROLE_LABELS[role] || role}</span>
-                          <span className="ml-auto sm:ml-0 sm:order-3 text-xs text-slate-500 font-medium">${payRate}</span>
+                          <span className="ml-auto sm:ml-0 sm:order-3 text-xs text-slate-500 font-medium">{payRate != null ? `$${payRate}` : ''}</span>
                           <button onClick={() => removeAssignment(assignmentId)} disabled={removing === assignmentId}
                             className="sm:order-4 text-red-300 hover:text-red-500 text-xs transition-colors p-1 -mr-1 sm:p-0 sm:mr-0"><X size={12} /></button>
                         </div>

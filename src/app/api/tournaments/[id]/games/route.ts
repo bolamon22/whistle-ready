@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest, viewer } from '@/lib/apiAuth'
+import { redactWorkerPay } from '@/lib/roleScope'
+import { assignmentPayGroups, seesPay } from '@/lib/payGroups'
+import { payScopeFor } from '@/lib/payScope'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { getIfNeeded, withIfNeeded, bracketMeta } from '@/lib/ifNeeded'
 import { refsLookup } from '@/lib/refRules'
@@ -23,10 +26,23 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
   if (staff) {
     // Heal bracket placeholders written with a flight's own numbering (lib/bracketPlaceholders).
     await syncBracketPlaceholders(params.id)
-    const games = await prisma.game.findMany({
+    const rows = await prisma.game.findMany({
       where: { tournamentId: params.id }, orderBy,
       include: { assignments:{ include:{ worker:true } } },
     })
+    // Pay on each slot only for those who see it (Oct 13 2026): none for the
+    // scheduler or Whistle Ready staff, an assigner's own pay groups, all of it for
+    // the director. This list used to hand every rate and payout handle to any staff.
+    const who = await viewer()
+    const scope = await payScopeFor(who.role, who.userId)
+    const games = rows.map(g => scope.all ? g : ({
+      ...g,
+      assignments: g.assignments.map(a => ({
+        ...a,
+        payRate: seesPay(scope, assignmentPayGroups(a.role, g.division, a.worker?.gender)) ? a.payRate : null,
+        worker: redactWorkerPay(a.worker, who.role, scope),
+      })),
+    }))
     const [ids, meta] = await Promise.all([getIfNeeded(params.id), bracketMeta(params.id)])
     return NextResponse.json(withIfNeeded(games, ids, meta), { headers: { 'Cache-Control': 'private, no-store' } })
   }

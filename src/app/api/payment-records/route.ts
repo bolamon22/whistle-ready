@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaffPay } from '@/lib/apiAuth'
+import { payAccess, payKey, payScopeFor } from '@/lib/payScope'
 // Staff pay records: these had no sign-in check at all (anyone could read, add or
 // delete what each official was paid).
+//
+// An assigner sees and marks paid only the people whose pay at that event is in
+// their pay groups (lib/payGroups, Oct 13 2026). A record is one per person per
+// event, so someone with pay in a group the assigner doesn't run shows paid or
+// not, without the amount, and only the director marks them paid.
 
 export async function GET(req: Request) {
   const gate = await requireStaffPay(); if (!gate.ok) return gate.res
@@ -17,12 +23,31 @@ export async function GET(req: Request) {
     include: { tournament: { select: { id: true, name: true, startDate: true } }, worker: { select: { id: true, name: true } } },
     orderBy: { paidAt: 'desc' },
   })
-  return NextResponse.json(records)
+  const scope = await payScopeFor(gate.role, gate.userId)
+  if (scope.all) return NextResponse.json(records)
+  const access = await payAccess(scope, records.map(r => ({ workerId: r.workerId, tournamentId: r.tournamentId })))
+  return NextResponse.json(records
+    .map(r => ({ r, a: access.get(payKey(r.workerId, r.tournamentId))?.access ?? 'none' }))
+    .filter(x => x.a !== 'none')
+    .map(x => (x.a === 'full' ? x.r : { ...x.r, amount: null })))
 }
 
 export async function POST(req: Request) {
   const gate = await requireStaffPay(); if (!gate.ok) return gate.res
-  const { workerId, tournamentId, amount, method, notes, paidBy } = await req.json()
+  const body = await req.json()
+  const { workerId, tournamentId, method, notes, paidBy } = body
+  let amount = body.amount
+  const scope = await payScopeFor(gate.role, gate.userId)
+  if (!scope.all) {
+    if (!workerId || !tournamentId) return NextResponse.json({ error: 'workerId and tournamentId are required' }, { status: 400 })
+    const a = (await payAccess(scope, [{ workerId, tournamentId }])).get(payKey(workerId, tournamentId))
+    if (a?.access !== 'full') {
+      return NextResponse.json({ error: a?.access === 'partial'
+        ? 'Part of this person’s pay is in a group you don’t run, so the director marks them paid.'
+        : 'This person’s pay isn’t in your groups.' }, { status: 403 })
+    }
+    amount = a.total   // what their Pay Summary shows, not a number from the browser
+  }
   const record = await prisma.paymentRecord.create({
     data: { workerId, tournamentId, amount, method: method ?? 'check', notes, paidBy },
     include: { tournament: { select: { id: true, name: true, startDate: true } } },

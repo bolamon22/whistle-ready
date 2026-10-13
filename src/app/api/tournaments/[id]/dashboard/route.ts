@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { canSeeMoney, canSeeStaffPay } from '@/lib/roleScope'
+import { payScopeFor } from '@/lib/payScope'
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
@@ -104,7 +105,9 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   // who has paid in full -- but every dollar figure comes back as 0, so the page
   // has nothing to show and the figures never reach the browser.
   const money = canSeeMoney(gate.role)
-  const pay = canSeeStaffPay(gate.role)
+  // Event-wide pay totals mix every pay group, so an assigner sees them only when
+  // set to all four groups (lib/payGroups, Oct 13 2026).
+  const pay = canSeeStaffPay(gate.role) && (money || (await payScopeFor(gate.role, gate.userId)).all)
   const $ = (n: number) => (money ? n : 0)
   const $pay = (n: number) => (pay ? n : 0)
 

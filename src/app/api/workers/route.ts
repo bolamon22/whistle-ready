@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
 import { redactWorker } from '@/lib/roleScope'
+import { payScopeFor } from '@/lib/payScope'
 import { createClient } from '@libsql/client'
 import { presenceByEmail, canSeePresence } from '@/lib/presence'
 
@@ -68,9 +69,12 @@ export async function GET(req: Request) {
   // whose role does not cover them (the scheduler). This was readable by any
   // signed-in account in the org, coaches included.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  // An assigner sees rates and payout details only for staff in their pay groups
+  // (lib/payGroups, Oct 13 2026).
+  const scope = await payScopeFor(gate.role, gate.userId)
   // isAssigner is 0/1 in raw SQL; a boolean everywhere else. The edit forms send back
   // what they were given, and Prisma refuses a number for it (see [id]/route.ts).
-  const shape = (rows: any[]) => rows.map(r => redactWorker({ ...r, isAssigner: !!Number(r.isAssigner) }, gate.role))
+  const shape = (rows: any[]) => rows.map(r => redactWorker({ ...r, isAssigner: !!Number(r.isAssigner) }, gate.role, scope))
   const { orgId, isAdmin } = await resolveOrgId(req)
   const client = db()
 
