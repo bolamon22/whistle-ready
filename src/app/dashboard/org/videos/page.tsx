@@ -67,6 +67,7 @@ export default function VideoLibrary() {
   const [notes, setNotes] = useState<Record<string, { text: string; by: string; at: string }>>({})
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [sending, setSending] = useState(false)
+  const [preChosen, setPreChosen] = useState<string[]>([])
   const [people, setPeople] = useState<Person[] | null>(null)
   const [sends, setSends] = useState<SendLog[]>([])
   const [fSeries, setFSeries] = useState<string>('all')
@@ -207,7 +208,7 @@ export default function VideoLibrary() {
         </div>
       )}
 
-      {tab === 'watched' && <Watched people={people} />}
+      {tab === 'watched' && <Watched people={people} onNudge={(w, v) => { setPicked(new Set(v)); setPreChosen(w); setSending(true) }} />}
       {tab === 'sent' && (
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
           {sends.length === 0 && <p className="p-6 text-sm text-slate-400 text-center">Nothing sent yet. Tick videos on the Videos tab, then Send.</p>}
@@ -232,7 +233,7 @@ export default function VideoLibrary() {
         </div>
       )}
       {scriptFor && <ScriptPanel readOnly={asg} v={scriptFor} note={notes[scriptFor.id]?.text || ''} onClose={() => setScriptFor(null)} onSaved={n => setNotes(n)} />}
-      {sending && <SendDialog roleKeys={asg ? ROLE_KEYS.filter(r => r !== 'assigner' && (people || []).some(p => p.roles.includes(r))) : ROLE_KEYS} ids={Array.from(picked)} people={people || []} onClose={() => setSending(false)} onSent={() => { setSending(false); setPicked(new Set()); loadSends(); setTab('sent') }} />}
+      {sending && <SendDialog initialChosen={preChosen} roleKeys={asg ? ROLE_KEYS.filter(r => r !== 'assigner' && (people || []).some(p => p.roles.includes(r))) : ROLE_KEYS} ids={Array.from(picked)} people={people || []} onClose={() => { setSending(false); setPreChosen([]) }} onSent={() => { setSending(false); setPreChosen([]); setPicked(new Set()); loadSends(); setTab('sent') }} />}
     </div>
   )
 }
@@ -280,11 +281,11 @@ function ScriptPanel({ v, note, onClose, onSaved, readOnly }: { v: Lib; note: st
   )
 }
 
-function SendDialog({ ids, people, roleKeys, onClose, onSent }: { ids: string[]; people: Person[]; roleKeys: string[]; onClose: () => void; onSent: () => void }) {
+function SendDialog({ ids, people, roleKeys, initialChosen, onClose, onSent }: { ids: string[]; people: Person[]; roleKeys: string[]; initialChosen?: string[]; onClose: () => void; onSent: () => void }) {
   // Nobody is picked to start: a send goes only to who you choose (Bo, Oct 13 2026 --
   // an Assigners pre-pick sent a "sample to myself" to the assigners too).
   const [roles, setRoles] = useState<Set<string>>(new Set())
-  const [chosen, setChosen] = useState<Set<string>>(new Set())
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set(initialChosen || []))
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
   const [meCopy, setMeCopy] = useState(true)
@@ -366,29 +367,112 @@ function SendDialog({ ids, people, roleKeys, onClose, onSent }: { ids: string[];
   )
 }
 
-function Watched({ people }: { people: Person[] | null }) {
+// Who's watched (Bo, Oct 13 2026: "sort ... by most recent viewers", plus "a scoreboard
+// of who's completed and who hasn't, who spent the most time learning"). Time is an
+// estimate: each counted play x the video's length (a play counts at 85%).
+type Sort = 'recent' | 'most' | 'least' | 'time' | 'name'
+type Status = '' | 'done' | 'started' | 'none'
+const minsOf = (secs: number) => Math.round(secs / 60)
+function Watched({ people, onNudge }: { people: Person[] | null; onNudge: (workerIds: string[], videoIds: string[]) => void }) {
   const [role, setRole] = useState('')
   const [video, setVideo] = useState('')
   const [q, setQ] = useState('')
+  const [sort, setSort] = useState<Sort>('recent')
+  const [status, setStatus] = useState<Status>('')
   const [open, setOpen] = useState<string | null>(null)
   if (!people) return <p className="text-sm text-slate-400 p-6 text-center">Loading…</p>
-  const list = people.filter(p => (!role || p.roles.includes(role)) && (!video || p.assigned.includes(video)) && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())))
+  const secsOf = (id: string) => trainingVideo(id)?.secs || 0
+  const rows = people.filter(p => (!role || p.roles.includes(role)) && (!video || p.assigned.includes(video)) && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())))
+    .map(p => {
+      const ids = video ? [video] : p.assigned
+      const done = ids.filter(id => p.watched[id]).length
+      const last = Object.values(p.watched).map(w => w.last).sort().pop() || ''
+      const plays = Object.values(p.watched).reduce((n, w) => n + w.plays, 0)
+      const secs = Object.entries(p.watched).reduce((n, [id, w]) => n + w.plays * secsOf(id), 0)
+      const st: Status = ids.length && done === ids.length ? 'done' : done > 0 ? 'started' : 'none'
+      return { p, ids, done, last, plays, secs, st, pct: ids.length ? done / ids.length : 0 }
+    })
+  const counts = { done: rows.filter(r => r.st === 'done').length, started: rows.filter(r => r.st === 'started').length, none: rows.filter(r => r.st === 'none').length }
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString()
+  const thisWeek = rows.filter(r => r.last && r.last >= weekAgo).length
+  const totalSecs = rows.reduce((n, r) => n + r.secs, 0)
+  const top = rows.filter(r => r.secs > 0).sort((a, b) => b.secs - a.secs || b.done - a.done).slice(0, 5)
+  // Per video: share of the people it's for who have watched it.
+  const vids = TRAINING_VIDEOS.map(v => { const for_ = rows.filter(r => r.p.assigned.includes(v.id)); const got = for_.filter(r => r.p.watched[v.id]).length; return { v, of: for_.length, got, pct: for_.length ? got / for_.length : 0 } }).filter(x => x.of > 0)
+  const best = vids.slice().sort((a, b) => b.pct - a.pct || b.got - a.got)[0]
+  const worst = vids.slice().sort((a, b) => a.pct - b.pct || a.got - b.got)[0]
+  const list = rows.filter(r => !status || r.st === status).sort((a, b) =>
+    sort === 'recent' ? (b.last || '').localeCompare(a.last || '') || a.p.name.localeCompare(b.p.name)
+    : sort === 'most' ? b.pct - a.pct || b.secs - a.secs
+    : sort === 'least' ? a.pct - b.pct || a.p.name.localeCompare(b.p.name)
+    : sort === 'time' ? b.secs - a.secs || b.pct - a.pct
+    : a.p.name.localeCompare(b.p.name))
+  const nudge = (st: Status) => {
+    const who = rows.filter(r => r.st === st)
+    const vidIds = Array.from(new Set(who.flatMap(r => r.ids.filter(id => !r.p.watched[id]))))
+    if (who.length && vidIds.length) onNudge(who.map(r => r.p.id), vidIds)
+  }
+  const Tile = ({ k, label, n, tone, hint }: { k: Status; label: string; n: number; tone: string; hint: string }) => (
+    <button type="button" onClick={() => setStatus(status === k ? '' : k)} aria-pressed={status === k}
+      className={`text-left rounded-xl border p-3.5 bg-white hover:border-teal-400 ${status === k ? 'border-teal-500 ring-2 ring-teal-100' : 'border-slate-200'}`}>
+      <span className={`block text-2xl font-bold ${tone}`}>{n}</span>
+      <span className="block text-sm font-semibold text-slate-700">{label}</span>
+      <span className="block text-xs text-slate-400">{rows.length ? Math.round(n / rows.length * 100) : 0}% · {hint}</span>
+    </button>
+  )
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative"><Search size={14} className="absolute left-3 top-2.5 text-slate-400" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a name" className="rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm w-48" /></div>
-        <select value={role} onChange={e => setRole(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"><option value="">All roles</option>{ROLE_KEYS.map(r => <option key={r} value={r}>{TRAINING_ROLE_LABELS[r]}</option>)}</select>
-        <select value={video} onChange={e => setVideo(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-xs"><option value="">Every video</option>{TRAINING_VIDEOS.map(v => <option key={v.id} value={v.id}>{v.num} {v.title}</option>)}</select>
-        <span className="text-xs text-slate-400 inline-flex items-center gap-1"><Users size={13} /> {list.length} people</span>
+        <select value={role} onChange={e => setRole(e.target.value)} aria-label="Role" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"><option value="">All roles</option>{ROLE_KEYS.map(r => <option key={r} value={r}>{TRAINING_ROLE_LABELS[r]}</option>)}</select>
+        <select value={video} onChange={e => setVideo(e.target.value)} aria-label="Video" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-xs"><option value="">Every video</option>{TRAINING_VIDEOS.map(v => <option key={v.id} value={v.id}>{v.num} {v.title}</option>)}</select>
+        <select value={sort} onChange={e => setSort(e.target.value as Sort)} aria-label="Sort" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+          <option value="recent">Most recent viewers</option><option value="most">Most complete</option><option value="least">Least complete</option><option value="time">Most time watching</option><option value="name">Name A–Z</option>
+        </select>
+        <span className="text-xs text-slate-400 inline-flex items-center gap-1"><Users size={13} /> {rows.length} people</span>
       </div>
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+
+      {/* Scoreboard -- follows the role and video filters above */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Tile k="done" label="Finished" n={counts.done} tone="text-emerald-700" hint={video ? 'watched it' : 'all their videos'} />
+        <Tile k="started" label="In progress" n={counts.started} tone="text-amber-600" hint="started, not done" />
+        <Tile k="none" label="Not started" n={counts.none} tone="text-slate-800" hint="nothing watched yet" />
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <span className="block text-2xl font-bold text-teal-700">{minsOf(totalSecs)} min</span>
+          <span className="block text-sm font-semibold text-slate-700">Time watching</span>
+          <span className="block text-xs text-slate-400">{thisWeek} watched in the last 7 days</span>
+        </div>
+      </div>
+      {(counts.none > 0 || counts.started > 0) && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          {counts.none > 0 && <button type="button" onClick={() => nudge('none')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-slate-700 hover:border-teal-400"><Mail size={14} /> Remind the {counts.none} who haven&apos;t started</button>}
+          {counts.started > 0 && <button type="button" onClick={() => nudge('started')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-slate-700 hover:border-teal-400"><Mail size={14} /> Remind the {counts.started} in progress</button>}
+        </div>
+      )}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Top learners</p>
+          {top.length === 0 ? <p className="text-sm text-slate-400">Nobody has watched yet.</p> : (
+            <ol className="space-y-1.5">{top.map((r, i) => (
+              <li key={r.p.id} className="flex items-center gap-2 text-sm">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{i + 1}</span>
+                <span className="flex-1 font-medium text-slate-800 truncate">{r.p.name}</span>
+                <span className="text-xs text-slate-500">{r.done}/{r.ids.length} · {r.plays} plays · {minsOf(r.secs) || '<1'} min</span>
+              </li>))}</ol>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Videos</p>
+          {best && <p className="text-slate-700"><span className="text-xs text-slate-400 block">Most watched</span>{best.v.num} {best.v.title} <span className="text-slate-500">· {best.got} of {best.of} ({Math.round(best.pct * 100)}%)</span></p>}
+          {worst && worst !== best && <p className="text-slate-700 mt-2"><span className="text-xs text-slate-400 block">Least watched</span>{worst.v.num} {worst.v.title} <span className="text-slate-500">· {worst.got} of {worst.of} ({Math.round(worst.pct * 100)}%)</span></p>}
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500 text-left"><tr><th className="px-4 py-2.5 font-semibold">Name</th><th className="px-4 py-2.5 font-semibold">Role</th><th className="px-4 py-2.5 font-semibold">{video ? 'This video' : 'Their videos'}</th><th className="px-4 py-2.5 font-semibold">Last watched</th><th /></tr></thead>
+          <thead className="bg-slate-50 text-xs text-slate-500 text-left"><tr><th className="px-4 py-2.5 font-semibold">Name</th><th className="px-4 py-2.5 font-semibold">Role</th><th className="px-4 py-2.5 font-semibold">{video ? 'This video' : 'Their videos'}</th><th className="px-4 py-2.5 font-semibold">Time</th><th className="px-4 py-2.5 font-semibold">Last watched</th><th /></tr></thead>
           <tbody className="divide-y divide-slate-100">
-            {list.map(p => {
-              const ids = video ? [video] : p.assigned
-              const done = ids.filter(id => p.watched[id]).length
-              const last = Object.values(p.watched).map(w => w.last).sort().pop() || ''
+            {list.map(({ p, ids, done, last, secs }) => {
               const isOpen = open === p.id
               return [
                 <tr key={p.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setOpen(isOpen ? null : p.id)}>
@@ -398,11 +482,12 @@ function Watched({ people }: { people: Person[] | null }) {
                     {video ? (p.watched[video] ? <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold"><CheckCircle2 size={15} /> Watched · {p.watched[video].plays}×</span> : <span className="text-slate-400">Not yet</span>)
                       : <span className="inline-flex items-center gap-2"><span className="w-24 h-1.5 rounded-full bg-slate-100 overflow-hidden"><span className="block h-full bg-teal-500" style={{ width: `${ids.length ? Math.round(done / ids.length * 100) : 0}%` }} /></span><b className={done === ids.length && ids.length ? 'text-emerald-700' : 'text-slate-700'}>{done}/{ids.length}</b></span>}
                   </td>
+                  <td className="px-4 py-2.5 text-slate-500">{secs ? `${minsOf(secs) || '<1'} min` : '—'}</td>
                   <td className="px-4 py-2.5 text-slate-500">{fmtDate(last) || '—'}</td>
                   <td className="px-4 py-2.5 text-slate-400">{isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</td>
                 </tr>,
                 isOpen && (
-                  <tr key={p.id + ':d'}><td colSpan={5} className="bg-slate-50 px-4 py-3">
+                  <tr key={p.id + ':d'}><td colSpan={6} className="bg-slate-50 px-4 py-3">
                     <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                       {p.assigned.map(id => { const w = p.watched[id]; const v = trainingVideo(id); return (
                         <li key={id} className="flex items-center gap-2">
@@ -415,11 +500,11 @@ function Watched({ people }: { people: Person[] | null }) {
                 ),
               ]
             })}
-            {list.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Nobody matches.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Nobody matches.</td></tr>}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-400">A video counts as watched when it plays to 85%. Each time after that adds to the count.</p>
+      <p className="text-xs text-slate-400">A video counts as watched when it plays to 85%. Each time after that adds a play. Time is an estimate: plays × each video&apos;s length.</p>
     </div>
   )
 }
