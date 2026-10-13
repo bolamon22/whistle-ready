@@ -73,10 +73,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // What followers have already been told about this game (start/halftime),
     // carried from the previous update so each alert goes out once.
     let prevAlerts: { start?: boolean; half?: boolean } = {}
+    let prevBy = '', prevActedAt = ''
+    let pv: any = null
     try {
       const prev = await prisma.appSetting.findUnique({ where: { key: k } })
-      if (prev) prevAlerts = (JSON.parse(prev.value || '{}').alerts) || {}
+      if (prev) { pv = JSON.parse(prev.value || '{}'); prevAlerts = pv.alerts || {}; prevBy = pv.by || ''; prevActedAt = pv.actedAt || '' }
     } catch { /* first update */ }
+    // A 30s refresh from a screen that isn't leading is dropped: it would put back
+    // its own, older copy of the game over the screen that just acted.
+    if (body.action === false && prevBy && body.by && body.by !== prevBy && pv?.live) {
+      return NextResponse.json({ ok: true, ignored: true, ...pv })
+    }
+    const nowMs = Date.now()
+    const cleanPens = (list: any) => Array.isArray(list) ? list.slice(0, 12).map((p: any) => ({
+      team: Number(p?.team) === 2 ? 2 : 1,
+      num: String(p?.num ?? '').slice(0, 4),
+      secs: Math.max(0, Math.min(3600, Math.round(Number(p?.secs) || 0))),
+      paused: !!p?.paused,
+    })).filter((p: any) => p.secs > 0) : []
     const entry = {
       score1: Number(body.score1) || 0,
       score2: Number(body.score2) || 0,
@@ -85,14 +99,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       live: !!body.live,
       clockMs: body.clockMs == null || isNaN(Number(body.clockMs)) ? null : Math.max(0, Math.round(Number(body.clockMs))),
       clockRunning: !!body.clockRunning,
-      penalties: Array.isArray(body.penalties) ? body.penalties.slice(0, 12).map((p: any) => ({
-        team: Number(p?.team) === 2 ? 2 : 1,
-        num: String(p?.num ?? '').slice(0, 4),
-        secs: Math.max(0, Math.min(3600, Math.round(Number(p?.secs) || 0))),
-        paused: !!p?.paused,
-      })).filter((p: any) => p.secs > 0) : [],
-      updatedAt: new Date().toISOString(),
+      // Which scorekeeper screen sent this, and when someone last DID something
+      // (goal, clock, penalty, half) as opposed to a 30s refresh. Every open
+      // scorekeeper on the game follows the screen that acted last (Bo, Oct 12
+      // 2026: a second tab kept overwriting a penalty entered on the first).
+      by: body.action === false ? prevBy || String(body.by || '').slice(0, 40) : String(body.by || '').slice(0, 40),
+      actedAt: body.action === false && prevActedAt ? prevActedAt : new Date().toISOString(),
+      penalties: cleanPens(body.penalties),
+      updatedAt: new Date(nowMs).toISOString(),
       alerts: { ...prevAlerts },
+    }
+    // An action names what it changed (`fields`: score, period, clock, penalties);
+    // everything else is kept from the stored game, run forward to now. Two
+    // screens on one game no longer erase each other: a penalty added on one
+    // doesn't undo the goal just scored on the other.
+    if (Array.isArray(body.fields) && pv && pv.live && entry.live) {
+      const f = new Set(body.fields.map(String))
+      const sent = Date.parse(pv.updatedAt || '')
+      const ran = pv.clockRunning && !isNaN(sent) ? Math.max(0, nowMs - sent) : 0
+      if (!f.has('score')) { entry.score1 = Number(pv.score1) || 0; entry.score2 = Number(pv.score2) || 0 }
+      if (!f.has('period')) { entry.period = Number(pv.period) || 1; entry.periodLabel = String(pv.periodLabel || '') }
+      if (!f.has('clock')) {
+        entry.clockMs = pv.clockMs == null ? null : Math.max(0, Number(pv.clockMs) - ran)
+        entry.clockRunning = !!pv.clockRunning && (entry.clockMs ?? 0) > 0
+      }
+      if (!f.has('penalties')) {
+        const ranSecs = Math.floor(Math.min(ran, Number(pv.clockMs) || 0) / 1000)
+        entry.penalties = cleanPens((pv.penalties || []).map((p: any) => ({ ...p, secs: p.paused ? p.secs : p.secs - ranSecs })))
+      }
     }
     // Start: the first live update (clock started or first goal). Halftime: the
     // scorer's clock ran out at the end of the half, or they moved into the

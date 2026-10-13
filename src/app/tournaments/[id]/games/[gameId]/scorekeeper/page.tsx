@@ -172,29 +172,13 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
           const ls = d?.scores?.[params.gameId]
           if (!ls || !ls.live) return
           startedRef.current = true
-          setScore1(Number(ls.score1) || 0); setScore2(Number(ls.score2) || 0)
-          savedScores.current = { s1: Number(ls.score1) || 0, s2: Number(ls.score2) || 0 }
-          // The clock and penalties too, when the server heard about this game more
-          // recently than this phone did (Bo, Oct 12 2026: opening the game from the
-          // live card showed 20:00 and Start while the game was running elsewhere).
+          // The clock and penalties too when the server heard about this game more
+          // recently than this phone did (opening the game from the live card showed
+          // 20:00 and Start while it was running elsewhere); the score always.
           const sent = Date.parse(ls.updatedAt || '')
           const serverNewer = !isNaN(sent) && !(saved && saved.savedAt > sent)
-          if (!serverNewer) return
-          if (ls.period) setCurrentPeriod(Number(ls.period) || 1)
-          if (ls.clockMs != null) {
-            const ran = ls.clockRunning ? Math.max(0, Date.now() - sent) : 0
-            const left = Math.max(0, Number(ls.clockMs) - ran)
-            setClockMs(left)
-            setClockRunning(!!ls.clockRunning && left > 0)
-            if (Array.isArray(ls.penalties)) {
-              const ranSecs = Math.floor(Math.min(ran, Number(ls.clockMs)) / 1000)
-              setPenalties(ls.penalties.map((p: { team: number; num: string; secs: number; paused: boolean }) => {
-                const remaining = Math.max(0, p.secs - (p.paused ? 0 : ranSecs))
-                return { id: Math.random().toString(36).slice(2), team: p.team === 2 ? 2 : 1, playerNum: p.num || '', remaining, total: p.secs, active: remaining > 0, paused: !!p.paused } as Penalty
-              }).filter((p: Penalty) => p.active))
-            }
-            if (ls.clockRunning && left > 0) toast('⏱ Picked up the running clock')
-          }
+          adoptRef.current(ls, serverNewer)
+          if (serverNewer && ls.clockRunning) toast('⏱ Picked up the running clock')
         }).catch(() => {})
       }
       setReqField(fieldNumberFrom(g.location))
@@ -237,16 +221,32 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   // with it (Bo, Oct 12 2026: Post scores and the ticker showed the half but never
   // the time): time left and whether it's running, so viewers can count it down.
   const startedRef = useRef(false)   // this game has been pushed live from this phone
-  function pushLive(opts: { score1?: number; score2?: number; period?: number; live: boolean; event?: 'halftime'; running?: boolean; ms?: number } = { live: true }) {
+  // Several screens can have the same game open (a scorer swapping phones, staff
+  // checking in). Each tags what it sends; the one that last acted leads, and
+  // the others follow it instead of overwriting it with their own copy.
+  const screenId = useRef(Math.random().toString(36).slice(2, 10))
+  const lastActRef = useRef(0)       // when this screen last sent a real action
+  type LiveField = 'score' | 'period' | 'clock' | 'penalties'
+  function pushLive(opts: { score1?: number; score2?: number; period?: number; live: boolean; event?: 'halftime'; running?: boolean; ms?: number; beat?: boolean; fields?: LiveField[] } = { live: true }) {
     const s1 = opts.score1 ?? score1, s2 = opts.score2 ?? score2, per = opts.period ?? currentPeriod
     if (opts.live) startedRef.current = true
+    if (!opts.beat) lastActRef.current = Date.now()
     return fetch(`/api/tournaments/${tid}/live-scores`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId: params.gameId, score1: s1, score2: s2, period: per, periodLabel: periodLabelFor(per), live: opts.live,
+        by: screenId.current, action: !opts.beat, ...(opts.fields && !opts.beat ? { fields: opts.fields } : {}),
         clockMs: opts.ms ?? clockMsRef.current, clockRunning: opts.live && (opts.running ?? clockRunning),
         penalties: penalties.filter(p => p.active && p.remaining > 0).map(p => ({ team: p.team, num: p.playerNum, secs: p.remaining, paused: p.paused })),
         ...(opts.event ? { event: opts.event } : {}) }),
-    }).then(r => r.ok).catch(() => false)
+    }).then(async r => {
+      // The reply is the game as merged on the server: take what other screens
+      // changed, keep what this action just set.
+      if (r.ok && opts.fields && opts.live) {
+        const j = await r.json().catch(() => null)
+        if (j && j.live && !j.ignored) adoptRef.current(j, true, new Set(opts.fields))
+      }
+      return r.ok
+    }).catch(() => false)
   }
   // While the clock runs, resend every 30s: keeps viewers' countdown in step with
   // this phone and tells the server the game is still going.
@@ -258,20 +258,63 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   useEffect(() => {
     if (!penPushRef.current) return
     penPushRef.current = false
-    if (startedRef.current && !gameEnded) pushLive({ live: true })
+    if (startedRef.current && !gameEnded) pushLive({ live: true, fields: ['penalties'] })
   }, [penalties]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Take another screen's state: score, half, clock (caught up), penalties.
+  function adoptServer(ls: any, withClock = true, skip: Set<string> = new Set()) {
+    if (!skip.has('score')) {
+      setScore1(Number(ls.score1) || 0); setScore2(Number(ls.score2) || 0)
+      savedScores.current = { s1: Number(ls.score1) || 0, s2: Number(ls.score2) || 0 }
+    }
+    if (!withClock) return
+    const sent = Date.parse(ls.updatedAt || '')
+    if (ls.period && !skip.has('period')) setCurrentPeriod(Number(ls.period) || 1)
+    if (ls.clockMs == null || isNaN(sent)) return
+    const ran = ls.clockRunning ? Math.max(0, Date.now() - sent) : 0
+    const left = Math.max(0, Number(ls.clockMs) - ran)
+    if (!skip.has('clock')) {
+      setClockMs(left)
+      setClockRunning(!!ls.clockRunning && left > 0)
+    }
+    if (Array.isArray(ls.penalties) && !skip.has('penalties')) {
+      const ranSecs = Math.floor(Math.min(ran, Number(ls.clockMs)) / 1000)
+      setPenalties(ls.penalties.map((p: { team: number; num: string; secs: number; paused: boolean }) => {
+        const remaining = Math.max(0, p.secs - (p.paused ? 0 : ranSecs))
+        return { id: Math.random().toString(36).slice(2), team: p.team === 2 ? 2 : 1, playerNum: p.num || '', remaining, total: p.secs, active: remaining > 0, paused: !!p.paused } as Penalty
+      }).filter((p: Penalty) => p.active))
+    }
+  }
+  const adoptRef = useRef(adoptServer); adoptRef.current = adoptServer
+  // Every 10s: if another screen acted more recently than this one, follow it.
+  // Otherwise, while the clock runs, refresh the server every 30s so viewers'
+  // countdown stays in step -- but only the leading screen does that.
+  const lastBeatRef = useRef(0)
   useEffect(() => {
-    if (!clockRunning || gameEnded) return
-    const t = setInterval(() => pushRef.current({ live: true }), 30000)
+    if (gameEnded) return
+    const t = setInterval(async () => {
+      if (!startedRef.current) return
+      const ls = await fetch(`/api/tournaments/${tid}/live-scores?fresh=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()).then(d => d?.scores?.[params.gameId]).catch(() => null)
+      const otherLeads = !!ls && !!ls.by && ls.by !== screenId.current && Date.parse(ls.actedAt || '') > lastActRef.current
+      if (otherLeads) {
+        if (ls.live) { adoptRef.current(ls); lastActRef.current = Date.parse(ls.actedAt) }
+        return
+      }
+      const iLead = !ls || !ls.by || ls.by === screenId.current
+      if (iLead && clockRunningRef.current && Date.now() - lastBeatRef.current >= 30000) {
+        lastBeatRef.current = Date.now()
+        pushRef.current({ live: true, beat: true })
+      }
+    }, 10000)
     return () => clearInterval(t)
-  }, [clockRunning, gameEnded])
+  }, [gameEnded]) // eslint-disable-line react-hooks/exhaustive-deps
   function changePeriod(delta: number) {
     const next = Math.max(1, Math.min(9, currentPeriod + delta))
     setCurrentPeriod(next)
-    pushLive({ period: next, live: true })
+    pushLive({ period: next, live: true, fields: ['period'] })
   }
 
   clockMsRef.current = clockMs
+  const clockRunningRef = useRef(false); clockRunningRef.current = clockRunning
 
   // tick: clock + penalties count down (skip paused). Driven by the real time
   // that has passed, not by counting timer ticks: phones throttle or freeze
@@ -344,8 +387,8 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     if (clockRunning && clockMs <= 0) {
       setClockRunning(false); toast('⏱ Period over')
       // End of the first half (or Q2): tell followers the halftime score.
-      if ((periodFormat === 'halves' && currentPeriod === 1) || (periodFormat === 'quarters' && currentPeriod === 2)) pushLive({ live: true, event: 'halftime', running: false, ms: 0 })
-      else pushLive({ live: true, running: false, ms: 0 })
+      if ((periodFormat === 'halves' && currentPeriod === 1) || (periodFormat === 'quarters' && currentPeriod === 2)) pushLive({ live: true, event: 'halftime', running: false, ms: 0, fields: ['clock'] })
+      else pushLive({ live: true, running: false, ms: 0, fields: ['clock'] })
     }
   }, [clockMs, clockRunning])
 
@@ -355,19 +398,19 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
     if (starting && clockMs <= 0) setClockMs(periodSecs * 1000)
     setClockRunning(r => !r)
     // Pause is sent too, so the ticker stops counting down when the scorer does.
-    if (starting || startedRef.current) pushLive({ live: true, running: starting, ms: starting && clockMs <= 0 ? periodSecs * 1000 : clockMs })
+    if (starting || startedRef.current) pushLive({ live: true, running: starting, ms: starting && clockMs <= 0 ? periodSecs * 1000 : clockMs, fields: ['clock'] })
   }
   function resetClock() {
     if (!window.confirm('Reset the clock back to the full period? This clears the current running time.')) return
     setClockRunning(false); setClockMs(periodSecs * 1000)
-    if (startedRef.current) pushLive({ live: true, running: false, ms: periodSecs * 1000 })
+    if (startedRef.current) pushLive({ live: true, running: false, ms: periodSecs * 1000, fields: ['clock'] })
   }
 
   function applyClockSetup() {
     if (!game) return
     const secs = Math.max(1, Number(setupMin) * 60 + Number(setupSec))
     setPeriodSecs(secs); setClockRunning(false); setClockMs(secs * 1000)
-    if (startedRef.current) pushLive({ live: true, running: false, ms: secs * 1000 })
+    if (startedRef.current) pushLive({ live: true, running: false, ms: secs * 1000, fields: ['clock'] })
     if (saveClockDefault) {
       setDefaults(saveDefaults(game.tournamentId ?? tid, { periodSecs: secs }))
       toast.success(`Saved ${fmt(secs)} as tournament default`)
@@ -495,19 +538,19 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
   }
   function addGoal(team: 1 | 2) {
     if (defaults.askScorer) { setGoalTeam(team); setGoalPlayer(''); return }
-    if (team === 1) { const ns = score1 + 1; setScore1(ns); pushLive({ score1: ns, live: true }) }
-    else { const ns = score2 + 1; setScore2(ns); pushLive({ score2: ns, live: true }) }
+    if (team === 1) { const ns = score1 + 1; setScore1(ns); pushLive({ score1: ns, live: true , fields: ['score'] }) }
+    else { const ns = score2 + 1; setScore2(ns); pushLive({ score2: ns, live: true , fields: ['score'] }) }
   }
   function confirmGoal() {
     const num = goalPlayer.trim()
-    if (goalTeam === 1) { const ns = score1 + 1; setScore1(ns); setScorers1(a => [...a, num]); pushLive({ score1: ns, live: true }) }
-    else if (goalTeam === 2) { const ns = score2 + 1; setScore2(ns); setScorers2(a => [...a, num]); pushLive({ score2: ns, live: true }) }
+    if (goalTeam === 1) { const ns = score1 + 1; setScore1(ns); setScorers1(a => [...a, num]); pushLive({ score1: ns, live: true , fields: ['score'] }) }
+    else if (goalTeam === 2) { const ns = score2 + 1; setScore2(ns); setScorers2(a => [...a, num]); pushLive({ score2: ns, live: true , fields: ['score'] }) }
     toast.success(num ? `Goal · #${num}` : 'Goal recorded')
     setGoalTeam(null); setGoalPlayer('')
   }
   function removeGoal(team: 1 | 2) {
-    if (team === 1) { const ns = Math.max(0, score1 - 1); setScore1(ns); setScorers1(a => a.slice(0, -1)); pushLive({ score1: ns, live: true }) }
-    else { const ns = Math.max(0, score2 - 1); setScore2(ns); setScorers2(a => a.slice(0, -1)); pushLive({ score2: ns, live: true }) }
+    if (team === 1) { const ns = Math.max(0, score1 - 1); setScore1(ns); setScorers1(a => a.slice(0, -1)); pushLive({ score1: ns, live: true , fields: ['score'] }) }
+    else { const ns = Math.max(0, score2 - 1); setScore2(ns); setScorers2(a => a.slice(0, -1)); pushLive({ score2: ns, live: true , fields: ['score'] }) }
   }
 
   function chosenSecs() { return useCustom ? Number(customMin) * 60 + Number(customSec) : penSecs }
