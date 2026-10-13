@@ -3,7 +3,7 @@ title: Add and edit people in the Staff Pool
 category: Staff
 order: 400
 routes: /staff
-keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form
+keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh
 ---
 The Staff Pool is your organization's master list of everyone who works your events: refs, scorekeepers, athletic trainers and field operations. Each tournament's roster is picked from this pool.
 
@@ -28,6 +28,12 @@ The Staff Pool is your organization's master list of everyone who works your eve
 2. Click **Upload File** (.xlsx, .xls or .csv).
 3. Under **Map your columns**, match each field to a column in your file. **Name** is required. Check the preview, then click **Import** (the button shows how many staff it will add).
 4. Click **Pool** to go back to the list.
+
+**To clear out old profiles with no email:**
+1. Click **N without email** next to the counts above the list. It only shows when there's someone to clear out.
+2. Under **Past events to treat as samples**, keep ticked the past events whose history doesn't matter. Anyone on an upcoming event is always kept.
+3. Profiles with no email and no phone are ticked for you. **Phone but no email** starts unticked: tick the ones to remove, and leave anyone you still use.
+4. Click **Delete N profiles** and confirm. This can't be undone.
 
 **Common problems:**
 - **Unassign** on this page deletes the person from your Staff Pool entirely, not just from one event. To take someone off a single tournament, use **Remove** on that tournament's **Staff roster** instead.

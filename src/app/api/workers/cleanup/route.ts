@@ -7,19 +7,26 @@ import { requireDirector } from '@/lib/apiAuth'
 // (Oct 24 2026) was a sample: assignments and "paid" marks on those are test data. But
 // the app has no sample flag, and a date cutoff would quietly turn real history into
 // deletable history once Monster Mash is over. So the organizer ticks which PAST events
-// count as samples; a profile can go when it has no email, no phone, and every row
+// count as samples; a profile can go when it has no email (see Oct 13 below) and every row
 // attached to it (assignment, roster spot, availability, time entry, pay record) sits
 // on a ticked event. Upcoming and in-progress events can never be ticked, so anyone on
 // a real roster stays. The delete re-checks every id against the same rule.
+//
+// Oct 13: Bo is starting fresh for Monster Mash and asked to clear out the old profiles
+// with no email too, even when they have a phone. Without an email nobody can get an app
+// login or an invite, and every event before Monster Mash was a sample. So the rule is
+// now "no email". A profile that has a phone comes back with it, and the Staff Pool lists
+// those on their own, unticked, so a real person isn't removed by accident.
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 }
 
 const PHONE_DIGITS = `length(replace(replace(replace(replace(replace(replace(coalesce(w.phone,''),' ',''),'-',''),'(',''),')',''),'.',''),'+',''))`
-const NO_CONTACT = `(w.email IS NULL OR trim(w.email) = '') AND ${PHONE_DIGITS} < 7`
+const NO_EMAIL = `(w.email IS NULL OR trim(w.email) = '')`
+const HAS_PHONE = `${PHONE_DIGITS} >= 7`
 
-// one row per (worker, tournament) a no-contact worker has anything on
+// one row per (worker, tournament) a no-email worker has anything on
 const HISTORY_SQL = (scope: string) => `
   SELECT h.workerId, h.tournamentId, COUNT(*) AS n FROM (
     SELECT a.workerId, g.tournamentId FROM "Assignment" a JOIN "Game" g ON g.id = a.gameId
@@ -28,7 +35,7 @@ const HISTORY_SQL = (scope: string) => `
     UNION ALL SELECT workerId, tournamentId FROM "TimeEntry"
     UNION ALL SELECT workerId, tournamentId FROM "PaymentRecord"
   ) h JOIN "Worker" w ON w.id = h.workerId
-  WHERE ${NO_CONTACT}${scope}
+  WHERE ${NO_EMAIL}${scope}
   GROUP BY h.workerId, h.tournamentId`
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -43,7 +50,7 @@ async function load(orgId: string) {
   const client = db()
   const scope = orgId ? ' AND w.orgId = ?' : ''
   const args = orgId ? [orgId] : []
-  const people = await client.execute({ sql: `SELECT w.id, w.name, w.defaultRole FROM "Worker" w WHERE ${NO_CONTACT}${scope} ORDER BY w.name`, args })
+  const people = await client.execute({ sql: `SELECT w.id, w.name, w.defaultRole, CASE WHEN ${HAS_PHONE} THEN w.phone ELSE '' END AS phone FROM "Worker" w WHERE ${NO_EMAIL}${scope} ORDER BY w.name`, args })
   const hist = await client.execute({ sql: HISTORY_SQL(scope), args })
   const byWorker = new Map<string, Record<string, number>>()
   const tIds = new Set<string>()
@@ -61,11 +68,12 @@ async function load(orgId: string) {
     }
   }
   tournaments.sort((a, b) => a.startDate.localeCompare(b.startDate))
-  const profiles = (people.rows as any[]).map(r => ({ id: String(r.id), name: String(r.name ?? ''), role: String(r.defaultRole ?? ''), history: byWorker.get(String(r.id)) ?? {} }))
+  const profiles = (people.rows as any[]).map(r => ({ id: String(r.id), name: String(r.name ?? ''), role: String(r.defaultRole ?? ''), phone: String(r.phone ?? ''), history: byWorker.get(String(r.id)) ?? {} }))
   return { client, profiles, tournaments }
 }
 
-// GET: every no-contact profile with its history per event, plus those events.
+// GET: every profile with no email (with its phone when it has one) and its history per
+// event, plus those events.
 export async function GET(req: Request) {
   const gate = await requireDirector()
   if (!gate.ok) return gate.res
@@ -73,8 +81,8 @@ export async function GET(req: Request) {
   return NextResponse.json({ profiles, tournaments })
 }
 
-// POST {ids, sampleTournamentIds, viewOrgId?}: delete those ids that still have no email,
-// no phone, and no history outside the given PAST events, along with that sample history.
+// POST {ids, sampleTournamentIds, viewOrgId?}: delete those ids that still have no email
+// and no history outside the given PAST events, along with that sample history.
 export async function POST(req: Request) {
   const gate = await requireDirector()
   if (!gate.ok) return gate.res
