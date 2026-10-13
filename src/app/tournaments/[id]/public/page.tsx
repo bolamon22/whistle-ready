@@ -115,7 +115,9 @@ function PoolCard({division,pool,standings,games,followed,onFollow,tiebreakers,a
       .sort((a,b)=>`${a.date}${a.startTime}`<`${b.date}${b.startTime}`?-1:1)
     return tg.slice(-3).map(g=>{const my=g.team1===team?g.score1!:g.score2!,op=g.team1===team?g.score2!:g.score1!;return my>op?'W':my<op?'L':'T'})
   }
-  const cutoff = numPools>1 ? Math.max(1,Math.ceil(advanceCount/numPools)) : advanceCount
+  // advanceCount 0 means no line (by-division pools, rosters): Math.max(1, ...) used to
+  // turn it into a line under #1 on every pool.
+  const cutoff = advanceCount<=0 ? 0 : numPools>1 ? Math.max(1,Math.ceil(advanceCount/numPools)) : advanceCount
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
       <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">

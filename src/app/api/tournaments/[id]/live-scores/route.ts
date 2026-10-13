@@ -32,7 +32,16 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     const scores: Record<string, any> = {}
     for (const r of rows || []) {
       const gameId = String(r.key).slice('liveScore:'.length)
-      try { scores[gameId] = JSON.parse(r.value || '{}') } catch { /* skip */ }
+      try {
+        const v = JSON.parse(r.value || '{}')
+        // A scorer who never taps Final (a test run, a closed phone) would leave the
+        // game "LIVE" on the public ticker forever (Bo, Oct 12 2026: test games from
+        // the night before still showed LIVE - HALF 1). A real game pushes on every
+        // goal, period and clock stop, so 4 hours of silence means it isn't live.
+        const age = Date.now() - Date.parse(v.updatedAt || '')
+        if (v.live && !(age < 4 * 60 * 60 * 1000)) v.live = false
+        scores[gameId] = v
+      } catch { /* skip */ }
     }
     // Short shared cache: collapses many concurrent spectator polls into a
     // handful of DB hits (event-weekend load-readiness pass, Sep 2026) while
