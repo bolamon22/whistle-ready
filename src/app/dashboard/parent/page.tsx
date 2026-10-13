@@ -64,6 +64,12 @@ const eventDates = (a: string, b?: string) => {
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() }
 const byTime = (a: Game, b: Game) => a.date !== b.date ? (a.date < b.date ? -1 : 1) : minutes(a.startTime) - minutes(b.startTime)
+/** "Village Park, 11700 Pierson Rd, Wellington, FL 33414" -> "Wellington": the last part that isn't a state or ZIP. */
+const cityOf = (loc: string | null) => {
+  const parts = String(loc || '').split(',').map(x => x.trim()).filter(Boolean)
+  while (parts.length > 1 && /^([A-Z]{2})?\s*(\d{5}(-\d{4})?)?$/.test(parts[parts.length - 1])) parts.pop()
+  return parts[parts.length - 1] || ''
+}
 const mapsUrl = (q: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 const orgSite = (slug: string) => DOMAIN_BY_SLUG[slug] ? `https://${DOMAIN_BY_SLUG[slug]}` : `/o/${slug}`
 
@@ -447,7 +453,7 @@ export default function ParentDashboard() {
                       <EventLogo t={t} size="w-10 h-10" />
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-[15px] text-slate-900 truncate">{t.name}</div>
-                        <div className="text-[13px] text-slate-600">{[eventDates(t.startDate, t.endDate), (t.location || '').split(',').slice(-1)[0]?.trim()].filter(Boolean).join(' · ')}</div>
+                        <div className="text-[13px] text-slate-600">{[eventDates(t.startDate, t.endDate), cityOf(t.location)].filter(Boolean).join(' · ')}</div>
                       </div>
                       {t.id === nextUpId
                         ? <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 whitespace-nowrap">Next up</span>
