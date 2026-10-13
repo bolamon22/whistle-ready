@@ -11,7 +11,7 @@ The Staff Roster is the list of people confirmed to work this tournament. Only p
 
 **To add people:**
 1. Scroll to **Available to Add**. This lists everyone in your Staff Pool who is not on this event yet.
-2. Narrow it with **Search by name…**, **Role**, **Level** and **Can ref**.
+2. Narrow it with **Search name, email or phone…**, **Role**, **Level** and **Can ref**. Each row shows the person's phone and email, or **No email** when there isn't one.
 3. Click **+ Add** next to each person. They move up to **Confirmed**.
 
 **To remove someone:** click **Remove** on their row under **Confirmed**. This takes them off this tournament only.

@@ -258,7 +258,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     .filter(w=>addRole==='all'||parseRoles(w).includes(addRole))
     .filter(w=>addCert==='all'||w.certLevel===addCert)
     .filter(w=>matchesRefGender(w,gender))
-    .filter(w=>!addSearch||w.name.toLowerCase().includes(addSearch.toLowerCase()))
+    .filter(w=>!addSearch||[w.name,w.email??'',w.phone??''].some(v=>v.toLowerCase().includes(addSearch.toLowerCase())))
     .sort((a,b)=>a.name.localeCompare(b.name))
 
   const needsHandleFor = (m:string) => m==='venmo'||m==='zelle'
@@ -640,7 +640,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <input className="input text-sm w-full sm:!w-56" placeholder="Search by name…" value={addSearch} onChange={e=>setAddSearch(e.target.value)}/>
+              <input className="input text-sm w-full sm:!w-64" placeholder="Search name, email or phone…" value={addSearch} onChange={e=>setAddSearch(e.target.value)}/>
               <div className="grid grid-cols-3 sm:flex sm:items-center gap-2">
                 <label className="text-sm text-slate-500 hidden sm:inline">Role:</label>
                 <select className="select !w-auto min-w-0 text-sm" value={addRole} onChange={e=>setAddRole(e.target.value)}>
@@ -672,7 +672,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                         <span className={`badge ${w.gender==='boys'?'bg-sky-100 text-sky-700':w.gender==='girls'?'bg-pink-100 text-pink-700':'bg-violet-100 text-violet-700'}`}>{w.gender==='boys'?'Boys':w.gender==='girls'?'Girls':'Both'}</span>
                       </>}
                     </div>
-                    <div className="text-xs text-slate-400 truncate mt-0.5">{w.phone||w.email||'—'}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 min-w-0">{w.phone&&<div>{w.phone}</div>}{w.email?<div className="truncate">{w.email}</div>:<div className="text-slate-400">{w.phone?'No email':'No email or phone'}</div>}</div>
                   </div>
                   <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="btn-primary btn-sm flex-shrink-0">+ Add</button>
                 </div>
@@ -692,7 +692,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     <div className="flex flex-wrap gap-1">{wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}</div>
                   </td>
                   <td className="px-4 py-3">{wRoles.includes('ref')?<div className="flex flex-wrap items-center gap-1"><span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span><span className={`badge ${w.gender==='boys'?'bg-sky-100 text-sky-700':w.gender==='girls'?'bg-pink-100 text-pink-700':'bg-violet-100 text-violet-700'}`}>{w.gender==='boys'?'Boys':w.gender==='girls'?'Girls':'Both'}</span></div>:<span className="text-slate-400">—</span>}</td>
-                  <td className="px-4 py-3 text-xs text-slate-400">{w.phone||w.email||'—'}</td>
+                  <td className="px-4 py-3 text-xs text-slate-500">{w.phone&&<div>{w.phone}</div>}{w.email?<div>{w.email}</div>:<div className="text-slate-400">{w.phone?'No email':'No email or phone'}</div>}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="btn-primary btn-sm">+ Add</button>
                   </td>
