@@ -80,7 +80,7 @@ export async function middleware(req: NextRequest) {
     const passthrough =
       pathname.startsWith('/o/') || pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.startsWith('/favicon') ||
       pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt' ||
-      /\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|map)$/i.test(pathname) ||
+      /\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|map|mp4|webm)$/i.test(pathname) ||
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
@@ -126,7 +126,7 @@ export async function middleware(req: NextRequest) {
   // SEO / crawler files — always public
   if (pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt') return NextResponse.next()
   // Static assets in /public (logos, images, fonts, etc.) — never require auth
-  if (/\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|map)$/i.test(pathname)) return NextResponse.next()
+  if (/\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|map|mp4|webm)$/i.test(pathname)) return NextResponse.next()
   // Public tournament pages (divisions, schedule, standings, bracket, rules) and
   // public registration — no login required, since teams and players register
   // without an account. The list lives in PUBLIC_TOURNAMENT_PATH at the top.
