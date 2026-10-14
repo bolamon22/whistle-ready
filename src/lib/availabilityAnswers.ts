@@ -158,7 +158,7 @@ export function availabilityLetter(o: {
   const subject = `${o.eventName}: which days can you work?`
   const where = o.where ? ` in ${o.where}` : ''
   const intro = `You're on the staff for ${o.eventName}, ${o.when}${where}. The assigner is building game assignments and still needs to know when you can work.`
-  const after = "For each day, tap All day, Morning, Afternoon or Can't work. You can change it any time before the event."
+  const after = "For each day, tap All day, Morning, Afternoon or Can't work. Please answer now: each day locks 48 hours before it starts, so the assigner has time to fill your games."
   const text = [
     `Hi ${o.firstName || 'there'},`, intro,
     o.days.map(d => `${d.label}: ${d.answered ? 'answered' : 'no answer yet'}`).join('\n'),
@@ -171,4 +171,42 @@ export function availabilityLetter(o: {
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 8px"><tr><td style="background:#0f766e;border-radius:10px"><a href="${escHtml(o.link)}" style="display:inline-block;padding:13px 28px;font:700 15px/1 Arial,Helvetica,sans-serif;color:#ffffff;text-decoration:none">${escHtml(button)}</a></td></tr></table>
     <p style="margin:14px 0 0;font-size:13px;color:#475569">${escHtml(after)} Sign in to Whistle Ready with this email address.</p>`
   return { subject, text, html, button }
+}
+
+// ── 48 hours' notice ────────────────────────────────────────────────────────────
+// Staff can't change a day right up to the event (Bo, Oct 14 2026: "They need to give
+// us at least 48 hours notice. So we can reschedule them. But we'd prefer more time.").
+// A day locks for its staff member at midnight two days before it: Saturday locks as
+// Thursday begins, a full 48 hours before Saturday's first game. Read on the event's
+// wall clock (Eastern, like lib/rosterLock), not the server's UTC or the phone's zone.
+// After the lock the assigner (or anyone who manages availability) can still set it,
+// so a real emergency is a phone call, not a dead end. Pure: client pages use it too.
+export const AVAIL_NOTICE_HOURS = 48
+const AVAIL_TZ = 'America/New_York'
+
+/** "YYYY-MM-DD" today on the event's wall clock. */
+export function eventToday(now: Date = new Date()): string {
+  try {
+    const p: Record<string, string> = {}
+    for (const x of new Intl.DateTimeFormat('en-CA', { timeZone: AVAIL_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)) p[x.type] = x.value
+    return `${p.year}-${p.month}-${p.day}`
+  } catch { return now.toISOString().slice(0, 10) }
+}
+
+/** "YYYY-MM-DD" plus n days (n may be negative). */
+export function addDaysISO(date: string, n: number): string {
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1) + n * 86400000)
+  return dt.toISOString().slice(0, 10)
+}
+
+/** True once a staff member can no longer change this day themselves. */
+export function availLocked(date: string, now: Date = new Date()): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(String(date))) return false
+  return eventToday(now) >= addDaysISO(date, -AVAIL_NOTICE_HOURS / 24)
+}
+
+/** The last day a staff member can still change this day: "Wed, Oct 21". */
+export function availChangeBy(date: string): string {
+  return dayTitle(addDaysISO(date, -AVAIL_NOTICE_HOURS / 24 - 1), true)
 }

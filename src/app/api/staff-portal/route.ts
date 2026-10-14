@@ -3,6 +3,7 @@ import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
 import { walletEnabled } from '@/lib/wallet'
 import { staffAvailability, type StaffAvailDay } from '@/lib/availability'
+import { availLocked } from '@/lib/availabilityAnswers'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -113,7 +114,7 @@ export async function POST(req: Request) {
   const worker = await findWorker(client, email)
   if (!worker) return NextResponse.json({ error: 'No staff record is linked to your account — contact your coordinator.' }, { status: 400 })
 
-  const tRes = await client.execute({ sql: `SELECT id, orgId, name FROM "Tournament" WHERE id = ?`, args: [tournamentId] })
+  const tRes = await client.execute({ sql: `SELECT id, orgId, name, startDate FROM "Tournament" WHERE id = ?`, args: [tournamentId] })
   const t = tRes.rows[0] as Record<string, unknown> | undefined
   if (!t) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
   const tOrg = (t.orgId as string | null) ?? null
@@ -133,6 +134,8 @@ export async function POST(req: Request) {
     args: [String(worker.id), tournamentId],
   })
   const n = Number((aRes.rows[0] as Record<string, unknown> | undefined)?.n ?? 0)
+  // Same 48 hours' notice as the day answers: no dropping out inside it on your own.
+  if (availLocked(String(t.startDate || ''))) return NextResponse.json({ error: 'It’s less than 48 hours before this event. Call or text the assigner if you can’t work it.' }, { status: 400 })
   if (n > 0) return NextResponse.json({ error: `You're already assigned to ${n} game${n === 1 ? '' : 's'} at this event — ask your assigner to take you off first.` }, { status: 400 })
 
   await client.execute({ sql: `DELETE FROM "RosterEntry" WHERE workerId = ? AND tournamentId = ?`, args: [String(worker.id), tournamentId] })

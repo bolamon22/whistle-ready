@@ -397,7 +397,7 @@ export default function AvailabilityPage({ params }: { params: { id: string } })
           <span className={`h-6 px-2.5 rounded-full border font-bold inline-flex items-center ${PILL.none}`}>No answer</span>
           <span className="sm:ml-auto">Tap an answer to set it for someone who texted you.</span>
         </div>
-        <p className="text-xs text-slate-500 mt-2 leading-relaxed">Morning means games that start before noon. Auto-assign only puts people on games they said they can work. People who haven&apos;t answered are still treated as available.</p>
+        <p className="text-xs text-slate-500 mt-2 leading-relaxed">Morning means games that start before noon. Staff can change a day until 48 hours before it; after that only you can. Auto-assign only puts people on games they said they can work. People who haven&apos;t answered are still treated as available.</p>
       </>)}
 
       {sheet && sheetP && sheetD && (

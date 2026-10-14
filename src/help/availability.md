@@ -25,7 +25,7 @@ To remind one person, click **Remind** in their row.
 1. Click their answer for that day (or **No answer**).
 2. Pick **All day**, **Morning**, **Afternoon** or **Can't work**, or **Pick game times…** to tick the start times they can work.
 
-They see it on their staff home marked **Set by** your name, and can still change it.
+They see it on their staff home marked **Set by** your name, and can still change it until the day locks. Staff can't change a day in the 48 hours before it (Saturday locks when Thursday begins); you still can, for the call or text that comes in late.
 
 **To narrow the list:** **Everyone**, **No answer yet**, **Can't work a day** or **Part of a day**; a button for each job; the **All staff** list (boys or girls refs); and **Find a person**.
 

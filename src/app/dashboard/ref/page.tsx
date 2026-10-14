@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import MyAvailability, { type AvDay } from '@/components/MyAvailability'
+import { availLocked } from '@/lib/availabilityAnswers'
 import StaffW9Card from '@/components/StaffW9Card'
 import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin, Siren, Bell, ArrowRight } from 'lucide-react'
 import { videosFor } from '@/lib/training'
@@ -116,7 +117,9 @@ export default function RefDashboard() {
   }
 
   // Days still without an answer, across the events they're working.
-  const openDays = (p: Portal | null) => (p?.events || []).filter(e => e.working && e.avail).reduce((n, e) => n + e.avail!.days.filter(d => !d.state).length, 0)
+  // A day that has locked (48 hours before it) can't be answered here any more, so it
+  // doesn't keep the To do card up.
+  const openDays = (p: Portal | null) => (p?.events || []).filter(e => e.working && e.avail).reduce((n, e) => n + e.avail!.days.filter(d => !d.state && !availLocked(d.date)).length, 0)
   function updateAvail(eventId: string, days: AvDay[]) {
     if (!portal) return
     const next = { ...portal, events: portal.events.map(e => e.id === eventId ? { ...e, avail: { days } } : e) }
@@ -324,7 +327,7 @@ export default function RefDashboard() {
   }
 
   // The availability to-do: events they work with a day still unanswered.
-  const todoEvents = (portal?.events || []).filter(e => e.working && e.avail && e.avail.days.some(d => !d.state))
+  const todoEvents = (portal?.events || []).filter(e => e.working && e.avail && e.avail.days.some(d => !d.state && !availLocked(d.date)))
   const todoLeft = openDays(portal)
 
   return (
@@ -349,7 +352,7 @@ export default function RefDashboard() {
           <CheckCircle2 size={24} className="text-teal-700 shrink-0" />
           <div>
             <p className="text-[15px] font-extrabold text-slate-900">You're all set</p>
-            <p className="text-[13px] text-slate-600 leading-snug">The assigner can see your answers. You can change them any time before the event.</p>
+            <p className="text-[13px] text-slate-600 leading-snug">The assigner can see your answers. You can change a day until 48 hours before it starts.</p>
           </div>
         </div>
       )}
@@ -392,7 +395,10 @@ export default function RefDashboard() {
                     <MyAvailability eventId={ev.id} days={ev.avail.days} onChange={d => updateAvail(ev.id, d)} />
                   </div>
                 )}
-                {ev.working && ev.assignedGames === 0 && (
+                {ev.working && ev.assignedGames === 0 && availLocked(ev.startDate) && (
+                  <p className="mt-3 text-xs text-gray-400">Can't work this event? It starts in less than 48 hours, so call or text the assigner.</p>
+                )}
+                {ev.working && ev.assignedGames === 0 && !availLocked(ev.startDate) && (
                   <p className="mt-3 text-xs text-gray-400">Can't work this event at all? <button type="button" onClick={() => setWorkingEvent(ev, false)} disabled={!!eventBusy} className="font-semibold text-gray-600 underline hover:text-gray-800">Take me off it</button></p>
                 )}
               </div>

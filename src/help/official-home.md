@@ -17,7 +17,7 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 1. Until every day has an answer, a **To do** card at the top says **Tell us which days you can work**. Tap **Answer now**.
 2. Under **Which days can you work?**, tap one for each day: **All day**, **Morning** (games that start before noon), **Afternoon** (noon or later) or **Can't work**. It saves right away and shows **Saved**. **I can work both days, all day** answers every day at once.
 3. Once the schedule is published, you can tap **Pick exact game times instead**, tick the start times you can work, and tap **Save**.
-4. To change a day, tap another answer, any time before the event. If the assigner set a day for you, it says **Set by** and their name.
+4. To change a day, tap another answer. Each day locks 48 hours before it starts (Saturday locks when Thursday begins); after that, call or text the assigner. Answer as early as you can. If the assigner set a day for you, it says **Set by** and their name.
 
 A reminder email from the assigner has an **Answer for my 2 days** button (the number is how many days are left) that opens your home page at that event.
 

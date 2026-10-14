@@ -7,7 +7,7 @@ import { seesPay, workerPayGroups } from '@/lib/payGroups'
 import { workerIdForEmail } from '@/lib/staffW9'
 import { tournamentOrgId } from '@/lib/org'
 import { eventDayList } from '@/lib/eventDays'
-import { AvailAnswer, isAvailAnswer, sortTimes } from '@/lib/availabilityAnswers'
+import { AvailAnswer, isAvailAnswer, sortTimes, availLocked, dayTitle } from '@/lib/availabilityAnswers'
 import { AVAILABILITY_MANAGERS, dayStates, gameSlots, publishedSchedules, reminderLog, saveAnswers } from '@/lib/availability'
 
 // Availability answers (Bo, Oct 14 2026; lib/availabilityAnswers has the why).
@@ -100,6 +100,10 @@ export async function POST(req: Request) {
   const asked = Array.isArray(b.dates) ? b.dates : [b.date]
   const dates = Array.from(new Set(asked.map((d: unknown) => String(d || '').slice(0, 10)).filter(Boolean))) as string[]
   if (!dates.length || dates.some(d => !days.includes(d))) return NextResponse.json({ error: 'That day isn’t part of this event.' }, { status: 400 })
+  // 48 hours' notice (lib/availabilityAnswers): staff can't change a day once it locks;
+  // the assigner still can, for the emergency that comes in by phone.
+  const shut = manager ? [] : dates.filter(d => availLocked(d))
+  if (shut.length) return NextResponse.json({ error: `${shut.map(d => dayTitle(d).split(',')[0]).join(' and ')} locked 48 hours before the day. Call or text the assigner to change it.`, locked: shut }, { status: 403 })
 
   let a: AvailAnswer = answer
   let times: string[] = []
