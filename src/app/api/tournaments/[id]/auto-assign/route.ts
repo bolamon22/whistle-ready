@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { getPayRate, parsePayRates, parseJsonDeep } from '@/lib/utils'
 import { requireStaff } from '@/lib/apiAuth'
 import { gameGender } from '@/lib/gameGender'
+import { effectiveUnavailability } from '@/lib/availability'
 
 interface WorkerRow {
   id: string; name: string; certLevel: string; defaultRole: string
@@ -102,7 +103,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // Unavailability map — roster = available by default.
   // Only block someone if they have an explicit unavailable record for this date/time.
-  const unavails = await prisma.availability.findMany({ where: { tournamentId: params.id, date } })
+  // Staff answers (All day / Morning / Afternoon / game times / Can't work, Oct 14 2026)
+  // count too, turned into the same records against today's game times.
+  const unavails = await effectiveUnavailability(params.id, date)
   const unavailMap = new Map<string, string[]>() // workerId → unavailable time slots
   for (const a of unavails) {
     unavailMap.set(a.workerId, JSON.parse(a.timeSlots))

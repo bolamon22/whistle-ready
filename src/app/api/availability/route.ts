@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { requireStaff, eventGate } from '@/lib/apiAuth'
 import { fieldDirectorSees } from '@/lib/roleScope'
 import { workerIdForEmail } from '@/lib/staffW9'
+import { AVAILABILITY_MANAGERS, effectiveUnavailability } from '@/lib/availability'
 
 // Who can work which days of an event. Staff only (Oct 13 2026): it took no login at
 // all, so anyone could read the names on an event's staff or change their days. A
@@ -14,7 +15,10 @@ import { workerIdForEmail } from '@/lib/staffW9'
 // everyone's days and change anyone's, because only the managing roles' page was gated.
 // So for anyone but the roles that manage staff, the worker is the one their login
 // email matches, never an id from the browser.
-const MANAGES = ['admin', 'director', 'assigner', 'scheduler', 'field_director']
+// Since Oct 14 2026 staff answer every day instead (api/availability/answers), and GET
+// returns those answers too, turned into the same records against the game times as
+// they are now (lib/availability), so the Assigner board's warnings follow them.
+const MANAGES = AVAILABILITY_MANAGERS
 async function ownWorker(gate: { role: string; session: any }): Promise<string | null | undefined> {
   if (MANAGES.includes(gate.role)) return undefined // not limited
   return (await workerIdForEmail(String(gate.session?.user?.email || ''))) || null
@@ -30,10 +34,12 @@ export async function GET(req: Request) {
   const{searchParams}=new URL(req.url);const tid=searchParams.get('tournamentId')
   if(!tid)return NextResponse.json({error:'required'},{status:400})
   const refused = eventGate(gate, tid); if (refused) return refused
-  const rows = await prisma.availability.findMany({where:{tournamentId:tid},include:{worker:{select:{id:true,name:true,roles:true,defaultRole:true}}}})
+  const rows = await effectiveUnavailability(tid)
+  const workers = await prisma.worker.findMany({ where: { id: { in: Array.from(new Set(rows.map(r => r.workerId))) } }, select: { id: true, name: true, roles: true, defaultRole: true } })
+  const byId = new Map(workers.map(w => [w.id, w]))
   const own = await ownWorker(gate)
-  const shown = own !== undefined ? rows.filter(r => own && r.workerId === own) : gate.role === 'field_director' ? rows.filter(r => fieldDirectorSees(r.worker)) : rows
-  return NextResponse.json(shown.map(r => ({ ...r, worker: r.worker ? { id: r.worker.id, name: r.worker.name } : r.worker })))
+  const shown = own !== undefined ? rows.filter(r => own && r.workerId === own) : gate.role === 'field_director' ? rows.filter(r => fieldDirectorSees(byId.get(r.workerId))) : rows
+  return NextResponse.json(shown.map(r => { const w = byId.get(r.workerId); return { ...r, worker: w ? { id: w.id, name: w.name } : null } }))
 }
 export async function POST(req: Request) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res

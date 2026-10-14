@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
 import { walletEnabled } from '@/lib/wallet'
+import { staffAvailability, type StaffAvailDay } from '@/lib/availability'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -63,6 +64,14 @@ export async function GET() {
     for (const row of a.rows as unknown as Record<string, unknown>[]) assigned.set(String(row.tid), Number(row.n))
   }
 
+  // Which days they can work at each event they're on (lib/availability). The staff
+  // home asks until every day has an answer. A failure here never hides their events.
+  let avail: Record<string, { days: StaffAvailDay[] }> = {}
+  if (worker) {
+    const mine = upcoming.filter(t => working.has(String(t.id))).map(t => ({ id: String(t.id), startDate: String(t.startDate || ''), endDate: String(t.endDate || '') }))
+    try { avail = await staffAvailability(String(worker.id), mine) } catch (e) { console.error('[staff-portal] availability:', e) }
+  }
+
   let orgName: string | null = null
   if (orgId) {
     try {
@@ -84,6 +93,7 @@ export async function GET() {
       id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''),
       location: String(t.location || ''), logoUrl: String(t.logoUrl || ''),
       working: working.has(String(t.id)), assignedGames: assigned.get(String(t.id)) ?? 0,
+      avail: avail[String(t.id)] ?? null,
     })),
   })
 }

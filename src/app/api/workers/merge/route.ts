@@ -62,6 +62,10 @@ export async function POST(req: Request) {
   await client.execute({ sql: `UPDATE "RosterEntry" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
   await client.execute({ sql: `DELETE FROM "Availability" WHERE workerId = ? AND (tournamentId || '|' || date) IN (SELECT tournamentId || '|' || date FROM "Availability" WHERE workerId = ?)`, args: [removeId, keepId] })
   await client.execute({ sql: `UPDATE "Availability" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
+  try {   // availability answers (lib/availability): the kept record's answer wins a day both answered
+    await client.execute({ sql: `DELETE FROM "AvailabilityAnswer" WHERE workerId = ? AND (tournamentId || '|' || date) IN (SELECT tournamentId || '|' || date FROM "AvailabilityAnswer" WHERE workerId = ?)`, args: [removeId, keepId] })
+    await client.execute({ sql: `UPDATE "AvailabilityAnswer" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
+  } catch { /* the table is made on first use; nobody has answered yet */ }
   await client.execute({ sql: `UPDATE "Assignment" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
   await client.execute({ sql: `UPDATE "TimeEntry" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
   await client.execute({ sql: `UPDATE "PaymentRecord" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })

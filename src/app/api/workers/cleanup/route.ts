@@ -99,6 +99,7 @@ export async function POST(req: Request) {
     // children first, so this works whether or not the database enforces the cascades
     await client.execute({ sql: `DELETE FROM "Assignment" WHERE workerId = ?`, args: [id] })
     for (const t of ['RosterEntry', 'Availability', 'TimeEntry', 'PaymentRecord']) await client.execute({ sql: `DELETE FROM "${t}" WHERE workerId = ?`, args: [id] })
+    try { await client.execute({ sql: `DELETE FROM "AvailabilityAnswer" WHERE workerId = ?`, args: [id] }) } catch { /* made on first use */ }
     await client.execute({ sql: `DELETE FROM "Worker" WHERE id = ?`, args: [id] })
   }
   return NextResponse.json({ deleted: go.length, skipped: ids.length - go.length })
