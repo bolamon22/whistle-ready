@@ -10,8 +10,8 @@ export type TrainingGroup = { key: string; label: string; roles: string[] | null
 
 export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'sign-up', num: '01', title: 'Sign up and get the app on your phone', blurb: 'The signup form, your photo, and adding Whistle Ready to your home screen.', secs: 59 },
-  { id: 'home', num: '02', title: 'Your staff home page', blurb: 'Sign up to work an event, your W-9, Up next and your games.', secs: 50 },
-  { id: 'availability', num: '02b', title: 'Set your availability', blurb: 'Tell the assigner which days and game times you can work.', secs: 43 },
+  { id: 'home', num: '02', title: 'Your staff home page', blurb: 'Sign up to work an event and answer its days, your W-9, Up next and your games.', secs: 66 },
+  { id: 'availability', num: '02b', title: 'Set your availability', blurb: 'Answer each day: All day, Morning, Afternoon or Can’t work, or pick exact game times.', secs: 53 },
   { id: 'staff-id', num: '03', title: 'Your staff ID', blurb: 'Apple Wallet, printing it, and wearing it all day.', secs: 38 },
   { id: 'keep-score', num: '04', title: 'Keep score live', blurb: 'Start the clock, add goals, fix a mistake, halftime and Save.', secs: 54 },
   { id: 'penalties', num: '05', title: 'Penalty time', blurb: 'Start a penalty, match the ref, and release the player.', secs: 48 },
@@ -29,10 +29,10 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'ref-gameday', num: 'R3', series: 'ref', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 48 },
   // Assigner training (Oct 13 2026): filmed on a computer screen, for the people who staff
   // Sunshine Events Group games.
-  { id: 'asg-home', num: 'A01', series: 'assigner', title: 'Your assigner home', blurb: 'Your next event, how many games are reffed, and the five buttons.', secs: 50 },
+  { id: 'asg-home', num: 'A01', series: 'assigner', title: 'Your assigner home', blurb: 'Your next event, how many games are reffed, and the five buttons.', secs: 53 },
   { id: 'asg-crew', num: 'A02', series: 'assigner', title: 'Build your crew', blurb: 'The Staff Pool, invites, the recruiting link and the letter to forward.', secs: 59 },
   { id: 'asg-roster', num: 'A03', series: 'assigner', title: 'Your tournament roster', blurb: 'Who is working the event, editing someone, filters and Exhibit A.', secs: 60 },
-  { id: 'asg-out', num: 'A04', series: 'assigner', title: 'Who’s out', blurb: 'Mark officials out all day or for part of it.', secs: 32 },
+  { id: 'asg-out', num: 'A04', series: 'assigner', title: 'Who can work, and who hasn’t answered', blurb: 'The Availability page: who answered, ref coverage, setting an answer for someone, and emailing who hasn’t answered.', secs: 63 },
   { id: 'asg-board', num: 'A05', series: 'assigner', title: 'Tour the Assigner board', blurb: 'Days, filters, min staff, density, folding and the other views.', secs: 63 },
   { id: 'asg-manual', num: 'A06', series: 'assigner', title: 'Assign officials manually', blurb: 'Drag a name or click a slot, busy and double-booked, refs per game.', secs: 65 },
   { id: 'asg-auto', num: 'A07', series: 'assigner', title: 'Auto-assign and Clear', blurb: 'Fill a day in seconds, preview the picks, and clearing a day.', secs: 63 },

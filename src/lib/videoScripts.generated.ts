@@ -68,9 +68,11 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "intro": "Your staff home page in Whistle Ready.",
     "lines": [
       "When you sign in, you land on your staff home page. My events shows every event this season.",
-      "Want to work an event? Tap Sign up to work. Then set your availability, so the assigner knows when you're free.",
+      "Want to work an event? Tap Sign up to work. Its days open right away, so you can tell the assigner which days you can work.",
+      "Until every day has an answer, a To do card stays at the top of this page. Tap Answer now, then answer each day, or tap I can work both days, all day.",
+      "Can't work the event after all? Tap Take me off it, any time before you're put on games.",
       "If you haven't sent your W-9 yet, upload it here. We need it before your first paycheck.",
-      "Game day tools are here: field requests, live scoring, staff contacts, and incidents.",
+      "Game day tools are here: field requests, live scoring, staff contacts, incidents, and the emergency plan.",
       "Up next shows your next game: the time, the field, and the teams. Tap Check in when you get to your field.",
       "Scroll down for every game you are on. As a scorekeeper, tap Open scorer to start keeping score.",
       "Tap All games to see the whole schedule for the event."
@@ -253,13 +255,13 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "title": "Set your availability",
     "intro": "Set your availability, in Whistle Ready.",
     "lines": [
-      "Signed up to work an event? Let the assigner know which days you can work.",
-      "On your home page, under the event, tap Set my availability.",
-      "You are available all day unless you say otherwise. Each day of the event has three choices.",
-      "Can't work a day at all? Tap Can't work. It saves right away.",
-      "Only out for part of a day? Tap Part of day, then tap the game times you can't work.",
-      "Tapped one by mistake? Tap it again to clear it.",
-      "Tap Done when you are finished. The assigner sees your days when building the schedule, so set them as early as you can."
+      "Working an event? Until every day has an answer, a To do card sits at the top of your home page. Tap Answer now.",
+      "Under the event, tap one answer for each day. It saves right away, and the assigner sees it.",
+      "Working the whole event? I can work both days, all day answers every day at once.",
+      "Or answer each day: All day, Morning, or Afternoon. Morning means games that start before noon.",
+      "Can't work a day? Tap Can't work. You won't be put on any games that day.",
+      "Once the schedule is posted, you can pick exact game times instead. Tap a quick pick, or tap each time you can work, then Save.",
+      "When every day has an answer, the card says You're all set. You can change an answer any time before the event."
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
@@ -270,7 +272,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Sign in to Whistle Ready on your computer, and you land on your assigner home. You assign officials for Sunshine Events Group tournaments from here.",
       "Up next is your next tournament: the dates, the venue, and how many games already have a full referee crew.",
       "Five buttons take you everywhere you need. Assign opens the Assigner board, where you put officials on games.",
-      "By official shows every game, or every person, with their pay. Roster is who is working this event. Availability is who is out.",
+      "By official shows every game, or every person, with their pay. Roster is who is working this event. Availability shows who can work each day, and who hasn’t answered.",
       "And Ref pay totals what each official earned, so you can mark them paid.",
       "Your other events are listed below, with the same buttons. Use Find a tournament to search, or switch to past events."
     ],
@@ -305,14 +307,15 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "outro": "Whistle Ready. Every game staffed."
   },
   "asg-out": {
-    "title": "Who’s out",
-    "intro": "Whistle Ready assigner training. Mark who is out.",
+    "title": "Who can work, and\nwho hasn’t answered",
+    "intro": "Whistle Ready assigner training. Who can work, and who hasn’t answered.",
     "lines": [
-      "Everyone on the roster is available by default. Use this page when an official tells you they can’t work part of the day.",
-      "Pick the day at the top.",
-      "Out all day? Click All Day Out on their row.",
-      "Only out for part of the day? Click the start times they can’t make. Those show as partial.",
-      "Auto-assign skips anyone who is out, and the Assigner board warns you if you pick them manually."
+      "Availability shows who can work each day of the event, and who hasn’t answered yet. It’s a tab on the staff roster.",
+      "The tiles count who answered every day, and who hasn’t. Ref coverage compares the refs who can work against the ref spots at the busiest game time.",
+      "Filter to the people with no answer yet, or to anyone who can’t work a day, or only part of one. You can pick a job, or find a person.",
+      "Someone texted you instead? Click their answer for that day and set it. They’ll see it on their staff home.",
+      "To chase the rest, click Remind on a row, or email everyone who hasn’t answered. Untick anyone to skip, check the preview, and send.",
+      "Their email has a button that opens their days. Auto-assign only puts people on games they said they can work, and anyone who hasn’t answered is still treated as available."
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
