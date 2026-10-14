@@ -3,7 +3,7 @@ title: Add and edit people in the Staff Pool
 category: Staff
 order: 400
 routes: /staff
-keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh
+keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh which events add to event tournament roster training videos watched send videos
 ---
 The Staff Pool is your organization's master list of everyone who works your events: refs, scorekeepers, athletic trainers and field operations. Each tournament's roster is picked from this pool.
 
@@ -17,11 +17,17 @@ The Staff Pool is your organization's master list of everyone who works your eve
 
 **To edit someone:** find them with **Search by name…** or the **Role**, **Can Ref** and **App** filters, then click **Edit**. Click **Profile** to see their details without editing.
 
+**To see someone's events and add them to one:** click **Profile**. Under **Events** are the tournaments they're on, with how many games they have at each. Pick a tournament from **Add to an event…** to put them on its staff roster. Click the **×** on an event to take them off it. **Show past events** lists the ones that are over.
+
+**Training videos:** their **Profile** also shows which of their training videos they've watched, and **Send the N not watched** emails them just to that person. The **Training** column shows how many they've watched, for example **3/11**. See "Send training videos and see who watched".
+
 **W-9s:** staff upload their own on their staff portal. **W-9 ✓** under **Pay Method** means one is on file; click **Profile** and then **View W-9 →** to open it. Only directors and admins can open a W-9.
 
 **To change many people at once:**
 1. Tick the box next to each person.
 2. In the bar that appears, pick a field from **— choose field to edit —** (for example **Role** or **Cert Level**), pick the new value, and click **Apply to Selected**.
+
+**To add several people to a tournament:** tick them, pick the tournament from **Add to event…** in the bar, and confirm. Anyone already on it is left as they were.
 
 **To import a spreadsheet:**
 1. Click **Bulk Import**, then choose **Refs** or **Other Staff**.

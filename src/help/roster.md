@@ -3,7 +3,7 @@ title: Build a tournament's staff roster
 category: Staff
 order: 420
 routes: /tournaments/*/roster
-keywords: staff roster tournament roster confirm staff add staff to event remove staff who is working refs scorekeepers trainers field ops bulk edit
+keywords: staff roster tournament roster confirm staff add staff to event remove staff who is working refs scorekeepers trainers field ops bulk edit other events training videos watched send videos
 ---
 The Staff Roster is the list of people confirmed to work this tournament. Only people on the roster show up in the Assigner, the availability grid and the staff directory.
 
@@ -17,6 +17,8 @@ The Staff Roster is the list of people confirmed to work this tournament. Only p
 **To remove someone:** click **Remove** on their row under **Confirmed**. This takes them off this tournament only.
 
 **To edit someone:** click **Edit** on their row, change the details, and save. Click **Profile** to see their details without editing. Changes here update their Staff Pool record.
+
+**Their other events and training:** **Profile** lists every tournament they're working (this one is marked **this event**), with **Add to an event…** to put them on another. It also shows which training videos they've watched, and **Send the N not watched** emails them to just that person. The **Training** column shows how many they've watched.
 
 **To change many people at once:** tick them, choose a field from **— choose field to edit —**, pick the value, and click **Apply to Selected**.
 

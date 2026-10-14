@@ -174,6 +174,20 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Person profile: events and training (Oct 14).** Bo: list which tournaments a person is doing, add them to a
+  roster from the Staff Pool ("I had to go to multiple spots to add someone"), send the staff videos from their
+  profile and see whether they watched. The profile panel on the Staff Pool and the Staff roster now holds
+  `components/staff/PersonEvents` (GET `/api/workers/[id]/events`: roster events plus events where they have games
+  but no roster spot, games per event, `canAdd` = their org's events that haven't ended; add/remove through the
+  roster route) and `components/staff/PersonTraining` (GET `/api/training?workerId=`: assigned videos, watched,
+  the last logged send that reached their email; Send = POST /api/training/send with `workerIds: [id]` only, never
+  roles or eventId, which pick groups). Staff Pool: Training column (from `?report=1`) and bulk **Add to event…**.
+  The roster POST no longer resets gameTarget/notes that weren't sent, and returns `added`. Every training count
+  (report, roster column, person) goes through `watchedBy()` in `api/training`, so the roster column now includes
+  views saved under `user:<id>`; assigners get roster counts for their pay groups. Send videos window: `everyone`
+  (Everyone working it) is its own pick, and an event with no role no longer means everyone on it (Bo's send to
+  Nicole listed every athletic trainer); the preview returns `people` (everyone matched, with hasEmail) and the
+  send takes `exclude` ids from the Who gets it checklist; the send log records everyone and excluded.
 - **Own club's games: someone else posts the score (Oct 13).** Bo, on Terry Crowley (club director who works
   events as a field director): one login, both hats, and "have someone else post the scores ... if we set the role
   up for someone else in the future, it will already be that way." `lib/ownClub.ts`: a login that can open a
