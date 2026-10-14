@@ -16,6 +16,8 @@ export type HowToVideo = { id: string; title: string; audience: string; blurb: s
 export const HOW_TO_VIDEOS: HowToVideo[] = [
   { id: 'waiver', title: "Your player's waiver and parent account", audience: 'Parents', secs: 86,
     blurb: "Fill out and sign the online waiver, then save your info so siblings and the next event take a few clicks." },
+  { id: 'parent-dashboard', title: 'Your parent dashboard and team alerts', audience: 'Parents', secs: 53,
+    blurb: "Your next game, live scores, your teams' schedule, and phone alerts when the schedule posts, a game moves, or a score comes in." },
   { id: 'club-portal', title: "Your club director's portal", audience: 'Club directors', secs: 69,
     blurb: 'Pay your balance, track waivers, request team changes, and register for future events.' },
   { id: 'coach-waiver', title: 'Coach waiver and credential', audience: 'Coaches', secs: 83,
@@ -34,6 +36,7 @@ const EMAIL_LABELS: Record<string, string> = {
   'waiver': 'How families sign the waiver',
   'club-portal': 'Tour your club portal',
   'coach-waiver': 'How coaches sign the waiver',
+  'parent-dashboard': 'Your parent dashboard and team alerts',
 }
 
 /** One quiet line of video links for a club email. `abs` turns a site path into a

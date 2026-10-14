@@ -492,5 +492,21 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "You do not need to bring it. Your signed waiver is what gets you on the sideline. Coaching another team later? Tap Add another team."
     ],
     "outro": "Sunshine Events Group. There from registration to the final whistle, so you can focus on the game."
+  },
+  "parent-dashboard": {
+    "title": "Your parent dashboard\nand team alerts",
+    "intro": "Sunshine Events Group. Your parent dashboard, and alerts for your teams.",
+    "lines": [
+      "Once you sign the waiver, you have a parent dashboard. Your next game is right at the top, with directions to the field.",
+      "Games being played right now show the live score.",
+      "Before game day, check that each player has a waiver on file.",
+      "Tap Schedule to see your teams' games for each day.",
+      "Tap Follow on a team to get phone alerts for it.",
+      "The first time, tap Turn on alerts. You hear when the schedule posts, if a game moves, and the scores, and nothing else. On an iPhone, add the site to your Home Screen first.",
+      "Follow each team you care about.",
+      "Want to see every game at the event? Tap All games.",
+      "Players and Events have your players and the events coming up."
+    ],
+    "outro": "Sunshine Events Group. There from registration to the final whistle, so you can focus on the game."
   }
 }
