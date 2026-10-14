@@ -215,7 +215,8 @@
         "/tournaments/*/ops",
         "/tournaments/*/incidents",
         "/tournaments/*/checklist",
-        "/tournaments/*/directory"
+        "/tournaments/*/directory",
+        "/tournaments/*/emergency"
       ]
     },
     {

@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
 import EventBackLink from '@/components/EventBackLink'
-import { TriangleAlert, ChevronLeft, Trash2, Check, Download, Lock, Plus } from 'lucide-react'
+import { TriangleAlert, ChevronLeft, Trash2, Check, Download, Lock, Plus, Siren } from 'lucide-react'
 import TrainingLink from '@/components/TrainingLink'
 
 const TYPES = ['Medical', 'Safety', 'Facility', 'Weather', 'Other']
@@ -111,6 +111,8 @@ export default function IncidentsPage({ embedded = false }: { embedded?: boolean
         <p className="text-sm text-slate-500 mb-5">Log injuries and safety or facility issues so the team can track them. For emergencies, call 911 first.</p>
         <TrainingLink id={type === 'Medical' ? 'injury-report' : 'incidents'} className="-mt-3 mb-5" />
       </>}
+
+      <Link href={`/tournaments/${id}/emergency`} className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 mb-4 text-sm font-semibold text-red-700"><Siren size={16} /> Emergency plan: 911 address, ER, AED, lightning <span className="ml-auto">→</span></Link>
 
       {/* report form */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6">
