@@ -1098,6 +1098,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   async function applyShorten() {
     const L = wxSlot
     if (!wxMovable.length || L <= 0) return
+    // Weather moves dozens of games and Undo covers hand moves only, so take a checkpoint
+    // first, as Auto-fill does: Tools > Revert puts the whole day back.
+    if (!checkpoint) {
+      const snap: Record<string, {date:string,startTime:string,location:string}> = {}
+      games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
+      setCheckpoint(snap); setViewingCheckpoint(false)
+    }
     setWxBusy(true)
     const byField: Record<string, Game[]> = {}
     wxMovable.forEach(g => { (byField[g.location] = byField[g.location] || []).push(g) })
@@ -1110,16 +1117,23 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     }
     setIncrement(L)
     setWxBusy(false); setShowWeather(false)
-    toast.success(`Re-stacked ${wxMovable.length} game${wxMovable.length === 1 ? '' : 's'} at ${L}-min slots — review & publish`)
+    toast.success(`Re-stacked ${wxMovable.length} game${wxMovable.length === 1 ? '' : 's'} at ${L}-min slots. Revert undoes it — review & publish`)
   }
   async function applyWeatherDelay() {
     if (!wxMovable.length || wxDelay <= 0) return
+    // Weather moves dozens of games and Undo covers hand moves only, so take a checkpoint
+    // first, as Auto-fill does: Tools > Revert puts the whole day back.
+    if (!checkpoint) {
+      const snap: Record<string, {date:string,startTime:string,location:string}> = {}
+      games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
+      setCheckpoint(snap); setViewingCheckpoint(false)
+    }
     setWxBusy(true)
     for (const g of wxMovable) {
       await patchGame(g.id, { startTime: minToHM(hmToMin(g.startTime) + wxDelay) })
     }
     setWxBusy(false); setShowWeather(false)
-    toast.success(`Delayed ${wxMovable.length} game${wxMovable.length === 1 ? '' : 's'} by ${wxDelay} min — review & publish`)
+    toast.success(`Delayed ${wxMovable.length} game${wxMovable.length === 1 ? '' : 's'} by ${wxDelay} min. Revert undoes it — review & publish`)
   }
 
   function openAutoFill() {
