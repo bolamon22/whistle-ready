@@ -25,6 +25,33 @@ function applyVars(template: string, vars: Record<string, string>): string {
 }
 const esc = (x: string) => x.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
 
+/** The dark pill a bare URL turns into. Inline, so it sits after whatever the
+ *  template wrote in front of it, and an arrow so it reads as a thing to click. */
+function linkPill(url: string, label: string): string {
+  return `<a href="${esc(url)}" style="display:inline-block;background:#0f172a;color:#ffffff;font-weight:600;`
+    + `font-size:14px;padding:7px 16px;border-radius:999px;text-decoration:none;line-height:1.3;">`
+    + `${esc(label)} &rarr;</a>`
+}
+
+/** One paragraph of the letter. Text is escaped (a club name with an &
+ *  used to break the markup); a URL becomes a pill labelled with the event it
+ *  points at, or its domain for anything else the letter happens to link. */
+function paraHtml(para: string, regUrl: string, eventName: string): string {
+  let out = ''
+  let last = 0
+  for (const m of para.matchAll(/https?:\/\/[^\s<]+/g)) {
+    const at = m.index ?? 0
+    out += esc(para.slice(last, at))
+    const url = m[0]
+    let label = eventName || 'Register'
+    if (url !== regUrl) { try { label = new URL(url).hostname.replace(/^www\./, '') } catch { label = 'Open link' } }
+    out += linkPill(url, label)
+    last = at + url.length
+  }
+  out += esc(para.slice(last))
+  return out.replace(/\n/g, '<br/>')
+}
+
 export async function runReturningInvite(a: {
   tournamentId: string
   clubs: InviteClub[]
@@ -151,7 +178,10 @@ export async function runReturningInvite(a: {
 
   for (const club of toSend) {
     const vars: Record<string, string> = {
-      clubName: club.clubName,
+      // A past registration saved with a blank club name mailed out as
+      // "Since  has played with us in the past" (seen Oct 14). Reads right in
+      // every sentence the templates put it in.
+      clubName: club.clubName || 'your club',
       teamsRegistered: String(teamsRegistered),
       clubsRegistered: String(clubsRegistered),
       datesLong: dateStrLong,
@@ -172,13 +202,17 @@ export async function runReturningInvite(a: {
     // Unmistakable in an inbox, so a test copy is never forwarded as the real one.
     const banner = testMode
       ? `<div style="background:#0b1f3a;color:#ffffff;border-radius:8px;padding:11px 14px;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55">`
-        + `<strong>TEST COPY</strong> — sent to you, not to ${esc(club.clubName)}. The merge fields below are ${esc(club.clubName)}'s real details, and nothing was sent to them. Every link and button is live.</div>`
+        + `<strong>TEST COPY</strong> — sent to you, not to ${esc(vars.clubName)}. The merge fields below are ${esc(vars.clubName)}'s real details, and nothing was sent to them. Every link and button is live.</div>`
       : ''
 
-    // Convert plain text body to simple HTML
+    // Plain text to HTML, with any bare URL rendered as a pill rather than the
+    // raw address. A register link is ~80 characters and wraps across two lines
+    // in the middle of a letter, which is the one thing in the email that does
+    // not look like it came from a person (Bo, Oct 14). The template keeps its
+    // own lead-in ("Register here:"); only the address itself becomes a button.
     const htmlBody = plainBody
       .split('\n\n')
-      .map(para => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">${para.replace(/\n/g, '<br/>')}</p>`)
+      .map(para => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">${paraHtml(para, regUrl, tournament.name)}</p>`)
       .join('')
 
     const html = renderEmail({
