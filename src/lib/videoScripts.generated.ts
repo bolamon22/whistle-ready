@@ -523,6 +523,21 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
+  "dir-registrations": {
+    "title": "Team registrations\nand payments",
+    "intro": "Whistle Ready tournament director training. Team registrations and payments.",
+    "lines": [
+      "People, then Team registrations, lists every club that registered, its teams, and what it owes.",
+      "The totals up top show clubs, teams, what you have invoiced, what you have received, and the balance still out.",
+      "Each club shows its contact, whether they have a login, and Invoiced, Paid, and Balance.",
+      "Filter by payment status to see who still owes, or search a club, team, or coach.",
+      "Paid by check? Click Payment. The balance fills in. Pick the method, add the check number, and click Record Payment.",
+      "Club still owes? Pay link copies a secure link you can send them to pay the balance by card.",
+      "Email clubs sends a letter to every club, or just the ones you pick, like a payment reminder. Send yourself a test first, or schedule it for later.",
+      "Add entry adds a club by hand, Import teams brings them in from a spreadsheet, and Public form opens the page clubs register on."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
   "waiver": {
     "title": "Your player's waiver\nand parent account",
     "intro": "Sunshine Events Group. Completing your player's waiver, and setting up your parent account.",
