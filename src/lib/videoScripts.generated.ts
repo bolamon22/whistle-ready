@@ -260,7 +260,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Working the whole event? I can work both days, all day answers every day at once.",
       "Or answer each day: All day, Morning, or Afternoon. Morning means games that start before noon.",
       "Can't work a day? Tap Can't work. You won't be put on any games that day.",
-      "Once the schedule is posted, you can pick exact game times instead. Tap a quick pick, or tap each time you can work, then Save.",
+      "Only free part of a day? Once the schedule is posted, tap Pick your times, tick the times you're free, then Save. The assigner still decides which games you work.",
       "When every day has an answer, the card says You're all set. You can change a day until 48 hours before it starts. After that, call or text the assigner."
     ],
     "outro": "Whistle Ready. Game day, run from your phone."

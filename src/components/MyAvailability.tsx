@@ -74,7 +74,7 @@ export default function MyAvailability({ eventId, days, onChange }: { eventId: s
       {days.map(d => {
         const s = d.state
         const shut = locked(d)
-        const later = d.posted.length ? '' : ' You can pick exact games once the schedule is posted.'
+        const later = d.posted.length ? '' : " Once the schedule is posted, you can narrow it to the times you're free."
         const hint = s?.a === 'am' ? 'Morning means games that start before noon.' + later
           : s?.a === 'pm' ? 'Afternoon means games that start at noon or later.' + later
           : s?.a === 'no' ? "You won't be put on any games this day." : ''
@@ -103,7 +103,7 @@ export default function MyAvailability({ eventId, days, onChange }: { eventId: s
             {s?.a === 'times' && (
               <div className="rounded-xl bg-teal-50 border border-teal-200 px-3 py-2.5 flex items-start gap-2.5">
                 <Clock size={17} className="text-teal-700 shrink-0 mt-px" />
-                <p className="flex-1 min-w-0 text-[13px] text-teal-900 leading-snug"><b>{s.times.length} game time{s.times.length === 1 ? '' : 's'}:</b> {timesList(s.times)}</p>
+                <p className="flex-1 min-w-0 text-[13px] text-teal-900 leading-snug"><b>Free at {s.times.length} time{s.times.length === 1 ? '' : 's'}:</b> {timesList(s.times)}</p>
                 {d.posted.length > 0 && !shut && <button type="button" onClick={() => setSheet(d.date)} className="shrink-0 text-[13px] font-extrabold text-teal-700 underline">Edit</button>}
               </div>
             )}
@@ -113,7 +113,7 @@ export default function MyAvailability({ eventId, days, onChange }: { eventId: s
             {s && s.by !== 'self' && s.by && s.a !== 'out' && <p className="px-0.5 text-xs text-slate-500">Set by {s.by}. Tap another answer to change it.</p>}
             {d.posted.length > 0 && !shut && s?.a !== 'no' && s?.a !== 'times' && (
               <button type="button" onClick={() => setSheet(d.date)} className="self-start px-0.5 inline-flex items-center gap-1 text-[13px] font-bold text-teal-700 hover:text-teal-900">
-                Pick exact game times instead<span className="font-medium text-slate-500">· {d.posted.length} posted</span><ChevronRight size={14} />
+                Only free part of the day? Pick your times<ChevronRight size={14} />
               </button>
             )}
           </div>

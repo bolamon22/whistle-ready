@@ -108,10 +108,10 @@ export async function POST(req: Request) {
   let a: AvailAnswer = answer
   let times: string[] = []
   if (a === 'times') {
-    if (dates.length !== 1) return NextResponse.json({ error: 'Pick game times one day at a time.' }, { status: 400 })
+    if (dates.length !== 1) return NextResponse.json({ error: 'Pick the times one day at a time.' }, { status: 400 })
     const posted = (slots.get(dates[0]) || []).map(s => s.t)
     times = sortTimes((Array.isArray(b.times) ? b.times : []).map(String).filter((x: string) => posted.includes(x)))
-    if (!times.length) return NextResponse.json({ error: 'Pick at least one game time.' }, { status: 400 })
+    if (!times.length) return NextResponse.json({ error: 'Pick at least one time.' }, { status: 400 })
     if (times.length === posted.length) { a = 'all'; times = [] }   // every game is All day
   }
 

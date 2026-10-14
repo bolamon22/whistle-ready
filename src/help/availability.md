@@ -5,7 +5,7 @@ order: 425
 routes: /tournaments/*/availability
 keywords: availability unavailability unavailable can't work all day morning afternoon game times who answered no answer yet reminder remind email staff coverage refs short set for them texted schedule days
 ---
-Everyone on the event's staff roster tells you which days they can work from their staff home: **All day**, **Morning** (games that start before noon), **Afternoon** (games at noon or later), certain game times, or **Can't work**. Every answer is saved, so this page shows who has answered and who hasn't.
+Everyone on the event's staff roster tells you which days they can work from their staff home: **All day**, **Morning** (games that start before noon), **Afternoon** (games at noon or later), only certain start times, or **Can't work**. Every answer is saved, so this page shows who has answered and who hasn't.
 
 **Where:** **People → Staff roster**, then the **Availability** tab.
 
@@ -23,7 +23,7 @@ To remind one person, click **Remind** in their row.
 
 **To set a day for someone who texted you:**
 1. Click their answer for that day (or **No answer**).
-2. Pick **All day**, **Morning**, **Afternoon** or **Can't work**, or **Pick game times…** to tick the start times they can work.
+2. Pick **All day**, **Morning**, **Afternoon** or **Can't work**, or **Free at certain times…** to tick the start times they're free.
 
 They see it on their staff home marked **Set by** your name, and can still change it until the day locks. Staff can't change a day in the 48 hours before it (Saturday locks when Thursday begins); you still can, for the call or text that comes in late.
 
@@ -37,7 +37,7 @@ They see it on their staff home marked **Set by** your name, and can still chang
 
 **Good to know:**
 - Auto-assign only puts people on games they said they can work. People who haven't answered are still treated as available.
-- Staff can pick exact game times once the schedule is published.
+- Once the schedule is published, staff can narrow a day to the start times they're free. That's when they can be used, not a request for particular games: you still decide who works which game.
 - Days marked out on the old grid show as **Can't work**, or **Out** at certain times, until the person answers.
 
 **Common problems:**

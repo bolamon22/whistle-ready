@@ -95,7 +95,7 @@ export function timesShort(ts: string[], posted: string[]): string {
   const day = sortTimes(posted)
   const idx = s.map(t => day.indexOf(t))
   const inRow = idx.every((v, i) => v >= 0 && (i === 0 || v === idx[i - 1] + 1))
-  if (!inRow) return `${s.length} game times`
+  if (!inRow) return `${s.length} start times`
   const a = s[0], b = s[s.length - 1]
   const ap = (t: string) => (isMorning(t) ? 'AM' : 'PM')
   return ap(a) === ap(b) ? `${hourShort(a)}–${hourShort(b)} ${ap(b)}` : `${hourShort(a)} ${ap(a)}–${hourShort(b)} ${ap(b)}`

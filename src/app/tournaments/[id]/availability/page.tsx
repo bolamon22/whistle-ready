@@ -184,7 +184,7 @@ export default function AvailabilityPage({ params }: { params: { id: string } })
               {d.times.length > 0 && (
                 <button type="button" role="menuitem" onClick={() => { setMenu(null); setSheet({ id: p.id, date: d.date }) }}
                   className="w-full h-9 px-2.5 rounded-lg flex items-center gap-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-100 text-left border-t border-slate-100 mt-1 pt-1">
-                  <Clock size={13} className="text-slate-500" />Pick game times…
+                  <Clock size={13} className="text-slate-500" />Free at certain times…
                 </button>
               )}
               <p className="px-2.5 pt-1.5 pb-1 text-[11px] leading-snug text-slate-500">For someone who texted you. They&apos;ll see it on their staff home.</p>
