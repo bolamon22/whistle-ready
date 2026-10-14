@@ -5,7 +5,7 @@
 //
 // Pure -- no database import -- so client pages can use it.
 
-export type TrainingVideo = { id: string; num: string; title: string; blurb: string; secs: number; series?: 'staff' | 'ref' | 'assigner' }
+export type TrainingVideo = { id: string; num: string; title: string; blurb: string; secs: number; series?: 'staff' | 'ref' | 'assigner' | 'director' }
 export type TrainingGroup = { key: string; label: string; roles: string[] | null; ids: string[] }
 
 export const TRAINING_VIDEOS: TrainingVideo[] = [
@@ -41,6 +41,9 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'asg-swaps', num: 'A10', series: 'assigner', title: 'Game-day swaps', blurb: 'Replace someone, fix a double-booking, lock the board.', secs: 43 },
   { id: 'asg-refneeded', num: 'A11', series: 'assigner', title: 'Ref needed alerts', blurb: 'Answer a Ref needed request on game day.', secs: 34 },
   { id: 'asg-pay', num: 'A12', series: 'assigner', title: 'Paying your officials', blurb: 'Totals, each official’s games, Mark Paid and CSV.', secs: 42 },
+  // Tournament director training (Oct 13 2026: "how to set up a tournament, for future
+  // tournament directors"). Computer videos; in the Video library, not in a staff group.
+  { id: 'dir-create', num: 'D01', series: 'director', title: 'Create a tournament', blurb: 'Name, dates, park and fields, game slots, team fee, logo, divisions, and copying last year’s event.', secs: 86 },
   { id: 'asg-send', num: 'A13', series: 'assigner', title: 'Send training videos to your refs', blurb: 'Pick the event and your refs, the message, the preview, and Who’s watched.', secs: 58 },
 ]
 

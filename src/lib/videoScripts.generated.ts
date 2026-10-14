@@ -441,6 +441,23 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
+  "dir-create": {
+    "title": "Create a tournament",
+    "intro": "Whistle Ready tournament director training. Create a tournament.",
+    "lines": [
+      "Your Tournaments page lists every event, upcoming and past. To start a new one, click New Tournament.",
+      "Give it a name, and pick the start and end dates.",
+      "Add the park, and how many fields you have. Whistle Ready sets up Field 1 through 8, so your schedule grid is ready.",
+      "Set the daily start and end times, and the schedule increment, which is how long each game slot is.",
+      "Teams register and pay right in Whistle Ready. Enter your base team fee. Discounts and other pricing can be added later.",
+      "Upload your tournament logo, or pick one from your library.",
+      "Open Divisions, and check the ones you are offering. You can add your own, too.",
+      "Click Create Tournament. Your new event shows up in the list, with buttons for its schedule, staff, registrations, and the builder.",
+      "Running an event again next year? Click Copy on last year's tournament, and give it a new name and dates.",
+      "The copy brings its fields, divisions, pay rates, staff roster, and registration settings. The schedule and registrations start fresh."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
   "waiver": {
     "title": "Your player's waiver\nand parent account",
     "intro": "Sunshine Events Group. Completing your player's waiver, and setting up your parent account.",
