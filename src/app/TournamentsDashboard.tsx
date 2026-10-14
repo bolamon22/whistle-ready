@@ -58,6 +58,11 @@ export default function TournamentsDashboard() {
   // roles that have the Tasks page (directors; admins always).
   const { effectiveRole } = useRole()
   const showTasks = !!session && roleCanAccess(effectiveRole, '/tasks')
+  // A scheduler (or any non-director) saw Registrations and Pay Report on every card,
+  // links that only end at "unauthorized", plus New, Copy and Edit for events, which
+  // are the director's job (Oct 14 2026). Show each link only to roles that can open it.
+  const can = (href: string) => roleCanAccess(effectiveRole, href)
+  const runsEvents = effectiveRole === 'admin' || effectiveRole === 'director'
   const [taskEvents, setTaskEvents] = useState<{ today: string; byId: Record<string, OverviewEvent> }>({ today: '', byId: {} })
   const onTaskEvents = useCallback((events: OverviewEvent[], today: string) => {
     setTaskEvents({ today, byId: Object.fromEntries(events.map(e => [e.id, e])) })
@@ -314,8 +319,10 @@ export default function TournamentsDashboard() {
                     {(() => { const st = statusOf(t); return st ? <span className={`badge ${st.cls}`}>{st.label}</span> : null })()}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    {runsEvents && <>
                     <button onClick={e=>{e.preventDefault();openEdit(t)}} className="text-xs text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-300 px-2 py-0.5 rounded-md transition-colors">Edit</button>
                     <button onClick={e=>{e.preventDefault();setCopySourceId(t.id);setCopyName(t.name+' (Copy)');setCopyStart('');setCopyEnd('')}} className="text-xs text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-300 px-2 py-0.5 rounded-md transition-colors">Copy</button>
+                    </>}
                     {orgs.length > 0 && (
                       <select
                         defaultValue=""
@@ -326,7 +333,7 @@ export default function TournamentsDashboard() {
                         {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                       </select>
                     )}
-                    <button onClick={()=>del(t.id,t.name)} className="text-slate-300 hover:text-red-400 transition-colors text-xl leading-none">×</button>
+                    {runsEvents && <button onClick={()=>del(t.id,t.name)} className="text-slate-300 hover:text-red-400 transition-colors text-xl leading-none">×</button>}
                   </div>
                 </div>
 
@@ -358,10 +365,10 @@ export default function TournamentsDashboard() {
                 {showTasks && taskEvents.byId[t.id] && <TaskStrip ev={taskEvents.byId[t.id]} today={taskEvents.today} />}
                 <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
                   <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm justify-center whitespace-nowrap">Schedule</Link>
-                  <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>
-                  <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-purple-600 border-purple-200 hover:bg-purple-50"><span className="hidden sm:inline">📋 </span>Registrations</Link>
-                  <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Pay Report</Link>
-                  <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-blue-600 border-blue-200 hover:bg-blue-50"><span className="hidden sm:inline">🏗 </span>Builder</Link>
+                  {can(`/tournaments/${t.id}/roster`) && <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>}
+                  {can(`/tournaments/${t.id}/registrations`) && <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-purple-600 border-purple-200 hover:bg-purple-50"><span className="hidden sm:inline">📋 </span>Registrations</Link>}
+                  {can(`/tournaments/${t.id}/pay-summary`) && <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Pay Report</Link>}
+                  {can(`/tournaments/${t.id}/builder`) && <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-blue-600 border-blue-200 hover:bg-blue-50"><span className="hidden sm:inline">🏗 </span>Builder</Link>}
                 </div>
               </div>
             )
@@ -420,7 +427,7 @@ export default function TournamentsDashboard() {
               )}
             </div>
           )}
-          <button className="btn-primary whitespace-nowrap" onClick={() => setShowForm(!showForm)}>+ New Tournament</button>
+          {runsEvents && <button className="btn-primary whitespace-nowrap" onClick={() => setShowForm(!showForm)}>+ New Tournament</button>}
         </div>
       </div>
 
