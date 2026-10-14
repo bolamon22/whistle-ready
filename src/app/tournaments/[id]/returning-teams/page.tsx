@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import { useOrg } from '@/lib/org-context'
 import { orgBaseUrl } from '@/lib/orgDomains'
-import { INVITE_TEMPLATES, RETURNING_TEMPLATE, eventsList, upcomingEvents, type StoredTemplate } from '@/lib/inviteTemplates'
+import { INVITE_TEMPLATES, RETURNING_TEMPLATE, eventsList, upcomingEvents, fmtEventDatesLong, type StoredTemplate } from '@/lib/inviteTemplates'
 import { sendBlockedReason } from '@/lib/inviteSend'
 
 interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string; _count?: { teamRegistrations?: number; registeredTeams?: number } }
@@ -137,6 +137,10 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
       // real letter won't quote.
       teamsRegistered: String(thisTournament?._count?.registeredTeams ?? 0),
       clubsRegistered: String(thisTournament?._count?.teamRegistrations ?? 0),
+      datesLong: thisTournament?.startDate ? fmtEventDatesLong(thisTournament.startDate, thisTournament.endDate) : 'TBD',
+      // The org record the browser gets has no phone on it; the real send reads
+      // Organization.contactPhone, so this is a preview placeholder, not a blank.
+      orgPhone: '[Org phone number]',
       tournamentName: thisTournament?.name ?? '[Tournament]',
       dates: dateStr,
       // Same link the send builds, so the preview isn't a different URL to the real one.
@@ -292,7 +296,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
               {/* Variables reference */}
               <div className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-500">
                 <span className="font-semibold text-slate-600">Available variables: </span>
-                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{registerUrl}}','{{lastYearTeams}}','{{lastYearDivisions}}','{{lastEvent}}','{{orgName}}','{{ourEvents}}'].map(v => (
+                {['{{contactName}}','{{clubName}}','{{tournamentName}}','{{dates}}','{{datesLong}}','{{registerUrl}}','{{teamsRegistered}}','{{clubsRegistered}}','{{lastYearTeams}}','{{lastYearDivisions}}','{{lastEvent}}','{{orgName}}','{{orgPhone}}','{{ourEvents}}'].map(v => (
                   <code key={v} className="bg-white border border-slate-200 rounded px-1.5 py-0.5 mx-0.5 text-teal-700">{v}</code>
                 ))}
               </div>

@@ -110,27 +110,26 @@ Bo Lamon
   {
     key: 'lastCallLetter',
     label: 'Last call (letter)',
-    hint: 'The persuasive version — our numbers so far, how the fall has gone, and a clear deadline.',
-    subject: `Closing soon — {{tournamentName}}, {{dates}}`,
+    hint: "Bo's longer deadline letter — earlier events filled early, brackets lock soon, register this week.",
+    subject: `{{tournamentName}} update: Registration closing early ({{datesLong}})`,
     body: `Hi {{contactName}},
 
-I wanted to reach out personally before we close registration for {{tournamentName}}, which runs {{dates}}.
+A quick heads-up regarding the {{tournamentName}} on {{datesLong}}:
 
-It has been a strong fall for us, and this one is going the same way — {{teamsRegistered}} teams from {{clubsRegistered}} clubs are already in, and a few divisions are tighter than others.
+Earlier this fall, our tournaments filled up well ahead of the deadline, forcing us to shut down registration early and move late entries to a waiting list. We're seeing that exact same demand right now, and several divisions are already down to their final few spots.
 
-I did not want {{clubName}} to find out the hard way that a division had closed. If you have been planning to bring teams, this is the week to get them in:
+Since {{clubName}} has played with us in the past, I wanted to reach out personally before brackets lock. If you are planning to bring teams out, please make sure to get them registered this week so you don't get caught on the waitlist.
 
-{{registerUrl}}
+Register here: {{registerUrl}}
 
-If it helps, here is what you get: a published schedule well before the weekend, certified officials and scorekeepers on every field, live scores your families can follow from the sideline, and a staff that answers the phone on game day.
+As always, you can count on the same smooth experience: schedules published well in advance, certified officials and dedicated scorekeepers on every field, live sideline scoring, and responsive directors on-site all weekend.
 
-And if you are still counting heads, just reply and tell me roughly how many teams and which divisions — I will hold what I can while you sort it out. I would much rather do that than have you miss it.
-
-Hope we get to see you there.
+Hope to see {{clubName}} competing out there.
 
 Best regards,
 Bo Lamon
-{{orgName}}`,
+{{orgName}}
+{{orgPhone}}`,
   },
   {
     key: 'shortNote',
@@ -157,6 +156,20 @@ export function fmtEventDates(startDate: string, endDate?: string): string {
   const one = (d: string) => { if (!d) return ''; const [y, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}/${y}` }
   if (!startDate) return 'TBD'
   return endDate && endDate !== startDate ? `${one(startDate)} – ${one(endDate)}` : one(startDate)
+}
+
+/** Nov 7, or Nov 7-8, or Nov 29 - Dec 1. The way someone writes a date in a
+ *  sentence, for letters where 11/7/2026 - 11/8/2026 reads like a receipt. */
+export function fmtEventDatesLong(startDate: string, endDate?: string): string {
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const part = (d: string) => { const [, m, day] = d.split('-'); return { m: MON[parseInt(m) - 1] || '', d: parseInt(day) } }
+  if (!startDate) return 'TBD'
+  const a = part(startDate)
+  if (!a.m) return fmtEventDates(startDate, endDate)
+  if (!endDate || endDate === startDate) return `${a.m} ${a.d}`
+  const b = part(endDate)
+  if (!b.m) return `${a.m} ${a.d}`
+  return a.m === b.m ? `${a.m} ${a.d}\u2013${b.d}` : `${a.m} ${a.d} \u2013 ${b.m} ${b.d}`
 }
 
 export type EventLike = { name: string; startDate: string; endDate?: string }

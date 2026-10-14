@@ -3,7 +3,7 @@ import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament, orgLogoUrl } from '@/lib/org'
 import { renderEmail, absUrl, imageSize, fitBox } from '@/lib/emailLayout'
 import { orgBaseUrl } from '@/lib/orgDomains'
-import { RETURNING_TEMPLATE, eventsList, upcomingEvents } from '@/lib/inviteTemplates'
+import { RETURNING_TEMPLATE, eventsList, upcomingEvents, fmtEventDatesLong } from '@/lib/inviteTemplates'
 import { listInviteTemplates } from '@/lib/inviteTemplateStore'
 
 // "Come back and play" invites to clubs from past events, lifted out of the route
@@ -62,6 +62,8 @@ export async function runReturningInvite(a: {
       ? `${fmtDate(tournament.startDate)} – ${fmtDate(tournament.endDate)}`
       : fmtDate(tournament.startDate)
     : 'TBD'
+
+  const dateStrLong = fmtEventDatesLong(tournament.startDate, tournament.endDate || undefined)
 
   // Cold outreach to club directors -- it has to come from the tournament
   // company, not noreply@whistleready.app. Falls back to the platform sender
@@ -139,6 +141,8 @@ export async function runReturningInvite(a: {
       clubName: club.clubName,
       teamsRegistered: String(teamsRegistered),
       clubsRegistered: String(clubsRegistered),
+      datesLong: dateStrLong,
+      orgPhone: org?.contactPhone || '',
       contactName: club.contactName || club.clubName,
       tournamentName: tournament.name,
       dates: dateStr,
