@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff, requireDirector } from '@/lib/apiAuth'
+import { requireStaff, requireDirector, viewerRole } from '@/lib/apiAuth'
+import { canSeeMoney, canSeeStaffPay } from '@/lib/roleScope'
+import { parseStaffPay, serializeStaffPay } from '@/lib/staffPay'
 import { assignEventSlug, slugOf, slugBase } from '@/lib/eventSlug'
 import { parseDivisionRules, applyRuleChange } from '@/lib/refRules'
 export async function GET(_: Request, { params }: { params:{id:string} }) {
@@ -64,8 +66,16 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
       }
     } catch { /* neither set of columns exists yet — keep defaults */ }
   }
+  // Staff pay rates are for directors and assigners. Everyone else (schedulers, and
+  // this route is public) gets the roles with rate 0; the officials-per-game rules
+  // in the same column stay, since the schedule needs them.
+  let payRates = t.payRates
+  if (!canSeeStaffPay(await viewerRole())) {
+    const cfg = parseStaffPay(t.payRates)
+    payRates = serializeStaffPay({ roles: cfg.roles.map(r => ({ ...r, rate: 0 })), officialsConfig: cfg.officialsConfig })
+  }
   return NextResponse.json({
-    ...t, tiebreakers, tagline, regConfirmationOverride,
+    ...t, payRates, tiebreakers, tagline, regConfirmationOverride,
     teamRegEnabled: !!teamRegEnabled,
     individualRegEnabled: !!individualRegEnabled,
     individualRegDescription, individualRegTiers, individualRegPositions, individualRegSizes,
@@ -83,6 +93,13 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   // Was previously callable with no auth at all.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const b = await req.json()
+  // Schedulers use Setup too, but fees, registration types, the confirmation letter
+  // and staff pay belong to directors (assigners keep staff pay). Drop those fields
+  // rather than refuse the save, so the rest of a scheduler's changes still land.
+  if (!canSeeMoney(gate.role)) {
+    for (const k of ['registrationPricing', 'regConfirmationOverride', 'teamRegEnabled', 'individualRegEnabled', 'individualRegDescription', 'individualRegTiers', 'individualRegPositions', 'individualRegSizes']) delete b[k]
+    if (!canSeeStaffPay(gate.role)) { delete b.payRates; delete b.divisionRules }
+  }
   // Fields that live in the Prisma schema.
   const data: any = {
     ...(b.name!==undefined&&{name:b.name}),

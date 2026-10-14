@@ -22,6 +22,8 @@ import GalleryPicker from '@/components/GalleryPicker'
 import { parsePricing, serializePricing, baseFee, DEFAULT_REG_PRICING, type RegPricing } from '@/lib/regPricing'
 import { resolveRegConfirmation, DEFAULT_REG_CONFIRMATION, type RegConfirmation } from '@/lib/regConfirmation'
 import { regBadge, TONE_CLASS, DIVISION_STATES, divisionState } from '@/lib/regStatus'
+import { useRole } from '@/lib/role-context'
+import { canSeeMoney } from '@/lib/roleScope'
 import { Trophy, Award, MapPin, DollarSign, Banknote, Clock, X, Calendar, ChevronUp, ChevronDown, Check, Circle, ArrowRight, ClipboardList, LayoutGrid, Info, Megaphone, GripVertical } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -145,6 +147,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [activeSection, setActiveSection] = useState('general')
+  // Schedulers open Setup too, for divisions, fields, game timing and tiebreakers.
+  // The MONEY sections (team fees, registration types, staff pay) are for directors
+  // only (Bo, Oct 14 2026), and the API refuses those fields from anyone else.
+  const { effectiveRole } = useRole()
+  const money = canSeeMoney(effectiveRole)
+  const SECS = money ? SECTIONS : SECTIONS.filter(s => s.group !== 'MONEY')
+  useEffect(() => { if (!money && SECTIONS.find(s => s.id === activeSection)?.group === 'MONEY') setActiveSection('general') }, [money, activeSection])
   // Allow deep-linking to a section, e.g. the dashboard's registration badge links to
   // ?section=regtypes. Read from location rather than useSearchParams to avoid needing
   // a Suspense boundary. Ignores unknown values so a bad link just opens General info.
@@ -323,13 +332,17 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({
           name, sport, startDate, endDate, location, logoUrl,
           scheduleIncrement: parseInt(scheduleIncrement) || 50,
-          payRates: serializeStaffPay({ roles: staffRoles, officialsConfig }),
-          divisionRules: JSON.stringify(officialsRulesToDivisionRules(officialsConfig)),
-          registrationPricing: serializePricing(pricing),
-          ...registrationTypesPayload(regTypes),
           registrationDivisions: JSON.stringify(applyDivOrder(fromDivItems(divItems, customDivisions), divOrder)),
           tiebreakers: { pool: poolTb.filter(Boolean), division: divTb.filter(Boolean), advanceBy },
-          regConfirmationOverride: JSON.stringify(regConf),
+          // Money and staff pay only from someone who can see them: a scheduler's copy
+          // of the pay rates comes back blanked (api/tournaments/[id]) and must not be saved.
+          ...(money ? {
+            payRates: serializeStaffPay({ roles: staffRoles, officialsConfig }),
+            divisionRules: JSON.stringify(officialsRulesToDivisionRules(officialsConfig)),
+            registrationPricing: serializePricing(pricing),
+            ...registrationTypesPayload(regTypes),
+            regConfirmationOverride: JSON.stringify(regConf),
+          } : {}),
         }),
       }),
       fetch(`/api/venues/${params.id}`, {
@@ -1079,7 +1092,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           <select value={activeSection} onChange={e => setActiveSection(e.target.value)}
             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400">
             {SECTION_GROUPS.map(group => {
-              const items = SECTIONS.filter(s => s.group === group)
+              const items = SECS.filter(s => s.group === group)
               if (items.length === 0) return null
               return (
                 <optgroup key={group} label={group}>
@@ -1098,7 +1111,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             </div>
             <nav className="p-2">
               {SECTION_GROUPS.map(group => {
-                const items = SECTIONS.filter(s => s.group === group)
+                const items = SECS.filter(s => s.group === group)
                 if (items.length === 0) return null   // group not populated yet
                 return (
                   <div key={group} className="mb-1.5 last:mb-0">
@@ -1144,7 +1157,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
               <div className="flex justify-between"><span>Divisions</span><span className="font-semibold text-slate-700">{divItems.filter(i => i.checked).length + customDivisions.length}</span></div>
               <div className="flex justify-between"><span>Venues</span><span className="font-semibold text-slate-700">{venues.length}</span></div>
               <div className="flex justify-between"><span>Total fields</span><span className="font-semibold text-slate-700">{venues.reduce((s, v) => s + v.fields.length, 0)}</span></div>
-              <div className="flex justify-between"><span>Sections done</span><span className="font-semibold text-slate-700">{SECTIONS.filter(s => isComplete(s.id)).length}/{SECTIONS.length}</span></div>
+              <div className="flex justify-between"><span>Sections done</span><span className="font-semibold text-slate-700">{SECS.filter(s => isComplete(s.id)).length}/{SECS.length}</span></div>
             </div>
           </div>
         </div>
@@ -1155,17 +1168,17 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 min-w-0">
-                  {(() => { const Icon = SECTIONS.find(s => s.id === activeSection)?.icon; return Icon ? <Icon size={18} className="text-slate-400 flex-shrink-0" /> : null })()}
-                  <span className="truncate">{SECTIONS.find(s => s.id === activeSection)?.label}</span>
+                  {(() => { const Icon = SECS.find(s => s.id === activeSection)?.icon; return Icon ? <Icon size={18} className="text-slate-400 flex-shrink-0" /> : null })()}
+                  <span className="truncate">{SECS.find(s => s.id === activeSection)?.label}</span>
                 </h2>
               </div>
               <div className="flex gap-2 flex-shrink-0">
-                {SECTIONS.findIndex(s => s.id === activeSection) > 0 && (
-                  <button onClick={() => setActiveSection(SECTIONS[SECTIONS.findIndex(s => s.id === activeSection) - 1].id)}
+                {SECS.findIndex(s => s.id === activeSection) > 0 && (
+                  <button onClick={() => setActiveSection(SECS[SECS.findIndex(s => s.id === activeSection) - 1].id)}
                     className="btn-secondary btn-sm">← <span className="hidden sm:inline">Prev</span></button>
                 )}
-                {SECTIONS.findIndex(s => s.id === activeSection) < SECTIONS.length - 1 && (
-                  <button onClick={() => setActiveSection(SECTIONS[SECTIONS.findIndex(s => s.id === activeSection) + 1].id)}
+                {SECS.findIndex(s => s.id === activeSection) < SECS.length - 1 && (
+                  <button onClick={() => setActiveSection(SECS[SECS.findIndex(s => s.id === activeSection) + 1].id)}
                     className="btn-primary btn-sm"><span className="hidden sm:inline">Next</span> →</button>
                 )}
               </div>
