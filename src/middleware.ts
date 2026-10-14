@@ -86,7 +86,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
       pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/coach') || pathname.startsWith('/vendor') || pathname.startsWith('/media') || pathname.startsWith('/claim') || pathname.startsWith('/share') ||
-      pathname === '/privacy' || pathname === '/terms'
+      pathname === '/privacy' || pathname === '/terms' || pathname === '/sms'
     if (!passthrough) {
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
