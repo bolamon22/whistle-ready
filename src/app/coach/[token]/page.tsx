@@ -8,6 +8,7 @@ import { loadCoachPass, waiverVersionOf } from '@/lib/coachPass'
 import { PrintCardButton } from '@/app/pass/[token]/PassActions'
 import { cardPrintCss, CARD_PRINT_NOTE } from '@/lib/cardPrint'
 import { walletEnabled } from '@/lib/wallet'
+import CoachTeamAlerts from '@/components/CoachTeamAlerts'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +67,15 @@ export default async function CoachCredentialPage({ params }: { params: { token:
           You do not need to bring this. Your waiver is on file and that is what matters —
           the card just saves you a conversation at the coaches&rsquo; tent.
         </div>
+
+        {/* The one thing on this page that matters DURING the event. A coach picked
+            their teams off the registered list when they signed, so pass.teams is
+            already the (division, name) pairs the follow table keys on. */}
+        {pass.tournamentId && pass.teams.length > 0 && (
+          <div className="max-w-[360px] mx-auto mt-4 print:hidden">
+            <CoachTeamAlerts tournamentId={pass.tournamentId} teams={pass.teams.map(t => ({ team: t.team, division: t.division }))} />
+          </div>
+        )}
 
         <div className="max-w-[360px] mx-auto mt-6 border-t border-white/10 pt-5 text-sm text-slate-300 space-y-1.5">
           {card.eventNames && <div><span className="text-slate-500">Event</span> · {card.eventNames}</div>}

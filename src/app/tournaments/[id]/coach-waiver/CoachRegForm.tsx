@@ -6,6 +6,7 @@ import { Camera, CheckCircle2, Shield } from 'lucide-react'
 import { uploadPlayerPhoto } from '@/lib/photoClient'
 import CredentialPreview from '@/app/o/[slug]/gallery/shoot/CredentialPreview'
 import HowToVideoLink from '@/components/HowToVideoLink'
+import CoachTeamAlerts from '@/components/CoachTeamAlerts'
 import type { ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
 import {
   COACH_ROLES, COACH_LEVELS, COACH_CERTS, CERT_SHORT,
@@ -199,6 +200,15 @@ export default function CoachRegForm({
         <CheckCircle2 size={44} className="mx-auto text-emerald-500" />
         <h1 className="mt-4 text-2xl font-bold text-slate-900">{cfg.confirmationTitle}</h1>
         <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">{cfg.confirmationMessage}</p>
+        {/* The moment a coach is most willing to tap "allow": they just finished
+            the form and their teams are on screen. Offering it later, on the
+            credential page, catches the ones who close this tab. */}
+        {!!tournamentId && picks.length > 0 && (
+          <div className="mt-7 max-w-md mx-auto">
+            <CoachTeamAlerts tournamentId={tournamentId} tone="light"
+              teams={picks.map(t => ({ team: t.team, division: t.division }))} />
+          </div>
+        )}
       </div>
     )
   }
@@ -230,7 +240,7 @@ export default function CoachRegForm({
               <div>
                 <label className={lab}>Mobile Phone <span className="text-rose-500">*</span></label>
                 <input type="tel" className={inp} value={d.mobilePhone} onChange={set('mobilePhone')} autoComplete="tel" />
-                {!!d.mobilePhone && digits(d.mobilePhone).length < 10 && <p className="text-xs text-rose-600 mt-1.5">Ten digits, please — game-day changes go out by text.</p>}
+                {!!d.mobilePhone && digits(d.mobilePhone).length < 10 && <p className="text-xs text-rose-600 mt-1.5">Ten digits, please — the tournament director calls this number on game day.</p>}
               </div>
 
               <div className="sm:col-span-2">
