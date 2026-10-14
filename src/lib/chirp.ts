@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/db'
+import { sendEmail } from '@/lib/email'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 import { roleCanAccess } from '@/lib/routeAccess'
 import { canSeeMoney, payStatus } from '@/lib/roleScope'
@@ -231,15 +232,51 @@ export function lastQuestion(messages: unknown): string {
   return m ? m.content.slice(0, 300) : ''
 }
 
+export const CHIRP_DOWN = "Sorry, Chirp can't answer right now. Please try again in a few minutes."
+
+/** Why the AI call failed, in words Bo can act on. */
+function outageReason(e: any): string {
+  const msg = String(e?.message || e || '')
+  if (/credit balance is too low|billing/i.test(msg)) return 'The Anthropic account is out of credits. Add credits at console.anthropic.com → Plans & Billing (turn on auto-reload so it can\'t run out mid-event).'
+  if (e?.status === 401 || /api.key|authentication/i.test(msg)) return 'The ANTHROPIC_API_KEY in Vercel was rejected. Check the key in console.anthropic.com and the Vercel environment variables.'
+  if (e?.status === 429 || /rate.limit/i.test(msg)) return 'Anthropic rate limit reached. It should clear on its own; if it keeps happening, raise the limit in console.anthropic.com.'
+  if (e?.status === 529 || /overloaded/i.test(msg)) return 'Anthropic was briefly overloaded. This usually clears in minutes.'
+  return 'Unexpected error: ' + msg.slice(0, 300)
+}
+
+/** Tell the organizer once every 6 hours while Chirp is failing, so an empty
+ *  credit balance on game day is found in the inbox, not by a parent. */
+async function alertOutage(e: any) {
+  try {
+    const key = 'chirpOutageAlertAt'
+    const row = await prisma.appSetting.findUnique({ where: { key } }).catch(() => null)
+    if (row && Date.now() - Number(row.value || 0) < 6 * 3600 * 1000) return
+    await prisma.appSetting.upsert({ where: { key }, update: { value: String(Date.now()) }, create: { key, value: String(Date.now()) } })
+    const reason = outageReason(e)
+    const to = process.env.CHIRP_ALERT_EMAIL || 'info@sunshinelax.com'
+    await sendEmail({ to, subject: '[Action needed] Chirp is not answering', fromName: 'Chirp · Whistle Ready',
+      text: `Chirp could not answer a question just now, so staff and visitors see "${CHIRP_DOWN}"\n\n${reason}\n\nYou'll get this at most once every 6 hours while it keeps failing.`,
+      html: `<p>Chirp could not answer a question just now, so staff and visitors see <em>"${CHIRP_DOWN}"</em></p><p><strong>${reason}</strong></p><p style="color:#64748b">You'll get this at most once every 6 hours while it keeps failing.</p>` })
+  } catch (err) { console.error('chirp outage alert failed:', err) }
+}
+
 export async function chirpReply(system: string, messages: unknown): Promise<string> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const response = await client.messages.create({
-    model: CHIRP_MODEL,
-    max_tokens: 1024,
-    system,
-    messages: cleanMessages(messages),
-  })
-  return response.content[0]?.type === 'text' ? response.content[0].text : ''
+  try {
+    const response = await client.messages.create({
+      model: CHIRP_MODEL,
+      max_tokens: 1024,
+      system,
+      messages: cleanMessages(messages),
+    })
+    return response.content[0]?.type === 'text' ? response.content[0].text : ''
+  } catch (e) {
+    // The raw API error (JSON, request ids, billing text) was shown in the chat
+    // bubble. People get a plain sentence; the organizer gets the reason.
+    console.error('Chirp AI error:', e)
+    await alertOutage(e)
+    throw new Error(CHIRP_DOWN)
+  }
 }
 
 export type StaffLogEntry = { q: string; at: number; role: string; name?: string; page?: string; covered: boolean }
