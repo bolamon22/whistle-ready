@@ -276,6 +276,20 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   coaches; Parents), Job chips under Staff (including No staff record), a Last on filter (visits recorded from
   Oct 12) and sort; search matches jobs and club names. NavBar no longer hides on /admin (only /o/), so admin
   pages keep the app header with SuperAdminBar (the Admin tabs) under it.
+- **Refs who signed up as Parents; Logins → Staff Pool (Oct 14).** Every Register / Create account / Create one
+  link went to /register, which can only make a Parent login, so refs "signing up to officiate" got Parent logins
+  with no Staff Pool record, and changing the role to Staff on Logins still left them off every staff list (Steve
+  Newell). One rule now: `lib/staffLogin.ts giveStaffAccess(email, orgId, role = 'staff')` raises a role in
+  `STAFF_PROMOTABLE` ('', viewer, parent, coach, club_director) to `role`, leaves office roles and the old
+  scorekeeper alone, and fills an empty `User.orgId` from the record. Callers: `/api/admin/users/staff-pool`
+  (Logins' **Add to the Staff Pool** dialog, `components/StaffPoolDialog`: GET login + every Worker + orgs;
+  POST `link` sets a Worker's email to the login's, `create` makes a Worker for one job), `/api/join` (an email
+  with a login joins with that login's password; a wrong one is a 409 with `existingAccount` and creates
+  nothing) and both invite paths. Changing a role to Staff on Logins opens the dialog. `GET /api/admin/users`
+  adds `staffMatch` (exactly one same-name Worker under an email no login uses); its PATCH no longer returns
+  the password hash. `/register` is a server page (each organizer's Work with us link) around `RegisterForm`,
+  which asks who the account is for; self-signup still never makes a staff login. The signed-out NavBar button
+  says Create account, and `/login?portal=1` opens the club portal-link form.
 - **Sponsors & partners (Oct 14).** Rows in AppSetting `orgSite:{orgId}.sponsors` carry `eventIds` (dated picks)
   and `series` (event labels from `seriesLabelOf`, "Every year"); both empty = every event. Public pages filter with
   `sponsorsForEvent(list, tournamentId, tournamentName)` in `lib/sponsors.ts`: pass the NAME or every-year picks don't
