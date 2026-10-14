@@ -122,8 +122,9 @@ export default function SmsProgramPage() {
 
       <Section title="Who we are">
         <p>
-          Sunshine Events Group LLC, a Florida limited liability company, running youth and high-school lacrosse
-          tournaments in Florida since 2019. We operate Whistle Ready, the software that runs our events.
+          We have run youth and high-school lacrosse tournaments in Florida since 2007, organized since 2019 as
+          Sunshine Events Group LLC, a Florida limited liability company. We operate Whistle Ready, the software
+          that runs our events.
         </p>
         <p>
           <a href="https://sunshineeventsgroup.com" className="text-teal-700 hover:underline">sunshineeventsgroup.com</a>
