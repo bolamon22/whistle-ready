@@ -27,14 +27,18 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
   if (gate.role === 'field_director' && !fieldDirectorSees(await prisma.worker.findUnique({ where: { id: String(workerId || '') } }))) {
     return NextResponse.json({ error: 'Field directors add scorekeepers, athletic trainers and field ops.' }, { status: 403 })
   }
+  const existed = await prisma.rosterEntry.findUnique({ where:{ workerId_tournamentId:{ workerId, tournamentId:params.id } }, select:{ id:true } })
   const entry = await prisma.rosterEntry.upsert({
     where:{ workerId_tournamentId:{ workerId, tournamentId:params.id } },
     create:{ workerId, tournamentId:params.id, gameTarget:gameTarget??0, notes },
-    update:{ gameTarget:gameTarget??0, notes },
+    // Only what was sent changes. Adding someone who is already on (the Staff Pool's
+    // Add to event, Oct 14 2026) used to reset their game target to 0.
+    update:{ ...(gameTarget!==undefined ? { gameTarget:gameTarget??0 } : {}), ...(notes!==undefined ? { notes } : {}) },
     include:{ worker:true },
   })
   // The same redaction as the list: this answer used to carry the person's pay and payout details.
-  return NextResponse.json({ ...entry, worker: redactWorker(entry.worker, gate.role, await payScopeFor(gate.role, gate.userId)) })
+  // `added` is false when they were on it already.
+  return NextResponse.json({ ...entry, added: !existed, worker: redactWorker(entry.worker, gate.role, await payScopeFor(gate.role, gate.userId)) })
 }
 
 export async function DELETE(req: Request, { params }: { params:{id:string} }) {

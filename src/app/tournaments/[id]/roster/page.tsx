@@ -9,10 +9,12 @@ import IfCanOpen from '@/components/IfCanOpen'
 import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
 import { useRole } from '@/lib/role-context'
 import { canSeeStaffPay } from '@/lib/roleScope'
+import PersonEvents, { eventDates } from '@/components/staff/PersonEvents'
+import PersonTraining from '@/components/staff/PersonTraining'
 
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
 interface RosterEntry { id:string;workerId:string;gameTarget:number;notes:string|null }
-interface Tournament { id:string;name:string;logoUrl:string }
+interface Tournament { id:string;name:string;logoUrl:string;startDate?:string;endDate?:string }
 interface InviteForm { email: string; name: string }
 
 const GENDERS = [{ value:'both',label:'Boys & Girls' },{ value:'boys',label:'Boys only' },{ value:'girls',label:'Girls only' }]
@@ -256,6 +258,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               <p className="text-slate-200 text-sm whitespace-pre-wrap">{w.notes}</p>
             </div>
           )}
+          {/* Every event they're working, and their training videos with Send (Oct 14 2026). */}
+          <PersonEvents workerId={w.id} name={w.name} currentEventId={params.id} onChange={load}/>
+          <PersonTraining workerId={w.id} name={w.name} eventName={tournament?.name} eventDates={tournament?.startDate?eventDates({startDate:tournament.startDate,endDate:tournament.endDate}):undefined}/>
         </div>
       </div>
     </div>

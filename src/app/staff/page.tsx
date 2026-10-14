@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { certLabel, CERT_LEVELS, WORKER_ROLES, PAY_METHODS, isHourlyRole } from '@/lib/utils'
 import { mergeLetter, letterCopyHtml } from '@/lib/inviteLetterText'
+import PersonEvents from '@/components/staff/PersonEvents'
+import PersonTraining from '@/components/staff/PersonTraining'
 
 interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;referredBy?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
@@ -294,6 +296,25 @@ export default function StaffPage() {
   const [expandMode,setExpandMode]=useState<ExpandMode>('profile')
   const [editForm,setEditForm]=useState<Record<string,unknown>>(EMPTY_FORM)
 
+  // Training videos watched per person (the Video library's report), for the Training
+  // column, like the Staff roster has (Bo, Oct 14 2026).
+  const [training,setTraining]=useState<Record<string,{watched:number;total:number}>>({})
+  const loadTraining=()=>fetch('/api/training?report=1').then(r=>r.ok?r.json():null).then(d=>{
+    if(!Array.isArray(d?.people))return
+    const t:Record<string,{watched:number;total:number}>={}
+    for(const p of d.people as {id:string;assigned:string[];watched:Record<string,unknown>}[])t[p.id]={watched:p.assigned.filter(v=>p.watched?.[v]).length,total:p.assigned.length}
+    setTraining(t)
+  }).catch(()=>{})
+  // Events that haven't ended, for adding the people ticked to one (Oct 14 2026: "I had to
+  // go to multiple spots to add someone"). One person at a time is in their profile.
+  const [openEvents,setOpenEvents]=useState<{id:string;name:string;startDate:string;endDate:string}[]>([])
+  const loadOpenEvents=()=>fetch('/api/tournaments').then(r=>r.ok?r.json():[]).then((ts:{id:string;name:string;startDate?:string;endDate?:string}[])=>{
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'})
+    setOpenEvents((Array.isArray(ts)?ts:[]).map(t=>({id:t.id,name:t.name,startDate:String(t.startDate||'').slice(0,10),endDate:String(t.endDate||'').slice(0,10)}))
+      .filter(t=>(t.endDate||t.startDate||'9999')>=today).sort((a,b)=>a.startDate.localeCompare(b.startDate)))
+  }).catch(()=>{})
+  const [eventsRev,setEventsRev]=useState(0)   // re-reads an open profile's events after a bulk add
+
   const load=async()=>{
     const m=document.cookie.match(/(?:^|; )preview-org=([^;]*)/)
     const previewOrgId=m?decodeURIComponent(m[1]):null
@@ -303,10 +324,11 @@ export default function StaffPage() {
     setLoading(false)
   }
   useEffect(()=>{
-    load();loadDupes();loadEmpty()
+    load();loadDupes();loadEmpty();loadTraining();loadOpenEvents()
     window.addEventListener('preview-org-changed',load)
     window.addEventListener('preview-org-changed',loadDupes)
-    return ()=>{window.removeEventListener('preview-org-changed',load);window.removeEventListener('preview-org-changed',loadDupes)}
+    window.addEventListener('preview-org-changed',loadOpenEvents)
+    return ()=>{window.removeEventListener('preview-org-changed',load);window.removeEventListener('preview-org-changed',loadDupes);window.removeEventListener('preview-org-changed',loadOpenEvents)}
   },[])
 
   function parseRoles(w:Worker):string[]{try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.length?r:[w.defaultRole]}catch{return[w.defaultRole]}}
@@ -508,6 +530,26 @@ export default function StaffPage() {
   function toggleSelect(id:string){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}
   function toggleAll(){setSelected(s=>s.size===filtered.length&&filtered.length>0?new Set():new Set(filtered.map(w=>w.id)))}
 
+  async function addSelectedTo(tid:string){
+    const t=openEvents.find(e=>e.id===tid);const ids=Array.from(selected)
+    if(!t||!ids.length)return
+    if(!confirm(`Add ${ids.length} ${ids.length===1?'person':'people'} to the ${t.name} staff roster?`))return
+    setBulkSaving(true)
+    let added=0,already=0;const failed:string[]=[]
+    for(let i=0;i<ids.length;i+=6){
+      await Promise.all(ids.slice(i,i+6).map(async id=>{
+        const r=await fetch(`/api/tournaments/${t.id}/roster`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerId:id})}).catch(()=>null)
+        const j=r?await r.json().catch(()=>({})):{}
+        if(!r?.ok){failed.push(workers.find(w=>w.id===id)?.name||id);return}
+        if(j.added===false)already++;else added++
+      }))
+    }
+    setBulkSaving(false);setEventsRev(v=>v+1);setSelected(new Set())
+    if(added)toast.success(`Added ${added} to ${t.name}${already?` (${already} already on it)`:''}`)
+    else if(already)toast(`${already===1?'They were':`All ${already} were`} already on ${t.name}`)
+    if(failed.length)toast.error(`Couldn’t add: ${failed.join(', ')}`)
+  }
+
   async function applyBulk(){
     if(!bulkField||!selected.size)return;setBulkSaving(true)
     const updates=Array.from(selected).map(id=>{
@@ -617,6 +659,9 @@ export default function StaffPage() {
               <p className="text-slate-200 text-sm whitespace-pre-wrap">{w.notes}</p>
             </div>
           )}
+          {/* The events they're working (and Add to an event), and their training videos (Oct 14 2026). */}
+          <PersonEvents key={`ev-${w.id}-${eventsRev}`} workerId={w.id} name={w.name}/>
+          <PersonTraining workerId={w.id} name={w.name}/>
         </div>
       </div>
     </div>
@@ -757,6 +802,13 @@ export default function StaffPage() {
             <div className="flex items-center gap-3 mb-3 p-3 bg-sky-50 border border-sky-200 rounded-lg flex-wrap">
               <span className="text-sm font-medium text-sky-700">{selected.size} selected</span>
               <button onClick={()=>sendAppInvites(Array.from(selected),true)} className="btn-primary btn-sm" disabled={inviting}>{inviting?'Sending…':'Send app invites'}</button>
+              {openEvents.length>0&&(
+                <select className="select !w-auto text-sm" value="" disabled={bulkSaving} aria-label="Add the people ticked to an event's staff roster"
+                  onChange={e=>{if(e.target.value)addSelectedTo(e.target.value)}}>
+                  <option value="">{bulkSaving?'Adding…':'Add to event…'}</option>
+                  {openEvents.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              )}
               {selected.size===2&&(
                 <button onClick={()=>setManualMerge(workers.filter(w=>selected.has(w.id)).slice(0,2))}
                   className="btn-sm border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg px-3">
@@ -906,6 +958,7 @@ export default function StaffPage() {
                         </>}
                         <span className="badge bg-slate-100 text-slate-700">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</span>
                         <span className="badge bg-white border border-slate-200 text-slate-500">{wRoles.some(r=>isHourlyRole(r))?(w.hourlyRate?`$${w.hourlyRate}/hr`:'no rate'):(w.payRateOverride?`$${w.payRateOverride}/game`:'Default rate')}</span>
+                        {training[w.id]&&<span className={`badge bg-white border border-slate-200 ${training[w.id].watched>=training[w.id].total?'text-emerald-700':'text-slate-500'}`}>Training {training[w.id].watched}/{training[w.id].total}</span>}
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                         {w.phone&&<a href={`tel:${w.phone}`} className="text-teal-700">{w.phone}</a>}
@@ -943,6 +996,7 @@ export default function StaffPage() {
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Rate</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Contact</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('appStatus')}>App {sortArrow('appStatus')}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide" title="Training videos watched, of the ones for their job">Training</th>
                   <th className="px-4 py-3"/>
                 </tr>
               </thead>
@@ -978,6 +1032,11 @@ export default function StaffPage() {
                           </div>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        {training[w.id]
+                          ?<span className={`text-sm font-semibold tabular-nums ${training[w.id].watched>=training[w.id].total?'text-emerald-700':training[w.id].watched?'text-slate-700':'text-amber-600'}`}>{training[w.id].watched}/{training[w.id].total}</span>
+                          :<span className="text-slate-300">—</span>}
+                      </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={()=>expand(w,'profile')} className={`text-xs mr-2 font-medium transition-colors ${isExpanded&&expandMode==='profile'?'text-slate-800 underline':'text-slate-400 hover:text-slate-700'}`}>Profile</button>
                         <button onClick={()=>expand(w,'edit')} className={`text-xs mr-3 font-medium transition-colors ${isExpanded&&expandMode==='edit'?'text-sky-800 underline':'text-sky-600 hover:text-sky-800'}`}>Edit</button>
@@ -988,14 +1047,14 @@ export default function StaffPage() {
                     {/* Profile panel */}
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
-                        <td colSpan={11} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
+                        <td colSpan={12} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
                       </tr>
                     )}
 
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={11} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">{renderEdit(w)}</td>
+                        <td colSpan={12} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">{renderEdit(w)}</td>
                       </tr>
                     )}
                   </>

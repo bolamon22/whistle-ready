@@ -13,7 +13,10 @@ import { seesPay, workerPayGroups } from '@/lib/payGroups'
 // GET                  -> { roles, watched: [videoId], plays: {videoId: n} } for the signed-in staff member
 // GET ?report=1        -> { people: [...] } every Staff Pool person with plays per video (Video library)
 // GET ?tournamentId=   -> { counts: { workerId: { watched, total } } } for that event's
-//                         roster (directors and admins), shown on the Staff roster
+//                         roster (directors, admins, field directors, and an assigner for
+//                         their own staff groups), shown on the Staff roster
+// GET ?workerId=       -> { roles, assigned, watched, lastSent, hasEmail } for one person's
+//                         profile on the Staff Pool and the Staff roster (same people)
 // POST { videoId }     -> mark it watched (the player calls this near the end)
 //
 // Keyed by the Worker matched on the session email (the same lookup as the staff
@@ -44,6 +47,34 @@ async function me(email: string, userId: string, loginRole = '') {
   return { key: w ? String(w.id) : `user:${userId}`, roles }
 }
 
+type Watched = Record<string, { plays: number; first: string; last: string }>
+/** What each of these Staff Pool people has watched, per video: plays, first and last
+ *  time. Views saved while a login had no Staff Pool record with the same email are kept
+ *  under user:<id>; they're folded into the person whose email matches that login now,
+ *  so nobody's watching goes missing (Bo, Oct 13 2026). The report, the roster's Training
+ *  column and a person's profile all count from here, so they can't disagree. */
+async function watchedBy(ws: Row[]): Promise<Map<string, Watched>> {
+  const ids = ws.map((w: Row) => String(w.id))
+  const seen: Row[] = []
+  for (let i = 0; i < ids.length; i += 400) {
+    const part = ids.slice(i, i + 400)
+    seen.push(...await prisma.$queryRawUnsafe<Row[]>(`SELECT workerKey, videoId, watchedAt, plays, lastWatchedAt FROM "StaffTraining" WHERE workerKey IN (${part.map(() => '?').join(', ')})`, ...part))
+  }
+  const byEmail = new Map(ws.filter((w: Row) => w.email).map((w: Row) => [String(w.email).trim().toLowerCase(), String(w.id)]))
+  if (byEmail.size) {
+    const orphan = await prisma.$queryRawUnsafe<Row[]>(`SELECT s.workerKey, s.videoId, s.watchedAt, s.plays, s.lastWatchedAt, lower(u.email) AS email FROM "StaffTraining" s JOIN "User" u ON s.workerKey = 'user:' || u.id`).catch(() => [] as Row[])
+    for (const r of orphan) { const wid = byEmail.get(String(r.email || '')); if (wid) seen.push({ ...r, workerKey: wid }) }
+  }
+  const by = new Map<string, Watched>()
+  for (const r of seen) {
+    const k = String(r.workerKey); const m = by.get(k) || {}
+    const v = { plays: Number(r.plays ?? 1) || 1, first: String(r.watchedAt || ''), last: String(r.lastWatchedAt || r.watchedAt || '') }
+    const o = m[String(r.videoId)]
+    m[String(r.videoId)] = o ? { plays: o.plays + v.plays, first: o.first < v.first ? o.first : v.first, last: o.last > v.last ? o.last : v.last } : v
+    by.set(k, m)
+  }
+  return by
+}
 
 export async function GET(req: NextRequest) {
   const gate = await requireStaff()
@@ -68,25 +99,7 @@ export async function GET(req: NextRequest) {
         ws = ws.filter((w: Row) => fieldDirectorSees(w) && (!on || on.has(String(w.id))))
       }
       const ids = ws.map((w: Row) => String(w.id))
-      const seen: Row[] = []
-      for (let i = 0; i < ids.length; i += 400) {
-        const part = ids.slice(i, i + 400)
-        seen.push(...await prisma.$queryRawUnsafe<Row[]>(`SELECT workerKey, videoId, watchedAt, plays, lastWatchedAt FROM "StaffTraining" WHERE workerKey IN (${part.map(() => '?').join(', ')})`, ...part))
-      }
-      // Views saved while a login had no Staff Pool record with the same email are kept
-      // under user:<id>. Fold them into the person whose email matches that login now,
-      // so nobody's watching goes missing from the report (Bo, Oct 13 2026).
-      const byEmail = new Map(ws.filter((w: Row) => w.email).map((w: Row) => [String(w.email).trim().toLowerCase(), String(w.id)]))
-      const orphan = await prisma.$queryRawUnsafe<Row[]>(`SELECT s.workerKey, s.videoId, s.watchedAt, s.plays, s.lastWatchedAt, lower(u.email) AS email FROM "StaffTraining" s JOIN "User" u ON s.workerKey = 'user:' || u.id`).catch(() => [] as Row[])
-      for (const r of orphan) { const wid = byEmail.get(String(r.email || '')); if (wid) seen.push({ ...r, workerKey: wid }) }
-      const by = new Map<string, Record<string, { plays: number; first: string; last: string }>>()
-      for (const r of seen) {
-        const k = String(r.workerKey); const m = by.get(k) || {}
-        const v = { plays: Number(r.plays ?? 1) || 1, first: String(r.watchedAt || ''), last: String(r.lastWatchedAt || r.watchedAt || '') }
-        const o = m[String(r.videoId)]
-        m[String(r.videoId)] = o ? { plays: o.plays + v.plays, first: o.first < v.first ? o.first : v.first, last: o.last > v.last ? o.last : v.last } : v
-        by.set(k, m)
-      }
+      const by = await watchedBy(ws)
       // Which events each person is on the staff roster for, so the library can pick
       // "everyone working Monster Mash" (Bo, Oct 13 2026). Current and upcoming events
       // only (ended more than two weeks ago drops off).
@@ -108,24 +121,51 @@ export async function GET(req: NextRequest) {
       const people = ws.map((w: Row) => { const roles = workerRoles(w); return { id: String(w.id), name: String(w.name || ''), email: String(w.email || ''), roles, gender: String(w.gender || 'both'), assigned: videosFor(roles), watched: by.get(String(w.id)) || {}, events: (onEvent.get(String(w.id)) || []).filter(t => live.has(t)) } })
       return NextResponse.json({ people, events })
     }
+    // One person, for their profile on the Staff Pool and the Staff roster: what they
+    // should watch, what they've watched, and when they were last sent videos (Bo, Oct 14
+    // 2026: "send them the staff videos from their user and ... let me know if they
+    // watched them"). The same people the report shows this viewer.
+    const wid = req.nextUrl.searchParams.get('workerId')
+    if (wid) {
+      const director = gate.role === 'admin' || gate.role === 'director'
+      const fd = gate.role === 'field_director'
+      if (!director && gate.role !== 'assigner' && !fd) return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
+      const notFound = NextResponse.json({ error: 'Not found' }, { status: 404 })
+      const w = (await prisma.$queryRawUnsafe<Row[]>(`SELECT * FROM "Worker" WHERE id = ?`, wid))[0]
+      if (!w || (gate.role !== 'admin' && gate.orgId && String(w.orgId || '') !== gate.orgId)) return notFound
+      if (gate.role === 'assigner' && !seesPay(await payScopeFor(gate.role, gate.userId), workerPayGroups(w as any))) return notFound
+      if (fd && (!fieldDirectorSees(w) || (gate.events && !(await rosterWorkerIds(gate.events)).has(wid)))) return notFound
+      const roles = workerRoles(w)
+      const email = String(w.email || '').trim().toLowerCase()
+      // The newest send that reached them (`to` holds who it actually went to). Others
+      // than directors see only their own sends, as in the library's Sent tab.
+      let lastSent: { at: string; by: string } | null = null
+      if (email) {
+        try {
+          const log = JSON.parse((await prisma.appSetting.findUnique({ where: { key: 'trainingSends' } }))?.value || '[]')
+          const hit = (Array.isArray(log) ? log : []).find((e: any) => (director || (e?.byUserId && e.byUserId === gate.userId))
+            && Array.isArray(e?.to) && e.to.some((t: any) => String(t?.email || '').trim().toLowerCase() === email))
+          if (hit) lastSent = { at: String(hit.at || ''), by: String(hit.by || '') }
+        } catch { /* no log yet */ }
+      }
+      return NextResponse.json({ roles, assigned: videosFor(roles), watched: (await watchedBy([w])).get(wid) || {}, lastSent, hasEmail: !!email })
+    }
     const tid = req.nextUrl.searchParams.get('tournamentId')
     if (tid) {
-      if (gate.role !== 'admin' && gate.role !== 'director' && gate.role !== 'field_director') return NextResponse.json({ error: 'Directors only' }, { status: 403 })
+      const fd = gate.role === 'field_director'
+      if (gate.role !== 'admin' && gate.role !== 'director' && !fd && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
       const refused = eventGate(gate, tid); if (refused) return refused
       if (gate.role !== 'admin' && gate.orgId && (await tournamentOrgId(tid)) !== gate.orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
-      const all = await prisma.$queryRawUnsafe<Row[]>(`SELECT w.id, w.roles, w.defaultRole, w.isAssigner FROM "RosterEntry" r JOIN "Worker" w ON w.id = r.workerId WHERE r.tournamentId = ?`, tid)
-      const roster = gate.role === 'field_director' ? all.filter((w: Row) => fieldDirectorSees(w)) : all
-      const ids = roster.map((r: Row) => String(r.id))
-      const seen = ids.length
-        ? await prisma.$queryRawUnsafe<Row[]>(`SELECT workerKey, videoId FROM "StaffTraining" WHERE workerKey IN (${ids.map(() => '?').join(', ')})`, ...ids)
-        : []
-      const byWorker = new Map<string, Set<string>>()
-      for (const s of seen) { const k = String(s.workerKey); if (!byWorker.has(k)) byWorker.set(k, new Set()); byWorker.get(k)!.add(String(s.videoId)) }
+      const all = await prisma.$queryRawUnsafe<Row[]>(`SELECT w.id, w.email, w.roles, w.defaultRole, w.isAssigner, w.gender FROM "RosterEntry" r JOIN "Worker" w ON w.id = r.workerId WHERE r.tournamentId = ?`, tid)
+      // An assigner sees the staff groups they run (lib/payGroups), as in the report.
+      const scope = gate.role === 'assigner' ? await payScopeFor(gate.role, gate.userId) : null
+      const roster = fd ? all.filter((w: Row) => fieldDirectorSees(w)) : scope ? all.filter((w: Row) => seesPay(scope, workerPayGroups(w as any))) : all
+      const by = await watchedBy(roster)
       const counts: Record<string, { watched: number; total: number }> = {}
       for (const w of roster) {
         const want = videosFor(workerRoles(w))
-        const got = byWorker.get(String(w.id)) || new Set()
-        counts[String(w.id)] = { watched: want.filter(v => got.has(v)).length, total: want.length }
+        const got = by.get(String(w.id)) || {}
+        counts[String(w.id)] = { watched: want.filter(v => got[v]).length, total: want.length }
       }
       return NextResponse.json({ counts })
     }
