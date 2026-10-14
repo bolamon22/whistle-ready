@@ -249,6 +249,20 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
+  "availability": {
+    "title": "Set your availability",
+    "intro": "Set your availability, in Whistle Ready.",
+    "lines": [
+      "Signed up to work an event? Let the assigner know which days you can work.",
+      "On your home page, under the event, tap Set my availability.",
+      "You are available all day unless you say otherwise. Each day of the event has three choices.",
+      "Can't work a day at all? Tap Can't work. It saves right away.",
+      "Only out for part of a day? Tap Part of day, then tap the game times you can't work.",
+      "Tapped one by mistake? Tap it again to clear it.",
+      "Tap Done when you are finished. The assigner sees your days when building the schedule, so set them as early as you can."
+    ],
+    "outro": "Whistle Ready. Game day, run from your phone."
+  },
   "asg-home": {
     "title": "Your assigner home",
     "intro": "Whistle Ready assigner training. Your assigner home.",

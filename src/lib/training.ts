@@ -11,6 +11,7 @@ export type TrainingGroup = { key: string; label: string; roles: string[] | null
 export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'sign-up', num: '01', title: 'Sign up and get the app on your phone', blurb: 'The signup form, your photo, and adding Whistle Ready to your home screen.', secs: 59 },
   { id: 'home', num: '02', title: 'Your staff home page', blurb: 'Sign up to work an event, your W-9, Up next and your games.', secs: 50 },
+  { id: 'availability', num: '02b', title: 'Set your availability', blurb: 'Tell the assigner which days and game times you can work.', secs: 43 },
   { id: 'staff-id', num: '03', title: 'Your staff ID', blurb: 'Apple Wallet, printing it, and wearing it all day.', secs: 38 },
   { id: 'keep-score', num: '04', title: 'Keep score live', blurb: 'Start the clock, add goals, fix a mistake, halftime and Save.', secs: 54 },
   { id: 'penalties', num: '05', title: 'Penalty time', blurb: 'Start a penalty, match the ref, and release the player.', secs: 48 },
@@ -45,7 +46,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
 
 // roles: null = everyone. Worker roles: ref, scorekeeper, field_ops, athletic_trainer.
 export const TRAINING_GROUPS: TrainingGroup[] = [
-  { key: 'start', label: 'Start here', roles: null, ids: ['sign-up', 'home', 'staff-id', 'field-request', 'directory'] },
+  { key: 'start', label: 'Start here', roles: null, ids: ['sign-up', 'home', 'availability', 'staff-id', 'field-request', 'directory'] },
   { key: 'scorekeepers', label: 'Scorekeepers', roles: ['scorekeeper'], ids: ['game-day-prep', 'keep-score', 'penalties', 'scorer-settings', 'post-final'] },
   { key: 'refs', label: 'Refs', roles: ['ref'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'incidents'] },
   { key: 'fieldops', label: 'Field ops', roles: ['field_ops'], ids: ['checklist', 'incidents'] },
