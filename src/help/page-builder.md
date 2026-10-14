@@ -19,6 +19,8 @@ The event page is the public landing page for the tournament: overview, fees, di
 
 **Built-in blocks:** **Overview** (a summary), **Tournament fees** (pulled from Team fees), **Divisions** (pulled from Divisions), **Location** (pulled from Venues & fields), **Hotels** (a **Booking link (housing company)** shows as a **Book hotels** button), **Rules** (custom, or linked to a set in your **Rules library**), **Contacts** (**Add contact**) and **Sponsors & partners**. Empty sections never show.
 
+**Sponsors aren't added here.** The **Sponsors & partners** block only shows them. To add or change a sponsor, or choose which events it shows at, go to **Organization** → **Website** → **Sponsors & partners** (see "Edit your organization's public website").
+
 **To add a block:** click **Add block** and choose **Custom text**, **Call-to-action button**, **Image / banner**, **Collapsible sections**, **Countdown**, **Schedule (live)** or **Standings (live)**. A custom block can sit on the event page or on **Its own page** linked from the Event info menu.
 
 **To draft FAQs:** click **Generate FAQs from event details**. It builds a question-and-answer block from your dates, location, format, divisions, fees and registration. Edit or remove any after.
