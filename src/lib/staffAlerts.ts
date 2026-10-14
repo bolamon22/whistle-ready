@@ -42,6 +42,13 @@ async function writeAll(list: StaffSub[]) {
 export const cleanGroups = (g: unknown): AlertGroup[] =>
   Array.isArray(g) ? (g.filter(x => (ALERT_GROUPS as readonly string[]).includes(String(x))) as AlertGroup[]) : []
 
+/** Every registered device, read-only. For the coverage view that answers
+ *  "who on this roster will actually get a buzz on game day" — the question you
+ *  cannot chase down without being able to see it. */
+export async function allSubs(): Promise<StaffSub[]> {
+  return readAll()
+}
+
 export async function findSub(endpoint: string): Promise<StaffSub | null> {
   return (await readAll()).find(s => s.endpoint === endpoint) || null
 }

@@ -10,6 +10,7 @@ import { FIELD_REQUEST_TEMPLATES, FIELD_REQUEST_URGENCIES } from '@/lib/fieldReq
 import { Radio, Send, Trash2, ChevronLeft, Users, TrafficCone, HeartPulse, Flag, ClipboardList, ListChecks, Check } from 'lucide-react'
 import StaffAlerts from '@/components/StaffAlerts'
 import TrainingLink from '@/components/TrainingLink'
+import AlertsCoverage from '@/components/AlertsCoverage'
 
 const GROUPS: { key: string; label: string; Icon: any }[] = [
   { key: 'all', label: 'All staff', Icon: Users },
@@ -83,6 +84,11 @@ export default function OpsBoardPage({ embedded = false }: { embedded?: boolean 
       </>}
 
       <div className="mb-4"><StaffAlerts tournamentId={String(id)} compact /></div>
+
+      {/* Read-only: who on the roster will actually get a buzz. Nothing here
+          changes how alerts are sent — it just makes the gap visible early
+          enough to do something about it. */}
+      <div className="mb-4"><AlertsCoverage tournamentId={String(id)} /></div>
 
       {/* composer */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6">
