@@ -126,7 +126,6 @@ export default function SmsProgramPage() {
           tournaments in Florida since 2019. We operate Whistle Ready, the software that runs our events.
         </p>
         <p>
-          11830 Wiles Rd, Coral Springs, FL 33076<br />
           <a href="https://sunshineeventsgroup.com" className="text-teal-700 hover:underline">sunshineeventsgroup.com</a>
         </p>
       </Section>

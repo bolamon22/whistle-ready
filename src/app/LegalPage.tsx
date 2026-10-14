@@ -49,7 +49,8 @@ export function Bullets({ items }: { items: React.ReactNode[] }) {
 export function Contact() {
   return (
     <p>
-      Sunshine Events Group<br />
+      Sunshine Events Group LLC<br />
+      11830 Wiles Rd, Coral Springs, FL 33076<br />
       Email: <a href={`mailto:${LEGAL_EMAIL}`} className="text-teal-700 hover:underline">{LEGAL_EMAIL}</a><br />
       Phone: {LEGAL_PHONE}
     </p>
