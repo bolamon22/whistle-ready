@@ -46,6 +46,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'dir-create', num: 'D01', series: 'director', title: 'Create a tournament', blurb: 'Name, dates, park and fields, game slots, team fee, logo, divisions, and copying last year’s event.', secs: 86 },
   { id: 'dir-setup', num: 'D02', series: 'director', title: 'Tournament setup: the basics', blurb: 'The setup page, divisions and their Full badges, venues, field hours, and game timing.', secs: 74 },
   { id: 'dir-money', num: 'D03', series: 'director', title: 'Tournament setup: fees, pay and standings', blurb: 'Team fees and division rates, the confirmation letter, registration types, staff pay, officials per game, and tiebreakers.', secs: 73 },
+  { id: 'dir-divisions', num: 'D04', series: 'director', title: 'Divisions, pools and brackets', blurb: 'Pools, auto-assigning teams, generating games, the bracket, Bulk Generate, and showing pools publicly.', secs: 69 },
   { id: 'asg-send', num: 'A13', series: 'assigner', title: 'Send training videos to your refs', blurb: 'Pick the event and your refs, the message, the preview, and Who’s watched.', secs: 58 },
 ]
 

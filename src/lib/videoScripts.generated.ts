@@ -492,6 +492,21 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
+  "dir-divisions": {
+    "title": "Divisions, pools\nand brackets",
+    "intro": "Whistle Ready tournament director training. Divisions, pools, and brackets.",
+    "lines": [
+      "Setup, then Divisions and teams, lists every division with its teams and pools. Click one to open it.",
+      "Teams and Pools shows every registered team, its club, and whether the club has paid.",
+      "Add your pools. Type a name, and press Enter.",
+      "Click Assign Pools, then Auto-assign teams to spread them evenly. Drag a team to move it to another pool.",
+      "On the Games tab, set the games per team, and click Generate games. They wait in the Scheduler, ready to place on fields and times.",
+      "On the Bracket tab, pick the format and how many teams advance. The summary shows how many games each team is guaranteed. Then click Generate Bracket.",
+      "Running a lot of divisions? Bulk Generate builds the pools, games, and brackets for all of them at once, from your Smart defaults.",
+      "When the pools are final, turn on Teams and pools to show them on your public page. The schedule gets published from the Scheduler."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
   "waiver": {
     "title": "Your player's waiver\nand parent account",
     "intro": "Sunshine Events Group. Completing your player's waiver, and setting up your parent account.",
