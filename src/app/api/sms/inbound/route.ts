@@ -108,7 +108,9 @@ export async function POST(req: NextRequest) {
   if (HELP_WORDS.has(word)) {
     await sendSms({
       to: from,
-      body: 'Sunshine Events Group staff alerts. Details: https://sunshineeventsgroup.com/sms — or call (954) 608-5886. Reply STOP to opt out.',
+      // Kept inside GSM-7 and under 160 chars so HELP is ONE segment: an em
+      // dash alone forces the whole reply to UCS-2, which bills three.
+      body: 'Sunshine Events Group game-day alerts for staff and coaches. Details: https://sunshineeventsgroup.com/sms or call (954) 608-5886. Reply STOP to opt out.',
     })
     return noReply()
   }
