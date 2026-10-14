@@ -458,6 +458,40 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
+  "dir-setup": {
+    "title": "Tournament setup:\nthe basics",
+    "intro": "Whistle Ready tournament director training. Tournament setup, the basics.",
+    "lines": [
+      "Each tournament has one setup page. Open Setup, then Tournament setup.",
+      "The sections are grouped: the basics, money, how games are played, and the public page. A check mark means that section is done.",
+      "General info has the name, sport, location, dates, and the tournament logo.",
+      "Divisions shows how many teams have registered in each one.",
+      "Getting full? Mark a division Almost full, or Full. It is a badge on your public page. It never stops a club from registering.",
+      "Below that, check the divisions you are running, add your own, and drag them into the order teams will see.",
+      "Venues and fields. Set the hours you can play each day. One field only open part of the day? Use its Availability button.",
+      "The park address shows on your public page with a map. Using more than one park? Add another venue.",
+      "Game Timing and Format sets the schedule increment, game length, and break. The period format and halftime show on the scorekeeper app.",
+      "Click Next to move through the sections, and Save Changes when you are done."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
+  "dir-money": {
+    "title": "Tournament setup:\nfees, pay and standings",
+    "intro": "Whistle Ready tournament director training. Tournament setup, fees, pay, and standings.",
+    "lines": [
+      "In Tournament setup, open Team fees. This is the price clubs see on your registration form.",
+      "Set the per-team rate by how many teams a club brings. Here, a club with three or more teams pays less for each one.",
+      "Need a different price for some divisions, like the youngest ages? Add a division rate for divisions with that name in them.",
+      "You can also offer an early-bird discount until a date.",
+      "Under that is the confirmation letter clubs get after they register. Leave it blank to use your standard letter, or write your own and preview it.",
+      "Registration types turns on team registration, individual player registration, or both.",
+      "Staff pay rates sets what you pay each role, per game or per hour. It feeds staff pay and the assigners’ pay report.",
+      "Officials per game sets how many refs each game needs, with exceptions for divisions that use more or fewer.",
+      "Standings tiebreakers decides how tied teams are ranked, and how teams advance to the bracket.",
+      "Click Save Changes when you are done."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
   "waiver": {
     "title": "Your player's waiver\nand parent account",
     "intro": "Sunshine Events Group. Completing your player's waiver, and setting up your parent account.",

@@ -44,6 +44,8 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   // Tournament director training (Oct 13 2026: "how to set up a tournament, for future
   // tournament directors"). Computer videos; in the Video library, not in a staff group.
   { id: 'dir-create', num: 'D01', series: 'director', title: 'Create a tournament', blurb: 'Name, dates, park and fields, game slots, team fee, logo, divisions, and copying last year’s event.', secs: 86 },
+  { id: 'dir-setup', num: 'D02', series: 'director', title: 'Tournament setup: the basics', blurb: 'The setup page, divisions and their Full badges, venues, field hours, and game timing.', secs: 74 },
+  { id: 'dir-money', num: 'D03', series: 'director', title: 'Tournament setup: fees, pay and standings', blurb: 'Team fees and division rates, the confirmation letter, registration types, staff pay, officials per game, and tiebreakers.', secs: 73 },
   { id: 'asg-send', num: 'A13', series: 'assigner', title: 'Send training videos to your refs', blurb: 'Pick the event and your refs, the message, the preview, and Who’s watched.', secs: 58 },
 ]
 
