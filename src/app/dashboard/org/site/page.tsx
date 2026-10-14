@@ -5,13 +5,14 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save, Star, Search, Library, GripVertical } from 'lucide-react'
+import { ChevronLeft, ChevronUp, ChevronDown, Plus, Trash2, ExternalLink, ImagePlus, Save, Star, Search, Library } from 'lucide-react'
 import MarkdownField from '@/components/MarkdownField'
 import GalleryPicker from '@/components/GalleryPicker'
 import AiGenerateButton from '@/components/AiGenerateButton'
 import { seriesOf, ONE_OFF } from '@/lib/eventSeries'
+import SponsorsEditor from '@/components/site/SponsorsEditor'
 
-type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string; eventIds?: string[] }
+type Sponsor = { name: string; logoUrl: string; url: string; role?: string; tier?: string; blurb?: string; eventIds?: string[]; series?: string[] }
 type PitchStat = { value: string; label: string }
 type Pitch = { show: boolean; headline: string; sub: string; benefits: string[]; stats: PitchStat[]; ctaLabel: string; wallCtaLabel: string; wallCtaLine: string }
 type Page = { title: string; slug: string; body: string; group: string; heroImage?: string; placement?: 'nav' | 'footer' }
@@ -109,33 +110,6 @@ function eventDates(start: unknown, end: unknown): string {
 }
 /** Just the city, so a long venue address doesn't push the row's buttons off screen. */
 const eventCity = (loc: unknown) => String(loc ?? '').split(/[,\/]/)[0].trim()
-
-/** "Oct 2026" on a sponsor's event chip, or just "Oct" when the name already says the year. */
-function chipWhen(t: any): string {
-  const m = /^(\d{4})-(\d{2})/.exec(String(t?.startDate ?? '').trim())
-  const mon = m ? EV_MON[Number(m[2]) - 1] : ''
-  if (!m || !mon) return ''
-  return String(t?.name ?? '').includes(m[1]) ? mon : `${mon} ${m[1]}`
-}
-
-/**
- * The sponsor "Shows at" picker: events coming up, events from the past year, and the rest.
- *
- * It listed every tournament the org has ever run on every sponsor card: 53 for Sunshine on
- * Oct 14 2026, 38 of them more than two years old, so six sponsors meant 318 chips to scroll
- * past. Sponsors get picked for the events being promoted, so the picker shows what's coming
- * up plus the past year (results pages still get visited) and keeps the rest behind "Show
- * older events". An older event that's already picked always shows, so nothing hidden is
- * quietly switched on.
- */
-function sponsorEventRows(ts: any[], today: string) {
-  const yearAgo = new Date(Date.parse(today + 'T00:00:00Z') - 365 * 864e5).toISOString().slice(0, 10)
-  const endOf = (t: any) => String(t?.endDate || t?.startDate || '').slice(0, 10)
-  const startOf = (t: any) => String(t?.startDate || '').slice(0, 10)
-  const upcoming = ts.filter(t => endOf(t) >= today).sort((a, b) => startOf(a).localeCompare(startOf(b)))
-  const past = ts.filter(t => endOf(t) < today).sort((a, b) => endOf(b).localeCompare(endOf(a)))
-  return { upcoming, recent: past.filter(t => endOf(t) >= yearAgo), older: past.filter(t => endOf(t) < yearAgo) }
-}
 
 /** One tournament in the event-pages panel. Module level, not nested in the render:
  *  declared inside it, React reads a new component type on every keystroke in the search
@@ -244,25 +218,6 @@ function OrgSiteEditorInner() {
     } catch { toast.error('Save failed') } finally { setSaving(false) }
   }
 
-  // Sponsor order is display order, so it needs to be changeable. Drag for a mouse,
-  // arrows for everything else -- HTML5 drag events do not fire on iOS at all, and
-  // this admin gets used from an iPad.
-  const [dragSpon, setDragSpon] = useState<number | null>(null)
-  const [overSpon, setOverSpon] = useState<number | null>(null)
-  // Only armed while the grip is held: a permanently draggable row swallows
-  // click-and-drag text selection inside the inputs it contains.
-  const [gripArmed, setGripArmed] = useState(false)
-  // Which sponsor cards have their older events opened, by position in the list.
-  const [sponOld, setSponOld] = useState<Record<number, boolean>>({})
-  const spToday = new Date().toISOString().slice(0, 10)
-  const moveSponsor = (from: number, to: number) => setC(v => {
-    if (to < 0 || to >= v.sponsors.length || from === to) return v
-    const a = [...v.sponsors]
-    const [m] = a.splice(from, 1)
-    a.splice(to, 0, m)
-    return { ...v, sponsors: a }
-  })
-
   const movePage = (i: number, dir: -1 | 1) => setC(v => { const a = [...v.pages]; const j = i + dir; if (j < 0 || j >= a.length) return v; [a[i], a[j]] = [a[j], a[i]]; return { ...v, pages: a } })
 
   if (loading) return <div className="text-slate-400 text-center py-16">Loading…</div>
@@ -324,7 +279,6 @@ function OrgSiteEditorInner() {
     return true
   })
 
-  const sponLogo = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: u } : s) })); else toast.error('Upload failed') }
   const pageHeroImg = async (i: number, f?: File | null) => { if (!f) return; const u = await uploadImage(f); if (u) setC(v => ({ ...v, pages: v.pages.map((x, j) => j === i ? { ...x, heroImage: u } : x) })); else toast.error('Upload failed') }
 
   return (
@@ -503,152 +457,24 @@ function OrgSiteEditorInner() {
 
       {/* Sponsors */}
       <Sec isOpen={!!openSec.sponsors} onToggle={() => setOpenSec(o => ({ ...o, sponsors: !o.sponsors }))} title="Sponsors & partners" summary={`${c.sponsors.length}`}>
-        <div className="flex justify-end mb-2">
-          <button onClick={() => setC(v => ({ ...v, sponsors: [...v.sponsors, { name: '', logoUrl: '', url: '', role: '', tier: 'official', blurb: '', eventIds: [] }] }))} className="text-sm text-teal-700 hover:text-teal-900 inline-flex items-center gap-1"><Plus size={14} /> Add</button>
-        </div>
-        {c.sponsors.length === 0 && <p className="text-sm text-slate-400">No sponsors yet.</p>}
-        {c.sponsors.length > 0 && (
-          <p className="text-xs text-slate-400 mb-2">
-            A partner with <strong className="font-semibold text-slate-500">Every event</strong> selected appears on all of
-            your event pages. Pick specific events for a host city or a county grant partner so they only
-            appear where they belong.
-          </p>
-        )}
-        {c.sponsors.length > 1 && (
-          <p className="text-xs text-slate-400 mb-2">
-            Drag the handle to reorder, or use the arrows. This is the order they appear in &mdash;
-            presenting sponsors always show above the grid regardless of where they sit in this list.
-          </p>
-        )}
-        <div className="space-y-3">
-          {c.sponsors.map((s, i) => (
-            <div key={i}
-              draggable={gripArmed}
-              onDragStart={e => { setDragSpon(i); e.dataTransfer.effectAllowed = 'move' }}
-              onDragOver={e => { if (dragSpon !== null) { e.preventDefault(); setOverSpon(i) } }}
-              onDrop={() => { if (dragSpon !== null) moveSponsor(dragSpon, i); setDragSpon(null); setOverSpon(null); setGripArmed(false) }}
-              onDragEnd={() => { setDragSpon(null); setOverSpon(null); setGripArmed(false) }}
-              className={`border rounded-xl p-3 bg-white transition-colors ${dragSpon === i ? 'opacity-40' : ''} ${overSpon === i && dragSpon !== null && dragSpon !== i ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200'}`}>
-              <div className="flex items-start gap-3">
-                {/* Grip arms the drag; the arrows are the whole story on a touch screen. */}
-                <div className="flex flex-col items-center pt-0.5 shrink-0">
-                  <span
-                    onPointerDown={() => setGripArmed(true)}
-                    onPointerUp={() => setGripArmed(false)}
-                    className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"
-                    title="Drag to reorder">
-                    <GripVertical size={16} />
-                  </span>
-                  <button type="button" onClick={() => moveSponsor(i, i - 1)} disabled={i === 0}
-                    className="text-slate-300 hover:text-slate-600 disabled:opacity-30" title="Move up"><ChevronUp size={14} /></button>
-                  <button type="button" onClick={() => moveSponsor(i, i + 1)} disabled={i === c.sponsors.length - 1}
-                    className="text-slate-300 hover:text-slate-600 disabled:opacity-30" title="Move down"><ChevronDown size={14} /></button>
-                </div>
-                {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-12 w-12 object-contain rounded-lg border border-slate-100 flex-shrink-0" /> : <div className="h-12 w-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 flex-shrink-0"><ImagePlus size={16} /></div>}
-                <div className="flex-1 grid sm:grid-cols-2 gap-2">
-                  <input className="input" value={s.name} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))} placeholder="Sponsor name" />
-                  <input className="input" value={s.url} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, url: e.target.value } : x) }))} placeholder="https://…" />
-                  {/* The role is what makes a logo legible. Several marks have their name
-                      baked into the image at a size nobody can read on a phone. */}
-                  <input className="input" value={s.role || ''} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, role: e.target.value } : x) }))} placeholder="Role — e.g. Official apparel, Host venue" />
-                  <select className="input" value={s.tier || 'official'} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, tier: e.target.value } : x) }))}>
-                    <option value="official">Official partner (in the grid)</option>
-                    <option value="presenting">Presenting sponsor (featured row)</option>
-                  </select>
-                </div>
-                <label className="text-xs border border-slate-300 rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer whitespace-nowrap">Logo<input type="file" accept="image/*" className="hidden" onChange={e => sponLogo(i, e.target.files?.[0])} /></label>
-                <GalleryPicker label="Library" triggerClassName="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1" onPick={(url) => setC(v => ({ ...v, sponsors: v.sponsors.map((s, j) => j === i ? { ...s, logoUrl: url } : s) }))} />
-                <button onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.filter((_, j) => j !== i) }))} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
-              </div>
-              {/* WHICH EVENTS. The list is org-wide, so before this every event page
-                  credited every partner -- Fall Classic in Martin County was
-                  thanking Palm Beach County's sports commission. Nothing selected
-                  means org-wide, which is what every row saved before this looks
-                  like, so existing partners keep showing everywhere until somebody
-                  says otherwise. */}
-              {tournaments.length > 0 && (() => {
-                const picked = new Set((s.eventIds || []).map(String))
-                const rows = sponsorEventRows(tournaments, spToday)
-                const showOld = !!sponOld[i]
-                const olderShown = showOld ? rows.older : rows.older.filter((t: any) => picked.has(String(t.id)))
-                const olderHidden = rows.older.length - olderShown.length
-                const toggle = (tid: string) => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => {
-                  if (j !== i) return x
-                  const cur = x.eventIds || []
-                  return { ...x, eventIds: cur.includes(tid) ? cur.filter(y => y !== tid) : [...cur, tid] }
-                }) }))
-                const chip = (t: any) => {
-                  const tid = String(t.id)
-                  const on = picked.has(tid)
-                  const when = chipWhen(t)
-                  return (
-                    <button key={tid} type="button" aria-pressed={on} onClick={() => toggle(tid)}
-                      className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
-                      {String(t.name || 'Event').trim()}
-                      {when && <>{' '}<span className={`font-normal ${on ? 'text-teal-50' : 'text-slate-400'}`}>{when}</span></>}
-                    </button>
-                  )
-                }
-                const rowLabel = 'text-[11px] text-slate-400 basis-full sm:basis-auto sm:w-20 shrink-0'
-                return (
-                  <div className="mt-2 space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-slate-400 mr-0.5">Shows at:</span>
-                      <button type="button" aria-pressed={!picked.size}
-                        onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, eventIds: [] } : x) }))}
-                        className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${!picked.size ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
-                        Every event
-                      </button>
-                      {!picked.size && <span className="text-[11px] text-slate-400">or pick events below</span>}
-                    </div>
-                    {rows.upcoming.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={rowLabel}>Coming up</span>
-                        {rows.upcoming.map((t: any) => chip(t))}
-                      </div>
-                    )}
-                    {rows.recent.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={rowLabel}>Past year</span>
-                        {rows.recent.map((t: any) => chip(t))}
-                      </div>
-                    )}
-                    {rows.older.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {olderShown.length > 0
-                          ? <span className={rowLabel}>Older</span>
-                          : <span className="hidden sm:block sm:w-20 shrink-0" aria-hidden="true" />}
-                        {olderShown.map((t: any) => chip(t))}
-                        {(showOld || olderHidden > 0) && (
-                          <button type="button" aria-expanded={showOld} onClick={() => setSponOld(o => ({ ...o, [i]: !showOld }))}
-                            className="text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2 px-1 py-1">
-                            {showOld ? 'Hide older events' : `Show ${olderHidden} older event${olderHidden === 1 ? '' : 's'}`}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
-              {/* Only the presenting row has space for a sentence, so only ask for one there. */}
-              {s.tier === 'presenting' && (
-                <input className="input mt-2 w-full" value={s.blurb || ''} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, blurb: e.target.value } : x) }))} placeholder="One line about what they do for the event (shown only on the featured row)" />
-              )}
-            </div>
-          ))}
-        </div>
+        <SponsorsEditor sponsors={c.sponsors} onChange={fn => setC(v => ({ ...v, sponsors: fn(v.sponsors) }))}
+          tournaments={tournaments} uploadImage={uploadImage} />
 
         {/* The button under the partner wall. Shown on the home page always, and on
             event pages when the fuller pitch below is switched off. */}
         <div className="mt-5 pt-4 border-t border-slate-200">
-          <p className="text-xs font-semibold text-slate-600 mb-2">The &ldquo;advertise with us&rdquo; button under the wall</p>
+          <p className="text-xs font-semibold text-slate-600 mb-2">The button under the logo wall</p>
           <div className="grid sm:grid-cols-[200px_1fr] gap-2">
-            <input className="input" value={c.sponsorPitch.wallCtaLabel}
-              onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, wallCtaLabel: e.target.value } }))}
-              placeholder="Advertise with us" />
-            <input className="input" value={c.sponsorPitch.wallCtaLine}
-              onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, wallCtaLine: e.target.value } }))}
-              placeholder="Put your brand in front of every family at our events." />
+            <label className="block text-xs font-semibold text-slate-600">Button
+              <input className="input mt-1" value={c.sponsorPitch.wallCtaLabel}
+                onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, wallCtaLabel: e.target.value } }))}
+                placeholder="Advertise with us" />
+            </label>
+            <label className="block text-xs font-semibold text-slate-600">Line above it
+              <input className="input mt-1" value={c.sponsorPitch.wallCtaLine}
+                onChange={e => setC(v => ({ ...v, sponsorPitch: { ...v.sponsorPitch, wallCtaLine: e.target.value } }))}
+                placeholder="Put your brand in front of every family at our events." />
+            </label>
           </div>
           <p className="text-xs text-slate-400 mt-1.5">Leave blank for those defaults. The line names the event automatically on event pages.</p>
         </div>

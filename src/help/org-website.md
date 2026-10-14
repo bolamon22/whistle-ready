@@ -3,7 +3,7 @@ title: Edit your organization's public website
 category: Organization
 order: 660
 routes: /dashboard/org/site
-keywords: website public site org site hero about sponsors partners info pages faq directions gallery photos instagram feed contact social logo event pages header event logos upcoming events cross promote
+keywords: website public site org site hero about sponsors partners sponsor every year logo wall info pages faq directions gallery photos instagram feed contact social logo event pages header event logos upcoming events cross promote
 ---
 The **Website** page edits your organization's public site: logo, hero, about section, sponsors, info pages, photo gallery and contact details. Each tournament's own event page is edited from here too.
 
@@ -16,7 +16,7 @@ The **Website** page edits your organization's public site: logo, hero, about se
 - **Logo**: **Upload** or pick **From library**.
 - **Hero**: **Headline**, **Subtext** and an optional **Background image (optional)**.
 - **About**: **Heading** and **Body**, plus figures for the By the Numbers page such as **Running events since**.
-- **Sponsors & partners**: click **Add**, then fill in the name, link and logo. Use the arrows or drag to reorder. Under **Shows at**, keep **Every event** or pick the events a sponsor belongs to: events **Coming up** and from the **Past year** are listed, and **Show older events** opens the rest. Tick **Ask for sponsors on event pages** to add a sponsor pitch.
+- **Sponsors & partners**: click **Add sponsor**, then fill in the name, link, role and logo. Each sponsor is one line: click **Edit** to change it and **Done** when you're finished. Presenting sponsors are listed apart from the partners in the grid; drag the handle or use the arrows to reorder within each group. Under **Shows at**, keep **Every event**, or choose **Only some events** and tick dates under each event. Events coming up and from the past year are listed, and **Show older events** opens the rest. **Every year** keeps the sponsor on that event's next tournament as soon as you create it. **See an event's logo wall** lists the logos an event's page will show, including changes you haven't saved. Tick **Ask for sponsors on event pages** to add a sponsor pitch.
 - **Info pages**: click **Add page** for pages like Directions or FAQ. Choose **In the menu** or **In the footer**.
 - **Photo gallery**: **Add photos**, then tag them to a tournament, caption and credit them. Use **Select all** with **Apply caption**, **Apply credit** or **Apply tournament** for many at once.
 - **Instagram feed**: shows your latest posts. Needs a Business or Creator account.

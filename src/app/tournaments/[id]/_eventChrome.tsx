@@ -46,7 +46,7 @@ export default async function EventChrome({ tournamentId, active, children }: { 
     (Array.isArray(cs.contacts) && cs.contacts.length) && { href: `${base}/event#contacts`, label: 'Contacts' },
     // Counted the same way the section is rendered, or an event with no partners
     // of its own still advertises a link to an empty section.
-    (sponsorsForEvent(sponsorList(sponsors), tournamentId).length > 0 || wantsSponsors) && { href: `${base}/event#sponsors`, label: 'Sponsors & partners' },
+    (sponsorsForEvent(sponsorList(sponsors), tournamentId, t.name).length > 0 || wantsSponsors) && { href: `${base}/event#sponsors`, label: 'Sponsors & partners' },
     // On the event page these two sit in the side rail. These pages have no
     // rail, and the old hero's buttons for them are gone -- so the menu carries
     // them or nothing does.

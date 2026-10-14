@@ -149,7 +149,7 @@ export default async function TournamentEventPage({ params }: { params: { id: st
   // slot all agree on the same list.
   // Only this event's partners. The list is org-wide, so without the filter a
   // Martin County tournament credits Palm Beach County's sports commission.
-  const spons = sponsorsForEvent(sponsorList(sponsors), params.id)
+  const spons = sponsorsForEvent(sponsorList(sponsors), params.id, t.name)
   const pitch = sponsorPitch(pitchRaw)
   const sponsorHref = `/tournaments/${params.id}/vendor-request#sponsor`
   // What the public may see of this event (lib/publicView). Read once: the counted

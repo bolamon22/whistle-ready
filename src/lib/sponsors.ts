@@ -11,6 +11,8 @@
 // worth more than a grid slot; `role` is the line that makes an unreadable logo
 // legible ("Wellington Parks & Recreation" is baked into its own image at 48px).
 
+import { seriesLabelOf } from './eventSeries'
+
 export type SponsorTierKey = 'presenting' | 'official'
 
 export type Sponsor = {
@@ -35,6 +37,17 @@ export type Sponsor = {
    * season, so the list has to be able to say which event a partner is for.
    */
   eventIds: string[]
+  /**
+   * Events this partner sponsors EVERY YEAR, as event labels from seriesLabelOf
+   * ("Monster Mash", "Fall Classic"). Matched by the tournament's name, so next
+   * year's copy shows them the day it's created.
+   *
+   * WHY: on Oct 14 2026 Palm Beach Sports Commission and Wellington Parks & Rec were
+   * ticked on Monster Mash and Summer Kick Off one dated tournament at a time, so each
+   * new season needed re-ticking, and a missed tick drops a logo a grant agreement
+   * pays for. Empty here AND in eventIds still means every event.
+   */
+  series: string[]
 }
 
 export type SponsorStat = { value: string; label: string }
@@ -86,6 +99,7 @@ export function sponsorRec(raw: any): Sponsor | null {
     tier: str(raw?.tier).toLowerCase() === 'presenting' ? 'presenting' : 'official',
     blurb: str(raw?.blurb),
     eventIds: (Array.isArray(raw?.eventIds) ? raw.eventIds : []).map(str).filter(Boolean),
+    series: (Array.isArray(raw?.series) ? raw.series : []).map(str).filter(Boolean),
   }
 }
 
@@ -96,18 +110,21 @@ export function sponsorList(raw: unknown): Sponsor[] {
 /**
  * The partners that belong on one event's page.
  *
- * A row with no events listed is org-wide and shows everywhere -- that is the
- * default, and it is what every row saved before scoping existed looks like.
+ * A row with no events and no yearly events listed is org-wide and shows
+ * everywhere -- that is the default, and it is what every row saved before
+ * scoping existed looks like. Pass the tournament's name so partners picked for
+ * every year of its event match; without it only the dated picks do.
  */
-export function sponsorsForEvent(list: Sponsor[], tournamentId: string): Sponsor[] {
+export function sponsorsForEvent(list: Sponsor[], tournamentId: string, tournamentName?: string): Sponsor[] {
   const id = str(tournamentId)
   if (!id) return list
-  return list.filter(s => s.eventIds.length === 0 || s.eventIds.includes(id))
+  const label = seriesLabelOf(str(tournamentName))
+  return list.filter(s => !isEventScoped(s) || s.eventIds.includes(id) || (!!label && (s.series || []).includes(label)))
 }
 
-/** True when a partner is pinned to specific events rather than shown org-wide. */
+/** True when a partner is pinned to some events, dated or every year, rather than shown org-wide. */
 export function isEventScoped(s: Sponsor): boolean {
-  return s.eventIds.length > 0
+  return s.eventIds.length > 0 || (s.series || []).length > 0
 }
 
 /**
