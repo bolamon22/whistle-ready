@@ -16,15 +16,27 @@
 // database -- that would drag the Prisma client into the client bundle and
 // break the build. The storage side lives in src/lib/smsConsentDb.ts.
 
+/** Who is ticking the box. Staff and coaches are ONE program -- operational
+ *  game-day messages to the people working the event -- but they are not told
+ *  the same thing, because they are not sent the same thing. A coach hears only
+ *  about a game moving and an event-wide alert; scores and schedule digests
+ *  reach them on free web push, never on a text. Saying "game-day updates" to a
+ *  coach would be consent for messages we do not send and do not want to be
+ *  approved for (Bo, Oct 14). */
+export type SmsAudience = 'staff' | 'coach'
+
 /** The exact words next to the checkbox. Carriers want all of this present:
  *  who is sending, what the messages are, that frequency varies, that rates may
- *  apply, and how to stop. Keep the page and any future profile toggle on this
- *  one string so the screenshot we submit stays true. */
-export function smsConsentText(orgName: string): string {
+ *  apply, and how to stop. Keep every page and any future profile toggle on this
+ *  one function so the screenshot we submit stays true. */
+export function smsConsentText(orgName: string, audience: SmsAudience = 'staff'): string {
   const who = (orgName || '').trim() || 'Whistle Ready'
-  return `Yes, text me staff and game-day updates at this number from ${who}. Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help.`
+  const what = audience === 'coach'
+    ? 'game schedule changes and event alerts'
+    : 'staff and game-day updates'
+  return `Yes, text me ${what} at this number from ${who}. Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help.`
 }
 
-export type SmsConsentSource = 'join' | 'profile' | 'staff'
+export type SmsConsentSource = 'join' | 'profile' | 'staff' | 'coach-waiver'
 
 export type SmsConsentRow = { consent: boolean; at: string; source: string }

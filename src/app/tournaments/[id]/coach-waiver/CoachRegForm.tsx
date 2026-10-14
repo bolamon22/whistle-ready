@@ -7,6 +7,7 @@ import { uploadPlayerPhoto } from '@/lib/photoClient'
 import CredentialPreview from '@/app/o/[slug]/gallery/shoot/CredentialPreview'
 import HowToVideoLink from '@/components/HowToVideoLink'
 import CoachTeamAlerts from '@/components/CoachTeamAlerts'
+import { smsConsentText } from '@/lib/smsConsent'
 import type { ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
 import {
   COACH_ROLES, COACH_LEVELS, COACH_CERTS, CERT_SHORT,
@@ -61,6 +62,7 @@ export default function CoachRegForm({
     accommodationStatus: '', highestLevelCoached: '', signature: '',
   })
   const [picks, setPicks] = useState<TeamPick[]>([])
+  const [smsOk, setSmsOk] = useState(false)
   const [certs, setCerts] = useState<string[]>([])
   const [agreed, setAgreed] = useState<Record<string, boolean>>({})
   const [photoUrl, setPhotoUrl] = useState('')
@@ -142,6 +144,12 @@ export default function CoachRegForm({
             teamName: picks.length ? `${picks[0].club} — ${picks[0].team}` : '',
             teams: picks,
             certifications: certs,
+            // Only a YES is recorded. An unticked box is not a "no" -- a coach
+            // who signs again for a second team must not silently revoke the
+            // permission they gave the first time.
+            ...(smsOk && digits(d.mobilePhone).length >= 10
+              ? { smsConsent: true, smsConsentAt: new Date().toISOString(), smsConsentSource: 'coach-waiver' }
+              : {}),
             agreements: sections.map(s => ({ key: s.key, title: s.title, agreed: !!agreed[s.key] })),
             waiverVersion: COACH_WAIVER_VERSION,
           },
@@ -242,6 +250,26 @@ export default function CoachRegForm({
                 <input type="tel" className={inp} value={d.mobilePhone} onChange={set('mobilePhone')} autoComplete="tel" />
                 {!!d.mobilePhone && digits(d.mobilePhone).length < 10 && <p className="text-xs text-rose-600 mt-1.5">Ten digits, please — the tournament director calls this number on game day.</p>}
               </div>
+
+              {/* Permission to text, in their own tick, shown only once there is a
+                  real number to text. A phone given so we can CALL on game day is
+                  not permission to message it. Unticked, never required to finish.
+                  The wording lives in lib/smsConsent so this screen stays true to
+                  what we actually send — it is also the opt-in evidence a carrier
+                  review asks for. */}
+              {digits(d.mobilePhone).length >= 10 && (
+                <label className="sm:col-span-2 flex gap-3 items-start bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 cursor-pointer">
+                  <input type="checkbox" checked={smsOk} onChange={e => setSmsOk(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-teal-600" />
+                  <span className="text-xs leading-relaxed text-slate-600">
+                    {smsConsentText(card.orgName, 'coach')}{' '}
+                    <a href="/terms" target="_blank" rel="noreferrer" className="text-teal-700 underline underline-offset-2">Terms</a>
+                    {' · '}
+                    <a href="/privacy" target="_blank" rel="noreferrer" className="text-teal-700 underline underline-offset-2">Privacy</a>
+                    <span className="block mt-1 text-slate-400">Optional — your waiver goes through either way. Scores and schedules come free to your phone instead; this is for a game moving.</span>
+                  </span>
+                </label>
+              )}
 
               <div className="sm:col-span-2">
                 <label className={lab}>Teams You Are Coaching <span className="text-rose-500">*</span></label>
