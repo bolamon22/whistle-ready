@@ -107,6 +107,10 @@ function JoinForm() {
   const [doneQr, setDoneQr] = useState('')
   const [appQr, setAppQr] = useState<string | null>(null)
   const [linked, setLinked] = useState(false)
+  // Joined with a login they already had (api/join, Oct 14 2026): often a Parent
+  // login made with Create account before they found this link.
+  const [hadLogin, setHadLogin] = useState(false)
+  const [askPassword, setAskPassword] = useState(false)   // that email has a login and the password didn't match
 
   useEffect(() => {
     if (!code) { setLinkState('invalid'); return }
@@ -169,9 +173,10 @@ function JoinForm() {
       }),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) { setError(data.error || 'Could not sign you up'); setSubmitting(false); return }
+    if (!res.ok) { setError(data.error || 'Could not sign you up'); setAskPassword(!!data.existingAccount); setSubmitting(false); return }
 
     setLinked(!!data.linked)
+    setHadLogin(!!data.existingAccount)
     setDoneEvents(Array.isArray(data.events) ? data.events : [])
     setDoneWorkerId(typeof data.workerId === 'string' ? data.workerId : '')
     setDone(true)
@@ -204,7 +209,9 @@ function JoinForm() {
         </div>
         <h1 className="text-xl font-bold text-slate-800 mt-4">Welcome to the crew{name ? `, ${name.split(' ')[0]}` : ''}!</h1>
         <p className="text-sm text-slate-500 mt-2">
-          {linked
+          {hadLogin
+            ? `You're on the ${orgName ?? ''} staff list, on the login you already had. Sign in with the same email and password.`
+            : linked
             ? `Good news — you were already on the ${orgName ?? 'staff'} list, so we connected your new login to your existing record.`
             : `You're on the ${orgName ?? ''} staff list. We sent a welcome email with everything below.`}
         </p>
@@ -498,15 +505,19 @@ function JoinForm() {
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
+              {error}{askPassword && <> <Link href="/forgot" className="font-semibold underline">Forgot password?</Link></>}
+            </p>
+          )}
 
           <button type="submit" disabled={submitting || !role}
             className="w-full bg-teal-500 hover:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm py-3 rounded-xl transition-colors">
             {submitting ? 'Creating your profile…' : 'Join the Staff →'}
           </button>
 
-          <p className="text-center text-xs text-slate-400">
-            Already have an account? <Link href="/login" className="text-teal-600 hover:underline">Sign in</Link>
+          <p className="text-center text-xs text-slate-400 leading-relaxed">
+            Already have a Whistle Ready login, even a parent one? Use the same email and password here, and we&apos;ll add staff to it.
           </p>
         </form>
       </div>

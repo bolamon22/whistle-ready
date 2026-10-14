@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { orgById } from '@/lib/org'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 import { notifyStaffRegistered } from '@/lib/staffNotify'
+import { giveStaffAccess } from '@/lib/staffLogin'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -121,8 +122,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           // verify it's theirs, so don't auto-link; the organizer can set the email instead.
           return NextResponse.json({ error: 'An account with that email already exists. Try signing in instead, or ask your coordinator to add this email to your staff record.' }, { status: 409 })
         }
-        // They already have a login; the staff record matches by email, so they're set.
+        // They already have a login; the staff record matches by email. A Parent (or
+        // other no-staff-pages) login becomes Staff, or the staff home stays shut to
+        // them (lib/staffLogin, Oct 14 2026).
         await client.execute({ sql: `UPDATE "StaffInvite" SET usedAt = datetime('now') WHERE token = ?`, args: [params.token] })
+        await giveStaffAccess(email, (worker.orgId as string | null) ?? null)
         return NextResponse.json({ ok: true, alreadyHadAccount: true })
       }
 
@@ -214,6 +218,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     }
     // Scope the new/linked user to the invite's org so they only see that org.
     if (orgId) { try { await oc.execute({ sql: `UPDATE "User" SET orgId = ? WHERE lower(email) = ?`, args: [orgId, email] }) } catch {} }
+    // A login they already had keeps its password, and a role with no staff pages
+    // (a Parent login, most often) takes the invite's role (lib/staffLogin).
+    if (existingUser) await giveStaffAccess(email, orgId, loginRole)
 
     // If invite was for a specific tournament, add to roster
     if (invite.tournamentId) {
@@ -228,7 +235,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     // Office heads-up — Bo wants to know the moment someone registers
     await notifyStaffRegistered({ org: await orgById(orgId), orgId, name, email, phone: phone || null, roles: [defaultRole], source: 'invite' })
 
-    return NextResponse.json({ ok: true, workerId })
+    return NextResponse.json({ ok: true, workerId, alreadyHadAccount: !!existingUser })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to accept invite' }, { status: 500 })

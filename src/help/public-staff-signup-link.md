@@ -16,7 +16,7 @@ Staff join with a link from the assigner or coordinator. A signup link (it conta
 3. Under **Pick your events**, tap the events you can work. You can add or drop events later from your staff portal.
 4. Under **Getting paid**, tap your preferred method (**Zelle**, **Check** or **Venmo**) and fill in what you have.
 5. Optionally add a headshot for **Your staff ID card**.
-6. Create a **Password** (at least 6 characters), type it again in **Confirm**, and tap **Join the Staff**.
+6. Create a **Password** (at least 6 characters), type it again in **Confirm**, and tap **Join the Staff**. Already have a Whistle Ready login, even a parent one? Use its email and password here instead, and staff is added to it.
 7. On **Welcome to the crew**, tap **Print my staff ID** if you want a copy, then **Sign in to your portal**.
 
 After you join, upload your W-9 from your staff portal: tap **Upload W-9** on the **W-9 needed** card.
@@ -25,5 +25,6 @@ After you join, upload your W-9 from your staff portal: tap **Upload W-9** on th
 
 **Common problems:**
 - "This signup link isn't active": ask your assigner for the current link.
-- "An account with this email already exists — sign in instead." Use **Sign in** with your existing password.
+- "You already have a Whistle Ready login with this email": type that login's password in **Password** and **Confirm**, and tap **Join the Staff** again. Forgot it? Tap **Forgot password?**.
+- Invite link and you already have a login: you'll see "You already have a Whistle Ready login with this email". Sign in with your existing password. A parent login becomes a staff login.
 - "Invite expired" or "Invite already used": ask your coordinator to send a new one, or sign in.

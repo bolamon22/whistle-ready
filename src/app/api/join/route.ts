@@ -7,6 +7,7 @@ import { orgBaseUrl } from '@/lib/orgDomains'
 import { sendEmail, orgSender } from '@/lib/email'
 import { notifyStaffRegistered } from '@/lib/staffNotify'
 import { saveW9, w9FromDataUrl, w9StorageReady } from '@/lib/staffW9'
+import { giveStaffAccess } from '@/lib/staffLogin'
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 
@@ -39,6 +40,13 @@ function db() {
 //
 // Duplicate guard: an email already in this org's Worker pool LINKS to that record
 // (fills only empty fields) instead of creating a second Worker.
+//
+// An email that already has a login joins with that login's password (Oct 14 2026).
+// Refs kept making a Parent login with Create account before they found this link
+// (Steve Newell), and the answer here was "sign in instead", which led back to the
+// parent home with no way onto the staff. Now the staff record and events attach
+// to the login they have, and a role with no staff pages becomes Staff
+// (lib/staffLogin). A wrong password creates nothing.
 
 const ROLES = new Set(['ref', 'scorekeeper', 'field_ops', 'athletic_trainer'])
 const GENDERS = new Set(['boys', 'girls', 'both'])
@@ -118,7 +126,13 @@ export async function POST(req: NextRequest) {
 
     const existingUser = await prisma.user.findUnique({ where: { email } })
     if (existingUser) {
-      return NextResponse.json({ error: 'An account with this email already exists — sign in instead.' }, { status: 409 })
+      const samePassword = !!existingUser.password && await bcrypt.compare(password, existingUser.password).catch(() => false)
+      if (!samePassword) {
+        return NextResponse.json({
+          error: 'You already have a Whistle Ready login with this email. Type that login\'s password here and we\'ll add staff to it.',
+          existingAccount: true,
+        }, { status: 409 })
+      }
     }
 
     const client = db()
@@ -189,9 +203,14 @@ export async function POST(req: NextRequest) {
       joined.push({ id: ev.id, name: ev.name, startDate: ev.startDate, endDate: ev.endDate, logoUrl: ev.logoUrl })
     }
 
-    const hashed = await bcrypt.hash(password, 12)
-    const user = await prisma.user.create({ data: { name, email, password: hashed, role: 'staff' } })
-    try { await client.execute({ sql: `UPDATE "User" SET orgId = ? WHERE id = ?`, args: [orgId, user.id] }) } catch { /* raw column */ }
+    let loginRole = 'staff'
+    if (existingUser) {
+      loginRole = (await giveStaffAccess(email, orgId))?.to ?? existingUser.role
+    } else {
+      const hashed = await bcrypt.hash(password, 12)
+      const user = await prisma.user.create({ data: { name, email, password: hashed, role: 'staff' } })
+      try { await client.execute({ sql: `UPDATE "User" SET orgId = ? WHERE id = ?`, args: [orgId, user.id] }) } catch { /* raw column */ }
+    }
 
     // Welcome letter, from the org (the employer — same rule as staff invites).
     const org = await orgById(orgId)
@@ -209,7 +228,7 @@ export async function POST(req: NextRequest) {
           <h2 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 8px;">Welcome to the crew${firstName ? `, ${firstName}` : ''}!</h2>
           <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 20px;">
             You're on the ${orgLabel} staff list. Your staff portal is where your events, schedule,
-            availability, and assignments live.
+            availability, and assignments live.${existingUser ? ' It\'s on the login you already had: sign in with the same email and password.' : ''}
           </p>
           ${eventLines}
           <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
@@ -244,7 +263,7 @@ export async function POST(req: NextRequest) {
     // Office heads-up — Bo wants to know the moment someone registers
     await notifyStaffRegistered({ org, orgId, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name), referredBy })
 
-    return NextResponse.json({ ok: true, linked, workerId, events: joined.map(e => ({ name: e.name, logoUrl: e.logoUrl })) }, { status: 201 })
+    return NextResponse.json({ ok: true, linked, existingAccount: !!existingUser, role: loginRole, workerId, events: joined.map(e => ({ name: e.name, logoUrl: e.logoUrl })) }, { status: 201 })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to sign up' }, { status: 500 })
