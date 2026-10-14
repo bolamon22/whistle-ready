@@ -110,6 +110,33 @@ function eventDates(start: unknown, end: unknown): string {
 /** Just the city, so a long venue address doesn't push the row's buttons off screen. */
 const eventCity = (loc: unknown) => String(loc ?? '').split(/[,\/]/)[0].trim()
 
+/** "Oct 2026" on a sponsor's event chip, or just "Oct" when the name already says the year. */
+function chipWhen(t: any): string {
+  const m = /^(\d{4})-(\d{2})/.exec(String(t?.startDate ?? '').trim())
+  const mon = m ? EV_MON[Number(m[2]) - 1] : ''
+  if (!m || !mon) return ''
+  return String(t?.name ?? '').includes(m[1]) ? mon : `${mon} ${m[1]}`
+}
+
+/**
+ * The sponsor "Shows at" picker: events coming up, events from the past year, and the rest.
+ *
+ * It listed every tournament the org has ever run on every sponsor card: 53 for Sunshine on
+ * Oct 14 2026, 38 of them more than two years old, so six sponsors meant 318 chips to scroll
+ * past. Sponsors get picked for the events being promoted, so the picker shows what's coming
+ * up plus the past year (results pages still get visited) and keeps the rest behind "Show
+ * older events". An older event that's already picked always shows, so nothing hidden is
+ * quietly switched on.
+ */
+function sponsorEventRows(ts: any[], today: string) {
+  const yearAgo = new Date(Date.parse(today + 'T00:00:00Z') - 365 * 864e5).toISOString().slice(0, 10)
+  const endOf = (t: any) => String(t?.endDate || t?.startDate || '').slice(0, 10)
+  const startOf = (t: any) => String(t?.startDate || '').slice(0, 10)
+  const upcoming = ts.filter(t => endOf(t) >= today).sort((a, b) => startOf(a).localeCompare(startOf(b)))
+  const past = ts.filter(t => endOf(t) < today).sort((a, b) => endOf(b).localeCompare(endOf(a)))
+  return { upcoming, recent: past.filter(t => endOf(t) >= yearAgo), older: past.filter(t => endOf(t) < yearAgo) }
+}
+
 /** One tournament in the event-pages panel. Module level, not nested in the render:
  *  declared inside it, React reads a new component type on every keystroke in the search
  *  box and remounts all fifty-two rows. */
@@ -225,6 +252,9 @@ function OrgSiteEditorInner() {
   // Only armed while the grip is held: a permanently draggable row swallows
   // click-and-drag text selection inside the inputs it contains.
   const [gripArmed, setGripArmed] = useState(false)
+  // Which sponsor cards have their older events opened, by position in the list.
+  const [sponOld, setSponOld] = useState<Record<number, boolean>>({})
+  const spToday = new Date().toISOString().slice(0, 10)
   const moveSponsor = (from: number, to: number) => setC(v => {
     if (to < 0 || to >= v.sponsors.length || from === to) return v
     const a = [...v.sponsors]
@@ -536,31 +566,70 @@ function OrgSiteEditorInner() {
                   means org-wide, which is what every row saved before this looks
                   like, so existing partners keep showing everywhere until somebody
                   says otherwise. */}
-              {tournaments.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-slate-400 mr-0.5">Shows at:</span>
-                  <button type="button"
-                    onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, eventIds: [] } : x) }))}
-                    className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${!(s.eventIds?.length) ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
-                    Every event
-                  </button>
-                  {tournaments.map((t: any) => {
-                    const tid = String(t.id)
-                    const on = (s.eventIds || []).includes(tid)
-                    return (
-                      <button key={tid} type="button"
-                        onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => {
-                          if (j !== i) return x
-                          const cur = x.eventIds || []
-                          return { ...x, eventIds: cur.includes(tid) ? cur.filter(y => y !== tid) : [...cur, tid] }
-                        }) }))}
-                        className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
-                        {String(t.name || 'Event')}
+              {tournaments.length > 0 && (() => {
+                const picked = new Set((s.eventIds || []).map(String))
+                const rows = sponsorEventRows(tournaments, spToday)
+                const showOld = !!sponOld[i]
+                const olderShown = showOld ? rows.older : rows.older.filter((t: any) => picked.has(String(t.id)))
+                const olderHidden = rows.older.length - olderShown.length
+                const toggle = (tid: string) => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => {
+                  if (j !== i) return x
+                  const cur = x.eventIds || []
+                  return { ...x, eventIds: cur.includes(tid) ? cur.filter(y => y !== tid) : [...cur, tid] }
+                }) }))
+                const chip = (t: any) => {
+                  const tid = String(t.id)
+                  const on = picked.has(tid)
+                  const when = chipWhen(t)
+                  return (
+                    <button key={tid} type="button" aria-pressed={on} onClick={() => toggle(tid)}
+                      className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                      {String(t.name || 'Event').trim()}
+                      {when && <>{' '}<span className={`font-normal ${on ? 'text-teal-50' : 'text-slate-400'}`}>{when}</span></>}
+                    </button>
+                  )
+                }
+                const rowLabel = 'text-[11px] text-slate-400 basis-full sm:basis-auto sm:w-20 shrink-0'
+                return (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-slate-400 mr-0.5">Shows at:</span>
+                      <button type="button" aria-pressed={!picked.size}
+                        onClick={() => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, eventIds: [] } : x) }))}
+                        className={`text-xs font-semibold rounded-full px-2.5 py-1 border ${!picked.size ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+                        Every event
                       </button>
-                    )
-                  })}
-                </div>
-              )}
+                      {!picked.size && <span className="text-[11px] text-slate-400">or pick events below</span>}
+                    </div>
+                    {rows.upcoming.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={rowLabel}>Coming up</span>
+                        {rows.upcoming.map((t: any) => chip(t))}
+                      </div>
+                    )}
+                    {rows.recent.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={rowLabel}>Past year</span>
+                        {rows.recent.map((t: any) => chip(t))}
+                      </div>
+                    )}
+                    {rows.older.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {olderShown.length > 0
+                          ? <span className={rowLabel}>Older</span>
+                          : <span className="hidden sm:block sm:w-20 shrink-0" aria-hidden="true" />}
+                        {olderShown.map((t: any) => chip(t))}
+                        {(showOld || olderHidden > 0) && (
+                          <button type="button" aria-expanded={showOld} onClick={() => setSponOld(o => ({ ...o, [i]: !showOld }))}
+                            className="text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2 px-1 py-1">
+                            {showOld ? 'Hide older events' : `Show ${olderHidden} older event${olderHidden === 1 ? '' : 's'}`}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
               {/* Only the presenting row has space for a sentence, so only ask for one there. */}
               {s.tier === 'presenting' && (
                 <input className="input mt-2 w-full" value={s.blurb || ''} onChange={e => setC(v => ({ ...v, sponsors: v.sponsors.map((x, j) => j === i ? { ...x, blurb: e.target.value } : x) }))} placeholder="One line about what they do for the event (shown only on the featured row)" />

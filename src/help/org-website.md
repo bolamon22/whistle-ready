@@ -16,7 +16,7 @@ The **Website** page edits your organization's public site: logo, hero, about se
 - **Logo**: **Upload** or pick **From library**.
 - **Hero**: **Headline**, **Subtext** and an optional **Background image (optional)**.
 - **About**: **Heading** and **Body**, plus figures for the By the Numbers page such as **Running events since**.
-- **Sponsors & partners**: click **Add**, then fill in the name, link and logo. Use the arrows or drag to reorder. Tick **Ask for sponsors on event pages** to add a sponsor pitch.
+- **Sponsors & partners**: click **Add**, then fill in the name, link and logo. Use the arrows or drag to reorder. Under **Shows at**, keep **Every event** or pick the events a sponsor belongs to: events **Coming up** and from the **Past year** are listed, and **Show older events** opens the rest. Tick **Ask for sponsors on event pages** to add a sponsor pitch.
 - **Info pages**: click **Add page** for pages like Directions or FAQ. Choose **In the menu** or **In the footer**.
 - **Photo gallery**: **Add photos**, then tag them to a tournament, caption and credit them. Use **Select all** with **Apply caption**, **Apply credit** or **Apply tournament** for many at once.
 - **Instagram feed**: shows your latest posts. Needs a Business or Creator account.
