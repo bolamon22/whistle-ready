@@ -51,6 +51,11 @@ export default function PrivacyPage() {
           'To understand how Whistle Ready is used so we can improve it.',
         ]} />
         <p>We do not sell or rent personal information, and we don&apos;t share it with advertisers.</p>
+        <p>
+          Mobile phone numbers and text-message consent are never shared with third parties for their own marketing.
+          Numbers are shared only with the messaging provider that delivers the texts on our behalf. How the staff
+          text program works, and how to stop it, is set out on our <Link href="/sms" className="text-teal-700 hover:underline">text message program</Link> page.
+        </p>
       </Section>
 
       <Section title="QuickBooks Online">
