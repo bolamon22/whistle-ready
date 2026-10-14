@@ -3,7 +3,7 @@ import Link from 'next/link'
 import LegalPage, { Section, Bullets, Contact } from '../LegalPage'
 import { smsConsentText } from '@/lib/smsConsent'
 
-// The public description of the staff text-message program.
+// The public description of the text-message program.
 //
 // Written for a carrier's toll-free verification reviewer as much as for staff:
 // a TFV submission is judged partly on whether the business has a reachable,
@@ -14,7 +14,7 @@ import { smsConsentText } from '@/lib/smsConsent'
 
 export const metadata: Metadata = {
   title: 'Text message program',
-  description: 'How Sunshine Events Group texts event staff: who gets messages, what they contain, and how to stop them.',
+  description: 'How Sunshine Events Group texts event staff and team coaches: who gets messages, what they contain, and how to stop them.',
   alternates: { canonical: '/sms' },
 }
 
@@ -27,30 +27,37 @@ export default function SmsProgramPage() {
       title="Text message program"
       intro={<>
         <p>
-          Sunshine Events Group, which operates Whistle Ready (whistleready.app), sends text messages to the
-          referees, scorekeepers, field staff and athletic trainers who work our events — and only to those who
-          have asked us to.
+          Sunshine Events Group, which operates Whistle Ready (whistleready.app), sends text messages to two
+          groups of people who work our events: the referees, scorekeepers, field staff and athletic trainers we
+          staff a tournament with, and the coaches on the sidelines. Only to those who have asked us to.
         </p>
         <p>
-          This is an internal staffing tool. It is not marketing, and we do not text players, parents, clubs or
-          anyone who has not worked for us.
+          Both groups get the same kind of message and nothing else: where to be, and when that changes. This is
+          an operations tool, not marketing. We do not text players, parents, spectators or clubs, and there is
+          nothing to buy in any message we send.
         </p>
       </>}
     >
       <Section title="Who gets messages">
+        <Bullets items={[
+          <><b>Event staff</b> — referees, scorekeepers, field staff and athletic trainers who signed up to work our events.</>,
+          <><b>Coaches</b> — the head and assistant coaches listed on a team’s signed coach waiver for an event they are coaching.</>,
+        ]} />
         <p>
-          Only event staff who ticked the box asking to be texted. Nobody is added by being on a roster, by giving
-          us a phone number, or by working an event.
+          In both cases, only the people who ticked the box asking to be texted. Nobody is added by being on a
+          roster, by giving us a phone number, by registering a team, or by working an event. We hold phone
+          numbers so we can call on game day; that is not permission to message them.
         </p>
       </Section>
 
-      <Section title="How staff opt in">
+      <Section title="How people opt in">
         <Bullets items={[
-          <>On the staff signup form, there is a checkbox under the phone number. It is <b>never pre-ticked</b>, and signup can be completed without it.</>,
+          <><b>Staff</b> tick a checkbox under the phone number on the staff signup form. It is <b>never pre-ticked</b>, and signup completes without it.</>,
           <>Staff already signed up can turn it on themselves from their staff home page, and turn it off there at any time.</>,
-          <>We record the date each person agreed, and which of the two they used.</>,
+          <><b>Coaches</b> tick the same kind of checkbox under the phone number on the coach waiver for the event they are coaching. It is never pre-ticked, and the waiver submits without it.</>,
+          <>We record the date each person agreed and which form they used.</>,
         ]} />
-        <p>This is the control exactly as it appears on the staff signup form:</p>
+        <p>These are the controls exactly as they appear, first on the staff signup form:</p>
 
         {/* A real rendering, not a description — this page is what a carrier
             reviewer is pointed at for opt-in evidence (optInImageUrls), and
@@ -73,28 +80,58 @@ export default function SmsProgramPage() {
           </div>
         </div>
 
+        <p>And on the coach waiver:</p>
+
+        <div className="rounded-xl border border-slate-300 bg-white p-5 not-prose">
+          <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">MOBILE PHONE</div>
+          <div className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-400 mb-3">(555) 000-0000</div>
+          <div className="flex gap-3 items-start bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <span aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 rounded border-2 border-slate-400 bg-white" />
+            <span className="text-xs leading-relaxed text-slate-600">
+              {smsConsentText('Sunshine Events Group', 'coach')}{' '}
+              <span className="text-teal-700 underline underline-offset-2">Terms</span>
+              {' · '}
+              <span className="text-teal-700 underline underline-offset-2">Privacy</span>
+              <span className="block mt-1 text-slate-400">Optional — your waiver goes through either way.</span>
+            </span>
+          </div>
+        </div>
+
         <p className="text-sm text-slate-500">
-          The box starts empty. Signup completes whether or not it is ticked, and nothing about this consent is
-          bundled with any other agreement.
+          Both boxes start empty. The form completes whether or not it is ticked, this consent is never bundled
+          with any other agreement, and ticking it is never a condition of working an event or coaching a team.
         </p>
       </Section>
 
       <Section title="What we send">
+        <p>To staff:</p>
         <Bullets items={[
           'Your assignments for an event, and changes to them.',
           'Schedule and field changes on game day.',
           'Requests for help on a field — an athletic trainer, equipment, or an official needed.',
           'Check-in and arrival reminders on the morning of an event.',
         ]} />
+        <p>To coaches, less:</p>
+        <Bullets items={[
+          'A game of theirs moving to a different time or field.',
+          'An alert affecting the whole event — a weather hold, a lightning delay, fields closed.',
+        ]} />
         <p>
-          Example: &ldquo;Monster Mash: you&apos;re on Field 4 at 8:00am, not Field 2. Reply STOP to opt out.&rdquo;
+          Examples: &ldquo;Monster Mash: you&apos;re on Field 4 at 8:00am, not Field 2. Reply STOP to opt
+          out.&rdquo; &ldquo;Monster Mash: Ghost 2030 now 11:20am on Field 7. Reply STOP to opt out.&rdquo;
+        </p>
+        <p className="text-sm text-slate-500">
+          Coaches are not texted scores, results or schedule summaries. Those reach the phones of anyone who asks
+          for them — coaches and families alike — as free browser notifications, which cost nothing and are
+          turned on and off on the device itself.
         </p>
       </Section>
 
       <Section title="How often">
         <p>
-          Message frequency varies. Most staff hear from us only in the days around an event they are working, and
-          not at all between events.
+          Message frequency varies, and it is low. Most staff hear from us only in the days around an event they
+          are working. A coach typically hears from us only when something moves — often not at all across a
+          whole weekend. Neither group hears from us between events.
         </p>
       </Section>
 
@@ -105,9 +142,9 @@ export default function SmsProgramPage() {
       <Section title="How to stop">
         <Bullets items={[
           <>Reply <b>STOP</b> to any message. We stop immediately.</>,
-          <>Or turn texts off on your staff home page, which takes effect the same way.</>,
+          <>Staff can also turn texts off on their staff home page, which takes effect the same way.</>,
           <>Reply <b>HELP</b> for help, or use the contact details below.</>,
-          'Stopping texts does not affect your assignments, your pay, or any email we send you.',
+          'Stopping texts does not affect your assignments, your pay, your team’s registration, or any email we send you.',
         ]} />
       </Section>
 
