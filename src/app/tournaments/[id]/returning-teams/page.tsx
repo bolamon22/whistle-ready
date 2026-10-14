@@ -9,7 +9,7 @@ import { orgBaseUrl } from '@/lib/orgDomains'
 import { INVITE_TEMPLATES, RETURNING_TEMPLATE, eventsList, upcomingEvents, type StoredTemplate } from '@/lib/inviteTemplates'
 import { sendBlockedReason } from '@/lib/inviteSend'
 
-interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string }
+interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string; _count?: { teamRegistrations?: number; registeredTeams?: number } }
 interface Club {
   id: string; clubName: string; contactName: string; contactEmail: string
   numTeams: number; divisions: string[]; registered: boolean
@@ -131,8 +131,12 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
         : fmtDate(thisTournament.startDate)
       : 'TBD'
     return {
-      clubName: club?.clubName ?? '[Club Name]',
-      contactName: club?.contactName ?? '[Contact Name]',
+      clubName: club?.clubName || '[Club Name]',
+      contactName: club?.contactName || club?.clubName || '[Contact Name]',
+      // Same counts the send reads, so the preview can't promise a number the
+      // real letter won't quote.
+      teamsRegistered: String(thisTournament?._count?.registeredTeams ?? 0),
+      clubsRegistered: String(thisTournament?._count?.teamRegistrations ?? 0),
       tournamentName: thisTournament?.name ?? '[Tournament]',
       dates: dateStr,
       // Same link the send builds, so the preview isn't a different URL to the real one.

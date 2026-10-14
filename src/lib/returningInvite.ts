@@ -114,6 +114,22 @@ export async function runReturningInvite(a: {
     }
   } catch { /* the letter still goes out without the calendar */ }
 
+  // {{teamsRegistered}} / {{clubsRegistered}} — how full this event actually is
+  // right now. The persuasive "last call" letter quotes these, so they are read
+  // at send time rather than typed into the template: a number keyed in by hand
+  // is wrong the day after it is saved, and this one goes to club directors who
+  // can see the public team list. Zero on failure, which reads as "don't claim".
+  let teamsRegistered = 0
+  let clubsRegistered = 0
+  try {
+    const regs = await prisma.teamRegistration.findMany({
+      where: { tournamentId: a.tournamentId, deletedAt: null },
+      select: { numTeams: true },
+    })
+    clubsRegistered = regs.length
+    teamsRegistered = regs.reduce((sum, r) => sum + (r.numTeams || 0), 0)
+  } catch { /* letters that don't use the tokens still send */ }
+
   let sent = 0
   const errors: string[] = []
   let sample: { subject: string; html: string; to: string } | null = null
@@ -121,6 +137,8 @@ export async function runReturningInvite(a: {
   for (const club of recipients) {
     const vars: Record<string, string> = {
       clubName: club.clubName,
+      teamsRegistered: String(teamsRegistered),
+      clubsRegistered: String(clubsRegistered),
       contactName: club.contactName || club.clubName,
       tournamentName: tournament.name,
       dates: dateStr,

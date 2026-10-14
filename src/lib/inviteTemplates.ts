@@ -108,6 +108,31 @@ Bo Lamon
 {{orgName}}`,
   },
   {
+    key: 'lastCallLetter',
+    label: 'Last call (letter)',
+    hint: 'The persuasive version — our numbers so far, how the fall has gone, and a clear deadline.',
+    subject: `Closing soon — {{tournamentName}}, {{dates}}`,
+    body: `Hi {{contactName}},
+
+I wanted to reach out personally before we close registration for {{tournamentName}}, which runs {{dates}}.
+
+It has been a strong fall for us, and this one is going the same way — {{teamsRegistered}} teams from {{clubsRegistered}} clubs are already in, and a few divisions are tighter than others.
+
+I did not want {{clubName}} to find out the hard way that a division had closed. If you have been planning to bring teams, this is the week to get them in:
+
+{{registerUrl}}
+
+If it helps, here is what you get: a published schedule well before the weekend, certified officials and scorekeepers on every field, live scores your families can follow from the sideline, and a staff that answers the phone on game day.
+
+And if you are still counting heads, just reply and tell me roughly how many teams and which divisions — I will hold what I can while you sort it out. I would much rather do that than have you miss it.
+
+Hope we get to see you there.
+
+Best regards,
+Bo Lamon
+{{orgName}}`,
+  },
+  {
     key: 'shortNote',
     label: 'Short note',
     hint: 'Three lines from Bo — for directors who answer a quick email but not a letter.',
