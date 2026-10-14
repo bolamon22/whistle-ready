@@ -145,7 +145,7 @@ export function coachConfig(raw: any): CoachConfig {
     photo: bool(c.photo, true),
     confirmationTitle: str(c.confirmationTitle) || 'You are credentialed',
     confirmationMessage: str(c.confirmationMessage) ||
-      'Your coach credential is ready. Show it at the coaches’ tent when you arrive — the QR is your check-in.',
+      'Your coach credential is ready. You do not need to bring it: your signed waiver is on file. If you want a copy, save it to your phone or print your own.',
   }
 }
 
