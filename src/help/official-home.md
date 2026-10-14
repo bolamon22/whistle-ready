@@ -3,7 +3,7 @@ title: Your staff home page on game day
 category: Game day
 order: 500
 routes: /dashboard/staff, /dashboard/ref, /dashboard/scorekeeper
-keywords: my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability w-9 w9 tax form upload w-9 paycheck
+keywords: my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability which days can you work all day morning afternoon can't work game times to do answer now take me off w-9 w9 tax form upload w-9 paycheck
 ---
 When a ref, scorekeeper, trainer or field ops worker logs in, they land on their own home page with their events, their next game and the game day tools.
 
@@ -11,7 +11,15 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 
 **To sign up for an event:**
 1. Under **My events**, tap **Sign up to work** on the event.
-2. Once you're on it, it shows **Working** and how many games you're assigned. Tap **Can't work it** to take yourself off (only before you have games).
+2. Once you're on it, it shows **Working** and how many games you're assigned, and asks which days you can work. Can't work the event at all? Tap **Take me off it** (only before you have games).
+
+**To tell us which days you can work:**
+1. Until every day has an answer, a **To do** card at the top says **Tell us which days you can work**. Tap **Answer now**.
+2. Under **Which days can you work?**, tap one for each day: **All day**, **Morning** (games that start before noon), **Afternoon** (noon or later) or **Can't work**. It saves right away and shows **Saved**. **I can work both days, all day** answers every day at once.
+3. Once the schedule is published, you can tap **Pick exact game times instead**, tick the start times you can work, and tap **Save**.
+4. To change a day, tap another answer, any time before the event. If the assigner set a day for you, it says **Set by** and their name.
+
+A reminder email from the assigner has an **Answer for my 2 days** button (the number is how many days are left) that opens your home page at that event.
 
 **To upload your W-9:** under **W-9 needed**, tap **Upload W-9** and pick the signed form as a PDF or a photo (up to 2 MB; photos are shrunk for you). **Blank W-9 from the IRS** opens an empty form. Once it's in, the card says **W-9 on file**; tap **Replace** to send a new one. It's stored encrypted, and only tournament directors can open it.
 

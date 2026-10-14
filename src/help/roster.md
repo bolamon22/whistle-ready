@@ -5,7 +5,7 @@ order: 420
 routes: /tournaments/*/roster
 keywords: staff roster tournament roster confirm staff add staff to event remove staff who is working refs scorekeepers trainers field ops bulk edit other events training videos watched send videos
 ---
-The Staff Roster is the list of people confirmed to work this tournament. Only people on the roster show up in the Assigner, the availability grid and the staff directory.
+The Staff Roster is the list of people confirmed to work this tournament. Only people on the roster show up in the Assigner, the **Availability** page and the staff directory, and only they are asked which days they can work.
 
 **Where:** **People → Staff roster**. Tabs across the top also open **Availability**, **Time Entries** and **Pay Summary**.
 

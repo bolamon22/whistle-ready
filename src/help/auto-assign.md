@@ -25,4 +25,4 @@ Auto-assign fills a day's open ref and scorekeeper slots for you. Clear removes 
 **Common problems:**
 - Clearing cannot be undone.
 - The **Clear** button stays grayed out until you tick at least one group, enter your name and type DELETE exactly.
-- Auto-assign uses the **Availability** page, so mark people out there first.
+- Auto-assign follows each person's answers on the **Availability** page: it only puts them on games they said they can work. People who haven't answered count as available, so remind them first.

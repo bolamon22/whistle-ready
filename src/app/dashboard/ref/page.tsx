@@ -1,20 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import MyAvailability from '@/components/MyAvailability'
+import MyAvailability, { type AvDay } from '@/components/MyAvailability'
 import StaffW9Card from '@/components/StaffW9Card'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin, Siren } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin, Siren, Bell, ArrowRight } from 'lucide-react'
 import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
 import { teamRefKey } from '@/lib/names'
 import SmsConsent from '@/components/SmsConsent'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
-interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number }
+interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number; avail?: { days: AvDay[] } | null }
 interface Portal { worker: { id: string; name: string; defaultRole: string; roles: string[] } | null; events: PortalEvent[] }
 
 // Which game-day tools each role actually uses — a referee has no business in the
@@ -58,7 +58,12 @@ export default function RefDashboard() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [allGames, setAllGames] = useState<Game[]>([])
-  const [availOpen, setAvailOpen] = useState('') // event id whose My availability panel is open
+  // Availability (Oct 14 2026): a to-do card until every day of every event they work
+  // has an answer, "You're all set" right after the last one, and the event a
+  // reminder email links to (?avail=<id>) scrolled to and outlined.
+  const [allSet, setAllSet] = useState(false)
+  const [flash, setFlash] = useState('')
+  const linked = useRef(false)
   const [selTournament, setSelTournament] = useState('')
   const [view, setView] = useState<'mine' | 'all'>('mine')
   const [showPast, setShowPast] = useState(false)
@@ -95,6 +100,30 @@ export default function RefDashboard() {
     })
   }, [status])
 
+  useEffect(() => {
+    if (!portal || linked.current) return
+    linked.current = true
+    const id = new URLSearchParams(window.location.search).get('avail')
+    if (id) setTimeout(() => jumpTo(id), 200)
+  }, [portal])
+
+  function jumpTo(id?: string) {
+    if (!id) return
+    const el = document.getElementById(`ev-${id}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setFlash(id); setTimeout(() => setFlash(f => (f === id ? '' : f)), 3000)
+  }
+
+  // Days still without an answer, across the events they're working.
+  const openDays = (p: Portal | null) => (p?.events || []).filter(e => e.working && e.avail).reduce((n, e) => n + e.avail!.days.filter(d => !d.state).length, 0)
+  function updateAvail(eventId: string, days: AvDay[]) {
+    if (!portal) return
+    const next = { ...portal, events: portal.events.map(e => e.id === eventId ? { ...e, avail: { days } } : e) }
+    if (openDays(portal) > 0 && openDays(next) === 0) setAllSet(true)
+    setPortal(next)
+  }
+
   const loadAllGames = async (tournamentId: string) => {
     const res = await fetch(`/api/tournaments/${tournamentId}/games`)
     const g = await res.json()
@@ -121,8 +150,11 @@ export default function RefDashboard() {
       const res = await fetch('/api/staff-portal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tournamentId: ev.id, action: join ? 'join' : 'leave' }) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'Could not update'); return }
-      setPortal(pt => pt ? { ...pt, events: pt.events.map(e => e.id === ev.id ? { ...e, working: join } : e) } : pt)
-      toast.success(join ? `You're on the list for ${ev.name} — set your availability!` : `Removed from ${ev.name}`)
+      // Reload, so a new event comes back with its days to answer.
+      const fresh = await fetch('/api/staff-portal').then(r => r.ok ? r.json() : null).catch(() => null)
+      if (fresh && Array.isArray(fresh.events)) setPortal(fresh)
+      else setPortal(pt => pt ? { ...pt, events: pt.events.map(e => e.id === ev.id ? { ...e, working: join } : e) } : pt)
+      toast.success(join ? `You're on the list for ${ev.name}. Now tell us which days you can work.` : `Removed from ${ev.name}`)
       if (join) { setSelTournament(ev.id); loadAllGames(ev.id) }
     } catch { toast.error('Could not update') } finally { setEventBusy('') }
   }
@@ -291,6 +323,10 @@ export default function RefDashboard() {
     )
   }
 
+  // The availability to-do: events they work with a day still unanswered.
+  const todoEvents = (portal?.events || []).filter(e => e.working && e.avail && e.avail.days.some(d => !d.state))
+  const todoLeft = openDays(portal)
+
   return (
     <div className="max-w-md mx-auto">
       {/* Greeting */}
@@ -298,6 +334,25 @@ export default function RefDashboard() {
         <p className="text-sm text-gray-400">{roleLabel}</p>
         <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'} 👋</h1>
       </div>
+
+      {/* Availability to-do: until every day of every event they work has an answer */}
+      {todoLeft > 0 && (
+        <div data-avail className="mb-5 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br from-[#0B1F3A] to-[#0E7490]">
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-teal-200"><Bell size={14} />TO DO</p>
+          <p className="mt-1.5 text-lg font-extrabold leading-snug">Tell us which days you can work</p>
+          <p className="mt-1 text-[13px] leading-snug text-slate-300">{todoEvents.map(e => e.name).join(' and ')} · {todoLeft} {todoLeft === 1 ? 'day still needs' : 'days still need'} an answer</p>
+          <button type="button" onClick={() => jumpTo(todoEvents[0]?.id)} className="mt-3 inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#ffffff] text-[#0B1F3A] text-sm font-extrabold hover:bg-[#f1f5f9]">Answer now<ArrowRight size={16} /></button>
+        </div>
+      )}
+      {todoLeft === 0 && allSet && (
+        <div data-avail className="mb-5 rounded-2xl p-3.5 bg-teal-50 border border-teal-200 flex items-start gap-3">
+          <CheckCircle2 size={24} className="text-teal-700 shrink-0" />
+          <div>
+            <p className="text-[15px] font-extrabold text-slate-900">You're all set</p>
+            <p className="text-[13px] text-slate-600 leading-snug">The assigner can see your answers. You can change them any time before the event.</p>
+          </div>
+        </div>
+      )}
 
       {/* Game-day alerts for this phone (field requests) */}
       <div className="mb-5"><StaffAlerts compact /></div>
@@ -316,7 +371,7 @@ export default function RefDashboard() {
           </div>
           <div className="space-y-2">
             {portal.events.map(ev => (
-              <div key={ev.id} className={`rounded-2xl border p-4 card ${ev.working ? 'border-emerald-300 bg-emerald-50/60' : 'border-gray-200 bg-white'}`}>
+              <div key={ev.id} id={`ev-${ev.id}`} className={`rounded-2xl border p-4 card scroll-mt-24 overflow-hidden ${ev.working ? 'border-emerald-300 bg-emerald-50/60' : 'border-gray-200 bg-white'} ${flash === ev.id ? 'ring-2 ring-teal-500 ring-offset-2' : ''}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-800 truncate">{ev.name}</p>
@@ -332,15 +387,14 @@ export default function RefDashboard() {
                     </button>
                   )}
                 </div>
-                {ev.working && (
-                  <div className="flex items-center gap-3 mt-2">
-                    {portal.worker && <button type="button" onClick={() => setAvailOpen(o => o === ev.id ? '' : ev.id)} aria-expanded={availOpen === ev.id} className="text-xs font-semibold text-teal-700 hover:text-teal-900">{availOpen === ev.id ? 'Done' : 'Set my availability →'}</button>}
-                    {ev.assignedGames === 0 && (
-                      <button onClick={() => setWorkingEvent(ev, false)} disabled={!!eventBusy} className="text-xs text-gray-400 hover:text-gray-600 ml-auto">Can't work it</button>
-                    )}
+                {ev.working && portal.worker && ev.avail && ev.avail.days.length > 0 && (
+                  <div className="mt-3 -mx-4 border-t border-emerald-200 bg-white">
+                    <MyAvailability eventId={ev.id} days={ev.avail.days} onChange={d => updateAvail(ev.id, d)} />
                   </div>
                 )}
-                {ev.working && portal.worker && availOpen === ev.id && <MyAvailability ev={ev} workerId={portal.worker.id} />}
+                {ev.working && ev.assignedGames === 0 && (
+                  <p className="mt-3 text-xs text-gray-400">Can't work this event at all? <button type="button" onClick={() => setWorkingEvent(ev, false)} disabled={!!eventBusy} className="font-semibold text-gray-600 underline hover:text-gray-800">Take me off it</button></p>
+                )}
               </div>
             ))}
           </div>

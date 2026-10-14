@@ -50,6 +50,16 @@ body.gd-dark .border-slate-200, body.gd-dark .border-gray-200, body.gd-dark .bor
 body.gd-dark .input, body.gd-dark .select, body.gd-dark input, body.gd-dark select, body.gd-dark textarea { background:#1f2937 !important; color:#f1f5f9 !important; border-color:#374151 !important; }
 body.gd-dark .btn-secondary { background:#1f2937 !important; color:#e5e7eb !important; border-color:#374151 !important; }
 body.gd-dark .shadow-sm, body.gd-dark .shadow-md, body.gd-dark .shadow-lg, body.gd-dark .shadow-xl { box-shadow:0 1px 0 rgba(255,255,255,0.05) !important; }
+/* Availability (staff home day picker, Pick exact game times, the Availability page):
+   amber marks a day with no answer, and the answer pills are tinted. Keep the tints
+   dark and their text light, here only, so other amber panels are untouched. */
+body.gd-dark [data-avail] .bg-amber-50 { background:rgba(245,158,11,0.10) !important; }
+body.gd-dark [data-avail] .bg-amber-100 { background:rgba(245,158,11,0.18) !important; }
+body.gd-dark [data-avail] .border-amber-200 { border-color:rgba(245,158,11,0.35) !important; }
+body.gd-dark [data-avail] :is(.text-amber-700, .text-amber-800, .text-amber-900) { color:#fcd34d !important; }
+body.gd-dark [data-avail] :is(.text-teal-700, .text-teal-800, .text-teal-900) { color:#5eead4 !important; }
+body.gd-dark [data-avail] :is(.text-rose-700, .text-rose-800) { color:#fda4af !important; }
+body.gd-dark [data-avail] .border-rose-200 { border-color:rgba(244,63,94,0.35) !important; }
 /* The header and admin tabs: readable teal and red text and plain role badges on the dark bar. */
 body.gd-dark :is([data-app-chrome], [data-admin-tabs]) .text-teal-700 { color:#5eead4 !important; }
 body.gd-dark :is([data-app-chrome], [data-admin-tabs]) .text-red-700 { color:#fca5a5 !important; }
