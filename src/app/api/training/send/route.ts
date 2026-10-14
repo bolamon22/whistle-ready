@@ -19,9 +19,12 @@ import { trainingVideo, workerRoles, minutesLabel, trainingLetter, inSendGroup }
 // 2026). The email links to the Training page inside their login -- there is no file to
 // forward -- and watching there is what the library's "Who's watched" counts.
 //
-// POST { videoIds, roles, workerIds, emails, meCopy, eventId, subject, body, preview? }
-//   preview -> { count, names, noEmail, newPeople, sample: { to, subject, html } }
+// POST { videoIds, roles, workerIds, emails, meCopy, eventId, everyone, exclude, subject, body, preview? }
+//   preview -> { count, names, noEmail, newPeople, people, sample: { to, subject, html } }
 //   send    -> { sent, failed, noEmail }
+// people: every Staff Pool person the picks match, unticked ones included, so the send
+// box can list them with a checkbox each; exclude: the ids unticked there, left out
+// whoever picked them (Bo, Oct 14 2026: send to just Nicole, not every athletic trainer).
 // subject/body are the message exactly as written in the send box; {firstName} is the
 // only thing filled per person. The preview renders the real email for one recipient
 // with the same code the send uses, so what Bo sees is what goes out.
@@ -65,8 +68,10 @@ export async function POST(req: NextRequest) {
   const mine = scope ? ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any)))
     : fd ? ws.filter((w: Row) => fieldDirectorSees(w) && (!fdOn || fdOn.has(String(w.id))))
     : ws
-  // An event narrows the role picks to the people on its staff roster; with no role
-  // picked it means everyone working it. Named people and typed addresses still go.
+  // An event narrows the role picks to the people on its staff roster. Everyone working
+  // it is its own pick (`everyone`): it used to be what an event with no role meant, so
+  // Bo's send to Nicole alone, with Monster Mash picked, listed everyone on the event
+  // (Oct 14 2026). Named people and typed addresses still go.
   const eventId = String(b.eventId || '')
   let onEvent: Set<string> | null = null; let eventName = ''
   if (eventId) {
@@ -76,11 +81,14 @@ export async function POST(req: NextRequest) {
     onEvent = new Set(rs.map((r: Row) => String(r.workerId)))
     const t = await prisma.$queryRawUnsafe<Row[]>(`SELECT name FROM "Tournament" WHERE id = ?`, eventId); eventName = String(t[0]?.name || '')
   }
+  const everyone = !!b.everyone && !!onEvent
   const hasRole = (w: Row) => { const rs = workerRoles(w); return roles.some(k => inSendGroup(rs, w.gender, k)) }
-  const byRole = (w: Row) => onEvent ? onEvent.has(String(w.id)) && (!roles.length || hasRole(w)) : hasRole(w)
+  const byRole = (w: Row) => onEvent ? onEvent.has(String(w.id)) && (everyone || hasRole(w)) : hasRole(w)
   const em = (w: Row) => String(w.email || '').trim().toLowerCase()
-  const to = mine.filter((w: Row) => picked.has(String(w.id)) || byRole(w) || typed.includes(em(w)))
+  const matched = mine.filter((w: Row) => picked.has(String(w.id)) || byRole(w) || typed.includes(em(w)))
     .sort((a: Row, c: Row) => String(a.name).localeCompare(String(c.name)))
+  const exclude = new Set<string>((Array.isArray(b.exclude) ? b.exclude : []).map(String))
+  const to = matched.filter((w: Row) => !exclude.has(String(w.id)))
   const noEmail = to.filter((w: Row) => !em(w)).map((w: Row) => String(w.name))
   const withEmail: Row[] = to.filter((w: Row) => em(w))
   // The sender's copy, and typed addresses that aren't anyone in the Staff Pool.
@@ -143,7 +151,8 @@ export async function POST(req: NextRequest) {
   if (b.preview) {
     const who = withEmail.find(w => !w.me && !w.newPerson) || withEmail[0]
     const sample = who ? { to: label(who), ...render(who), text: undefined } : null
-    return NextResponse.json({ count: withEmail.length, names: withEmail.map(label), noEmail, newPeople, emailOn: emailEnabled(), sample })
+    const people = matched.map((w: Row) => ({ id: String(w.id), name: String(w.name || ''), roles: workerRoles(w), hasEmail: !!em(w) }))
+    return NextResponse.json({ count: withEmail.length, names: withEmail.map(label), noEmail, newPeople, people, emailOn: emailEnabled(), sample })
   }
   let sent = 0; const failed: string[] = []; const went: { name: string; email: string }[] = []
   const one = async (w: Row) => {
@@ -156,7 +165,7 @@ export async function POST(req: NextRequest) {
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: LOG } })
     const log = row?.value ? JSON.parse(row.value) : []
-    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), byUserId: gate.userId || '', videoIds, roles, people: Array.from(picked), emails: typed, meCopy: !!b.meCopy, event: eventName, subject: subjectTpl, sent, to: went, failed }
+    const entry = { at: new Date().toISOString(), by: String(gate.session?.user?.name || gate.session?.user?.email || ''), byUserId: gate.userId || '', videoIds, roles, everyone, people: Array.from(picked), excluded: Array.from(exclude), emails: typed, meCopy: !!b.meCopy, event: eventName, subject: subjectTpl, sent, to: went, failed }
     const value = JSON.stringify([entry, ...(Array.isArray(log) ? log : [])].slice(0, 50))
     await prisma.appSetting.upsert({ where: { key: LOG }, update: { value }, create: { key: LOG, value } })
   } catch { /* the emails went; only the log is lost */ }

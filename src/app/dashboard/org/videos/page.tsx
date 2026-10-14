@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
-import { CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, Mail, PlayCircle, Search, Send, Users, X } from 'lucide-react'
+import { Check, CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, Mail, PlayCircle, Search, Send, Users, X } from 'lucide-react'
+import { WORKER_ROLES } from '@/lib/utils'
 import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo, trainingLetter, SEND_GROUPS, inSendGroup } from '@/lib/training'
 import { HOW_TO_VIDEOS, howToSrc, howToPoster, howToMinutes } from '@/lib/howToVideos'
 import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
@@ -29,7 +30,7 @@ function evDates(e?: Ev | null): string {
   if (!b || isNaN(b.getTime())) return `${m(a)} ${a.getDate()}`
   return m(a) === m(b) ? `${m(a)} ${a.getDate()}\u2013${b.getDate()}` : `${m(a)} ${a.getDate()} \u2013 ${m(b)} ${b.getDate()}`
 }
-type SendLog = { event?: string; subject?: string; at: string; by: string; videoIds: string[]; roles: string[]; people: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
+type SendLog = { event?: string; subject?: string; at: string; by: string; videoIds: string[]; roles: string[]; everyone?: boolean; people: string[]; excluded?: string[]; emails?: string[]; meCopy?: boolean; sent: number; to?: { name: string; email: string }[]; failed?: string[] }
 
 const LIB: Lib[] = [
   ...TRAINING_VIDEOS.map(v => ({ ...v, series: (v.series || 'staff') as 'staff' | 'ref' | 'assigner' | 'director' | 'scheduler', audience: audienceFor(v.id), src: videoSrc(v.id), poster: posterSrc(v.id) })),
@@ -247,7 +248,7 @@ export default function VideoLibrary() {
             <div key={i} className="p-4 text-sm">
               <div className="flex items-center justify-between gap-3"><span className="font-semibold text-slate-800">{s.sent} {s.sent === 1 ? 'person' : 'people'}</span><span className="text-xs text-slate-400">{new Date(s.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{s.by ? ` · ${s.by}` : ''}</span></div>
               <p className="text-slate-600 mt-1">{bundleSummary(s.videoIds)}</p>
-              {(() => { const to = [...s.roles.map(r => TRAINING_ROLE_LABELS[r] || r), ...(s.people.length ? [`${s.people.length} picked by name`] : []), ...(s.emails || []), ...(s.meCopy ? ['you'] : [])]; return to.length ? <p className="text-xs text-slate-400 mt-0.5">To: {to.join(', ')}</p> : null })()}
+              {(() => { const to = [...(s.everyone ? ['everyone working it'] : []), ...s.roles.map(r => TRAINING_ROLE_LABELS[r] || r), ...(s.people.length ? [`${s.people.length} picked by name`] : []), ...(s.emails || []), ...(s.meCopy ? ['you'] : []), ...(s.excluded?.length ? [`${s.excluded.length} left out`] : [])]; return to.length ? <p className="text-xs text-slate-400 mt-0.5">To: {to.join(', ')}</p> : null })()}
               {s.event && <p className="text-xs text-slate-500 mt-0.5">Event: {s.event}</p>}
               {s.subject && <p className="text-xs text-slate-500 mt-0.5">Subject: {s.subject}</p>}
               {s.to && s.to.length > 0 && <p className="text-xs text-slate-600 mt-1">Sent to: {s.to.map(t => t.name && t.name !== t.email ? `${t.name} (${t.email})` : t.email).join(', ')}</p>}
@@ -322,6 +323,11 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
   // an Assigners pre-pick sent a "sample to myself" to the assigners too).
   const [roles, setRoles] = useState<Set<string>>(new Set())
   const [eventId, setEventId] = useState('')
+  // Everyone working the event is a pick of its own, and anyone matched can be unticked
+  // (Bo, Oct 14 2026: he picked Monster Mash and Nicole, and every athletic trainer on the
+  // event was in the send, with no way to leave them out).
+  const [everyone, setEveryone] = useState(false)
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const onEv = eventId ? people.filter(p => p.events?.includes(eventId)) : people
   const [chosen, setChosen] = useState<Set<string>>(() => new Set(initialChosen || []))
   const [q, setQ] = useState('')
@@ -341,9 +347,9 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
   const [emailsText, setEmailsText] = useState('')
   const emails = emailsText.split(/[\s,;]+/).map(e => e.trim()).filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
   const emailsKey = emails.join(',')
-  const [preview, setPreview] = useState<{ count: number; names: string[]; noEmail: string[]; newPeople?: string[]; emailOn: boolean; sample?: { to: string; subject: string; html: string } | null } | null>(null)
+  const [preview, setPreview] = useState<{ count: number; names: string[]; noEmail: string[]; newPeople?: string[]; people?: { id: string; name: string; roles: string[]; hasEmail: boolean }[]; emailOn: boolean; sample?: { to: string; subject: string; html: string } | null } | null>(null)
   const [busy, setBusy] = useState(false)
-  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), emails, meCopy, eventId, subject, body: msg, ...extra })
+  const body = (extra: object) => JSON.stringify({ videoIds: ids, roles: Array.from(roles), workerIds: Array.from(chosen), emails, meCopy, eventId, everyone, exclude: Array.from(excluded), subject, body: msg, ...extra })
   useEffect(() => {
     if (!roles.size && !chosen.size && !meCopy && !emails.length && !eventId) { setPreview(null); return }
     let live = true
@@ -351,9 +357,11 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
     const t = setTimeout(() => fetch('/api/training/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body({ preview: true }) }).then(r => r.ok ? r.json() : null).then(d => { if (live) setPreview(d) }).catch(() => {}), 400)
     return () => { live = false; clearTimeout(t) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roles, chosen, meCopy, emailsKey, eventId, subject, msg])
+  }, [roles, chosen, meCopy, emailsKey, eventId, everyone, excluded, subject, msg])
   const flip = (set: Set<string>, setter: (s: Set<string>) => void, k: string) => { const n = new Set(set); n.has(k) ? n.delete(k) : n.add(k); setter(n) }
   const matches = q.trim() ? people.filter(p => p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : []
+  const jobLabel = (r: string) => WORKER_ROLES.find(x => x.value === r)?.label || TRAINING_ROLE_LABELS[r] || r
+  const pill = (on: boolean) => `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-slate-400'}`
   const send = async () => {
     const list = preview?.names || []
     if (!confirm(`Email ${ids.length === 1 ? 'this video' : `these ${ids.length} videos`} to ${list.length} ${list.length === 1 ? 'person' : 'people'}?\n\n${list.join('\n')}`)) return
@@ -377,21 +385,28 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
         {events.length > 0 && (
           <div>
             <label htmlFor="send-event" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Working an event</label>
-            <select id="send-event" value={eventId} onChange={e => setEventId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+            <select id="send-event" value={eventId} onChange={e => { setEventId(e.target.value); if (!e.target.value) setEveryone(false) }} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
               <option value="">Any event (whole Staff Pool)</option>
               {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name} · {people.filter(p => p.events?.includes(ev.id)).length} on staff</option>)}
             </select>
-            {eventId && <p className="text-[11px] text-slate-500 mt-1">Only people on this event&apos;s staff roster. Pick a role below to narrow it, or none for everyone working it ({onEv.length}).</p>}
+            {eventId && <p className="text-[11px] text-slate-500 mt-1">A role below goes only to people on this event&apos;s staff roster ({onEv.length}). To send to all of them, pick <b>Everyone working it</b>.</p>}
           </div>
         )}
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{eventId ? 'Who is a…' : 'To everyone who is a…'}</p>
           <div className="flex flex-wrap gap-2">
+            {eventId && (
+              <button type="button" onClick={() => setEveryone(v => !v)} aria-pressed={everyone} className={pill(everyone)}>
+                {everyone && <Check size={14} aria-hidden />}Everyone working it ({onEv.length})
+              </button>
+            )}
             {roleKeys.map(r => (
-              <button key={r} type="button" onClick={() => flip(roles, setRoles, r)} aria-pressed={roles.has(r)}
-                className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${roles.has(r) ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600'}`}>{TRAINING_ROLE_LABELS[r]}</button>
+              <button key={r} type="button" onClick={() => flip(roles, setRoles, r)} aria-pressed={roles.has(r)} className={pill(roles.has(r))}>
+                {roles.has(r) && <Check size={14} aria-hidden />}{TRAINING_ROLE_LABELS[r]}
+              </button>
             ))}
           </div>
+          {(roles.size > 0 || everyone) && <p className="text-[11px] text-slate-500 mt-1.5">Tap a pill again to turn it off.</p>}
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">…and/or these people</p>
@@ -407,6 +422,28 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
           <p className="text-[11px] text-slate-400 mt-1">Someone not on staff yet gets a link to create their login first, then the videos.</p>
           <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer"><input type="checkbox" checked={meCopy} onChange={e => setMeCopy(e.target.checked)} className="accent-teal-600" /> Send me a copy too</label>
         </div>
+        {(preview?.people?.length || 0) > 0 && (
+          <div>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Who gets it <span className="normal-case font-normal text-slate-400">· untick anyone to leave them out</span></p>
+              <div className="flex gap-3 text-xs font-semibold">
+                <button type="button" onClick={() => setExcluded(new Set(preview!.people!.map(p => p.id)))} className="text-slate-500 hover:text-slate-800">Untick all</button>
+                <button type="button" onClick={() => setExcluded(new Set())} className="text-teal-700 hover:text-teal-900">Tick all</button>
+              </div>
+            </div>
+            <ul className="mt-1.5 max-h-56 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+              {preview!.people!.map(p => (
+                <li key={p.id}>
+                  <label className={`flex items-center gap-2.5 px-3 py-2 text-sm ${p.hasEmail ? 'cursor-pointer hover:bg-slate-50' : 'opacity-60'}`}>
+                    <input type="checkbox" className="accent-teal-600" disabled={!p.hasEmail} checked={p.hasEmail && !excluded.has(p.id)} onChange={() => flip(excluded, setExcluded, p.id)} />
+                    <span className={`flex-1 min-w-0 truncate ${excluded.has(p.id) ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{p.name}</span>
+                    <span className="text-xs text-slate-400 whitespace-nowrap">{p.hasEmail ? p.roles.map(jobLabel).join(', ') : 'No email on file'}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div>
           <div className="flex items-baseline justify-between gap-2">
             <label htmlFor="send-subject" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Message</label>
