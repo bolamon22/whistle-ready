@@ -5,6 +5,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { Camera, CheckCircle2, Shield } from 'lucide-react'
 import { uploadPlayerPhoto } from '@/lib/photoClient'
 import CredentialPreview from '@/app/o/[slug]/gallery/shoot/CredentialPreview'
+import HowToVideoLink from '@/components/HowToVideoLink'
 import type { ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
 import {
   COACH_ROLES, COACH_LEVELS, COACH_CERTS, CERT_SHORT,
@@ -41,7 +42,7 @@ const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.trim())
 type TeamPick = { club: string; team: string; division: string }
 
 export default function CoachRegForm({
-  orgId, tournamentId, tournamentName, clubs, cfg, sections, card,
+  orgId, tournamentId, tournamentName, clubs, cfg, sections, card, howTo = false,
 }: {
   orgId: string
   tournamentId: string
@@ -50,6 +51,8 @@ export default function CoachRegForm({
   cfg: CoachConfig
   sections: WaiverSection[]
   card: CoachCardContext
+  /** Show the "Watch how" coach video link (lib/howToVideos: only the org it is branded for). */
+  howTo?: boolean
 }) {
   const [d, setD] = useState({
     coachFullName: '', email: '', mobilePhone: '', clubName: '', coachingRole: '',
@@ -207,6 +210,7 @@ export default function CoachRegForm({
         <p className="text-[11px] font-bold tracking-[0.11em] uppercase text-teal-600 mb-1.5">{card.orgName}</p>
         <h1 className="text-[27px] leading-tight font-extrabold text-slate-900 tracking-tight">{cfg.title}</h1>
         <p className="text-sm text-slate-500 mt-1.5 max-w-2xl">{cfg.intro}</p>
+        {howTo && <HowToVideoLink id="coach-waiver" className="mt-2" />}
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_332px] gap-6 items-start">

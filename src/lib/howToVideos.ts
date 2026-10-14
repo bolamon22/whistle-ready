@@ -18,6 +18,8 @@ export const HOW_TO_VIDEOS: HowToVideo[] = [
     blurb: "Fill out and sign the online waiver, then save your info so siblings and the next event take a few clicks." },
   { id: 'club-portal', title: "Your club director's portal", audience: 'Club directors', secs: 69,
     blurb: 'Pay your balance, track waivers, request team changes, and register for future events.' },
+  { id: 'coach-waiver', title: 'Coach waiver and credential', audience: 'Coaches', secs: 83,
+    blurb: 'Sign the coach waiver once per event, cover every team you coach, and get your sideline credential.' },
 ]
 
 export const howToVideo = (id: string) => HOW_TO_VIDEOS.find(v => v.id === id) || null
@@ -31,6 +33,7 @@ export const howToMinutes = (secs: number) => `${Math.max(1, Math.round(secs / 6
 const EMAIL_LABELS: Record<string, string> = {
   'waiver': 'How families sign the waiver',
   'club-portal': 'Tour your club portal',
+  'coach-waiver': 'How coaches sign the waiver',
 }
 
 /** One quiet line of video links for a club email. `abs` turns a site path into a

@@ -2,6 +2,7 @@ import { createClient } from '@libsql/client'
 import { headers } from 'next/headers'
 import { Trophy } from 'lucide-react'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
+import { hasHowTo } from '@/lib/howToVideos'
 import { appBaseUrl, fmtRange, orgSiteConfig } from '@/lib/playerPass'
 import { coachConfig, coachWaiverFor } from '@/lib/coachForm'
 import type { ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
@@ -105,6 +106,7 @@ export default async function TournamentCoachWaiver({ params }: { params: { id: 
         clubs={clubs}
         cfg={cfg}
         sections={coachWaiverFor(cfg)}
+        howTo={hasHowTo(String(org.slug || ''))}
         card={{
           eventNames: String(t.name || ''),
           eventDates: fmtRange(String(t.startDate || ''), String(t.endDate || '')),

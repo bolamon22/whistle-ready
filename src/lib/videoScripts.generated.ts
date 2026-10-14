@@ -474,5 +474,23 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Track your tournament history, and register for future events with just a few clicks."
     ],
     "outro": "Sunshine Events Group. From registration to the final whistle, so you can focus on the game."
+  },
+  "coach-waiver": {
+    "title": "Coach waiver\nand credential",
+    "intro": "Sunshine Events Group. Signing your coach waiver, and getting your credential.",
+    "lines": [
+      "Every coach, assistant coach, and team manager on the sideline signs this once per event. Open the coach waiver link from your club, or from the event page.",
+      "Your credential builds itself as you fill in the form. It stays gray until the waiver is signed.",
+      "Add your name, email, and mobile phone.",
+      "Tick every team you will coach this weekend. You get one credential that covers all of them.",
+      "Your club fills in for you. Pick your role, and add an emergency contact.",
+      "Answer the hotel question. A photo and your certifications are optional.",
+      "Read the three agreements, and check each one.",
+      "Type your full name to sign. It has to match the name at the top. Your credential goes live.",
+      "Tap Submit and get my credential. We email you a link to your credential, and a link to create a coach login.",
+      "Open your credential from the email. Save it to your phone, add it to Apple Wallet, or print it.",
+      "You do not need to bring it. Your signed waiver is what gets you on the sideline. Coaching another team later? Tap Add another team."
+    ],
+    "outro": "Sunshine Events Group. There from registration to the final whistle, so you can focus on the game."
   }
 }
