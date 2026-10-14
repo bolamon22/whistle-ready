@@ -255,7 +255,10 @@ export default function NavBar() {
         ) : (
           <div className="ml-auto flex flex-shrink-0 items-center gap-2">
             <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-slate-700 hover:text-teal-700">Sign in</Link>
-            <Link href="/register" className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Register</Link>
+            {/* "Create account", not "Register": on an event page "Register" read as
+                registering a team, and refs used it to sign up to officiate. It made
+                them Parent logins (Oct 14 2026); /register now asks who it's for. */}
+            <Link href="/register" className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 whitespace-nowrap">Create account</Link>
           </div>
         )}
       </header>

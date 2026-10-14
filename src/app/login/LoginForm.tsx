@@ -19,7 +19,12 @@ export default function LoginForm({ brandName, brandLogo }: { brandName?: string
   // to be cleared. Without a word of explanation that reads as a random logout.
   const [claimed, setClaimed] = useState(false)
   useEffect(() => {
-    try { setClaimed(new URLSearchParams(window.location.search).get('claimed') === '1') } catch { /* ignore */ }
+    try {
+      const q = new URLSearchParams(window.location.search)
+      setClaimed(q.get('claimed') === '1')
+      // Create account's "Email me my portal link" (club directors) opens the form below.
+      if (q.get('portal') === '1') setLinkOpen(true)
+    } catch { /* ignore */ }
   }, [])
   const [loading, setLoading] = useState(false)
   // Show-password toggle (Bo) — long passwords on a phone keyboard are a guess
