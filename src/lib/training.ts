@@ -11,7 +11,7 @@ export type TrainingGroup = { key: string; label: string; roles: string[] | null
 export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'sign-up', num: '01', title: 'Sign up and get the app on your phone', blurb: 'The signup form, your photo, and adding Whistle Ready to your home screen.', secs: 59 },
   { id: 'home', num: '02', title: 'Your staff home page', blurb: 'Sign up to work an event and answer its days, your W-9, Up next and your games.', secs: 66 },
-  { id: 'availability', num: '02b', title: 'Set your availability', blurb: 'Answer each day: All day, Morning, Afternoon or Can’t work, or pick exact game times.', secs: 53 },
+  { id: 'availability', num: '02b', title: 'Set your availability', blurb: 'Answer each day: All day, Morning, Afternoon or Can’t work, or pick exact game times. Each day locks 48 hours before it.', secs: 61 },
   { id: 'staff-id', num: '03', title: 'Your staff ID', blurb: 'Apple Wallet, printing it, and wearing it all day.', secs: 38 },
   { id: 'keep-score', num: '04', title: 'Keep score live', blurb: 'Start the clock, add goals, fix a mistake, halftime and Save.', secs: 54 },
   { id: 'penalties', num: '05', title: 'Penalty time', blurb: 'Start a penalty, match the ref, and release the player.', secs: 48 },

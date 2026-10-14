@@ -256,12 +256,12 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "intro": "Set your availability, in Whistle Ready.",
     "lines": [
       "Working an event? Until every day has an answer, a To do card sits at the top of your home page. Tap Answer now.",
-      "Under the event, tap one answer for each day. It saves right away, and the assigner sees it.",
+      "Under the event, tap one answer for each day. It saves right away, and the assigner sees it. Each day locks 48 hours before it starts, so answer early.",
       "Working the whole event? I can work both days, all day answers every day at once.",
       "Or answer each day: All day, Morning, or Afternoon. Morning means games that start before noon.",
       "Can't work a day? Tap Can't work. You won't be put on any games that day.",
       "Once the schedule is posted, you can pick exact game times instead. Tap a quick pick, or tap each time you can work, then Save.",
-      "When every day has an answer, the card says You're all set. You can change an answer any time before the event."
+      "When every day has an answer, the card says You're all set. You can change a day until 48 hours before it starts. After that, call or text the assigner."
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
