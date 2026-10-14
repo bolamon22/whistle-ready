@@ -3,7 +3,7 @@ title: Add a user and set their role
 category: Admin
 order: 700
 routes: /admin/users, /profile/*
-keywords: logins login user management users add user create account role change role reset password delete user club links club director link coach two hats field director with a club assigner pay access sees pay for boys refs girls refs scorekeepers field ops filter staff job trainer athletic trainer referee scorekeeper office parents clubs coaches last on who uses the app no staff record staff record
+keywords: logins login user management users add user create account role change role reset password delete user club links club director link coach two hats field director with a club assigner pay access sees pay for boys refs girls refs scorekeepers field ops filter staff job trainer athletic trainer referee scorekeeper office parents clubs coaches last on who uses the app no staff record staff record add to staff pool not in staff pool link staff record signed up as a parent wrong role referee shows as parent official parent account can't find staff
 ---
 **Logins** (once called User Management) is the admin list of every account. Add users, change roles, reset passwords, link club directors to their clubs, or delete accounts.
 
@@ -15,7 +15,13 @@ keywords: logins login user management users add user create account role change
 3. Pick a **Role**.
 4. Click **Add login**. Share the password with them yourself.
 
-**To change a role:** pick a new role in the **Role** column. It saves right away.
+**To change a role:** pick a new role in the **Role** column. It saves right away. Changing a role to **Staff** doesn't put anyone on a staff list by itself, so if they aren't in the Staff Pool yet, **Add to the Staff Pool** opens next.
+
+**To put a login in the Staff Pool** (a ref who signed up as a Parent, for example):
+1. Click **+ Add to Staff Pool** under their name. A login that shares its name with a Staff Pool record under another email shows **Link Staff Pool record** instead.
+2. If they're already in the Staff Pool under another email (or none), find them under **Already in the Staff Pool under another email?**. Records with the same last name show first, and you can search by name or email. Click **Link**, read what changes, and click **Link record**. The record takes this login's email, so staff emails go there too.
+3. If they're new, pick their job under **New to the Staff Pool**: **Ref**, **Scorekeeper**, **Athletic trainer** or **Field ops**. Refs also pick **Boys**, **Girls** or **Both**. Click the **Add to the Staff Pool** button (it shows their first name).
+A Parent, Coach, Club Director or Viewer login becomes **Staff** when you save, and takes the record's organization. Office roles keep theirs. Add their phone, pay and certification on their staff record.
 
 **To reset a password:** click **Reset PW**, enter the new password, and click **Reset Password**.
 
@@ -44,7 +50,7 @@ A link opens that club's registrations at that tournament as they are when you a
 - **Last on** narrows to people on now, on in the last 7 or 30 days, or with **No visit recorded**. Visits are recorded from Oct 12, 2026.
 - Sort by **Newest first**, **Name A–Z** or **Last on**. **Clear filters** resets.
 
-Every ref, scorekeeper, trainer and field ops worker logs in as **Staff**. Their job comes from their Staff Pool profile with the same email, shown under their name with a **Staff record →** link. **No staff record** means no Staff Pool profile has that email, so the app doesn't know their job: add one in the Staff Pool, or fix the email on either side. Club directors and coaches show the clubs they can open; parents show how many player waivers they're linked to.
+Every ref, scorekeeper, trainer and field ops worker logs in as **Staff**. Their job comes from their Staff Pool profile with the same email, shown under their name with a **Staff record →** link. **+ Add to Staff Pool** means no Staff Pool profile has that email, so they aren't on staff lists, rosters or Auto-assign: click it to add or link them. Club directors and coaches show the clubs they can open; parents show how many player waivers they're linked to.
 
 **Common problems:**
 - Delete cannot be undone. You cannot delete your own account.

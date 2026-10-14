@@ -10,13 +10,16 @@ import { agoLabel, isOnline, parseDbTime } from '@/lib/presenceTime'
 import toast, { Toaster } from 'react-hot-toast'
 import AssignerPayAccess from '@/components/AssignerPayAccess'
 import FieldDirectorEvents, { type FieldDirectorEvent } from '@/components/FieldDirectorEvents'
+import StaffPoolDialog from '@/components/StaffPoolDialog'
 import { DEFAULT_ASSIGNER_GROUPS, type PayGroup } from '@/lib/payGroups'
 
-// staff: the Staff Pool record with this email (jobs = its roles); clubs: club names
+// staff: the Staff Pool record with this email (jobs = its roles); staffMatch: a
+// record with the same name under another email, offered to link; clubs: club names
 // this login can open in the portal; players: player waivers a parent is linked to.
 interface User {
   id: string; name: string; email: string; role: string; createdAt: string; lastSeenAt?: string | null; lastLoginAt?: string | null
   staff?: { workerId: string; jobs: string[]; gender: string; records: number } | null
+  staffMatch?: { workerId: string; name: string } | null
   clubs?: string[]; players?: number
 }
 interface ClubLink { id: string; tournamentId: string; clubName: string }
@@ -120,6 +123,9 @@ function AdminUsersInner() {
   const [resetting, setResetting] = useState(false)
   // Which staff pay each assigner sees (one runs boys refs, one girls refs).
   const [payAccess, setPayAccess] = useState<Record<string, { groups: PayGroup[]; custom: boolean }>>({})
+  // "Add to the Staff Pool" (components/StaffPoolDialog), opened from a row or right
+  // after a role is changed to Staff: the role alone never put anyone on a staff list.
+  const [staffFor, setStaffFor] = useState<{ user: User; suggest?: string; roleJustChanged?: boolean } | null>(null)
   // Which events each field director works (lib/fieldDirector).
   const [fd, setFd] = useState<{ fieldDirectors: Record<string, { orgId: string | null; events: string[] }>; events: FieldDirectorEvent[] }>({ fieldDirectors: {}, events: [] })
 
@@ -145,10 +151,12 @@ function AdminUsersInner() {
     fetch('/api/field-director-events').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.fieldDirectors) setFd({ fieldDirectors: d.fieldDirectors, events: Array.isArray(d.events) ? d.events : [] }) }).catch(() => {})
   }
 
-  const changeRole = async (id: string, role: string) => {
-    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, role }) })
+  const changeRole = async (u: User, role: string) => {
+    const res = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: u.id, role }) })
+    if (!res.ok) { toast.error('Could not change the role'); return }
     toast.success('Role updated!')
     load()
+    if (role === 'staff' && !u.staff) setStaffFor({ user: { ...u, role }, suggest: u.staffMatch?.workerId, roleJustChanged: true })
   }
 
   const addUser = async (e: React.FormEvent) => {
@@ -170,6 +178,9 @@ function AdminUsersInner() {
       })
     }
     toast.success(`${newName} added!`)
+    if (newRole === 'staff' && data.id) {
+      setStaffFor({ user: { id: data.id, name: data.name || newName, email: data.email || newEmail, role: 'staff', createdAt: '' } })
+    }
     setShowAdd(false)
     setNewName(''); setNewEmail(''); setNewPassword(''); setNewRole('viewer')
     setAdding(false)
@@ -462,6 +473,12 @@ function AdminUsersInner() {
         </div>
       )}
 
+      {staffFor && (
+        <StaffPoolDialog login={staffFor.user} suggest={staffFor.suggest} roleJustChanged={staffFor.roleJustChanged}
+          onClose={() => setStaffFor(null)}
+          onDone={msg => { setStaffFor(null); toast.success(msg); load() }} />
+      )}
+
       <div className="bg-white border border-gray-200 rounded-2xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -480,7 +497,7 @@ function AdminUsersInner() {
               <tr className="hover:bg-gray-50">
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-800">{u.name}</div>
-                  {(u.staff || whoOf(u.role) === 'staff' || (u.clubs?.length ?? 0) > 0 || (u.players ?? 0) > 0) && (
+                  {(u.staff || u.staffMatch || whoOf(u.role) === 'staff' || (u.clubs?.length ?? 0) > 0 || (u.players ?? 0) > 0) && (
                     <div className="flex flex-wrap items-center gap-1 mt-1">
                       {u.staff?.jobs.map(j => (
                         <span key={j} className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">{jobLabel(j, u.staff?.gender)}</span>
@@ -491,9 +508,19 @@ function AdminUsersInner() {
                           Staff record{u.staff.records > 1 ? ` (${u.staff.records})` : ''} →
                         </Link>
                       )}
-                      {!u.staff && whoOf(u.role) === 'staff' && (
-                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700"
-                          title="No Staff Pool profile has this email, so the app doesn't know their job">No staff record</span>
+                      {!u.staff && u.staffMatch && (
+                        <button type="button" onClick={() => setStaffFor({ user: u, suggest: u.staffMatch?.workerId })}
+                          className="text-left text-[11px] font-semibold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                          title={`The Staff Pool has ${u.staffMatch.name} under another email. Link that record to this login.`}>
+                          Link Staff Pool record
+                        </button>
+                      )}
+                      {!u.staff && !u.staffMatch && whoOf(u.role) === 'staff' && (
+                        <button type="button" onClick={() => setStaffFor({ user: u })}
+                          className="text-left text-[11px] font-semibold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                          title="No Staff Pool record has this email, so they aren't on staff lists, rosters or Auto-assign. Add them, or link the record they have.">
+                          + Add to Staff Pool
+                        </button>
                       )}
                       {(u.clubs ?? []).slice(0, 2).map(c => (
                         <span key={c} className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 text-violet-700">{c}</span>
@@ -511,7 +538,7 @@ function AdminUsersInner() {
                 <td className="px-4 py-3">
                   <select
                     value={u.role}
-                    onChange={e => changeRole(u.id, e.target.value)}
+                    onChange={e => changeRole(u, e.target.value)}
                     className={`text-xs font-semibold px-2 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 ${ROLE_COLORS[u.role] || ROLE_COLORS.viewer}`}
                   >
                     {(ROLES.includes(u.role) ? ROLES : [u.role, ...ROLES]).map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
