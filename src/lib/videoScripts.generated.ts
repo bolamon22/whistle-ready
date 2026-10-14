@@ -507,6 +507,22 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
+  "dir-schedule": {
+    "title": "Build and publish\nthe schedule",
+    "intro": "Whistle Ready tournament director training. Build and publish the schedule.",
+    "lines": [
+      "The Scheduler puts every game on a field and a time. Games that still need a spot wait up top, in the Parking Lot.",
+      "Drag a game onto a field and time to place it.",
+      "To place a lot of games at once, click Auto-fill.",
+      "Pick the division and the type of games, how many games each team plays each day, and which fields to use.",
+      "Click Place games. Anything that doesn’t fit stays in the Parking Lot. It saves a checkpoint first, so Revert undoes the whole fill.",
+      "Check it from different angles. Grid shows each field. Teams shows each team’s day, so you can spot a long wait or back-to-back games.",
+      "Rain delay? Weather pushes the rest of the day back, or tightens the time slots. To close a field, click its name at the top of the grid.",
+      "The schedule stays a draft until you click Publish. That puts it on your public page, and can alert the phones of parents who follow those teams.",
+      "Change something later? Publish again. Only the teams whose games moved get an alert."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
   "waiver": {
     "title": "Your player's waiver\nand parent account",
     "intro": "Sunshine Events Group. Completing your player's waiver, and setting up your parent account.",
