@@ -17,9 +17,27 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     subjectTemplate?: string
     bodyTemplate?: string
     sendAt?: string
+    test?: boolean
   }
   const { clubs } = body
   if (!clubs?.length) return NextResponse.json({ error: 'clubs required' }, { status: 400 })
+
+  // One copy to the signed-in staffer, built from the first club on the list so
+  // the merge fields are real. The address comes from the SESSION, never the
+  // request body — a typo there would put a club invite in front of a stranger.
+  // Nothing is written and no club is emailed.
+  if (body.test === true) {
+    const session = await getServerSession(authOptions)
+    const me = String((session?.user as { email?: string } | undefined)?.email || '').trim().toLowerCase()
+    if (!me) return NextResponse.json({ error: 'Your account has no email address to send to' }, { status: 400 })
+    const t = await runReturningInvite({
+      tournamentId: params.id, clubs: clubs.slice(0, 1),
+      subjectTemplate: body.subjectTemplate, bodyTemplate: body.bodyTemplate,
+      testTo: me,
+    })
+    if (!t.ok) return NextResponse.json({ error: t.error }, { status: t.status })
+    return NextResponse.json({ ok: true, test: true, to: me, sent: t.sent, errors: t.errors })
+  }
 
   const sendAt = String(body.sendAt || '').trim()
   if (sendAt) {

@@ -34,8 +34,17 @@ export async function runReturningInvite(a: {
   notifyTo?: string
   /** True only for a run the scheduler fired, so the receipt can say which it was. */
   scheduled?: boolean
+  /** Send ONE copy here instead of to the clubs — a preview in a real inbox, so
+   *  Bo can see the buttons and the logos render. Set only from the session's own
+   *  address, never from the request body. */
+  testTo?: string
 }): Promise<{ ok: true; sent: number; errors: string[]; skippedDupes: number } | { ok: false; error: string; status: number }> {
   if (!a.clubs?.length) return { ok: false, error: 'clubs required', status: 400 }
+
+  // A test copy goes down THIS function, not a second code path — a test that
+  // renders through different code proves nothing about the real send. Only the
+  // recipient, the subject prefix, the banner and the receipt differ.
+  const testMode = !!String(a.testTo || '').trim()
 
   // One invite per address, whatever the caller sent (Bo: pulling several past
   // events must never mail the same director twice). The page already merges
@@ -47,8 +56,12 @@ export async function runReturningInvite(a: {
     seen.add(key)
     return true
   })
-  const skippedDupes = a.clubs.length - recipients.length
-  if (!recipients.length) return { ok: false, error: 'No usable email addresses', status: 400 }
+  const skippedDupes = testMode ? 0 : a.clubs.length - recipients.length
+  if (!testMode && !recipients.length) return { ok: false, error: 'No usable email addresses', status: 400 }
+  // Built from a real club so the merge fields are real, but sent to the tester.
+  const toSend = testMode
+    ? [{ ...a.clubs[0], contactEmail: String(a.testTo).trim().toLowerCase() }]
+    : recipients
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: a.tournamentId },
@@ -136,7 +149,7 @@ export async function runReturningInvite(a: {
   const errors: string[] = []
   let sample: { subject: string; html: string; to: string } | null = null
 
-  for (const club of recipients) {
+  for (const club of toSend) {
     const vars: Record<string, string> = {
       clubName: club.clubName,
       teamsRegistered: String(teamsRegistered),
@@ -156,6 +169,11 @@ export async function runReturningInvite(a: {
 
     const subject = applyVars(subjectTemplate, vars)
     const plainBody = applyVars(bodyTemplate, vars)
+    // Unmistakable in an inbox, so a test copy is never forwarded as the real one.
+    const banner = testMode
+      ? `<div style="background:#0b1f3a;color:#ffffff;border-radius:8px;padding:11px 14px;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55">`
+        + `<strong>TEST COPY</strong> — sent to you, not to ${esc(club.clubName)}. The merge fields below are ${esc(club.clubName)}'s real details, and nothing was sent to them. Every link and button is live.</div>`
+      : ''
 
     // Convert plain text body to simple HTML
     const htmlBody = plainBody
@@ -168,7 +186,7 @@ export async function runReturningInvite(a: {
       eyebrow: tournament.name || fromName,
       logoUrl: eventLogo, logoHref: eventHome, logoAlt: tournament.name, logoBox,
       footerLogoUrl: segLogo, footerHref: orgHome, footerLogoBox,
-      body: `${htmlBody}
+      body: `${banner}${htmlBody}
             <div style="margin:28px 0;">
               <a href="${regUrl}"
                 style="display:inline-block;background:#0f172a;color:#ffffff;font-weight:600;
@@ -178,12 +196,12 @@ export async function runReturningInvite(a: {
             </div>
             <p style="font-size:12px;color:#94a3b8">If the button does not work, copy this link into your browser:<br>${regUrl}</p>`,
     })
-    const res = await sendEmail({ ...sender, fromName, to: club.contactEmail, subject, html })
+    const res = await sendEmail({ ...sender, fromName, to: club.contactEmail, subject: testMode ? `[TEST] ${subject}` : subject, html })
     if (res.ok) { sent++; if (!sample) sample = { subject, html, to: club.contactEmail } }
     else errors.push(`${club.clubName}: ${res.error}`)
   }
 
-  if (a.notifyTo) {
+  if (a.notifyTo && !testMode) {
     // A RECEIPT FOR EVERY RUN, not just a scheduled one.
     //
     // This used to fire only for the cron, on the reasoning that a Send-now shows a

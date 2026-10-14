@@ -34,6 +34,7 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
   const [filter, setFilter] = useState<'all' | 'registered' | 'not-registered'>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sending, setSending] = useState(false)
+  const [testing, setTesting] = useState(false)
   // Send now or queue it — same cron that runs the club letters (Bo)
   const [when, setWhen] = useState<'now' | 'later'>('now')
   const [sendAt, setSendAt] = useState('')
@@ -173,6 +174,29 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
 
   function selectAllUnregistered() {
     setSelected(new Set(clubs.filter(c => !c.registered).map(c => c.id)))
+  }
+
+  // A real copy of this letter in Bo's own inbox — the only way to see how the
+  // buttons, logos and spacing actually render, which no on-page preview shows.
+  // Built from the club the preview is on, so what he reads is what they'd get.
+  async function sendTest() {
+    const c = previewClub ?? clubs.find(x => !x.registered) ?? clubs[0]
+    if (!c) { toast.error('Pick some past tournaments first — the test is built from a real club'); return }
+    setTesting(true)
+    try {
+      const res = await fetch(`/api/tournaments/${params.id}/returning-teams/invite`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          test: true,
+          clubs: [{ clubName: c.clubName, contactEmail: c.contactEmail, contactName: c.contactName, numTeams: c.numTeams, divisions: c.divisions, lastEvent: c.lastEvent }],
+          subjectTemplate: subject, bodyTemplate: body,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.ok) toast.success(`Test sent to ${data.to} — built from ${c.clubName}. Nothing went to the club.`, { duration: 6000 })
+      else toast.error(data.error || 'Could not send the test')
+    } catch { toast.error('Could not send the test') }
+    setTesting(false)
   }
 
   async function sendInvites() {
@@ -325,6 +349,11 @@ export default function ReturningTeamsPage({ params }: { params: { id: string } 
                       <button onClick={() => setNewName(`${activeTpl?.label ?? 'My letter'} copy`)} disabled={savingTpl}
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:border-slate-300">
                         Save as new…
+                      </button>
+                      <button onClick={sendTest} disabled={testing || !clubs.length}
+                        title="Emails one copy to you, built from the club in the preview. No club is emailed."
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed">
+                        {testing ? 'Sending…' : 'Send a test to me'}
                       </button>
                       {tplDirty && (
                         <button onClick={() => applyTemplate(templateKey)}
