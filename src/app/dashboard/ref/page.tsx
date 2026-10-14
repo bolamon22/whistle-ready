@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import MyAvailability from '@/components/MyAvailability'
 import StaffW9Card from '@/components/StaffW9Card'
 import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search } from 'lucide-react'
 import { videosFor } from '@/lib/training'
@@ -56,6 +57,7 @@ export default function RefDashboard() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [allGames, setAllGames] = useState<Game[]>([])
+  const [availOpen, setAvailOpen] = useState('') // event id whose My availability panel is open
   const [selTournament, setSelTournament] = useState('')
   const [view, setView] = useState<'mine' | 'all'>('mine')
   const [showPast, setShowPast] = useState(false)
@@ -324,12 +326,13 @@ export default function RefDashboard() {
                 </div>
                 {ev.working && (
                   <div className="flex items-center gap-3 mt-2">
-                    <Link href={`/tournaments/${ev.id}/availability`} className="text-xs font-semibold text-teal-700 hover:text-teal-900">Set my availability →</Link>
+                    {portal.worker && <button type="button" onClick={() => setAvailOpen(o => o === ev.id ? '' : ev.id)} aria-expanded={availOpen === ev.id} className="text-xs font-semibold text-teal-700 hover:text-teal-900">{availOpen === ev.id ? 'Done' : 'Set my availability →'}</button>}
                     {ev.assignedGames === 0 && (
                       <button onClick={() => setWorkingEvent(ev, false)} disabled={!!eventBusy} className="text-xs text-gray-400 hover:text-gray-600 ml-auto">Can't work it</button>
                     )}
                   </div>
                 )}
+                {ev.working && portal.worker && availOpen === ev.id && <MyAvailability ev={ev} workerId={portal.worker.id} />}
               </div>
             ))}
           </div>
