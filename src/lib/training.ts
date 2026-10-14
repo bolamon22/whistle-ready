@@ -47,7 +47,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'dir-setup', num: 'D02', series: 'director', title: 'Tournament setup: the basics', blurb: 'The setup page, divisions and their Full badges, venues, field hours, and game timing.', secs: 74 },
   { id: 'dir-money', num: 'D03', series: 'director', title: 'Tournament setup: fees, pay and standings', blurb: 'Team fees and division rates, the confirmation letter, registration types, staff pay, officials per game, and tiebreakers.', secs: 73 },
   { id: 'dir-divisions', num: 'D04', series: 'director', title: 'Divisions, pools and brackets', blurb: 'Pools, auto-assigning teams, generating games, the bracket, Bulk Generate, and showing pools publicly.', secs: 69 },
-  { id: 'dir-schedule', num: 'D05', series: 'director', title: 'Build and publish the schedule', blurb: 'The Parking Lot, dragging games, Auto-fill, checking each team, weather delays, closing a field, and Publish.', secs: 71 },
+  { id: 'dir-schedule', num: 'D05', series: 'director', title: 'Build and publish the schedule', blurb: 'The Board view: placing games, Auto-fill, the Issues panel, weather delays, closing a field, and Publish.', secs: 92 },
   { id: 'dir-registrations', num: 'D06', series: 'director', title: 'Team registrations and payments', blurb: 'Totals, balances, filtering, recording a check, the Pay link, Email clubs, and adding or importing teams.', secs: 65 },
   { id: 'asg-send', num: 'A13', series: 'assigner', title: 'Send training videos to your refs', blurb: 'Pick the event and your refs, the message, the preview, and Who’s watched.', secs: 58 },
 ]
