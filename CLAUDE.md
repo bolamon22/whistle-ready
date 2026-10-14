@@ -174,6 +174,26 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
+  availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
+  until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
+  exact game times once the schedule is posted, every answer saved, Answered / No answer yet with a filter, and an
+  email to the ones who haven't answered. Answers live in raw table `AvailabilityAnswer` (one per worker, event and
+  day; all TEXT; `lib/availability`): `all` | `am` (games starting before noon) | `pm` | `times` (start times they
+  CAN work) | `no`. Saving one deletes that day's old `Availability` record; an old record still standing wins.
+  `effectiveUnavailability()` turns answers into the old "out at these start times" records against the game times
+  of the moment, and GET /api/availability (Assigner board warnings) and Auto-assign read it, so a schedule change
+  never strands an answer; no answer = available, as before. Pure helpers and labels: `lib/availabilityAnswers`.
+  API: GET/POST `/api/availability/answers` (staff answer only for themselves, by login email, and must be on the
+  roster; managers set anyone's, a field director only their jobs) and POST `/api/availability/remind` (org sender,
+  skips answered / no email / not theirs; an assigner only their pay groups; logged in AppSetting
+  `availReminders:<tournamentId>`). The staff portal returns each working event's days (`avail`; game times only
+  once the schedule is published). Staff home: a To do card until every day is answered, the day picker inline in
+  each event (`components/MyAvailability`, `ExactTimesSheet`), `?avail=<id>` (the email's link) scrolls to that event,
+  "Can't work it" is now **Take me off it**. `/tournaments/[id]/availability` is the head assigner's page (tiles, ref
+  coverage at the busiest start time per half day using Game.refCount, filters, set for someone, Remind, email
+  dialog). Dark mode: scoped `[data-avail]` rules in globals.css. Tests: 45 real-Prisma checks. The training videos
+  that show availability need re-recording (claude/staff-training-videos.md).
 - **Person profile: events and training (Oct 14).** Bo: list which tournaments a person is doing, add them to a
   roster from the Staff Pool ("I had to go to multiple spots to add someone"), send the staff videos from their
   profile and see whether they watched. The profile panel on the Staff Pool and the Staff roster now holds
