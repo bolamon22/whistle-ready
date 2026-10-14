@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { createClient } from '@libsql/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { checkInsFor } from '@/lib/staffCheckIn'
 
 // The signed-in staff member's games, for the staff home page (dashboard/ref).
 // The Worker is matched by email ignoring case, the same way /api/staff-portal does,
@@ -26,10 +27,11 @@ export async function GET() {
     orderBy: [{ game: { date: 'asc' } }, { game: { startTime: 'asc' } }],
   })
 
+  const checks = await checkInsFor(assignments.map(a => a.id))
   return NextResponse.json(assignments.map(a => {
     const { assignments: crew, ...game } = a.game
     return {
-      id: a.id, role: a.role, payRate: a.payRate, game,
+      id: a.id, role: a.role, payRate: a.payRate, game, checkedInAt: checks.get(a.id) || null,
       crew: crew.filter(c => c.workerId !== workerId).map(c => ({ role: c.role, name: c.worker.name, phone: c.worker.phone || '' })),
     }
   }), { headers: { 'Cache-Control': 'private, no-store' } })

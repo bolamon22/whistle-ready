@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { canSeeStaffPay, redactWorker } from '@/lib/roleScope'
 import { type PayScope, assignmentPayGroups, seesPay } from '@/lib/payGroups'
 import { payScopeFor } from '@/lib/payScope'
+import { checkInsFor } from '@/lib/staffCheckIn'
 
 // Staff only. These had no sign-in check: anyone with a tournament id could
 // read every official's contact and pay, or assign and unassign games. Pay
@@ -40,5 +41,6 @@ export async function GET(req: Request) {
     payScopeFor(gate.role, gate.userId),
   ])
   const division = new Map(games.map(g => [g.id, g.division]))
-  return NextResponse.json(assignments.map(a => shape({ ...a, gameId: a.gameId }, gate.role, scope, division.get(a.gameId) ?? '')))
+  const checks = await checkInsFor(assignments.map(a => a.id))
+  return NextResponse.json(assignments.map(a => shape({ ...a, gameId: a.gameId, checkedInAt: checks.get(a.id) || null }, gate.role, scope, division.get(a.gameId) ?? '')))
 }

@@ -8,7 +8,7 @@ import { X } from 'lucide-react'
 interface Worker { id: string; name: string; certLevel: string; defaultRole: string }
 // payRate is null when this viewer doesn't see that pay: the scheduler, or an
 // assigner for a group they don't run (lib/payGroups).
-interface Assignment { id: string; role: string; payRate: number | null; worker: Worker }
+interface Assignment { id: string; role: string; payRate: number | null; worker: Worker; checkedInAt?: string | null }
 interface Game {
   id: string; gameNumber: string; date: string; startTime: string
   division: string; location: string; team1: string; team2: string
@@ -182,6 +182,7 @@ export default function AssignmentsPage({ params }: { params: { id: string } }) 
                         <div key={a.id} className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg ${ROLE_COLORS[a.role] || 'bg-slate-100 text-slate-600'}`}>
                           <span className="font-medium">{a.worker.name}</span>
                           <span className="opacity-70">· {ROLE_LABELS[a.role] || a.role}</span>
+                          {a.checkedInAt && <span title="Checked in on the staff app" className="font-semibold text-emerald-700">· In {new Date(a.checkedInAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>}
                           {a.payRate != null && <span className="opacity-60">· ${a.payRate}</span>}
                           <button onClick={() => removeAssignment(a.id)} disabled={removing === a.id}
                             className="ml-1 opacity-50 hover:opacity-100 transition-opacity text-current"><X size={12} /></button>

@@ -7,7 +7,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import MyAvailability from '@/components/MyAvailability'
 import StaffW9Card from '@/components/StaffW9Card'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin } from 'lucide-react'
 import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
 import { teamRefKey } from '@/lib/names'
@@ -83,6 +83,7 @@ export default function RefDashboard() {
     ]).then(([a, t, p]) => {
       fetch('/api/training').then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.watched)) setTraining({ roles: d.roles || [], watched: d.watched }) }).catch(() => {})
       setAssignments(Array.isArray(a) ? a : [])
+      setCheckedIn(new Set((Array.isArray(a) ? a : []).filter((x: any) => x.checkedInAt).map((x: any) => x.game.id)))
       setTournaments(Array.isArray(t) ? t : [])
       setPortal(p && Array.isArray(p.events) ? p : null)
       // Default to the first event they're actually working, else the first tournament
@@ -99,9 +100,15 @@ export default function RefDashboard() {
     setAllGames(Array.isArray(g) ? g : [])
   }
 
-  function checkIn(id: string) {
-    setCheckedIn(s => { const n = new Set(s); n.add(id); return n })
-    toast.success('Checked in ✓')
+  // Saved per game (api/ref/checkin) so the director sees it on Assignments; tap again to undo a mis-tap.
+  async function checkIn(id: string) {
+    const undo = checkedIn.has(id)
+    if (undo && !confirm('Undo your check-in for this game?')) return
+    const res = await fetch('/api/ref/checkin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gameId: id, undo }) }).catch(() => null)
+    const d = res ? await res.json().catch(() => ({})) : {}
+    if (!res?.ok) { toast.error(d.error || 'Could not check in. Try again.'); return }
+    setCheckedIn(s => { const n = new Set(s); if (undo) n.delete(id); else n.add(id); return n })
+    toast.success(undo ? 'Check-in undone' : 'Checked in')
   }
 
   // ── My events: put yourself on / off an event's roster (see /api/staff-portal) ──
@@ -246,9 +253,9 @@ export default function RefDashboard() {
           </div>
         )}
         <div className="flex gap-2 mt-3">
-          <button onClick={() => checkIn(g.id)} disabled={checkedIn.has(g.id)}
-            className="flex-1 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-60">
-            {checkedIn.has(g.id) ? '📍 Checked in' : '📍 Check in'}
+          <button onClick={() => checkIn(g.id)} aria-pressed={checkedIn.has(g.id)}
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${checkedIn.has(g.id) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            {checkedIn.has(g.id) ? <><CheckCircle2 size={15} /> Checked in</> : <><MapPin size={15} /> Check in</>}
           </button>
           {isScorekeeper && !g.isCanceled && (
             <a href={`/tournaments/${g.tournamentId}/games/${g.id}/scorekeeper`}
@@ -409,9 +416,9 @@ export default function RefDashboard() {
           <Coaches g={upNext} />
           <p className="text-xs text-gray-400 mb-3">{upNext.division}{upNext.crew?.length ? ` · with ${upNext.crew.map((c: Crew) => c.name.split(' ')[0]).join(', ')}` : ''}</p>
           <div className="flex gap-2">
-            <button onClick={() => checkIn(upNext.id)} disabled={checkedIn.has(upNext.id)}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-60">
-              {checkedIn.has(upNext.id) ? '📍 Checked in' : '📍 Check in'}
+            <button onClick={() => checkIn(upNext.id)} aria-pressed={checkedIn.has(upNext.id)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${checkedIn.has(upNext.id) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+              {checkedIn.has(upNext.id) ? <><CheckCircle2 size={15} /> Checked in</> : <><MapPin size={15} /> Check in</>}
             </button>
             {upNext.role === 'scorekeeper' && (
               <a href={`/tournaments/${upNext.tournamentId}/games/${upNext.id}/scorekeeper`}

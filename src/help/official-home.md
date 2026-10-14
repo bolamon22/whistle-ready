@@ -29,7 +29,7 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 
 **Common problems:**
 - **Your login isn't linked to a staff record yet.** Contact your coordinator.
-- **Check in** marks the game on your phone only; it doesn't notify anyone.
+- **Check in** when you reach your table or field. The director sees "In" and the time next to your name on Assignments. Tapped it by mistake? Tap **Checked in** again to undo.
 - **No upcoming assignments.** You haven't been put on a game yet.
 - "Upload the W-9 as a PDF or a photo": other file types (Word documents, for example) aren't taken. Save it as a PDF or take a photo of the signed form.
 
