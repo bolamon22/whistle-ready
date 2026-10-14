@@ -256,6 +256,13 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   coaches; Parents), Job chips under Staff (including No staff record), a Last on filter (visits recorded from
   Oct 12) and sort; search matches jobs and club names. NavBar no longer hides on /admin (only /o/), so admin
   pages keep the app header with SuperAdminBar (the Admin tabs) under it.
+- **Sponsors & partners (Oct 14).** Rows in AppSetting `orgSite:{orgId}.sponsors` carry `eventIds` (dated picks)
+  and `series` (event labels from `seriesLabelOf`, "Every year"); both empty = every event. Public pages filter with
+  `sponsorsForEvent(list, tournamentId, tournamentName)` in `lib/sponsors.ts`: pass the NAME or every-year picks don't
+  match (event page and `_eventChrome` do). Admin editor: `components/site/SponsorsEditor.tsx` (one row per sponsor,
+  presenting and grid groups, logo-wall check) over `lib/sponsorPicker.ts` (client-safe: rows per event, past year +
+  upcoming, older behind Show older events, summaries). The home page shows every sponsor. Tests: 43 lib checks + 36
+  browser checks on Sunshine's real event list (scratch).
 - **Assigner pay groups (Oct 13).** Staff pay is split into groups (`lib/payGroups.ts`, pure): `boys` and
   `girls` (ref slots, by the game's division through `gameGender`; a division that says neither follows the
   ref's own gender), `scorekeepers`, and `ops` (field ops, trainers, hourly time). Each assigner's groups are
