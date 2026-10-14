@@ -16,6 +16,7 @@ import EventSwitcher from '@/components/nav/EventSwitcher'
 import GlobalSearch from '@/components/nav/GlobalSearch'
 import AccountMenu, { Avatar, ViewAsSelect } from '@/components/nav/AccountMenu'
 import { type NavEvent, ROLE_LABELS, currentEvent, currentMenu, todayYmd, visibleMenus } from '@/components/nav/navConfig'
+import { isLegalPath } from '@/lib/legalRoutes'
 
 // The app header (redesigned Oct 13 2026; Bo: "we are due for a little bit of a
 // redesign now that we've added a lot of stuff to it"). Left to right: logo, the
@@ -159,7 +160,10 @@ export default function NavBar() {
   if (pathname.startsWith('/pay')) return null
   // The public marketing landing, the /find look-up and the privacy and terms
   // pages have their own header.
-  if (!session && (pathname === '/' || pathname === '/find' || pathname === '/privacy' || pathname === '/terms')) return null
+  // Signed-out visitors on these pages get the page's own header (LandingNav,
+  // or the org's lockup on the org's own domain) -- this nav would be a second
+  // one, and on sunshineeventsgroup.com the two named different companies.
+  if (!session && (pathname === '/' || pathname === '/find' || isLegalPath(pathname))) return null
 
   const menus = session ? visibleMenus(role) : []
   const current = currentMenu(menus, pathname)
