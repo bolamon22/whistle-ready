@@ -39,6 +39,8 @@ async function me(email: string, userId: string, loginRole = '') {
   const w = rows[0]
   const roles = w ? workerRoles(w) : []
   if (loginRole === 'assigner' && !roles.includes('assigner')) roles.push('assigner')
+  // Schedulers are a login role, not a Staff Pool job, so their videos follow the login.
+  if (loginRole === 'scheduler' && !roles.includes('scheduler')) roles.push('scheduler')
   return { key: w ? String(w.id) : `user:${userId}`, roles }
 }
 

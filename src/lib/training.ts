@@ -5,7 +5,7 @@
 //
 // Pure -- no database import -- so client pages can use it.
 
-export type TrainingVideo = { id: string; num: string; title: string; blurb: string; secs: number; series?: 'staff' | 'ref' | 'assigner' | 'director' }
+export type TrainingVideo = { id: string; num: string; title: string; blurb: string; secs: number; series?: 'staff' | 'ref' | 'assigner' | 'director' | 'scheduler' }
 export type TrainingGroup = { key: string; label: string; roles: string[] | null; ids: string[] }
 
 export const TRAINING_VIDEOS: TrainingVideo[] = [
@@ -49,6 +49,14 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'dir-divisions', num: 'D04', series: 'director', title: 'Divisions, pools and brackets', blurb: 'Pools, auto-assigning teams, generating games, the bracket, Bulk Generate, and showing pools publicly.', secs: 69 },
   { id: 'dir-schedule', num: 'D05', series: 'director', title: 'Build and publish the schedule', blurb: 'The Board view: placing games, Auto-fill, the Issues panel, weather delays, closing a field, and Publish.', secs: 92 },
   { id: 'dir-registrations', num: 'D06', series: 'director', title: 'Team registrations and payments', blurb: 'Totals, balances, filtering, recording a check, the Pay link, Email clubs, and adding or importing teams.', secs: 65 },
+  // Scheduler training (Bo, Oct 14 2026: "they would be similar to the tournament director
+  // but they would need all things with scheduling seeding etc. they just don't have the
+  // money aspect"). The money-free director videos (D02, D04, D05) are in their group too.
+  { id: 'sch-home', num: 'S01', series: 'scheduler', title: 'Your scheduler home', blurb: 'Your tournaments, the Setup sections you use, and the Setup and Live menus.', secs: 51 },
+  { id: 'sch-timing', num: 'S02', series: 'scheduler', title: 'Game timing and tiebreakers', blurb: 'The schedule increment, game format, how teams advance, and the tiebreaker order.', secs: 59 },
+  { id: 'sch-brackets', num: 'S03', series: 'scheduler', title: 'Brackets and seeding', blurb: 'Formats, the 2-game guarantee, seeding from standings, the preview, and flights.', secs: 78 },
+  { id: 'sch-fixes', num: 'S04', series: 'scheduler', title: 'Bracket games and fixes', blurb: 'Placing bracket games, Seeding time, moving and swapping games, exact times, and Undo.', secs: 59 },
+  { id: 'sch-weather', num: 'S05', series: 'scheduler', title: 'Weather delays and field closures', blurb: 'Delay or shorten the day, Revert, closing a field, and publishing the changes.', secs: 66 },
   { id: 'asg-send', num: 'A13', series: 'assigner', title: 'Send training videos to your refs', blurb: 'Pick the event and your refs, the message, the preview, and Who’s watched.', secs: 58 },
 ]
 
@@ -59,6 +67,7 @@ export const TRAINING_GROUPS: TrainingGroup[] = [
   { key: 'refs', label: 'Refs', roles: ['ref'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'incidents'] },
   { key: 'fieldops', label: 'Field ops', roles: ['field_ops'], ids: ['checklist', 'incidents'] },
   { key: 'trainers', label: 'Athletic trainers', roles: ['athletic_trainer'], ids: ['trainer-call', 'injury-report', 'incidents', 'field-request', 'directory'] },
+  { key: 'schedulers', label: 'Schedulers', roles: ['scheduler'], ids: ['sch-home', 'dir-setup', 'sch-timing', 'dir-divisions', 'sch-brackets', 'dir-schedule', 'sch-fixes', 'sch-weather'] },
   { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-pay', 'asg-send'] },
 ]
 
@@ -92,7 +101,7 @@ export function workerRoles(w: { roles?: unknown; defaultRole?: unknown; isAssig
 }
 
 /** Who a video is for, in words, from the groups it's in. */
-export const TRAINING_ROLE_LABELS: Record<string, string> = { ref: 'Refs', ref_boys: 'Boys refs', ref_girls: 'Girls refs', scorekeeper: 'Scorekeepers', field_ops: 'Field ops', athletic_trainer: 'Athletic trainers', assigner: 'Assigners' }
+export const TRAINING_ROLE_LABELS: Record<string, string> = { ref: 'Refs', ref_boys: 'Boys refs', ref_girls: 'Girls refs', scorekeeper: 'Scorekeepers', field_ops: 'Field ops', athletic_trainer: 'Athletic trainers', assigner: 'Assigners', scheduler: 'Schedulers' }
 
 /** Who a training email can go to. Refs split by the games they work (Bo, Oct 13 2026:
  *  a boys assigner and a girls assigner each send to their own refs). A ref set to

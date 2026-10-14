@@ -540,6 +540,74 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     ],
     "outro": "Whistle Ready. Every game staffed."
   },
+  "sch-home": {
+    "title": "Your scheduler home",
+    "intro": "Whistle Ready scheduler training. Your scheduler home.",
+    "lines": [
+      "Your home page lists each tournament. Schedule opens its games, Staff shows who is working, and Builder opens its setup.",
+      "Setup holds what every schedule is built from: divisions, venues and fields, game timing, and standings tiebreakers. Fees and staff pay stay with the director.",
+      "The Setup menu at the top gets you around. Divisions and teams holds the pools and brackets. The Scheduler puts games on fields and times.",
+      "Under Live, Post scores enters results. Scores drive the standings, and the standings set the bracket seeds.",
+      "The next videos take each part in turn: tiebreakers, pools and brackets, building the schedule, and game-day changes."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
+  "sch-timing": {
+    "title": "Game timing and\ntiebreakers",
+    "intro": "Whistle Ready scheduler training. Game timing and tiebreakers.",
+    "lines": [
+      "Game Timing and Format sets the rhythm of the day. The schedule increment is the time from one start to the next. Fifty minutes fits a 40-minute game and a 10-minute turnover.",
+      "The period format and halftime length show on the scorekeeper’s app.",
+      "Standings tiebreakers decide who ranks higher when teams finish level. They set the seeds too.",
+      "First, choose how teams advance. By division ranks every team in the division together. By pool seeds the pool winners first, then the runners-up.",
+      "Then set the order. Record gives three points for a win and one for a tie. Head to head, goal difference and goals scored break the ties that are left.",
+      "Divisions get their own list, used to rank teams across pools. Save as default carries your order into every new tournament. Then click Save Changes."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
+  "sch-brackets": {
+    "title": "Brackets and seeding",
+    "intro": "Whistle Ready scheduler training. Brackets and seeding.",
+    "lines": [
+      "Each division builds its bracket on its own Bracket tab. Open the division, then click Bracket.",
+      "Pick the format: single elimination, double elimination, or both-ways consolation. Then set how many teams advance, and any extra consolation games.",
+      "For a division with only two pool games, the 2-game guarantee gives every first-round loser a second game, and adds If needed games for you.",
+      "Click Generate Bracket. Its games join the Unscheduled list in the Scheduler, waiting for a spot after pool play.",
+      "The seed order follows your standings tiebreakers. Click Seed from standings to fill every seed, or type a team into any seed yourself. Then click Save Seeds.",
+      "Preview shows the bracket with the seeds in place. Click a team to change it, or the pencil to change a matchup.",
+      "A big division? Split into flights makes two brackets, each with its own champion. Set the cutoff, pick each flight’s format, and click Split.",
+      "Switch between the flights at the top. When pool play ends on game day, come back, click Seed from standings again, and save. The public bracket updates."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
+  "sch-fixes": {
+    "title": "Bracket games\nand fixes",
+    "intro": "Whistle Ready scheduler training. Bracket games and fixes.",
+    "lines": [
+      "Bracket games wait in the Unscheduled list after pool play. Pick the day and the division, then switch the list to Bracket.",
+      "Click a seeded game. Seeding time marks the slots before pool play ends, plus one slot to set the seeds.",
+      "Click the first green slot after that to place it. The next game is picked up for you.",
+      "A game fed by another has to wait for that game to end. Before B1 ends marks the slots that are too early.",
+      "To move a placed game, drag it to an open slot. Drop it on another game, and the two trade places.",
+      "For an exact time, click the game, then Time. Type the day, the start time, and the field.",
+      "Drag a game back to the Unscheduled list to take it off the board. Undo reverses your last change."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
+  "sch-weather": {
+    "title": "Weather delays and\nfield closures",
+    "intro": "Whistle Ready scheduler training. Weather delays and field closures.",
+    "lines": [
+      "Lightning or a storm on game day? Open the Scheduler on that day, and click Weather.",
+      "Delay pushes back every game from the time you pick. Choose how long, and when the delay starts. Games with a score, and canceled games, stay put.",
+      "Shorten keeps the end of the day, and tightens the rest into shorter time slots instead.",
+      "Click Apply delay. Every game from 12:10 on moves at once. It saves a checkpoint first, so if it was a mistake, Revert puts the day back.",
+      "Lost a field to standing water? Hover its name, and click the closed sign. Close it for the whole day, or from a time on.",
+      "Nothing new can go in a closed window. Games already there show in Issues, so you can move them to an open slot.",
+      "Then click Publish. It lists every game that moved, and only the teams whose games changed get an alert."
+    ],
+    "outro": "Whistle Ready. Every game staffed."
+  },
   "waiver": {
     "title": "Your player's waiver\nand parent account",
     "intro": "Sunshine Events Group. Completing your player's waiver, and setting up your parent account.",
