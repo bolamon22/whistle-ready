@@ -3,7 +3,7 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: notify officials, send assignments, email refs, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green
+keywords: notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
@@ -26,8 +26,11 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 **Tell your officials (Notify officials):**
 1. When the assignments are ready, click **Notify officials** at the top of the Assigner.
 2. Choose **Every day of the event** or **Just** the day you're on, add an optional **Note** (for example where to check in), and check the count.
-3. Click **Send to N officials**. Each official gets an email with only their own games (day, time, field, game, teams and whether they're a referee or scorekeeper) and an **Open My games** button. Anyone who turned on Whistle Ready alerts gets a phone alert too.
-4. After you make changes, send again with **Only officials whose games changed since the last send** ticked, so everyone else isn't emailed twice.
+3. Keep **Ask them to confirm their games** ticked to have them confirm, and set **Confirm by**. Each email then gets a **Confirm my games** button that needs no login. Untick it to just send their games with an **Open My games** button.
+4. Click **Send to N officials**. Each official gets an email with only their own games (day, time, field, game, teams and whether they're a referee or scorekeeper). Anyone who turned on Whistle Ready alerts gets a phone alert too.
+5. After you make changes, send again with **Only officials whose games changed since the last send** ticked, so everyone else isn't emailed twice. Games that moved after someone confirmed them need confirming again.
+
+**Who confirmed:** **Confirmed N/N** next to **Notify officials** opens the Confirmations page. On the board, a **✓** after a name means they confirmed that game. If an official can't work a game, it comes off their schedule, you get an email, and the slot shows **open** with their name (for example **open · Brooks can't**). See "See which officials confirmed their games".
 
 **Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games or enter scores. Ask the scheduler or director.
 

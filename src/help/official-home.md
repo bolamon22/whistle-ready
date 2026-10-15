@@ -3,7 +3,7 @@ title: Your staff home page on game day
 category: Game day
 order: 500
 routes: /dashboard/staff, /dashboard/ref, /dashboard/scorekeeper
-keywords: my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability which days can you work all day morning afternoon can't work game times to do answer now take me off w-9 w9 tax form upload w-9 paycheck
+keywords: confirm my games confirm your games can't work a game my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability which days can you work all day morning afternoon can't work game times to do answer now take me off w-9 w9 tax form upload w-9 paycheck
 ---
 When a ref, scorekeeper, trainer or field ops worker logs in, they land on their own home page with their events, their next game and the game day tools.
 
@@ -20,6 +20,8 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 4. To change a day, tap another answer. Each day locks 48 hours before it starts (Saturday locks when Thursday begins); after that, call or text the assigner. Answer as early as you can. If the assigner set a day for you, it says **Set by** and their name.
 
 A reminder email from the assigner has an **Answer for my 2 days** button (the number is how many days are left) that opens your home page at that event.
+
+**To confirm your games:** when your assigner asks, a **To do** card says **Confirm your games** with how many and the date to confirm by. Tap **Confirm now**. It opens the same page as the **Confirm my games** button in the email: tap **Confirm my N games**, or tap a game you can't work first. See "Confirm the games you were assigned".
 
 **To upload your W-9:** under **W-9 needed**, tap **Upload W-9** and pick the signed form as a PDF or a photo (up to 2 MB; photos are shrunk for you). **Blank W-9 from the IRS** opens an empty form. Once it's in, the card says **W-9 on file**; tap **Replace** to send a new one. It's stored encrypted, and only tournament directors can open it.
 

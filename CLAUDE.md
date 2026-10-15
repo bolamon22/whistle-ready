@@ -290,6 +290,21 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   the password hash. `/register` is a server page (each organizer's Work with us link) around `RegisterForm`,
   which asks who the account is for; self-signup still never makes a staff login. The signed-out NavBar button
   says Create account, and `/login?portal=1` opens the club portal-link form.
+- **Officials confirm their games (Oct 15).** The referee assigners asked to have officials confirm the games
+  they're given when the schedule is released, like teams confirm. Notify officials (`confirm: true`, `confirmBy`,
+  on by default in its dialog) saves the event's ask (AppSetting `officialConfirmAsk:{tid}`: confirmBy, who, their
+  email) and gives each official with games left to answer a "Confirm my games" button to `/confirm-games/[token]`:
+  no login, the token (raw table `OfficialConfirmLink`, one per official per event) is the key, like `/confirm/[regId]`.
+  Answers are raw table `OfficialConfirm` (TEXT only; one row per gameId + role + workerId): `yes` with `sig` (the
+  game's day~time~field~number when they answered; a moved game reads as "changed" and needs confirming again) or
+  `no` with a note. A `no` deletes their Assignment on the spot (the slot opens, pay never counts it), keeps the
+  row so the board and `/tournaments/[id]/confirmations` show who couldn't and why, and emails + pushes the asker.
+  No `no` within 48 hours of the game's day (`availLocked`, as for availability). `lib/officialConfirm.ts` (server),
+  `api/official-confirm/[token]` (public GET/POST), `api/tournaments/[id]/official-confirm` (GET board data, POST
+  `confirm` = marked by phone; admin/director/assigner). Reminders are Notify officials with `workerIds` +
+  `reminder: true`. The staff portal returns `confirm` per event for the To do card on My games; the board shows a
+  ✓ per confirmed slot, "open · Name can't" on declined open slots, Confirmed N/N in its toolbar, and opens `?day=`.
+  Merge moves answers and links. Middleware lists `/confirm-games` (public via `/confirm` too).
 - **Ref levels (Oct 15).** The ref assigners' own 1-3 ranking of their refs (1 lowest, red; 2 yellow; 3 green),
   separate from `certLevel` (youth/HS/college, which sets pay). `lib/refLevel.ts` (pure: `REF_LEVELS`,
   `refLevelOf`), `components/RefLevelPill.tsx` (solid "L1"-"L3", unlike the board's tinted game-count pills),
