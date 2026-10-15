@@ -26,6 +26,10 @@ export const canSeeStaffPay = (role: string) => canSeeMoney(role) || role === 'a
 /** Emails, phone numbers and notes for clubs, coaches and staff. */
 export const canSeeContacts = (role: string) => canSeeMoney(role) || role === 'assigner'
 
+/** A ref's level (lib/refLevel), the assigners' ranking: the people who see staff pay,
+ *  and an assigner only for the staff groups they run, like pay. Never refs. */
+export const canSeeRefLevel = (role: string) => canSeeStaffPay(role)
+
 // The field director (Bo, Oct 13 2026: Jamie Wolf "is just going to be working the
 // event") runs game day at the events assigned to them (lib/fieldDirector). They see
 // the scorekeepers, athletic trainers and field ops, with their email and phone so
@@ -62,7 +66,8 @@ export function payStatus(invoiced: number, received: number): PayStatus {
 // A staff record (Worker) carries pay and payout details next to the name. A
 // scheduler can see who is working and their roles, not what they are paid or
 // how to reach or pay them.
-const WORKER_PAY_KEYS = ['payRateOverride', 'hourlyRate', 'payMethod', 'payHandle', 'venmoHandle', 'zelleHandle']
+// refLevel (Oct 15 2026) follows the pay rule: seen and set by whoever sees their pay.
+const WORKER_PAY_KEYS = ['payRateOverride', 'hourlyRate', 'payMethod', 'payHandle', 'venmoHandle', 'zelleHandle', 'refLevel']
 const WORKER_CONTACT_KEYS = ['email', 'phone', 'notes', 'mailingAddress']
 
 /** Whether this viewer sees this staff member's rate and payout details: a role

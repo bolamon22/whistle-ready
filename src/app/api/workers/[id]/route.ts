@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { redactWorker, stripWorkerUpdate, fieldDirectorSees } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
+import { setRefLevel, refLevelsFor } from '@/lib/refLevelDb'
 // Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
 // handles or edit/delete workers). An assigner reads and edits pay only for staff in
 // their pay groups (lib/payGroups, Oct 13 2026).
@@ -12,7 +13,10 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
   const [w, scope] = await Promise.all([prisma.worker.findUnique({ where:{id:params.id} }), payScopeFor(gate.role, gate.userId)])
   // A field director sees only scorekeepers, athletic trainers and field ops.
   if (!w || (gate.role === 'field_director' && !fieldDirectorSees(w))) return NextResponse.json({ error:'Not found' }, { status:404 })
-  return NextResponse.json(redactWorker(w, gate.role, scope))
+  // Ref level (lib/refLevel) is a raw column Prisma doesn't read; redactWorker blanks
+  // it for anyone who doesn't see this person's pay.
+  const refLevel = (await refLevelsFor([w.id]).catch(() => new Map<string, number>())).get(w.id) ?? null
+  return NextResponse.json(redactWorker({ ...w, refLevel }, gate.role, scope))
 }
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
@@ -35,6 +39,12 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     try { await prisma.$executeRawUnsafe(`ALTER TABLE "Worker" ADD COLUMN "${col}" TEXT`) } catch { /* exists */ }
     try { await prisma.$executeRawUnsafe(`UPDATE "Worker" SET "${col}" = ? WHERE id = ?`, b[col] ? String(b[col]).slice(0, max) : null, params.id) } catch {}
     delete b[col]
+  }
+  // Ref level (lib/refLevel, Oct 15 2026): a raw INTEGER column. stripWorkerUpdate has
+  // already dropped it for anyone who doesn't see this person's pay.
+  if (b.refLevel !== undefined) {
+    await setRefLevel(params.id, b.refLevel)
+    delete b.refLevel
   }
   // Association: a raw column too. It left the Prisma schema on Jun 9 (ee0e621), so
   // passing it to prisma.worker.update threw "Unknown argument" and every Staff Pool

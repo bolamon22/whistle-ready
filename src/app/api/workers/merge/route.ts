@@ -157,6 +157,11 @@ export async function POST(req: Request) {
     filled.push('orgId')
   }
 
+  // The ref level (lib/refLevel): the kept record's, else the other one's.
+  if ((keep.refLevel === null || keep.refLevel === undefined) && rem.refLevel !== null && rem.refLevel !== undefined) {
+    try { await client.execute({ sql: `UPDATE "Worker" SET "refLevel" = ? WHERE id = ?`, args: [Number(rem.refLevel), keepId] }); filled.push('refLevel') } catch { /* no column yet */ }
+  }
+
   await client.execute({ sql: `DELETE FROM "Worker" WHERE id = ?`, args: [removeId] })
   return NextResponse.json({ ok: true, keepId, filled })
 }

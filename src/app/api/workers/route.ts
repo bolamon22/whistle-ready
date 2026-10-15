@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireStaff } from '@/lib/apiAuth'
-import { redactWorker, fieldDirectorSees } from '@/lib/roleScope'
+import { redactWorker, fieldDirectorSees, seesWorkerPay } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
 import { createClient } from '@libsql/client'
 import { presenceByEmail, canSeePresence } from '@/lib/presence'
+import { setRefLevel } from '@/lib/refLevelDb'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -148,6 +149,12 @@ export async function POST(req: Request) {
   if (body.referredBy) {
     try { await client.execute(`ALTER TABLE "Worker" ADD COLUMN "referredBy" TEXT`) } catch { /* exists */ }
     await client.execute({ sql: `UPDATE "Worker" SET "referredBy" = ? WHERE id = ?`, args: [String(body.referredBy).trim().slice(0, 120), id] })
+  }
+  // Ref level (lib/refLevel): only someone who sees this person's pay sets it, the same
+  // rule as editing (an assigner, for the staff groups they run).
+  if (body.refLevel !== undefined && body.refLevel !== null && body.refLevel !== ''
+    && seesWorkerPay({ roles: JSON.stringify(roles ?? [defaultRole ?? 'ref']), defaultRole: defaultRole ?? 'ref', gender: gender ?? 'both' }, gatePost.role, await payScopeFor(gatePost.role, gatePost.userId))) {
+    await setRefLevel(id, body.refLevel)
   }
 
   const created = await client.execute({ sql: `SELECT * FROM "Worker" WHERE id = ?`, args: [id] })

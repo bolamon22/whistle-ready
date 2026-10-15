@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, eventGate } from '@/lib/apiAuth'
-import { fieldDirectorSees, workerJobs } from '@/lib/roleScope'
+import { fieldDirectorSees, workerJobs, canSeeRefLevel } from '@/lib/roleScope'
+import { refLevelsFor } from '@/lib/refLevelDb'
 import { payScopeFor } from '@/lib/payScope'
 import { seesPay, workerPayGroups } from '@/lib/payGroups'
 import { workerIdForEmail } from '@/lib/staffW9'
@@ -42,8 +43,10 @@ export async function GET(req: Request) {
   let people = roster.map(r => r.worker).filter(Boolean)
   if (gate.role === 'field_director') people = people.filter(w => fieldDirectorSees(w))
   const scope = gate.role === 'assigner' ? await payScopeFor(gate.role, gate.userId) : null
-  const [slots, states, log, published] = await Promise.all([
+  const [slots, states, log, published, levels] = await Promise.all([
     gameSlots(tid), dayStates(tid, people.map(p => p.id)), reminderLog(tid), publishedSchedules([tid]),
+    // Each ref's level (lib/refLevel), for the people who see it.
+    canSeeRefLevel(gate.role) ? refLevelsFor(people.map(p => p.id)).catch(() => new Map<string, number>()) : Promise.resolve(new Map<string, number>()),
   ])
   const remindedAt = new Map<string, string>()
   for (const e of log) for (const id of e.workerIds || []) if (!remindedAt.has(id)) remindedAt.set(id, e.at)
@@ -61,6 +64,7 @@ export async function GET(req: Request) {
         gender: w.gender || 'both',
         hasEmail: !!String(w.email || '').trim(),
         canRemind: !scope || seesPay(scope, workerPayGroups(w)),
+        level: workerJobs(w).includes('ref') && (!scope || seesPay(scope, workerPayGroups(w))) ? levels.get(w.id) ?? null : null,
         days: states.get(w.id) || {},
         remindedAt: remindedAt.get(w.id) || '',
       })),
