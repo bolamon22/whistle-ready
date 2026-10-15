@@ -1094,6 +1094,21 @@ export const GENERATED_HELP: { id: string; title: string; category: string; keyw
     "body": "If your teams are in TourneyMachine, export them and import them into a Whistle Ready tournament. Only team registration data comes across: clubs, teams, coaches and divisions. Schedules, scores and pools do not.\n\n**Step 1, export from TourneyMachine:**\n1. Log into TourneyMachine and open your event.\n2. Go to **Teams**, then **Quick Report**.\n3. Download as CSV or Excel. Include as many columns as you can; extra columns are skipped.\n\n**Step 2, import into Whistle Ready:**\n1. Open your tournament's **Registrations** page and click **Import teams**.\n2. Drop your file on **Drop your spreadsheet here**, or click to browse (.csv or .xlsx).\n3. Check **Map Columns**. Whistle Ready guesses the matches, such as **Club Name** and **Team Name**.\n4. Review **Preview Import**. Each club becomes one registration with its teams listed under it.\n5. Click the **Import** button.\n\nAfter import, the registrations appear in the team registrations list, where you can edit each one. For more on the import screen, see \"Import teams from a spreadsheet\".\n\n**Common problems:**\n- Importing the same file twice creates duplicate registrations. Check the list before re-importing.\n- If no club name column is mapped, the team name is used as the club name."
   },
   {
+    "id": "get-the-app",
+    "title": "Get Whistle Ready on your phone (iPhone or Android)",
+    "category": "Public pages",
+    "keywords": "app, apple app, iphone app, ios app, app store, android app, google play, download, install, download the app, is there an app, home screen, add to home screen, notifications, alerts, push notifications, phone, mobile app, whistle ready app",
+    "routes": [
+      "/tournaments/*/public",
+      "/tournaments/*/today",
+      "/tournaments/*/event",
+      "/dashboard/parent",
+      "/dashboard/staff"
+    ],
+    "audience": "both",
+    "body": "There's no App Store or Google Play download to find. Whistle Ready works as an app straight from your phone's browser: you add it to your Home Screen once, and it opens full screen like any other app, with alerts.\n\n**iPhone:**\n1. Open the event's schedule page (or your staff or parent home page) in **Safari**. It has to be Safari for alerts to work.\n2. Tap **Share** (the square with the arrow), then **Add to Home Screen**, then **Add**.\n3. Open Whistle Ready from the new icon on your Home Screen.\n4. Tap **Follow** on your team, then **Turn on alerts**, and tap **Allow** when your phone asks.\n\n**Android:**\n1. Open the page in **Chrome**.\n2. Tap the menu (three dots), then **Install app** (or **Add to Home screen**).\n3. Open it from the new icon, tap **Follow** on your team, then **Turn on alerts** and **Allow**.\n\nOnce alerts are on, you hear when the schedule posts, when a game moves, and the scores for the teams you follow, and nothing else. Staff get their game-day alerts the same way."
+  },
+  {
     "id": "public-register-team",
     "title": "Register your team for a tournament",
     "category": "Public pages",
