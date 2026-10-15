@@ -9,7 +9,7 @@ import EventBackLink from '@/components/EventBackLink'
 import { TriangleAlert, ChevronLeft, Trash2, Check, Download, Lock, Plus, Siren } from 'lucide-react'
 import TrainingLink from '@/components/TrainingLink'
 
-const TYPES = ['Medical', 'Safety', 'Facility', 'Weather', 'Other']
+const TYPES = ['Medical', 'Safety', 'Facility', 'Complaint', 'Weather', 'Other']
 const SEVERITIES = ['Low', 'Medium', 'High']
 const sevClass = (s: string) => s === 'High' ? 'bg-red-100 text-red-700' : s === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
 
@@ -73,7 +73,22 @@ export default function IncidentsPage({ embedded = false }: { embedded?: boolean
     } catch { toast.error('Failed') } finally { setSaving(false) }
   }
   async function resolve(iid: string) {
-    try { const r = await fetch(`/api/tournaments/${id}/incidents`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: iid, status: 'resolved' }) }); if (r.ok) load() } catch {}
+    const note = prompt('What was done? (optional)\n\nFor example: filled the hole, swapped the net, talked with the coach.', '')
+    if (note === null) return
+    try { const r = await fetch(`/api/tournaments/${id}/incidents`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: iid, status: 'resolved', note }) }); if (r.ok) { toast.success('Marked fixed'); load() } } catch {}
+  }
+  // Hand a problem to someone (Oct 14 2026): field ops by name from the roster, or anyone typed in.
+  const [crew, setCrew] = useState<string[]>([])
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/tournaments/${id}/roster`).then(r => r.ok ? r.json() : []).then((rows: any[]) => {
+      const names = (Array.isArray(rows) ? rows : []).filter(e => { const w = e.worker || {}; let roles: string[] = []; try { roles = JSON.parse(w.roles || '[]') } catch {} return w.defaultRole === 'field_ops' || roles.includes('field_ops') }).map(e => String(e.worker?.name || '')).filter(Boolean)
+      setCrew(Array.from(new Set(names)).sort())
+    }).catch(() => {})
+  }, [id])
+  async function assign(iid: string, who: string) {
+    const r = await fetch(`/api/tournaments/${id}/incidents`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: iid, assignee: who }) }).catch(() => null)
+    if (r?.ok) { toast.success(who ? `Sent to ${who}` : 'Unassigned'); load() } else toast.error('Couldn’t save that')
   }
   async function remove(iid: string) {
     if (!confirm('Delete this incident for good?')) return
@@ -120,7 +135,7 @@ export default function IncidentsPage({ embedded = false }: { embedded?: boolean
           <div>
             <label className="block text-[11px] text-slate-500 mb-1" htmlFor="inc-type">Type</label>
             <select id="inc-type" value={type} onChange={e => setType(e.target.value)} className={inputCls}>
-              {TYPES.map(t => <option key={t} value={t}>{t === 'Medical' ? 'Medical / injury' : t}</option>)}
+              {TYPES.map(t => <option key={t} value={t}>{t === 'Medical' ? 'Medical / injury' : t === 'Facility' ? 'Facility / maintenance' : t === 'Complaint' ? 'Complaint (coach or parent)' : t}</option>)}
             </select>
           </div>
           <div>
@@ -204,7 +219,7 @@ export default function IncidentsPage({ embedded = false }: { embedded?: boolean
       </div>
       {open.length === 0 && <p className="text-sm text-slate-400 mb-4">No open incidents. 🎉</p>}
       <div className="space-y-2 mb-6">
-        {open.map(i => <IncidentCard key={i.id} i={i} onResolve={() => resolve(i.id)} onRemove={() => remove(i.id)} onFollowUp={(t, o) => followUp(i.id, t, o)} />)}
+        {open.map(i => <IncidentCard key={i.id} i={i} crew={crew} onAssign={w => assign(i.id, w)} onResolve={() => resolve(i.id)} onRemove={() => remove(i.id)} onFollowUp={(t, o) => followUp(i.id, t, o)} />)}
       </div>
 
       {resolved.length > 0 && (
@@ -222,7 +237,7 @@ function useMemoTeams(teams: { team: string; division: string }[], team: string)
   return useMemo(() => Array.from(new Set(teams.filter(t => t.team === team).map(t => t.division).filter(Boolean))), [teams, team])
 }
 
-function IncidentCard({ i, done, onResolve, onRemove, onFollowUp }: { i: any; done?: boolean; onResolve?: () => void; onRemove?: () => void; onFollowUp: (text: string, outcome: string) => Promise<boolean> }) {
+function IncidentCard({ i, done, crew = [], onAssign, onResolve, onRemove, onFollowUp }: { i: any; done?: boolean; crew?: string[]; onAssign?: (who: string) => void; onResolve?: () => void; onRemove?: () => void; onFollowUp: (text: string, outcome: string) => Promise<boolean> }) {
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
   const [outcome, setOutcome] = useState('')
@@ -252,6 +267,8 @@ function IncidentCard({ i, done, onResolve, onRemove, onFollowUp }: { i: any; do
           {j.parentNotified && <><dt className="text-slate-400">Parent told</dt><dd className="text-slate-700">{j.parentNotified === 'yes' ? `Yes${j.parentName ? `, ${j.parentName}` : ''}${j.parentPhone ? ` (${j.parentPhone})` : ''}` : j.parentNotified === 'no' ? 'Not yet' : 'Not needed'}</dd></>}
         </dl>
       )}
+      {i.assignee && !done && <p className="mt-1.5 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 inline-block">With {i.assignee}{i.assignedBy ? <span className="font-normal text-amber-700"> · sent by {i.assignedBy}</span> : null}</p>}
+      {done && i.resolvedBy && <p className="mt-1.5 text-xs text-slate-500">Fixed by {i.resolvedBy}{i.resolvedAt ? ` at ${new Date(i.resolvedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}{i.resolveNote ? `: ${i.resolveNote}` : ''}</p>}
       {(i.followUps || []).length > 0 && (
         <ul className="mt-2 border-t border-slate-100 pt-2 space-y-1">
           {i.followUps.map((f: any, k: number) => <li key={k} className="text-xs text-slate-600"><span className="text-slate-400">{new Date(f.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {f.by}:</span> {f.outcome && <b className="text-slate-800">{f.outcome}. </b>}{f.text}</li>)}
@@ -268,7 +285,16 @@ function IncidentCard({ i, done, onResolve, onRemove, onFollowUp }: { i: any; do
         </div>
       )}
       <div className="flex gap-2 mt-2">
-        {onResolve && <button type="button" onClick={onResolve} className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg"><Check size={13} /> Resolve</button>}
+        {onResolve && <button type="button" onClick={onResolve} className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg"><Check size={13} /> {j ? 'Resolve' : 'Mark fixed'}</button>}
+        {onAssign && !j && (
+          <select value="" aria-label="Send to" onChange={e => { const v = e.target.value; if (v === '__other') { const t = prompt('Who is taking care of it?', ''); if (t !== null && t.trim()) onAssign(t.trim()) } else if (v === '__none') onAssign(''); else if (v) onAssign(v) }}
+            className="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg px-2 py-1 border-0">
+            <option value="">{i.assignee ? 'Send to someone else…' : 'Send to…'}</option>
+            {crew.map(n => <option key={n} value={n}>{n} (field ops)</option>)}
+            <option value="__other">Someone else…</option>
+            {i.assignee && <option value="__none">Unassign</option>}
+          </select>
+        )}
         {j && !i.redacted && !adding && <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg"><Plus size={13} /> Follow-up</button>}
         {onRemove && <button type="button" onClick={onRemove} className="text-slate-300 hover:text-red-500 ml-auto" title="Delete"><Trash2 size={14} /></button>}
       </div>

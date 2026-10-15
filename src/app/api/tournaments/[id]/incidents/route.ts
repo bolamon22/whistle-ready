@@ -132,7 +132,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       await writeList(params.id, next)
       return NextResponse.json({ ok: true })
     }
-    const next = list.map((i: any) => i.id === b.id ? { ...i, status: b.status || i.status } : i)
+    // Who is fixing it (Oct 14 2026, field directors: a hole in the field or a torn net
+    // gets handed to someone on field ops and tracked until it's fixed), and who closed
+    // it, when, and what was done.
+    if (!list.some((i: any) => i.id === b.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const now = new Date().toISOString()
+    const next = list.map((i: any) => {
+      if (i.id !== b.id) return i
+      let out = { ...i }
+      if (b.assignee !== undefined) out = { ...out, assignee: str(b.assignee, 80), assignedBy: me(session), assignedAt: now }
+      if (b.status === 'resolved' && i.status !== 'resolved') out = { ...out, status: 'resolved', resolvedBy: me(session), resolvedAt: now, resolveNote: str(b.note, 300) }
+      else if (b.status === 'open') out = { ...out, status: 'open', resolvedBy: undefined, resolvedAt: undefined, resolveNote: undefined }
+      return out
+    })
     await writeList(params.id, next)
     return NextResponse.json({ ok: true })
   } catch (e: any) { return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 }) }

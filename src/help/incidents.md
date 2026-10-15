@@ -10,7 +10,7 @@ Incidents is a shared log of medical, safety, facility and weather issues so the
 **Where:** **Live → Communications**, **Incidents** tab, or **Incidents** on your home page.
 
 **To log an incident:**
-1. Pick the **Type**: **Medical / injury**, **Safety**, **Facility**, **Weather** or **Other**.
+1. Pick the **Type**: **Medical / injury**, **Safety**, **Facility / maintenance** (holes in a field, a torn net, a broken goal, bathrooms), **Complaint (coach or parent)**, **Weather** or **Other**.
 2. Pick the **Severity**: **Low**, **Medium** or **High**.
 3. Enter the **Field / location (optional)**.
 4. Describe it under **What happened**.
@@ -30,7 +30,9 @@ Incidents is a shared log of medical, safety, facility and weather issues so the
 
 **Injury log:** trainers and directors can tap **Injury log (spreadsheet)** to download every injury for the event.
 
-**To close one out:** tap **Resolve** on the incident. It moves to the resolved list. Tap **Show resolved** to see past incidents.
+**To hand it to someone:** on anything but an injury, pick **Send to…** and choose someone on field ops (or **Someone else…** to type a name). The card shows **With** their name until it's fixed.
+
+**To close one out:** tap **Mark fixed** (or **Resolve** on an injury) and, if you like, say what was done. It moves to the resolved list with who fixed it and when. Tap **Show resolved** to see past incidents.
 
 **Common problems:**
 - The save button stays grayed out until **What happened** is filled in, and for a player, the **Name**.
