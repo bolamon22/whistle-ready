@@ -1409,6 +1409,23 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     }
   })
 
+  // ── Rematches: two teams meeting more than once in pool play. Usually a slip from a
+  //    team swap or a hand-added game, and easy to miss on a busy board. Bracket games
+  //    are left out: a pool rematch on Sunday is how brackets work.
+  const rematchMsgs = new Map<string, string>()
+  {
+    const meetings = new Map<string, Game[]>()
+    games.filter(g => g.gameNumber.startsWith('P') && isRealTeam(g.team1) && isRealTeam(g.team2)).forEach(g => {
+      const pair = [teamKey(g.division, g.team1), teamKey(g.division, g.team2)].sort().join('||')
+      meetings.set(pair, [...(meetings.get(pair) ?? []), g])
+    })
+    meetings.forEach(gs => {
+      if (gs.length < 2) return
+      const msg = `${divAbbr(gs[0].division)}: ${gs[0].team1} and ${gs[0].team2} play each other ${gs.length === 2 ? 'twice' : `${gs.length} times`} in pool play (${gs.map(g => g.gameNumber).join(', ')})`
+      gs.forEach(g => rematchMsgs.set(g.id, rematchMsgs.has(g.id) ? rematchMsgs.get(g.id)! + '\n' + msg : msg))
+    })
+  }
+
   // ── Bracket order: lead-in games first, and seeded games after pool play plus a
   //    slot to seed (lib/bracketOrder: the same rules as the Board's hints and Auto-fill).
   const bracketOrderMsgs = new Map<string, string>()
@@ -1424,6 +1441,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const ISSUE_KINDS = [
     { map: conflictMsgs,     label: 'Conflict',      dot: 'bg-red-500' },
     { map: backToBackMsgs,   label: 'Back-to-back',  dot: 'bg-yellow-400' },
+    { map: rematchMsgs,      label: 'Rematch',       dot: 'bg-violet-500' },
     { map: bracketOrderMsgs, label: 'Bracket order', dot: 'bg-orange-500' },
     { map: longGapMsgs,      label: 'Long gap',      dot: 'bg-teal-400' },
   ]
@@ -2412,7 +2430,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           const viewProps = {
             games, dayGames, unscheduled, activeDate, slots, fields: visibleFields, divisions, increment,
             divColor: (d: string) => divColor(d, colorsByDiv), fmtTime, divAbbr,
-            issues: { conflict: conflictMsgs, b2b: backToBackMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
+            issues: { conflict: conflictMsgs, b2b: backToBackMsgs, rematch: rematchMsgs, gap: longGapMsgs, bracket: bracketOrderMsgs },
             filterPool: gridPool, filterTeam: gridTeam,
             filterDiv: gridDiv, setFilterDiv: (d: string) => { setGridDiv(d); setGridPool('__all__'); setGridTeam('__all__') },
             // Awaited so the Board picks the next game only once this one is on the board

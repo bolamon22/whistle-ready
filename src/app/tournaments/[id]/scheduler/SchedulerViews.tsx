@@ -1,6 +1,6 @@
 'use client'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop, Ruler } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Repeat, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop, Ruler } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
 import { BracketView, type BkBracket } from '@/components/BracketDiagram'
 import { bracketWaits, brokenWait, type BracketWait } from '@/lib/bracketOrder'
@@ -53,6 +53,7 @@ export interface ViewsProps {
   issues: {
     conflict: Map<string, string>
     b2b: Map<string, string>
+    rematch: Map<string, string>
     gap: Map<string, string>
     bracket: Map<string, string>
   }
@@ -100,7 +101,7 @@ export interface ViewsProps {
   tournamentId?: string
 }
 
-type IssueKind = 'conflict' | 'closed' | 'field' | 'b2b' | 'bracket' | 'gap'
+type IssueKind = 'conflict' | 'closed' | 'field' | 'b2b' | 'rematch' | 'bracket' | 'gap'
 const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues'] | null; label: string; dot: string; bg: string; border: string }[] = [
   { kind: 'conflict', key: 'conflict', label: 'Double-booked', dot: '#ef4444', bg: '#fee2e2', border: '#ef4444' },
   // not in p.issues: computed from isFieldClosed + dayGames in useIssueList
@@ -108,6 +109,7 @@ const KINDS: { kind: IssueKind; key: keyof ViewsProps['issues'] | null; label: s
   // not in p.issues either: computed from fieldAllows (Setup's division limits per field)
   { kind: 'field',    key: null,       label: 'Wrong field',   dot: '#c026d3', bg: '#fae8ff', border: '#c026d3' },
   { kind: 'b2b',      key: 'b2b',      label: 'Back-to-back',  dot: '#f59e0b', bg: '#fef3c7', border: '#f59e0b' },
+  { kind: 'rematch',  key: 'rematch',  label: 'Rematch',       dot: '#7c3aed', bg: '#ede9fe', border: '#7c3aed' },
   { kind: 'bracket',  key: 'bracket',  label: 'Bracket order', dot: '#ea580c', bg: '#ffedd5', border: '#ea580c' },
   { kind: 'gap',      key: 'gap',      label: 'Long gap',      dot: '#14b8a6', bg: '',        border: '' },
 ]
@@ -301,7 +303,7 @@ function useIssueList(p: ViewsProps) {
         list.push({ kind: 'field', label: fieldKind.label, dot: fieldKind.dot, text, gameId: g.id, division: g.division })
       }
     }
-    const order: Record<IssueKind, number> = { conflict: 0, closed: 1, field: 2, b2b: 3, bracket: 4, gap: 5 }
+    const order: Record<IssueKind, number> = { conflict: 0, closed: 1, field: 2, b2b: 3, rematch: 4, bracket: 5, gap: 6 }
     list.sort((a, b) => order[a.kind] - order[b.kind])
     return { byGame, list }
   }, [p.games, p.issues, p.isFieldClosed, p.fieldAllows, p.dayGames, p.fields, p.fmtTime])
@@ -309,7 +311,7 @@ function useIssueList(p: ViewsProps) {
 
 function worstOf(items: { kind: IssueKind }[] | undefined) {
   if (!items || items.length === 0) return null
-  const order: IssueKind[] = ['conflict', 'closed', 'field', 'b2b', 'bracket', 'gap']
+  const order: IssueKind[] = ['conflict', 'closed', 'field', 'b2b', 'rematch', 'bracket', 'gap']
   return order.find(k => items.some(i => i.kind === k)) ?? null
 }
 const KIND = (k: IssueKind | null) => KINDS.find(x => x.kind === k)
@@ -320,7 +322,7 @@ const KIND = (k: IssueKind | null) => KINDS.find(x => x.kind === k)
 
 function IssueBadge({ kind, count }: { kind: IssueKind; count: number }) {
   const k = KIND(kind)!
-  const Icon = kind === 'conflict' ? AlertTriangle : kind === 'closed' ? Ban : kind === 'field' ? Ruler : kind === 'b2b' ? ArrowLeftRight : kind === 'bracket' ? Zap : Clock
+  const Icon = kind === 'conflict' ? AlertTriangle : kind === 'closed' ? Ban : kind === 'field' ? Ruler : kind === 'b2b' ? ArrowLeftRight : kind === 'rematch' ? Repeat : kind === 'bracket' ? Zap : Clock
   return (
     <span className="keep-ink absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow ring-2 ring-white" style={{ background: k.dot, color: kind === 'b2b' ? '#0f172a' : '#fff' }}>
       <Icon size={11} />
@@ -1350,7 +1352,7 @@ export function TimelineView(p: ViewsProps) {
     // which division was which (Oct 5 2026). They now keep their division color
     // and just fade; hovering brings one back to full strength.
     const fade = on ? '' : divOut(g) ? 'grayscale opacity-40 hover:grayscale-0 hover:opacity-100' : d ? 'opacity-60 hover:opacity-100' : done ? 'opacity-70' : ''
-    const issueBg = worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'bracket'
+    const issueBg = worst === 'conflict' || worst === 'closed' || worst === 'field' || worst === 'b2b' || worst === 'rematch' || worst === 'bracket'
     // Bright: the division color fills the card and every line takes the ink that reads
     // on it; an issue shows as a thick border in its color instead of a tinted card.
     const lit = bright && !on
