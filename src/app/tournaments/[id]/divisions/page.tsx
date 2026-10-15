@@ -209,6 +209,8 @@ export default function DivisionsPage() {
   //    without the guarantee and so missed a level-but-short pool)
   //  - games that still name a team no longer in the division (deleted or renamed)
   //  - a bracket drawn for more seeds than the division has teams
+  //  - two teams that meet more than once in pool play (a swap or a hand edit
+  //    can leave a rematch that nobody asked for)
   const { issuesByDivision, rosterIssuesByDivision } = useMemo(() => {
     const m = new Map<string, string[]>()
     // stray-team and bracket lines also show inside the division (the uneven-pool
@@ -225,6 +227,18 @@ export default function DivisionsPage() {
       for (const f of findShortTeams(mine, guarantee)) {
         add(d, describeFinding(f) + (f.belowGuarantee && f.shortTeams.length ? ` Under the ${guarantee}-game guarantee.` : ''))
       }
+      const isBracketGame = (g: any) => g.isChampionship || /^B/i.test(String(g.gameNumber || ''))
+      const meetings = new Map<string, { a: string; b: string; nums: string[] }>()
+      for (const g of mine) {
+        if (isBracketGame(g) || g.isCanceled || !g.team1 || !g.team2 || isPlaceholder(g.team1) || isPlaceholder(g.team2)) continue
+        const [a, b] = [String(g.team1).trim(), String(g.team2).trim()].sort((x, y) => nameKey(x).localeCompare(nameKey(y)))
+        const k = nameKey(a) + '|' + nameKey(b)
+        const e = meetings.get(k) ?? { a, b, nums: [] }
+        e.nums.push(String(g.gameNumber || '?')); meetings.set(k, e)
+      }
+      meetings.forEach(e => {
+        if (e.nums.length > 1) add(d, `${e.a} and ${e.b} play each other ${e.nums.length === 2 ? 'twice' : `${e.nums.length} times`} in pool play (${e.nums.join(', ')}). Change one of those matchups.`, true)
+      })
       const roster = allRosters.filter(r => r.division === d)
       if (!roster.length) continue
       const keys = new Set(roster.flatMap(r => r.teams).map(t => nameKey(t)))
