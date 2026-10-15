@@ -12,6 +12,7 @@ import ClubNameHint, { useKnownClubs } from '@/components/ClubNameHint'
 import PasswordInput from '@/components/PasswordInput'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { nameKey } from '@/lib/names'
+import { track } from '@/lib/track'
 
 interface TeamRow {
   clubName: string
@@ -368,6 +369,11 @@ export default function RegisterPage() {
       })
       if (!res.ok) throw new Error('Registration failed')
       const registration = await res.json()
+      // The registration is saved at this point, so this is the moment that
+      // counts as the conversion — before the payment step, which plenty of
+      // clubs finish later by invoice. Needs a "Team Registration" custom-event
+      // goal in Plausible to be recorded (lib/track).
+      track('Team Registration', { teams: teams.length, event: tournamentName || String(tournamentId) })
       setConf(registration.confirmation || null)
 
       // The login is ready: sign them in now, before any payment step, so "Open

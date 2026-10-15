@@ -7,6 +7,7 @@ import { cardPrintCss, CARD_PRINT_NOTE } from '@/lib/cardPrint'
 import { USA_LACROSSE_LABEL, USA_LACROSSE_SHORT, USA_LACROSSE_LOOKUP, USA_LACROSSE_LOOKUP_TEXT } from '@/lib/usaLacrosse'
 import { uploadPlayerPhoto, uploadClubLogo } from '@/lib/photoClient'
 import { cleanCardLink, qrLabelFor } from '@/lib/cardLink'
+import { track } from '@/lib/track'
 import type { PassCardData, CardTheme } from '@/lib/playerPassCard'
 import { SAMPLE_PLAYER } from '@/lib/samplePlayerCard'
 import CardPreview from './CardPreview'
@@ -510,7 +511,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       const division = clubMode && d.teamPick && d.teamPick !== '__other' ? String(pickedTeam?.division || '') : ''
       const data = { ...rest, teamName: resolvedTeam, division, clubName: clubMode && d.clubName !== '__other' ? d.clubName : '', tournamentId: tournamentId || '', tournamentName: tournamentName || '' }
       const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data }) })
-      if (res.ok) { const j = await res.json().catch(() => ({})); if (j.passToken) setPassToken(String(j.passToken)); if (j.account?.token || j.account?.linked) setAccount(j.account as AccountOffer); setDone(true); try { window.scrollTo({ top: 0 }) } catch {} }
+      if (res.ok) { const j = await res.json().catch(() => ({})); if (j.passToken) setPassToken(String(j.passToken)); if (j.account?.token || j.account?.linked) setAccount(j.account as AccountOffer); track('Player Waiver'); setDone(true); try { window.scrollTo({ top: 0 }) } catch {} }
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Submission failed') }
     } catch { toast.error('Submission failed') } finally { setSubmitting(false) }
   }
