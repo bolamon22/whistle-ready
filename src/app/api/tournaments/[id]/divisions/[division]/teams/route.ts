@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { canSeeMoney, canSeeContacts, payStatus } from '@/lib/roleScope'
 import { cleanName, nameKey } from '@/lib/names'
-import { renameTeamRefs, removeTeamRefs } from '@/lib/teamRename'
+import { renameTeamRefs, removeTeamRefs, swapTeamDivisionRefs } from '@/lib/teamRename'
 import { findShortTeams, describeFinding } from '@/lib/gameBalance'
 import { parsePricing, calcFee } from '@/lib/regPricing'
 
@@ -82,7 +82,52 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
-    const { teamId, newDivision } = await req.json()
+    const { teamId, newDivision, swapWithTeamId } = await req.json()
+
+    // Swap with a team in another division: each takes the other's division,
+    // pool spot, games and bracket seed, so neither schedule needs rebuilding.
+    if (teamId && swapWithTeamId) {
+      const both = await prisma.registeredTeam.findMany({
+        where: { id: { in: [teamId, swapWithTeamId] }, registration: { tournamentId: params.id } },
+        select: { id: true, teamName: true, division: true },
+      })
+      const a = both.find(t => t.id === teamId), b = both.find(t => t.id === swapWithTeamId)
+      if (!a || !b) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
+      if (nameKey(a.division) === nameKey(b.division)) {
+        return NextResponse.json({ error: 'Both teams are in the same division. Use Swap on the Teams board.' }, { status: 400 })
+      }
+      // Another team already carrying one of these names in the other division
+      // would end up sharing its games.
+      const clash = await prisma.registeredTeam.findFirst({
+        where: {
+          registration: { tournamentId: params.id, deletedAt: null },
+          OR: [
+            { division: b.division, teamName: a.teamName, NOT: { id: b.id } },
+            { division: a.division, teamName: b.teamName, NOT: { id: a.id } },
+          ],
+        },
+        select: { teamName: true, division: true },
+      })
+      if (clash) return NextResponse.json({ error: `${clash.division} already has a team called ${clash.teamName}. Rename one first.` }, { status: 409 })
+      // A score belongs to the matchup that was played; swapping would hand it
+      // to a team that never played that game.
+      const scored = await prisma.game.count({
+        where: {
+          tournamentId: params.id, NOT: { score1: null },
+          OR: [
+            { division: a.division, OR: [{ team1: a.teamName }, { team2: a.teamName }] },
+            { division: b.division, OR: [{ team1: b.teamName }, { team2: b.teamName }] },
+          ],
+        },
+      })
+      if (scored) return NextResponse.json({ error: `${scored} of their games already have scores, so they can't be swapped.` }, { status: 409 })
+
+      await prisma.registeredTeam.update({ where: { id: a.id }, data: { division: b.division } })
+      await prisma.registeredTeam.update({ where: { id: b.id }, data: { division: a.division } })
+      const counts = await swapTeamDivisionRefs(params.id, { name: a.teamName, division: a.division }, { name: b.teamName, division: b.division })
+      return NextResponse.json({ ok: true, counts })
+    }
+
     if (!teamId || !newDivision?.trim()) return NextResponse.json({ error: 'teamId and newDivision required' }, { status: 400 })
 
     const division = decodeURIComponent(params.division)

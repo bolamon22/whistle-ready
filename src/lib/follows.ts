@@ -420,6 +420,31 @@ export async function renameFollowRefs(tournamentId: string, oldName: string, ne
   return Number(r) || 0
 }
 
+/**
+ * A team changed division (the cross-division swap on the Divisions page): the
+ * phones following it go with it. Without this they keep following the old
+ * division's slot, which now belongs to a different team.
+ */
+export async function moveFollowDivision(tournamentId: string, teamName: string, fromDivision: string, toDivision: string): Promise<number> {
+  await ensureFollowTables()
+  const key = nameKey(teamName), from = nameKey(fromDivision), to = nameKey(toDivision)
+  if (!key || !from || !to || from === to) return 0
+  // A device already following this name in the new division would collide on
+  // the UNIQUE; drop its old row rather than fail the move.
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "TeamFollow2" WHERE "id" IN (
+       SELECT o."id" FROM "TeamFollow2" o JOIN "TeamFollow2" n
+         ON n."deviceId" = o."deviceId" AND n."tournamentId" = o."tournamentId" AND n."teamKey" = o."teamKey" AND n."divKey" = ?
+      WHERE o."tournamentId" = ? AND o."teamKey" = ? AND o."divKey" = ?)`,
+    to, tournamentId, key, from,
+  )
+  const r = await prisma.$executeRawUnsafe(
+    `UPDATE "TeamFollow2" SET "division" = ?, "divKey" = ? WHERE "tournamentId" = ? AND "teamKey" = ? AND "divKey" = ?`,
+    cleanName(toDivision), to, tournamentId, key, from,
+  )
+  return Number(r) || 0
+}
+
 /** A team left the event: its follows go with it, in that division only when given. */
 export async function removeFollowRefs(tournamentId: string, teamName: string, division?: string): Promise<number> {
   await ensureFollowTables()

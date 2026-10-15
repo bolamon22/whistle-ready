@@ -297,6 +297,20 @@ export default function DivisionsPage() {
   const [newDivName, setNewDivName] = useState('')
   const [movingTeam, setMovingTeam] = useState<Team | null>(null)
   const [moveTarget, setMoveTarget] = useState('')
+  // Optional: a team in the destination division to trade places with.
+  const [swapWith, setSwapWith] = useState('')
+  const [destTeams, setDestTeams] = useState<{ id: string; teamName: string; pool?: string | null }[]>([])
+  const [crossSwapping, setCrossSwapping] = useState(false)
+  useEffect(() => {
+    setSwapWith('')
+    if (!moveTarget) { setDestTeams([]); return }
+    let live = true
+    fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(moveTarget)}/teams`)
+      .then(r => r.ok ? r.json() : { teams: [] })
+      .then(d => { if (live) setDestTeams(Array.isArray(d.teams) ? d.teams : []) })
+      .catch(() => { if (live) setDestTeams([]) })
+    return () => { live = false }
+  }, [id, moveTarget])
 
   // Swap teams state
   const [swapA, setSwapA] = useState<string | null>(null)
@@ -501,6 +515,26 @@ export default function DivisionsPage() {
     }))
     setMovingTeam(null)
     toast.success(`${team.teamName} moved to ${newDivision}`)
+  }
+
+  // Trade places with a team in another division: each takes the other's pool
+  // spot, games and bracket seed (server: lib/teamRename swapTeamDivisionRefs),
+  // so neither division has to be rescheduled.
+  async function swapAcrossDivisions(team: Team, otherId: string) {
+    if (!activeDiv) return
+    const other = destTeams.find(t => t.id === otherId)
+    if (!other) return
+    setCrossSwapping(true)
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId: team.id, swapWithTeamId: other.id }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setCrossSwapping(false)
+    if (!res.ok) { toast.error(d.error ?? 'Failed to swap teams'); return }
+    setMovingTeam(null); setMoveTarget(''); setSwapWith('')
+    selectDiv(activeDiv)
+    toast.success(`${team.teamName} and ${other.teamName} swapped divisions, pool spots and games`)
   }
 
   async function deleteTeam(team: Team) {
@@ -1868,8 +1902,8 @@ if (loading) return (
                 {/* ── Move Team modal ── */}
                 {movingTeam && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setMovingTeam(null)}>
-                    <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={e => e.stopPropagation()}>
-                      <h3 className="font-bold text-slate-800 mb-1">Move Team</h3>
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-96 max-w-[calc(100vw-2rem)]" onClick={e => e.stopPropagation()}>
+                      <h3 className="font-bold text-slate-800 mb-1">{swapWith ? 'Swap Teams' : 'Move Team'}</h3>
                       <p className="text-sm text-slate-500 mb-4">
                         Moving <strong>{movingTeam.teamName}</strong> from <strong>{activeDiv}</strong>
                       </p>
@@ -1883,14 +1917,33 @@ if (loading) return (
                           <option key={d.name} value={d.name}>{d.name}</option>
                         ))}
                       </select>
+                      {moveTarget && destTeams.length > 0 && (
+                        <div className="mb-4 -mt-1">
+                          <label className="block text-xs font-medium text-slate-600 mb-1.5">Swap with a team there <span className="font-normal text-slate-400">(optional)</span></label>
+                          <select
+                            value={swapWith}
+                            onChange={e => setSwapWith(e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
+                            <option value="">No swap, just move</option>
+                            {destTeams.map(t => (
+                              <option key={t.id} value={t.id}>{t.teamName}{t.pool ? ` · Pool ${String(t.pool).replace(/^pool\s*/i, '')}` : ''}</option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-slate-500 mt-1.5">
+                            {swapWith
+                              ? `Each team takes the other's pool spot and games, so neither schedule changes. Followers move with their team.`
+                              : `Moving on its own takes it out of its pool here. Its games stay behind until you rebuild them.`}
+                          </p>
+                        </div>
+                      )}
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setMovingTeam(null)}
                           className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancel</button>
                         <button
-                          onClick={() => moveTarget && moveTeam(movingTeam, moveTarget)}
-                          disabled={!moveTarget}
+                          onClick={() => { if (!moveTarget) return; if (swapWith) swapAcrossDivisions(movingTeam, swapWith); else moveTeam(movingTeam, moveTarget) }}
+                          disabled={!moveTarget || crossSwapping}
                           className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
-                          Move Team
+                          {swapWith ? (crossSwapping ? 'Swapping…' : 'Swap Teams') : 'Move Team'}
                         </button>
                       </div>
                     </div>

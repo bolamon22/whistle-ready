@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db'
 import { tournamentOrgId } from '@/lib/org'
 import { listSubmissions, updateSubmissionData } from '@/lib/formSubmissions'
 import { nameKey } from '@/lib/names'
-import { renameFollowRefs, removeFollowRefs } from '@/lib/follows'
+import { renameFollowRefs, removeFollowRefs, moveFollowDivision } from '@/lib/follows'
 
 // Team and club names are string keys everywhere (pools, games, brackets,
 // follows, club-director links, waivers). When one is renamed — even just to
@@ -185,6 +185,96 @@ export async function removeTeamRefs(tournamentId: string, teamName: string, div
   } catch {}
   try { const c = await removeFollowRefs(tournamentId, teamName, division); if (c) n.follows = (n.follows || 0) + c } catch {}
 
+  return n
+}
+
+/**
+ * Two teams in different divisions trade places: each takes the other's pool
+ * spot, games and bracket seed, so neither division's schedule has to be
+ * rebuilt. Bo, Oct 15 2026, swapping Riverwolves (U14 A) and Suncoast 14U
+ * (U14 B): "I don't want to do it manually because then I'd have to reschedule
+ * both divisions."
+ *
+ * Only references inside the two divisions change -- the same club's teams in
+ * other divisions are separate (division, name) pairs. Followers move with
+ * their team. Waivers and coach profiles are keyed by team name, which does not
+ * change, so they need nothing. The caller has already moved the two
+ * RegisteredTeam rows and checked that no game is scored.
+ */
+export async function swapTeamDivisionRefs(
+  tournamentId: string,
+  a: { name: string; division: string },
+  b: { name: string; division: string },
+): Promise<RenameCounts> {
+  const n: RenameCounts = {}
+  const dA = nameKey(a.division), dB = nameKey(b.division)
+  const kA = nameKey(a.name), kB = nameKey(b.name)
+  if (!tournamentId || !dA || !dB || dA === dB || !kA || !kB) return n
+  // In A's division A's name becomes B's, and the reverse in B's. null = leave it.
+  const swapIn = (division: string, v: string | null | undefined): string | null => {
+    if (!v) return null
+    const d = nameKey(division), k = nameKey(v)
+    if (d === dA && k === kA) return b.name
+    if (d === dB && k === kB) return a.name
+    return null
+  }
+
+  try {
+    const pools = await prisma.pool.findMany({ where: { tournamentId } })
+    for (const p of pools) {
+      let names: string[] = []
+      try { names = JSON.parse(p.teamNames || '[]') } catch { continue }
+      if (!Array.isArray(names)) continue
+      const next = names.map(x => swapIn(p.division, x) ?? x)
+      if (next.join('\u0000') === names.join('\u0000')) continue
+      await prisma.pool.update({ where: { id: p.id }, data: { teamNames: JSON.stringify(next) } })
+      n.pools = (n.pools || 0) + 1
+    }
+  } catch {}
+
+  try {
+    const games: { id: string; division: string; team1: string; team2: string }[] = await prisma.game.findMany({
+      where: { tournamentId }, select: { id: true, division: true, team1: true, team2: true },
+    })
+    for (const g of games) {
+      const t1 = swapIn(g.division, g.team1), t2 = swapIn(g.division, g.team2)
+      if (t1 === null && t2 === null) continue
+      await prisma.game.update({ where: { id: g.id }, data: { ...(t1 !== null ? { team1: t1 } : {}), ...(t2 !== null ? { team2: t2 } : {}) } })
+      n.games = (n.games || 0) + 1
+    }
+  } catch {}
+
+  try {
+    const brackets: { id: string; division: string; seeds: string }[] = await prisma.bracket.findMany({
+      where: { tournamentId }, select: { id: true, division: true, seeds: true },
+    })
+    for (const br of brackets) {
+      const d = nameKey(br.division)
+      if (d !== dA && d !== dB) continue
+      let seeds: Record<string, string> = {}
+      try { seeds = JSON.parse(br.seeds || '{}') } catch {}
+      let seedChanged = false
+      for (const k of Object.keys(seeds)) { const v = swapIn(br.division, seeds[k]); if (v !== null) { seeds[k] = v; seedChanged = true } }
+      if (seedChanged) { await prisma.bracket.update({ where: { id: br.id }, data: { seeds: JSON.stringify(seeds) } }); n.seeds = (n.seeds || 0) + 1 }
+      const rows: { id: string; team1: string | null; team2: string | null; winner: string | null; loser: string | null }[] =
+        await prisma.bracketGame.findMany({ where: { bracketId: br.id }, select: { id: true, team1: true, team2: true, winner: true, loser: true } })
+      for (const r of rows) {
+        const data: Record<string, string> = {}
+        for (const k of ['team1', 'team2', 'winner', 'loser'] as const) { const v = swapIn(br.division, r[k]); if (v !== null) data[k] = v }
+        if (Object.keys(data).length) { await prisma.bracketGame.update({ where: { id: r.id }, data }); n.bracketGames = (n.bracketGames || 0) + 1 }
+      }
+    }
+  } catch {}
+
+  // Same name in both divisions: nothing visible changes, and moving both
+  // groups of followers would just trade them back.
+  if (kA !== kB) {
+    try {
+      const c = (await moveFollowDivision(tournamentId, a.name, a.division, b.division))
+        + (await moveFollowDivision(tournamentId, b.name, b.division, a.division))
+      if (c) n.follows = c
+    } catch {}
+  }
   return n
 }
 
