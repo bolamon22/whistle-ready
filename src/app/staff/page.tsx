@@ -7,13 +7,17 @@ import { certLabel, CERT_LEVELS, WORKER_ROLES, PAY_METHODS, isHourlyRole } from 
 import { mergeLetter, letterCopyHtml } from '@/lib/inviteLetterText'
 import PersonEvents from '@/components/staff/PersonEvents'
 import PersonTraining from '@/components/staff/PersonTraining'
+import RefLevelPill from '@/components/RefLevelPill'
+import { REF_LEVELS, refLevelOf } from '@/lib/refLevel'
+import { canSeeRefLevel } from '@/lib/roleScope'
+import { useRole } from '@/lib/role-context'
 
-interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;referredBy?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
+interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;refLevel?:number|null;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;referredBy?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
 const GENDERS=[{value:'both',label:'Girls & Boys'},{value:'boys',label:'Boys'},{value:'girls',label:'Girls'}]
 const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',roles:['ref'],isAssigner:false,gender:'both',payRateOverride:'',hourlyRate:'',payMethod:'check',payHandle:'',venmoHandle:'',zelleHandle:'',mailingAddress:'',referredBy:'',notes:''}
 
-type SortKey = 'name'|'defaultRole'|'certLevel'|'gender'|'appStatus'
+type SortKey = 'name'|'defaultRole'|'certLevel'|'refLevel'|'gender'|'appStatus'
 type SortDir = 'asc'|'desc'
 type ExpandMode = 'profile'|'edit'
 type DupeSide={registered?:boolean;id:string;name:string;email:string|null;phone:string|null;defaultRole:string;roles:string;certLevel:string;payMethod:string;payHandle:string|null;association:string|null;createdAt:string}
@@ -21,7 +25,7 @@ type DupePair={key:string;reasons:string[];a:DupeSide;b:DupeSide;keep?:'a'|'b'|n
 
 // ── Inline edit form (defined OUTSIDE component to prevent remount on render) ──
 function StaffEditForm({
-  form, setForm, onSubmit, onCancel, saving, submitLabel
+  form, setForm, onSubmit, onCancel, saving, submitLabel, levels
 }:{
   form:Record<string,unknown>
   setForm:(fn:(f:Record<string,unknown>)=>Record<string,unknown>)=>void
@@ -29,6 +33,7 @@ function StaffEditForm({
   onCancel:()=>void
   saving:boolean
   submitLabel:string
+  levels?:boolean   // the viewer sees and sets ref levels (lib/refLevel)
 }) {
   const roles = (form.roles as string[]) ?? ['ref']
   const toggleRole = (r:string) => setForm(f=>{
@@ -63,6 +68,7 @@ function StaffEditForm({
       {hasRef&&<>
         <div><label className="label">Cert Level</label><select className="select" value={String(form.certLevel??'youth')} onChange={e=>setForm(f=>({...f,certLevel:e.target.value}))}>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div><div><label className="label">Association</label><input className="input" value={form.association??''} onChange={e=>setForm(f=>({...f,association:e.target.value}))} placeholder="e.g. SFLOA, Tampa"/></div>
         <div><label className="label">Can Ref</label><select className="select" value={String(form.gender??'both')} onChange={e=>setForm(f=>({...f,gender:e.target.value}))}>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select></div>
+        {levels&&<div><label className="label">Ref level <span className="text-slate-400 font-normal">(not shown to refs)</span></label><select className="select" value={String(form.refLevel??'')} onChange={e=>setForm(f=>({...f,refLevel:e.target.value}))}><option value="">Not ranked</option>{REF_LEVELS.map(l=><option key={l.value} value={l.value}>{l.label} ({l.color})</option>)}</select></div>}
         <div><label className="label">Pay Rate Override ($/game)</label><input className="input" type="number" min="0" step="0.01" value={String(form.payRateOverride??'')} onChange={e=>setForm(f=>({...f,payRateOverride:e.target.value}))} placeholder="Leave blank = default"/></div>
       </>}
       {hasHourly&&<div><label className="label">Hourly Rate ($/hr)</label><input className="input" type="number" min="0" step="0.01" value={String(form.hourlyRate??'')} onChange={e=>setForm(f=>({...f,hourlyRate:e.target.value}))}/></div>}
@@ -250,6 +256,11 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
 }
 
 export default function StaffPage() {
+  // Ref levels (lib/refLevel): directors, admins and assigners; the API blanks them for
+  // everyone else and for staff outside an assigner's groups.
+  const { effectiveRole }=useRole()
+  const showLevels=canSeeRefLevel(effectiveRole)
+  const [levelFilter,setLevelFilter]=useState('all')
   const [workers,setWorkers]=useState<Worker[]>([])
   const [loading,setLoading]=useState(true)
   const [saving,setSaving]=useState(false)
@@ -339,6 +350,7 @@ export default function StaffPage() {
   const filtered=workers
     .filter(w=>roleFilter==='all'||parseRoles(w).includes(roleFilter))
     .filter(w=>genderFilter==='all'||w.gender===genderFilter)
+    .filter(w=>!showLevels||levelFilter==='all'||(parseRoles(w).includes('ref')&&(levelFilter==='none'?!refLevelOf(w.refLevel):String(refLevelOf(w.refLevel))===levelFilter)))
     .filter(w=>appFilter==='all'||(w.appStatus??'none')===appFilter)
     .filter(w=>!search||w.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
@@ -350,13 +362,13 @@ export default function StaffPage() {
     if(expandedId===w.id&&expandMode===mode){setExpandedId(null);return}
     setExpandedId(w.id);setExpandMode(mode)
     if(mode==='edit'){
-      setEditForm({name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,association:w.association??''  ,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',venmoHandle:w.venmoHandle??(w.payMethod==='venmo'?w.payHandle??'':''),zelleHandle:w.zelleHandle??(w.payMethod==='zelle'?w.payHandle??'':''),mailingAddress:w.mailingAddress??'',referredBy:w.referredBy??'',notes:w.notes??''})
+      setEditForm({...(showLevels?{refLevel:refLevelOf(w.refLevel)??''}:{}),name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,association:w.association??''  ,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',venmoHandle:w.venmoHandle??(w.payMethod==='venmo'?w.payHandle??'':''),zelleHandle:w.zelleHandle??(w.payMethod==='zelle'?w.payHandle??'':''),mailingAddress:w.mailingAddress??'',referredBy:w.referredBy??'',notes:w.notes??''})
     }
   }
 
   async function saveEdit(e:React.FormEvent,workerId:string){
     e.preventDefault();setSaving(true)
-    const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:(editForm.payMethod==='venmo'?editForm.venmoHandle:editForm.payMethod==='zelle'?editForm.zelleHandle:'')||null,venmoHandle:editForm.venmoHandle||null,zelleHandle:editForm.zelleHandle||null,mailingAddress:editForm.mailingAddress||null,referredBy:String(editForm.referredBy??'').trim()||null,notes:editForm.notes||null,roles:editForm.roles}
+    const payload={...editForm,...('refLevel' in editForm?{refLevel:refLevelOf(editForm.refLevel)}:{}),name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:(editForm.payMethod==='venmo'?editForm.venmoHandle:editForm.payMethod==='zelle'?editForm.zelleHandle:'')||null,venmoHandle:editForm.venmoHandle||null,zelleHandle:editForm.zelleHandle||null,mailingAddress:editForm.mailingAddress||null,referredBy:String(editForm.referredBy??'').trim()||null,notes:editForm.notes||null,roles:editForm.roles}
     const res=await fetch(`/api/workers/${workerId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     if(res.ok){toast.success('Updated');setExpandedId(null);load()}else{const j=await res.json().catch(()=>({}));toast.error(j.error||'Failed')}
     setSaving(false)
@@ -384,7 +396,7 @@ export default function StaffPage() {
 
   async function addNew(e:React.FormEvent){
     e.preventDefault();setSaving(true)
-    const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:(editForm.payMethod==='venmo'?editForm.venmoHandle:editForm.payMethod==='zelle'?editForm.zelleHandle:'')||null,notes:editForm.notes||null,roles:editForm.roles,orgId:previewOrgId()}
+    const payload={...editForm,...('refLevel' in editForm?{refLevel:refLevelOf(editForm.refLevel)}:{}),name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:(editForm.payMethod==='venmo'?editForm.venmoHandle:editForm.payMethod==='zelle'?editForm.zelleHandle:'')||null,notes:editForm.notes||null,roles:editForm.roles,orgId:previewOrgId()}
     const res=await fetch('/api/workers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     if(res.ok){toast.success('Added');setExpandedId(null);setEditForm(EMPTY_FORM);load()}else toast.error('Failed')
     setSaving(false)
@@ -556,6 +568,7 @@ export default function StaffPage() {
       const payload:Record<string,unknown>={}
       if(bulkField==='payRateOverride'||bulkField==='hourlyRate')payload[bulkField]=bulkValue?parseFloat(bulkValue):null
       else if(bulkField==='isAssigner')payload[bulkField]=bulkValue==='true'
+      else if(bulkField==='refLevel')payload[bulkField]=refLevelOf(bulkValue)
       else payload[bulkField]=bulkValue
       return fetch(`/api/workers/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     })
@@ -641,6 +654,7 @@ export default function StaffPage() {
             {w.email&&<div className="min-w-0"><p className="text-slate-400 text-xs mb-0.5">Email</p><a href={`mailto:${w.email}`} className="block truncate text-sky-200">{w.email}</a></div>}
             {wRoles.includes('ref')&&<>
               <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p className="text-white">{certLabel(w.certLevel)}</p></div>
+              {showLevels&&<div><p className="text-slate-400 text-xs mb-0.5">Ref level</p><p className="text-white flex items-center gap-1.5">{refLevelOf(w.refLevel)?<><RefLevelPill level={w.refLevel}/>{REF_LEVELS.find(l=>l.value===refLevelOf(w.refLevel))?.label}</>:'Not ranked'}</p></div>}
               <div><p className="text-slate-400 text-xs mb-0.5">Association</p><p className="text-white">{w.association||'\u2014'}</p></div>
               <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p className="text-white">{gLabel(w.gender)}</p></div>
             </>}
@@ -693,11 +707,11 @@ export default function StaffPage() {
         </div>
         <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={e=>handlePhotoUpload(e,w.id)}/>
       </div>
-      <StaffEditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={saving} submitLabel="Save"/>
+      <StaffEditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={saving} submitLabel="Save" levels={showLevels}/>
     </>
   )
 
-  const BULK_FIELDS=[{value:'defaultRole',label:'Role'},{value:'certLevel',label:'Cert Level'},{value:'gender',label:'Can Ref'},{value:'payMethod',label:'Pay Method'},{value:'payRateOverride',label:'Pay Rate Override ($/game)'},{value:'hourlyRate',label:'Hourly Rate ($/hr)'},{value:'isAssigner',label:'Is Assigner'}]
+  const BULK_FIELDS=[{value:'defaultRole',label:'Role'},{value:'certLevel',label:'Cert Level'},...(showLevels?[{value:'refLevel',label:'Ref level'}]:[]),{value:'gender',label:'Can Ref'},{value:'payMethod',label:'Pay Method'},{value:'payRateOverride',label:'Pay Rate Override ($/game)'},{value:'hourlyRate',label:'Hourly Rate ($/hr)'},{value:'isAssigner',label:'Is Assigner'}]
   const preview=importData?buildPreview():[]
 
   return(
@@ -757,7 +771,7 @@ export default function StaffPage() {
       {tab==='roster'&&expandedId==='__new__'&&(
         <div className="card p-6 mb-4 border-sky-200 border">
           <h2 className="font-semibold text-slate-800 mb-4">Add Staff</h2>
-          <StaffEditForm form={editForm} setForm={setEditForm} onSubmit={addNew} onCancel={()=>setExpandedId(null)} saving={saving} submitLabel="Add Staff"/>
+          <StaffEditForm form={editForm} setForm={setEditForm} onSubmit={addNew} onCancel={()=>setExpandedId(null)} saving={saving} submitLabel="Add Staff" levels={showLevels}/>
         </div>
       )}
 
@@ -779,6 +793,11 @@ export default function StaffPage() {
               <option value="girls">Girls</option>
               <option value="both">Girls & Boys</option>
             </select>
+            {showLevels&&<select className="select !w-auto min-w-0 text-sm" aria-label="Ref level" value={levelFilter} onChange={e=>{setLevelFilter(e.target.value);setSelected(new Set())}}>
+              <option value="all">Ref level: all</option>
+              {REF_LEVELS.map(l=><option key={l.value} value={l.value}>{l.label} ({l.color})</option>)}
+              <option value="none">Refs not ranked</option>
+            </select>}
             <label className="text-sm text-slate-500 hidden sm:inline">App:</label>
             <select className="select !w-auto min-w-0 text-sm" value={appFilter} onChange={e=>{setAppFilter(e.target.value);setSelected(new Set())}}>
               <option value="all">App: all</option>
@@ -821,6 +840,7 @@ export default function StaffPage() {
                 {bulkField==='defaultRole'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>}
                 {bulkField==='certLevel'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>}
                 {bulkField==='gender'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select>}
+                {bulkField==='refLevel'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{REF_LEVELS.map(l=><option key={l.value} value={l.value}>{l.label} ({l.color})</option>)}<option value="none">Not ranked</option></select>}
                 {bulkField==='payMethod'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select>}
                 {bulkField==='isAssigner'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option><option value="true">Yes</option><option value="false">No</option></select>}
                 {(bulkField==='payRateOverride'||bulkField==='hourlyRate')&&<input className="input !w-28 text-sm" type="number" min="0" step="0.01" value={bulkValue} onChange={e=>setBulkValue(e.target.value)} placeholder="Amount"/>}
@@ -953,6 +973,7 @@ export default function StaffPage() {
                         {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
                         {wRoles.includes('ref')&&<>
                           <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                          {showLevels&&<RefLevelPill level={w.refLevel} className="self-center"/>}
                           <span className="badge bg-white border border-slate-200 text-slate-500">{gLabel(w.gender)}</span>
                           {w.association&&<span className="badge bg-white border border-slate-200 text-slate-500">{w.association}</span>}
                         </>}
@@ -990,6 +1011,7 @@ export default function StaffPage() {
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('name')}>Name {sortArrow('name')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('defaultRole')}>Roles {sortArrow('defaultRole')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('certLevel')}>Cert {sortArrow('certLevel')}</th>
+                  {showLevels&&<th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" title="Ref level, 1 (lowest, red) to 3 (green). Only assigners and directors see it." onClick={()=>toggleSort('refLevel')}>Level {sortArrow('refLevel')}</th>}
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('association')}>Association {sortArrow('association')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={()=>toggleSort('gender')}>Can Ref {sortArrow('gender')}</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wide">Pay Method</th>
@@ -1014,7 +1036,8 @@ export default function StaffPage() {
                           {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
                         </div>
                       </td>
-                      <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">—</span>}</td><td className="px-4 py-3 text-sm text-slate-600">{w.association||'\u2014'}</td>
+                      <td className="px-4 py-3">{wRoles.includes('ref')?<span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>:<span className="text-slate-400">—</span>}</td>
+                      {showLevels&&<td className="px-4 py-3">{wRoles.includes('ref')&&refLevelOf(w.refLevel)?<RefLevelPill level={w.refLevel} className="!text-[11px] !px-1.5"/>:<span className="text-slate-300">—</span>}</td>}<td className="px-4 py-3 text-sm text-slate-600">{w.association||'\u2014'}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{wRoles.includes('ref')?gLabel(w.gender):'—'}</td>
                       <td className="px-4 py-3"><span className="badge bg-slate-100 text-slate-700">{pmLabel(w.payMethod)}</span>{w.payHandle&&<div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}{!!w.w9OnFile&&<div className="text-[10px] font-semibold text-emerald-600 mt-0.5">W-9 ✓</div>}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{wRoles.some(r=>isHourlyRole(r))?(w.hourlyRate?`$${w.hourlyRate}/hr`:'—'):(w.payRateOverride?`$${w.payRateOverride}/game`:'Default')}</td>
@@ -1047,14 +1070,14 @@ export default function StaffPage() {
                     {/* Profile panel */}
                     {isExpanded&&expandMode==='profile'&&(
                       <tr key={`${w.id}-p`}>
-                        <td colSpan={12} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
+                        <td colSpan={showLevels?13:12} className="p-0 border-b border-slate-200">{renderProfile(w,wRoles)}</td>
                       </tr>
                     )}
 
                     {/* Edit panel */}
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
-                        <td colSpan={12} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">{renderEdit(w)}</td>
+                        <td colSpan={showLevels?13:12} className="px-4 sm:px-6 py-4 sm:py-5 bg-sky-50/40 border-b border-slate-200">{renderEdit(w)}</td>
                       </tr>
                     )}
                   </>

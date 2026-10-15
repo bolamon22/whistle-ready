@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { certLabel, PAY_METHODS, WORKER_ROLES, formatDate } from '@/lib/utils'
+import RefLevelPill from '@/components/RefLevelPill'
 
-interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;defaultRole:string;gender:string;payMethod:string;payHandle:string|null;isAssigner:boolean;hourlyRate:number|null;payRateOverride:number|null;notes:string|null;photoUrl:string|null }
+interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;refLevel?:number|null;defaultRole:string;gender:string;payMethod:string;payHandle:string|null;isAssigner:boolean;hourlyRate:number|null;payRateOverride:number|null;notes:string|null;photoUrl:string|null }
 // amount is null for an assigner when part of that event's pay is in a group they
 // don't run (lib/payGroups); the record still shows they were paid.
 interface PayRecord { id:string;amount:number|null;method:string;paidAt:string;notes:string|null;tournament:{id:string;name:string;startDate:string|null} }
@@ -93,7 +94,7 @@ export default function StaffProfilePage({ params }: { params:{id:string} }) {
 
             <div>
               <h1 className="text-2xl font-bold text-slate-900">{worker.name}</h1>
-              <p className="text-slate-500">{rLabel(worker.defaultRole)}{worker.defaultRole==='ref'?` · ${certLabel(worker.certLevel)}`:''}</p>
+              <p className="text-slate-500 flex items-center gap-1.5">{rLabel(worker.defaultRole)}{worker.defaultRole==='ref'?` · ${certLabel(worker.certLevel)}`:''}{worker.defaultRole==='ref'&&<RefLevelPill level={worker.refLevel}/>}</p>
               {!!worker.isAssigner&&<span className="badge bg-amber-100 text-amber-700 mt-1">Assigner</span>}
               <div className="flex items-center gap-2 mt-1">
                 <button onClick={()=>fileInputRef.current?.click()} disabled={photoUploading}
