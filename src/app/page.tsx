@@ -1,21 +1,33 @@
-'use client'
-
-import { Suspense } from 'react'
-import { useSession } from 'next-auth/react'
+import type { Metadata } from 'next'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { BRAND, brandJsonLd } from '@/lib/brandFaq'
 import Landing from './Landing'
-import TournamentsDashboard from './TournamentsDashboard'
+import HomeClient from './HomeClient'
 
-export default function HomePage() {
-  const { status } = useSession()
+// The domain root. Signed out: the public landing, rendered on the SERVER so
+// crawlers and answer engines that don't run JavaScript read the real page
+// (before Oct 15 2026 they got "Loading…": the page was client-only and the
+// session is unknown during server render). Signed in: the tournaments
+// dashboard, unchanged (HomeClient).
+//
+// Custom org domains never reach this page: middleware rewrites their root to
+// /o/<slug>, so the brand metadata below is whistleready.app's own.
 
-  // Logged-out visitors see the public marketing landing at the domain root.
-  if (status === 'unauthenticated') return <Landing />
+export const metadata: Metadata = {
+  title: { absolute: `${BRAND.name} — ${BRAND.tagline}` },
+  description: BRAND.description,
+  alternates: { canonical: '/' },
+  openGraph: { title: `${BRAND.name} — ${BRAND.tagline}`, description: BRAND.description, url: '/', siteName: BRAND.name, type: 'website' },
+}
 
-  // Brief loading state while the session resolves.
-  if (status === 'loading') {
-    return <div className="text-slate-400 text-center py-24">Loading…</div>
-  }
-
-  // Authenticated (admin/director) — the tournaments dashboard, unchanged.
-  return <Suspense fallback={null}><TournamentsDashboard /></Suspense>
+export default async function HomePage() {
+  const session = await getServerSession(authOptions).catch(() => null)
+  if (session?.user) return <HomeClient />
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(brandJsonLd()).replace(/</g, '\\u003c') }} />
+      <Landing />
+    </>
+  )
 }

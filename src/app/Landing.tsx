@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import LandingNav from './LandingNav'
+import { BRAND_FAQ } from '@/lib/brandFaq'
 import {
   Users, LayoutGrid, CalendarDays, Activity, DollarSign, ClipboardList,
   ShieldCheck, Check, ArrowRight, Search, Eye, Flag, UserRound, UserCog, Loader2,
@@ -286,6 +287,27 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── FAQ ── (lib/brandFaq: the same answers go into the page's JSON-LD and llms.txt) */}
+      <section id="faq" className="px-6 py-20 scroll-mt-20">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-teal-600 mb-3">Questions</p>
+            <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">About Whistle Ready</h2>
+          </div>
+          <div className="space-y-3">
+            {BRAND_FAQ.map(f => (
+              <details key={f.q} className="group bg-white border border-slate-200 rounded-xl px-5 py-4 open:shadow-sm">
+                <summary className="cursor-pointer list-none flex items-center justify-between gap-4 font-semibold text-slate-900">
+                  <h3 className="text-base">{f.q}</h3>
+                  <span className="text-slate-400 group-open:rotate-45 transition-transform text-xl leading-none" aria-hidden>+</span>
+                </summary>
+                <p className="mt-3 text-slate-600 leading-7">{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── FOOTER ── */}
       <footer className="px-6 py-10 border-t border-slate-200">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -301,7 +323,7 @@ export default function Landing() {
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-400">
-          <p>© 2026 Whistle Ready · whistleready.app · Tournament management for every sport.</p>
+          <p>© 2026 Whistle Ready LLC · whistleready.app · Tournament management for every sport.</p>
           <p className="flex gap-4">
             <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms</Link>

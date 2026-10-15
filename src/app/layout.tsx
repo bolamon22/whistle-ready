@@ -18,7 +18,8 @@ import GlobalChirp from './GlobalChirp'
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: 'Whistle Ready', template: '%s · Whistle Ready' },
-  description: 'The Sports Management Master Plan',
+  description: 'Whistle Ready is tournament management software for lacrosse and youth sports: registration, brackets, scheduling, referee and staff assigning, live scores and standings.',
+  applicationName: 'Whistle Ready',
   openGraph: { siteName: 'Whistle Ready', type: 'website' },
   twitter: { card: 'summary_large_image' },
   manifest: '/manifest.webmanifest',
