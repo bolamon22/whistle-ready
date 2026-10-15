@@ -21,5 +21,5 @@ When the same person ends up in the Staff Pool twice (for example imported as "K
 3. Under **Merge these two into one person**, click **Keep this one** on the record to keep, then confirm.
 
 **Common problems:**
-- A merge can't be undone. The kept record also picks up any detail it was missing (email, phone, pay details, cert level) from the other one, and their W-9 if they uploaded one (the newer one when both did), so check both before you confirm.
+- A merge can't be undone. The kept record also picks up any detail it was missing (email, phone, pay details, cert level, organization) from the other one, and their W-9 if they uploaded one (the newer one when both did), so check both before you confirm. The training videos they've watched and the training emails sent to them move to the kept record too.
 - **Merge these two** only appears when exactly two people are ticked.

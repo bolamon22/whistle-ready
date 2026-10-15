@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
 import { mergeW9 } from '@/lib/staffW9'
+import { moveTrainingEmails } from '@/lib/trainingSends'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -70,6 +71,23 @@ export async function POST(req: Request) {
   await client.execute({ sql: `UPDATE "TimeEntry" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
   await client.execute({ sql: `UPDATE "PaymentRecord" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
   try { await client.execute({ sql: `UPDATE "StaffInvite" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] }) } catch { /* raw column may not exist */ }
+  // Training videos they've watched (api/training, keyed by the record their login
+  // matched) and the training emails sent to them (lib/trainingSends) move to the kept
+  // record. A video watched under both adds the plays together. Before Oct 15 2026 a
+  // merge left the views on the deleted record, so the kept one showed them unwatched.
+  try {
+    const mine = await client.execute({ sql: `SELECT videoId, watchedAt, plays, lastWatchedAt FROM "StaffTraining" WHERE workerKey = ?`, args: [removeId] })
+    for (const v of mine.rows as Record<string, unknown>[]) {
+      const both = await client.execute({ sql: `SELECT watchedAt, plays, lastWatchedAt FROM "StaffTraining" WHERE workerKey = ? AND videoId = ?`, args: [keepId, String(v.videoId)] })
+      const k = both.rows[0] as Record<string, unknown> | undefined
+      if (!k) { await client.execute({ sql: `UPDATE "StaffTraining" SET workerKey = ? WHERE workerKey = ? AND videoId = ?`, args: [keepId, removeId, String(v.videoId)] }); continue }
+      const first = [String(k.watchedAt || ''), String(v.watchedAt || '')].filter(Boolean).sort()[0] || String(k.watchedAt || '')
+      const last = [String(k.lastWatchedAt || k.watchedAt || ''), String(v.lastWatchedAt || v.watchedAt || '')].sort().pop() || ''
+      await client.execute({ sql: `UPDATE "StaffTraining" SET plays = ?, watchedAt = ?, lastWatchedAt = ? WHERE workerKey = ? AND videoId = ?`, args: [(Number(k.plays) || 1) + (Number(v.plays) || 1), first, last, keepId, String(v.videoId)] })
+      await client.execute({ sql: `DELETE FROM "StaffTraining" WHERE workerKey = ? AND videoId = ?`, args: [removeId, String(v.videoId)] })
+    }
+  } catch { /* nobody has watched a video yet: no table */ }
+  try { await moveTrainingEmails(removeId, keepId) } catch (e) { console.error('merge training emails', e) }
 
   // Fill keep's empty fields from remove; union roles; keep the stronger flags.
   const pick = (a: unknown, b: unknown) => (a !== null && a !== undefined && String(a).trim() !== '') ? a : ((b as string | null) ?? null)
@@ -129,6 +147,15 @@ export async function POST(req: Request) {
   // with the person. w9OnFile used to be merged as a column above, where the kept
   // record's 0 beat the other record's 1 and the file was left under the deleted id.
   try { if (await mergeW9(keepId, removeId)) filled.push('w9OnFile') } catch (e) { console.error('merge w9', e) }
+
+  // A record with no organization (older than org scoping, like both of Haylee Lamon's,
+  // Oct 15 2026) takes the other record's, or else the merging director's, so the
+  // person shows in their org's lists and sends again.
+  const org = String(keep.orgId || '') || String(rem.orgId || '') || gate.orgId || ''
+  if (!keep.orgId && org) {
+    await client.execute({ sql: `UPDATE "Worker" SET orgId = ? WHERE id = ?`, args: [org, keepId] })
+    filled.push('orgId')
+  }
 
   await client.execute({ sql: `DELETE FROM "Worker" WHERE id = ?`, args: [removeId] })
   return NextResponse.json({ ok: true, keepId, filled })
