@@ -6,6 +6,7 @@ import { Users, Calendar, Clock, Wallet, Mail, Check, ChevronDown, Search, X } f
 import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
 import ExactTimesSheet from '@/components/ExactTimesSheet'
+import RefLevelPill from '@/components/RefLevelPill'
 import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
 import { AvailAnswer, DayState, availabilityLetter, covers, dayTitle, eventRange, isMorning, stateLabel, stateTone, time12 } from '@/lib/availabilityAnswers'
 
@@ -21,7 +22,8 @@ import { AvailAnswer, DayState, availabilityLetter, covers, dayTitle, eventRange
 
 type Slot = { t: string; n: number; refs: { boys: number; girls: number; both: number } }
 type Day = { date: string; times: Slot[] }
-type Person = { id: string; name: string; jobs: string[]; gender: string; hasEmail: boolean; canRemind: boolean; days: Record<string, DayState>; remindedAt: string }
+// level: a ref's level (lib/refLevel), sent only to those who see it.
+type Person = { id: string; name: string; jobs: string[]; gender: string; hasEmail: boolean; canRemind: boolean; days: Record<string, DayState>; remindedAt: string; level?: number | null }
 type Data = {
   tournament: { id: string; name: string; startDate: string; endDate: string; location: string; logoUrl: string }
   published: boolean
@@ -352,7 +354,7 @@ export default function AvailabilityPage({ params }: { params: { id: string } })
             const at = answeredAt(p)
             return (
               <div key={p.id} className="grid items-center px-5 py-2.5 min-h-[56px] border-t border-slate-100" style={{ gridTemplateColumns: cols }}>
-                <span className="font-semibold text-slate-900 truncate pr-2">{p.name}</span>
+                <span className="flex items-center gap-1.5 min-w-0 pr-2"><span className="font-semibold text-slate-900 truncate">{p.name}</span><RefLevelPill level={p.level} /></span>
                 <span><span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full whitespace-nowrap">{jobLabel(p)}</span></span>
                 {days.map(d => <div key={d.date}>{pill(p, d)}</div>)}
                 <span className="text-[13px] text-slate-500 leading-tight">{at.text}{at.by && <span className="block text-xs text-slate-400">Set by {first(at.by)}</span>}</span>
@@ -371,7 +373,7 @@ export default function AvailabilityPage({ params }: { params: { id: string } })
               <div key={p.id} className="card p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-900 truncate">{p.name}</p>
+                    <p className="flex items-center gap-1.5 min-w-0"><span className="font-semibold text-slate-900 truncate">{p.name}</span><RefLevelPill level={p.level} /></p>
                     <p className="text-xs text-slate-500">{jobLabel(p)} · {at.text === '—' ? 'no answer yet' : `answered ${at.text}`}</p>
                   </div>
                   {action(p)}

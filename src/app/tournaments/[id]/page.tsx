@@ -10,8 +10,10 @@ import { divisionAbbr } from '@/lib/names'
 import { gameGender } from '@/lib/gameGender'
 import { isOnline, presenceLabel } from '@/lib/presenceTime'
 import { useRole } from '@/lib/role-context'
+import RefLevelPill from '@/components/RefLevelPill'
 
-interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null }
+// refLevel (lib/refLevel) comes back only for those who see this person's pay (api/workers).
+interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null;refLevel?:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number|null;worker:Worker }
 interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[];ownClub?:boolean }
 // ownClub: the viewer's own club plays, so someone else posts the score (lib/ownClub).
@@ -48,7 +50,7 @@ function staffRank(w:Worker):number{
 // Searchable dropdown component
 function SearchSelect({ value, onChange, options, placeholder, assigned, disabled, chip }: {
   value: string; onChange: (v:string)=>void
-  options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string;busy?:string}[]
+  options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string;busy?:string;level?:number|null}[]
   placeholder: string; assigned: boolean; disabled: boolean
   /** Compact board: a one-line chip (role · last name · games) instead of the row select. */
   chip?: { short:string; color:string; display:string; count?:number; danger?:boolean; tone:'ref'|'sk'; title?:string }
@@ -76,13 +78,13 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
       <div className="px-2 py-1.5 text-[10px] text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100" onClick={()=>{onChange('');setOpen(false);setSearch('')}}>— unassigned —</div>
       {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>isBusy(o)?(
         <div key={o.id} aria-disabled="true" title={`Already working ${o.busy} at this time`} className="px-2 py-1.5 cursor-not-allowed bg-slate-50 opacity-60">
-          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 line-through decoration-slate-300">{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}{o.label}</div>
+          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 line-through decoration-slate-300">{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}<RefLevelPill level={o.level}/>{o.label}</div>
           <div className="text-[10px] text-slate-500">Busy · on {o.busy}</div>
         </div>
       ):(
         <div key={o.id} onClick={()=>{onChange(o.id);setOpen(false);setSearch('')}}
           className={`px-2 py-1.5 cursor-pointer hover:bg-sky-50 ${o.id===value?'bg-sky-100':''}`}>
-          <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}{o.warning?'⚠ ':''}{o.label}</div>
+          <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}<RefLevelPill level={o.level}/>{o.warning?'⚠ ':''}{o.label}</div>
           {o.sublabel&&<div className="text-[10px] text-slate-400">{o.sublabel}</div>}
         </div>
       ))}
@@ -99,6 +101,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
           onClick={()=>{if(!disabled){setOpen(o=>!o);setTimeout(()=>inputRef.current?.focus(),50)}}}
           className={`flex items-center gap-1 h-5 w-full px-1 rounded-md border text-[10px] min-w-0 text-left transition-colors ${look} ${disabled?'opacity-50 cursor-not-allowed':''}`}>
           <span className="text-[8px] font-extrabold shrink-0" style={{color:chip.danger?'#b91c1c':chip.color}}>{chip.short}</span>
+          {assigned&&<RefLevelPill level={selected?.level} small/>}
           <span className={`truncate ${assigned?'font-semibold':'font-medium'}`}>{assigned?chip.display:'open'}</span>
           {assigned&&chip.count!==undefined&&<span className={`ml-auto text-[9px] shrink-0 ${chip.danger?'text-red-600':'text-slate-500'}`}>{chip.count}</span>}
         </button>
@@ -122,7 +125,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
         {open?(
           <input ref={inputRef} className="w-full bg-transparent outline-none text-[10px] text-slate-800" value={search} onChange={e=>setSearch(e.target.value)} placeholder="type to search…" onClick={e=>e.stopPropagation()}/>
         ):(
-          <span className={`flex items-center gap-1 truncate ${assigned?'text-sky-800':'text-slate-400'}`}>{selected?.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected.dot}`}/>}{selected?.label||placeholder}</span>
+          <span className={`flex items-center gap-1 truncate ${assigned?'text-sky-800':'text-slate-400'}`}>{selected?.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected.dot}`}/>}<RefLevelPill level={selected?.level} small/>{selected?.label||placeholder}</span>
         )}
       </div>
       {open&&(
@@ -944,7 +947,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                                 const role=i===0?'ref1':i===1?'ref2':'ref3'
                                 const roleObj={value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
                                 const existing=g.assignments.find(a=>a.role===role)
-                                return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
+                                return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id),level:w.refLevel}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
                               })}
                               <div className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-emerald-600 w-6">SK</span><div className="flex-1"><SearchSelect value={g.assignments.find(a=>a.role==='scorekeeper')?.workerId??''} onChange={wid=>assign(g.id,'scorekeeper',wid)} options={rosterWorkers.filter(w=>canScorekeeper(w)).map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!g.assignments.find(a=>a.role==='scorekeeper')} disabled={assigningGame===g.id}/></div></div>
                             </div>
@@ -1009,7 +1012,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                                   {Array.from({length:refCount},(_,i)=>{
                                     const role=i===0?'ref1':i===1?'ref2':'ref3'
                                     const existing=g.assignments.find(a=>a.role===role)
-                                    return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
+                                    return<div key={role} className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-sky-600 w-6">R{i+1}</span><div className="flex-1"><SearchSelect value={existing?.workerId??''} onChange={wid=>assign(g.id,role,wid)} options={rosterWorkers.filter(w=>w.defaultRole==='ref').map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id),level:w.refLevel}})} placeholder="unassigned" assigned={!!existing} disabled={assigningGame===g.id}/></div></div>
                                   })}
                                   <div className="flex items-center gap-1 min-w-[180px]"><span className="text-[11px] font-bold text-emerald-600 w-6">SK</span><div className="flex-1"><SearchSelect value={g.assignments.find(a=>a.role==='scorekeeper')?.workerId??''} onChange={wid=>assign(g.id,'scorekeeper',wid)} options={rosterWorkers.filter(w=>canScorekeeper(w)).map(w=>{const count=getGameCount(w.id,g.date);return{id:w.id,label:`${w.name} ${count>=8?'🔴':count>=5?'🟡':'🟢'}${count}`,sublabel:certLabel(w.certLevel),warning:doubled.has(w.id),busy:busyFor(g,w.id)}})} placeholder="unassigned" assigned={!!g.assignments.find(a=>a.role==='scorekeeper')} disabled={assigningGame===g.id}/></div></div>
                                 </div>
@@ -1203,8 +1206,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
                   onDragStart={e=>{e.dataTransfer.setData('workerId',w.id);e.dataTransfer.effectAllowed='copy';setDragWorker(w)}}
                   onDragEnd={()=>{setDragWorker(null);setDragSlot(null)}}
                   className={`flex items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-2 pr-1 h-6 text-[11px] whitespace-nowrap shrink-0 transition-colors ${locked?'opacity-60 cursor-default':'cursor-grab active:cursor-grabbing hover:border-sky-400'} ${dragWorker?.id===w.id?'opacity-40':''}`}
-                  title={`${w.name} · ${kind.label} · ${certLabel(w.certLevel)} · ${count} game${count!==1?'s':''} today${showPresence?` · ${presenceLabel(w)}`:''}`}>
+                  title={`${w.name} · ${kind.label} · ${certLabel(w.certLevel)}${w.refLevel&&w.defaultRole==='ref'?` · Ref level ${w.refLevel}`:''} · ${count} game${count!==1?'s':''} today${showPresence?` · ${presenceLabel(w)}`:''}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${kind.dot}`}/>
+                  {w.defaultRole==='ref'&&<RefLevelPill level={w.refLevel}/>}
                   <span className="font-medium text-slate-700">{w.name}</span>
                   {on&&<span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100" aria-label="On now"/>}
                   <span className={`text-[10px] font-bold px-1.5 rounded-full ${loadCls(count)}`}>{count}</span>
@@ -1610,6 +1614,8 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
       id:w.id,
       label:`${w.name}${crossSK?` (${mainJob(w.defaultRole)}→SK)`:''} ${count}`,
       dot:staffKind(w).dot,
+      // Ref level (lib/refLevel): ref slots only; it's the assigners' rank of their refs.
+      level:slotType==='ref'?w.refLevel:null,
       sublabel:`${certLabel(w.certLevel)}${!avail?' · ⚠ unavailable':''}${isDoubled?' · ⚠ double-booked':''}`,
       warning:!avail||isDoubled,
       busy:busyFor?.(w.id),
