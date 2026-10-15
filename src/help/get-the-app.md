@@ -6,7 +6,7 @@ audience: both
 routes: /tournaments/*/public, /tournaments/*/today, /tournaments/*/event, /dashboard/parent, /dashboard/staff
 keywords: app, apple app, iphone app, ios app, app store, android app, google play, download, install, download the app, is there an app, home screen, add to home screen, notifications, alerts, push notifications, phone, mobile app, whistle ready app
 ---
-There's no App Store or Google Play download to find. Whistle Ready works as an app straight from your phone's browser: you add it to your Home Screen once, and it opens full screen like any other app, with alerts.
+Here's how to put Whistle Ready on your phone. You add it to your Home Screen once from your browser, and it opens full screen like any other app, with alerts.
 
 **iPhone:**
 1. Open the event's schedule page (or your staff or parent home page) in **Safari**. It has to be Safari for alerts to work.
