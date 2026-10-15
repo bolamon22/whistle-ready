@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   title: { absolute: `${BRAND.name} — ${BRAND.tagline}` },
   description: BRAND.description,
   alternates: { canonical: '/' },
+  // Google Search Console ownership for https://whistleready.app/ (URL-prefix property,
+  // HTML-tag method, added Oct 15 2026). Removing it un-verifies the property.
+  verification: { google: 'S6DkpOAnlD5-s50zQEbR73xZ4MQGZPT6eTl1oYUpLRc' },
   openGraph: { title: `${BRAND.name} — ${BRAND.tagline}`, description: BRAND.description, url: '/', siteName: BRAND.name, type: 'website' },
 }
 
