@@ -815,6 +815,13 @@ export default function RegistrationsPage() {
   // Scheduled rows whose full club list is opened. A row said only "1 club", so eight
   // queued waiver reminders read as one club eight times (Bo, Oct 15); each now names its clubs.
   const [schedOpen, setSchedOpen] = useState<Record<string, boolean>>({})
+  // The scheduled letter open for reading, and wording changed but not saved yet,
+  // per send (Bo, Oct 15: "Is there a way i can read and edit the letters? some may
+  // be too harsh"). Moving between letters keeps a half-done edit; only Save
+  // changes what goes out.
+  const [schedRead, setSchedRead] = useState('')
+  const [schedDrafts, setSchedDrafts] = useState<Record<string, { subject: string; body: string }>>({})
+  const [schedSaving, setSchedSaving] = useState(false)
   const loadScheduled = () => {
     fetch(`/api/registrations/comm-schedule?tournamentId=${tournamentId}`).then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.scheduled) setScheduled(d.scheduled) }).catch(() => {})
@@ -825,6 +832,33 @@ export default function RegistrationsPage() {
     const res = await fetch(`/api/registrations/comm-schedule?id=${id}&tournamentId=${tournamentId}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Canceled'); setScheduled(s => s.filter(x => x.id !== id)) }
     else toast.error('Could not cancel — it may have already gone out')
+  }
+  const sendAtText = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const toggleSchedRead = (sc: any) => setSchedRead(r => (r === sc.id ? '' : sc.id))
+  const editSched = (sc: any, patch: Partial<{ subject: string; body: string }>) =>
+    setSchedDrafts(m => ({ ...m, [sc.id]: { ...(m[sc.id] || { subject: String(sc.subject ?? ''), body: String(sc.body ?? '') }), ...patch } }))
+  const dropSchedDraft = (id: string) => setSchedDrafts(m => { const n = { ...m }; delete n[id]; return n })
+  const saveScheduled = async (sc: any) => {
+    const d = schedDrafts[sc.id]
+    if (!d) return
+    setSchedSaving(true)
+    try {
+      const res = await fetch('/api/registrations/comm-schedule', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sc.id, tournamentId, subject: d.subject, body: d.body }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (res.status === 404) {
+        // It went out (or was canceled) while open, so this list is out of date.
+        loadScheduled()
+        throw new Error('Too late to change: it already went out or was canceled')
+      }
+      if (!res.ok || !j.ok || !j.scheduled) throw new Error(j.error || 'Could not save the letter')
+      setScheduled(s => s.map(x => (x.id === sc.id ? { ...x, subject: j.scheduled.subject, body: j.scheduled.body } : x)))
+      dropSchedDraft(sc.id)
+      toast.success(`Saved. This wording goes out ${sendAtText(sc.sendAt)}.`, { duration: 5000 })
+    } catch (e: any) { toast.error(e?.message || 'Could not save the letter', { duration: 6000 }) }
+    finally { setSchedSaving(false) }
   }
   const loadPayLetter = (v: PayVariant) => {
     fetch(`/api/registrations/pay-letter?variant=${v}`).then(r => r.ok ? r.json() : null)
@@ -881,6 +915,69 @@ export default function RegistrationsPage() {
       // The real block is built per club at send time (lib/checklistLetter) from
       // confirm status, login, waiver counts, balance and hotel.
       .replace(/\{checklist\}/g, '[x] Teams and divisions confirmed — …\n[ ] Player waivers — …\n[ ] Balance due — …\n(ticked off per club, with a button on each open item)')
+  }
+  // What stands in for the button under a letter in a preview: the compose box and
+  // a scheduled letter's reader say the same thing. `button` is an org letter's own
+  // button (lib/customLetters); the built-in letters go by kind.
+  const CTA_NOTES: Record<string, string> = {
+    payment: 'Invoiced / paid / balance table + the "Pay online" button appear here automatically',
+    waiver: '"Open the player waiver" button appears here automatically',
+    schedule: '"View the schedule" button appears here automatically',
+    confirm: '"Review + confirm your teams" button appears here automatically — their own private link',
+    account: '"Set up my account" button appears here automatically — a single-use link tied to this registration',
+    checklist: 'Each open item carries its own button — confirm teams, set up a login, share the waiver link, pay the balance',
+  }
+  const ctaPreviewNote = (kind: string, button?: string) => button === undefined ? (CTA_NOTES[kind] || '')
+    : button === 'pay' ? CTA_NOTES.payment
+    : !button || button === 'none' ? 'No button under this letter'
+    : `"${CTA_LABELS[button as keyof typeof CTA_LABELS] || button}" button appears here automatically`
+  // The reader under a scheduled send: its letter as the first club will get it,
+  // editable, with the same rewrite buttons and fill-in check as the compose box.
+  const schedReader = (sc: any, draft: { subject: string; body: string }, changed: boolean, names: string[]) => {
+    const custom = sc.payload?.custom as { name?: string; button?: string } | undefined
+    const pay = sc.kind === 'payment'
+    const unknown = unknownFields(`${draft.subject}\n${draft.body}`, pay)
+    const sample = (sc.regIds || []).map((id: string) => registrations.find(r => r.id === String(id))).find(Boolean) as Registration | undefined
+    const merge = pay ? mergePayPreview : mergeCommPreview
+    const fid = `sched-${sc.id}`
+    return (
+      <div className="border-t border-teal-200 bg-white rounded-b-lg px-3 pt-2.5 pb-3">
+        <p className="text-[11px] text-slate-500 mb-2">Goes out {sendAtText(sc.sendAt)} to {names.join(', ')}. Changes here are for this send only; your saved letter stays as it is.</p>
+        <label htmlFor={`${fid}-subject`} className="block text-xs font-medium text-slate-600 mb-1">Subject</label>
+        <input id={`${fid}-subject`} value={draft.subject} maxLength={200}
+          onChange={e => editSched(sc, { subject: e.target.value })}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        <label htmlFor={`${fid}-body`} className="block text-xs font-medium text-slate-600 mb-1">Letter</label>
+        <textarea id={`${fid}-body`} value={draft.body} maxLength={4000}
+          onChange={e => editSched(sc, { body: e.target.value })}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[160px] resize-y focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        <AiRewriteBar key={sc.id} tournamentId={String(tournamentId)} kind={custom ? 'custom' : sc.kind} button={custom ? ((custom.button || 'none') as LetterButton) : undefined}
+          subject={draft.subject} body={draft.body} onResult={r => editSched(sc, { subject: r.subject, body: r.body })} />
+        {unknown.length > 0 && (
+          <p role="alert" className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {unknown.map(f => `{${f}}`).join(', ')} {unknown.length === 1 ? 'isn\u2019t a fill-in field' : 'aren\u2019t fill-in fields'} for this letter, so {unknown.length === 1 ? 'it' : 'they'} would reach the club exactly as typed. Fix or remove {unknown.length === 1 ? 'it' : 'them'} to save.
+          </p>
+        )}
+        {sample && (
+          <div className="mt-3">
+            <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">PREVIEW — AS {sample.clubName.toUpperCase()} WILL GET IT</div>
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-700 space-y-2">
+              <div className="font-semibold text-slate-900">{merge(draft.subject, sample)}</div>
+              {merge(draft.body, sample).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
+              <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{ctaPreviewNote(sc.kind, custom ? String(custom.button || 'none') : undefined)}</div>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <button type="button" onClick={() => saveScheduled(sc)} disabled={!changed || schedSaving || unknown.length > 0 || !draft.subject.trim() || !draft.body.trim()}
+            className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">{schedSaving ? 'Saving…' : 'Save changes'}</button>
+          {changed && <button type="button" onClick={() => dropSchedDraft(sc.id)}
+            className="text-sm text-slate-600 border border-slate-300 hover:border-slate-400 px-3 py-2 rounded-lg">Discard changes</button>}
+          <button type="button" onClick={() => setSchedRead('')} className="text-sm text-slate-500 px-3 py-2">Close</button>
+          {!changed && <span className="text-[11px] text-slate-400">No changes yet</span>}
+        </div>
+      </div>
+    )
   }
   // The payment kind edits the SAME letter the per-club modal uses; the other
   // three edit their commLetters entry.
@@ -1879,18 +1976,7 @@ export default function RegistrationsPage() {
                         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-700 space-y-2">
                           <div className="font-semibold text-slate-900">{merge(commCur.subject, sample)}</div>
                           {merge(commCur.body, sample).split(/\n{2,}/).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}
-                          <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{commKind === 'custom'
-                            ? (customDraft.button === 'pay' ? 'Invoiced / paid / balance table + the "Pay online" button appear here automatically'
-                              : customDraft.button === 'none' ? 'No button under this letter'
-                              : `"${CTA_LABELS[customDraft.button]}" button appears here automatically`)
-                            : ({
-                            payment: 'Invoiced / paid / balance table + the "Pay online" button appear here automatically',
-                            waiver: '"Open the player waiver" button appears here automatically',
-                            schedule: '"View the schedule" button appears here automatically',
-                            confirm: '"Review + confirm your teams" button appears here automatically — their own private link',
-                            account: '"Set up my account" button appears here automatically — a single-use link tied to this registration',
-                            checklist: 'Each open item carries its own button — confirm teams, set up a login, share the waiver link, pay the balance',
-                          } as Record<string, string>)[commKind]}</div>
+                          <div className="border border-dashed border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-400">{ctaPreviewNote(commKind, commKind === 'custom' ? customDraft.button : undefined)}</div>
                         </div>
                       </div>
                     )
@@ -1931,19 +2017,37 @@ export default function RegistrationsPage() {
                       <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">SCHEDULED</div>
                       <div className="space-y-1">
                         {scheduled.map(sc => {
-                          const names: string[] = (sc.regIds || []).map((id: string) => registrations.find(r => r.id === String(id))?.clubName || 'A club no longer registered')
+                          // A returning-team invite (queued from Returning teams) names its clubs in
+                          // the payload: they aren't registered here, so it has no regIds.
+                          const names: string[] = sc.type === 'returning'
+                            ? ((sc.payload?.clubs || []) as { clubName?: string }[]).map(c => String(c?.clubName || 'A club'))
+                            : (sc.regIds || []).map((id: string) => registrations.find(r => r.id === String(id))?.clubName || 'A club no longer registered')
                           const showAll = !!schedOpen[sc.id] || names.length <= 3
+                          const letterName = sc.type === 'returning' ? 'Returning-team invite' : (sc.payload?.custom?.name || COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind)
+                          // Returning-team invites share this list but fill in other fields
+                          // (lib/returningInvite), so they have no reader yet.
+                          const canRead = sc.type !== 'returning'
+                          const reading = canRead && schedRead === sc.id
+                          const draft = schedDrafts[sc.id] || { subject: String(sc.subject ?? ''), body: String(sc.body ?? '') }
+                          const changed = draft.subject !== String(sc.subject ?? '') || draft.body !== String(sc.body ?? '')
                           return (
-                            <div key={sc.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                              <span className="font-semibold text-slate-700">{sc.payload?.custom?.name || COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind}</span>
-                              <span className="text-slate-400">·</span>
-                              <span className="min-w-0 text-slate-700" title={names.join(', ')}>
-                                {(showAll ? names : names.slice(0, 2)).join(', ')}
-                                {!showAll && <> <button type="button" onClick={() => setSchedOpen(o => ({ ...o, [sc.id]: true }))} className="font-semibold text-teal-700 hover:underline">+{names.length - 2} more</button></>}
-                              </span>
-                              <span className="text-slate-400">·</span>
-                              <span className="whitespace-nowrap">{new Date(sc.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                              <button onClick={() => cancelScheduled(sc.id)} aria-label={`Cancel the ${sc.payload?.custom?.name || COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind} to ${names.join(', ')}`} className="ml-auto text-slate-400 hover:text-red-500 font-semibold">Cancel</button>
+                            <div key={sc.id} className={`text-xs text-slate-600 bg-slate-50 border rounded-lg ${reading ? 'border-teal-300' : 'border-slate-200'}`}>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1.5">
+                                <span className="font-semibold text-slate-700">{letterName}</span>
+                                <span className="text-slate-400">·</span>
+                                <span className="min-w-0 text-slate-700" title={names.join(', ')}>
+                                  {(showAll ? names : names.slice(0, 2)).join(', ')}
+                                  {!showAll && <> <button type="button" onClick={() => setSchedOpen(o => ({ ...o, [sc.id]: true }))} className="font-semibold text-teal-700 hover:underline">+{names.length - 2} more</button></>}
+                                </span>
+                                <span className="text-slate-400">·</span>
+                                <span className="whitespace-nowrap">{sendAtText(sc.sendAt)}</span>
+                                {changed && !reading && <span className="font-semibold text-amber-700">Changes not saved</span>}
+                                <span className="ml-auto inline-flex items-center gap-3">
+                                  {canRead && <button type="button" onClick={() => toggleSchedRead(sc)} aria-expanded={reading} className="font-semibold text-teal-700 hover:underline">{reading ? 'Close' : 'Read / edit'}</button>}
+                                  <button type="button" onClick={() => cancelScheduled(sc.id)} aria-label={`Cancel the ${letterName} to ${names.join(', ')}`} className="text-slate-400 hover:text-red-500 font-semibold">Cancel send</button>
+                                </span>
+                              </div>
+                              {reading && schedReader(sc, draft, changed, names)}
                             </div>
                           )
                         })}

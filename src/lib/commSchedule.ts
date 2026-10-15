@@ -101,6 +101,28 @@ export async function cancelScheduled(id: string, tournamentId: string): Promise
   return true
 }
 
+/** One send still waiting to go, or null once it has gone, been canceled or never existed. */
+export async function getQueued(id: string, tournamentId: string): Promise<ScheduledSend | null> {
+  await ensureScheduleTable()
+  const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
+    `SELECT * FROM "CommScheduledSend" WHERE id = ? AND tournamentId = ? AND status = 'queued'`, id, tournamentId)
+  return rows.length ? row(rows[0]) : null
+}
+
+/** New wording for a letter that hasn't gone yet (Bo, Oct 15: "some may be too
+ *  harsh"). Only while it is still queued: once the cron claims it, it leaves with
+ *  the text it had. Null when it is no longer queued. Same caps as createScheduled;
+ *  the route refuses anything longer rather than cutting it off. */
+export async function updateScheduled(id: string, tournamentId: string, subject: string, body: string): Promise<ScheduledSend | null> {
+  await ensureScheduleTable()
+  const done = await prisma.$executeRawUnsafe(
+    `UPDATE "CommScheduledSend" SET subject = ?, body = ? WHERE id = ? AND tournamentId = ? AND status = 'queued'`,
+    subject.slice(0, 200), body.slice(0, 4000), id, tournamentId)
+  if (Number(done) <= 0) return null
+  const rows: Record<string, unknown>[] = await prisma.$queryRawUnsafe(`SELECT * FROM "CommScheduledSend" WHERE id = ?`, id)
+  return rows.length ? row(rows[0]) : null
+}
+
 /** Claim one due row at a time so two overlapping cron runs can't double-send. */
 export async function claimDue(nowIso: string): Promise<ScheduledSend | null> {
   await ensureScheduleTable()
@@ -110,7 +132,11 @@ export async function claimDue(nowIso: string): Promise<ScheduledSend | null> {
   const r = row(rows[0])
   const claimed = await prisma.$executeRawUnsafe(
     `UPDATE "CommScheduledSend" SET status = 'sending' WHERE id = ? AND status = 'queued'`, r.id)
-  return Number(claimed) > 0 ? r : null
+  if (Number(claimed) <= 0) return null
+  // Read it again now that it is ours. An edit saved between the SELECT above and
+  // the claim would otherwise go out as the old wording while the editor said Saved.
+  const fresh: Record<string, unknown>[] = await prisma.$queryRawUnsafe(`SELECT * FROM "CommScheduledSend" WHERE id = ?`, r.id)
+  return fresh.length ? row(fresh[0]) : r
 }
 
 export async function finishScheduled(id: string, status: 'sent' | 'failed', results: SendResult[]) {

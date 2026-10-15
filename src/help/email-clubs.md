@@ -3,7 +3,7 @@ title: Email clubs and send pay reminders
 category: Registration & money
 order: 215
 routes: /tournaments/*/registrations
-keywords: email clubs pay reminder payment reminder urgent final notice waiting list requirements waiver reminder schedule is ready confirm your teams set up your account pre-event checklist letter bulk email schedule send later queued cancel template new letter your own letter ai write with ai rewrite more urgent friendlier shorter fix grammar dictate dictation microphone mic voice coach registration coaches registered coach letter save as a template reuse next event future events
+keywords: email clubs pay reminder payment reminder urgent final notice waiting list requirements waiver reminder schedule is ready confirm your teams set up your account pre-event checklist letter bulk email schedule send later queued cancel read edit change scheduled letter wording too harsh template new letter your own letter ai write with ai rewrite more urgent friendlier shorter fix grammar dictate dictation microphone mic voice coach registration coaches registered coach letter save as a template reuse next event future events
 ---
 The **Email clubs** dialog sends a letter to each club's contact (the team director), filled in per club. Use it for payment reminders, waiver pushes, schedule announcements, team confirmations and account setup.
 
@@ -38,7 +38,10 @@ The AI writes the words only. Names, balances, team lists and links fill in from
 
 **To keep your wording:** click **Save as default**. The **Payment reminder** letters are saved separately. Your own letters use **Save changes**, and **Delete letter** removes one.
 
-**To see or cancel a scheduled send:** open **Email clubs**. Each send under **SCHEDULED** shows its letter, the clubs it goes to and when; click **+N more** to see every club on a long list. Click **Cancel** to stop it. The **Email clubs** button shows how many are queued.
+**To see, change or cancel a scheduled send:** open **Email clubs**. Each send under **SCHEDULED** shows its letter, the clubs it goes to and when; click **+N more** to see every club on a long list. The **Email clubs** button shows how many are queued.
+
+- **Read / edit** opens the letter with a preview of how the first club on it will get it. Change the wording, or use **Friendlier** or another rewrite button, then click **Save changes**. Only that send changes; your saved letter stays as it is. To change who gets it or when, cancel it and schedule it again.
+- **Cancel send** stops it.
 
 **Waiver counts:** expand a club to see **Waivers** per team and "waivers completed" for the club, then click **Send a waiver reminder**.
 
