@@ -4,7 +4,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck } from 'lucide-react'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
 import { gameGender } from '@/lib/gameGender'
@@ -25,6 +25,7 @@ interface GapEntry { gameNumber:string;division:string;location:string;missingRo
 interface AaPick { gameId:string;role:string;workerId:string;workerName:string;workerGender:string;gameNumber:string;division:string;startTime:string;location:string }
 const aaKey=(p:{gameId:string;role:string})=>`${p.gameId}|${p.role}`
 const aaRole=(r:string)=>r==='scorekeeper'?'SK':r==='ref1'?'R1':r==='ref2'?'R2':'R3'
+const lastWord=(n:string)=>String(n||'').trim().split(/\s+/).pop()||n
 const aaTime=(t:string)=>{const[h,m]=t.split(':').map(Number);return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`}
 
 const FIELD_LABELS=[{key:'gameNumber',label:'Game Number',required:true},{key:'date',label:'Game Date',required:true},{key:'startTime',label:'Start Time',required:true},{key:'division',label:'Division',required:true},{key:'location',label:'Location / Field',required:true},{key:'team1',label:'Team 1',required:true},{key:'team2',label:'Team 2',required:true},{key:'pool',label:'Pool',required:false}]
@@ -53,7 +54,10 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
   options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string;busy?:string;level?:number|null}[]
   placeholder: string; assigned: boolean; disabled: boolean
   /** Compact board: a one-line chip (role · last name · games) instead of the row select. */
-  chip?: { short:string; color:string; display:string; count?:number; danger?:boolean; tone:'ref'|'sk'; title?:string }
+  chip?: { short:string; color:string; display:string; count?:number; danger?:boolean; tone:'ref'|'sk'; title?:string
+    /** Officials' confirmations (lib/officialConfirm): they confirmed this game; or, on an
+     *  open slot, who said they can't work it. */
+    confirmed?:boolean; declined?:string }
 }) {
   const [open,setOpen]=useState(false)
   const [search,setSearch]=useState('')
@@ -93,6 +97,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
 
   if(chip){
     const look=chip.danger?'bg-red-50 border-red-300 text-red-700'
+      :!assigned&&chip.declined?'bg-red-50 border-dashed border-red-300 text-red-700 hover:border-red-400'
       :assigned?(chip.tone==='sk'?'bg-emerald-50 border-emerald-200 text-slate-900':'bg-teal-50 border-teal-200 text-slate-900')
       :'bg-white border-dashed border-slate-300 text-slate-400 hover:border-teal-500 hover:bg-teal-50'
     return(
@@ -102,7 +107,8 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
           className={`flex items-center gap-1 h-5 w-full px-1 rounded-md border text-[10px] min-w-0 text-left transition-colors ${look} ${disabled?'opacity-50 cursor-not-allowed':''}`}>
           <span className="text-[8px] font-extrabold shrink-0" style={{color:chip.danger?'#b91c1c':chip.color}}>{chip.short}</span>
           {assigned&&<RefLevelPill level={selected?.level} small/>}
-          <span className={`truncate ${assigned?'font-semibold':'font-medium'}`}>{assigned?chip.display:'open'}</span>
+          <span className={`truncate ${assigned?'font-semibold':'font-medium'}`}>{assigned?chip.display:chip.declined?`open · ${chip.declined}`:'open'}</span>
+          {assigned&&chip.confirmed&&<span className="text-emerald-600 text-[9px] font-black shrink-0" aria-label="Confirmed">✓</span>}
           {assigned&&chip.count!==undefined&&<span className={`ml-auto text-[9px] shrink-0 ${chip.danger?'text-red-600':'text-slate-500'}`}>{chip.count}</span>}
         </button>
         {open&&(
@@ -203,6 +209,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const noSchedule=effectiveRole==='assigner'
   const gameLocked=locked||noSchedule
   const [showNotify,setShowNotify]=useState(false)
+  // Officials' confirmations (lib/officialConfirm): each slot's answer and the open slots
+  // someone said they can't work. Only directors, admins and assigners get them.
+  const [confirms,setConfirms]=useState<{ask:{confirmBy:string}|null;totals:{officials:number;confirmed:number};slots:Record<string,string>;openDeclines:Record<string,{name:string;note:string}>}|null>(null)
+  const markFor=(gameId:string,role:string)=>confirms?{st:confirms.slots[`${gameId}|${role}`],declined:confirms.openDeclines[`${gameId}|${role}`]}:undefined
   const [gamesPerRef,setGamesPerRef]=useState(6)
   const [reqsOpen,setReqsOpen]=useState(false)
 
@@ -251,8 +261,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
     setRoster(r.map((e:{workerId:string;gameTarget:number})=>({workerId:e.workerId,gameTarget:e.gameTarget})))
     // Same days as the Scheduler: start..end from Setup plus any day a game is on.
     const dates=eventDayList(t,(Array.isArray(g)?g:[]).map((x:Game)=>x.date))
-    if(dates.length>0)setActiveDay(d=>d&&dates.includes(d)?d:dates[0])
+    // ?day= opens that day (a "can't work" email's Fill it on the Assigner button).
+    const want=typeof window!=='undefined'?new URLSearchParams(window.location.search).get('day'):null
+    if(dates.length>0)setActiveDay(d=>d&&dates.includes(d)?d:want&&dates.includes(want)?want:dates[0])
     resetDivisionColors();setLoading(false)
+    fetch(`/api/tournaments/${params.id}/official-confirm`).then(x=>x.ok?x.json():null).then(d=>setConfirms(d&&d.slots?d:null)).catch(()=>{})
   },[params.id])
 
   useEffect(()=>{load()},[load])
@@ -571,7 +584,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
 
-      {showNotify && <NotifyOfficials tournamentId={params.id} day={activeDay} dayLabel={activeDay?formatDate(activeDay):''} onClose={()=>setShowNotify(false)} />}
+      {showNotify && <NotifyOfficials tournamentId={params.id} day={activeDay} dayLabel={activeDay?formatDate(activeDay):''} onClose={()=>setShowNotify(false)} onSent={()=>load()} />}
       {/* Auto-assign modal */}
       {showAutoAssign&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -849,6 +862,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         )}
         <div className="flex items-center gap-1.5">
           {games.length > 0 && <button onClick={() => setShowNotify(true)} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 border border-teal-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Send size={13} /> Notify officials</button>}
+          {confirms?.ask && <Link href={`/tournaments/${params.id}/confirmations`} title="Who has confirmed their games" className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><CheckCheck size={13} /> Confirmed {confirms.totals.confirmed}/{confirms.totals.officials}</Link>}
           {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="text-xs font-semibold text-purple-700 border border-purple-200 hover:bg-purple-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Zap size={13} /> Auto-assign</button>}
           {dayGames.length > 0 && <button onClick={() => { resetClear(); setShowClear(true) }} className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Trash2 size={13} /> Clear</button>}
           {!noSchedule&&<button onClick={openAddGame} className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Plus size={13} /> Game</button>}
@@ -1238,10 +1252,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
             const nodes=slotRoles(rc).map((role,i)=>{
               const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
               const existing=game.assignments.find(a=>a.role===role)
-              return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
+              return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} mark={markFor(game.id,role)} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
             })
             const sk=game.assignments.find(a=>a.role==='scorekeeper')
-            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
+            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} mark={markFor(game.id,'scorekeeper')} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
             return nodes
           }
           // One line: status dot, game, division, the crew by last name. Used by the
@@ -1442,10 +1456,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
                               const role=i===0?'ref1':i===1?'ref2':'ref3'
                               const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
                               const existing=game.assignments.find(a=>a.role===role)
-                              return<div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":"+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+":"+role?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref"/></div>
+                              return<div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":"+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+":"+role?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" mark={markFor(game.id,role)}/></div>
                             })}
                             {/* Scorekeeper */}
-                            <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper"/></div>
+                            <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" mark={markFor(game.id,'scorekeeper')}/></div>
                           </div>
                           </>}
                         </td>
@@ -1570,12 +1584,15 @@ export default function GridPage({ params }: { params:{id:string} }) {
   )
 }
 
-function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,onAssign,getGameCount,doubled,slotType,chip,displayName,busyFor }:{
+function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,onAssign,getGameCount,doubled,slotType,chip,displayName,busyFor,mark }:{
   roleObj:{value:string;label:string;short:string;color:string};existing?:Assignment;workers:Worker[];avails:Availability[];date:string;time:string;disabled:boolean;division:string;onAssign:(w:string)=>void;getGameCount:(id:string)=>number;doubled:Set<string>;slotType:'ref'|'scorekeeper'
   /** Compact board chip; displayName is the short (last) name to show on it. */
   chip?:boolean;displayName?:string
   /** Where this worker already is at this time (another game), if anywhere. */
   busyFor?:(workerId:string)=>string|undefined
+  /** Officials' confirmations for this slot (lib/officialConfirm): the holder's answer,
+   *  and who said they can't work it when it's open. */
+  mark?:{st?:string;declined?:{name:string;note:string}}
 }){
   const divLower=division.toLowerCase()
   const gameGender=divLower.includes('girl')||divLower.includes('women')?'girls':divLower.includes('boy')||divLower.includes('men')?'boys':'both'
@@ -1626,40 +1643,47 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
 
   if(chip){
     const count=existing?getGameCount(existing.workerId):undefined
+    const answer=existing?(mark?.st==='yes'?' · confirmed':mark?.st==='changed'?' · game changed since they confirmed':''):''
     const title=existing
-      ?`${roleObj.label}: ${existing.worker?.name??''} · ${count} game${count===1?'':'s'} today${isDoubledAssigned?' · also on another game at this time':''}`
+      ?`${roleObj.label}: ${existing.worker?.name??''} · ${count} game${count===1?'':'s'} today${isDoubledAssigned?' · also on another game at this time':''}${answer}`
+      :mark?.declined?`${roleObj.label}: open — ${mark.declined.name} can't work it${mark.declined.note?`: “${mark.declined.note}”`:''}. Click to pick, or drop a name here`
       :`${roleObj.label}: open — click to pick, or drop a name here`
     return <SearchSelect value={existing?.workerId??''} onChange={onAssign} options={options} placeholder="open" assigned={!!existing} disabled={disabled}
-      chip={{short:roleObj.short,color:roleObj.color,display:displayName||existing?.worker?.name||'',count,danger:!!isDoubledAssigned,tone:slotType==='scorekeeper'?'sk':'ref',title}}/>
+      chip={{short:roleObj.short,color:roleObj.color,display:displayName||existing?.worker?.name||'',count,danger:!!isDoubledAssigned,tone:slotType==='scorekeeper'?'sk':'ref',title,confirmed:!!existing&&mark?.st==='yes',declined:!existing&&mark?.declined?`${lastWord(mark.declined.name)} can't`:undefined}}/>
   }
 
   return(
     <div className="flex items-center gap-0.5">
       <span className="text-[9px] font-bold w-5 shrink-0" style={{color:roleObj.color}}>{roleObj.short}</span>
-      <div className="flex-1 relative">
+      <div className="flex-1 relative" title={!existing&&mark?.declined?`${mark.declined.name} can't work it${mark.declined.note?`: “${mark.declined.note}”`:''}`:undefined}>
         {isDoubledAssigned&&<div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full z-10"/>}
-        <SearchSelect value={existing?.workerId??''} onChange={onAssign} options={options} placeholder="unassigned" assigned={!!existing} disabled={disabled}/>
+        <SearchSelect value={existing?.workerId??''} onChange={onAssign} options={options} placeholder={!existing&&mark?.declined?`${lastWord(mark.declined.name)} can't work`:'unassigned'} assigned={!!existing} disabled={disabled}/>
       </div>
+      {existing&&mark?.st==='yes'&&<span className="text-emerald-600 text-[10px] font-black shrink-0" title="Confirmed">✓</span>}
     </div>
   )
 }
 
 /** "Notify officials": email (and phone-alert) each official their own games, once
  *  the assignments are ready (api/tournaments/[id]/notify-officials). */
-function NotifyOfficials({ tournamentId, day, dayLabel, onClose }: { tournamentId: string; day: string; dayLabel: string; onClose: () => void }) {
+function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tournamentId: string; day: string; dayLabel: string; onClose: () => void; onSent?: () => void }) {
   const [scope,setScope]=useState<'all'|'day'>('all')
   const [onlyChanged,setOnlyChanged]=useState(false)
   const [note,setNote]=useState('')
-  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean}|null>(null)
+  // Ask them to confirm (Bo, Oct 15 2026; lib/officialConfirm): on unless unticked.
+  const [confirm,setConfirm]=useState(true)
+  const [confirmBy,setConfirmBy]=useState('')
+  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean;ask:{confirmBy:string;at:string}|null;suggestBy:string}|null>(null)
   const [sending,setSending]=useState(false)
   const [primed,setPrimed]=useState(false)
-  const body=(extra:object)=>JSON.stringify({date:scope==='day'?day:'',onlyChanged,note,...extra})
+  const body=(extra:object)=>JSON.stringify({date:scope==='day'?day:'',onlyChanged,note,confirm,confirmBy:confirmBy||undefined,...extra})
   useEffect(()=>{
     let live=true
     fetch(`/api/tournaments/${tournamentId}/notify-officials`,{method:'POST',headers:{'Content-Type':'application/json'},body:body({preview:true})})
       .then(r=>r.ok?r.json():null).then(d=>{ if(!live||!d) return; setPreview(d)
-        // Sent before? Default to only the people whose games changed since.
-        if(!primed){ setPrimed(true); if(d.lastSentAt&&!onlyChanged) setOnlyChanged(true) } })
+        // Sent before? Default to only the people whose games changed since, unless nobody
+        // has been asked to confirm yet: the first ask has to reach everyone.
+        if(!primed){ setPrimed(true); if(d.lastSentAt&&d.ask&&!onlyChanged) setOnlyChanged(true); if(d.suggestBy) setConfirmBy(d.suggestBy) } })
       .catch(()=>{})
     return()=>{live=false}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1670,8 +1694,9 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose }: { tournamentI
       const r=await fetch(`/api/tournaments/${tournamentId}/notify-officials`,{method:'POST',headers:{'Content-Type':'application/json'},body:body({})})
       const d=await r.json().catch(()=>({}))
       if(!r.ok){toast.error(d.error||'That didn’t send. Try again.');return}
-      toast.success(`Sent to ${d.emailed} official${d.emailed===1?'':'s'} by email${d.pushed?` · ${d.pushed} phone alert${d.pushed===1?'':'s'}`:''}`)
+      toast.success(`Sent to ${d.emailed} official${d.emailed===1?'':'s'} by email${d.pushed?` · ${d.pushed} phone alert${d.pushed===1?'':'s'}`:''}${confirm&&d.asked?` · ${d.asked} asked to confirm`:''}`)
       if(d.failed?.length) toast.error(`Didn’t go through for: ${d.failed.join(', ')}`)
+      onSent?.()
       onClose()
     }finally{setSending(false)}
   }
@@ -1682,7 +1707,7 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose }: { tournamentI
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Notify officials</h2>
-            <p className="text-sm text-slate-500 mt-1">Emails each official their own games, with a link to My games. Anyone with Whistle Ready alerts on gets a phone alert too.</p>
+            <p className="text-sm text-slate-500 mt-1">Emails each official their own games. Anyone with Whistle Ready alerts on gets a phone alert too.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
         </div>
@@ -1691,6 +1716,13 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose }: { tournamentI
           <label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='all'} onChange={()=>setScope('all')} className="accent-teal-600"/> Every day of the event</label>
           {day&&<label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='day'} onChange={()=>setScope('day')} className="accent-teal-600"/> Just {dayLabel}</label>}
           <label className="flex items-center gap-2 text-sm pt-1"><input type="checkbox" checked={onlyChanged} onChange={e=>setOnlyChanged(e.target.checked)} className="accent-teal-600"/> Only officials whose games changed since the last send</label>
+        </div>
+        <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-3 space-y-2">
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirm} onChange={e=>setConfirm(e.target.checked)} className="accent-teal-600 mt-0.5"/>
+            <span><span className="font-semibold text-slate-800">Ask them to confirm their games</span>
+              <span className="block text-xs text-slate-500 mt-0.5">Each email gets a Confirm button, no login needed. If someone can&apos;t work a game, it comes off their schedule and you get an email. Answers show on <Link href={`/tournaments/${tournamentId}/confirmations`} className="underline">Confirmations</Link>.</span></span>
+          </label>
+          {confirm&&<label className="flex items-center gap-2 text-sm pl-6 text-slate-700">Confirm by <input type="date" value={confirmBy} onChange={e=>setConfirmBy(e.target.value)} className="input !w-auto text-sm !py-1"/></label>}
         </div>
         <div>
           <label htmlFor="notify-note" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Note (optional)</label>
