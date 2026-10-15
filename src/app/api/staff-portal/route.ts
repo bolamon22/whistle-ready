@@ -5,6 +5,7 @@ import { walletEnabled } from '@/lib/wallet'
 import { staffAvailability, type StaffAvailDay } from '@/lib/availability'
 import { availLocked } from '@/lib/availabilityAnswers'
 import { confirmLink, pendingFor, readAsk } from '@/lib/officialConfirm'
+import { releaseFilter } from '@/lib/staffReleaseStore'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -59,11 +60,14 @@ export async function GET() {
   if (worker) {
     const r = await client.execute({ sql: `SELECT tournamentId FROM "RosterEntry" WHERE workerId = ?`, args: [String(worker.id)] })
     for (const row of r.rows as unknown as Record<string, unknown>[]) working.add(String(row.tournamentId))
+    // Counted per slot so games the assigner hasn't shown yet aren't counted (lib/staffRelease).
     const a = await client.execute({
-      sql: `SELECT g.tournamentId AS tid, COUNT(*) AS n FROM "Assignment" x JOIN "Game" g ON g.id = x.gameId WHERE x.workerId = ? GROUP BY g.tournamentId`,
+      sql: `SELECT g.tournamentId AS tid, x.role AS role, g.division AS division FROM "Assignment" x JOIN "Game" g ON g.id = x.gameId WHERE x.workerId = ?`,
       args: [String(worker.id)],
     })
-    for (const row of a.rows as unknown as Record<string, unknown>[]) assigned.set(String(row.tid), Number(row.n))
+    const rows = a.rows as unknown as Record<string, unknown>[]
+    const visible = await releaseFilter(gate.role, rows.map(r => String(r.tid)))
+    for (const row of rows) if (visible(String(row.tid), String(row.role || ''), String(row.division || ''))) assigned.set(String(row.tid), (assigned.get(String(row.tid)) || 0) + 1)
   }
 
   // Which days they can work at each event they're on (lib/availability). The staff
@@ -153,7 +157,8 @@ export async function POST(req: Request) {
   const n = Number((aRes.rows[0] as Record<string, unknown> | undefined)?.n ?? 0)
   // Same 48 hours' notice as the day answers: no dropping out inside it on your own.
   if (availLocked(String(t.startDate || ''))) return NextResponse.json({ error: 'It’s less than 48 hours before this event. Call or text the assigner if you can’t work it.' }, { status: 400 })
-  if (n > 0) return NextResponse.json({ error: `You're already assigned to ${n} game${n === 1 ? '' : 's'} at this event — ask your assigner to take you off first.` }, { status: 400 })
+  // No count: some of these may be games the assigner hasn't shown yet.
+  if (n > 0) return NextResponse.json({ error: 'You’re already on games at this event. Ask your assigner to take you off first.' }, { status: 400 })
 
   await client.execute({ sql: `DELETE FROM "RosterEntry" WHERE workerId = ? AND tournamentId = ?`, args: [String(worker.id), tournamentId] })
   return NextResponse.json({ ok: true, working: false })

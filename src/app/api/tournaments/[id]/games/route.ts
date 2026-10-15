@@ -9,6 +9,8 @@ import { getIfNeeded, withIfNeeded, bracketMeta } from '@/lib/ifNeeded'
 import { refsLookup } from '@/lib/refRules'
 import { syncBracketPlaceholders } from '@/lib/bracketPlaceholders'
 import { ownClubTeams, isOwnClubGame } from '@/lib/ownClub'
+import { seesUnreleased } from '@/lib/staffRelease'
+import { releaseFilter } from '@/lib/staffReleaseStore'
 
 // Two audiences, two URLs:
 //   ?view=public  -> what the public schedule may show. Never includes staff
@@ -45,10 +47,13 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
         worker: who.role === 'field_director' ? redactWorker(a.worker, who.role, scope) : redactWorkerPay(a.worker, who.role, scope),
       })),
     }))
+    // Refs and scorekeepers see only the crews the assigner has shown (lib/staffRelease).
+    const shownTo = seesUnreleased(who.role) ? null : await releaseFilter(who.role, [params.id])
+    const visibleGames = shownTo ? games.map(g => ({ ...g, assignments: g.assignments.filter(a => shownTo(params.id, a.role, g.division)) })) : games
     // Games this login's own club plays are marked: someone else posts those scores
     // (lib/ownClub), and Post scores and Live scoring show them without the boxes.
     const mine = await ownClubTeams(who.role, who.userId, params.id).catch(() => new Set<string>())
-    const marked = mine.size ? games.map(g => isOwnClubGame(mine, g) ? { ...g, ownClub: true } : g) : games
+    const marked = mine.size ? visibleGames.map(g => isOwnClubGame(mine, g) ? { ...g, ownClub: true } : g) : visibleGames
     const [ids, meta] = await Promise.all([getIfNeeded(params.id), bracketMeta(params.id)])
     return NextResponse.json(withIfNeeded(marked, ids, meta), { headers: { 'Cache-Control': 'private, no-store' } })
   }

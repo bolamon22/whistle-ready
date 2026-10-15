@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { fieldDirectorSees } from '@/lib/roleScope'
+import { releaseFilter } from '@/lib/staffReleaseStore'
 
 // Which events a Staff Pool person is working, and which they can still be added to,
 // for their profile on the Staff Pool and the Staff roster (Bo, Oct 14 2026: "make it so
@@ -29,13 +30,24 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   if (gate.role === 'field_director' && !fieldDirectorSees(w)) return notFound
   const mine = (id: string) => !gate.events || gate.events.includes(id)
 
-  const [roster, games] = await Promise.all([
+  const [roster, slots] = await Promise.all([
     prisma.$queryRawUnsafe<Row[]>(`SELECT t.id AS id, t.name AS name, t.startDate AS startDate, t.endDate AS endDate
       FROM "RosterEntry" r JOIN "Tournament" t ON t.id = r.tournamentId WHERE r.workerId = ?`, params.id),
-    prisma.$queryRawUnsafe<Row[]>(`SELECT t.id AS id, t.name AS name, t.startDate AS startDate, t.endDate AS endDate, COUNT(*) AS n
+    prisma.$queryRawUnsafe<Row[]>(`SELECT t.id AS id, t.name AS name, t.startDate AS startDate, t.endDate AS endDate, a.role AS role, g.division AS division
       FROM "Assignment" a JOIN "Game" g ON g.id = a.gameId JOIN "Tournament" t ON t.id = g.tournamentId
-      WHERE a.workerId = ? GROUP BY t.id, t.name, t.startDate, t.endDate`, params.id),
+      WHERE a.workerId = ?`, params.id),
   ])
+  // Per-event game counts, leaving out crews the assigner hasn't shown to staff yet
+  // when a ref or scorekeeper is asking (lib/staffRelease).
+  const visible = await releaseFilter(gate.role, slots.map(s => String(s.id)))
+  const games: Row[] = []
+  const counted = new Map<string, Row>()
+  for (const s of slots) {
+    if (!visible(String(s.id), String(s.role || ''), String(s.division || ''))) continue
+    const e = counted.get(String(s.id))
+    if (e) e.n = Number(e.n) + 1
+    else { const row: Row = { id: s.id, name: s.name, startDate: s.startDate, endDate: s.endDate, n: 1 }; counted.set(String(s.id), row); games.push(row) }
+  }
   const byId = new Map<string, { id: string; name: string; startDate: string; endDate: string; games: number; onRoster: boolean }>()
   for (const r of roster) byId.set(String(r.id), { id: String(r.id), name: String(r.name || ''), startDate: day(r.startDate), endDate: day(r.endDate), games: 0, onRoster: true })
   for (const g of games) {

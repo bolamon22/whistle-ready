@@ -6,6 +6,7 @@ import { canSeeStaffPay, redactWorker } from '@/lib/roleScope'
 import { type PayScope, assignmentPayGroups, seesPay } from '@/lib/payGroups'
 import { payScopeFor } from '@/lib/payScope'
 import { checkInsFor } from '@/lib/staffCheckIn'
+import { releaseFilter } from '@/lib/staffReleaseStore'
 
 // Staff only. These had no sign-in check: anyone with a tournament id could
 // read every official's contact and pay, or assign and unassign games. Pay
@@ -41,6 +42,9 @@ export async function GET(req: Request) {
     payScopeFor(gate.role, gate.userId),
   ])
   const division = new Map(games.map(g => [g.id, g.division]))
-  const checks = await checkInsFor(assignments.map(a => a.id))
-  return NextResponse.json(assignments.map(a => shape({ ...a, gameId: a.gameId, checkedInAt: checks.get(a.id) || null }, gate.role, scope, division.get(a.gameId) ?? '')))
+  // Refs and scorekeepers: only crews the assigner has shown (lib/staffRelease).
+  const visible = await releaseFilter(gate.role, [tournamentId])
+  const shown = assignments.filter(a => visible(tournamentId, a.role, division.get(a.gameId) ?? ''))
+  const checks = await checkInsFor(shown.map(a => a.id))
+  return NextResponse.json(shown.map(a => shape({ ...a, gameId: a.gameId, checkedInAt: checks.get(a.id) || null }, gate.role, scope, division.get(a.gameId) ?? '')))
 }

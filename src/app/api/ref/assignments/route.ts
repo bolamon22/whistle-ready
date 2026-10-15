@@ -4,6 +4,7 @@ import { createClient } from '@libsql/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { checkInsFor } from '@/lib/staffCheckIn'
+import { releaseFilter } from '@/lib/staffReleaseStore'
 
 // The signed-in staff member's games, for the staff home page (dashboard/ref).
 // The Worker is matched by email ignoring case, the same way /api/staff-portal does,
@@ -27,12 +28,17 @@ export async function GET() {
     orderBy: [{ game: { date: 'asc' } }, { game: { startTime: 'asc' } }],
   })
 
-  const checks = await checkInsFor(assignments.map(a => a.id))
-  return NextResponse.json(assignments.map(a => {
+  // Only games the assigner has shown to staff (lib/staffRelease), and only crew
+  // members whose own games are shown: a scorekeeper must not learn the boys refs
+  // before the boys assigner is ready.
+  const visible = await releaseFilter((session.user as { role?: string }).role, assignments.map(a => a.game.tournamentId))
+  const shown = assignments.filter(a => visible(a.game.tournamentId, a.role, a.game.division))
+  const checks = await checkInsFor(shown.map(a => a.id))
+  return NextResponse.json(shown.map(a => {
     const { assignments: crew, ...game } = a.game
     return {
       id: a.id, role: a.role, payRate: a.payRate, game, checkedInAt: checks.get(a.id) || null,
-      crew: crew.filter(c => c.workerId !== workerId).map(c => ({ role: c.role, name: c.worker.name, phone: c.worker.phone || '' })),
+      crew: crew.filter(c => c.workerId !== workerId && visible(a.game.tournamentId, c.role, a.game.division)).map(c => ({ role: c.role, name: c.worker.name, phone: c.worker.phone || '' })),
     }
   }), { headers: { 'Cache-Control': 'private, no-store' } })
 }

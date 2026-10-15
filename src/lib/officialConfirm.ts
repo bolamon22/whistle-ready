@@ -1,6 +1,8 @@
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/db'
 import { eventToday } from '@/lib/availabilityAnswers'
+import { isReleased } from '@/lib/staffRelease'
+import { getRelease } from '@/lib/staffReleaseStore'
 
 // Officials confirm their games (Bo, Oct 15 2026: the referee assigners "would like
 // to have a way to send an email to their officials once they're ready to release
@@ -99,7 +101,10 @@ export async function resolveConfirmLink(token: string): Promise<{ tournamentId:
 // ── Games and answers ──
 /** Officials' places on this event's scheduled games (not canceled, with a time and
  *  field: parked games aren't on the schedule yet, the same rule as Notify officials). */
-export async function officialSlots(tournamentId: string, workerId?: string): Promise<OfficialSlot[]> {
+export async function officialSlots(tournamentId: string, workerId?: string, opts: { shownOnly?: boolean } = {}): Promise<OfficialSlot[]> {
+  // shownOnly: what the official may see -- crews the assigner has shown on the
+  // staff portal (lib/staffRelease). The assigner's own views pass nothing.
+  const rel = opts.shownOnly ? await getRelease(tournamentId) : null
   const games = await prisma.game.findMany({
     where: { tournamentId, isCanceled: false },
     select: { id: true, date: true, startTime: true, location: true, gameNumber: true, division: true, team1: true, team2: true,
@@ -108,7 +113,7 @@ export async function officialSlots(tournamentId: string, workerId?: string): Pr
   const out: OfficialSlot[] = []
   for (const g of games) {
     if (!g.startTime || !g.location) continue
-    for (const a of g.assignments) out.push({
+    for (const a of g.assignments) if (!rel || isReleased(rel, a.role, g.division)) out.push({
       gameId: g.id, role: a.role, workerId: a.workerId, workerName: String(a.worker?.name || ''), workerEmail: String(a.worker?.email || '').trim(),
       date: g.date, time: g.startTime, field: g.location, num: g.gameNumber, division: g.division, teams: `${g.team1} vs ${g.team2}`, sig: gameSig(g),
     })
@@ -153,7 +158,7 @@ export function upcoming<T extends { date: string }>(rows: T[], today = eventTod
 
 /** How many of this official's games still need an answer (none when not asked). */
 export async function pendingFor(tournamentId: string, workerId: string): Promise<{ pending: number; total: number }> {
-  const slots = upcoming(await officialSlots(tournamentId, workerId))
+  const slots = upcoming(await officialSlots(tournamentId, workerId, { shownOnly: true }))
   if (!slots.length) return { pending: 0, total: 0 }
   const answers = await answersFor(tournamentId, workerId)
   return { pending: slots.filter(s => stateOf(s, answers) !== 'yes').length, total: slots.length }

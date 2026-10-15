@@ -31,7 +31,7 @@ async function pageData(tournamentId: string, workerId: string) {
     prisma.worker.findUnique({ where: { id: workerId }, select: { id: true, name: true } }),
   ])
   if (!t || !w) return null
-  const [ask, slots, answers, org] = await Promise.all([readAsk(tournamentId), officialSlots(tournamentId, workerId), answersFor(tournamentId, workerId), orgForTournament(tournamentId).catch(() => null)])
+  const [ask, slots, answers, org] = await Promise.all([readAsk(tournamentId), officialSlots(tournamentId, workerId, { shownOnly: true }), answersFor(tournamentId, workerId), orgForTournament(tournamentId).catch(() => null)])
   const today = eventToday()
   const mine = upcoming(slots, today).sort(byTime)
   const held = new Set(mine.map(s => `${s.gameId}|${s.role}`))
@@ -78,7 +78,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
 
   // Only games that are theirs right now, from today on: the board can change
   // between the page loading and the tap.
-  const slots = upcoming(await officialSlots(tournamentId, workerId))
+  const slots = upcoming(await officialSlots(tournamentId, workerId, { shownOnly: true }))
   const byKey = new Map(slots.map(s => [`${s.gameId}|${s.role}`, s]))
   let confirmed = 0, gone = 0
   const declined: (OfficialSlot & { note: string })[] = []
