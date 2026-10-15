@@ -20,6 +20,7 @@ import { directorsOf } from '@/lib/clubAccess'
 import { clearingTransfers } from '@/lib/pendingTransfers'
 import { countdownPhrase } from '@/lib/payLetterText'
 import { asLetterButton, CTA_LABELS, coachCountsText } from '@/lib/customLetters'
+import { campaignSlug } from '@/lib/utm'
 
 // The club-letter send itself, lifted out of the route so the scheduler can run
 // exactly the same code later (Bo, Sep 10: "schedule when we send the email").
@@ -126,6 +127,11 @@ export async function runCommSend(args: {
   const bodyTpl = String(args.body ?? '').trim().slice(0, 4000) || letter.body
   // Only an org letter can arrive empty: every built-in letter has a default.
   if (!subjectTpl || !bodyTpl) return { ok: false, error: 'Write the letter first', status: 400 }
+  // One campaign for the whole batch, named after the letter Bo picked, so a
+  // send shows up in Plausible as e.g. "fall-classic-register-now" instead of
+  // disappearing into Direct. Built from the TEMPLATE, not each club's merged
+  // subject — {club} would otherwise split one send into forty campaigns.
+  const campaign = campaignSlug(subjectTpl.replace(/\{[^}]*\}/g, ' '))
   // A payment letter that carries {requirements} (the Urgent one does) needs the
   // same status facts as the pre-event checklist: waivers, coaches, confirmations.
   const needsReqs = kind === 'payment' && bodyTpl.includes('{requirements}')
@@ -360,7 +366,7 @@ export async function runCommSend(args: {
         videoHtml: portalVideo.html, videoText: portalVideo.text,
       })
       const rr = await sendEmail({
-        to: recipients, text, ...orgSender(org),
+        to: recipients, text, ...orgSender(org), campaign,
         subject: testMode ? `[TEST] ${subject}` : subject,
         html: testMode ? testBanner(reg.clubName) + html : html,
       })
@@ -465,7 +471,7 @@ export async function runCommSend(args: {
     })
     const text = `${checkItems ? splitOnSentinel(bodyText, checklistText(checkItems)) : bodyText}${ctaUrl ? `\n\n${ctaLabel}: ${ctaUrl}` : ''}${letterVideo.text ? `\n\n${letterVideo.text}` : ''}`
     const r = await sendEmail({
-      to: recipients, text, ...orgSender(org),
+      to: recipients, text, ...orgSender(org), campaign,
       subject: testMode ? `[TEST] ${subject}` : subject,
       html: testMode ? testBanner(reg.clubName) + html : html,
     })

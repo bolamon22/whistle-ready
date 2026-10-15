@@ -11,6 +11,7 @@ import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ChevronLeft, ChevronDown, ChevronRight, Users, Upload, Search, Mail, Star, Trophy, Download, Archive } from 'lucide-react'
 import { canon } from '@/lib/clubCanon'
+import { withCampaign } from '@/lib/utm'
 import ProspectsPanel from './ProspectsPanel'
 
 interface Hist { event:string; year:number; teams:number; paid:number; divisions:string[] }
@@ -152,11 +153,18 @@ function mergeClubs(existing:Club[], incoming:Club[]):Club[]{
   return Object.values(idx).sort((a,b)=>b.totalTeams-a.totalTeams||a.club.localeCompare(b.club))
 }
 
+// The win-back draft used to describe registration without ever linking to it,
+// so the club had to go find the site themselves and the send left no trace we
+// could measure. The link is campaign-tagged (lib/utm) for the same reason the
+// club letters are: untagged clicks are indistinguishable from someone typing
+// the address, which is why the Oct 4 2026 send could never be evaluated.
+const WINBACK_LINK = withCampaign('https://sunshineeventsgroup.com/', 'club-winback')
+
 function draftInvite(c:Club){
   const last=c.history[c.history.length-1]
   const brought = last ? `${last.teams} team${last.teams===1?'':'s'} to ${last.event} ${last.year}` : 'teams to our events'
   const subject=`Come back to Sunshine Events Group — 2026 registration is open`
-  const body=`Hi ${c.contact||'there'},\n\nWe'd love to have ${c.club} back this season! You brought ${brought}${c.eventsAttended>1?`, and have joined us ${c.eventsAttended} times over the years`:''} — thank you for being part of it.\n\nRegistration for our 2026 events is open now. We'd be glad to save your spot again.\n\nLet me know if you have any questions.\n\nBest,\nSunshine Events Group\ninfo@sunshinelax.com`
+  const body=`Hi ${c.contact||'there'},\n\nWe'd love to have ${c.club} back this season! You brought ${brought}${c.eventsAttended>1?`, and have joined us ${c.eventsAttended} times over the years`:''} — thank you for being part of it.\n\nRegistration for our 2026 events is open now. We'd be glad to save your spot again:\n${WINBACK_LINK}\n\nLet me know if you have any questions.\n\nBest,\nSunshine Events Group\ninfo@sunshinelax.com`
   return `mailto:${c.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
