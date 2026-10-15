@@ -3,7 +3,7 @@
 // One list per tournament (AppSetting `checklists:{id}`), checked off by staff
 // on their phones while they set up. Served by /api/tournaments/[id]/checklists,
 // which hands these out until the list is first saved; Tasks counts a list that
-// was never saved as these ten, none done. Pure -- no database import -- so a
+// was never saved as these, none done. Pure -- no database import -- so a
 // client page can show the same defaults.
 
 export type ChecklistItem = { id: string; text: string; done: boolean; doneBy?: string; doneAt?: string }
@@ -19,4 +19,6 @@ export const DEFAULT_SETUP_ITEMS: ChecklistItem[] = [
   { id: 'd8', text: 'First-aid / medical station ready', done: false },
   { id: 'd9', text: 'Trash & recycling bins out', done: false },
   { id: 'd10', text: 'Parking & traffic plan set', done: false },
+  { id: 'd11', text: 'Flip score chart at every score table before the first game', done: false },
+  { id: 'd12', text: 'Pack-up: flip score charts collected from every table', done: false },
 ]
