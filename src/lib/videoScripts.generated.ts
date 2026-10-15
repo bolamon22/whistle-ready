@@ -247,7 +247,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "You are outside all day, so pack for it. Lunch is provided, but bring snacks, and a water bottle or a small cooler.",
       "Bring a portable phone charger if you have one. Scoring live all day uses a lot of battery.",
       "Pack rain gear, sunscreen, a hat, and sunglasses.",
-      "And keep an eye on the weather all day. Thanks for helping run a great event."
+      "And keep an eye on the weather leading up to the event, so you show up with the right gear. Thanks for helping run a great event."
     ],
     "outro": "Whistle Ready. Game day, run from your phone."
   },
