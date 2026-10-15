@@ -121,6 +121,12 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
   const [showAddGame, setShowAddGame] = useState(false)
   const [seeds, setSeeds] = useState<Record<string, string>>({})
   const [standings, setStandings] = useState<{ team: string; w: number; l: number; t: number; gf: number; ga: number }[]>([])
+  // Standings exist before a ball is played (every team 0-0), and that order is just
+  // the order teams appear in the games. Seeding from it put real names on the bracket
+  // before the event and paired two pool-mates in round one (Girls MS, Oct 2026).
+  // Names only go in once every pool game has a score.
+  const [poolProgress, setPoolProgress] = useState({ scored: 0, total: 0 })
+  const poolDone = poolProgress.total > 0 && poolProgress.scored === poolProgress.total
   const [schedule, setSchedule] = useState<Record<number, { date: string; startTime: string; location: string }>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -207,9 +213,11 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         score2: g.score2 == null || g.score2 === '' ? null : Number(g.score2),
         isCanceled: !!g.isCanceled, isChampionship: false,
       }))
+      const live = list.filter(g => !g.isCanceled)
+      setPoolProgress({ scored: live.filter(g => g.score1 != null && g.score2 != null).length, total: live.length })
       if (!list.length) { setStandings([]); return }
       setStandings(seedOrder(list, list[0].division, rules).map(({ team, w, l, t, gf, ga }) => ({ team, w, l, t, gf, ga })))
-    } catch { setStandings([]) }
+    } catch { setStandings([]); setPoolProgress({ scored: 0, total: 0 }) }
   }, [tournamentId, division])
 
   useEffect(() => { loadStandings() }, [loadStandings])
@@ -405,7 +413,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       if (total < 3) throw new Error('Need at least 3 ranked teams to split into flights.')
       const cut = Math.max(1, Math.min(parseInt(cutoffInput) || 1, total - 1))
       const seedMap: Record<string, string> = {}
-      if (standings.length) standings.forEach((r, i) => { seedMap[String(i + 1)] = r.team })
+      if (standings.length && poolDone) standings.forEach((r, i) => { seedMap[String(i + 1)] = r.team })
       else Object.assign(seedMap, seeds)
       const r = await fetch(apiBase, {
         method: 'POST',
@@ -500,8 +508,10 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
         className="w-full py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
         {splitting ? 'Splitting…' : (totalTeams > 0 ? `Split into ${cutPreview} + ${flightBCount} flights` : 'Split into flights')}
       </button>
-      {standings.length === 0 && (
-        <p className="text-xs text-amber-400/90 mt-3">No pool standings yet — finish pool play (or seed manually) so flights split by rank.</p>
+      {!poolDone && (
+        <p className="text-xs text-amber-400/90 mt-3">
+          Pool play isn't finished{poolProgress.total > 0 ? ` (${poolProgress.scored} of ${poolProgress.total} games scored)` : ''}, so the flights will show "Seed 1", "Seed 2"… instead of team names. Split again once every pool game has a score, or type seeds by hand.
+        </p>
       )}
     </div>
   )
@@ -769,9 +779,13 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
           {standings.length > 0 && (
             <div className="mb-5 rounded-xl border border-slate-700 overflow-hidden bg-slate-800">
               <div className="flex items-center justify-between px-3 py-2 bg-slate-900">
-                <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">{advanceBy === 'pool' ? 'Seed order · by pool finish' : 'Seed order · division standings'}</span>
-                <button onClick={() => { const next = { ...seeds }; standings.forEach((r, i) => { next[String(i + 1)] = r.team }); setSeeds(next) }}
-                  className="text-[11px] text-teal-300 hover:text-teal-200">Seed from standings ↓</button>
+                <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">{!poolDone ? 'Standings so far' : advanceBy === 'pool' ? 'Seed order · by pool finish' : 'Seed order · division standings'}</span>
+                {poolDone ? (
+                  <button onClick={() => { const next = { ...seeds }; standings.forEach((r, i) => { next[String(i + 1)] = r.team }); setSeeds(next) }}
+                    className="text-[11px] text-teal-300 hover:text-teal-200">Seed from standings ↓</button>
+                ) : (
+                  <span className="text-[11px] text-amber-300">{poolProgress.scored} of {poolProgress.total} pool games scored · seed after pool play</span>
+                )}
               </div>
               <table className="w-full text-xs">
                 <thead className="bg-slate-900 text-slate-400">
