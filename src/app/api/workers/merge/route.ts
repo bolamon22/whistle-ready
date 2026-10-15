@@ -3,6 +3,7 @@ import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
 import { mergeW9 } from '@/lib/staffW9'
 import { moveTrainingEmails } from '@/lib/trainingSends'
+import { moveOfficialConfirms } from '@/lib/officialConfirm'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -88,6 +89,8 @@ export async function POST(req: Request) {
     }
   } catch { /* nobody has watched a video yet: no table */ }
   try { await moveTrainingEmails(removeId, keepId) } catch (e) { console.error('merge training emails', e) }
+  // Their answers to "confirm your games" and their confirm links (lib/officialConfirm).
+  try { await moveOfficialConfirms(removeId, keepId) } catch (e) { console.error('merge game confirmations', e) }
 
   // Fill keep's empty fields from remove; union roles; keep the stronger flags.
   const pick = (a: unknown, b: unknown) => (a !== null && a !== undefined && String(a).trim() !== '') ? a : ((b as string | null) ?? null)
