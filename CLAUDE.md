@@ -362,6 +362,12 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   `letter` tool, prompt in `lib/letterAi.ts`) writes words only; the send fills the `{fields}`. Unknown
   `{fields}` block Send/Save (red), a rewrite that drops a field shows an amber warning, and **Undo the AI
   change** restores the letter. Both AI boxes take dictation through `DictateButton`.
+- **Read / edit a scheduled club letter (Oct 15).** Each SCHEDULED row in Email clubs opens a reader: subject +
+  body editable, `AiRewriteBar`, the unknown-`{field}` check and a preview for the row's first club. Unsaved
+  wording is kept per send (`schedDrafts`). `PATCH /api/registrations/comm-schedule` `{id, tournamentId, subject,
+  body}` → `updateScheduled` (queued rows only, else 404; refuses over 200/4000 chars and unknown fields;
+  `type: 'returning'` refused, no editor yet). `claimDue` re-reads the row after claiming, so an edit saved
+  mid-claim can't go out as the old wording. Only that send changes; saved letters stay as they are.
 - **Staff W-9 upload (Oct 11).** W-9 card on the staff portal (`components/StaffW9Card.tsx`, `/dashboard/staff`),
   `GET/POST /api/staff-portal/w9` (worker from the session email, oldest record, never from the request). All W-9
   storage goes through `lib/staffW9.ts`: encrypted data URL in AppSetting `w9:{workerId}`, `w9meta:{workerId}`
