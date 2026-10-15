@@ -23,12 +23,15 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **Other views:** **List**, **Division** and **Staff** (pick a name under **View schedule for:** to see one person's games). In the list view, click a game to open **Assign Staff** and pick names for each slot.
 
+**What staff can see (Staff portal):** the **Staff portal** box under the buttons shows, for **Boys officials**, **Girls officials** and **Scorekeepers**, whether they can see their games yet. Until a group is shown, its games are only on this board: they aren't on the officials' staff home or My games, and nobody is told. Build and fix the schedule first, then click **Show to staff** (this emails nobody) or send **Notify officials**, which shows that group's games as it sends. **Hide** takes them off the staff portal again; nothing on the board changes. A new event starts with every group hidden.
+
 **Tell your officials (Notify officials):**
 1. When the assignments are ready, click **Notify officials** at the top of the Assigner.
-2. Choose **Every day of the event** or **Just** the day you're on, add an optional **Note** (for example where to check in), and check the count.
-3. Keep **Ask them to confirm their games** ticked to have them confirm, and set **Confirm by**. Each email then gets a **Confirm my games** button that needs no login. Untick it to just send their games with an **Open My games** button.
-4. Click **Send to N officials**. Each official gets an email with only their own games (day, time, field, game, teams and whether they're a referee or scorekeeper). Anyone who turned on Whistle Ready alerts gets a phone alert too.
-5. After you make changes, send again with **Only officials whose games changed since the last send** ticked, so everyone else isn't emailed twice. Games that moved after someone confirmed them need confirming again.
+2. Under **Who**, tick **Boys officials**, **Girls officials** or **Scorekeepers** (any mix; nobody is ticked until you pick). Each group's own assigner can send to just their group. A group that is still hidden is shown on the staff portal when you send.
+3. Choose **Every day of the event** or **Just** the day you're on, add an optional **Note** (for example where to check in), and check the count.
+4. Keep **Ask them to confirm their games** ticked to have them confirm, and set **Confirm by**. Each email then gets a **Confirm my games** button that needs no login. Untick it to just send their games with an **Open My games** button.
+5. Click **Send to N officials**. Each official gets an email with only their own games (day, time, field, game, teams and whether they're a referee or scorekeeper). Anyone who turned on Whistle Ready alerts gets a phone alert too.
+6. After you make changes, send again with **Only officials whose games changed since the last send** ticked, so everyone else isn't emailed twice. Games that moved after someone confirmed them need confirming again.
 
 **Who confirmed:** **Confirmed N/N** next to **Notify officials** opens the Confirmations page. On the board, a **✓** after a name means they confirmed that game. If an official can't work a game, it comes off their schedule, you get an email, and the slot shows **open** with their name (for example **open · Brooks can't**). See "See which officials confirmed their games".
 
@@ -39,4 +42,4 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 **Common problems:**
 - Assigning someone already on a game at the same time asks you to confirm before it double-books them.
 - Only people on the tournament's **Staff roster** appear here.
-- Assigning a game doesn't tell the official by itself. Use **Notify officials** when you're ready. People with no email on the Roster are listed in the Notify box.
+- Assigning a game doesn't tell the official, and they can't see it until their group is shown under **Staff portal**. Use **Notify officials** when you're ready. People with no email on the Roster are listed in the Notify box.

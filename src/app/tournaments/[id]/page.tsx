@@ -4,7 +4,8 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff } from 'lucide-react'
+import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
 import { gameGender } from '@/lib/gameGender'
@@ -209,6 +210,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const noSchedule=effectiveRole==='assigner'
   const gameLocked=locked||noSchedule
   const [showNotify,setShowNotify]=useState(false)
+  // Bumped after Notify officials sends, which also shows those crews to staff.
+  const [releaseKey,setReleaseKey]=useState(0)
   // Officials' confirmations (lib/officialConfirm): each slot's answer and the open slots
   // someone said they can't work. Only directors, admins and assigners get them.
   const [confirms,setConfirms]=useState<{ask:{confirmBy:string}|null;totals:{officials:number;confirmed:number};slots:Record<string,string>;openDeclines:Record<string,{name:string;note:string}>}|null>(null)
@@ -584,7 +587,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
 
-      {showNotify && <NotifyOfficials tournamentId={params.id} day={activeDay} dayLabel={activeDay?formatDate(activeDay):''} onClose={()=>setShowNotify(false)} onSent={()=>load()} />}
+      {showNotify && <NotifyOfficials tournamentId={params.id} day={activeDay} dayLabel={activeDay?formatDate(activeDay):''} onClose={()=>setShowNotify(false)} onSent={()=>{load();setReleaseKey(k=>k+1)}} />}
       {/* Auto-assign modal */}
       {showAutoAssign&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -869,6 +872,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
           {!noSchedule&&<label className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"><Upload size={13} /> Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>}
         </div>
       </div>
+
+      {games.length > 0 && <StaffPortalVisibility tournamentId={params.id} refreshKey={releaseKey} />}
 
       {/* Day tabs */}
       {dates.length > 0 && viewMode !== 'staff' && (
@@ -1673,10 +1678,13 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
   // Ask them to confirm (Bo, Oct 15 2026; lib/officialConfirm): on unless unticked.
   const [confirm,setConfirm]=useState(true)
   const [confirmBy,setConfirmBy]=useState('')
-  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean;ask:{confirmBy:string;at:string}|null;suggestBy:string}|null>(null)
+  // Who (Bo, Oct 15 2026): boys officials, girls officials and scorekeepers have
+  // their own assigners, so nobody is picked until the sender picks their crew.
+  const [crews,setCrews]=useState<Crew[]>([])
+  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean;ask:{confirmBy:string;at:string}|null;suggestBy:string;crews?:{crew:Crew;officials:number;games:number;shown:boolean}[]}|null>(null)
   const [sending,setSending]=useState(false)
   const [primed,setPrimed]=useState(false)
-  const body=(extra:object)=>JSON.stringify({date:scope==='day'?day:'',onlyChanged,note,confirm,confirmBy:confirmBy||undefined,...extra})
+  const body=(extra:object)=>JSON.stringify({date:scope==='day'?day:'',onlyChanged,note,confirm,confirmBy:confirmBy||undefined,crews,...extra})
   useEffect(()=>{
     let live=true
     fetch(`/api/tournaments/${tournamentId}/notify-officials`,{method:'POST',headers:{'Content-Type':'application/json'},body:body({preview:true})})
@@ -1687,7 +1695,7 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
       .catch(()=>{})
     return()=>{live=false}
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[scope,onlyChanged,tournamentId])
+  },[scope,onlyChanged,tournamentId,crews.join(',')])
   const send=async()=>{
     setSending(true)
     try{
@@ -1712,6 +1720,22 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
           <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
         </div>
         <div className="space-y-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Who</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {(preview?.crews??(['boys','girls','scorekeepers'] as Crew[]).map(c=>({crew:c,officials:0,games:0,shown:false}))).map(c=>{
+              const on=crews.includes(c.crew)
+              return (
+                <label key={c.crew} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${on?'border-teal-500 bg-teal-50':'border-slate-200 hover:bg-slate-50'}`}>
+                  <input type="checkbox" checked={on} onChange={e=>setCrews(cs=>e.target.checked?[...cs,c.crew]:cs.filter(x=>x!==c.crew))} className="accent-teal-600 mt-0.5"/>
+                  <span><span className="font-semibold text-slate-800">{CREW_LABEL[c.crew]}</span>
+                    <span className="block text-xs text-slate-500">{preview?`${c.officials} ${c.crew==='scorekeepers'?'scorekeeper':'official'}${c.officials===1?'':'s'}`:'…'}{preview&&!c.shown?' · hidden':''}</span></span>
+                </label>
+              )
+            })}
+          </div>
+          {preview?.crews?.some(c=>crews.includes(c.crew)&&!c.shown)&&<p className="text-xs text-amber-700 flex items-start gap-1.5"><Eye size={13} className="mt-0.5 flex-shrink-0"/>Sending also shows {preview.crews.filter(c=>crews.includes(c.crew)&&!c.shown).map(c=>CREW_LABEL[c.crew].toLowerCase()).join(' and ')} their games on the staff portal.</p>}
+        </div>
+        <div className="space-y-2">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Which games</p>
           <label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='all'} onChange={()=>setScope('all')} className="accent-teal-600"/> Every day of the event</label>
           {day&&<label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='day'} onChange={()=>setScope('day')} className="accent-teal-600"/> Just {dayLabel}</label>}
@@ -1729,7 +1753,7 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
           <textarea id="notify-note" value={note} onChange={e=>setNote(e.target.value)} rows={3} maxLength={600} className="input mt-1 w-full text-sm" placeholder="Check in at the ref tent 30 minutes before your first game."/>
         </div>
         <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 space-y-1" aria-live="polite">
-          {!preview?<p className="text-slate-400">Counting…</p>:<>
+          {!preview?<p className="text-slate-400">Counting…</p>:!crews.length?<p className="text-slate-500">Pick who to notify.</p>:<>
             <p><span className="font-bold">{preview.targets}</span> official{preview.targets===1?'':'s'} · {preview.games} game{preview.games===1?'':'s'}{preview.unchanged>0&&onlyChanged?<span className="text-slate-500"> · {preview.unchanged} unchanged, skipped</span>:''}</p>
             {last&&<p className="text-xs text-slate-500">Last sent {last}</p>}
             {preview.noEmail.length>0&&<p className="text-xs text-amber-700">No email on file: {preview.noEmail.join(', ')}. Add one on the Roster.</p>}
@@ -1738,8 +1762,63 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn-primary inline-flex items-center gap-1.5 disabled:opacity-50" disabled={sending||!preview||preview.targets===0} onClick={send}><Send size={14}/>{sending?'Sending…':`Send to ${preview?.targets??0} official${preview?.targets===1?'':'s'}`}</button>
+          <button type="button" className="btn-primary inline-flex items-center gap-1.5 disabled:opacity-50" disabled={sending||!preview||!crews.length||preview.targets===0} onClick={send}><Send size={14}/>{sending?'Sending…':`Send to ${preview?.targets??0} official${preview?.targets===1?'':'s'}`}</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// What refs and scorekeepers can see on the staff portal, per crew (Bo, Oct 15 2026:
+// "make a clear area ... telling the assigner whether it's available to see on the
+// staff portal or it's not visible at this time"). Assignments are hidden from staff
+// until shown here or by Notify officials; the board itself always shows them.
+// Server: api/tournaments/[id]/staff-release, lib/staffRelease.
+function StaffPortalVisibility({ tournamentId, refreshKey }: { tournamentId: string; refreshKey: number }) {
+  type Row = { crew: Crew; shown: boolean; shownAt: string; shownBy: string; officials: number; games: number }
+  const [rows,setRows]=useState<Row[]|null>(null)
+  const [busy,setBusy]=useState<Crew|null>(null)
+  const [denied,setDenied]=useState(false)
+  useEffect(()=>{
+    let live=true
+    fetch(`/api/tournaments/${tournamentId}/staff-release`).then(r=>{ if(r.status===403){ if(live) setDenied(true); return null } return r.ok?r.json():null })
+      .then(d=>{ if(live&&d?.crews) setRows(d.crews) }).catch(()=>{})
+    return()=>{live=false}
+  },[tournamentId,refreshKey])
+  const set=async(crew:Crew,visible:boolean)=>{
+    setBusy(crew)
+    try{
+      const r=await fetch(`/api/tournaments/${tournamentId}/staff-release`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({crews:[crew],visible})})
+      const d=await r.json().catch(()=>({}))
+      if(!r.ok){toast.error(d.error||'That didn’t save. Try again.');return}
+      setRows(d.crews)
+      toast.success(visible?`${CREW_LABEL[crew]} can see their games now. Nobody was emailed.`:`${CREW_LABEL[crew]}’ games are hidden from the staff portal.`)
+    }finally{setBusy(null)}
+  }
+  if(denied||!rows) return null
+  const when=(iso:string)=>iso?new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''
+  return (
+    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-2">
+        <p className="text-sm font-bold text-slate-800">Staff portal</p>
+        <p className="text-xs text-slate-500">What refs and scorekeepers can see. Hidden games are only on this board. Notify officials shows a group’s games when it sends.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {rows.map(c=>(
+          <div key={c.crew} className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${c.shown?'border-teal-200 bg-teal-50/60':'border-amber-200 bg-amber-50/60'}`}>
+            {c.shown?<Eye size={16} className="text-teal-600 flex-shrink-0"/>:<EyeOff size={16} className="text-amber-600 flex-shrink-0"/>}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-800 truncate">{CREW_LABEL[c.crew]}</p>
+              <p className={`text-xs ${c.shown?'text-teal-700':'text-amber-700'}`}>
+                {c.shown?(c.shownAt?`Visible since ${when(c.shownAt)}${c.shownBy?` · ${c.shownBy}`:''}`:'Visible'):`Hidden${c.games?` · ${c.games} assignment${c.games===1?'':'s'}`:''}`}
+              </p>
+            </div>
+            <button type="button" disabled={busy===c.crew} onClick={()=>set(c.crew,!c.shown)}
+              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border whitespace-nowrap disabled:opacity-50 transition-colors ${c.shown?'border-slate-300 text-slate-600 hover:bg-white':'border-teal-600 bg-teal-600 text-white hover:bg-teal-700'}`}>
+              {busy===c.crew?'Saving…':c.shown?'Hide':'Show to staff'}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )

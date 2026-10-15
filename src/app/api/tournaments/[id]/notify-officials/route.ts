@@ -7,6 +7,8 @@ import { orgForTournament, tournamentOrgId } from '@/lib/org'
 import { pushToStaffEmails } from '@/lib/staffAlerts'
 import { addDaysISO, dayTitle, eventToday } from '@/lib/availabilityAnswers'
 import { answersFor, confirmLinks, gameSig, readAsk, stateOf, writeAsk } from '@/lib/officialConfirm'
+import { CREWS, crewsOf, isCrew, type Crew } from '@/lib/staffRelease'
+import { getRelease, setRelease } from '@/lib/staffReleaseStore'
 
 // "Notify officials" on the Assigner board (Bo, Oct 13 2026: "we should have a way
 // for them to notify the refs when the schedule is ready"). Assigning never told
@@ -27,6 +29,13 @@ import { answersFor, confirmLinks, gameSig, readAsk, stateOf, writeAsk } from '@
 // to confirm gets the plain email. workerIds sends to just those officials
 // (reminders from the Confirmations page), whatever onlyChanged says; reminder: true
 // marks the subject "Reminder:". Preview also returns the ask and a suggested date.
+//
+// crews (Bo, Oct 15 2026): ['boys' | 'girls' | 'scorekeepers'] -- boys and girls
+// officials have different assigners, so each sends to their own crew, or several
+// at once. Sending also SHOWS those crews' games on the staff portal
+// (lib/staffRelease): an official can't be emailed games they can't open. A
+// reminder to picked people (workerIds) covers only crews already shown, and
+// shows nothing new. "Changed since the last send" is remembered per crew.
 
 const ROLE_LABEL: Record<string, string> = { ref1: 'Referee', ref2: 'Referee', ref3: 'Referee', scorekeeper: 'Scorekeeper' }
 const roleLabel = (r: string) => ROLE_LABEL[r] || r.replace(/^\w/, c => c.toUpperCase())
@@ -46,6 +55,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const confirm = !!b.confirm
   const reminder = !!b.reminder
   const only = Array.isArray(b.workerIds) ? new Set((b.workerIds as unknown[]).map(String)) : null
+  const release = await getRelease(params.id)
+  const crews: Crew[] = Array.isArray(b.crews) ? Array.from(new Set((b.crews as unknown[]).filter(isCrew)))
+    : only ? CREWS.filter(c => !!release[c]) : [...CREWS]
+  // The preview runs with nobody picked too: it gives the picker its counts.
+  if (!crews.length && !b.preview) return NextResponse.json({ error: only ? 'None of these games are showing on the staff portal yet.' : 'Pick who to notify.' }, { status: 400 })
+  const inCrews = (role: string, division: string) => crewsOf(role, division).some(c => crews.includes(c))
 
   const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { id: true, name: true, startDate: true } })
   if (!t) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -66,11 +81,16 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Each official's games, in time order.
   type Row = { date: string; time: string; field: string; division: string; num: string; teams: string; role: string; gameId: string; roleKey: string; sig: string }
   const people = new Map<string, { id: string; name: string; email: string; rows: Row[] }>()
+  // How many officials and games each crew has, for the picker (whatever is picked).
+  const crewPeople: Record<Crew, Set<string>> = { boys: new Set(), girls: new Set(), scorekeepers: new Set() }
+  const crewGames: Record<Crew, number> = { boys: 0, girls: 0, scorekeepers: 0 }
   for (const g of games) {
     if (!g.startTime || !g.location) continue   // parked games aren't on the schedule yet
     for (const a of g.assignments) {
       const w: any = a.worker
       if (!w) continue
+      for (const c of crewsOf(a.role, g.division)) { crewPeople[c].add(w.id); crewGames[c]++ }
+      if (!inCrews(a.role, g.division)) continue
       const p = people.get(w.id) || { id: w.id, name: String(w.name || ''), email: String(w.email || '').trim(), rows: [] }
       p.rows.push({ date: g.date, time: g.startTime, field: g.location, division: g.division, num: g.gameNumber, teams: `${g.team1} vs ${g.team2}`, role: roleLabel(a.role), gameId: g.id, roleKey: a.role, sig: gameSig(g) })
       people.set(w.id, p)
@@ -82,9 +102,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   let sent: Record<string, { sig: string; sentAt: string }> = {}
   try { const r = await prisma.appSetting.findUnique({ where: { key } }); if (r?.value) sent = JSON.parse(r.value) || {} } catch {}
   const sigOf = (rows: Row[]) => (date ? date + '|' : '') + rows.map(r => [r.date, r.time, r.field, r.num, r.teams, r.role].join('~')).join('|')
+  // Remembered per crew ("<workerId>|<crew>"), so a boys-only send and a later
+  // girls-only send don't count each other as changes. Sends from before crews
+  // were stored under the bare worker id, for all their games.
+  const crewRows = (p: { rows: Row[] }, c: Crew) => p.rows.filter(r => crewsOf(r.roleKey, r.division).includes(c))
+  const unchanged = (p: { id: string; rows: Row[] }) => {
+    const mine = crews.filter(c => crewRows(p, c).length)
+    if (mine.length && mine.every(c => sent[`${p.id}|${c}`])) return mine.every(c => sent[`${p.id}|${c}`].sig === sigOf(crewRows(p, c)))
+    return crews.length === CREWS.length && sent[p.id]?.sig === sigOf(p.rows)
+  }
 
   const all = Array.from(people.values()).sort((a, b) => a.name.localeCompare(b.name))
-  const targets = all.filter(p => only ? only.has(p.id) : !onlyChanged || sent[p.id]?.sig !== sigOf(p.rows))
+  const targets = all.filter(p => only ? only.has(p.id) : !onlyChanged || !unchanged(p))
   const noEmail = targets.filter(p => !p.email).map(p => p.name)
   const lastSentAt = Object.values(sent).map(v => v.sentAt).sort().pop() || ''
 
@@ -94,6 +123,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       unchanged: all.length - targets.length, noEmail, lastSentAt,
       emailOn: emailEnabled(),
       ask, suggestBy,
+      crews: CREWS.map(c => ({ crew: c, officials: crewPeople[c].size, games: crewGames[c], shown: !!release[c], shownAt: release[c]?.at || '', shownBy: release[c]?.by || '' })),
     })
   }
 
@@ -107,6 +137,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (confirm) {
     await writeAsk(params.id, { confirmBy, at: new Date().toISOString(), by: String(gate.session?.user?.name || ''), byUserId: gate.userId || '', byEmail: String(gate.session?.user?.email || '') })
   }
+
+  // Show these crews' games on the staff portal first, so the email's "My games"
+  // and Confirm links open to the games it lists.
+  if (!only) await setRelease(params.id, crews, true, String(gate.session?.user?.name || gate.session?.user?.email || ''))
 
   const org = await orgForTournament(params.id).catch(() => null)
   const base = 'https://whistleready.app'
@@ -166,7 +200,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         : { title: `Your games at ${t.name}`, body: `${gamesWord(n)}. First: ${dayName(p.rows[0].date)} ${time12(p.rows[0].time)}, ${p.rows[0].field}.`, url: '/dashboard/ref', tag: `games:${params.id}` })
       if (k) { pushed += k; ok = true }
     }
-    if (ok) sent[p.id] = { sig: sigOf(p.rows), sentAt: now }
+    if (ok) for (const c of crews) { const rows = crewRows(p, c); if (rows.length) sent[`${p.id}|${c}`] = { sig: sigOf(rows), sentAt: now } }
   }
   for (let i = 0; i < targets.length; i += 8) await Promise.all(targets.slice(i, i + 8).map(sendOne))
   try {
