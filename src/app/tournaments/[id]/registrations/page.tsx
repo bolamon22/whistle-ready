@@ -812,6 +812,9 @@ export default function RegistrationsPage() {
   const [commWhen, setCommWhen] = useState<'now' | 'later'>('now')
   const [commAt, setCommAt] = useState('')
   const [scheduled, setScheduled] = useState<any[]>([])
+  // Scheduled rows whose full club list is opened. A row said only "1 club", so eight
+  // queued waiver reminders read as one club eight times (Bo, Oct 15); each now names its clubs.
+  const [schedOpen, setSchedOpen] = useState<Record<string, boolean>>({})
   const loadScheduled = () => {
     fetch(`/api/registrations/comm-schedule?tournamentId=${tournamentId}`).then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.scheduled) setScheduled(d.scheduled) }).catch(() => {})
@@ -970,7 +973,8 @@ export default function RegistrationsPage() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.ok) throw new Error(d.error || 'Send failed')
       if (d.scheduled) {
-        toast.success(`Scheduled for ${new Date(d.scheduled.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — ${commSel.size} club${commSel.size !== 1 ? 's' : ''}`, { duration: 5000 })
+        const onlyClub = commSel.size === 1 ? registrations.find(r => commSel.has(r.id))?.clubName : ''
+        toast.success(`Scheduled for ${new Date(d.scheduled.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — ${onlyClub || `${commSel.size} club${commSel.size !== 1 ? 's' : ''}`}`, { duration: 5000 })
         setScheduled(s => [...s, d.scheduled].sort((a, b) => a.sendAt.localeCompare(b.sendAt)))
         setCommOpen(false)
         return
@@ -1926,16 +1930,23 @@ export default function RegistrationsPage() {
                     <div className="mt-5 border-t border-slate-100 pt-3">
                       <div className="text-[11px] font-bold tracking-wide text-slate-400 mb-1.5">SCHEDULED</div>
                       <div className="space-y-1">
-                        {scheduled.map(sc => (
-                          <div key={sc.id} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                            <span className="font-semibold text-slate-700">{sc.payload?.custom?.name || COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind}</span>
-                            <span className="text-slate-400">·</span>
-                            <span>{sc.regIds.length} club{sc.regIds.length !== 1 ? 's' : ''}</span>
-                            <span className="text-slate-400">·</span>
-                            <span>{new Date(sc.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                            <button onClick={() => cancelScheduled(sc.id)} className="ml-auto text-slate-400 hover:text-red-500 font-semibold">Cancel</button>
-                          </div>
-                        ))}
+                        {scheduled.map(sc => {
+                          const names: string[] = (sc.regIds || []).map((id: string) => registrations.find(r => r.id === String(id))?.clubName || 'A club no longer registered')
+                          const showAll = !!schedOpen[sc.id] || names.length <= 3
+                          return (
+                            <div key={sc.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                              <span className="font-semibold text-slate-700">{sc.payload?.custom?.name || COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind}</span>
+                              <span className="text-slate-400">·</span>
+                              <span className="min-w-0 text-slate-700" title={names.join(', ')}>
+                                {(showAll ? names : names.slice(0, 2)).join(', ')}
+                                {!showAll && <> <button type="button" onClick={() => setSchedOpen(o => ({ ...o, [sc.id]: true }))} className="font-semibold text-teal-700 hover:underline">+{names.length - 2} more</button></>}
+                              </span>
+                              <span className="text-slate-400">·</span>
+                              <span className="whitespace-nowrap">{new Date(sc.sendAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                              <button onClick={() => cancelScheduled(sc.id)} aria-label={`Cancel the ${sc.payload?.custom?.name || COMM_KIND_LABELS[sc.kind as CommKind] || sc.kind} to ${names.join(', ')}`} className="ml-auto text-slate-400 hover:text-red-500 font-semibold">Cancel</button>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}

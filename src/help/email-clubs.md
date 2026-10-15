@@ -38,7 +38,7 @@ The AI writes the words only. Names, balances, team lists and links fill in from
 
 **To keep your wording:** click **Save as default**. The **Payment reminder** letters are saved separately. Your own letters use **Save changes**, and **Delete letter** removes one.
 
-**To cancel a scheduled send:** open **Email clubs**, find it under **SCHEDULED** and click **Cancel**. The **Email clubs** button shows how many are queued.
+**To see or cancel a scheduled send:** open **Email clubs**. Each send under **SCHEDULED** shows its letter, the clubs it goes to and when; click **+N more** to see every club on a long list. Click **Cancel** to stop it. The **Email clubs** button shows how many are queued.
 
 **Waiver counts:** expand a club to see **Waivers** per team and "waivers completed" for the club, then click **Send a waiver reminder**.
 
