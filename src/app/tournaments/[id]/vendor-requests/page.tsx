@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import TournamentNav from '../TournamentNav'
-import { Inbox, ChevronRight, ExternalLink, Download, Trash2, Check, X, Link2 } from 'lucide-react'
+import { Inbox, ChevronRight, ExternalLink, Download, Trash2, Check, X, Link2, MapPin } from 'lucide-react'
 import VendorInvoicePanel, { type VendorInvoice } from './VendorInvoicePanel'
 
-type Sub = { id: string; submittedAt: string; data: any; status?: string; amountDue?: number; paymentStatus?: string; passToken?: string | null }
+type Sub = { id: string; submittedAt: string; data: any; status?: string; amountDue?: number; paymentStatus?: string; passToken?: string | null; spot?: string }
 
 const money = (n?: number) => (Number(n) > 0 ? `$${Number(n).toLocaleString('en-US')}` : '—')
 
@@ -87,6 +87,22 @@ export default function VendorRequestEntries() {
     setInvoices(prev => { const n = { ...prev }; if (invoice) n[submission.id] = invoice; else delete n[submission.id]; return n })
   }
 
+  // Where the vendor sets up (lib/vendorSpots). Directors and field directors set it.
+  async function editSpot(s: Sub) {
+    const typed = prompt(`Where does ${s.data?.companyName || 'this vendor'} set up?\n\nFor example: by Field 3, or lot B near the gate. Leave empty to clear it.`, s.spot || '')
+    if (typed === null) return
+    const res = await fetch(`/api/tournaments/${id}/vendor-requests`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subId: s.id, spot: typed }) }).catch(() => null)
+    const j = res ? await res.json().catch(() => ({})) : {}
+    if (!res?.ok) { alert(j.error || 'Could not save the spot.'); return }
+    setSubs(prev => prev.map(x => (x.id === s.id ? { ...x, spot: j.spot || '' } : x)))
+  }
+  const SpotChip = ({ s }: { s: Sub }) => (
+    <button type="button" onClick={e => { e.stopPropagation(); editSpot(s) }} title="Where they set up. Click to change."
+      className={`mt-1 inline-flex items-center gap-1 text-xs rounded-md px-1.5 py-0.5 ${s.spot ? 'text-teal-800 bg-teal-50 hover:bg-teal-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}>
+      <MapPin size={12} />{s.spot || 'Set spot'}
+    </button>
+  )
+
   const boothLink = (s: Sub) => (s.passToken ? `${window.location.origin}/vendor/${s.passToken}` : '')
   const copyLink = (s: Sub) => { const l = boothLink(s); if (l) { navigator.clipboard?.writeText(l); alert('Booth link copied.') } }
 
@@ -139,12 +155,12 @@ export default function VendorRequestEntries() {
   }
   const exportCsv = () => {
     const cols = ['companyName', 'companyContact', 'phone', 'email', 'website', 'level', 'products']
-    const head = ['Submitted', ...cols, 'Status', ...(canMoney ? ['Fee', 'Payment', 'Invoice', 'Paid', 'Balance'] : [])].join(',')
+    const head = ['Submitted', ...cols, 'Spot', 'Status', ...(canMoney ? ['Fee', 'Payment', 'Invoice', 'Paid', 'Balance'] : [])].join(',')
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = rows.map(s => {
       const inv = invoices[s.id]
       const extra = canMoney ? (inv ? [inv.number, inv.money.paid, inv.money.balance] : ['', '', '']) : []
-      return [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.status || 'needs review', ...(canMoney ? [money(s.amountDue), s.paymentStatus || 'unpaid'] : []), ...extra].map(esc).join(',')
+      return [fmt(s.submittedAt), ...cols.map(c => s.data?.[c]), s.spot || '', s.status || 'needs review', ...(canMoney ? [money(s.amountDue), s.paymentStatus || 'unpaid'] : []), ...extra].map(esc).join(',')
     })
     const blob = new Blob([[head, ...lines].join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'vendor-requests.csv'; a.click(); URL.revokeObjectURL(url)
@@ -179,7 +195,7 @@ export default function VendorRequestEntries() {
                       <div className="font-semibold text-slate-800 truncate">{s.data?.companyName || '—'}</div>
                       <div className="text-sm text-slate-600 truncate">{s.data?.companyContact || '—'}{s.data?.email ? ` · ${s.data.email}` : ''}</div>
                       <div className="text-xs text-slate-400 truncate">{s.data?.level || '—'} · {fmt(s.submittedAt)}</div>
-                      <div className="mt-1.5"><StatusChip s={s} inv={invoices[s.id]} /></div>
+                      <div className="mt-1.5 flex items-center gap-2 flex-wrap"><StatusChip s={s} inv={invoices[s.id]} /><SpotChip s={s} /></div>
                     </div>
                     <ChevronRight size={16} className={`text-slate-400 flex-shrink-0 mt-1 transition-transform ${open === s.id ? 'rotate-90' : ''}`} />
                   </button>
@@ -207,7 +223,7 @@ export default function VendorRequestEntries() {
                   {rows.map(s => (
                     <>
                       <tr key={s.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setOpen(open === s.id ? null : s.id)}>
-                        <td className="px-4 py-2.5 font-medium text-slate-800">{s.data?.companyName || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium text-slate-800">{s.data?.companyName || '—'}<br /><SpotChip s={s} /></td>
                         <td className="px-4 py-2.5 text-slate-600">{s.data?.companyContact || '—'}<br /><span className="text-xs text-slate-400">{s.data?.email}</span></td>
                         <td className="px-4 py-2.5 text-slate-600">{s.data?.level || '—'}</td>
                         <td className="px-4 py-2.5"><StatusChip s={s} inv={invoices[s.id]} />{s.status === 'approved' && canMoney && <div className="text-xs text-slate-400 mt-1 tabular-nums">{(() => { const inv = invoices[s.id]; return inv && inv.money.paid > 0 && inv.money.balance > 0 ? `${money(inv.money.balance)} of ${money(inv.money.due)} due` : money(s.amountDue) })()}</div>}</td>

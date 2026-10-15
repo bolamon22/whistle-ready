@@ -21,6 +21,8 @@ Vendor requests lists businesses that applied for a booth. You approve them with
 
 **Field directors** see this list for their own events, with contacts and status, but no fees, payments or booth links, and no buttons to approve, decline or delete.
 
+**Where each vendor sets up:** click **Set spot** under the company name (or the spot, to change it) and type where they go, such as "by Field 3" or "lot B near the gate". Directors and field directors can set it; it shows on the row and in **Export CSV**.
+
 **To undo an approval or decline:** click **Undo**.
 
 **To resend the booth page:** click **Copy booth link** on an approved vendor and send it yourself.

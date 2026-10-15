@@ -13,6 +13,7 @@ import { canSeeMoney } from '@/lib/roleScope'
 import { ensureVendorInvoiceColumns, type FormSubmission } from '@/lib/formSubmissions'
 import { qboSettings } from '@/lib/qboSync'
 import { vendorInvoiceSummary, type VendorInvoiceSummary } from '@/lib/vendorInvoiceSummary'
+import { vendorSpots, setVendorSpot } from '@/lib/vendorSpots'
 
 // Staff: vendor requests for THIS tournament (rows in "OrgFormSubmission" tagged with
 // the tournamentId — see src/lib/formSubmissions.ts).
@@ -69,10 +70,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const canMoney = canSeeMoney(g.gate.role)
     const invoices = canMoney ? await invoicesFor(g.orgId, submissions).catch(() => ({})) : {}
     const canManage = g.gate.role === 'admin' || roleHasFeature(g.gate.role, 'tournament_people')
-    return NextResponse.json({ submissions: submissions.map(x => forRole(x, canMoney)), canMoney, canManage, invoices })
+    const spots = await vendorSpots(params.id)
+    return NextResponse.json({ submissions: submissions.map(x => ({ ...forRole(x, canMoney), spot: spots[x.id]?.spot || '' })), canMoney, canManage, invoices })
   } catch {
     return NextResponse.json({ submissions: [] })
   }
+}
+
+// PATCH { subId, spot } -- where this vendor sets up. Anyone who can read the vendor
+// list (directors and field directors) can set it; an empty spot clears it.
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const g = await gateForTournament(params.id, 'tournament_vendors')
+  if ('res' in g) return g.res
+  const body = await req.json().catch(() => ({})) as { subId?: unknown; spot?: unknown }
+  const subId = String(body.subId || '')
+  if (!subId) return NextResponse.json({ error: 'Missing subId' }, { status: 400 })
+  const cur = await getSubmission(g.orgId, subId).catch(() => null)
+  if (!cur || cur.formType !== 'vendor' || (cur.tournamentId && cur.tournamentId !== params.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const by = String(g.gate.session?.user?.name || g.gate.session?.user?.email || 'Staff')
+  const all = await setVendorSpot(params.id, subId, String(body.spot ?? ''), by)
+  return NextResponse.json({ ok: true, spot: all[subId]?.spot || '' })
 }
 
 // Staff: delete ONE vendor request (e.g. spam or a test entry). Scoped to this
