@@ -13,6 +13,7 @@ import PasswordInput from '@/components/PasswordInput'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { nameKey } from '@/lib/names'
 import { track } from '@/lib/track'
+import { TERMS_VERSION, TERMS_AGREE_LABEL } from '@/lib/termsVersion'
 
 interface TeamRow {
   clubName: string
@@ -111,6 +112,7 @@ export default function RegisterPage() {
   const [hpExtra, setHpExtra] = useState('')  // honeypot -- bots autofill it, humans never see it
   const [paymentMethod, setPaymentMethod] = useState('')
   const [notes, setNotes] = useState('')
+  const [agreeTerms, setAgreeTerms] = useState(false)
   const [teams, setTeams] = useState<TeamRow[]>([emptyTeam()])
 
   const [pricing, setPricing] = useState<Pricing>(DEFAULT_PRICING)
@@ -338,6 +340,7 @@ export default function RegisterPage() {
     e.preventDefault()
     if (!paymentMethod) { toast.error('Please select a payment option'); return }
     if (!needsHotel) { toast.error('Please select hotel preference'); return }
+    if (!agreeTerms) { toast.error('Please agree to the Terms of Use'); document.getElementById('agree-terms')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return }
     if (askPassword && hint && hintChoice !== 'no') {
       toast.error(hintChoice === 'yes'
         ? 'Sign in with your login on file first, or choose to set up a new login.'
@@ -365,6 +368,7 @@ export default function RegisterPage() {
           clubLogoUrl,
           // Signed out only: see askPassword.
           portalPassword: askPassword ? portalPassword : undefined,
+          termsVersion: agreeTerms ? TERMS_VERSION : undefined,
         }),
       })
       if (!res.ok) throw new Error('Registration failed')
@@ -979,6 +983,11 @@ export default function RegisterPage() {
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} autoComplete="off"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </section>
+
+            <label id="agree-terms" className="flex gap-2.5 items-start text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} className="mt-0.5 w-4 h-4 accent-blue-600 shrink-0" />
+              <span>{TERMS_AGREE_LABEL} (<a href="/terms" target="_blank" rel="noreferrer" className="text-blue-600 underline underline-offset-2">read them</a>) *</span>
+            </label>
 
             <button type="submit" disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 text-sm transition-colors">

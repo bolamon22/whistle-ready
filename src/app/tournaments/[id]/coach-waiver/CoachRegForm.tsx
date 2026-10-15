@@ -9,6 +9,7 @@ import HowToVideoLink from '@/components/HowToVideoLink'
 import CoachTeamAlerts from '@/components/CoachTeamAlerts'
 import { smsConsentText } from '@/lib/smsConsent'
 import type { ClubOption } from '@/app/o/[slug]/register/player/PlayerRegForm'
+import { TERMS_VERSION } from '@/lib/termsVersion'
 import {
   COACH_ROLES, COACH_LEVELS, COACH_CERTS, CERT_SHORT,
   COACH_SIGNATURE_PROMPT, COACH_WAIVER_VERSION,
@@ -152,6 +153,8 @@ export default function CoachRegForm({
               : {}),
             agreements: sections.map(s => ({ key: s.key, title: s.title, agreed: !!agreed[s.key] })),
             waiverVersion: COACH_WAIVER_VERSION,
+            // Signing also agrees to the Terms of Use (the line under the signature).
+            termsVersion: TERMS_VERSION,
           },
         }),
       })
@@ -420,6 +423,7 @@ export default function CoachRegForm({
                 <input className={`${inp} font-serif italic text-xl`} value={d.signature} onChange={set('signature')}
                   placeholder={d.coachFullName || 'Your full legal name'} />
                 {!!d.signature && !sigOk && <p className="text-xs text-rose-600 mt-1.5">Your signature has to match the name you entered at the top.</p>}
+                <p className="text-xs text-slate-500 mt-2">By signing, you also agree to the Whistle Ready <a href="/terms" target="_blank" rel="noreferrer" className="text-teal-700 underline underline-offset-2">Terms of Use</a>.</p>
               </div>
 
               <div className="flex gap-3.5 items-center flex-wrap mt-5">

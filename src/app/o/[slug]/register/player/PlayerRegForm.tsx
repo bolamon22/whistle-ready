@@ -15,6 +15,7 @@ import ParentAccountOffer from '@/components/ParentAccountOffer'
 import HowToVideoLink from '@/components/HowToVideoLink'
 import WaiverPrefillBar from '@/components/WaiverPrefillBar'
 import type { AccountOffer } from '@/lib/parentWaiverFields'
+import { TERMS_VERSION } from '@/lib/termsVersion'
 
 type Fields = { gender: boolean; grade: boolean; teamName: boolean; parent2: boolean; hotelQuestion: boolean; newsletter: boolean; playerPass?: boolean; position?: boolean; homeTown?: boolean }
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
@@ -509,7 +510,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
       // the team, but the division is what the schedule and the brackets are built on,
       // so losing it would just move the problem. Blank when the team was typed in.
       const division = clubMode && d.teamPick && d.teamPick !== '__other' ? String(pickedTeam?.division || '') : ''
-      const data = { ...rest, teamName: resolvedTeam, division, clubName: clubMode && d.clubName !== '__other' ? d.clubName : '', tournamentId: tournamentId || '', tournamentName: tournamentName || '' }
+      const data = { ...rest, teamName: resolvedTeam, division, clubName: clubMode && d.clubName !== '__other' ? d.clubName : '', tournamentId: tournamentId || '', tournamentName: tournamentName || '', termsVersion: TERMS_VERSION }
       const res = await fetch('/api/org-forms/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId, formType: 'player', data }) })
       if (res.ok) { const j = await res.json().catch(() => ({})); if (j.passToken) setPassToken(String(j.passToken)); if (j.account?.token || j.account?.linked) setAccount(j.account as AccountOffer); track('Player Waiver'); setDone(true); try { window.scrollTo({ top: 0 }) } catch {} }
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Submission failed') }
@@ -746,7 +747,7 @@ export default function PlayerRegForm({ orgId, fields, waiverTitle, waiverHtml, 
         <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 leading-relaxed mb-4 max-h-56 overflow-y-auto" dangerouslySetInnerHTML={{ __html: waiverHtml }} />
         <label className="flex items-start gap-3 cursor-pointer mb-4">
           <input type="checkbox" checked={d.agree} onChange={e => set('agree', e.target.checked)} className="mt-0.5 accent-teal-500 w-4 h-4" />
-          <span className="text-sm text-slate-700">I have read and agree to the waiver and release of liability above *</span>
+          <span className="text-sm text-slate-700">I have read and agree to the waiver and release of liability above, and to the Whistle Ready <a href="/terms" target="_blank" rel="noreferrer" className="text-teal-700 underline underline-offset-2">Terms of Use</a> *</span>
         </label>
         <label className={labelCls}>Type your full name as signature *</label>
         <input className={inputCls} name="signature" value={d.signature} onChange={e => set('signature', e.target.value)} placeholder="Full legal name" required />

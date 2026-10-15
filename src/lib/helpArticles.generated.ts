@@ -201,6 +201,23 @@ export const GENERATED_HELP: { id: string; title: string; category: string; keyw
     "body": "**Documents** keeps the tournament's paperwork in one place: grant applications, insurance certificates, permits and venue contracts. It is for staff only.\n\n**Where:** **Setup → Documents**.\n\n**To upload a document:**\n1. Pick a category: **Grant**, **Insurance**, **Permit**, **Venue**, **Contract**, **Financial** or **Other**.\n2. Click **Upload file** and choose the file (PDF, Word, Excel or an image, up to 10 MB).\n\nDocuments are grouped by category.\n\n**To download or delete:** use **Download** or **Delete** on the document.\n\n**Common problems:**\n- Deleting asks for confirmation and cannot be undone."
   },
   {
+    "id": "terms-of-use",
+    "title": "Terms of Use and the agree box",
+    "category": "Getting started",
+    "keywords": "terms of use terms and conditions agree checkbox updated terms we updated our terms of use confidential license whistle ready llc sign in prompt accept",
+    "routes": [
+      "/terms",
+      "/login",
+      "/profile",
+      "/dashboard",
+      "/tournaments/*/register",
+      "/tournaments/*/player-waiver",
+      "/tournaments/*/coach-waiver"
+    ],
+    "audience": "staff",
+    "body": "Whistle Ready's **Terms of Use** live at **/terms**. They are an agreement with Whistle Ready LLC, which owns the software. They cover the license to use it, keeping non-public screens confidential, and not using it to build a competing product.\n\n**Signing in:** the first time anyone signs in after the terms change, a **We updated our Terms of Use** box appears. Tick **I agree to the Whistle Ready Terms of Use** and press **Agree and continue**. It is asked once per version. **Sign out** leaves without agreeing. The box never appears on the Terms, Privacy or SMS pages, so the **Read the Terms of Use** link can be opened from it.\n\n**Team registration:** the form has a required **I agree to the Whistle Ready Terms of Use** box above the submit button. A club contact who ticks it is not asked again when they first sign in to their club portal with the same email.\n\n**Player waiver:** the waiver box reads **I have read and agree to the waiver and release of liability above, and to the Whistle Ready Terms of Use**.\n\n**Coach waiver:** the line under the signature says signing also agrees to the **Terms of Use**.\n\nEach agreement is saved with the date, the terms version and where it was given, so there is a record of who agreed to what."
+  },
+  {
     "id": "registration-emails",
     "title": "Who gets new-registration emails",
     "category": "Registration & money",

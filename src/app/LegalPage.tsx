@@ -19,7 +19,7 @@ export const LEGAL_UPDATED = 'October 5, 2026'
 export const LEGAL_EMAIL = 'info@sunshinelax.com'
 export const LEGAL_PHONE = '(954) 608-5886'
 
-export default async function LegalPage({ title, intro, children }: { title: string; intro: React.ReactNode; children: React.ReactNode }) {
+export default async function LegalPage({ title, intro, children, updated }: { title: string; intro: React.ReactNode; children: React.ReactNode; updated?: string }) {
   const host = (headers().get('host') || '').replace(/:\d+$/, '').replace(/^www\./, '').toLowerCase()
   const slug = ORG_DOMAINS[host] || ''
   // Only costs a query on an org's own domain; whistleready.app skips it.
@@ -32,7 +32,7 @@ export default async function LegalPage({ title, intro, children }: { title: str
       <PublicHeader org={org ? { name: org.name, logoUrl: org.logoUrl, domain: host } : null} />
       <article className="max-w-3xl mx-auto px-5 sm:px-6 py-10 sm:py-14">
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">{title}</h1>
-        <p className="mt-2 text-sm text-slate-500">{operator} · Last updated {LEGAL_UPDATED}</p>
+        <p className="mt-2 text-sm text-slate-500">{operator} · Last updated {updated || LEGAL_UPDATED}</p>
         <div className="mt-6 space-y-3 text-[15px] leading-7">{intro}</div>
         <div className="mt-10 space-y-9 text-[15px] leading-7">{children}</div>
         <footer className="mt-12 pt-6 border-t border-slate-200 text-sm text-slate-500 flex flex-wrap gap-x-5 gap-y-2">

@@ -21,6 +21,8 @@ import { viewerRole } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
 import { canSeeMoney, canSeeContacts, payStatus } from '@/lib/roleScope'
 import { portalUsage } from '@/lib/portalVisits'
+import { recordTermsAcceptance, requestMeta } from '@/lib/terms'
+import { TERMS_VERSION } from '@/lib/termsVersion'
 
 async function ensureRegistrationColumns() {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "TeamRegistration" ADD COLUMN "clubLogoUrl" TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
@@ -467,6 +469,12 @@ export async function POST(req: NextRequest) {
       password: typeof portalPassword === 'string' ? portalPassword : '',
       sessionUser: (session?.user as { id?: string; email?: string | null } | undefined) ?? null,
     })
+  }
+
+  // The contact ticked "I agree to the Terms of Use" on the form. Recorded by
+  // email, so the portal login made above is not asked again at sign-in.
+  if (!isImport && body.termsVersion === TERMS_VERSION && contactEmail) {
+    await recordTermsAcceptance({ email: String(contactEmail), context: 'team-registration', ...requestMeta(req) })
   }
 
   // Public form registrations get a confirmation letter (on-screen + email); imports don't.
