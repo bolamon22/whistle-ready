@@ -7,6 +7,7 @@ import { tournamentOrgId } from '@/lib/org'
 import { TRAINING_VIDEOS, videosFor, workerRoles } from '@/lib/training'
 import { payScopeFor } from '@/lib/payScope'
 import { seesPay, workerPayGroups } from '@/lib/payGroups'
+import { trainingEmailsTo } from '@/lib/trainingSends'
 
 // Staff training videos: which ones a person has watched.
 //
@@ -15,8 +16,9 @@ import { seesPay, workerPayGroups } from '@/lib/payGroups'
 // GET ?tournamentId=   -> { counts: { workerId: { watched, total } } } for that event's
 //                         roster (directors, admins, field directors, and an assigner for
 //                         their own staff groups), shown on the Staff roster
-// GET ?workerId=       -> { roles, assigned, watched, lastSent, hasEmail } for one person's
-//                         profile on the Staff Pool and the Staff roster (same people)
+// GET ?workerId=       -> { roles, assigned, watched, lastSent, hasEmail, email, sends } for
+//                         one person's profile on the Staff Pool and the Staff roster
+//                         (same people); sends = every training email to them (lib/trainingSends)
 // POST { videoId }     -> mark it watched (the player calls this near the end)
 //
 // Keyed by the Worker matched on the session email (the same lookup as the staff
@@ -52,26 +54,45 @@ type Watched = Record<string, { plays: number; first: string; last: string }>
  *  time. Views saved while a login had no Staff Pool record with the same email are kept
  *  under user:<id>; they're folded into the person whose email matches that login now,
  *  so nobody's watching goes missing (Bo, Oct 13 2026). The report, the roster's Training
- *  column and a person's profile all count from here, so they can't disagree. */
+ *  column and a person's profile all count from here, so they can't disagree.
+ *  A person with two records under one email counts the views of both: a login's views
+ *  are saved under its oldest record (me()), so the newer duplicate showed 0 of 13
+ *  watched while she'd watched 5 (Haylee Lamon, Oct 15 2026). */
 async function watchedBy(ws: Row[]): Promise<Map<string, Watched>> {
-  const ids = ws.map((w: Row) => String(w.id))
+  const em = (v: unknown) => String(v || '').trim().toLowerCase()
+  const ids = new Set(ws.map((w: Row) => String(w.id)))
+  const forEmail = new Map<string, string[]>()          // email -> these people with it
+  for (const w of ws) { const e = em(w.email); if (e) forEmail.set(e, [...(forEmail.get(e) || []), String(w.id)]) }
+  const emailOf = new Map<string, string>(ws.map((w: Row) => [String(w.id), em(w.email)]))
+  // Other records with the same emails (a duplicate that isn't in this list).
+  const emails = Array.from(forEmail.keys())
+  for (let i = 0; i < emails.length; i += 400) {
+    const part = emails.slice(i, i + 400)
+    const twins = await prisma.$queryRawUnsafe<Row[]>(`SELECT id, lower(email) AS email FROM "Worker" WHERE lower(email) IN (${part.map(() => '?').join(', ')})`, ...part)
+    for (const t of twins) if (!emailOf.has(String(t.id))) emailOf.set(String(t.id), em(t.email))
+  }
+  const keys = Array.from(emailOf.keys())
   const seen: Row[] = []
-  for (let i = 0; i < ids.length; i += 400) {
-    const part = ids.slice(i, i + 400)
+  for (let i = 0; i < keys.length; i += 400) {
+    const part = keys.slice(i, i + 400)
     seen.push(...await prisma.$queryRawUnsafe<Row[]>(`SELECT workerKey, videoId, watchedAt, plays, lastWatchedAt FROM "StaffTraining" WHERE workerKey IN (${part.map(() => '?').join(', ')})`, ...part))
   }
-  const byEmail = new Map(ws.filter((w: Row) => w.email).map((w: Row) => [String(w.email).trim().toLowerCase(), String(w.id)]))
-  if (byEmail.size) {
+  if (forEmail.size) {
     const orphan = await prisma.$queryRawUnsafe<Row[]>(`SELECT s.workerKey, s.videoId, s.watchedAt, s.plays, s.lastWatchedAt, lower(u.email) AS email FROM "StaffTraining" s JOIN "User" u ON s.workerKey = 'user:' || u.id`).catch(() => [] as Row[])
-    for (const r of orphan) { const wid = byEmail.get(String(r.email || '')); if (wid) seen.push({ ...r, workerKey: wid }) }
+    for (const r of orphan) if (forEmail.has(em(r.email))) seen.push({ ...r, workerKey: '', email: em(r.email) })
   }
   const by = new Map<string, Watched>()
   for (const r of seen) {
-    const k = String(r.workerKey); const m = by.get(k) || {}
+    // Everyone here with the view's email gets it; a record with no email keeps its own.
+    const e = r.workerKey ? emailOf.get(String(r.workerKey)) || '' : String(r.email || '')
+    const to = e ? forEmail.get(e) || [] : ids.has(String(r.workerKey)) ? [String(r.workerKey)] : []
     const v = { plays: Number(r.plays ?? 1) || 1, first: String(r.watchedAt || ''), last: String(r.lastWatchedAt || r.watchedAt || '') }
-    const o = m[String(r.videoId)]
-    m[String(r.videoId)] = o ? { plays: o.plays + v.plays, first: o.first < v.first ? o.first : v.first, last: o.last > v.last ? o.last : v.last } : v
-    by.set(k, m)
+    for (const k of to) {
+      const m = by.get(k) || {}
+      const o = m[String(r.videoId)]
+      m[String(r.videoId)] = o ? { plays: o.plays + v.plays, first: o.first < v.first ? o.first : v.first, last: o.last > v.last ? o.last : v.last } : v
+      by.set(k, m)
+    }
   }
   return by
 }
@@ -90,8 +111,9 @@ export async function GET(req: NextRequest) {
       const fd = gate.role === 'field_director'
       if (!director && gate.role !== 'assigner' && !fd) return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
       const scope = director || fd ? null : await payScopeFor(gate.role, gate.userId)
+      // An admin also sees the records with no organization (api/training/send).
       let ws = gate.orgId
-        ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ? ORDER BY name`, gate.orgId)
+        ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ?${gate.role === 'admin' ? ` OR orgId IS NULL OR orgId = ''` : ''} ORDER BY name`, gate.orgId)
         : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" ORDER BY name`)
       if (scope) ws = ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any)))
       if (fd) {
@@ -137,10 +159,14 @@ export async function GET(req: NextRequest) {
       if (fd && (!fieldDirectorSees(w) || (gate.events && !(await rosterWorkerIds(gate.events)).has(wid)))) return notFound
       const roles = workerRoles(w)
       const email = String(w.email || '').trim().toLowerCase()
-      // The newest send that reached them (`to` holds who it actually went to). Others
-      // than directors see only their own sends, as in the library's Sent tab.
-      let lastSent: { at: string; by: string } | null = null
-      if (email) {
+      // Every training email to them, failures included (lib/trainingSends, kept from Oct
+      // 15 2026). Others than directors see only their own sends, as in the library's
+      // Sent tab. Sends from before then are only in the library's log, which still
+      // gives the last one.
+      const sends = email ? await trainingEmailsTo(email, director ? undefined : gate.userId || '-').catch(() => []) : []
+      const newest = sends.find(x => x.ok)
+      let lastSent: { at: string; by: string } | null = newest ? { at: newest.at, by: newest.by } : null
+      if (email && !lastSent) {
         try {
           const log = JSON.parse((await prisma.appSetting.findUnique({ where: { key: 'trainingSends' } }))?.value || '[]')
           const hit = (Array.isArray(log) ? log : []).find((e: any) => (director || (e?.byUserId && e.byUserId === gate.userId))
@@ -148,7 +174,7 @@ export async function GET(req: NextRequest) {
           if (hit) lastSent = { at: String(hit.at || ''), by: String(hit.by || '') }
         } catch { /* no log yet */ }
       }
-      return NextResponse.json({ roles, assigned: videosFor(roles), watched: (await watchedBy([w])).get(wid) || {}, lastSent, hasEmail: !!email })
+      return NextResponse.json({ roles, assigned: videosFor(roles), watched: (await watchedBy([w])).get(wid) || {}, lastSent, hasEmail: !!email, email, sends })
     }
     const tid = req.nextUrl.searchParams.get('tournamentId')
     if (tid) {
