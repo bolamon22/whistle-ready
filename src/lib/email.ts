@@ -12,6 +12,7 @@
 //   EMAIL_ORG_SENDERS — "slug:address" pairs, per-org From overrides
 // INVITE_FROM_EMAIL is still read as a fallback so existing deploys keep working.
 import sgMail from '@sendgrid/mail'
+import { tagLinks } from '@/lib/utm'
 
 const DEFAULT_FROM = process.env.EMAIL_FROM || process.env.INVITE_FROM_EMAIL || 'noreply@whistleready.app'
 const DEFAULT_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Whistle Ready'
@@ -34,6 +35,11 @@ export type SendEmailArgs = {
   fromName?: string
   /** Files to attach (base64 content). Keep the total well under SendGrid's 30 MB. */
   attachments?: { filename: string; content: string; type?: string }[]
+  /** Campaign id (lib/utm). Set it and every link to our own domains in this
+   *  email is tagged utm_source=email, so clicks land in Plausible's Campaigns
+   *  tab instead of Direct. Leave it unset on platform mail — a password reset
+   *  is not a campaign and tagging it only pollutes the numbers. */
+  campaign?: string
 }
 
 export type SendEmailResult = { ok: boolean; error?: string }
@@ -73,14 +79,20 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     .filter(Boolean)
     .filter(c => !recipients.some(r => r.toLowerCase() === c.toLowerCase()))
 
+  // Campaign tagging happens here, at the one seam every send already passes
+  // through, so a new send site can never forget it — it only has to name the
+  // campaign. Untagged (no campaign) bodies go out byte-for-byte unchanged.
+  const html = args.campaign ? tagLinks(args.html, args.campaign, { html: true }) : args.html
+  const text = args.campaign && args.text ? tagLinks(args.text, args.campaign) : args.text
+
   try {
     sgMail.setApiKey(key)
     await sgMail.send({
       to: recipients,
       from: { email: args.fromEmail || DEFAULT_FROM, name: args.fromName || DEFAULT_FROM_NAME },
       subject: args.subject,
-      html: args.html,
-      ...(args.text ? { text: args.text } : {}),
+      html,
+      ...(text ? { text } : {}),
       ...(ccList.length ? { cc: ccList } : {}),
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
       ...(args.attachments?.length ? {
