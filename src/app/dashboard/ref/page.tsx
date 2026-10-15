@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import MyAvailability, { type AvDay } from '@/components/MyAvailability'
-import { availLocked } from '@/lib/availabilityAnswers'
+import { availLocked, dayTitle } from '@/lib/availabilityAnswers'
 import StaffW9Card from '@/components/StaffW9Card'
 import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin, Siren, Bell, ArrowRight, Trophy } from 'lucide-react'
 import { videosFor } from '@/lib/training'
@@ -15,7 +15,9 @@ import { teamRefKey } from '@/lib/names'
 import SmsConsent from '@/components/SmsConsent'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
-interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number; avail?: { days: AvDay[] } | null }
+// confirm: their assigner asked them to confirm their games and some still need an
+// answer (lib/officialConfirm); href is their no-login confirm page.
+interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number; avail?: { days: AvDay[] } | null; confirm?: { confirmBy: string; pending: number; total: number; href: string } | null }
 interface Portal { worker: { id: string; name: string; defaultRole: string; roles: string[] } | null; events: PortalEvent[] }
 
 // Which game-day tools each role actually uses — a referee has no business in the
@@ -338,6 +340,16 @@ export default function RefDashboard() {
         <p className="text-sm text-gray-400">{roleLabel}</p>
         <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'} 👋</h1>
       </div>
+
+      {/* Games to confirm: their assigner asked, and some games still need an answer */}
+      {(portal?.events || []).filter(e => e.confirm && e.confirm.pending > 0).map(e => (
+        <div key={'confirm' + e.id} className="mb-5 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br from-[#0B1F3A] to-[#0E7490]">
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-teal-200"><Bell size={14} />TO DO</p>
+          <p className="mt-1.5 text-lg font-extrabold leading-snug">Confirm your games</p>
+          <p className="mt-1 text-[13px] leading-snug text-slate-300">{e.name} · {e.confirm!.pending === e.confirm!.total ? `${e.confirm!.total} game${e.confirm!.total === 1 ? '' : 's'}` : `${e.confirm!.pending} of your ${e.confirm!.total} games`} to confirm{e.confirm!.confirmBy ? ` by ${dayTitle(e.confirm!.confirmBy, true)}` : ''}</p>
+          <a href={e.confirm!.href} className="mt-3 inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#ffffff] text-[#0B1F3A] text-sm font-extrabold hover:bg-[#f1f5f9]">Confirm now<ArrowRight size={16} /></a>
+        </div>
+      ))}
 
       {/* Availability to-do: until every day of every event they work has an answer */}
       {todoLeft > 0 && (

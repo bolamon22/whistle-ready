@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { walletEnabled } from '@/lib/wallet'
 import { staffAvailability, type StaffAvailDay } from '@/lib/availability'
 import { availLocked } from '@/lib/availabilityAnswers'
+import { confirmLink, pendingFor, readAsk } from '@/lib/officialConfirm'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -73,6 +74,21 @@ export async function GET() {
     try { avail = await staffAvailability(String(worker.id), mine) } catch (e) { console.error('[staff-portal] availability:', e) }
   }
 
+  // Games to confirm (lib/officialConfirm): at events whose officials were asked to
+  // confirm, the games this person still has to answer, and their no-login link.
+  // The staff home shows a To do card. A failure here never hides their events.
+  const confirm: Record<string, { confirmBy: string; pending: number; total: number; href: string }> = {}
+  if (worker) {
+    for (const t of upcoming.filter(t => (assigned.get(String(t.id)) ?? 0) > 0)) {
+      try {
+        const ask = await readAsk(String(t.id))
+        if (!ask) continue
+        const { pending, total } = await pendingFor(String(t.id), String(worker.id))
+        if (pending > 0) confirm[String(t.id)] = { confirmBy: ask.confirmBy, pending, total, href: `/confirm-games/${await confirmLink(String(t.id), String(worker.id))}` }
+      } catch (e) { console.error('[staff-portal] confirm:', e) }
+    }
+  }
+
   let orgName: string | null = null
   if (orgId) {
     try {
@@ -95,6 +111,7 @@ export async function GET() {
       location: String(t.location || ''), logoUrl: String(t.logoUrl || ''),
       working: working.has(String(t.id)), assignedGames: assigned.get(String(t.id)) ?? 0,
       avail: avail[String(t.id)] ?? null,
+      confirm: confirm[String(t.id)] ?? null,
     })),
   })
 }
