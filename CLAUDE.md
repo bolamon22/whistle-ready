@@ -290,6 +290,18 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   the password hash. `/register` is a server page (each organizer's Work with us link) around `RegisterForm`,
   which asks who the account is for; self-signup still never makes a staff login. The signed-out NavBar button
   says Create account, and `/login?portal=1` opens the club portal-link form.
+- **Training-video emails to one person (Oct 15).** Bo's send to Haylee Lamon from her profile sent nothing: her
+  two Staff Pool records were the only ones with no `orgId`, and `/api/training/send` reads only the sender's org
+  ("Nobody with an email matches"). An admin's sends and the Who's watched report now include records with no
+  org; everyone else stays in their org. A send that picked people who all fail to match is a 400 instead of
+  mailing the sender's copy alone (a copy with nobody picked is still the sender's own test). Every recipient of
+  every send is a row in raw table `TrainingEmail` (`lib/trainingSends.ts`: sentAt, email, workerId, byName,
+  byUserId, videoIds JSON, ok 0/1, error); `GET /api/training?workerId=` returns them as `sends` plus `email`, and
+  `PersonTraining` lists them under "Emailed to …", asks inline (no browser confirm) with "Send me a copy" (the
+  copy is the recipient's own email marked "Copy:"), and shows exactly who it went to or why not. `watchedBy`
+  counts views under every record with the same email (views are keyed by the oldest record), and
+  `/api/workers/merge` moves StaffTraining views (plays added on overlap) and TrainingEmail rows to the kept
+  record and fills an empty `orgId` from the other record or the merging director's org.
 - **Sponsors & partners (Oct 14).** Rows in AppSetting `orgSite:{orgId}.sponsors` carry `eventIds` (dated picks)
   and `series` (event labels from `seriesLabelOf`, "Every year"); both empty = every event. Public pages filter with
   `sponsorsForEvent(list, tournamentId, tournamentName)` in `lib/sponsors.ts`: pass the NAME or every-year picks don't
