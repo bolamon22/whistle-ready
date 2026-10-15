@@ -8,11 +8,13 @@ import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
 import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
 import { useRole } from '@/lib/role-context'
-import { canSeeStaffPay } from '@/lib/roleScope'
+import { canSeeStaffPay, canSeeRefLevel } from '@/lib/roleScope'
+import RefLevelPill from '@/components/RefLevelPill'
+import { REF_LEVELS, refLevelOf } from '@/lib/refLevel'
 import PersonEvents, { eventDates } from '@/components/staff/PersonEvents'
 import PersonTraining from '@/components/staff/PersonTraining'
 
-interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
+interface Worker { id:string;name:string;certLevel:string;refLevel?:number|null;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
 interface RosterEntry { id:string;workerId:string;gameTarget:number;notes:string|null }
 interface Tournament { id:string;name:string;logoUrl:string;startDate?:string;endDate?:string }
 interface InviteForm { email: string; name: string }
@@ -26,17 +28,19 @@ type ExpandMode = 'profile'|'edit'
 const BULK_FIELDS = [
   {value:'defaultRole',label:'Role'},
   {value:'certLevel',label:'Cert Level'},
+  {value:'refLevel',label:'Ref level'},   // only for those who see ref levels (lib/refLevel)
   {value:'gender',label:'Can Ref'},
   {value:'payMethod',label:'Pay Method'},
 ]
 
 // ── Edit form (outside component to prevent remount) ──
-function EditForm({ form, setForm, onSubmit, onCancel, saving }: {
+function EditForm({ form, setForm, onSubmit, onCancel, saving, levels }: {
   form: Record<string,unknown>
   setForm: (fn:(f:Record<string,unknown>)=>Record<string,unknown>)=>void
   onSubmit: (e:React.FormEvent)=>void
   onCancel: ()=>void
   saving: boolean
+  levels?: boolean   // the viewer sees and sets ref levels (lib/refLevel)
 }) {
   const roles = (form.roles as string[]) ?? [String(form.defaultRole??'ref')]
   const toggleRole = (r:string) => setForm(f => {
@@ -69,6 +73,7 @@ function EditForm({ form, setForm, onSubmit, onCancel, saving }: {
       {hasRef&&<>
         <div><label className="label">Cert Level</label><select className="select" value={String(form.certLevel??'youth')} onChange={e=>setForm(f=>({...f,certLevel:e.target.value}))}>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
         <div><label className="label">Can Ref</label><select className="select" value={String(form.gender??'both')} onChange={e=>setForm(f=>({...f,gender:e.target.value}))}>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select></div>
+        {levels&&<div><label className="label">Ref level <span className="text-slate-400 font-normal">(not shown to refs)</span></label><select className="select" value={String(form.refLevel??'')} onChange={e=>setForm(f=>({...f,refLevel:e.target.value}))}><option value="">Not ranked</option>{REF_LEVELS.map(l=><option key={l.value} value={l.value}>{l.label} ({l.color})</option>)}</select></div>}
         <div><label className="label">Pay Rate Override ($/game)</label><input className="input" type="number" min="0" step="0.01" value={String(form.payRateOverride??'')} onChange={e=>setForm(f=>({...f,payRateOverride:e.target.value}))} placeholder="Leave blank = default"/></div>
       </>}
       {hasHourly&&<div><label className="label">Hourly Rate ($/hr)</label><input className="input" type="number" min="0" step="0.01" value={String(form.hourlyRate??'')} onChange={e=>setForm(f=>({...f,hourlyRate:e.target.value}))}/></div>}
@@ -94,6 +99,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const { effectiveRole } = useRole()
   const canEdit = effectiveRole !== 'field_director'
   const showPay = canSeeStaffPay(effectiveRole)
+  const showLevels = canSeeRefLevel(effectiveRole)
   const cols = 9 - (canEdit ? 0 : 1) - (showPay ? 0 : 1)
   const [tournament, setTournament] = useState<Tournament|null>(null)
   const [allWorkers, setAllWorkers] = useState<Worker[]>([])
@@ -189,13 +195,13 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     if(expandedId===w.id&&expandMode===mode){setExpandedId(null);return}
     setExpandedId(w.id); setExpandMode(mode)
     if(mode==='edit'){
-      setEditForm({name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',notes:w.notes??''})
+      setEditForm({...(showLevels?{refLevel:refLevelOf(w.refLevel)??''}:{}),name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',notes:w.notes??''})
     }
   }
 
   async function saveEdit(e:React.FormEvent, workerId:string) {
     e.preventDefault(); setEditSaving(true)
-    const payload={...editForm,name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:editForm.payHandle||null,notes:editForm.notes||null,roles:editForm.roles}
+    const payload={...editForm,...('refLevel' in editForm?{refLevel:refLevelOf(editForm.refLevel)}:{}),name:String(editForm.name).trim(),email:editForm.email||null,phone:editForm.phone||null,payRateOverride:editForm.payRateOverride!==''?Number(editForm.payRateOverride):null,hourlyRate:editForm.hourlyRate!==''?Number(editForm.hourlyRate):null,payHandle:editForm.payHandle||null,notes:editForm.notes||null,roles:editForm.roles}
     const res=await fetch(`/api/workers/${workerId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     if(res.ok){toast.success('Updated');setExpandedId(null);load()}else{const j=await res.json().catch(()=>({}));toast.error(j.error||'Failed')}
     setEditSaving(false)
@@ -208,7 +214,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     if(!bulkField||!selected.size) return
     setBulkSaving(true)
     await Promise.all(Array.from(selected).map(id=>
-      fetch(`/api/workers/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[bulkField]:bulkValue})})
+      fetch(`/api/workers/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[bulkField]:bulkField==='refLevel'?refLevelOf(bulkValue):bulkValue})})
     ))
     toast.success(`Updated ${selected.size} staff`)
     setSelected(new Set());setBulkField('');setBulkValue('');setBulkSaving(false);load()
@@ -246,6 +252,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
             {w.email&&<div className="min-w-0"><p className="text-slate-400 text-xs mb-0.5">Email</p><a href={`mailto:${w.email}`} className="block truncate text-teal-200">{w.email}</a></div>}
             {wRoles.includes('ref')&&<>
               <div><p className="text-slate-400 text-xs mb-0.5">Cert Level</p><p>{certLabel(w.certLevel)}</p></div>
+              {showLevels&&<div><p className="text-slate-400 text-xs mb-0.5">Ref level</p><p className="flex items-center gap-1.5">{refLevelOf(w.refLevel)?<><RefLevelPill level={w.refLevel}/>{REF_LEVELS.find(l=>l.value===refLevelOf(w.refLevel))?.label}</>:'Not ranked'}</p></div>}
               <div><p className="text-slate-400 text-xs mb-0.5">Can Ref</p><p>{gLabel(w.gender)}</p></div>
             </>}
             {showPay&&<div><p className="text-slate-400 text-xs mb-0.5">Pay Method</p><p>{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</p></div>}
@@ -464,8 +471,8 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
                 <RefGenderSelect value={gender} onChange={v=>{setGender(v);setSelected(new Set())}}/>
-                <select aria-label="Level" className={`select !w-auto text-sm flex-shrink-0 ${certFilter!=='all'?'!border-teal-400 !text-teal-800':''}`} value={certFilter} onChange={e=>setCertFilter(e.target.value)}>
-                  <option value="all">All levels</option>
+                <select aria-label="Cert level" className={`select !w-auto text-sm flex-shrink-0 ${certFilter!=='all'?'!border-teal-400 !text-teal-800':''}`} value={certFilter} onChange={e=>setCertFilter(e.target.value)}>
+                  <option value="all">All certs</option>
                   {CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 <select aria-label="Games" className={`select !w-auto text-sm flex-shrink-0 ${gamesFilter!=='all'?'!border-teal-400 !text-teal-800':''}`} value={gamesFilter} onChange={e=>setGamesFilter(e.target.value as 'all'|'none'|'some')}>
@@ -491,12 +498,13 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               <span className="text-sm font-medium text-teal-700">{selected.size} selected</span>
               <select className="select !w-auto text-sm" value={bulkField} onChange={e=>{setBulkField(e.target.value);setBulkValue('')}}>
                 <option value="">— choose field to edit —</option>
-                {BULK_FIELDS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
+                {BULK_FIELDS.filter(f=>f.value!=='refLevel'||showLevels).map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
               {bulkField&&<>
                 {bulkField==='defaultRole'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>}
                 {bulkField==='certLevel'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>}
                 {bulkField==='gender'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select>}
+                {bulkField==='refLevel'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{REF_LEVELS.map(l=><option key={l.value} value={l.value}>{l.label} ({l.color})</option>)}<option value="none">Not ranked</option></select>}
                 {bulkField==='payMethod'&&<select className="select !w-auto text-sm" value={bulkValue} onChange={e=>setBulkValue(e.target.value)}><option value="">Pick…</option>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select>}
                 <button onClick={applyBulk} className="btn-primary btn-sm" disabled={bulkSaving||!bulkValue}>{bulkSaving?'Saving…':'Apply to Selected'}</button>
               </>}
@@ -522,6 +530,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                         {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
                         {wRoles.includes('ref')&&<>
                           <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                          {showLevels&&<RefLevelPill level={w.refLevel} className="self-center"/>}
                           <span className="badge bg-white border border-slate-200 text-slate-500">{gLabel(w.gender)}</span>
                         </>}
                         {showPay&&<span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}{w.payHandle?` · ${w.payHandle}`:''}</span>}
@@ -542,7 +551,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   {isExpanded&&expandMode==='profile'&&<div className="border-t border-slate-200">{renderProfile(w,wRoles)}</div>}
                   {isExpanded&&expandMode==='edit'&&(
                     <div className="px-3 py-4 bg-teal-50/40 border-t border-slate-200">
-                      <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving}/>
+                      <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving} levels={showLevels}/>
                     </div>
                   )}
                 </div>
@@ -584,7 +593,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                       <td className="px-4 py-2">
                         {wRoles.includes('ref')
                           ? <div className="flex flex-col gap-0.5">
-                              <span className={`badge w-fit ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                              <span className="flex items-center gap-1"><span className={`badge w-fit ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>{showLevels&&<RefLevelPill level={w.refLevel}/>}</span>
                               <span className="text-xs text-slate-400">{gLabel(w.gender)}</span>
                             </div>
                           : <span className="text-slate-400">—</span>}
@@ -624,7 +633,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     {isExpanded&&expandMode==='edit'&&(
                       <tr key={`${w.id}-e`}>
                         <td colSpan={cols} className="px-6 py-5 bg-teal-50/40 border-b border-slate-200">
-                          <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving}/>
+                          <EditForm form={editForm} setForm={setEditForm} onSubmit={e=>saveEdit(e,w.id)} onCancel={()=>setExpandedId(null)} saving={editSaving} levels={showLevels}/>
                         </td>
                       </tr>
                     )}
@@ -661,9 +670,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   <option value="all">All roles</option>
                   {WORKER_ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
-                <label className="text-sm text-slate-500 hidden sm:inline">Level:</label>
-                <select className="select !w-auto min-w-0 text-sm" value={addCert} onChange={e=>setAddCert(e.target.value)}>
-                  <option value="all">All levels</option>
+                <label className="text-sm text-slate-500 hidden sm:inline">Cert:</label>
+                <select aria-label="Cert level" className="select !w-auto min-w-0 text-sm" value={addCert} onChange={e=>setAddCert(e.target.value)}>
+                  <option value="all">All certs</option>
                   {CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 <RefGenderSelect value={gender} onChange={setGender}/>
@@ -683,6 +692,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                       {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
                       {wRoles.includes('ref')&&<>
                         <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
+                        {showLevels&&<RefLevelPill level={w.refLevel} className="self-center"/>}
                         <span className={`badge ${w.gender==='boys'?'bg-sky-100 text-sky-700':w.gender==='girls'?'bg-pink-100 text-pink-700':'bg-violet-100 text-violet-700'}`}>{w.gender==='boys'?'Boys':w.gender==='girls'?'Girls':'Both'}</span>
                       </>}
                     </div>
@@ -705,7 +715,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">{wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}</div>
                   </td>
-                  <td className="px-4 py-3">{wRoles.includes('ref')?<div className="flex flex-wrap items-center gap-1"><span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span><span className={`badge ${w.gender==='boys'?'bg-sky-100 text-sky-700':w.gender==='girls'?'bg-pink-100 text-pink-700':'bg-violet-100 text-violet-700'}`}>{w.gender==='boys'?'Boys':w.gender==='girls'?'Girls':'Both'}</span></div>:<span className="text-slate-400">—</span>}</td>
+                  <td className="px-4 py-3">{wRoles.includes('ref')?<div className="flex flex-wrap items-center gap-1"><span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>{showLevels&&<RefLevelPill level={w.refLevel}/>}<span className={`badge ${w.gender==='boys'?'bg-sky-100 text-sky-700':w.gender==='girls'?'bg-pink-100 text-pink-700':'bg-violet-100 text-violet-700'}`}>{w.gender==='boys'?'Boys':w.gender==='girls'?'Girls':'Both'}</span></div>:<span className="text-slate-400">—</span>}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">{w.phone&&<div>{w.phone}</div>}{w.email?<div>{w.email}</div>:<div className="text-slate-400">{w.phone?'No email':'No email or phone'}</div>}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="btn-primary btn-sm">+ Add</button>
