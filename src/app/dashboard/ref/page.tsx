@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import MyAvailability, { type AvDay } from '@/components/MyAvailability'
 import { availLocked } from '@/lib/availabilityAnswers'
 import StaffW9Card from '@/components/StaffW9Card'
-import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin, Siren, Bell, ArrowRight } from 'lucide-react'
+import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin, Siren, Bell, ArrowRight, Trophy } from 'lucide-react'
 import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
 import { teamRefKey } from '@/lib/names'
@@ -29,6 +29,7 @@ const TOOLS: { href: string; label: string; icon: React.ComponentType<{ size?: n
   { href: 'checklist',      label: 'Setup checklist', icon: ClipboardCheck, roles: ['field_ops'] },
   { href: 'incidents',      label: 'Incidents',       icon: TriangleAlert,  roles: null },
   { href: 'emergency',      label: 'Emergency plan',  icon: Siren,          roles: null },
+  { href: 'awards',         label: 'Awards & photos', icon: Trophy,         roles: ['field_ops'] },
   { href: 'rules',          label: 'Rules',           icon: BookOpen,       roles: ['ref', 'scorekeeper'] },
 ]
 interface Crew { role: string; name: string; phone: string }
