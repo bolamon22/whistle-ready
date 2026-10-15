@@ -3,7 +3,7 @@ title: See who can work each day, and remind the ones who haven't answered
 category: Staff
 order: 425
 routes: /tournaments/*/availability
-keywords: availability unavailability unavailable can't work all day morning afternoon game times who answered no answer yet reminder remind email staff coverage refs short set for them texted schedule days
+keywords: availability unavailability unavailable can't work all day morning afternoon game times who answered no answer yet reminder remind email staff coverage refs short set for them texted schedule days ref level
 ---
 Everyone on the event's staff roster tells you which days they can work from their staff home: **All day**, **Morning** (games that start before noon), **Afternoon** (games at noon or later), only certain start times, or **Can't work**. Every answer is saved, so this page shows who has answered and who hasn't.
 
@@ -34,6 +34,7 @@ They see it on their staff home marked **Set by** your name, and can still chang
 - Amber **Morning**, **Afternoon** or times like **8–11 AM**: only those games.
 - Red **Can't work**: not that day.
 - Dashed **No answer**: hasn't answered yet.
+- A red, yellow or green **L1**, **L2** or **L3** beside a ref's name is their ref level, not an answer. Directors, admins and assigners see it.
 
 **Good to know:**
 - Auto-assign only puts people on games they said they can work. People who haven't answered are still treated as available.

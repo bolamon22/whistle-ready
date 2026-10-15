@@ -3,7 +3,7 @@ title: Add and edit people in the Staff Pool
 category: Staff
 order: 400
 routes: /staff
-keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh which events add to event tournament roster training videos watched send videos
+keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh which events add to event tournament roster training videos watched send videos ref level ref levels rank ranking 1 2 3 level 1 level 2 level 3 red yellow green best refs top refs
 ---
 The Staff Pool is your organization's master list of everyone who works your events: refs, scorekeepers, athletic trainers and field operations. Each tournament's roster is picked from this pool.
 
@@ -21,11 +21,16 @@ The Staff Pool is your organization's master list of everyone who works your eve
 
 **Training videos:** their **Profile** also shows which of their training videos they've watched, and **Send the N not watched** emails them just to that person. The **Training** column shows how many they've watched, for example **3/11**. See "Send training videos and see who watched".
 
+**Ref levels:** your assigners' own ranking of their refs, from **Level 1** (red, the lowest) to **Level 2** (yellow) and **Level 3** (green). It's separate from **Cert Level** (youth, high school, college), which sets pay.
+- To set one, click **Edit** and pick it under **Ref level**. For several refs at once, tick them and choose **Ref level** in the bar.
+- The **Level** column shows each ref's red, yellow or green **L1**, **L2** or **L3**, and you can sort by it. **Ref level: all** finds the refs at one level, or **Refs not ranked**.
+- Only directors, admins and assigners see levels, and an assigner sees and sets them only for the staff groups they run. Refs never see their own.
+
 **W-9s:** staff upload their own on their staff portal. **W-9 ✓** under **Pay Method** means one is on file; click **Profile** and then **View W-9 →** to open it. Only directors and admins can open a W-9.
 
 **To change many people at once:**
 1. Tick the box next to each person.
-2. In the bar that appears, pick a field from **— choose field to edit —** (for example **Role** or **Cert Level**), pick the new value, and click **Apply to Selected**.
+2. In the bar that appears, pick a field from **— choose field to edit —** (for example **Role**, **Cert Level** or **Ref level**), pick the new value, and click **Apply to Selected**.
 
 **To add several people to a tournament:** tick them, pick the tournament from **Add to event…** in the bar, and confirm. Anyone already on it is left as they were.
 

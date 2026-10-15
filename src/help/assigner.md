@@ -3,7 +3,7 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: notify officials, send assignments, email refs, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games
+keywords: notify officials, send assignments, email refs, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
@@ -11,7 +11,7 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **To assign staff on the grid:**
 1. Pick the day from the tabs.
-2. The staff bar above the grid lists everyone on the tournament roster. Use **Find a name**, sort by **Fewest games** or **A–Z**, and filter **All**, **Boys refs**, **Girls refs** or **SK**. The button at the end of the bar (**All** with a count) opens the full list. The number after a name is how many games they have that day.
+2. The staff bar above the grid lists everyone on the tournament roster. Use **Find a name**, sort by **Fewest games** or **A–Z**, and filter **All**, **Boys refs**, **Girls refs** or **SK**. The button at the end of the bar (**All** with a count) opens the full list. The number after a name is how many games they have that day. A red, yellow or green **L1**, **L2** or **L3** is the ref's level (3 is the highest), which you set on the Staff Pool; only directors, admins and assigners see it.
 3. Drag a name onto a game's slot, or click the slot and pick a name.
 4. To change how many refs a game needs, use the minus and plus buttons on the game. To set every game that day at once, click **1**, **2** or **3** next to **Refs per game**.
 

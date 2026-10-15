@@ -290,6 +290,17 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   the password hash. `/register` is a server page (each organizer's Work with us link) around `RegisterForm`,
   which asks who the account is for; self-signup still never makes a staff login. The signed-out NavBar button
   says Create account, and `/login?portal=1` opens the club portal-link form.
+- **Ref levels (Oct 15).** The ref assigners' own 1-3 ranking of their refs (1 lowest, red; 2 yellow; 3 green),
+  separate from `certLevel` (youth/HS/college, which sets pay). `lib/refLevel.ts` (pure: `REF_LEVELS`,
+  `refLevelOf`), `components/RefLevelPill.tsx` (solid "L1"-"L3", unlike the board's tinted game-count pills),
+  `lib/refLevelDb.ts` (server: raw INTEGER `Worker.refLevel`, NULL = not ranked, column made on first use;
+  `setRefLevel`, `refLevelsFor`). It follows the pay rule: `refLevel` is in roleScope's `WORKER_PAY_KEYS`, so
+  `redactWorker` blanks it and `stripWorkerUpdate` drops it for anyone who doesn't see that person's pay
+  (`canSeeRefLevel` = admin, director, assigner; an assigner only for their pay groups). Refs never see their own:
+  nothing they read returns it. Set in the Staff Pool and Staff roster edit forms and bulk bars (PATCH/POST
+  `/api/workers`); shown on the Staff Pool (Level column, sort, filter), roster, the Assigner (staff bar, slot
+  pickers, compact chips), Availability (`level` from `/api/availability/answers`) and `/staff/[id]`. Merge keeps
+  the kept record's level, else the other's. Not used by Auto-assign.
 - **Training-video emails to one person (Oct 15).** Bo's send to Haylee Lamon from her profile sent nothing: her
   two Staff Pool records were the only ones with no `orgId`, and `/api/training/send` reads only the sender's org
   ("Nobody with an email matches"). An admin's sends and the Who's watched report now include records with no
