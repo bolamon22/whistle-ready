@@ -130,6 +130,14 @@ rebuild, and commit through GitHub Desktop itself for multi-file/dir changes. A 
 - Chrome stealing frontmost focus blocks clicks on GitHub Desktop (it's read-tier) — re-open GHD or
   use Ctrl+P. GHD may open on a different monitor — use `switch_display`.
 
+### Tooling gotcha — line endings (CRLF)
+Bo's Windows checkout turns most files' LF into CRLF in the working tree, but the repo itself keeps
+them LF; only about ten files (`git ls-files --eol src | grep i/crlf`: games/[id], ref/assignments,
+registration-payments, staff/[id] page, ...) are CRLF in git. Write a file with the line endings
+the INDEX has (`git ls-files --eol <file>`: `i/lf` or `i/crlf`), never the working tree's: a CRLF
+copy of an `i/lf` file commits as a whole-file rewrite (Oct 16 2026, admin/org route, redone
+before push). Python text-mode edits turn CRLF into LF, so edit `i/crlf` files byte-safe.
+
 ### Tooling gotcha — raw-query column types (Prisma 5.22 + libSQL)
 The libSQL adapter picks a type for each column of a raw query, and one value that doesn't fit it
 fails the WHOLE query with "Raw query failed. Code: `N/A`. Message: `N/A`", not just that row:
