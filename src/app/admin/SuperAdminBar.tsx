@@ -3,18 +3,22 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ArrowRight, Check, ChevronDown, Pencil } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Eye, Pencil } from 'lucide-react'
+import { useRole } from '@/lib/role-context'
 
 // The admin pages' tabs, under the app header. Light, like the rest of the app,
 // since the Oct 13 2026 header redesign (it was a dark bar with its own brand and
 // a Back link). Users is called Logins now, to match the People menu.
+//
+// Viewing picks the organization the admin pages and the app show. Each one shows its
+// plan (lib/orgPlans), and the eye opens it the way its director sees it (View as,
+// lib/previewView).
 
-interface Org { id: string; name: string; slug: string; subscriptionTier: string }
+interface Org { id: string; name: string; slug: string; plan?: string; planLabel?: string }
 
-const TIER_DOT: Record<string, string> = {
-  starter: 'bg-slate-400',
-  pro: 'bg-blue-500',
-  enterprise: 'bg-purple-500',
+const PLAN_DOT: Record<string, string> = {
+  tournament: 'bg-teal-500',
+  assigner: 'bg-indigo-500',
 }
 
 const TABS = [
@@ -33,6 +37,7 @@ export default function SuperAdminBar() {
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const dropRef = useRef<HTMLDivElement>(null)
+  const { setPreview } = useRole()
 
   useEffect(() => {
     fetch('/api/admin/orgs').then(r => r.json()).then(d => setOrgs(Array.isArray(d) ? d : [])).catch(() => {})
@@ -87,14 +92,14 @@ export default function SuperAdminBar() {
       <div className="relative flex-shrink-0" ref={dropRef}>
         <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="true"
           className="flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:border-slate-300">
-          <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${activeOrg ? TIER_DOT[activeOrg.subscriptionTier] ?? 'bg-slate-400' : 'bg-emerald-500'}`} />
+          <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${activeOrg ? PLAN_DOT[activeOrg.plan ?? ''] ?? 'bg-slate-400' : 'bg-emerald-500'}`} />
           <span className="hidden font-medium text-slate-600 sm:inline">Viewing</span>
           <span className="max-w-[130px] truncate font-bold text-slate-900 sm:max-w-[200px]">{activeOrg ? activeOrg.name : 'All organizations'}</span>
           <ChevronDown size={13} aria-hidden className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+          <div className="absolute right-0 top-full z-50 mt-2 w-[360px] max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
             <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Switch organization</p>
             <button type="button" onClick={() => switchOrg(null)} aria-current={!activeOrgId ? 'true' : undefined}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-50 ${!activeOrgId ? 'bg-teal-50' : ''}`}>
@@ -112,12 +117,16 @@ export default function SuperAdminBar() {
                 return (
                   <div key={org.id} className={`flex items-center rounded-xl ${on ? 'bg-teal-50' : 'hover:bg-slate-50'}`}>
                     <button type="button" onClick={() => switchOrg(org.id)} aria-current={on ? 'true' : undefined} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left">
-                      <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${TIER_DOT[org.subscriptionTier] ?? 'bg-slate-400'}`} />
+                      <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${PLAN_DOT[org.plan ?? ''] ?? 'bg-slate-400'}`} />
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-slate-900">{org.name}</span>
-                        <span className="block text-xs capitalize text-slate-600">{org.subscriptionTier}</span>
+                        <span className="block truncate text-xs text-slate-600">Plan: {org.planLabel || 'Tournament'}</span>
                       </span>
                       {on && <Check size={16} aria-hidden className="ml-auto flex-shrink-0 text-teal-700" />}
+                    </button>
+                    <button type="button" onClick={() => { setOpen(false); void setPreview(org.id, 'director') }} title="View as its director" aria-label={`View ${org.name} as its director`}
+                      className="flex-shrink-0 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-900">
+                      <Eye size={15} aria-hidden />
                     </button>
                     <button type="button" onClick={() => switchOrg(org.id, '/')} title="Open its tournaments" aria-label={`Open ${org.name}'s tournaments`}
                       className="flex-shrink-0 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-900">
