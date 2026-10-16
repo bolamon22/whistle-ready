@@ -68,6 +68,14 @@ export default function TournamentsDashboard() {
   // are the director's job (Oct 14 2026). Show each link only to roles that can open it.
   const can = (href: string) => roleCanAccess(effectiveRole, href, planOff)
   const runsEvents = effectiveRole === 'admin' || effectiveRole === 'director'
+  // New Tournament asks only what the organization's plan uses (Bo, Oct 16 2026, setting
+  // up a Head Assigner: "We need to have some sort of event setup ... the name of the
+  // tournament and stuff"). Without Registration there's no team registration or fee: its
+  // "Import from another platform" went to a page the plan doesn't have. Without Event
+  // setup & scheduling there's no schedule increment, fields, daily times or divisions:
+  // the board takes its fields, divisions and days from the games it imports.
+  const regOn = !planOff.includes('registration')
+  const schedOn = !planOff.includes('scheduling')
   const [taskEvents, setTaskEvents] = useState<{ today: string; byId: Record<string, OverviewEvent> }>({ today: '', byId: {} })
   const onTaskEvents = useCallback((events: OverviewEvent[], today: string) => {
     setTaskEvents({ today, byId: Object.fromEntries(events.map(e => [e.id, e])) })
@@ -175,7 +183,7 @@ export default function TournamentsDashboard() {
         name: form.name.trim(), sport: form.sport, startDate: form.startDate,
         endDate: form.endDate, location: form.location,
         scheduleIncrement: parseInt(form.scheduleIncrement) || 50,
-        registrationDivisions: JSON.stringify(divisions),
+        registrationDivisions: JSON.stringify(regOn || schedOn ? divisions : []),
       })
     })
     if (r.ok) {
@@ -185,7 +193,7 @@ export default function TournamentsDashboard() {
         const fee = parseInt(form.teamFee)
         const patch: any = {}
         if (createLogoUrl) patch.logoUrl = createLogoUrl
-        if (form.regMode === 'builtin' && fee > 0) patch.registrationPricing = JSON.stringify({ tiers: [{ max: null, price: fee }], flats: [], dates: [] })
+        if (regOn && form.regMode === 'builtin' && fee > 0) patch.registrationPricing = JSON.stringify({ tiers: [{ max: null, price: fee }], flats: [], dates: [] })
         if (Object.keys(patch).length) {
           try { await fetch(`/api/tournaments/${created.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }) } catch { /* non-fatal */ }
         }
@@ -199,7 +207,7 @@ export default function TournamentsDashboard() {
           for (let d = new Date(sd); d <= ed; d.setDate(d.getDate() + 1)) days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
         }
         const defaultAvailability = (form.dayStart && form.dayEnd) ? days.map(date => ({ date, slots: [{ start: form.dayStart, end: form.dayEnd }] })) : []
-        if (fields.length || defaultAvailability.length) {
+        if (schedOn && (fields.length || defaultAvailability.length)) {
           try {
             await fetch(`/api/venues/${created.id}`, {
               method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -209,7 +217,7 @@ export default function TournamentsDashboard() {
         }
       }
       toast.success('Tournament created')
-      if (form.regMode === 'import' && created?.id) {
+      if (regOn && form.regMode === 'import' && created?.id) {
         window.location.href = `/tournaments/${created.id}/registrations/import`
         return
       }
@@ -455,14 +463,15 @@ export default function TournamentsDashboard() {
               </div>
               <div><label className="label">Start Date</label><input className="input" type="date" value={form.startDate} onChange={e=>setF('startDate',e.target.value)}/></div>
               <div><label className="label">End Date</label><input className="input" type="date" value={form.endDate} onChange={e=>setF('endDate',e.target.value)}/></div>
-              <div>
+              {schedOn && <div>
                 <label className="label">Schedule Increment (minutes)</label>
                 <input className="input" type="number" min="5" max="120" step="5" value={form.scheduleIncrement} onChange={e=>setF('scheduleIncrement',e.target.value)} placeholder="50"/>
-              </div>
+              </div>}
               <div className="sm:col-span-2 lg:col-span-2">
                 <label className="label">Location</label>
                 <input className="input" placeholder="e.g. Village Park, Pleasanton CA" value={form.location} onChange={e=>setF('location',e.target.value)}/>
               </div>
+              {schedOn && <>
               <div>
                 <label className="label">Number of fields</label>
                 <input className="input" type="number" min="0" max="30" step="1" value={form.numFields} onChange={e=>setF('numFields',e.target.value)} placeholder="e.g. 6"/>
@@ -476,15 +485,16 @@ export default function TournamentsDashboard() {
                 <label className="label">Daily end time</label>
                 <input className="input" type="time" value={form.dayEnd} onChange={e=>setF('dayEnd',e.target.value)}/>
               </div>
-              <div>
+              </>}
+              {regOn && <div>
                 <label className="label">Team registration</label>
                 <select className="input" value={form.regMode} onChange={e=>setF('regMode',e.target.value)}>
                   <option value="builtin">Use built-in registration</option>
                   <option value="import">Import from another platform (CSV)</option>
                 </select>
                 <p className="text-[11px] text-gray-400 mt-1">{form.regMode === 'import' ? "You'll upload your CSV right after creating." : 'Teams register & pay through Whistle Ready.'}</p>
-              </div>
-              {form.regMode === 'builtin' && (
+              </div>}
+              {regOn && form.regMode === 'builtin' && (
                 <div>
                   <label className="label">Team registration fee ($)</label>
                   <input className="input" type="number" min="0" step="any" value={form.teamFee} onChange={e=>setF('teamFee',e.target.value)} placeholder="1495"/>
@@ -504,10 +514,12 @@ export default function TournamentsDashboard() {
               </div>
             </div>
 
-            <p className="text-xs text-gray-400 -mt-1">You can add or change any of this later in Settings — none of it is locked in.</p>
+            <p className="text-xs text-gray-400 -mt-1">{schedOn
+              ? 'You can add or change any of this later in Settings — none of it is locked in.'
+              : 'Change any of this later with Edit on the event’s card. The games, with their fields and divisions, come in when you import the schedule on the Assigner board.'}</p>
 
             {/* Divisions section */}
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
+            {(regOn || schedOn) && <div className="border border-gray-200 rounded-xl overflow-hidden">
               <button type="button" onClick={() => setShowDivisions(v => !v)}
                 className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
                 <div className="flex items-center gap-2">
@@ -553,7 +565,7 @@ export default function TournamentsDashboard() {
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             <div className="flex gap-2 pt-1">
               <button type="submit" className="btn-primary" disabled={saving}>{saving?'Creating…':'Create Tournament'}</button>
