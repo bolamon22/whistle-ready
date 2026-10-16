@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import LandingNav from './LandingNav'
-import { BRAND_FAQ } from '@/lib/brandFaq'
+import { BRAND, BRAND_FAQ } from '@/lib/brandFaq'
 import {
   Users, LayoutGrid, CalendarDays, Activity, DollarSign, ClipboardList,
   ShieldCheck, Check, ArrowRight, Search, Eye, Flag, UserRound, UserCog, Loader2,
@@ -327,6 +327,7 @@ export default function Landing() {
           <p className="flex gap-4">
             <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms</Link>
+            <a href={BRAND.instagram} target="_blank" rel="noopener me" className="hover:text-slate-600 transition-colors">Instagram</a>
           </p>
         </div>
       </footer>

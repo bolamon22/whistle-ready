@@ -14,6 +14,10 @@ export const BRAND = {
   legalName: 'Whistle Ready LLC',
   url: 'https://whistleready.app',
   logo: 'https://whistleready.app/icon-192.png',
+  // Official social profiles. Add each new one here: it becomes schema.org sameAs,
+  // which tells search and answer engines these accounts are the same Whistle Ready.
+  sameAs: ['https://www.instagram.com/getwhistleready/'],
+  instagram: 'https://www.instagram.com/getwhistleready/',
   locality: 'Coral Springs',
   region: 'FL',
   country: 'US',
@@ -63,6 +67,7 @@ export function brandJsonLd() {
     alternateName: [BRAND.name, ...BRAND.alternateNames],
     url: BRAND.url,
     logo: BRAND.logo,
+    sameAs: [...BRAND.sameAs],
     address: { '@type': 'PostalAddress', addressLocality: BRAND.locality, addressRegion: BRAND.region, addressCountry: BRAND.country },
   }
   return {
