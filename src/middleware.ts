@@ -4,6 +4,7 @@ import { roleCanAccess } from './lib/routeAccess'
 import { PREVIEW_ROLES } from './lib/roleScope'
 import { LEGAL_PATHS, isLegalPath } from './lib/legalRoutes'
 import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES, aliasRedirectForHost } from './lib/orgDomains'
+import { orgScoped } from './lib/orgScope'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm', '/confirm-games', '/share', '/guides', ...LEGAL_PATHS]  // /privacy + /terms = the privacy policy and terms of use (Intuit's QuickBooks review links to them); /housing/[code] = housing board; /confirm/[regId] = club team-confirmation (the id IS the key, like /pay); /confirm-games/[token] = an official confirming their games (lib/officialConfirm; already covered by '/confirm', named so a tighter '/confirm' can't lock officials out); /share/[regId] = ready-made messages a director sends their own families (same key model, and they often have no account yet)  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized', '/switch-org']
@@ -29,14 +30,14 @@ const ROLE_HOME: Record<string, string> = {
 // Page access lives in lib/routeAccess, shared with the tournament nav so a tab
 // the role cannot open is not shown either.
 
-// One login, several organizations (lib/orgMembers). These roles run an
-// organization's events, and they work one organization at a time: an event of any
-// other organization is turned away, its API answered as if nobody were signed in
-// (the field director rule below, applied to organizations) and its staff pages sent
-// through the switcher when the login is a member there, else home. Refs and
+// One login, several organizations (lib/orgMembers). Directors, schedulers,
+// assigners and field directors (lib/orgScope) work one organization at a time: an
+// event of any other organization is turned away, its API answered as if nobody were
+// signed in (the field director rule below, applied to organizations) and its staff
+// pages sent through the switcher when the login is a member there, else home. Refs and
 // scorekeepers (staff), clubs and families are not limited here: what they can do on
-// an event is already theirs alone. Admins see everything.
-const ORG_SCOPED = ['director', 'scheduler', 'assigner', 'field_director']
+// an event is already theirs alone. Admins see everything. Routes that reach an event
+// through another id (a game, a registration) check it with orgGate in lib/apiAuth.
 const EVENT_ORG_MS = 60_000
 const eventOrgs = new Map<string, { org: string | null; at: number }>()
 
@@ -58,7 +59,7 @@ async function eventOrg(req: NextRequest, id: string): Promise<string | null | u
 
 /** The event's organization when it isn't the one this login is working in. */
 async function inOtherOrg(req: NextRequest, t: { role?: unknown; orgId?: unknown }, eventId: string): Promise<string | null> {
-  if (!ORG_SCOPED.includes(String(t.role || ''))) return null
+  if (!orgScoped(t.role)) return null
   const org = await eventOrg(req, eventId)
   return org && org !== (t.orgId ?? null) ? org : null
 }
@@ -161,7 +162,7 @@ export async function middleware(req: NextRequest) {
   // list rides in the login token). A call to any other event's API goes through
   // without the login, so they get what the public gets there and no staff data. One
   // check here instead of one in every /api/tournaments/<id> route. The same goes for
-  // an event of another organization (ORG_SCOPED above).
+  // an event of another organization (lib/orgScope).
   const eventApi = /^\/api\/tournaments\/([^/]+)(?:\/|$)/.exec(pathname)
   if (eventApi && req.cookies.getAll().some(c => c.name.includes('next-auth.session-token'))) {
     const t = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
@@ -259,7 +260,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(ROLE_HOME.field_director, req.url))
   }
 
-  // An event of another organization (ORG_SCOPED above): switch to it when this login
+  // An event of another organization (lib/orgScope): switch to it when this login
   // works there too (an emailed link into Sunshine's event while working in your
   // own), else home.
   if (eventPage && !isAdminPreviewing) {

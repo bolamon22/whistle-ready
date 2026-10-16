@@ -4,6 +4,9 @@ import { cookies } from 'next/headers'
 import { authOptions } from '@/lib/auth'
 import { PREVIEW_ROLES, canSeeMoney, canSeeStaffPay } from '@/lib/roleScope'
 import { roleHasFeature } from './routeAccess'
+import { tournamentOrgId } from '@/lib/org'
+import { prisma } from '@/lib/db'
+import { orgScoped } from '@/lib/orgScope'
 
 // Shared authorization for API route handlers.
 //
@@ -41,6 +44,32 @@ export function eventGate(gate: { events: string[] | null }, tournamentId: strin
   if (!gate.events) return null
   if (tournamentId && gate.events.includes(String(tournamentId))) return null
   return NextResponse.json({ error: 'That event is not one of yours.' }, { status: 403 })
+}
+
+/** One organization at a time (lib/orgScope, lib/orgMembers): a director, scheduler,
+ *  assigner or field director gets another organization's event refused as if it
+ *  didn't exist. Middleware does this for every /api/tournaments/<id> route; a route
+ *  that reaches the event through something else (a game, a registration or a payment
+ *  by its own id, or an event id in the body) calls this once it knows the event.
+ *  An event with no organization is open as before. Admins (even in View as), staff,
+ *  clubs and families aren't limited here. Returns the refusal, or null. */
+export async function orgGate(gate: { role: string; orgId: string | null; session?: any }, tournamentId: string | null | undefined): Promise<NextResponse | null> {
+  if (!tournamentId || gate.session?.user?.role === 'admin' || !orgScoped(gate.role)) return null
+  const org = await tournamentOrgId(String(tournamentId))
+  return org && org !== (gate.orgId ?? null) ? NextResponse.json({ error: 'Not found' }, { status: 404 }) : null
+}
+
+/** orgGate for a team registration by its id (its event's organization). */
+export async function orgGateRegistration(gate: { role: string; orgId: string | null; session?: any }, registrationId: string | null | undefined): Promise<NextResponse | null> {
+  if (!registrationId || gate.session?.user?.role === 'admin' || !orgScoped(gate.role)) return null
+  const r = await prisma.teamRegistration.findUnique({ where: { id: String(registrationId) }, select: { tournamentId: true } })
+  return r ? orgGate(gate, r.tournamentId) : null
+}
+
+/** orgGate for a record that belongs to an organization itself (a Staff Pool record). */
+export function orgGateFor(gate: { role: string; orgId: string | null; session?: any }, orgId: string | null | undefined): NextResponse | null {
+  if (!orgId || gate.session?.user?.role === 'admin' || !orgScoped(gate.role)) return null
+  return orgId !== (gate.orgId ?? null) ? NextResponse.json({ error: 'Not found' }, { status: 404 }) : null
 }
 
 // "View as": an admin previewing a role gets that role's answers from the API
