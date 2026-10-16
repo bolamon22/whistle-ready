@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGateRegistration, requireStaff } from '@/lib/apiAuth'
 
 export async function POST(req: NextRequest) {
   // Auth (Aug 2026): staff only — was previously callable with no auth.
@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
   if (!registrationId || !amount || !receivedAt) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  // Only registrations of the organization this login works in (lib/orgScope).
+  const away = await orgGateRegistration(gate, String(registrationId)); if (away) return away
   const payment = await prisma.registrationPayment.create({
     data: {
       registrationId,

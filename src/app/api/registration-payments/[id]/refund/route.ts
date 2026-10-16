@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGateRegistration, requireStaff } from '@/lib/apiAuth'
 
 // POST: refund a Stripe-backed payment (full or partial) and record the
 // negative payment row so invoiced/paid/balance stay true in the app.
@@ -14,6 +14,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const payment = await prisma.registrationPayment.findUnique({ where: { id: params.id } })
     if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+    // Only payments of the organization this login works in (lib/orgScope).
+    const away = await orgGateRegistration(gate, payment.registrationId); if (away) return away
     const piMatch = (payment.notes || '').match(/pi_[A-Za-z0-9]+/)
     if (!piMatch) return NextResponse.json({ error: 'Not a Stripe payment — adjust this one manually.' }, { status: 400 })
     const piId = piMatch[0]

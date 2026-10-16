@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireMoney } from '@/lib/apiAuth'
+import { orgGateRegistration, requireMoney } from '@/lib/apiAuth'
 import { loadInvoice } from '@/lib/invoice'
 import { buildInvoicePdf, invoiceFileName, money } from '@/lib/invoicePdf'
 import { sendEmail, orgSender } from '@/lib/email'
@@ -65,6 +65,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const gate = await requireMoney()
   if (!gate.ok) return gate.res
+  const away = await orgGateRegistration(gate, params.id); if (away) return away
   let body: { toClub?: unknown; also?: unknown; note?: unknown } = {}
   try { body = await req.json() } catch { /* defaults below */ }
 

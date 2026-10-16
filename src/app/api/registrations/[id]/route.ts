@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { recordTeamPayment } from '@/lib/paymentGuard'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGateRegistration, requireStaff } from '@/lib/apiAuth'
 import { cleanName, nameKey } from '@/lib/names'
 import { renameTeamRefs, renameClubRefs, removeTeamRefs } from '@/lib/teamRename'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
@@ -104,6 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // deletes + recreates the team list -- a travel edit must never do that.
   if (body.travel) {
     const gate = await requireStaff(); if (!gate.ok) return gate.res
+    const away = await orgGateRegistration(gate, params.id); if (away) return away
     await ensureRegistrationColumns()
     try {
       await prisma.$executeRawUnsafe(
@@ -117,7 +118,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
   // Full staff edit below (deletes + recreates the team list) -- never anonymous.
+  // Only registrations of the organization this login works in (lib/orgScope).
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const away = await orgGateRegistration(gate, params.id); if (away) return away
 
   const {
     clubName, clubContact, contactEmail, contactPhone,
@@ -228,6 +231,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const away = await orgGateRegistration(gate, params.id); if (away) return away
   const reg = await prisma.teamRegistration.findUnique({ where: { id: params.id }, select: { tournamentId: true, teams: { select: { teamName: true, division: true } } } })
   await prisma.teamRegistration.update({
     where: { id: params.id },

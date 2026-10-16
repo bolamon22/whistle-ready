@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGate, requireStaff } from '@/lib/apiAuth'
 import { runCommSend, isSendKind, type SendKind } from '@/lib/commSend'
 import { OFFICE_CC } from '@/lib/email'
 import { createScheduled } from '@/lib/commSchedule'
@@ -16,6 +16,8 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() } catch { /* validated below */ }
 
   const tournamentId = String(body.tournamentId ?? '')
+  // Only clubs of the organization this login works in (lib/orgScope).
+  const away = await orgGate(gate, tournamentId); if (away) return away
   const kind = String(body.kind ?? '')
   const regIds = (Array.isArray(body.regIds) ? body.regIds : []).map(x => String(x)).filter(Boolean)
   const subject = String(body.subject ?? '')

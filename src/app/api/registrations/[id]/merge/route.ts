@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { copyAccess } from '@/lib/clubAccess'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGateRegistration, requireStaff } from '@/lib/apiAuth'
 import { cleanName, nameKey } from '@/lib/names'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
@@ -40,6 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const dryRun = body?.dryRun === true
   if (!sourceId) return NextResponse.json({ error: 'sourceId required' }, { status: 400 })
   if (sourceId === params.id) return NextResponse.json({ error: 'Pick a different registration to merge in' }, { status: 400 })
+  // Both registrations must be in the organization this login works in (lib/orgScope).
+  const away = (await orgGateRegistration(gate, params.id)) || (await orgGateRegistration(gate, sourceId)); if (away) return away
 
   await ensureMergeColumns()
   await ensurePaymentGuard()

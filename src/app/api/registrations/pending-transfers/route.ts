@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireMoney } from '@/lib/apiAuth'
+import { orgGate, requireMoney } from '@/lib/apiAuth'
 import { clearingTransfers } from '@/lib/pendingTransfers'
 
 // Bank transfers still clearing, per registration, for the staff registrations
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   if (!gate.ok) return gate.res
   const tournamentId = req.nextUrl.searchParams.get('tournamentId') || ''
   if (!tournamentId) return NextResponse.json({ error: 'tournamentId required' }, { status: 400 })
+  const away = await orgGate(gate, tournamentId); if (away) return away
   const regs = await prisma.teamRegistration.findMany({ where: { tournamentId, deletedAt: null }, select: { id: true } })
   const clearing = await clearingTransfers(regs.map(r => r.id))
   return NextResponse.json({ clearing })

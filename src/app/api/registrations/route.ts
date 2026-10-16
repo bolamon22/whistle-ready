@@ -17,7 +17,7 @@ import { cleanName, nameKey } from '@/lib/names'
 import { isDivisionFull } from '@/lib/regStatus'
 import { canOpen, directorsOf } from '@/lib/clubAccess'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
-import { viewerRole } from '@/lib/apiAuth'
+import { orgGate, requireStaff, viewerRole } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
 import { canSeeMoney, canSeeContacts, payStatus } from '@/lib/roleScope'
 import { portalUsage } from '@/lib/portalVisits'
@@ -94,7 +94,13 @@ export async function GET(req: NextRequest) {
 
   await ensureRegistrationColumns()
   await ensurePaymentGuard()
-  const role = await viewerRole()
+  let role = await viewerRole()
+  // A director, scheduler, assigner or field director working in another
+  // organization gets what the public gets here (lib/orgScope).
+  if (role && !EXTERNAL.includes(role)) {
+    const staff = await requireStaff()
+    if (staff.ok && await orgGate(staff, tournamentId)) role = ''
+  }
   // Signed out or external (coach, parent, club director): the team list is the
   // Teams & pools switch's to give. It went out regardless, on the grounds that
   // the public page showed it anyway, but the public page no longer shows teams

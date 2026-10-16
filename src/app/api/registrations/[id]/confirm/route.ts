@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGateRegistration, requireStaff } from '@/lib/apiAuth'
 import { ensureConfirmCols, fileChangeRequest, confirmTeamList } from '@/lib/changeRequest'
 
 // Public confirm/change-request endpoint for a registration — the regId in the
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (action === 'resolve') {
     const gate = await requireStaff()
     if (!gate.ok) return gate.res
+    const away = await orgGateRegistration(gate, params.id); if (away) return away
     const cur: Record<string, unknown>[] = await prisma.$queryRawUnsafe(
       `SELECT "confirmNote", "confirmAt" FROM "TeamRegistration" WHERE id = ?`, params.id)
     const note = String(cur[0]?.confirmNote || '').trim()

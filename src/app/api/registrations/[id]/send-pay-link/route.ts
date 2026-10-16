@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGateRegistration, requireStaff } from '@/lib/apiAuth'
 import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament } from '@/lib/org'
 import { payLetterFor, buildPayReminderEmail } from '@/lib/payLetter'
@@ -12,6 +12,7 @@ const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigi
 // Staff-only: email the club contact their public pay link for this registration.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const away = await orgGateRegistration(gate, params.id); if (away) return away
   try {
     await ensurePaymentGuard()
     const reg = await prisma.teamRegistration.findUnique({

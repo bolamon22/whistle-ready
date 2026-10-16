@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGate, requireStaff } from '@/lib/apiAuth'
 import { listScheduled, cancelScheduled, getQueued, updateScheduled } from '@/lib/commSchedule'
 import { unknownFields } from '@/lib/customLetters'
 
 // What's queued for a tournament, changing a letter's wording or cancelling one before it goes.
+// Only events of the organization this login works in (lib/orgScope).
 
 export async function GET(req: NextRequest) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
   const tournamentId = String(new URL(req.url).searchParams.get('tournamentId') || '')
   if (!tournamentId) return NextResponse.json({ error: 'tournamentId required' }, { status: 400 })
+  const away = await orgGate(gate, tournamentId); if (away) return away
   return NextResponse.json({ scheduled: await listScheduled(tournamentId) })
 }
 
@@ -20,6 +22,7 @@ export async function DELETE(req: NextRequest) {
   const id = String(url.searchParams.get('id') || '')
   const tournamentId = String(url.searchParams.get('tournamentId') || '')
   if (!id || !tournamentId) return NextResponse.json({ error: 'id and tournamentId required' }, { status: 400 })
+  const away = await orgGate(gate, tournamentId); if (away) return away
   const done = await cancelScheduled(id, tournamentId)
   if (!done) return NextResponse.json({ error: 'Already sent or gone' }, { status: 404 })
   return NextResponse.json({ ok: true })
@@ -38,6 +41,7 @@ export async function PATCH(req: NextRequest) {
   const subject = String(b.subject ?? '').trim()
   const body = String(b.body ?? '')
   if (!id || !tournamentId) return NextResponse.json({ error: 'id and tournamentId required' }, { status: 400 })
+  const away = await orgGate(gate, tournamentId); if (away) return away
   if (!subject) return NextResponse.json({ error: 'The subject is empty' }, { status: 400 })
   if (!body.trim()) return NextResponse.json({ error: 'The letter is empty' }, { status: 400 })
   // Refused, not trimmed: a letter cut off mid-sentence would reach every club that way.
