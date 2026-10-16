@@ -218,13 +218,14 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   `/admin/orgs/[id]` (Plan section, saves each click via GET/PUT `/api/admin/orgs/[id]/plan`), the plan picker on
   New Organization (`plan` in POST `/api/admin/orgs`), and the Plan column (`planLabel`, e.g. "Assigner + Scores")
   on the list; the Tier select is gone from the UI (the column stays). `roleCanAccess(role, path, planOff?)`: a
-  page in an off group is closed for every role; middleware passes `token.planOff` (not for an admin's View as),
+  page in an off group is closed for every role; middleware passes `token.planOff` (an admin's View as of an
+  organization: its `preview-plan` cookie, see View as below),
   and every client caller passes `useRole().planOff` (IfCanOpen, TournamentNav, navConfig `visibleMenus` /
   `eventHref`, NavBar, GlobalSearch, EventSwitcher, TournamentsDashboard, EventBackLink, the event dashboard).
   Plans are page-level: API routes don't check them (it's the org's own data). Routes that reach an event
   through another id call `orgGate(gate, tournamentId)` / `orgGateRegistration(gate, regId)` / `orgGateFor(gate,
-  orgId)` (lib/apiAuth; roles from `lib/orgScope`, shared with middleware; admins incl. View as, staff, clubs and
-  families pass; 404 like a missing record): games/[id] (GET falls back to the public answer), assignments
+  orgId)` (lib/apiAuth; roles from `lib/orgScope`, shared with middleware; admins (unless viewing one org), staff,
+  clubs and families pass; 404 like a missing record): games/[id] (GET falls back to the public answer), assignments
   (+ the worker must be this org's), assignments/[id], time-entries (+ worker), time-entries/[id], workers/[id]
   and its W-9 (a director of any org could read any W-9), registrations/[id] (travel, edit, delete), its
   confirm resolve, invoice POST, merge (both), restore, send-pay-link, registrations export / deleted /
@@ -239,6 +240,26 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   (orgMembers, auth token, Your team, admin org routes, plans, field directors, assigner pay, event-org) and 35
   middleware checks on a built Next app (scratch). Help: switch-organization, org-your-team, admin-organizations,
   top-bar.
+- **View as an organization (Oct 16).** Bo: "view it as an outside organization, just so I can see what they see
+  ... so I can just switch between them. And have both open up on my screen". An admin's View as is an
+  organization plus a role, all in cookies (`lib/previewView.ts`): `preview-role` (set in the browser by
+  `lib/role-context`), `preview-org` and `preview-plan` (that org's off groups, comma list), the last two written
+  by POST `/api/admin/preview-org` (every org picker uses it; a malformed id clears them) and `preview-plan`
+  refreshed by the plan PUT when the org being viewed changes plan. 8 hours each; honored only for a real admin
+  and a role in `PREVIEW_ROLES`. With an org: middleware (`previewOf`) applies `preview-plan` as planOff and holds
+  pages and `/api/tournaments/<id>` to that org like its own people (another org's event → the role's home, no
+  switcher); `lib/apiAuth` gives the gate that org as `orgId` plus `viewing: true`, and the org gates apply to a
+  viewing admin. With **All organizations**: the role alone, as before (no plan, no org limit). `useRole()` adds
+  `previewOrgId` and `setPreview(orgId, role)` (null role = Back to admin, back to the org viewed before, kept in
+  localStorage `wr-view-before`); it reads the cookies on first render, and the browser's other tabs reload on
+  `wr-view-stamp`, so no tab shows one view's menus over another's data. UI: `components/nav/ViewAsMenu.tsx` (chip
+  at 2xl+, a row in the account and phone menus, the amber bar with **Switch view** / **Back to admin**), an eye per
+  org in SuperAdminBar's Viewing list (which shows plans now, not tiers). TournamentsDashboard hides the admin
+  tools in View as; Your team (`/api/org/users` now goes through `requireStaff`) and GlobalSearch follow the viewed
+  org. Two views side by side = two cookie jars (a private window signed in as admin). Routes that read the real
+  session role themselves (`/api/tournaments` GET, `/api/workers`) still answer as admin, scoped by the `viewOrgId`
+  the client sends from the cookie. Tests: 38 real-Prisma (vatest) and 30 middleware checks (scratch). Help:
+  view-as, top-bar, admin-organizations.
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
