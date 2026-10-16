@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import { notifyPaymentReceived } from '@/lib/paymentNotify'
 import { markVendorPaid } from '@/lib/formSubmissions'
 import { recordTeamPayment } from './paymentGuard'
+import { tournamentOrgId } from '@/lib/org'
 
 // Catching money Stripe took that the app never heard about.
 //
@@ -30,6 +31,7 @@ export type PaymentGap = {
   targetId: string            // registrationId / individual reg id / vendor token
   label: string               // club or player, for the staff list
   context: string             // tournament name where we can find it
+  orgId?: string | null       // whose payment it is (the event's, or the vendor form's organization)
 }
 
 export type ReconcileResult = {
@@ -120,6 +122,13 @@ async function teamAlreadyRecorded(registrationId: string, piId: string): Promis
     where: { registrationId, notes: { contains: piId } },
   })
   return !!existing
+}
+
+async function vendorOrgId(token: string): Promise<string | null> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT "orgId" FROM "OrgFormSubmission" WHERE "passToken" = ? LIMIT 1`, token)
+    return rows?.[0]?.orgId ? String(rows[0].orgId) : null
+  } catch { return null }
 }
 
 async function vendorAlreadyPaid(token: string): Promise<boolean> {
@@ -293,7 +302,7 @@ export async function findUnrecordedPayments(days = 30): Promise<ReconcileResult
       const t = await prisma.tournament.findUnique({
         where: { id: reg.tournamentId }, select: { name: true },
       })
-      gaps.push({ ...base, kind: 'team', targetId: meta.registrationId, label: reg.clubName, context: t?.name || '' })
+      gaps.push({ ...base, kind: 'team', targetId: meta.registrationId, label: reg.clubName, context: t?.name || '', orgId: await tournamentOrgId(reg.tournamentId) })
       continue
     }
 
@@ -308,14 +317,14 @@ export async function findUnrecordedPayments(days = 30): Promise<ReconcileResult
       })
       gaps.push({
         ...base, kind: 'individual', targetId: row.id,
-        label: `${row.firstName} ${row.lastName}`.trim(), context: t?.name || '',
+        label: `${row.firstName} ${row.lastName}`.trim(), context: t?.name || '', orgId: await tournamentOrgId(row.tournamentId),
       })
       continue
     }
 
     if (meta.type === 'vendor_booth' && meta.vendorToken) {
       if (await vendorAlreadyPaid(meta.vendorToken)) continue
-      gaps.push({ ...base, kind: 'vendor', targetId: meta.vendorToken, label: 'Vendor booth', context: '' })
+      gaps.push({ ...base, kind: 'vendor', targetId: meta.vendorToken, label: 'Vendor booth', context: '', orgId: await vendorOrgId(meta.vendorToken) })
     }
   }
 

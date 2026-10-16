@@ -19,3 +19,4 @@ Payment reconcile finds payments Stripe processed that never got recorded on a r
 - Recording uses the date Stripe took the payment, not today, and sends the usual payment heads-up email.
 - It's safe to run twice. A payment already on file is skipped.
 - To stop it happening again, click **Open Stripe webhooks** and turn the webhook back on.
+- Only directors and admins can check and record payments. A director sees only their own organization's payments.

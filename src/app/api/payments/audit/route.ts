@@ -8,13 +8,15 @@
 // Read-only. Fixing anything it finds is a deliberate act on the registrations
 // page, not something this route does on its own.
 import { NextRequest, NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireMoney } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
 import { auditPayments } from '@/lib/stripeReconcile'
 import { ensurePaymentGuard } from '@/lib/paymentGuard'
 
+// Money, so admins and directors only; a director gets their own organization's
+// events only (lib/orgScope).
 export async function GET(req: NextRequest) {
-  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  const gate = await requireMoney(); if (!gate.ok) return gate.res
 
   const sp = new URL(req.url).searchParams
   const raw = Number(sp.get('days'))
@@ -30,6 +32,15 @@ export async function GET(req: NextRequest) {
          JOIN "TeamRegistration" r ON r.id = p."registrationId"
         WHERE r."deletedAt" IS NULL`)
     ids = rows.map(r => String(r.tournamentId)).filter(Boolean)
+  }
+  if (gate.session?.user?.role !== 'admin') {
+    if (!gate.orgId) ids = []
+    else if (ids.length) {
+      const own = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM "Tournament" WHERE orgId = ? AND id IN (${ids.map(() => '?').join(', ')})`, gate.orgId, ...ids)
+      const keep = new Set(own.map(r => String(r.id)))
+      ids = ids.filter(id => keep.has(id))
+    }
   }
 
   // Also reports whether the unique index that PREVENTS duplicates is actually
