@@ -3,14 +3,14 @@ title: See the app as an organization and role (View as)
 category: Admin
 order: 720
 routes: /
-keywords: view as preview role previewing see what staff see impersonate test permissions exit preview back to admin switch view organization outside organization customer plan assigner plan side by side two windows private window incognito
+keywords: view as preview role previewing see what staff see impersonate test permissions exit preview back to admin switch view organization outside organization customer plan assigner plan side by side two windows private window incognito head assigner
 ---
 **View as** lets an admin see the app the way someone else sees it: pick an organization and a role, and you get that organization's plan, menus and data as that role sees them. Only admins have it.
 
 **Where:** **View as** in the top bar on wide screens, or your account menu (your initials, top right). On phones and tablets, open the menu and use **View as**. In the admin pages, the eye next to an organization under **Viewing** opens it as its director in one click.
 
 **To view as an organization:**
-1. Open **View as** and pick the **Organization** (each shows its plan, for example **Assigner + Scores**) and the **Role**: **Tournament Director**, **Club Director**, **Assigner**, **Scheduler**, **Field Director**, **Coach**, **Staff** or **Parent**.
+1. Open **View as** and pick the **Organization** (each shows its plan, for example **Assigner + Scores**) and the **Role**: **Tournament Director** (called **Head Assigner** for an organization on the Assigner plan), **Club Director**, **Assigner**, **Scheduler**, **Field Director**, **Coach**, **Staff** or **Parent**.
 2. Click **Show**. The app opens at that role's home, with a yellow bar across the top: "Viewing Gulf Coast Officials as Tournament Director".
 3. Everything is that organization's: only its plan's pages in the menus, its events, Staff Pool, **Your team** and tasks. Another organization's event sends you home, as it would them.
 

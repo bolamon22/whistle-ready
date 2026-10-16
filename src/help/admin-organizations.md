@@ -3,7 +3,7 @@ title: Manage organizations (platform admin)
 category: Admin
 order: 730
 routes: /admin, /admin/orgs, /admin/orgs/*
-keywords: organizations orgs platform dashboard new org create organization owner team subscription plan whistle ready tournament whistle ready assigner feature switches turn on off registration scheduling scores game day money tasks website status branding logo slug payment details switch org member another organization
+keywords: organizations orgs platform dashboard new org create organization owner team subscription plan whistle ready tournament whistle ready assigner feature switches turn on off registration scheduling scores game day money tasks website status branding logo slug payment details switch org member another organization head assigner
 ---
 The **Platform Dashboard** and **Organizations** pages are for platform admins who run more than one customer organization.
 
@@ -14,14 +14,14 @@ The **Platform Dashboard** and **Organizations** pages are for platform admins w
 **To create an organization:**
 1. Go to **Organizations** and click **+ New Organization**.
 2. Enter **Org Name**. The **Slug** fills in for you and becomes part of its web address.
-3. Add **Contact Email**, pick a **Plan**, and optionally an **Owner Email** for an existing login. The owner becomes the new organization's director and keeps any organization they already work for.
+3. Add **Contact Email**, pick a **Plan**, and optionally an **Owner Email** for an existing login. The owner runs the new organization (its **Tournament Director**, or **Head Assigner** on the Assigner plan) and keeps any organization they already work for.
 4. Click **Create Organization**.
 
 **To edit an organization:** click its name, change the **Branding**, **Contact** or **Payment Details** sections, then click **Save Changes**.
 
 **Plans:**
 - **Whistle Ready Tournament**: everything (registration, scheduling, officials, scores, game day, money and the website). Every organization without a plan is on this one.
-- **Whistle Ready Assigner**: officials only. Events and their games, the **Assigner**, **Staff Pool**, availability, confirmations, time entries and staff pay.
+- **Whistle Ready Assigner**: officials only. Events and their games, the **Assigner**, **Staff Pool**, availability, confirmations, time entries and staff pay. The person who runs it is called the **Head Assigner** (the director role, renamed): they create the events, import the games, add people and set pay. Their helpers are **Assigners**.
 
 On the organization's page, the **Plan** section has both plans and a switch for each group: **Registration**, **Event setup & scheduling**, **Scores**, **Game-day tools**, **Event money**, **Tasks** and **Website & media**. Click a plan to start from its switches, then turn any group on or off for this organization only (an assigner who wants to run a tournament gets **Registration** and **Event setup & scheduling**, say). Each click saves; **Changed for this organization** shows when the switches differ from the plan. A group that is off leaves the menus and its pages for everyone in that organization, whatever their role. People already signed in get the change within a minute. Officials are always on.
 
