@@ -4,10 +4,13 @@
 //   v1 (legacy): { youth: 50, hs: 60, scorekeeper: 15, ... }        — flat role→rate map
 //   v2 (current): { _v:2, roles:[{id,name,rate,rateType}], officialsConfig:{...} }
 //
-// Two surfaces edit this column (Setup wizard + Settings). When they each owned their
-// own parse/serialize, they drifted into writing DIFFERENT shapes, and wizard-set rates
-// were silently ignored by payroll. Everything now goes through this file so that
-// can't recur. Payroll reads via parsePayRates() in lib/utils.ts, which understands v2.
+// Two surfaces edit this column: Tournament setup's Staff pay rates, and Pay rates on
+// Staff pay (components/PayRatesPanel), which the Assigner plan has without Event setup
+// & scheduling. When two surfaces (then Setup and Settings) each owned their own
+// parse/serialize, they drifted into writing DIFFERENT shapes, and wizard-set rates were
+// silently ignored by payroll. Both now load with staffPayOf() and save with
+// staffPayBody() so that can't recur. Payroll reads via parsePayRates() in
+// lib/utils.ts, which understands v2.
 
 export interface StaffRole {
   id: string
@@ -98,4 +101,30 @@ export function serializeStaffPay(cfg: StaffPayConfig): string {
 /** The divisionRules map derived from officials exceptions (keyword → count). */
 export function officialsRulesToDivisionRules(cfg: OfficialsConfig): Record<string, number> {
   return Object.fromEntries(cfg.rules.map(r => [r.keyword, r.count]))
+}
+
+/**
+ * One event's editing model, from GET /api/tournaments/[id]: its payRates, with the
+ * officials exceptions taken from divisionRules when that has any (the column games
+ * are counted from, lib/refRules; older events kept their exceptions only there).
+ */
+export function staffPayOf(t: { payRates?: unknown; divisionRules?: unknown } | null | undefined): StaffPayConfig {
+  const cfg = parseStaffPay(t?.payRates)
+  let rules = cfg.officialsConfig.rules
+  try {
+    const raw = t?.divisionRules
+    const dr = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw
+    if (dr && typeof dr === 'object' && !Array.isArray(dr) && Object.keys(dr).length > 0) {
+      rules = Object.entries(dr as Record<string, unknown>).map(([keyword, count]) => ({ keyword, count: count as number }))
+    }
+  } catch { /* keep the exceptions saved with the pay rates */ }
+  return { roles: cfg.roles, officialsConfig: { ...DEFAULT_OFFICIALS_CONFIG, ...cfg.officialsConfig, rules } }
+}
+
+/** What Tournament setup and Pay rates send to PATCH /api/tournaments/[id]. */
+export function staffPayBody(cfg: StaffPayConfig): { payRates: string; divisionRules: string } {
+  return {
+    payRates: serializeStaffPay(cfg),
+    divisionRules: JSON.stringify(officialsRulesToDivisionRules(cfg.officialsConfig)),
+  }
 }

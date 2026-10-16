@@ -14,7 +14,7 @@ import RegConfirmationEditor from '@/components/RegConfirmationEditor'
 import StaffPayEditor from '@/components/StaffPayEditor'
 import EventContentSection, { useEventContent, type EventSectionKey } from '@/components/EventContentEditor'
 import {
-  parseStaffPay, serializeStaffPay, officialsRulesToDivisionRules,
+  staffPayOf, staffPayBody,
   DEFAULT_ROLES, DEFAULT_OFFICIALS_CONFIG,
   type StaffRole, type OfficialsConfig,
 } from '@/lib/staffPay'
@@ -249,17 +249,10 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
       setLocation(t.location || ''); setLogoUrl(t.logoUrl || '')
       setScheduleIncrement(String(t.scheduleIncrement || 50))
       try { const obj = JSON.parse(t.tiebreakers || '{}'); const pool = Array.isArray(obj)?obj:(obj.pool||[]); const division = Array.isArray(obj)?obj:(obj.division||[]); setPoolTb(pad6(pool.length?pool:DEFAULT_TB)); setDivTb(pad6(division.length?division:DEFAULT_TB)); setAdvanceBy(!Array.isArray(obj) && obj.advanceBy === 'pool' ? 'pool' : 'division') } catch {}
-      const staffParsed = parseStaffPay(t.payRates)
+      // Pay rates and officials per game, loaded the same way as Pay rates on Staff pay.
+      const staffParsed = staffPayOf(t)
       setStaffRoles(staffParsed.roles)
-      // Load officials config — prefer v2 format, fall back to old divisionRules
-      let loadedRules = staffParsed.officialsConfig.rules
-      try {
-        const dr = JSON.parse(t.divisionRules || '{}')
-        if (typeof dr === 'object' && !Array.isArray(dr) && Object.keys(dr).length > 0) {
-          loadedRules = Object.entries(dr).map(([keyword, count]) => ({ keyword, count: count as number }))
-        }
-      } catch {}
-      setOfficialsConfig({ ...DEFAULT_OFFICIALS_CONFIG, ...staffParsed.officialsConfig, rules: loadedRules })
+      setOfficialsConfig(staffParsed.officialsConfig)
       setPricing(parsePricing(t.registrationPricing))
       setRegTypes(parseRegistrationTypes(t))
       loadInfoSections(params.id).then(setInfoSections)
@@ -337,8 +330,7 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
           // Money and staff pay only from someone who can see them: a scheduler's copy
           // of the pay rates comes back blanked (api/tournaments/[id]) and must not be saved.
           ...(money ? {
-            payRates: serializeStaffPay({ roles: staffRoles, officialsConfig }),
-            divisionRules: JSON.stringify(officialsRulesToDivisionRules(officialsConfig)),
+            ...staffPayBody({ roles: staffRoles, officialsConfig }),
             registrationPricing: serializePricing(pricing),
             ...registrationTypesPayload(regTypes),
             regConfirmationOverride: JSON.stringify(regConf),

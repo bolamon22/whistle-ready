@@ -1,8 +1,9 @@
 'use client'
 
-// The ONE staff pay + officials editor. Rendered by BOTH the Setup wizard and
-// Settings so the two surfaces can never drift apart again — previously each owned
-// its own UI and serialization, which silently discarded wizard-set pay rates.
+// The ONE staff pay + officials editor. Rendered by BOTH Tournament setup and Pay
+// rates on Staff pay (components/PayRatesPanel) so the two surfaces can never drift
+// apart again — Setup and the old Settings page each owned their own UI and
+// serialization, which silently discarded wizard-set pay rates.
 //
 // Fully controlled: the parent holds a StaffPayConfig and persists it with
 // serializeStaffPay(). This component never fetches or saves.
@@ -89,7 +90,9 @@ export default function StaffPayEditor({
         </div>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden">
-          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          {/* On phones each role is two lines, the name and then rate, type and remove,
+              so the column header is for wide screens only. */}
+          <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wide">
             <div className="col-span-5">Role</div>
             <div className="col-span-3 text-right">Rate</div>
             <div className="col-span-3">Type</div>
@@ -98,19 +101,19 @@ export default function StaffPayEditor({
 
           {roles.map((role, idx) => (
             <div key={role.id} className="grid grid-cols-12 gap-2 px-4 py-2.5 border-b border-slate-50 last:border-0 items-center hover:bg-slate-50/50">
-              <div className="col-span-5">
+              <div className="col-span-12 sm:col-span-5">
                 <input className="w-full bg-transparent text-sm text-slate-800 focus:outline-none border-b border-transparent focus:border-teal-400 px-0.5"
                   value={role.name}
                   onChange={e => setRoles(roles.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} />
               </div>
-              <div className="col-span-3 flex items-center justify-end gap-1">
+              <div className="col-span-5 sm:col-span-3 flex items-center sm:justify-end gap-1">
                 <span className="text-slate-400 text-sm">$</span>
                 <input type="number" min="0" step="0.50"
                   className="w-20 text-right text-sm border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400"
                   value={role.rate}
                   onChange={e => setRoles(roles.map((x, i) => i === idx ? { ...x, rate: parseFloat(e.target.value) || 0 } : x))} />
               </div>
-              <div className="col-span-3">
+              <div className="col-span-6 sm:col-span-3">
                 <select className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-400 bg-white"
                   value={role.rateType}
                   onChange={e => setRoles(roles.map((x, i) => i === idx ? { ...x, rateType: e.target.value as 'per_game' | 'hourly' } : x))}>
@@ -127,19 +130,19 @@ export default function StaffPayEditor({
 
           {/* Add role */}
           <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-t border-slate-100 items-center">
-            <div className="col-span-5">
+            <div className="col-span-12 sm:col-span-5">
               <input className="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-400"
                 placeholder="New role name…" value={newRoleName}
                 onChange={e => setNewRoleName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRole() } }} />
             </div>
-            <div className="col-span-3 flex items-center justify-end gap-1">
+            <div className="col-span-5 sm:col-span-3 flex items-center sm:justify-end gap-1">
               <span className="text-slate-400 text-sm">$</span>
               <input type="number" min="0" step="0.50"
                 className="w-20 text-right text-sm border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-400"
                 placeholder="0" value={newRoleRate} onChange={e => setNewRoleRate(e.target.value)} />
             </div>
-            <div className="col-span-3">
+            <div className="col-span-6 sm:col-span-3">
               <select className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none bg-white"
                 value={newRoleType} onChange={e => setNewRoleType(e.target.value as 'per_game' | 'hourly')}>
                 <option value="per_game">Per game</option>

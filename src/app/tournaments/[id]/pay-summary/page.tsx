@@ -2,10 +2,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { certLabel, formatDate, formatTime, PAY_METHODS, WORKER_ROLES, ALL_ROLES } from '@/lib/utils'
-import { Users, Calendar, Clock, Wallet, Download, ChevronUp, ChevronDown } from 'lucide-react'
+import { Users, Calendar, Clock, Wallet, Download, ChevronUp, ChevronDown, Banknote } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
+import PayRatesPanel from '@/components/PayRatesPanel'
 import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
+import { useRole } from '@/lib/role-context'
+import { canSeeMoney } from '@/lib/roleScope'
 
 interface GameEntry{gameNumber:string;date:string;startTime:string;division:string;location:string;role:string;pay:number}
 interface TERow{date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;hours:number;pay:number}
@@ -30,6 +33,11 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   const [gender,setGender]=useRefGender(params.id)
   const [payNote,setPayNote]=useState('')
   const [err,setErr]=useState('')
+  // Pay rates (components/PayRatesPanel): the director's, as in Tournament setup. On the
+  // Assigner plan this is the only place to set them.
+  const { effectiveRole }=useRole()
+  const setsRates=canSeeMoney(effectiveRole)
+  const [showRates,setShowRates]=useState(false)
 
   async function load(){
     const [dr,pr]=await Promise.all([
@@ -126,8 +134,12 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
           {scoped&&<p className="text-xs text-slate-500 mt-1.5">Showing pay for <strong className="text-slate-700">{data.scope!.label}</strong>. The director picks which groups you see.</p>}
           {err&&<p className="text-sm text-red-600 mt-1.5" role="alert">{err}</p>}
         </div>
-        <button onClick={exportCSV} className="btn-primary btn-sm" disabled={!data.summary.length}><Download size={14} className="inline align-text-bottom mr-1" />CSV</button>
+        <div className="flex flex-shrink-0 gap-2">
+          {setsRates&&<button type="button" onClick={()=>setShowRates(s=>!s)} aria-expanded={showRates} className="btn-secondary btn-sm"><Banknote size={14} className="inline align-text-bottom mr-1" />Pay rates</button>}
+          <button onClick={exportCSV} className="btn-primary btn-sm" disabled={!data.summary.length}><Download size={14} className="inline align-text-bottom mr-1" />CSV</button>
+        </div>
       </div>
+      {setsRates&&showRates&&<PayRatesPanel id={params.id} onClose={()=>setShowRates(false)} />}
 
       {data.summary.length===0?<div className="card p-12 text-center text-slate-400"><p className="font-medium">{scoped&&!data.scope!.groups.length?'You don’t see any staff pay yet. Ask the director to pick your pay groups.':scoped?`No pay yet for ${data.scope!.label}`:'No assignments yet'}</p></div>:(
         <div className="space-y-3">
