@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { requireStaff, eventGate } from '@/lib/apiAuth'
 import { redactWorker, fieldDirectorSees } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
+import { tournamentOrgId } from '@/lib/org'
 
 // A field director (lib/fieldDirector) sees, adds and removes only the scorekeepers,
 // athletic trainers and field ops on their own events, never refs.
@@ -26,6 +27,15 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
   const { workerId, gameTarget, notes } = await req.json()
   if (gate.role === 'field_director' && !fieldDirectorSees(await prisma.worker.findUnique({ where: { id: String(workerId || '') } }))) {
     return NextResponse.json({ error: 'Field directors add scorekeepers, athletic trainers and field ops.' }, { status: 403 })
+  }
+  // Only the event's own organization's people. The roster offers that organization's
+  // Staff Pool (api/workers), but an admin's list used to be everyone on the platform.
+  const [person, eventOrg] = await Promise.all([
+    prisma.worker.findUnique({ where: { id: String(workerId || '') }, select: { orgId: true } }),
+    tournamentOrgId(params.id),
+  ])
+  if (person?.orgId && eventOrg && person.orgId !== eventOrg) {
+    return NextResponse.json({ error: 'That person is in another organization’s Staff Pool.' }, { status: 403 })
   }
   const existed = await prisma.rosterEntry.findUnique({ where:{ workerId_tournamentId:{ workerId, tournamentId:params.id } }, select:{ id:true } })
   const entry = await prisma.rosterEntry.upsert({
