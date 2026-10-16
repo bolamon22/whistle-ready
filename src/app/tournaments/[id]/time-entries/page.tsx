@@ -35,7 +35,7 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
   const[clockedIn,setClockedIn]=useState<Record<string,string>>({}) // workerId -> entryId
 
   async function load(){
-    const[tR,wR,eR]=await Promise.all([fetch(`/api/tournaments/${params.id}`),fetch('/api/workers'),fetch(`/api/time-entries?tournamentId=${params.id}`)])
+    const[tR,wR,eR]=await Promise.all([fetch(`/api/tournaments/${params.id}`),fetch(`/api/workers?tournamentId=${params.id}`),fetch(`/api/time-entries?tournamentId=${params.id}`)])
     const t=await tR.json();const w=await wR.json();const e=await eR.json()
     setTournament(t);setEntries(e)
     setWorkers(w.filter((x:Worker)=>x.defaultRole==='athletic_trainer'||x.defaultRole==='field_ops'))

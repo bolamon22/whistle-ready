@@ -7,19 +7,29 @@ import { payScopeFor } from '@/lib/payScope'
 import { createClient } from '@libsql/client'
 import { presenceByEmail, canSeePresence } from '@/lib/presence'
 import { setRefLevel } from '@/lib/refLevelDb'
+import { tournamentOrgId } from '@/lib/org'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 }
 
-async function resolveOrgId(req: Request): Promise<{ orgId: string | null; isAdmin: boolean }> {
+// Whose Staff Pool this answers with. An admin's View as of an organization (lib/apiAuth:
+// gate.viewing) gets that organization's, like its own people. An event page sends its
+// event (?tournamentId=), and an admin then gets that event's organization's pool. Both
+// used to fall through to every person on the platform (Bo, Oct 16 2026: the Staff roster
+// of an Assigner-plan organization's event offered Sunshine's 121 staff, "a completely
+// separate organization").
+async function resolveOrgId(req: Request, gate: { viewing?: boolean; orgId: string | null }): Promise<{ orgId: string | null; isAdmin: boolean }> {
+  if (gate.viewing) return { orgId: gate.orgId, isAdmin: false }
   const session = await getServerSession(authOptions)
   const role = (session?.user as any)?.role
   const sessionOrgId = (session?.user as any)?.orgId ?? null
 
   if (role === 'admin') {
     const url = new URL(req.url)
-    const viewOrgId = url.searchParams.get('viewOrgId')
+    const tournamentId = url.searchParams.get('tournamentId')
+    const eventOrg = tournamentId ? await tournamentOrgId(tournamentId) : null
+    const viewOrgId = eventOrg ?? url.searchParams.get('viewOrgId')
     return { orgId: viewOrgId ?? null, isAdmin: true }
   }
 
@@ -80,7 +90,7 @@ export async function GET(req: Request) {
   const shape = (rows: any[]) => rows
     .filter(r => gate.role !== 'field_director' || fieldDirectorSees(r))
     .map(r => redactWorker({ ...r, isAssigner: !!Number(r.isAssigner) }, gate.role, scope))
-  const { orgId, isAdmin } = await resolveOrgId(req)
+  const { orgId, isAdmin } = await resolveOrgId(req, gate)
   const client = db()
 
   if (isAdmin && !orgId) {

@@ -23,7 +23,7 @@ export default function ExhibitAPage({ params }: { params: { id: string } }) {
   async function load() {
     const [tR, wR, rR] = await Promise.all([
       fetch(`/api/tournaments/${params.id}`),
-      fetch('/api/workers'),
+      fetch(`/api/workers?tournamentId=${params.id}`),
       fetch(`/api/tournaments/${params.id}/roster`),
     ])
     setTournament(await tR.json())

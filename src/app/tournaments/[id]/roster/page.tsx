@@ -147,7 +147,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   async function load() {
     const [tR,wR,rR,gR] = await Promise.all([
       fetch(`/api/tournaments/${params.id}`),
-      fetch('/api/workers'),
+      fetch(`/api/workers?tournamentId=${params.id}`),   // this event's organization's Staff Pool
       fetch(`/api/tournaments/${params.id}/roster`),
       fetch(`/api/tournaments/${params.id}/games`),
     ])

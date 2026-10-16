@@ -256,7 +256,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const load=useCallback(async()=>{
     const [tR,gR,wR,aR,rR]=await Promise.all([
       fetch(`/api/tournaments/${params.id}`),fetch(`/api/tournaments/${params.id}/games`),
-      fetch('/api/workers'),fetch(`/api/availability?tournamentId=${params.id}`),
+      fetch(`/api/workers?tournamentId=${params.id}`),fetch(`/api/availability?tournamentId=${params.id}`),
       fetch(`/api/tournaments/${params.id}/roster`),
     ])
     const t=await tR.json();const g=await gR.json();const w=await wR.json();const a=await aR.json();const r=await rR.json()
