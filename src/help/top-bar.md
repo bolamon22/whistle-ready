@@ -17,7 +17,7 @@ The top bar is the same on every page, and it shows only what your role can open
 - **Search** finds events, staff, logins (admins), clubs and pages. Type at least two letters, then click a result, or use the arrow keys and Enter. **Ctrl K** (**Cmd K** on a Mac) jumps to it from anywhere.
 - **Tasks** (the checklist button) shows a red number when tasks are overdue.
 - **2 on** shows how many other people are in the app right now. Click it to see who.
-- **View as** (admins, on wide screens) shows the app as another role.
+- **View as** (admins, on wide screens) shows the app as another organization and role sees it. While it's on, a yellow bar across the top says what you're viewing, with **Switch view** and **Back to admin**.
 - **Your initials** open your account menu: **Profile**, **Game-day alerts**, **Appearance** (**Light** or **Dark**), **View as** (admins) and **Sign out**.
 
 The menu holding the page you're on is underlined. A menu with nothing your role can open isn't shown, and a menu with only one page is just that page's link (a field director sees **All tournaments** and **Training videos**).

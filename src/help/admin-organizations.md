@@ -7,7 +7,7 @@ keywords: organizations orgs platform dashboard new org create organization owne
 ---
 The **Platform Dashboard** and **Organizations** pages are for platform admins who run more than one customer organization.
 
-**Where:** **Admin** → **Platform dashboard** in the top bar. Admin pages have tabs for **Platform dashboard**, **Organizations**, **Logins**, **Permissions**, **Roadmap** and **Payment providers**, and **Viewing** on the right switches organization.
+**Where:** **Admin** → **Platform dashboard** in the top bar. Admin pages have tabs for **Platform dashboard**, **Organizations**, **Logins**, **Permissions**, **Roadmap** and **Payment providers**, and **Viewing** on the right switches organization. Each organization there shows its plan, and the eye next to it opens the app as its director sees it (see "See the app as an organization and role").
 
 **The Platform Dashboard** shows totals (**Organizations**, **Tournaments**, **Staff Members**, **Users**), **Customer Organizations** and **Recent Tournaments**. Hover an org for **View Portal →**, **Website** and **Edit**.
 
