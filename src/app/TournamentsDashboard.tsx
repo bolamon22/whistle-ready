@@ -56,12 +56,12 @@ export default function TournamentsDashboard() {
   const isAdmin = session?.user?.role === 'admin'
   // Tasks: the card below the list and a strip on each event's card, for the
   // roles that have the Tasks page (directors; admins always).
-  const { effectiveRole } = useRole()
-  const showTasks = !!session && roleCanAccess(effectiveRole, '/tasks')
+  const { effectiveRole, planOff } = useRole()
+  const showTasks = !!session && roleCanAccess(effectiveRole, '/tasks', planOff)
   // A scheduler (or any non-director) saw Registrations and Pay Report on every card,
   // links that only end at "unauthorized", plus New, Copy and Edit for events, which
   // are the director's job (Oct 14 2026). Show each link only to roles that can open it.
-  const can = (href: string) => roleCanAccess(effectiveRole, href)
+  const can = (href: string) => roleCanAccess(effectiveRole, href, planOff)
   const runsEvents = effectiveRole === 'admin' || effectiveRole === 'director'
   const [taskEvents, setTaskEvents] = useState<{ today: string; byId: Record<string, OverviewEvent> }>({ today: '', byId: {} })
   const onTaskEvents = useCallback((events: OverviewEvent[], today: string) => {

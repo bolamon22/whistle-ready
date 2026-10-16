@@ -15,10 +15,11 @@ function Logo({ e, size }: { e: NavEvent; size: string }) {
     : <span className={`${size} flex flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600`}>{(e.name || '?').charAt(0)}</span>
 }
 
-export default function EventSwitcher({ events, current, role, today, canCreate, open, setOpen, variant }: {
+export default function EventSwitcher({ events, current, role, planOff, today, canCreate, open, setOpen, variant }: {
   events: NavEvent[]
   current: NavEvent | null
   role: string
+  planOff?: readonly string[] | null
   today: string
   canCreate: boolean
   open: boolean
@@ -37,7 +38,7 @@ export default function EventSwitcher({ events, current, role, today, canCreate,
       : 'mt-2 rounded-2xl border border-slate-200 bg-white p-2'}>
       <p className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{listLabel}</p>
       {list.map(e => (
-        <Link key={e.id} href={eventHref(role, e.id)} onClick={() => setOpen(false)}
+        <Link key={e.id} href={eventHref(role, e.id, planOff)} onClick={() => setOpen(false)}
           className={`flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-50 ${e.id === current.id ? 'bg-teal-50' : ''}`}>
           <Logo e={e} size="h-8 w-8" />
           <span className="flex min-w-0 flex-1 flex-col">

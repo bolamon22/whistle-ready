@@ -126,12 +126,13 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     { label: 'Contacts', href: `${base}/contacts`, wide: true },
   ]
 
-  // Only the tabs this role can open (the same rule middleware enforces), so a
-  // scheduler is not shown Financials or Registrations to be bounced from.
-  // While the session loads, show everything rather than flash an empty bar.
+  // Only the tabs this role can open (the same rule middleware enforces, the
+  // organization's plan included), so a scheduler is not shown Financials or
+  // Registrations to be bounced from. While the session loads, show everything rather
+  // than flash an empty bar.
   const { status } = useSession()
-  const { effectiveRole } = useRole()
-  const canOpen = (href: string) => status !== 'authenticated' || roleCanAccess(effectiveRole, href)
+  const { effectiveRole, planOff } = useRole()
+  const canOpen = (href: string) => status !== 'authenticated' || roleCanAccess(effectiveRole, href, planOff)
   // The name and logo go to the first page this role can open: the dashboard for most,
   // the Assigner for an assigner (who has no tournament dashboard), game day for a
   // field director.
@@ -144,7 +145,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   // This event's overdue tasks, as a red count on the Tasks tab (overdue only,
   // like the top bar). Refreshed when a task is checked off anywhere on the page.
   const [overdue, setOverdue] = useState(0)
-  const tasksOpen = status === 'authenticated' && roleCanAccess(effectiveRole, `${base}/tasks`)
+  const tasksOpen = status === 'authenticated' && roleCanAccess(effectiveRole, `${base}/tasks`, planOff)
   useEffect(() => {
     if (!tasksOpen) return
     let live = true

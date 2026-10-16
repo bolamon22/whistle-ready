@@ -12,9 +12,9 @@ import { roleHome } from '@/lib/roleHome'
 // Whistle Ready staff can't open, so they got "not allowed"; they go home instead.
 export default function EventBackLink({ id }: { id: string | string[] }) {
   const { status } = useSession()
-  const { effectiveRole } = useRole()
+  const { effectiveRole, planOff } = useRole()
   const dash = `/tournaments/${Array.isArray(id) ? id[0] : id}/dashboard`
-  const toDash = status !== 'authenticated' || roleCanAccess(effectiveRole, dash)
+  const toDash = status !== 'authenticated' || roleCanAccess(effectiveRole, dash, planOff)
   return (
     <Link href={toDash ? dash : roleHome(effectiveRole)} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3">
       <ChevronLeft size={15} /> {toDash ? 'Dashboard' : 'Home'}

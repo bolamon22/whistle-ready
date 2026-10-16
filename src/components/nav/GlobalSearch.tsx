@@ -27,8 +27,9 @@ function jobsOf(w: { roles?: unknown; defaultRole?: string | null }): string[] {
   return list.map(j => JOB[j] ?? j)
 }
 
-export default function GlobalSearch({ role, menus, events, previewOrgId, hotkey = false, variant = 'bar', onDone }: {
+export default function GlobalSearch({ role, planOff, menus, events, previewOrgId, hotkey = false, variant = 'bar', onDone }: {
   role: string
+  planOff?: readonly string[] | null
   menus: NavMenu[]
   events: NavEvent[]
   previewOrgId: string | null
@@ -47,9 +48,9 @@ export default function GlobalSearch({ role, menus, events, previewOrgId, hotkey
   const box = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const loaded = useRef(false)
-  const canStaff = roleCanAccess(role, '/staff')
+  const canStaff = roleCanAccess(role, '/staff', planOff)
   const canLogins = role === 'admin'
-  const canClubs = roleCanAccess(role, '/dashboard/org/clubs')
+  const canClubs = roleCanAccess(role, '/dashboard/org/clubs', planOff)
   const placeholder = canClubs ? 'Search people, events, clubs' : canStaff ? 'Search people and events' : 'Search events and pages'
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function GlobalSearch({ role, menus, events, previewOrgId, hotkey
       arr.map(t => ({ t, r: name(t).toLowerCase().startsWith(s) ? 0 : 1 })).sort((a, b) => a.r - b.r).map(x => x.t)
     const out: Hit[] = []
     for (const e of first(events.filter(e => has(e.name, e.location)), e => e.name).slice(0, 5)) {
-      out.push({ group: 'Events', label: e.name, sub: [dateRange(e), e.location].filter(Boolean).join(' · '), href: eventHref(role, e.id) })
+      out.push({ group: 'Events', label: e.name, sub: [dateRange(e), e.location].filter(Boolean).join(' · '), href: eventHref(role, e.id, planOff) })
     }
     for (const w of first((staff ?? []).filter(w => has(w.name, w.email, ...jobsOf(w))), w => String(w.name || '')).slice(0, 5)) {
       out.push({ group: 'Staff', label: String(w.name || ''), sub: jobsOf(w).join(', '), href: `/staff/${w.id}` })
@@ -108,7 +109,7 @@ export default function GlobalSearch({ role, menus, events, previewOrgId, hotkey
       out.push({ group: 'Pages', label: i.label, sub: i.desc, href: i.href })
     }
     return out
-  }, [s, events, staff, logins, clubs, menus, role])
+  }, [s, events, staff, logins, clubs, menus, role, planOff])
 
   const loading = (canStaff && staff === null) || (canLogins && logins === null) || (canClubs && clubs === null)
   const groups = useMemo(() => {

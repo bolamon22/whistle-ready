@@ -119,7 +119,7 @@ export default function DashboardPage() {
   // the money hidden tab. Can we just make them work together?" -- a second button
   // for the marks was one control too many.
   const [showMoney, setShowMoney] = useState(false)
-  const { effectiveRole } = useRole()
+  const { effectiveRole, planOff } = useRole()
   const dragFrom = useRef<number | null>(null)
 
   useEffect(() => {
@@ -175,7 +175,7 @@ export default function DashboardPage() {
   const statusOnly = data.canSeeMoney === false
   // Links go only where this role may go; a tile that bounced to "unauthorized"
   // reads as broken.
-  const linkIf = (href: string) => (roleCanAccess(effectiveRole, href) ? href : undefined)
+  const linkIf = (href: string) => (roleCanAccess(effectiveRole, href, planOff) ? href : undefined)
   const showMarks = showMoney || statusOnly
   const assignPct = games.active > 0 ? Math.round((games.assigned / (games.active * 2)) * 100) : 0
   const collectPct = reg.invoiced > 0 ? Math.round((reg.received / reg.invoiced) * 100) : 0
@@ -340,7 +340,7 @@ export default function DashboardPage() {
         </section>
 
         {/* ── Tasks (directors; hidden from roles without the Tasks tab) ── */}
-        {roleCanAccess(effectiveRole, `/tournaments/${id}/tasks`) && <TournamentTasksBox tournamentId={String(id)} />}
+        {roleCanAccess(effectiveRole, `/tournaments/${id}/tasks`, planOff) && <TournamentTasksBox tournamentId={String(id)} />}
 
         {/* ── Game Day console ──────────────────────────────────────────── */}
         <section>

@@ -15,6 +15,7 @@ import NavMenus from '@/components/nav/NavMenus'
 import EventSwitcher from '@/components/nav/EventSwitcher'
 import GlobalSearch from '@/components/nav/GlobalSearch'
 import AccountMenu, { Avatar, ViewAsSelect } from '@/components/nav/AccountMenu'
+import { OrgBrand, OrgSheetList, useMyOrgs } from '@/components/nav/OrgSwitcher'
 import { type NavEvent, ROLE_LABELS, currentEvent, currentMenu, todayYmd, visibleMenus } from '@/components/nav/navConfig'
 import { isLegalPath } from '@/lib/legalRoutes'
 
@@ -23,7 +24,8 @@ import { isLegalPath } from '@/lib/legalRoutes'
 // event you're working on (a switcher), four menus (Events, People, Organization,
 // Admin) holding only the links this role can open, then search (Ctrl K), Tasks
 // with the overdue count, who's on, View as, and the account menu. Below 1280px
-// the menus fold into one phone menu.
+// the menus fold into one phone menu. A login that works in more than one
+// organization (lib/orgMembers) gets the organization switcher on the logo.
 
 const SHEET_LINK = 'flex min-h-[44px] items-center justify-between gap-3 px-1 text-[15px] font-medium text-slate-900 hover:text-teal-700'
 
@@ -39,7 +41,8 @@ export default function NavBar() {
   const [today, setToday] = useState('')
   const org = useOrg()
   const { data: session } = useSession()
-  const { effectiveRole, isPreview, setPreviewRole } = useRole()
+  const { effectiveRole, isPreview, setPreviewRole, planOff } = useRole()
+  const myOrgs = useMyOrgs()
 
   const realRole = session?.user?.role ?? 'staff'
   const role = effectiveRole
@@ -109,7 +112,7 @@ export default function NavBar() {
   // counted "due this week" was always lit. Reloaded when a task changes, when
   // the admin switches org, and on page changes at most once a minute (a new
   // day makes more tasks overdue).
-  const canTasks = !!session && roleCanAccess(role, '/tasks')
+  const canTasks = !!session && roleCanAccess(role, '/tasks', planOff)
   const [overdue, setOverdue] = useState(0)
   const tasksAt = useRef(0)
   const loadOverdue = useCallback(() => {
@@ -165,9 +168,9 @@ export default function NavBar() {
   // one, and on sunshineeventsgroup.com the two named different companies.
   if (!session && (pathname === '/' || pathname === '/find' || pathname === '/guides' || pathname.startsWith('/guides/') || isLegalPath(pathname))) return null
 
-  const menus = session ? visibleMenus(role) : []
+  const menus = session ? visibleMenus(role, planOff) : []
   const current = currentMenu(menus, pathname)
-  const canEvents = !!session && roleCanAccess(role, '/')
+  const canEvents = !!session && roleCanAccess(role, '/', planOff)
   const event = canEvents && today ? currentEvent(tournaments, pathname, today) : null
   const canCreate = role === 'admin' || role === 'director'
   const showTheme = isStaffThemeRoute(pathname)
@@ -175,7 +178,9 @@ export default function NavBar() {
   const roleLabel = ROLE_LABELS[role] ?? role
   const taskLabel = overdue > 0 ? `Tasks, ${overdue} overdue` : 'Tasks'
 
-  const brand = hasOrg ? (
+  const brand = myOrgs.orgs.length > 1 ? (
+    <OrgBrand org={org} orgs={myOrgs.orgs} active={myOrgs.active} open={open === 'org'} setOpen={o => setOpen(o ? 'org' : null)} />
+  ) : hasOrg ? (
     <a href="/" aria-label={`${org.name} home`} className="flex min-w-0 flex-1 items-center gap-2.5 xl:flex-none xl:flex-shrink-0">
       {org.logoUrl
         ? <img src={org.logoUrl} alt="" className="h-9 w-9 flex-shrink-0 rounded-[10px] border border-slate-200 bg-white object-contain p-[3px]" />
@@ -206,7 +211,7 @@ export default function NavBar() {
           <>
             <span aria-hidden className="hidden h-6 w-px flex-shrink-0 bg-slate-200 xl:block" />
             <div className="hidden flex-shrink-0 xl:block">
-              <EventSwitcher events={tournaments} current={event} role={role} today={today} canCreate={canCreate}
+              <EventSwitcher events={tournaments} current={event} role={role} planOff={planOff} today={today} canCreate={canCreate}
                 open={open === 'event'} setOpen={o => setOpen(o ? 'event' : null)} variant="pill" />
             </div>
           </>
@@ -221,7 +226,7 @@ export default function NavBar() {
 
         {canEvents && (
           <div className="hidden min-w-[180px] max-w-[300px] shrink basis-[300px] xl:block">
-            <GlobalSearch role={role} menus={menus} events={tournaments} previewOrgId={previewOrgId} hotkey />
+            <GlobalSearch role={role} planOff={planOff} menus={menus} events={tournaments} previewOrgId={previewOrgId} hotkey />
           </div>
         )}
 
@@ -269,11 +274,12 @@ export default function NavBar() {
           <div className="absolute inset-x-0 top-full h-screen bg-black/30" onClick={() => setSheet(false)} aria-hidden />
           <nav aria-label="Menu" className="absolute inset-x-0 top-full max-h-[calc(100dvh-60px)] overflow-y-auto border-b border-slate-200 bg-white px-4 pb-5 pt-3 shadow-lg">
             <div className="mx-auto flex max-w-xl flex-col gap-1.5">
+              <OrgSheetList orgs={myOrgs.orgs} active={myOrgs.active} onDone={() => setSheet(false)} />
               {canEvents && (
-                <GlobalSearch role={role} menus={menus} events={tournaments} previewOrgId={previewOrgId} variant="sheet" onDone={() => setSheet(false)} />
+                <GlobalSearch role={role} planOff={planOff} menus={menus} events={tournaments} previewOrgId={previewOrgId} variant="sheet" onDone={() => setSheet(false)} />
               )}
               {event && (
-                <EventSwitcher events={tournaments} current={event} role={role} today={today} canCreate={canCreate}
+                <EventSwitcher events={tournaments} current={event} role={role} planOff={planOff} today={today} canCreate={canCreate}
                   open={sheetEvent} setOpen={setSheetEvent} variant="card" />
               )}
 

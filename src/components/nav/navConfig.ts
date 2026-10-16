@@ -51,10 +51,11 @@ export const NAV_MENUS: NavMenu[] = [
   ] },
 ]
 
-/** The menus this role sees, each with only the links it can open. */
-export function visibleMenus(role: string): NavMenu[] {
+/** The menus this role sees, each with only the links it can open (the
+ *  organization's plan included: lib/orgPlans). */
+export function visibleMenus(role: string, planOff?: readonly string[] | null): NavMenu[] {
   return NAV_MENUS
-    .map(m => ({ ...m, items: m.items.filter(i => (!i.roles || i.roles.includes(role)) && roleCanAccess(role, i.href)) }))
+    .map(m => ({ ...m, items: m.items.filter(i => (!i.roles || i.roles.includes(role)) && roleCanAccess(role, i.href, planOff)) }))
     .filter(m => m.items.length > 0)
 }
 
@@ -115,9 +116,9 @@ export function whenLabel(e: NavEvent, today: string): string {
 
 /** Where an event opens for this role: its dashboard, else the board, else the
  *  scheduler, else game day (a field director). */
-export function eventHref(role: string, id: string): string {
+export function eventHref(role: string, id: string, planOff?: readonly string[] | null): string {
   const base = `/tournaments/${id}`
-  return [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/communications`, `${base}/roster`].find(h => roleCanAccess(role, h)) ?? base
+  return [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/communications`, `${base}/roster`].find(h => roleCanAccess(role, h, planOff)) ?? base
 }
 
 // ── Roles, for the account menu and View as ──

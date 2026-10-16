@@ -7,13 +7,18 @@ interface RoleContextType {
   effectiveRole: string
   isPreview: boolean
   setPreviewRole: (role: string | null) => void
+  /** Feature groups the organization's plan has off (lib/orgPlans): pass to roleCanAccess. */
+  planOff: string[]
 }
 
 const RoleContext = createContext<RoleContextType>({
   effectiveRole: 'viewer',
   isPreview: false,
   setPreviewRole: () => {},
+  planOff: [],
 })
+
+const NO_GROUPS: string[] = []
 
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession()
@@ -51,9 +56,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const isAdmin = realRole === 'admin'
   const isPreview = isAdmin && previewRole !== null
   const effectiveRole = isPreview ? previewRole! : realRole
+  // The plan of the organization this login works in. Admins (previewing or not) aren't held to one.
+  const planOff = !isAdmin && Array.isArray(session?.user?.planOff) ? session!.user.planOff! : NO_GROUPS
 
   return (
-    <RoleContext.Provider value={{ effectiveRole, isPreview, setPreviewRole }}>
+    <RoleContext.Provider value={{ effectiveRole, isPreview, setPreviewRole, planOff }}>
       {children}
     </RoleContext.Provider>
   )
