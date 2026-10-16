@@ -213,9 +213,19 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   page in an off group is closed for every role; middleware passes `token.planOff` (not for an admin's View as),
   and every client caller passes `useRole().planOff` (IfCanOpen, TournamentNav, navConfig `visibleMenus` /
   `eventHref`, NavBar, GlobalSearch, EventSwitcher, TournamentsDashboard, EventBackLink, the event dashboard).
-  Plans are page-level: API routes don't check them (it's the org's own data). Not yet: routes that reach an
-  event through another id (`/api/games/<id>`, `/api/registrations/<id>`, payments, costs, time entries, a Staff
-  Pool record) don't check the org themselves; one staff home for an
+  Plans are page-level: API routes don't check them (it's the org's own data). Routes that reach an event
+  through another id call `orgGate(gate, tournamentId)` / `orgGateRegistration(gate, regId)` / `orgGateFor(gate,
+  orgId)` (lib/apiAuth; roles from `lib/orgScope`, shared with middleware; admins incl. View as, staff, clubs and
+  families pass; 404 like a missing record): games/[id] (GET falls back to the public answer), assignments
+  (+ the worker must be this org's), assignments/[id], time-entries (+ worker), time-entries/[id], workers/[id]
+  and its W-9 (a director of any org could read any W-9), registrations/[id] (travel, edit, delete), its
+  confirm resolve, invoice POST, merge (both), restore, send-pay-link, registrations export / deleted /
+  pending-transfers, GET /api/registrations (another org's director gets the public answer),
+  registration-payments (+[id], refund), payment-records (+[id]; a director must ask by event or person),
+  availability, venues/[id] (the id is the event), comm-send and comm-schedule. Payment reconcile and the
+  payments audit are now money roles only (they were any staff login) and a director sees only gaps/events of
+  their org (`PaymentGap.orgId`: the event's, or the vendor form's). Costs, tasks and contacts were already
+  org-scoped (tasksGate). Tests: 42 more real-Prisma checks (scratch isotest). Not yet: one staff home for an
   official in two orgs (staff-portal, ref/assignments, availability answers, check-in, W-9 and training all take
   the first Worker for the login email), Chirp's page list ignores the plan. Tests: 73 real-Prisma checks
   (orgMembers, auth token, Your team, admin org routes, plans, field directors, assigner pay, event-org) and 35
