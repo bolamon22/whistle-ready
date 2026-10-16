@@ -269,6 +269,19 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   (role list by the picked org's plan, the bar, the chip), account and phone menus, org switcher, Your team,
   Admin → Organizations (new-org owner note, team list and role menu). Not renamed yet: Logins, Chirp's role
   line, Who's on, other pages' own role maps. Tests: 7 more in vatest (45).
+- **Head Assigner setup gaps (Oct 16).** Setting one up (Bo: "he would need to have the payroll for the official
+  scorekeepers and possibly any miscellaneous staff") showed what the Assigner plan still sent through Event setup &
+  scheduling. Pay rates and officials per game lived only in Tournament setup: now also **Pay rates** on Staff pay
+  (`components/PayRatesPanel`, directors and admins), and Setup and the panel both load with `staffPayOf()` and save
+  with `staffPayBody()` (lib/staffPay). Event cards on home and `/dashboard/director` opened the event dashboard
+  ("not allowed" on the Assigner plan, and that page is where "not allowed" sends a director): they use `eventHref`
+  (navConfig), and the director page shows only buttons the plan opens. The event header's Register shows only
+  with Registration on. The board's Import gives each game `refsLookup` (it ignored the standard officials count)
+  and says how many games and assignments it replaces. Still open: a re-import that keeps assignments, a short New
+  event form for the Assigner plan. Misc staff are paid through Time Entries (Staff Pool role Field Operations or
+  Athletic Trainer, the person's Hourly Rate); roles added in the rate editor are saved but payroll reads only the
+  standard role ids (`parsePayRates`). Help: import-games (new), staff-pay-rates, staff-pay-summary,
+  admin-organizations (the setup recipe), assigner. Tests: 30 (scratch).
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
