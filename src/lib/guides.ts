@@ -122,6 +122,142 @@ We built [Whistle Ready](/#features) because we were doing all of this by hand. 
 Running a tournament and want to see it work on your own fields? [Tell us about your event](/#organizations).
 `,
   },
+  {
+    slug: 'how-to-follow-your-team-at-a-lacrosse-tournament',
+    title: 'How to follow your team at a lacrosse tournament: schedules, live scores and alerts on your phone',
+    description: 'Find your team’s games, field numbers and live scores, and get an alert on your phone when the schedule changes or a game goes final. No account needed.',
+    audience: 'Parents and fans',
+    published: '2026-10-16',
+    updated: '2026-10-16',
+    author: TEAM,
+    body: `
+> **Short answer:** Open the event at [whistleready.app/find](/find), find your team, and tap **Follow**. Your team moves to the top of the page under **My Teams**, and if you turn on alerts your phone tells you when the schedule is posted, when your team’s games move, and when each game goes final. No account, no password.
+
+Every tournament weekend, the most common question at the main tent is some version of “when and where does my kid play next?” Here is how to answer it yourself in about a minute.
+
+## 1. Find the event
+
+Go to [whistleready.app/find](/find) and search for the tournament by name, or open the link the club or tournament shared with you. The event page shows every division, the full schedule, field numbers and standings.
+
+## 2. Find your team, in the right division
+
+Search for your team’s name. Many clubs bring more than one team to the same event, so check the **division** too. “Miami Reign” in Boys U14 and “Miami Reign” in Boys HS are different teams with different schedules.
+
+## 3. Tap Follow
+
+Tap **Follow** on your team. You can follow more than one, which helps if you have two kids playing, or you want to keep an eye on the team your team plays next. Your teams show up at the top of the event page under **My Teams**, so you are not scrolling through 300 games to find yours.
+
+Follows are saved on your phone, so there is nothing to sign up for. If you switch phones, just follow again.
+
+## 4. Turn on alerts
+
+The first time you follow a team, you are asked whether you want alerts. Say yes and you will hear about:
+
+- **The schedule going out,** with your team’s games.
+- **Changes to your team’s games,** such as a new time or field.
+- **Final scores** for your team’s games during the event.
+- **Announcements from the tournament,** such as a weather delay.
+
+You will not get a buzz for every little edit while the director is still building the schedule. Alerts are sent when the schedule is published.
+
+### On an iPhone: add it to your Home Screen first
+
+Apple only allows alerts from a website once it is on your Home Screen. Open the event in Safari, tap the **Share** button, tap **Add to Home Screen**, then open the event from that new icon and turn on alerts. It takes about 15 seconds. Android phones can turn on alerts straight from the browser.
+
+## 5. Check live scores and standings during the day
+
+Scores are entered at the field by the scorekeeper and show up on the event page within moments. Standings update as each final comes in, so you can see where your team sits going into bracket day without asking anyone.
+
+## Game-day tips from the tent
+
+- **Check the field number, not just the time.** Big events can run on a dozen or more fields spread across a park. The field number is on every game.
+- **Look again in the morning.** Weather and late games can shift a schedule overnight. If you follow your team, you will be told.
+- **Lightning means everyone off the field.** Play usually resumes 30 minutes after the last strike, and the tournament will post an update when games restart.
+- **Coaches have the final word on arrival times.** The schedule shows game times. Your coach may want the team there earlier to warm up.
+
+## For coaches
+
+Coaches can follow their own teams in one tap when they sign the coach waiver, so they hear about schedule changes the same moment parents do.
+
+## How Whistle Ready helps
+
+[Whistle Ready](/#features) runs the schedule, scores and alerts for the tournaments that use it, so families get one link for the whole weekend instead of a printed sheet and a group text.
+
+[Find a tournament](/find)
+`,
+  },
+  {
+    slug: 'what-to-bring-to-a-youth-lacrosse-tournament',
+    title: 'What to bring to a youth lacrosse tournament: a packing list for players and parents',
+    description: 'A packing list for a youth lacrosse tournament weekend in the Florida heat: player gear, spares, sideline setup, food and water, and what to do before you leave home.',
+    audience: 'Parents and players',
+    published: '2026-10-16',
+    updated: '2026-10-16',
+    author: TEAM,
+    body: `
+> **Short answer:** Pack the full set of gear plus spares (an extra stick or head, mouthguard and laces), two jerseys if your team has light and dark, more water than you think, sunscreen, a pop-up tent and chairs, and snacks for between games. Before you leave, check the schedule for your first game’s field number and make sure your waiver is signed.
+
+We have watched a lot of families arrive at 7:30 in the morning without a mouthguard. This is the list we wish everyone had.
+
+## Player gear
+
+- **Helmet** with a properly fitted chin strap
+- **Mouthguard,** plus a spare. Players without one cannot play.
+- **Gloves**
+- **Shoulder pads and arm pads**
+- **Rib pads,** if your division or position requires them
+- **Cup** for boys
+- **Goggles** for girls, plus **eye protection** checked to your division’s rules
+- **Stick,** plus a **backup stick or head.** Strings break and heads crack.
+- **Cleats,** and a pair of sneakers or slides for between games
+- **Both game jerseys** (light and dark) and shorts or kilt
+- **Extra socks.** Wet socks by game three are miserable.
+
+Goalies: add the chest protector, throat guard, goalie stick and a backup.
+
+## Small things that save a game
+
+- Spare **laces and stringing,** and someone who knows how to restring
+- **Athletic tape**
+- A **screwdriver** for helmet hardware
+- **Hair ties** and a towel
+
+## Staying cool in the heat
+
+Florida tournaments are hot, even in the fall, and most of the day is in full sun.
+
+- **Water and a sports drink,** more than you think. A cooler with ice is worth the carry.
+- **Sunscreen,** reapplied between games
+- **A pop-up tent** for shade. Many clubs set up a team tent row, so ask your coach.
+- **Chairs** for the sideline
+- **Cooling towels** and a **spray bottle**
+- **Hat and sunglasses** for parents
+
+## Food between games
+
+Teams usually play two or three games a day with a game off in between. Pack food that is easy to eat in that break: fruit, sandwiches, granola bars, pretzels. Skip anything heavy right before a game. Many events have food trucks, but lines get long at lunch.
+
+## For parents
+
+- **Phone charger** or a battery pack. You will be checking scores all day.
+- **Some cash** for parking, vendors or the merch tent
+- **A small first-aid kit.** Every event should have an athletic trainer, but a bandage and ice pack in your bag save a walk.
+- **Rain jacket or poncho** for afternoon storms
+
+## Before you leave home
+
+- **Check the schedule** for your first game’s time and **field number,** and follow your team so you hear about changes. See [how to follow your team](/guides/how-to-follow-your-team-at-a-lacrosse-tournament).
+- **Make sure the player waiver is signed.** Most events check waivers before a team’s first game.
+- **Look at the field map** for parking and where your field is. Big parks can be a long walk.
+- **Know the weather plan.** Lightning stops play, and games pick up once it is safe.
+
+## How Whistle Ready helps
+
+Tournaments on [Whistle Ready](/#features) post the schedule, field numbers and live scores in one place, and let families sign waivers online before the weekend.
+
+[Find a tournament](/find)
+`,
+  },
 ]
 
 export function guideBySlug(slug: string): Guide | undefined {
