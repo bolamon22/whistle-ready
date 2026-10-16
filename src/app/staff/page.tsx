@@ -11,6 +11,7 @@ import RefLevelPill from '@/components/RefLevelPill'
 import { REF_LEVELS, refLevelOf } from '@/lib/refLevel'
 import { canSeeRefLevel } from '@/lib/roleScope'
 import { useRole } from '@/lib/role-context'
+import { importName } from '@/lib/importName'
 
 interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;refLevel?:number|null;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;referredBy?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
@@ -584,7 +585,8 @@ export default function StaffPage() {
       setImportData({headers:data.headers,rows:data.rows})
       const h=data.headers as string[]
       const find=(...keys:string[])=>h.find((x:string)=>keys.some(k=>x.toLowerCase().replace(/\s/g,'')===k.toLowerCase().replace(/\s/g,'')))??''
-      setMapping({name:find('name','fullname'),email:find('email','emailaddress'),phone:find('phone','cell','mobile'),certLevel:find('certlevel','cert','level'),gender:find('gender','boys/girls'),payRateOverride:find('payrate','rate','pay'),defaultRole:find('role','position','title'),hourlyRate:find('hourlyrate','rate','hourly')})
+      // A name is one Full name column, or First and Last name columns (lib/importName).
+      setMapping({name:find('name','fullname'),firstName:find('firstname','first','fname','givenname'),lastName:find('lastname','last','lname','surname','familyname'),email:find('email','emailaddress'),phone:find('phone','cell','mobile'),certLevel:find('certlevel','cert','level'),gender:find('gender','boys/girls'),payRateOverride:find('payrate','rate','pay'),defaultRole:find('role','position','title'),hourlyRate:find('hourlyrate','rate','hourly')})
     } else toast.error(data.error||'Parse failed')
     setImportLoading(false);if(fileRef.current)fileRef.current.value=''
   }
@@ -593,18 +595,18 @@ export default function StaffPage() {
 
   function buildPreview(){
     if(!importData)return[]
-    return importData.rows.filter(r=>getVal(r,mapping.name)).map(r=>{
+    return importData.rows.map(r=>({r,name:importName(getVal(r,mapping.name),getVal(r,mapping.firstName),getVal(r,mapping.lastName))})).filter(x=>x.name).map(({r,name})=>{
       if(importType==='refs'){
         const cert=getVal(r,mapping.certLevel).toLowerCase()
         const gr=getVal(r,mapping.gender).toLowerCase()
         const gender=gr.includes('boy')?'boys':gr.includes('girl')?'girls':'both'
         const rate=getVal(r,mapping.payRateOverride)
-        return{name:getVal(r,mapping.name),email:getVal(r,mapping.email)||null,phone:getVal(r,mapping.phone)||null,certLevel:cert||'youth',defaultRole:'ref',roles:['ref'],gender,payRateOverride:rate?parseFloat(rate)||null:null,isAssigner:false,hourlyRate:null,payMethod:'check',payHandle:null}
+        return{name,email:getVal(r,mapping.email)||null,phone:getVal(r,mapping.phone)||null,certLevel:cert||'youth',defaultRole:'ref',roles:['ref'],gender,payRateOverride:rate?parseFloat(rate)||null:null,isAssigner:false,hourlyRate:null,payMethod:'check',payHandle:null}
       }else{
         const role=getVal(r,mapping.defaultRole).toLowerCase()
         const defaultRole=role.includes('train')?'athletic_trainer':role.includes('field')?'field_ops':role.includes('score')?'scorekeeper':'field_ops'
         const rate=getVal(r,mapping.hourlyRate)
-        return{name:getVal(r,mapping.name),email:getVal(r,mapping.email)||null,phone:getVal(r,mapping.phone)||null,certLevel:'none',defaultRole,roles:[defaultRole],gender:'both',payRateOverride:null,isAssigner:false,hourlyRate:rate?parseFloat(rate)||null:null,payMethod:'check',payHandle:null}
+        return{name,email:getVal(r,mapping.email)||null,phone:getVal(r,mapping.phone)||null,certLevel:'none',defaultRole,roles:[defaultRole],gender:'both',payRateOverride:null,isAssigner:false,hourlyRate:rate?parseFloat(rate)||null:null,payMethod:'check',payHandle:null}
       }
     })
   }
@@ -748,9 +750,10 @@ export default function StaffPage() {
           )}
           {importData&&(
             <div>
-              <p className="text-sm font-semibold mb-3">Map your columns — {importData.rows.length} rows detected</p>
+              <p className="text-sm font-semibold mb-1">Map your columns — {importData.rows.length} rows detected</p>
+              <p className="text-xs text-slate-500 mb-3">For the name, map <strong>Full name</strong>, or <strong>First name</strong> and <strong>Last name</strong>. A name written “Smith, John” comes in as John Smith.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-                {[{key:'name',label:'Name *'},{key:'email',label:'Email'},{key:'phone',label:'Phone'},...(importType==='refs'?[{key:'certLevel',label:'Cert Level'},{key:'gender',label:'Boys/Girls'},{key:'payRateOverride',label:'Pay Rate ($/game)'}]:[{key:'defaultRole',label:'Role'},{key:'hourlyRate',label:'Hourly Rate ($/hr)'}])].map(f=>(
+                {[{key:'name',label:'Full name'},{key:'firstName',label:'First name'},{key:'lastName',label:'Last name'},{key:'email',label:'Email'},{key:'phone',label:'Phone'},...(importType==='refs'?[{key:'certLevel',label:'Cert Level'},{key:'gender',label:'Boys/Girls'},{key:'payRateOverride',label:'Pay Rate ($/game)'}]:[{key:'defaultRole',label:'Role'},{key:'hourlyRate',label:'Hourly Rate ($/hr)'}])].map(f=>(
                   <div key={f.key}><label className="label">{f.label}</label><select className="select" value={mapping[f.key]??''} onChange={e=>setMapping(m=>({...m,[f.key]:e.target.value}))}><option value="">— not mapped —</option>{importData.headers.map(h=><option key={h} value={h}>{h}</option>)}</select></div>
                 ))}
               </div>
