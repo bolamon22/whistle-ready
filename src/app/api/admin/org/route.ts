@@ -11,7 +11,6 @@ export async function GET(req: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
-  const userId = (session.user as any).id
   const client = getClient()
   try {
     // Admin can pass ?view=orgId to get a specific org (for preview mode)
@@ -24,10 +23,15 @@ export async function GET(req: Request) {
       }
       return NextResponse.json(null) // admin with no preview = platform view, no org brand
     }
-    // Regular user: return their org
+    // Regular user: the organization they're working in (the session's: with more than
+    // one, the one picked in the switcher, lib/orgMembers), and only what the app shows
+    // them (the brand, and the payment instructions on the registration form), not the
+    // whole row.
+    const orgId = (session.user as any).orgId as string | null
+    if (!orgId) return NextResponse.json(null)
     const res = await client.execute({
-      sql: `SELECT o.* FROM "Organization" o INNER JOIN "User" u ON u."orgId" = o.id WHERE u.id = ? LIMIT 1`,
-      args: [userId],
+      sql: `SELECT id, name, slug, logoUrl, contactEmail, contactPhone, website, zelleHandle, paypalEmail, checkPayableTo, checkAddress FROM "Organization" WHERE id = ? LIMIT 1`,
+      args: [orgId],
     })
     return NextResponse.json(res.rows[0] ?? null)
   } catch { return NextResponse.json(null) }
