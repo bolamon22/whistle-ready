@@ -13,8 +13,9 @@ export const dynamic = 'force-dynamic'
 // (lib/orgMembers). Switching itself is useSession().update({ activeOrgId }), which
 // lib/auth checks against these same memberships.
 //
-// GET -> { active, orgs: [{ orgId, name, logoUrl, role, home, plan }] }
+// GET -> { active, orgs: [{ orgId, name, logoUrl, role, home, plan, planKey }] }
 //        orgId null = a club or family login's own portal (no organization).
+//        plan = the plan's short name ('Assigner'), planKey its key ('assigner').
 export async function GET() {
   const session = await getServerSession(authOptions)
   const user = session?.user as { id?: string; role?: string; orgId?: string | null } | undefined
@@ -39,6 +40,7 @@ export async function GET() {
       name: m.orgId ? String(org.get(m.orgId)?.name || 'Organization') : '',
       logoUrl: m.orgId ? logo.get(m.orgId) || '' : '',
       plan: m.orgId ? PLANS[plans[m.orgId]?.plan || 'tournament'].short : '',
+      planKey: m.orgId ? plans[m.orgId]?.plan || 'tournament' : '',
     })),
   })
 }

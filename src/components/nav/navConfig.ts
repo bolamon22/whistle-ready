@@ -10,6 +10,7 @@ import {
   Building2, Image, Scale, Camera, LayoutGrid, Building, Shield, Map, CreditCard,
 } from 'lucide-react'
 import { roleCanAccess } from '@/lib/routeAccess'
+import { ownerTitle } from '@/lib/orgPlans'
 
 export type NavItem = {
   href: string; label: string; desc: string; icon: LucideIcon
@@ -133,3 +134,8 @@ export const ROLE_COLORS: Record<string, string> = {
 }
 /** The roles an admin can preview the app as. */
 export const VIEW_AS_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'field_director', 'coach', 'staff', 'parent']
+/** A role's name in an organization on this plan (lib/orgPlans): the director is the
+ *  Head Assigner on the Assigner plan, the Tournament Director otherwise. */
+export function roleTitle(role: string, plan?: string | null): string {
+  return role === 'director' ? ownerTitle(plan) : ROLE_LABELS[role] ?? role
+}

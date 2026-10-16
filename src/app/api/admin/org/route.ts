@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createClient } from '@libsql/client'
+import { readOrgPlan } from '@/lib/orgPlanStore'
 
 function getClient() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 }
+
+// GET also answers the organization's plan key (`plan`, lib/orgPlans), so the app can
+// call its director by the plan's name for them (Head Assigner on the Assigner plan).
+const withPlan = async (row: Record<string, unknown> | undefined) => row ? { ...row, plan: (await readOrgPlan(String(row.id))).plan } : null
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions)
@@ -19,7 +24,7 @@ export async function GET(req: Request) {
       const viewId = url.searchParams.get('view')
       if (viewId) {
         const res = await client.execute({ sql: `SELECT * FROM "Organization" WHERE id = ? LIMIT 1`, args: [viewId] })
-        return NextResponse.json(res.rows[0] ?? null)
+        return NextResponse.json(await withPlan(res.rows[0]))
       }
       return NextResponse.json(null) // admin with no preview = platform view, no org brand
     }
@@ -33,7 +38,7 @@ export async function GET(req: Request) {
       sql: `SELECT id, name, slug, logoUrl, contactEmail, contactPhone, website, zelleHandle, paypalEmail, checkPayableTo, checkAddress FROM "Organization" WHERE id = ? LIMIT 1`,
       args: [orgId],
     })
-    return NextResponse.json(res.rows[0] ?? null)
+    return NextResponse.json(await withPlan(res.rows[0]))
   } catch { return NextResponse.json(null) }
 }
 

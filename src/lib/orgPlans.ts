@@ -53,13 +53,20 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 ]
 export const GROUP_KEYS = FEATURE_GROUPS.map(g => g.key)
 
-export type Plan = { key: PlanKey; label: string; short: string; desc: string; on: GroupKey[] }
+// `owner` is what the organization's director (the login role that runs it: events,
+// people, pay) is called on that plan. Bo, Oct 16 2026, about the assigner who runs his
+// own officials business: "we don't call them a tournament director". Same role and
+// powers underneath; the plan already leaves out what an assigner doesn't do.
+export type Plan = { key: PlanKey; label: string; short: string; desc: string; on: GroupKey[]; owner: string }
 export const PLANS: Record<PlanKey, Plan> = {
-  tournament: { key: 'tournament', label: 'Whistle Ready Tournament', short: 'Tournament', desc: 'Everything: registration, scheduling, officials, scores, game day, money and the website.', on: [...GROUP_KEYS] },
-  assigner: { key: 'assigner', label: 'Whistle Ready Assigner', short: 'Assigner', desc: 'Officials only: events and games, the Assigner, Staff Pool, availability, confirmations and staff pay.', on: [] },
+  tournament: { key: 'tournament', label: 'Whistle Ready Tournament', short: 'Tournament', desc: 'Everything: registration, scheduling, officials, scores, game day, money and the website.', on: [...GROUP_KEYS], owner: 'Tournament Director' },
+  assigner: { key: 'assigner', label: 'Whistle Ready Assigner', short: 'Assigner', desc: 'Officials only: events and games, the Assigner, Staff Pool, availability, confirmations and staff pay.', on: [], owner: 'Head Assigner' },
 }
 export const PLAN_KEYS = Object.keys(PLANS) as PlanKey[]
 export const isPlanKey = (v: unknown): v is PlanKey => typeof v === 'string' && v in PLANS
+
+/** What the director role is called on a plan (Tournament when unknown). */
+export const ownerTitle = (plan?: string | null): string => PLANS[isPlanKey(plan) ? plan : 'tournament'].owner
 
 /** An organization's plan and its switches. `features` holds every group, true = on. */
 export type OrgPlan = { plan: PlanKey; features: Record<GroupKey, boolean> }

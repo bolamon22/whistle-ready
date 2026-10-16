@@ -7,6 +7,8 @@ interface OrgData {
   name: string
   logoUrl?: string
   slug?: string
+  /** The organization's plan key (lib/orgPlans): names its director (roleTitle). */
+  plan?: string
 }
 
 const OrgContext = createContext<OrgData | null>(null)
