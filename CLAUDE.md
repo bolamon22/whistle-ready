@@ -288,6 +288,14 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   `?tournamentId=` (an admin gets that event's org; others keep their own); the board, roster, Exhibit A and time
   entries send it. Roster POST refuses a worker from another org (a worker with no org is still allowed). Pages that
   send `viewOrgId` (Staff Pool, search) work as before. Tests: 18 (scratch).
+- **Training videos follow the plan (Oct 16).** Bo: an Assigner-package org should get only what pertains to refs,
+  scorekeepers and the assigning grid. `VIDEO_NEEDS` (lib/training) maps a video to the plan groups its pages need
+  (scores, gameday, scheduling, money, registration; unlisted = officials, always on); `videoOnPlan(id, planOff)`,
+  `trainingGroups(planOff)` and `groupsFor/videosFor(roles, planOff)`. `/api/training` counts each person against
+  their org's plan (report, profile, roster) and returns `planOff` on the self call (View as: the viewed org); sends
+  drop off-plan ids. The Video library filters by `useRole().planOff` (an admin sees all). Assigner plan: 19 of 42
+  (Start here basics, R1-R3, the assigner series minus A11 Ref needed), plus live scoring with Scores on. Chirp's
+  video list still ignores the plan. Tests: 22 pure + 14 real-Prisma (scratch).
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
