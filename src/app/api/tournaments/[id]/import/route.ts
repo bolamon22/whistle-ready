@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import prisma from '@/lib/db'
 import { excelSerialToDate, excelSerialToTime } from '@/lib/utils'
 import { requireStaff } from '@/lib/apiAuth'
+import { refsLookup } from '@/lib/refRules'
 
 function parseDate(val: unknown): string {
   if (typeof val==='number') return excelSerialToDate(val)
@@ -32,20 +33,18 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
     if (!rows.length) return NextResponse.json({ error:'No data' }, { status:400 })
     const mapping = mj ? JSON.parse(mj) : autoDetect(Object.keys(rows[0]))
 
-    // Get tournament division rules for ref count
-    const tournament = await prisma.tournament.findUnique({ where:{id:params.id} })
-    const divRules: Record<string,number> = tournament ? JSON.parse(tournament.divisionRules||'{}') : {}
+    // Each game's refs from the event's officials setting: its standard officials per game
+    // and the division exceptions (lib/refRules), like every other way games are made.
+    // This read only the exceptions and gave every other game 2, so a Head Assigner who
+    // set 1 or 3 per game in Pay rates got 2 on every imported game.
+    const refsFor = await refsLookup(params.id)
 
     const dateSet = new Set<string>()
     const games = rows.filter(r=>String(r[mapping.gameNumber]??'').trim()).map(r=>{
       const date=parseDate(r[mapping.date]??''); const startTime=parseTime(r[mapping.startTime]??'')
       const division=String(r[mapping.division]??'')
       dateSet.add(date)
-      // Determine ref count from division rules
-      let refCount=2
-      for (const [keyword, count] of Object.entries(divRules)) {
-        if (division.toLowerCase().includes(keyword.toLowerCase())) { refCount=count; break }
-      }
+      const refCount=refsFor(division)
       return { tournamentId:params.id, gameNumber:String(r[mapping.gameNumber]??''), date, startTime, division, pool:mapping.pool?String(r[mapping.pool]??'')||null:null, location:String(r[mapping.location]??''), team1:String(r[mapping.team1]??''), team2:String(r[mapping.team2]??''), refCount }
     })
     await prisma.game.deleteMany({ where:{tournamentId:params.id} })
