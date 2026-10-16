@@ -132,6 +132,9 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   // than flash an empty bar.
   const { status } = useSession()
   const { effectiveRole, planOff } = useRole()
+  // Register (the public team registration form) only when the plan has Registration:
+  // on the Assigner plan the organization doesn't take registrations.
+  const registers = !planOff.includes('registration')
   const canOpen = (href: string) => status !== 'authenticated' || roleCanAccess(effectiveRole, href, planOff)
   // The name and logo go to the first page this role can open: the dashboard for most,
   // the Assigner for an assigner (who has no tournament dashboard), game day for a
@@ -214,7 +217,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
               </div>
             </div>
             <div className="flex items-center flex-shrink-0 -mr-1.5 -mt-1">
-              <Link href={`${base}/register`} aria-label="Registration form" title="Registration form" className={phoneIcon}><ClipboardList size={16} /></Link>
+              {registers && <Link href={`${base}/register`} aria-label="Registration form" title="Registration form" className={phoneIcon}><ClipboardList size={16} /></Link>}
               <Link href={`${base}/public`} target="_blank" aria-label="Public page" title="Public page" className={phoneIcon}><Globe size={16} /></Link>
               <HelpCenter tournamentId={id} />
               <button onClick={toggleCollapsed} aria-label="Minimize header" className={phoneIcon}><ChevronUp size={16} /></button>
@@ -328,10 +331,10 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
 
           {/* Action buttons */}
           <div className="flex gap-2 flex-shrink-0">
-            <Link href={`${base}/register`}
+            {registers && <Link href={`${base}/register`}
               className="text-xs text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5">
               <ClipboardList size={14} /> Register
-            </Link>
+            </Link>}
             <Link href={`${base}/public`} target="_blank"
               className="text-xs text-slate-300 hover:text-white border border-white/15 hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5">
               <Globe size={14} /> Public

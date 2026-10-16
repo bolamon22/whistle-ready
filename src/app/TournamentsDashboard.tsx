@@ -12,6 +12,7 @@ import { HomeTasksCard, TaskStrip, type OverviewEvent } from '@/components/tasks
 import { useRole } from '@/lib/role-context'
 import { useOrg } from '@/lib/org-context'
 import { roleCanAccess } from '@/lib/routeAccess'
+import { eventHref } from '@/components/nav/navConfig'
 
 interface Tournament {
   id:string; name:string; sport:string; startDate:string; endDate:string
@@ -341,8 +342,9 @@ export default function TournamentsDashboard() {
                   </div>
                 </div>
 
-                {/* Clickable header */}
-                <Link href={`/tournaments/${t.id}/dashboard`} className="block mb-4">
+                {/* Clickable header: the event's first page this role and plan can open
+                    (the Assigner board on the Assigner plan, which has no event dashboard). */}
+                <Link href={eventHref(effectiveRole, t.id, planOff)} className="block mb-4">
                   {/* Logo centered at top */}
                   {t.logoUrl && (
                     <div className="flex justify-center mb-3">
