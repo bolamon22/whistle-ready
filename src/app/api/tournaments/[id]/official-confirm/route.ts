@@ -42,6 +42,13 @@ async function board(event: Event, gate: Gate) {
   ])
   let sent: Record<string, { sentAt?: string }> = {}
   try { sent = notice?.value ? JSON.parse(notice.value) || {} : {} } catch { /* none sent */ }
+  // When each official was last emailed. Notify officials keeps one entry per crew
+  // ("<workerId>|boys") since crews came in (Oct 15 2026), one per official before.
+  const lastSent = new Map<string, string>()
+  for (const [k, v] of Object.entries(sent)) {
+    const id = k.split('|')[0], at = String(v?.sentAt || '')
+    if (at > (lastSent.get(id) || '')) lastSent.set(id, at)
+  }
 
   const slots: Record<string, string> = {}
   const holder = new Map<string, string>()
@@ -52,7 +59,7 @@ async function board(event: Event, gate: Gate) {
   const people = new Map<string, Person>()
   const person = (id: string, name: string) => {
     let p = people.get(id)
-    if (!p) { p = { id, name, games: 0, yes: 0, waiting: 0, changed: 0, changedGames: [], declined: [], answeredAt: '', askedAt: String(sent[id]?.sentAt || '') }; people.set(id, p) }
+    if (!p) { p = { id, name, games: 0, yes: 0, waiting: 0, changed: 0, changedGames: [], declined: [], answeredAt: '', askedAt: lastSent.get(id) || '' }; people.set(id, p) }
     return p
   }
   for (const s of upcoming(allSlots, today)) {
