@@ -260,6 +260,15 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   session role themselves (`/api/tournaments` GET, `/api/workers`) still answer as admin, scoped by the `viewOrgId`
   the client sends from the cookie. Tests: 38 real-Prisma (vatest) and 30 middleware checks (scratch). Help:
   view-as, top-bar, admin-organizations.
+- **Head Assigner (Oct 16).** Bo, about the assigner who runs his own officials business: "we don't call them a
+  tournament director". On the Assigner plan the director role is called **Head Assigner**: names only, same role
+  key and powers (create events, import games, Your team, staff pay), and the plan already limits the pages. A
+  separate role would have meant touching 84 `'director'` checks in 61 files (25 `requireDirector`). `PLANS[k].owner`
+  + `ownerTitle(plan)` (lib/orgPlans), `roleTitle(role, plan)` (navConfig). `/api/admin/org` returns `plan` (the
+  shown org's key, so `useOrg().plan`, View as included) and `/api/me/orgs` adds `planKey`. Renamed in: View as
+  (role list by the picked org's plan, the bar, the chip), account and phone menus, org switcher, Your team,
+  Admin → Organizations (new-org owner note, team list and role menu). Not renamed yet: Logins, Chirp's role
+  line, Who's on, other pages' own role maps. Tests: 7 more in vatest (45).
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
