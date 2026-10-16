@@ -3,7 +3,7 @@ title: Send training videos and see who watched
 category: Staff
 order: 405
 routes: /dashboard/org/videos, /dashboard/assigner/videos
-keywords: training videos send videos email videos staff videos who watched not watched one person just one person leave someone out untick everyone working it event roles athletic trainers scorekeepers refs field ops video library was it sent did it send record of sends copy send me a copy emailed history not sent delivered opened
+keywords: training videos send videos email videos staff videos who watched not watched one person just one person leave someone out untick everyone working it event roles athletic trainers scorekeepers refs field ops video library was it sent did it send record of sends copy send me a copy emailed history not sent delivered opened plan assigner plan head assigner which videos missing videos fewer videos
 ---
 Staff training videos play inside each person's Whistle Ready login, and the app keeps track of who has watched them.
 
@@ -30,3 +30,4 @@ Staff training videos play inside each person's Whistle Ready login, and the app
 - Someone with no email on file can't be sent videos. Add their email with **Edit**.
 - Someone with two Staff Pool records under one email shows the videos watched on either one. Merge the two (see "Merge duplicate staff records").
 - Assigners send to the staff groups they run. Field directors send to the scorekeepers, athletic trainers and field ops on their events.
+- Each organization gets the videos for the pages its plan has. On the Whistle Ready Assigner plan that's **Start here**, the ref videos and the assigner videos, plus the live scoring videos when **Scores** is on. Videos about setup, scheduling, registration and game-day tools aren't shown, sent or counted there. Switching a group on brings its videos back.
