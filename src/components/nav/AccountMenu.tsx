@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import { signOut } from 'next-auth/react'
-import { BellRing, ChevronDown, Eye, LogOut, Shield, UserRound } from 'lucide-react'
-import { ROLE_COLORS, ROLE_LABELS, VIEW_AS_ROLES } from './navConfig'
+import { BellRing, ChevronDown, LogOut, Shield, UserRound } from 'lucide-react'
+import { ROLE_COLORS, ROLE_LABELS } from './navConfig'
+import { ViewAsRow } from './ViewAsMenu'
 
 // The avatar menu at the right of the header (Bo, Oct 13 2026): your name and
-// role, Profile, Game-day alerts, Light/Dark, View as (admins) and Sign out.
+// role, Profile, Game-day alerts, Light/Dark, View as (admins: an organization and
+// a role, components/nav/ViewAsMenu) and Sign out.
 // These used to be separate controls in the bar itself. Club portal is there for a
 // staff login that also directs a club (a field director with a club of his own).
 
@@ -20,57 +22,15 @@ export function Avatar({ name, image, size = 'h-9 w-9 text-xs' }: { name?: strin
     : <span aria-hidden className={`${size} flex flex-shrink-0 items-center justify-center rounded-full bg-teal-100 font-extrabold text-teal-700`}>{initials(name)}</span>
 }
 
-/** Admins only: see the app as another role. 'chip' sits in the bar on wide
- *  screens; 'row' is the same control inside the account and phone menus. */
-export function ViewAsSelect({ role, isPreview, setPreviewRole, variant }: {
-  role: string
-  isPreview: boolean
-  setPreviewRole: (r: string | null) => void
-  variant: 'chip' | 'row'
-}) {
-  const options = (
-    <>
-      <option value="">Admin (you)</option>
-      {VIEW_AS_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
-    </>
-  )
-  const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => setPreviewRole(e.target.value || null)
-  if (variant === 'row') {
-    return (
-      <label className="flex min-h-[44px] items-center justify-between gap-3 px-3">
-        <span className="text-sm font-medium text-slate-900">View as</span>
-        <select value={isPreview ? role : ''} onChange={onChange}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500">
-          {options}
-        </select>
-      </label>
-    )
-  }
-  // The chip shows "View as" (or the role being previewed); the real select sits
-  // invisibly on top of it, so it stays a native, keyboard-friendly menu.
-  return (
-    <label className={`relative hidden h-8 flex-shrink-0 items-center gap-1.5 rounded-full border pl-2.5 pr-2 text-xs font-semibold focus-within:ring-2 focus-within:ring-teal-500 2xl:flex ${isPreview ? 'border-amber-300 bg-amber-100 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
-      <Eye size={15} aria-hidden />
-      <span aria-hidden className="whitespace-nowrap">{isPreview ? ROLE_LABELS[role] ?? role : 'View as'}</span>
-      <ChevronDown size={13} aria-hidden />
-      <select value={isPreview ? role : ''} onChange={onChange} aria-label="View as"
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none rounded-full opacity-0">
-        {options}
-      </select>
-    </label>
-  )
-}
-
 const ROW = 'flex min-h-[40px] items-center gap-2.5 rounded-xl px-3 text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none'
 const ITEM = `${ROW} font-medium text-slate-900`
 
-export default function AccountMenu({ name, image, role, isAdmin, isPreview, setPreviewRole, open, setOpen, showAlerts, showTheme, dark, toggleTheme, poweredBy, clubPortal = false }: {
+export default function AccountMenu({ name, image, role, isAdmin, isPreview, open, setOpen, showAlerts, showTheme, dark, toggleTheme, poweredBy, clubPortal = false }: {
   name?: string | null
   image?: string | null
   role: string
   isAdmin: boolean            // the signed-in person is an admin (View as)
   isPreview: boolean
-  setPreviewRole: (r: string | null) => void
   open: boolean
   setOpen: (o: boolean) => void
   showAlerts: boolean
@@ -117,7 +77,7 @@ export default function AccountMenu({ name, image, role, isAdmin, isPreview, set
               </div>
             </div>
           )}
-          {isAdmin && <ViewAsSelect role={role} isPreview={isPreview} setPreviewRole={setPreviewRole} variant="row" />}
+          {isAdmin && <ViewAsRow idPrefix="va-account" />}
           <div className="mx-1 my-1 h-px bg-slate-200" />
           <button type="button" onClick={() => signOut({ callbackUrl: '/login' })} className={`${ROW} w-full font-semibold text-red-700`}>
             <LogOut size={16} aria-hidden />Sign out

@@ -79,7 +79,9 @@ export default function GlobalSearch({ role, planOff, menus, events, previewOrgI
   function load() {
     if (loaded.current) return
     loaded.current = true
-    const org = role === 'admin' && previewOrgId ? encodeURIComponent(previewOrgId) : ''
+    // The organization an admin is viewing (the header passes it to admins only),
+    // in View as too, so a preview searches that organization's people.
+    const org = previewOrgId ? encodeURIComponent(previewOrgId) : ''
     const list = (r: Response) => (r.ok ? r.json() : [])
     if (canStaff) fetch('/api/workers' + (org ? `?viewOrgId=${org}` : '')).then(list).then(d => setStaff(Array.isArray(d) ? d : [])).catch(() => setStaff([]))
     if (canLogins) fetch('/api/admin/users').then(list).then(d => setLogins(Array.isArray(d) ? d : [])).catch(() => setLogins([]))

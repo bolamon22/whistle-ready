@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
-import { ChevronDown, Eye, ListChecks, Menu, Moon, Sun, X } from 'lucide-react'
+import { ChevronDown, ListChecks, Menu, Moon, Sun, X } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { useOrg } from '@/lib/org-context'
 import { isStaffThemeRoute } from './ThemeShell'
@@ -14,7 +14,8 @@ import { canSeePresence } from '@/lib/presenceTime'
 import NavMenus from '@/components/nav/NavMenus'
 import EventSwitcher from '@/components/nav/EventSwitcher'
 import GlobalSearch from '@/components/nav/GlobalSearch'
-import AccountMenu, { Avatar, ViewAsSelect } from '@/components/nav/AccountMenu'
+import AccountMenu, { Avatar } from '@/components/nav/AccountMenu'
+import { ViewAsBanner, ViewAsChip, ViewAsRow } from '@/components/nav/ViewAsMenu'
 import { OrgBrand, OrgSheetList, useMyOrgs } from '@/components/nav/OrgSwitcher'
 import { type NavEvent, ROLE_LABELS, currentEvent, currentMenu, todayYmd, visibleMenus } from '@/components/nav/navConfig'
 import { isLegalPath } from '@/lib/legalRoutes'
@@ -25,7 +26,9 @@ import { isLegalPath } from '@/lib/legalRoutes'
 // Admin) holding only the links this role can open, then search (Ctrl K), Tasks
 // with the overdue count, who's on, View as, and the account menu. Below 1280px
 // the menus fold into one phone menu. A login that works in more than one
-// organization (lib/orgMembers) gets the organization switcher on the logo.
+// organization (lib/orgMembers) gets the organization switcher on the logo. An
+// admin's View as (an organization and a role, components/nav/ViewAsMenu) puts an
+// amber bar on top while it's on.
 
 const SHEET_LINK = 'flex min-h-[44px] items-center justify-between gap-3 px-1 text-[15px] font-medium text-slate-900 hover:text-teal-700'
 
@@ -41,7 +44,7 @@ export default function NavBar() {
   const [today, setToday] = useState('')
   const org = useOrg()
   const { data: session } = useSession()
-  const { effectiveRole, isPreview, setPreviewRole, planOff } = useRole()
+  const { effectiveRole, isPreview, planOff } = useRole()
   const myOrgs = useMyOrgs()
 
   const realRole = session?.user?.role ?? 'staff'
@@ -196,13 +199,8 @@ export default function NavBar() {
 
   return (
     <div data-app-chrome className="sticky top-0 z-40">
-      {/* Preview banner */}
-      {isPreview && (
-        <div className="bg-amber-400 text-amber-900 text-xs font-semibold px-4 py-1.5 flex items-center justify-between">
-          <span className="flex items-center gap-1.5"><Eye size={14} aria-hidden /><span>Previewing as <strong>{roleLabel}</strong> — this is how the app looks to that role</span></span>
-          <button onClick={() => setPreviewRole(null)} className="underline hover:no-underline ml-4">Exit Preview</button>
-        </div>
-      )}
+      {/* View as: what's on, Switch view, Back to admin */}
+      {isAdmin && <ViewAsBanner open={open === 'viewas-bar'} setOpen={o => setOpen(o ? 'viewas-bar' : null)} />}
 
       <header className="relative flex h-[60px] items-center gap-2 border-b border-slate-200 bg-white px-3 xl:h-16 xl:gap-3 xl:px-5">
         {brand}
@@ -226,7 +224,7 @@ export default function NavBar() {
 
         {canEvents && (
           <div className="hidden min-w-[180px] max-w-[300px] shrink basis-[300px] xl:block">
-            <GlobalSearch role={role} planOff={planOff} menus={menus} events={tournaments} previewOrgId={previewOrgId} hotkey />
+            <GlobalSearch role={role} planOff={planOff} menus={menus} events={tournaments} previewOrgId={isAdmin ? previewOrgId : null} hotkey />
           </div>
         )}
 
@@ -243,10 +241,10 @@ export default function NavBar() {
         {session ? (
           <>
             {canSeePresence(role) && <div className="hidden flex-shrink-0 xl:block"><WhoIsOn /></div>}
-            {isAdmin && <ViewAsSelect role={role} isPreview={isPreview} setPreviewRole={setPreviewRole} variant="chip" />}
+            {isAdmin && <ViewAsChip open={open === 'viewas'} setOpen={o => setOpen(o ? 'viewas' : null)} />}
             <div className="hidden flex-shrink-0 xl:block">
               <AccountMenu name={session.user?.name} image={session.user?.image} role={role} isAdmin={isAdmin}
-                isPreview={isPreview} setPreviewRole={setPreviewRole} open={open === 'account'} setOpen={o => setOpen(o ? 'account' : null)}
+                isPreview={isPreview} open={open === 'account'} setOpen={o => setOpen(o ? 'account' : null)}
                 showAlerts={showAlerts} showTheme={showTheme} dark={dark} toggleTheme={toggleTheme} poweredBy={hasOrg} clubPortal={clubPortal} />
             </div>
 
@@ -276,7 +274,7 @@ export default function NavBar() {
             <div className="mx-auto flex max-w-xl flex-col gap-1.5">
               <OrgSheetList orgs={myOrgs.orgs} active={myOrgs.active} onDone={() => setSheet(false)} />
               {canEvents && (
-                <GlobalSearch role={role} planOff={planOff} menus={menus} events={tournaments} previewOrgId={previewOrgId} variant="sheet" onDone={() => setSheet(false)} />
+                <GlobalSearch role={role} planOff={planOff} menus={menus} events={tournaments} previewOrgId={isAdmin ? previewOrgId : null} variant="sheet" onDone={() => setSheet(false)} />
               )}
               {event && (
                 <EventSwitcher events={tournaments} current={event} role={role} planOff={planOff} today={today} canCreate={canCreate}
@@ -334,7 +332,7 @@ export default function NavBar() {
                 </div>
                 {showAlerts && <Link href="/dashboard/alerts" onClick={() => setSheet(false)} className={SHEET_LINK}>Game-day alerts</Link>}
                 {clubPortal && <Link href="/dashboard/club-director" onClick={() => setSheet(false)} className={SHEET_LINK}>Club portal</Link>}
-                {isAdmin && <div className="-mx-2"><ViewAsSelect role={role} isPreview={isPreview} setPreviewRole={setPreviewRole} variant="row" /></div>}
+                {isAdmin && <div className="-mx-2"><ViewAsRow idPrefix="va-sheet" /></div>}
                 <div className="flex gap-2.5 pt-2">
                   {showTheme && (
                     <button type="button" onClick={toggleTheme}
