@@ -9,6 +9,7 @@ import { Users, UserPlus, Trash2, Link2, ChevronLeft } from 'lucide-react'
 import AssignerPayAccess from '@/components/AssignerPayAccess'
 import FieldDirectorEvents, { type FieldDirectorEvent } from '@/components/FieldDirectorEvents'
 import { DEFAULT_ASSIGNER_GROUPS, type PayGroup } from '@/lib/payGroups'
+import { useRole } from '@/lib/role-context'
 
 const ROLES = ['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff']
 const ROLE_LABEL: Record<string, string> = { director: 'Director', scheduler: 'Scheduler', assigner: 'Assigner', field_director: 'Field Director', coach: 'Coach', staff: 'Staff' }
@@ -16,7 +17,9 @@ const ROLE_LABEL: Record<string, string> = { director: 'Director', scheduler: 'S
 export default function OrgTeamPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const role = (session?.user as any)?.role
+  // The role the app shows: an admin's View as of a director opens this page too
+  // (lib/previewView), with that organization's people.
+  const { effectiveRole: role } = useRole()
   const [users, setUsers] = useState<any[]>([])
   const [invites, setInvites] = useState<any[]>([])
   const [loading, setLoading] = useState(true)

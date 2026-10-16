@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { requireStaff } from '@/lib/apiAuth'
 import { createClient } from '@libsql/client'
 import { sendEmail } from '@/lib/email'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
@@ -18,6 +17,9 @@ import crypto from 'crypto'
 // role, which took them out of their own organization and could even demote an admin
 // by email. Now their home stays put and they become a member here, with the role
 // picked here; admins can't be added, changed or removed from this page at all.
+//
+// The organization and role come from the gate (lib/apiAuth): the signed-in director's,
+// or those of an admin's View as of an organization's director (lib/previewView).
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
 const ASSIGNABLE_ROLES = MEMBER_ROLES
@@ -25,19 +27,21 @@ const ASSIGNABLE_ROLES = MEMBER_ROLES
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 }
-async function ctx() {
-  const s = await getServerSession(authOptions)
-  return { s, role: (s?.user as any)?.role as string | undefined, orgId: (s?.user as any)?.orgId as string | null, email: s?.user?.email ?? null }
-}
 const canManage = (role?: string) => role === 'director'
+/** The director's session and organization, or the refusal to send back. */
+async function ctx(): Promise<{ s: any; orgId: string } | { res: NextResponse }> {
+  const g = await requireStaff()
+  if (!g.ok) return { res: g.res }
+  if (!canManage(g.role) || !g.orgId) return { res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { s: g.session, orgId: g.orgId }
+}
 async function ensureInviteCol(_client: unknown) {
   await ensureStaffInviteTable() // table + raw columns — prod Turso never had the table
 }
 
 export async function GET() {
-  const { s, role, orgId } = await ctx()
-  if (!s) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!canManage(role) || !orgId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const c = await ctx(); if ('res' in c) return c.res
+  const { orgId } = c
   try {
     const client = db(); await ensureInviteCol(client)
     const users = await orgPeople(orgId)
@@ -50,9 +54,8 @@ export async function GET() {
 
 // Add a user to my org: assign an existing account, or invite a new one by email.
 export async function POST(req: NextRequest) {
-  const { s, role, orgId } = await ctx()
-  if (!s) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!canManage(role) || !orgId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const c = await ctx(); if ('res' in c) return c.res
+  const { s, orgId } = c
   try {
     const body = await req.json().catch(() => ({}))
     const email = String(body.email || '').trim().toLowerCase()
@@ -92,8 +95,8 @@ export async function POST(req: NextRequest) {
 
 // Change a member's role within my org.
 export async function PATCH(req: NextRequest) {
-  const { s, role, orgId } = await ctx()
-  if (!s || !canManage(role) || !orgId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const c = await ctx(); if ('res' in c) return c.res
+  const { orgId } = c
   try {
     const body = await req.json().catch(() => ({}))
     const userId = String(body.userId || '')
@@ -108,8 +111,8 @@ export async function PATCH(req: NextRequest) {
 
 // Remove a member from my org, or cancel a pending invite.
 export async function DELETE(req: NextRequest) {
-  const { s, role, orgId } = await ctx()
-  if (!s || !canManage(role) || !orgId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const c = await ctx(); if ('res' in c) return c.res
+  const { orgId } = c
   try {
     const client = db(); await ensureInviteCol(client)
     const userId = req.nextUrl.searchParams.get('userId')
