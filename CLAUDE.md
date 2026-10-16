@@ -282,6 +282,12 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   Athletic Trainer, the person's Hourly Rate); roles added in the rate editor are saved but payroll reads only the
   standard role ids (`parsePayRates`). Help: import-games (new), staff-pay-rates, staff-pay-summary,
   admin-organizations (the setup recipe), assigner. Tests: 30 (scratch).
+- **Event pages list only the event's organization's Staff Pool (Oct 16).** In View as of an Assigner-plan org,
+  its event's roster offered Sunshine's 121 staff: event pages called `/api/workers` with no org, and an admin got
+  everyone on the platform. `/api/workers` now holds View as to the viewed org (`gate.viewing`) and takes
+  `?tournamentId=` (an admin gets that event's org; others keep their own); the board, roster, Exhibit A and time
+  entries send it. Roster POST refuses a worker from another org (a worker with no org is still allowed). Pages that
+  send `viewOrgId` (Staff Pool, search) work as before. Tests: 18 (scratch).
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
