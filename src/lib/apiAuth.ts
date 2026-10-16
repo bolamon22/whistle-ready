@@ -26,8 +26,14 @@ import { orgScoped } from '@/lib/orgScope'
 const EXTERNAL_ROLES = ['coach', 'parent', 'club_director']
 
 export type AuthResult =
-  | { ok: true; session: any; role: string; userId: string; orgId: string | null; events: string[] | null }
+  | { ok: true; session: any; role: string; userId: string; orgId: string | null; events: string[] | null; viewing?: boolean }
   | { ok: false; res: NextResponse }
+
+/** What the org checks below need from a gate. `viewing`: an admin's View as of one
+ *  organization, which is held to that organization like its own people. */
+type OrgView = { role: string; orgId: string | null; session?: any; viewing?: boolean }
+/** Admins aren't limited to one organization, except while viewing one. */
+const unlimited = (gate: OrgView) => gate.session?.user?.role === 'admin' && !gate.viewing
 
 /** The events a signed-in field director works (lib/fieldDirector), from the login
  *  token; null for everyone else, an admin previewing the role included, which
@@ -51,45 +57,54 @@ export function eventGate(gate: { events: string[] | null }, tournamentId: strin
  *  didn't exist. Middleware does this for every /api/tournaments/<id> route; a route
  *  that reaches the event through something else (a game, a registration or a payment
  *  by its own id, or an event id in the body) calls this once it knows the event.
- *  An event with no organization is open as before. Admins (even in View as), staff,
- *  clubs and families aren't limited here. Returns the refusal, or null. */
-export async function orgGate(gate: { role: string; orgId: string | null; session?: any }, tournamentId: string | null | undefined): Promise<NextResponse | null> {
-  if (!tournamentId || gate.session?.user?.role === 'admin' || !orgScoped(gate.role)) return null
+ *  An event with no organization is open as before. Admins (unless viewing one
+ *  organization in View as), staff, clubs and families aren't limited here. Returns
+ *  the refusal, or null. */
+export async function orgGate(gate: OrgView, tournamentId: string | null | undefined): Promise<NextResponse | null> {
+  if (!tournamentId || unlimited(gate) || !orgScoped(gate.role)) return null
   const org = await tournamentOrgId(String(tournamentId))
   return org && org !== (gate.orgId ?? null) ? NextResponse.json({ error: 'Not found' }, { status: 404 }) : null
 }
 
 /** orgGate for a team registration by its id (its event's organization). */
-export async function orgGateRegistration(gate: { role: string; orgId: string | null; session?: any }, registrationId: string | null | undefined): Promise<NextResponse | null> {
-  if (!registrationId || gate.session?.user?.role === 'admin' || !orgScoped(gate.role)) return null
+export async function orgGateRegistration(gate: OrgView, registrationId: string | null | undefined): Promise<NextResponse | null> {
+  if (!registrationId || unlimited(gate) || !orgScoped(gate.role)) return null
   const r = await prisma.teamRegistration.findUnique({ where: { id: String(registrationId) }, select: { tournamentId: true } })
   return r ? orgGate(gate, r.tournamentId) : null
 }
 
 /** orgGate for a record that belongs to an organization itself (a Staff Pool record). */
-export function orgGateFor(gate: { role: string; orgId: string | null; session?: any }, orgId: string | null | undefined): NextResponse | null {
-  if (!orgId || gate.session?.user?.role === 'admin' || !orgScoped(gate.role)) return null
+export function orgGateFor(gate: OrgView, orgId: string | null | undefined): NextResponse | null {
+  if (!orgId || unlimited(gate) || !orgScoped(gate.role)) return null
   return orgId !== (gate.orgId ?? null) ? NextResponse.json({ error: 'Not found' }, { status: 404 }) : null
 }
 
 // "View as": an admin previewing a role gets that role's answers from the API
 // too, not just its pages. Otherwise the preview showed the pages a scheduler
 // can open filled with data only an admin can see, which is exactly what the
-// preview exists to check. Only an admin's cookie is honored, and only for a
-// known role.
-function previewRoleFor(realRole: string): string | null {
+// preview exists to check. With an organization picked (lib/previewView) the
+// answers are that organization's: the gate's orgId is it, and the org checks
+// above hold the preview to it. Only an admin's cookies are honored, and only
+// for a known role.
+function previewFor(realRole: string): { role: string; orgId: string | null } | null {
   if (realRole !== 'admin') return null
   try {
-    const v = cookies().get('preview-role')?.value || ''
-    return (PREVIEW_ROLES as readonly string[]).includes(v) ? v : null
+    const c = cookies()
+    const v = c.get('preview-role')?.value || ''
+    if (!(PREVIEW_ROLES as readonly string[]).includes(v)) return null
+    const org = c.get('preview-org')?.value || ''
+    return { role: v, orgId: /^[A-Za-z0-9_-]{1,64}$/.test(org) ? org : null }
   } catch { return null }   // outside a request (scripts, build): no preview
 }
 
-async function base(): Promise<{ session: any; role: string } | { res: NextResponse }> {
+type Base = { session: any; role: string; viewOrg: string | null }
+
+async function base(): Promise<Base | { res: NextResponse }> {
   const session = await getServerSession(authOptions)
   if (!session) return { res: NextResponse.json({ error: 'Sign in required' }, { status: 401 }) }
   const real = ((session.user as any)?.role as string) || ''
-  return { session, role: previewRoleFor(real) ?? real }
+  const pv = previewFor(real)
+  return pv ? { session, role: pv.role, viewOrg: pv.orgId } : { session, role: real, viewOrg: null }
 }
 
 /** The role this request should be answered as: the signed-in role, or the role an
@@ -106,14 +121,16 @@ export async function viewer(): Promise<{ role: string; userId: string; events: 
   return 'res' in b ? { role: '', userId: '', events: null } : { role: b.role, userId: ((b.session.user as any)?.id as string) || '', events: eventsOf(b.session) }
 }
 
-function ok(session: any, role?: string): AuthResult {
+function ok(b: Base): AuthResult {
+  const { session, role, viewOrg } = b
   return {
     ok: true,
     session,
-    role: role ?? (((session.user as any)?.role as string) || ''),
+    role,
     userId: (session.user as any)?.id as string,
-    orgId: ((session.user as any)?.orgId as string | null) ?? null,
+    orgId: viewOrg ?? (((session.user as any)?.orgId as string | null) ?? null),
     events: eventsOf(session),
+    ...(viewOrg ? { viewing: true } : {}),
   }
 }
 
@@ -121,11 +138,11 @@ function ok(session: any, role?: string): AuthResult {
 export async function requireStaff(): Promise<AuthResult> {
   const b = await base()
   if ('res' in b) return { ok: false, res: b.res }
-  if (b.role === 'admin') return ok(b.session, b.role)
+  if (b.role === 'admin') return ok(b)
   if (EXTERNAL_ROLES.includes(b.role) || !b.role) {
     return { ok: false, res: NextResponse.json({ error: 'Staff access required' }, { status: 403 }) }
   }
-  return ok(b.session, b.role)
+  return ok(b)
 }
 
 /** Dollar amounts (invoices, payments, income, expenses): director or admin.
@@ -133,7 +150,7 @@ export async function requireStaff(): Promise<AuthResult> {
 export async function requireMoney(): Promise<AuthResult> {
   const b = await base()
   if ('res' in b) return { ok: false, res: b.res }
-  if (canSeeMoney(b.role)) return ok(b.session, b.role)
+  if (canSeeMoney(b.role)) return ok(b)
   return { ok: false, res: NextResponse.json({ error: 'Financial access required' }, { status: 403 }) }
 }
 
@@ -150,7 +167,7 @@ export async function isStaffRequest(): Promise<boolean> {
 export async function requireStaffPay(): Promise<AuthResult> {
   const b = await base()
   if ('res' in b) return { ok: false, res: b.res }
-  if (canSeeStaffPay(b.role)) return ok(b.session, b.role)
+  if (canSeeStaffPay(b.role)) return ok(b)
   return { ok: false, res: NextResponse.json({ error: 'Pay access required' }, { status: 403 }) }
 }
 
@@ -161,8 +178,8 @@ export async function requireStaffPay(): Promise<AuthResult> {
 export async function requireFeature(feature: string): Promise<AuthResult> {
   const b = await base()
   if ('res' in b) return { ok: false, res: b.res }
-  if (b.role === 'admin') return ok(b.session, b.role)
-  if (!EXTERNAL_ROLES.includes(b.role) && b.role && roleHasFeature(b.role, feature)) return ok(b.session, b.role)
+  if (b.role === 'admin') return ok(b)
+  if (!EXTERNAL_ROLES.includes(b.role) && b.role && roleHasFeature(b.role, feature)) return ok(b)
   return { ok: false, res: NextResponse.json({ error: 'Your role does not have access to this' }, { status: 403 }) }
 }
 
@@ -170,6 +187,6 @@ export async function requireFeature(feature: string): Promise<AuthResult> {
 export async function requireDirector(): Promise<AuthResult> {
   const b = await base()
   if ('res' in b) return { ok: false, res: b.res }
-  if (b.role === 'admin' || b.role === 'director') return ok(b.session, b.role)
+  if (b.role === 'admin' || b.role === 'director') return ok(b)
   return { ok: false, res: NextResponse.json({ error: 'Only the tournament director can do this' }, { status: 403 }) }
 }

@@ -64,6 +64,20 @@ async function inOtherOrg(req: NextRequest, t: { role?: unknown; orgId?: unknown
   return org && org !== (t.orgId ?? null) ? org : null
 }
 
+// An admin's View as (lib/previewView): the role being previewed and the organization
+// being looked at, from this browser's cookies. With an organization, the preview gets
+// what that organization's people get: its plan (preview-plan) and its events only.
+// Without one, the role alone, as before. Null when this isn't an admin previewing.
+type Preview = { role: string; orgId: string | null; planOff: string[] }
+function previewOf(req: NextRequest, realRole: unknown): Preview | null {
+  if (realRole !== 'admin') return null
+  const role = req.cookies.get('preview-role')?.value || ''
+  if (!(PREVIEW_ROLES as readonly string[]).includes(role)) return null
+  const orgId = req.cookies.get('preview-org')?.value || null
+  const planOff = orgId ? (req.cookies.get('preview-plan')?.value || '').split(',').filter(Boolean) : []
+  return { role, orgId, planOff }
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -166,8 +180,9 @@ export async function middleware(req: NextRequest) {
   const eventApi = /^\/api\/tournaments\/([^/]+)(?:\/|$)/.exec(pathname)
   if (eventApi && req.cookies.getAll().some(c => c.name.includes('next-auth.session-token'))) {
     const t = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    const pv = previewOf(req, t?.role)
     const notTheirs = (t?.role === 'field_director' && !(Array.isArray(t.events) && t.events.includes(eventApi[1])))
-      || (!!t && !!(await inOtherOrg(req, t, eventApi[1])))
+      || (!!t && !!(await inOtherOrg(req, pv?.orgId ? pv : t, eventApi[1])))
     if (notTheirs) {
       const anonymous = new Headers(req.headers)
       anonymous.delete('cookie')
@@ -227,10 +242,10 @@ export async function middleware(req: NextRequest) {
   const realRole = rawRole === 'ref' || rawRole === 'scorekeeper' ? 'staff'
                  : rawRole === 'viewer' ? 'staff'
                  : rawRole
-  const previewCookie = req.cookies.get('preview-role')?.value
   const previewOrgCookie = req.cookies.get('preview-org')?.value
-  const isAdminPreviewing = realRole === 'admin' && !!previewCookie && (PREVIEW_ROLES as readonly string[]).includes(previewCookie)
-  const role = isAdminPreviewing ? previewCookie! : realRole
+  const preview = previewOf(req, realRole)
+  const isAdminPreviewing = !!preview
+  const role = preview ? preview.role : realRole
   // Inject preview-org into request headers so API routes can read it
   const requestHeaders = new Headers(req.headers)
   if (realRole === 'admin' && previewOrgCookie) {
@@ -262,11 +277,12 @@ export async function middleware(req: NextRequest) {
 
   // An event of another organization (lib/orgScope): switch to it when this login
   // works there too (an emailed link into Sunshine's event while working in your
-  // own), else home.
-  if (eventPage && !isAdminPreviewing) {
-    const org = await inOtherOrg(req, token, eventPage[1])
+  // own), else home. An admin viewing an organization is held to it the same way.
+  const viewer = preview ? (preview.orgId ? preview : null) : token
+  if (eventPage && viewer) {
+    const org = await inOtherOrg(req, viewer, eventPage[1])
     if (org) {
-      if (Array.isArray(token.orgs) && token.orgs.includes(org)) {
+      if (!preview && Array.isArray(token.orgs) && token.orgs.includes(org)) {
         const sw = new URL('/switch-org', req.url)
         sw.searchParams.set('to', org)
         sw.searchParams.set('next', pathname + req.nextUrl.search)
@@ -277,8 +293,9 @@ export async function middleware(req: NextRequest) {
   }
 
   // Check permissions: the role's, and the organization's plan (lib/orgPlans; an
-  // admin previewing a role isn't held to a plan).
-  const planOff = !isAdminPreviewing && Array.isArray(token.planOff) ? token.planOff.map(String) : null
+  // admin previewing a role is held to the plan of the organization being viewed,
+  // and to none without one).
+  const planOff = preview ? preview.planOff : Array.isArray(token.planOff) ? token.planOff.map(String) : null
   if (roleCanAccess(role, pathname, planOff)) return NextResponse.next({ request: { headers: requestHeaders } })
 
   // Blocked
