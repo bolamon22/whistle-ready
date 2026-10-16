@@ -84,21 +84,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const { teamId, newDivision, swapWithTeamId } = await req.json()
 
-    // Swap with a team in another division: each takes the other's division,
-    // pool spot, games and bracket seed, so neither schedule needs rebuilding.
+    // Swap with another team: each takes the other's pool spot, games and bracket
+    // seed (and, from another division, its division), so no schedule needs
+    // rebuilding. Two teams in the same division is the Swap on the Teams board.
     if (teamId && swapWithTeamId) {
       const both = await prisma.registeredTeam.findMany({
         where: { id: { in: [teamId, swapWithTeamId] }, registration: { tournamentId: params.id } },
-        select: { id: true, teamName: true, division: true },
+        select: { id: true, teamName: true, division: true, waitlisted: true },
       })
       const a = both.find(t => t.id === teamId), b = both.find(t => t.id === swapWithTeamId)
       if (!a || !b) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
-      if (nameKey(a.division) === nameKey(b.division)) {
-        return NextResponse.json({ error: 'Both teams are in the same division. Use Swap on the Teams board.' }, { status: 400 })
-      }
+      if (a.id === b.id) return NextResponse.json({ error: 'Pick two different teams.' }, { status: 400 })
+      // A waitlisted team isn't in the draw: trading places would put it in a pool
+      // and games while it still reads as waiting, and leave the other team out.
+      const waiting = [a, b].find(t => t.waitlisted)
+      if (waiting) return NextResponse.json({ error: `${waiting.teamName} is on the waiting list. Take them off it before swapping.` }, { status: 409 })
+      const sameDivision = nameKey(a.division) === nameKey(b.division)
       // Another team already carrying one of these names in the other division
       // would end up sharing its games.
-      const clash = await prisma.registeredTeam.findFirst({
+      const clash = sameDivision ? null : await prisma.registeredTeam.findFirst({
         where: {
           registration: { tournamentId: params.id, deletedAt: null },
           OR: [
@@ -122,8 +126,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       })
       if (scored) return NextResponse.json({ error: `${scored} of their games already have scores, so they can't be swapped.` }, { status: 409 })
 
-      await prisma.registeredTeam.update({ where: { id: a.id }, data: { division: b.division } })
-      await prisma.registeredTeam.update({ where: { id: b.id }, data: { division: a.division } })
+      if (!sameDivision) {
+        await prisma.registeredTeam.update({ where: { id: a.id }, data: { division: b.division } })
+        await prisma.registeredTeam.update({ where: { id: b.id }, data: { division: a.division } })
+      }
       const counts = await swapTeamDivisionRefs(params.id, { name: a.teamName, division: a.division }, { name: b.teamName, division: b.division })
       return NextResponse.json({ ok: true, counts })
     }

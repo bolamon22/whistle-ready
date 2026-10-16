@@ -710,35 +710,30 @@ export default function DivisionsPage() {
     toast.success('Teams auto-assigned to pools')
   }
 
+  // The two teams trade places: pool, place in the pool's list, games and bracket
+  // seed, in one server call (lib/teamRename swapTeamDivisionRefs, the same as a
+  // swap with another division). This used to trade only the pools, in the browser,
+  // so two teams in the same pool didn't change at all and games never followed a
+  // team into its new pool (Bo, Oct 16 2026: "it's not seeming to swap them").
   async function swapTeams() {
     if (!swapA || !swapB || !activeDiv) return
     const teamA = teams.find(t => t.teamName === swapA)
     const teamB = teams.find(t => t.teamName === swapB)
     if (!teamA || !teamB) return
     setSwapping(true)
-    // Both moves must come from one snapshot of pools. Two separate
-    // assignTeamToPool calls each PATCH every pool from the same stale state,
-    // so whichever lands last undoes half the swap.
-    const a = swapA, b = swapB
-    const poolA = teamA.pool ?? null, poolB = teamB.pool ?? null
-    const newPools = pools.map(p => {
-      const names = p.teamNames.filter(n => n !== a && n !== b)
-      if (poolB && p.name === poolB) names.push(a)
-      if (poolA && p.name === poolA) names.push(b)
-      return { ...p, teamNames: names }
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId: teamA.id, swapWithTeamId: teamB.id }),
     })
-    const changed = newPools.filter((p, i) => p.teamNames.join('\u0000') !== pools[i].teamNames.join('\u0000'))
-    await Promise.all(changed.map(p =>
-      fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/pools`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ poolId: p.id, teamNames: p.teamNames }),
-      })
-    ))
-    setPools(newPools)
-    setTeams(ts => ts.map(t => t.teamName === a ? { ...t, pool: poolB } : t.teamName === b ? { ...t, pool: poolA } : t))
-    setSwapA(null); setSwapB(null)
+    const d = await res.json().catch(() => ({}))
     setSwapping(false)
-    toast.success('Teams swapped')
+    if (!res.ok) { toast.error(d.error ?? 'Failed to swap teams'); return }
+    selectDiv(activeDiv)
+    const games = Number(d.counts?.games) || 0
+    const where = teamA.pool && teamA.pool === teamB.pool ? 'schedules' : 'pools'
+    toast.success(games
+      ? `${teamA.teamName} and ${teamB.teamName} swapped ${where} (${games} game${games === 1 ? '' : 's'} changed)`
+      : `${teamA.teamName} and ${teamB.teamName} swapped places`)
   }
 
   async function checkAndGenerate(div: string, isAll = false) {

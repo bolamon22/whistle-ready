@@ -189,17 +189,22 @@ export async function removeTeamRefs(tournamentId: string, teamName: string, div
 }
 
 /**
- * Two teams in different divisions trade places: each takes the other's pool
- * spot, games and bracket seed, so neither division's schedule has to be
- * rebuilt. Bo, Oct 15 2026, swapping Riverwolves (U14 A) and Suncoast 14U
- * (U14 B): "I don't want to do it manually because then I'd have to reschedule
- * both divisions."
+ * Two teams trade places: each takes the other's pool spot, games and bracket
+ * seed, so no schedule has to be rebuilt. Bo, Oct 15 2026, swapping Riverwolves
+ * (U14 A) and Suncoast 14U (U14 B): "I don't want to do it manually because then
+ * I'd have to reschedule both divisions."
+ *
+ * Also two teams in the same division (Swap on the Teams board): each takes the
+ * other's pool, its place in the pool's list and its games. That Swap used to
+ * trade only the pools, in the browser, so two teams in one pool didn't change at
+ * all and games never followed a team into its new pool (Bo, Oct 16 2026: "it's
+ * not seeming to swap them").
  *
  * Only references inside the two divisions change -- the same club's teams in
  * other divisions are separate (division, name) pairs. Followers move with
  * their team. Waivers and coach profiles are keyed by team name, which does not
  * change, so they need nothing. The caller has already moved the two
- * RegisteredTeam rows and checked that no game is scored.
+ * RegisteredTeam rows (another division) and checked that no game is scored.
  */
 export async function swapTeamDivisionRefs(
   tournamentId: string,
@@ -209,7 +214,7 @@ export async function swapTeamDivisionRefs(
   const n: RenameCounts = {}
   const dA = nameKey(a.division), dB = nameKey(b.division)
   const kA = nameKey(a.name), kB = nameKey(b.name)
-  if (!tournamentId || !dA || !dB || dA === dB || !kA || !kB) return n
+  if (!tournamentId || !dA || !dB || !kA || !kB || (dA === dB && kA === kB)) return n
   // In A's division A's name becomes B's, and the reverse in B's. null = leave it.
   const swapIn = (division: string, v: string | null | undefined): string | null => {
     if (!v) return null
@@ -267,8 +272,8 @@ export async function swapTeamDivisionRefs(
   } catch {}
 
   // Same name in both divisions: nothing visible changes, and moving both
-  // groups of followers would just trade them back.
-  if (kA !== kB) {
+  // groups of followers would just trade them back. Same division: they stay put.
+  if (kA !== kB && dA !== dB) {
     try {
       const c = (await moveFollowDivision(tournamentId, a.name, a.division, b.division))
         + (await moveFollowDivision(tournamentId, b.name, b.division, a.division))
