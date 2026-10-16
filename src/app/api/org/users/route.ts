@@ -5,15 +5,22 @@ import { prisma } from '@/lib/db'
 import { createClient } from '@libsql/client'
 import { sendEmail } from '@/lib/email'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
+import { MEMBER_ROLES, addToOrg, orgPeople, removeFromOrg, setRoleIn } from '@/lib/orgMembers'
 import crypto from 'crypto'
 
 // Owner/director self-serve management of THEIR organization's users.
 // Everything is scoped to the signed-in user's orgId (never trusted from the client).
 // StaffInvite.orgId is a raw column (not in the Prisma schema), so we add it via a
 // guarded ALTER and write it with the libsql client.
+//
+// One login can work in several organizations (lib/orgMembers). Adding someone who
+// already has a login no longer moves it here: it used to set their User.orgId and
+// role, which took them out of their own organization and could even demote an admin
+// by email. Now their home stays put and they become a member here, with the role
+// picked here; admins can't be added, changed or removed from this page at all.
 
 const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app' // NOT NEXTAUTH_URL — prod's still points at old gameday-staff5.vercel.app (found Aug 28)
-const ASSIGNABLE_ROLES = ['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff']
+const ASSIGNABLE_ROLES = MEMBER_ROLES
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -33,9 +40,9 @@ export async function GET() {
   if (!canManage(role) || !orgId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   try {
     const client = db(); await ensureInviteCol(client)
-    const users = await client.execute({ sql: `SELECT id, name, email, role FROM "User" WHERE orgId = ? ORDER BY name COLLATE NOCASE`, args: [orgId] })
+    const users = await orgPeople(orgId)
     const invites = await client.execute({ sql: `SELECT id, email, name, token FROM "StaffInvite" WHERE orgId = ? AND usedAt IS NULL ORDER BY createdAt DESC`, args: [orgId] })
-    return NextResponse.json({ users: users.rows, invites: invites.rows })
+    return NextResponse.json({ users, invites: invites.rows })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })
   }
@@ -55,11 +62,13 @@ export async function POST(req: NextRequest) {
 
     const client = db(); await ensureInviteCol(client)
 
-    // Already has an account → just attach to this org with the chosen role.
+    // Already has an account → into this org with the chosen role (lib/orgMembers:
+    // their own org, if they have one, stays theirs).
     const existing = await client.execute({ sql: `SELECT id FROM "User" WHERE lower(email) = ? LIMIT 1`, args: [email] })
     if (existing.rows[0]?.id) {
-      await client.execute({ sql: `UPDATE "User" SET orgId = ?, role = ? WHERE id = ?`, args: [orgId, newRole, existing.rows[0].id] })
-      return NextResponse.json({ ok: true, assigned: true })
+      const r = await addToOrg(String(existing.rows[0].id), orgId, newRole, String(s?.user?.email || ''))
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+      return NextResponse.json({ ok: true, assigned: true, member: r.how === 'member' })
     }
 
     // Otherwise create an org-scoped invite + email a join link.
@@ -90,8 +99,7 @@ export async function PATCH(req: NextRequest) {
     const userId = String(body.userId || '')
     const newRole = ASSIGNABLE_ROLES.includes(body.role) ? body.role : null
     if (!userId || !newRole) return NextResponse.json({ error: 'userId and role required' }, { status: 400 })
-    const client = db()
-    await client.execute({ sql: `UPDATE "User" SET role = ? WHERE id = ? AND orgId = ?`, args: [newRole, userId, orgId] })
+    if (!(await setRoleIn(userId, orgId, newRole))) return NextResponse.json({ error: 'They are not on your team.' }, { status: 404 })
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })
@@ -106,7 +114,7 @@ export async function DELETE(req: NextRequest) {
     const client = db(); await ensureInviteCol(client)
     const userId = req.nextUrl.searchParams.get('userId')
     const inviteId = req.nextUrl.searchParams.get('inviteId')
-    if (userId) await client.execute({ sql: `UPDATE "User" SET orgId = NULL WHERE id = ? AND orgId = ?`, args: [userId, orgId] })
+    if (userId) await removeFromOrg(userId, orgId)
     if (inviteId) await client.execute({ sql: `UPDATE "StaffInvite" SET expiresAt = datetime('now') WHERE id = ? AND orgId = ?`, args: [inviteId, orgId] })
     return NextResponse.json({ ok: true })
   } catch (e: any) {

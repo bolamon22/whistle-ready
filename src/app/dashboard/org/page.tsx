@@ -48,12 +48,12 @@ export default function OrgTeamPage() {
     try {
       const res = await fetch('/api/org/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim(), name: name.trim() || undefined, role: newRole }) })
       const d = await res.json().catch(() => ({}))
-      if (res.ok) { if (d.assigned) toast.success('Added to your org'); else { toast.success('Invite sent'); if (d.inviteUrl) setLastLink(d.inviteUrl) } setEmail(''); setName(''); load() }
+      if (res.ok) { if (d.assigned) toast.success(d.member ? 'Added. They pick your organization from the logo menu at the top left.' : 'Added to your org'); else { toast.success('Invite sent'); if (d.inviteUrl) setLastLink(d.inviteUrl) } setEmail(''); setName(''); load() }
       else toast.error(d.error || 'Failed')
     } catch { toast.error('Failed') } finally { setBusy(false) }
   }
   async function changeRole(userId: string, r: string) {
-    try { const res = await fetch('/api/org/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, role: r }) }); if (res.ok) { toast.success('Role updated'); load() } else toast.error('Failed') } catch { toast.error('Failed') }
+    try { const res = await fetch('/api/org/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, role: r }) }); const d = await res.json().catch(() => ({})); if (res.ok) { toast.success('Role updated'); load() } else toast.error(d.error || 'Failed') } catch { toast.error('Failed') }
   }
   async function removeUser(userId: string) {
     if (!window.confirm('Remove this user from your organization?')) return
@@ -92,10 +92,14 @@ export default function OrgTeamPage() {
           <div key={u.id} className="bg-white border border-slate-200 rounded-xl p-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p><p className="text-xs text-slate-400 truncate">{u.email}</p></div>
+              {u.role === 'admin' ? (
+                <span className="flex-shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700" title="Whistle Ready admins see every organization; only an admin can change them">Admin</span>
+              ) : (
               <div className="flex items-center gap-2 flex-shrink-0">
-                <select value={ROLES.includes(u.role) ? u.role : 'staff'} onChange={e => changeRole(u.id, e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">{ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select>
-                <button onClick={() => removeUser(u.id)} className="text-slate-300 hover:text-red-500" title="Remove"><Trash2 size={15} /></button>
+                <select value={ROLES.includes(u.role) ? u.role : 'staff'} onChange={e => changeRole(u.id, e.target.value)} aria-label={`Role for ${u.name}`} className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">{ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select>
+                <button onClick={() => removeUser(u.id)} className="text-slate-300 hover:text-red-500" title="Remove" aria-label={`Remove ${u.name}`}><Trash2 size={15} /></button>
               </div>
+              )}
             </div>
             {u.role === 'assigner' && (
               <div className="mt-2 pt-2 border-t border-slate-100">
