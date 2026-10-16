@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { PLANS, PLAN_KEYS, type PlanKey } from '@/lib/orgPlans'
 
 interface Org {
   id: string
@@ -12,6 +13,9 @@ interface Org {
   subscriptionTier: string
   subscriptionStatus: string
   createdAt: string
+  /** lib/orgPlans: the plan, and a summary with any switch changed for this org. */
+  plan?: PlanKey
+  planLabel?: string
 }
 
 export default function OrgsPage() {
@@ -21,7 +25,8 @@ export default function OrgsPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', slug: '', contactEmail: '', tier: 'starter', ownerEmail: '' })
+  const [form, setForm] = useState({ name: '', slug: '', contactEmail: '', plan: 'tournament' as PlanKey, ownerEmail: '' })
+  const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -60,16 +65,17 @@ export default function OrgsPage() {
     setOrgs(prev => [{
       ...data,
       contactEmail: form.contactEmail || null,
-      subscriptionTier: form.tier,
+      subscriptionTier: 'starter',
       subscriptionStatus: 'active',
       createdAt: new Date().toISOString(),
+      plan: form.plan,
+      planLabel: PLANS[form.plan].short,
     }, ...prev])
-    setForm({ name: '', slug: '', contactEmail: '', tier: 'starter', ownerEmail: '' })
+    setNotice(data.ownerWarning ? `Created ${data.name}. Owner not added: ${data.ownerWarning}` : '')
+    setForm({ name: '', slug: '', contactEmail: '', plan: 'tournament', ownerEmail: '' })
     setShowForm(false)
     setCreating(false)
   }
-
-  const TIERS = ['starter', 'pro', 'enterprise']
 
   if (status === 'loading') {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Loading...</div>
@@ -128,20 +134,22 @@ export default function OrgsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Tier</label>
+                  <label htmlFor="new-org-plan" className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
                   <select
-                    value={form.tier}
-                    onChange={e => setForm(f => ({ ...f, tier: e.target.value }))}
+                    id="new-org-plan"
+                    value={form.plan}
+                    onChange={e => setForm(f => ({ ...f, plan: e.target.value as PlanKey }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   >
-                    {TIERS.map(t => (
-                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                    {PLAN_KEYS.map(k => (
+                      <option key={k} value={k}>{PLANS[k].label}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-gray-500">{PLANS[form.plan].desc} Switch features on or off on the organization’s page.</p>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Owner Email <span className="text-gray-400 font-normal">(optional — assigns an existing user as org admin)</span>
+                    Owner Email <span className="text-gray-400 font-normal">(optional: an existing login, who becomes this org’s director and keeps any org they already have)</span>
                   </label>
                   <input
                     type="email"
@@ -173,6 +181,8 @@ export default function OrgsPage() {
           </div>
         )}
 
+        {notice && <p role="status" className="mb-4 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2">{notice}</p>}
+
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           {loading ? (
             <div className="p-8 text-center text-gray-400">Loading organizations...</div>
@@ -185,7 +195,7 @@ export default function OrgsPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Slug</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Contact</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Tier</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Plan</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Created</th>
                 </tr>
@@ -198,11 +208,9 @@ export default function OrgsPage() {
                     <td className="px-4 py-3 text-gray-500">{o.contactEmail || '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        o.subscriptionTier === 'enterprise' ? 'bg-purple-100 text-purple-700' :
-                        o.subscriptionTier === 'pro' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-600'
+                        o.plan === 'assigner' ? 'bg-indigo-100 text-indigo-700' : 'bg-teal-100 text-teal-700'
                       }`}>
-                        {o.subscriptionTier}
+                        {o.planLabel || PLANS[o.plan || 'tournament'].short}
                       </span>
                     </td>
                     <td className="px-4 py-3">

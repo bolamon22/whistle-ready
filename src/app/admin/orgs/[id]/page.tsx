@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
+import { FEATURE_GROUPS, PLANS, PLAN_KEYS, type GroupKey, type OrgPlan, type PlanKey, isCustomized, planDefaults } from '@/lib/orgPlans'
 
 interface Org {
   id: string; name: string; slug: string; logoUrl: string
@@ -14,7 +15,6 @@ interface Org {
   subscriptionTier: string; subscriptionStatus: string
 }
 
-const TIERS = ['starter', 'pro', 'enterprise']
 const STATUSES = ['active', 'inactive', 'suspended']
 const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
@@ -34,6 +34,9 @@ export default function OrgEditPage() {
   const [newRole, setNewRole] = useState('staff')
   const [newOwner, setNewOwner] = useState(false)
   const [teamBusy, setTeamBusy] = useState(false)
+  // Plan and feature switches (lib/orgPlans), saved as soon as they change.
+  const [plan, setPlan] = useState<(OrgPlan & { by?: string; at?: string }) | null>(null)
+  const [planBusy, setPlanBusy] = useState(false)
 
   useEffect(() => {
     if (status === 'loading') return
@@ -43,7 +46,21 @@ export default function OrgEditPage() {
       .then(data => { setForm(data); setLoading(false) })
       .catch(() => setLoading(false))
     loadTeam()
+    fetch(`/api/admin/orgs/${id}/plan`).then(r => r.ok ? r.json() : null).then(d => { if (d?.plan) setPlan(d) }).catch(() => {})
   }, [session, status, id])
+
+  async function savePlan(next: OrgPlan) {
+    const before = plan
+    setPlan(next); setPlanBusy(true)
+    try {
+      const res = await fetch(`/api/admin/orgs/${id}/plan`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d?.plan) { setPlan(d); toast.success('Plan saved. Signed-in people get it within a minute.') }
+      else { setPlan(before); toast.error(d.error || 'Plan not saved') }
+    } catch { setPlan(before); toast.error('Plan not saved') } finally { setPlanBusy(false) }
+  }
+  const pickPlan = (k: PlanKey) => { if (plan?.plan !== k) savePlan(planDefaults(k)) }
+  const flip = (g: GroupKey) => { if (plan) savePlan({ plan: plan.plan, features: { ...plan.features, [g]: !plan.features[g] } }) }
 
   async function loadTeam() {
     try { const d = await fetch(`/api/admin/orgs/${id}/users`).then(r => r.ok ? r.json() : null); if (d) { setTeamUsers(d.users || []); setOwnerUserId(d.ownerUserId ?? null) } } catch {}
@@ -207,22 +224,55 @@ export default function OrgEditPage() {
             </div>
           </section>
 
-          {/* Subscription */}
-          <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Subscription</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Tier</label>
-                <select value={form.subscriptionTier || 'starter'} onChange={e => set('subscriptionTier', e.target.value)} className={inp}>
-                  {TIERS.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-                <select value={form.subscriptionStatus || 'active'} onChange={e => set('subscriptionStatus', e.target.value)} className={inp}>
-                  {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                </select>
-              </div>
+          {/* Plan: what this organization uses (lib/orgPlans) */}
+          <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm" aria-labelledby="plan-h">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 id="plan-h" className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Plan</h2>
+              {plan && isCustomized(plan) && <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">Changed for this organization</span>}
+            </div>
+            {!plan ? <p className="text-sm text-slate-400">Loading…</p> : (
+              <>
+                <div role="radiogroup" aria-label="Plan" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {PLAN_KEYS.map(k => {
+                    const on = plan.plan === k
+                    return (
+                      <button key={k} type="button" role="radio" aria-checked={on} disabled={planBusy} onClick={() => pickPlan(k)}
+                        className={`text-left rounded-xl border-2 p-3 transition-colors disabled:opacity-60 ${on ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                        <span className="flex items-center gap-2">
+                          <span aria-hidden className={`h-4 w-4 rounded-full border-2 flex-shrink-0 ${on ? 'border-blue-600 bg-blue-600 shadow-[inset_0_0_0_2px_white]' : 'border-slate-300'}`} />
+                          <span className="text-sm font-bold text-slate-900">{PLANS[k].label}</span>
+                        </span>
+                        <span className="block mt-1 pl-6 text-xs text-slate-600">{PLANS[k].desc}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-4 mb-2 text-xs text-slate-500">Officials are always on. Switch anything else on or off for this organization:</p>
+                <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg">
+                  {FEATURE_GROUPS.map(g => {
+                    const on = !!plan.features[g.key]
+                    return (
+                      <li key={g.key} className="flex items-center justify-between gap-4 px-3 py-2.5">
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-slate-800">{g.label}</span>
+                          <span className="block text-xs text-slate-500">{g.desc}</span>
+                        </span>
+                        <button type="button" role="switch" aria-checked={on} aria-label={g.label} disabled={planBusy} onClick={() => flip(g.key)}
+                          className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:opacity-60 ${on ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                          <span aria-hidden className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+                {plan.at && <p className="mt-2 text-[11px] text-slate-400">Last changed {new Date(plan.at).toLocaleString()}{plan.by ? ` by ${plan.by}` : ''}</p>}
+              </>
+            )}
+            <div className="mt-5 max-w-xs">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Subscription status</label>
+              <select value={form.subscriptionStatus || 'active'} onChange={e => set('subscriptionStatus', e.target.value)} className={inp}>
+                {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+              </select>
             </div>
           </section>
 
@@ -246,7 +296,7 @@ export default function OrgEditPage() {
               </label>
               <button onClick={addMember} disabled={teamBusy || !newEmail.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">Add</button>
             </div>
-            <p className="text-[11px] text-slate-400 mb-4">The user must already have an account. The primary owner gets director access to run the organization.</p>
+            <p className="text-[11px] text-slate-400 mb-4">The user must already have an account. The primary owner gets director access to run the organization. Someone who already works for another organization keeps it and switches between the two from the logo at the top left.</p>
 
             {teamUsers.length === 0 ? (
               <p className="text-sm text-slate-400">No users assigned to this org yet.</p>
@@ -256,12 +306,14 @@ export default function OrgEditPage() {
                   <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-800 truncate">{u.name}{u.id === ownerUserId && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Owner</span>}</p>
-                      <p className="text-xs text-slate-400 truncate">{u.email} · {u.role}</p>
+                      <p className="text-xs text-slate-400 truncate">{u.email} · {u.role}{u.member ? ' · home is another organization' : ''}</p>
                     </div>
+                    {u.role !== 'admin' && (
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {u.id !== ownerUserId && <button onClick={() => makeOwner(u.email)} disabled={teamBusy} className="text-xs font-medium text-blue-600 hover:text-blue-800">Make owner</button>}
                       <button onClick={() => removeMember(u.id)} disabled={teamBusy} className="text-xs font-medium text-red-500 hover:text-red-700">Remove</button>
                     </div>
+                    )}
                   </div>
                 ))}
               </div>

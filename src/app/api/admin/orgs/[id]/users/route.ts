@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createClient } from '@libsql/client'
+import { addToOrg, orgPeople, removeFromOrg } from '@/lib/orgMembers'
 
 // Admin-only: list/assign the users that belong to an organization, and designate
 // the org's primary owner. orgId + ownerUserId live as raw columns (not in the
 // Prisma schema), so we use the libsql client directly.
+//
+// One login can work in several organizations (lib/orgMembers): adding someone whose
+// login already belongs to another organization makes them a member here and leaves
+// their own alone (this used to move their login over). Admin logins are never changed.
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -23,9 +28,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   try {
     const client = db()
     await ensureOwnerColumn(client)
-    const users = await client.execute({ sql: `SELECT id, name, email, role FROM "User" WHERE orgId = ? ORDER BY name COLLATE NOCASE`, args: [params.id] })
+    const users = await orgPeople(params.id)
     const org = await client.execute({ sql: `SELECT ownerUserId FROM "Organization" WHERE id = ? LIMIT 1`, args: [params.id] })
-    return NextResponse.json({ users: users.rows, ownerUserId: org.rows[0]?.ownerUserId ?? null })
+    return NextResponse.json({ users, ownerUserId: org.rows[0]?.ownerUserId ?? null })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })
   }
@@ -48,14 +53,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const userId = u.rows[0]?.id as string | undefined
     if (!userId) return NextResponse.json({ error: 'No account exists with that email yet. They need to sign up (or be invited) first.' }, { status: 404 })
 
-    await client.execute({ sql: `UPDATE "User" SET orgId = ? WHERE id = ?`, args: [params.id, userId] })
-    if (makeOwner) {
-      await client.execute({ sql: `UPDATE "Organization" SET ownerUserId = ? WHERE id = ?`, args: [userId, params.id] })
-      await client.execute({ sql: `UPDATE "User" SET role = 'director' WHERE id = ?`, args: [userId] })
-    } else if (role) {
-      await client.execute({ sql: `UPDATE "User" SET role = ? WHERE id = ?`, args: [role, userId] })
-    }
-    return NextResponse.json({ ok: true })
+    // The owner runs the organization as its director; anyone else gets the role
+    // picked (staff when none).
+    const r = await addToOrg(userId, params.id, makeOwner ? 'director' : (role || 'staff'), String((await getServerSession(authOptions))?.user?.email || ''))
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+    if (makeOwner) await client.execute({ sql: `UPDATE "Organization" SET ownerUserId = ? WHERE id = ?`, args: [userId, params.id] })
+    return NextResponse.json({ ok: true, member: r.how === 'member' })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })
   }
@@ -69,7 +72,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     await ensureOwnerColumn(client)
     const userId = req.nextUrl.searchParams.get('userId')
     if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
-    await client.execute({ sql: `UPDATE "User" SET orgId = NULL WHERE id = ? AND orgId = ?`, args: [userId, params.id] })
+    await removeFromOrg(userId, params.id)
     await client.execute({ sql: `UPDATE "Organization" SET ownerUserId = NULL WHERE id = ? AND ownerUserId = ?`, args: [params.id, userId] })
     return NextResponse.json({ ok: true })
   } catch (e: any) {
