@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff, isStaffRequest, eventGate, viewer } from '@/lib/apiAuth'
+import { requireStaff, eventGate, orgGate, viewer } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { notifyFinal } from '@/lib/finalAlerts'
 import { ownClubTeams, isOwnClubGame, ownClubRefusal } from '@/lib/ownClub'
@@ -17,6 +17,13 @@ import { ownClubTeams, isOwnClubGame, ownClubRefusal } from '@/lib/ownClub'
 // page saves mid-game too, to survive a refresh; it marks those writes
 // `provisional: true` so they are not announced as finals. The response is the
 // updated game either way, so nothing about the callers had to change.
+// A game of another organization's event is not found for a director, scheduler,
+// assigner or field director working elsewhere (lib/orgScope).
+async function otherOrg(gate: Parameters<typeof orgGate>[0], gameId: string) {
+  const g = await prisma.game.findUnique({ where: { id: gameId }, select: { tournamentId: true } })
+  return g ? orgGate(gate, g.tournamentId) : null
+}
+
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const b = await req.json()
@@ -36,6 +43,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
       const refused = eventGate(gate, g?.tournamentId); if (refused) return refused
     }
   }
+  const away = await otherOrg(gate, params.id); if (away) return away
   const touchesScore = b.score1 !== undefined || b.score2 !== undefined
   const before = touchesScore
     ? await prisma.game.findUnique({ where: { id: params.id }, select: { score1: true, score2: true, tournamentId: true, team1: true, team2: true } })
@@ -82,6 +90,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   if (gate.role === 'assigner' || gate.role === 'field_director') return NextResponse.json({ error: 'Only the scheduler or director can delete games.' }, { status: 403 })
+  const away = await otherOrg(gate, params.id); if (away) return away
   await prisma.game.delete({ where:{id:params.id} })
   return NextResponse.json({ ok:true })
 }
@@ -89,7 +98,9 @@ export async function DELETE(_: Request, { params }: { params:{id:string} }) {
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const game = await prisma.game.findUnique({ where: { id: params.id } })
   if (!game) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (await isStaffRequest()) {
+  const staff = await requireStaff()
+  // Staff of another organization's event get what the public gets (lib/orgScope).
+  if (staff.ok && !(await orgGate(staff, game.tournamentId))) {
     // The scorekeeper page shows a game the viewer's own club plays without the
     // controls: someone else keeps that score (lib/ownClub).
     const who = await viewer()

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGate, requireStaff } from '@/lib/apiAuth'
 
 function getClient() {
   return createClient({
@@ -30,6 +30,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // Staff only: this rewrites the venue list, field hours and which fields are
   // closed on a day. It took writes from anyone with a tournament id.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  // params.id is the event: only one of the organization this login works in (lib/orgScope).
+  const away = await orgGate(gate, params.id); if (away) return away
   try {
     const { venues, defaultAvailability } = await req.json()
     const client = getClient()

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getPayRate, parsePayRates } from '@/lib/utils'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGate, orgGateFor, requireStaff } from '@/lib/apiAuth'
 import { canSeeStaffPay, redactWorker } from '@/lib/roleScope'
 import { type PayScope, assignmentPayGroups, seesPay } from '@/lib/payGroups'
 import { payScopeFor } from '@/lib/payScope'
@@ -23,8 +23,10 @@ export async function POST(req: Request) {
   const{gameId,workerId,role}=await req.json()
   const game=await prisma.game.findUnique({where:{id:gameId},include:{tournament:true}})
   if(!game)return NextResponse.json({error:'Game not found'},{status:404})
+  // Only games of the organization this login works in, and only its own Staff Pool (lib/orgScope).
+  const away = await orgGate(gate, game.tournamentId); if (away) return NextResponse.json({error:'Game not found'},{status:404})
   const worker=await prisma.worker.findUnique({where:{id:workerId}})
-  if(!worker)return NextResponse.json({error:'Worker not found'},{status:404})
+  if(!worker || orgGateFor(gate, worker.orgId))return NextResponse.json({error:'Worker not found'},{status:404})
   const payRates=parsePayRates(game.tournament.payRates)
   const payRate=worker.payRateOverride??getPayRate(worker.certLevel,role,payRates)
   const scope=await payScopeFor(gate.role,gate.userId)
@@ -36,6 +38,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const tournamentId = searchParams.get('tournamentId')
   if (!tournamentId) return NextResponse.json([], { status: 200 })
+  const away = await orgGate(gate, tournamentId); if (away) return away
   const [assignments, games, scope] = await Promise.all([
     prisma.assignment.findMany({ where: { game: { tournamentId } }, include: { worker: true } }),
     prisma.game.findMany({ where: { tournamentId }, select: { id: true, division: true } }),

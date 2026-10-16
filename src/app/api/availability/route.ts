@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff, eventGate } from '@/lib/apiAuth'
+import { requireStaff, eventGate, orgGate } from '@/lib/apiAuth'
 import { fieldDirectorSees } from '@/lib/roleScope'
 import { workerIdForEmail } from '@/lib/staffW9'
 import { AVAILABILITY_MANAGERS, effectiveUnavailability } from '@/lib/availability'
@@ -33,7 +33,7 @@ export async function GET(req: Request) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const{searchParams}=new URL(req.url);const tid=searchParams.get('tournamentId')
   if(!tid)return NextResponse.json({error:'required'},{status:400})
-  const refused = eventGate(gate, tid); if (refused) return refused
+  const refused = eventGate(gate, tid) || await orgGate(gate, tid); if (refused) return refused
   const rows = await effectiveUnavailability(tid)
   const workers = await prisma.worker.findMany({ where: { id: { in: Array.from(new Set(rows.map(r => r.workerId))) } }, select: { id: true, name: true, roles: true, defaultRole: true } })
   const byId = new Map(workers.map(w => [w.id, w]))
@@ -44,7 +44,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const{workerId,tournamentId,date,timeSlots}=await req.json()
-  const refused = eventGate(gate, tournamentId); if (refused) return refused
+  const refused = eventGate(gate, tournamentId) || await orgGate(gate, tournamentId); if (refused) return refused
   if (!(await fieldDirectorMay(gate.role, String(workerId || '')))) return NextResponse.json({ error: 'Not one of your staff' }, { status: 403 })
   { const own = await ownWorker(gate); if (own !== undefined && (!own || own !== String(workerId || ''))) return NextResponse.json({ error: 'You can only set your own days' }, { status: 403 }) }
   return NextResponse.json(await prisma.availability.upsert({where:{workerId_tournamentId_date:{workerId,tournamentId,date}},create:{workerId,tournamentId,date,timeSlots:JSON.stringify(timeSlots??[])},update:{timeSlots:JSON.stringify(timeSlots??[])}}))
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const{searchParams}=new URL(req.url)
-  const refused = eventGate(gate, searchParams.get('tournamentId')); if (refused) return refused
+  const refused = eventGate(gate, searchParams.get('tournamentId')) || await orgGate(gate, searchParams.get('tournamentId')); if (refused) return refused
   if (!(await fieldDirectorMay(gate.role, searchParams.get('workerId') || ''))) return NextResponse.json({ error: 'Not one of your staff' }, { status: 403 })
   { const own = await ownWorker(gate); if (own !== undefined && (!own || own !== (searchParams.get('workerId') || ''))) return NextResponse.json({ error: 'You can only set your own days' }, { status: 403 }) }
   await prisma.availability.deleteMany({where:{workerId:searchParams.get('workerId')!,tournamentId:searchParams.get('tournamentId')!,date:searchParams.get('date')!}})
