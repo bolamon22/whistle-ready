@@ -163,7 +163,7 @@ export default function NavBar() {
   // Signed-out visitors on these pages get the page's own header (LandingNav,
   // or the org's lockup on the org's own domain) -- this nav would be a second
   // one, and on sunshineeventsgroup.com the two named different companies.
-  if (!session && (pathname === '/' || pathname === '/find' || isLegalPath(pathname))) return null
+  if (!session && (pathname === '/' || pathname === '/find' || pathname === '/guides' || pathname.startsWith('/guides/') || isLegalPath(pathname))) return null
 
   const menus = session ? visibleMenus(role) : []
   const current = currentMenu(menus, pathname)

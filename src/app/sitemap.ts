@@ -3,6 +3,8 @@ import { headers } from 'next/headers'
 import { createClient } from '@libsql/client'
 import { orgAbs, tournamentAbs } from '@/lib/seo'
 import { ORG_DOMAINS, DOMAIN_BY_SLUG } from '@/lib/orgDomains'
+import { SITE_URL } from '@/lib/seo'
+import { GUIDES } from '@/lib/guides'
 
 export const dynamic = 'force-dynamic'
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
@@ -64,5 +66,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       out.push({ url: tournamentAbs(oSlug, `/tournaments/${id}/public`), lastModified: now, changeFrequency: 'daily', priority: 0.6 })
     }
   } catch {}
+
+  // Whistle Ready's own pages: whistleready.app only, never an org's domain.
+  if (!onlySlug) {
+    out.push({ url: `${SITE_URL}/`, lastModified: now, changeFrequency: 'weekly', priority: 1 })
+    out.push({ url: `${SITE_URL}/guides`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 })
+    for (const g of GUIDES) out.push({ url: `${SITE_URL}/guides/${g.slug}`, lastModified: new Date(`${g.updated}T12:00:00Z`), changeFrequency: 'monthly', priority: 0.6 })
+  }
   return out
 }

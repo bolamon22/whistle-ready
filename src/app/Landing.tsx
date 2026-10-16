@@ -317,6 +317,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <a href="#features" className="hover:text-slate-800 transition-colors">Features</a>
+            <Link href="/guides" className="hover:text-slate-800 transition-colors">Guides</Link>
             <Link href="/find" className="hover:text-slate-800 transition-colors">Find your tournament</Link>
             <a href="#organizations" className="hover:text-slate-800 transition-colors">Run a tournament</a>
             <a href="#login" className="hover:text-slate-800 transition-colors">Log in</a>

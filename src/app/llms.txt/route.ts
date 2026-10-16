@@ -3,6 +3,7 @@ import { createClient } from '@libsql/client'
 import { orgAbs, tournamentAbs } from '@/lib/seo'
 import { ORG_DOMAINS } from '@/lib/orgDomains'
 import { BRAND, BRAND_FAQ } from '@/lib/brandFaq'
+import { GUIDES } from '@/lib/guides'
 
 // llms.txt — the plain-text site summary answer engines read.
 //
@@ -41,7 +42,8 @@ export async function GET() {
   let body = single
     ? `# ${single.name}\n\n> ${single.name} runs sports tournaments: upcoming events, live schedules and standings, online team registration, rules, hotels, and photo galleries.\n\n`
     : `# ${BRAND.name}\n\n> ${BRAND.description} Made by ${BRAND.legalName} (${BRAND.locality}, Florida) at ${BRAND.url}. It also powers public tournament websites for event organizers: upcoming tournaments, live schedules and standings, online team registration, rules, hotels, and photo galleries.\n\n## About\n\n` +
-      BRAND_FAQ.map(f => `**${f.q}** ${f.a}`).join('\n\n') + '\n\n'
+      BRAND_FAQ.map(f => `**${f.q}** ${f.a}`).join('\n\n') + '\n\n' +
+      `## Guides\n\n` + GUIDES.map(g => `- [${g.title}](${BRAND.url}/guides/${g.slug}): ${g.description}`).join('\n') + '\n\n'
 
   for (const o of orgs) {
     const slug = String(o.slug || '')
