@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { requireStaff } from '@/lib/apiAuth'
+import { orgGateFor, requireStaff } from '@/lib/apiAuth'
 import { redactWorker, stripWorkerUpdate, fieldDirectorSees } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
 import { setRefLevel, refLevelsFor } from '@/lib/refLevelDb'
 // Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
 // handles or edit/delete workers). An assigner reads and edits pay only for staff in
-// their pay groups (lib/payGroups, Oct 13 2026).
+// their pay groups (lib/payGroups, Oct 13 2026). A director, scheduler, assigner or
+// field director reaches only the Staff Pool of the organization they're working in
+// (lib/orgScope).
+async function otherOrg(gate: Parameters<typeof orgGateFor>[0], id: string) {
+  const w = await prisma.worker.findUnique({ where: { id }, select: { orgId: true } })
+  return !w ? NextResponse.json({ error: 'Not found' }, { status: 404 }) : orgGateFor(gate, w.orgId)
+}
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
   const [w, scope] = await Promise.all([prisma.worker.findUnique({ where:{id:params.id} }), payScopeFor(gate.role, gate.userId)])
   // A field director sees only scorekeepers, athletic trainers and field ops.
-  if (!w || (gate.role === 'field_director' && !fieldDirectorSees(w))) return NextResponse.json({ error:'Not found' }, { status:404 })
+  if (!w || orgGateFor(gate, w.orgId) || (gate.role === 'field_director' && !fieldDirectorSees(w))) return NextResponse.json({ error:'Not found' }, { status:404 })
   // Ref level (lib/refLevel) is a raw column Prisma doesn't read; redactWorker blanks
   // it for anyone who doesn't see this person's pay.
   const refLevel = (await refLevelsFor([w.id]).catch(() => new Map<string, number>())).get(w.id) ?? null
@@ -23,6 +29,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   if (!gate.ok) return gate.res
   // Field directors invite and roster staff; the Staff Pool records are the director's.
   if (gate.role === 'field_director') return NextResponse.json({ error: 'Ask your director to change Staff Pool details.' }, { status: 403 })
+  const away = await otherOrg(gate, params.id); if (away) return away
   const scope = await payScopeFor(gate.role, gate.userId)
   // Pay groups go by the record as stored, so an assigner can't move someone into
   // their groups and set the pay in the same save.
@@ -101,6 +108,7 @@ export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
   if (gate.role === 'field_director') return NextResponse.json({ error: 'Ask your director to remove Staff Pool records.' }, { status: 403 })
+  const away = await otherOrg(gate, params.id); if (away) return away
   const [games, roster, pay, time] = await Promise.all([
     prisma.assignment.count({ where: { workerId: params.id } }),
     prisma.rosterEntry.count({ where: { workerId: params.id } }),

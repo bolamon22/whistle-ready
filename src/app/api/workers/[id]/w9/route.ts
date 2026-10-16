@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireDirector } from '@/lib/apiAuth'
+import { orgGateFor, requireDirector } from '@/lib/apiAuth'
 import { decrypt } from '@/lib/encrypt'
 import { sniffW9 } from '@/lib/staffW9'
 
@@ -8,10 +8,13 @@ import { sniffW9 } from '@/lib/staffW9'
 // APIs: a W-9 carries a tax ID. The file is stored AES-256-GCM-encrypted under
 // AppSetting w9:{workerId} (lib/staffW9: the staff portal, and /api/join); this route decrypts and streams
 // it so the browser renders the PDF/image directly. It never appears in any list
-// payload.
+// payload. A director gets only their own organization's staff (lib/orgScope): with
+// more than one organization on Whistle Ready, any director could read anyone's.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const gate = await requireDirector()
   if (!gate.ok) return gate.res
+  const w = await prisma.worker.findUnique({ where: { id: params.id }, select: { orgId: true } })
+  if (!w || orgGateFor(gate, w.orgId)) return NextResponse.json({ error: 'No W-9 on file' }, { status: 404 })
 
   const row = await prisma.appSetting.findUnique({ where: { key: `w9:${params.id}` } })
   if (!row) return NextResponse.json({ error: 'No W-9 on file' }, { status: 404 })
