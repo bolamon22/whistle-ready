@@ -3,7 +3,7 @@ title: Add staff and admins to your organization
 category: Organization
 order: 600
 routes: /dashboard/org
-keywords: your team invite add user staff admin director scheduler assigner field director works events coach role change remove invite link pending invites members pay access sees pay for boys refs girls refs scorekeepers
+keywords: your team invite add user staff admin director scheduler assigner field director works events coach role change remove invite link pending invites members pay access sees pay for boys refs girls refs scorekeepers another organization second organization member switch
 ---
 The **Your team** page is where a director adds people to the organization, changes their role, or removes them. New people get an email to set up their account.
 
@@ -15,13 +15,17 @@ The **Your team** page is where a director adds people to the organization, chan
 3. Click **Add / invite**.
 4. If they already have an account you will see "Added to your org". If not, you will see "Invite sent" and a link you can **Copy** and send yourself.
 
+**Someone who already works for another organization** (an assigner who also runs his own officials, say) keeps that organization and gets yours too, with the role you pick here. You'll see "Added. They pick your organization from the logo menu at the top left." Tell them to click their logo at the top left and pick yours. Their role in the other organization doesn't change, and nothing of yours shows there.
+
 **To change someone's role:** under **Members**, pick a new role from the menu next to their name. It saves right away.
 
 **To pick which staff pay an assigner sees:** on an Assigner's card, click the groups next to **Sees pay for**: **Boys refs**, **Girls refs**, **Scorekeepers**, **Field ops & trainers**. Each click saves. **Default until you pick** means they see boys and girls refs only. Tick all four when one person runs everybody.
 
 **To pick a field director's events:** on a Field Director's card, click the events next to **Works**. Each click saves. They see only those events, so pick at least one.
 
-**To remove someone:** click the trash icon next to their name and confirm. This removes them from your organization.
+**To remove someone:** click the trash icon next to their name and confirm. This removes them from your organization only; anything they do for another organization stays.
+
+**Admins:** a Whistle Ready admin on your list shows **Admin** with no role menu or trash icon. Only an admin can change an admin login.
 
 **Pending invites:** people who have not set up their account yet are listed under **Pending invites**. Use **Copy link** to resend the invite yourself, or **Cancel** to withdraw it.
 

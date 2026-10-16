@@ -174,6 +174,53 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 
 ## Current state (as of Sep 30, 2026)
 
+- **One login, several organizations; plans (Oct 16).** Bo: an assigner who works Sunshine's events "wants to use
+  it for his own. So he would have the same login, but I would give him access to our events, and then he would
+  create his own events", and admins "turn feature on or off if they want to be like a tournament director".
+  **Memberships** (`lib/orgMembers.ts`, server only): a login's home stays `User.orgId` + `User.role`; every other
+  organization is a row in raw table `OrgMember` (id, userId, orgId, role, createdAt, by; TEXT; unique
+  userId+orgId; created lazily). `addToOrg` (Your team POST, Admin → Organizations team POST and new-org owner):
+  admin login → refused; already home here → role changes; staff login with no org → this becomes home (as
+  before); anyone else → membership (their home is never moved: Your team used to `UPDATE "User" SET orgId, role`
+  on any login by email, admins included, and new-org owners were moved too). `setRoleIn` / `removeFromOrg` never
+  touch admins. `orgPeople(orgId)` = home people (admins included, shown without controls) + members; used by Your
+  team, Admin org team, `/api/field-director-events` (a director sees and sets only their own org's events of a
+  field director; the rest of the list is kept) and `/api/assigner-pay`. **Token** (`lib/auth`): `activeOrgId` is
+  set by `useSession().update({ activeOrgId })` (trigger 'update', checked against memberships, fresh read);
+  `orgId`/`role` are the active org's (`pickActive`: picked, else home, else first), `orgs` = every org id,
+  `switchable` when there are 2+, `planOff` = the active org's off groups; the per-instance cache is keyed
+  user+active org; admins unchanged. Session adds `switchable` and `planOff` only. **Switcher**:
+  `components/nav/OrgSwitcher.tsx` (`useMyOrgs` → GET `/api/me/orgs`; the logo becomes a button with
+  **Your organizations**; the phone menu lists them on top), `lib/switchOrg.ts` (`switchOrg`, `safeNext`), then a
+  full reload to `/`. `/api/admin/org` now returns the session's (active) org, and for non-admins only id, name,
+  slug, logoUrl, contact fields and the Zelle/PayPal/check instructions (it returned `o.*`, bank details included,
+  to every signed-in login). **Isolation**: `ORG_SCOPED` roles in middleware (director, scheduler, assigner,
+  field_director) work one org at a time: `/api/tournaments/<id>/...` of an event in another org goes through
+  without the cookie (as field directors' other events always did), and its staff pages redirect to
+  `/switch-org?to=<org>&next=<path>` (a client page that switches, then opens the page) when the login is a member
+  there, else to the role's home. The event's org comes from public GET `/api/event-org?id=` (CDN 60 s, plus a
+  60 s per-isolate map in middleware); an event with no org is open as before; a failed lookup lets the request
+  through. Staff (refs, scorekeepers), club and family logins and admins are not limited by this. A scoped login
+  with no org gets no org's events. **Plans** (`lib/orgPlans.ts`, pure; `lib/orgPlanStore.ts` server): Whistle
+  Ready Tournament (all on; also no record) and Whistle Ready Assigner (officials only); switch groups
+  registration, scheduling (setup + event dashboard), scores, gameday, money, tasks, website, each a set of
+  role-permissions.json features plus extra routes (`/dashboard/org/clubs` is registration; site, forms, assets,
+  rules, photographers are website). Officials, Staff Pool, Your team, event settings and documents are never
+  switched off. Stored in AppSetting `orgPlan:<orgId>` = { plan, features, by, at }; admin UI on
+  `/admin/orgs/[id]` (Plan section, saves each click via GET/PUT `/api/admin/orgs/[id]/plan`), the plan picker on
+  New Organization (`plan` in POST `/api/admin/orgs`), and the Plan column (`planLabel`, e.g. "Assigner + Scores")
+  on the list; the Tier select is gone from the UI (the column stays). `roleCanAccess(role, path, planOff?)`: a
+  page in an off group is closed for every role; middleware passes `token.planOff` (not for an admin's View as),
+  and every client caller passes `useRole().planOff` (IfCanOpen, TournamentNav, navConfig `visibleMenus` /
+  `eventHref`, NavBar, GlobalSearch, EventSwitcher, TournamentsDashboard, EventBackLink, the event dashboard).
+  Plans are page-level: API routes don't check them (it's the org's own data). Not yet: routes that reach an
+  event through another id (`/api/games/<id>`, `/api/registrations/<id>`, payments, costs, time entries, a Staff
+  Pool record) don't check the org themselves; one staff home for an
+  official in two orgs (staff-portal, ref/assignments, availability answers, check-in, W-9 and training all take
+  the first Worker for the login email), Chirp's page list ignores the plan. Tests: 73 real-Prisma checks
+  (orgMembers, auth token, Your team, admin org routes, plans, field directors, assigner pay, event-org) and 35
+  middleware checks on a built Next app (scratch). Help: switch-organization, org-your-team, admin-organizations,
+  top-bar.
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,

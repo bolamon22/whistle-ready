@@ -3,7 +3,7 @@ title: Manage organizations (platform admin)
 category: Admin
 order: 730
 routes: /admin, /admin/orgs, /admin/orgs/*
-keywords: organizations orgs platform dashboard new org create organization owner team subscription tier status branding logo slug payment details switch org
+keywords: organizations orgs platform dashboard new org create organization owner team subscription plan whistle ready tournament whistle ready assigner feature switches turn on off registration scheduling scores game day money tasks website status branding logo slug payment details switch org member another organization
 ---
 The **Platform Dashboard** and **Organizations** pages are for platform admins who run more than one customer organization.
 
@@ -14,15 +14,25 @@ The **Platform Dashboard** and **Organizations** pages are for platform admins w
 **To create an organization:**
 1. Go to **Organizations** and click **+ New Organization**.
 2. Enter **Org Name**. The **Slug** fills in for you and becomes part of its web address.
-3. Add **Contact Email**, a **Subscription Tier**, and optionally an **Owner Email** for an existing user.
+3. Add **Contact Email**, pick a **Plan**, and optionally an **Owner Email** for an existing login. The owner becomes the new organization's director and keeps any organization they already work for.
 4. Click **Create Organization**.
 
-**To edit an organization:** click its name, change the **Branding**, **Contact**, **Payment Details** or **Subscription** sections, then click **Save Changes**.
+**To edit an organization:** click its name, change the **Branding**, **Contact** or **Payment Details** sections, then click **Save Changes**.
+
+**Plans:**
+- **Whistle Ready Tournament**: everything (registration, scheduling, officials, scores, game day, money and the website). Every organization without a plan is on this one.
+- **Whistle Ready Assigner**: officials only. Events and their games, the **Assigner**, **Staff Pool**, availability, confirmations, time entries and staff pay.
+
+On the organization's page, the **Plan** section has both plans and a switch for each group: **Registration**, **Event setup & scheduling**, **Scores**, **Game-day tools**, **Event money**, **Tasks** and **Website & media**. Click a plan to start from its switches, then turn any group on or off for this organization only (an assigner who wants to run a tournament gets **Registration** and **Event setup & scheduling**, say). Each click saves; **Changed for this organization** shows when the switches differ from the plan. A group that is off leaves the menus and its pages for everyone in that organization, whatever their role. People already signed in get the change within a minute. Officials are always on.
+
+**Subscription status** sits under the plan and saves with **Save Changes**. The **Organizations** list shows each plan, with any switch changed (for example **Assigner + Scores**).
 
 **To add people to an organization:**
 1. Under **Team & owner**, enter **Add user by email** and pick a **Role**.
 2. Tick **Make primary owner** if they should run it, then click **Add**.
 3. Use **Make owner** or **Remove** on existing members.
+
+Someone whose login already belongs to another organization keeps it: they get this one too (marked **home is another organization** on the list) and switch between them from the logo at the top left. **Remove** takes them out of this organization only. Admin logins are never changed from here.
 
 **Common problems:**
 - The user must already have an account. Create it first in **Logins**.

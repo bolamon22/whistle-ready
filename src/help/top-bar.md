@@ -3,12 +3,12 @@ title: Find your way around (the top bar)
 category: Getting started
 order: 1.5
 routes:
-keywords: top bar header menu menus navigation events people organization admin event button switch event next event new tournament search find ctrl k cmd k tasks overdue who's on view as account initials profile game-day alerts appearance dark mode light mode sign out phone menu logins staff pool
+keywords: top bar header menu menus navigation events people organization admin event button switch event next event new tournament search find ctrl k cmd k tasks overdue who's on view as account initials profile game-day alerts appearance dark mode light mode sign out phone menu logins staff pool switch organization your organizations
 ---
 The top bar is the same on every page, and it shows only what your role can open.
 
 **From left to right:**
-- **Your logo** takes you to your home page.
+- **Your logo** takes you to your home page. If you work for more than one organization, it has an arrow and opens **Your organizations** instead: pick one to switch (see "Work for more than one organization").
 - **The event button** shows the event you're working on and its dates, with **On now**, **Tomorrow** or **in 11 days**. It's the event whose pages you're on, or else the next one. Click it to jump to another upcoming event, **All tournaments** or **+ New tournament**.
 - **Events:** **All tournaments**, **Tasks** and **Event contacts**.
 - **People:** **Staff Pool**, **Logins** (admins), **Your team** (directors) and **Training videos**.
