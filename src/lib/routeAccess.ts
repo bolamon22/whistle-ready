@@ -1,4 +1,5 @@
 import permissionsConfig from './role-permissions.json'
+import { planAllows } from './orgPlans'
 
 // Which pages a role may open. Shared by middleware (the real gate) and the
 // tournament nav (so a tab the role cannot open is not shown at all).
@@ -13,6 +14,11 @@ import permissionsConfig from './role-permissions.json'
 // A path that no feature names keeps its old behavior: open to roles that have
 // the tournaments list, closed to the rest. That covers pages added after the
 // permission list was written without locking anyone out of them.
+//
+// On top of the role, the organization's plan (lib/orgPlans): `planOff` is the list
+// of feature groups switched off for the organization the login is working in (it
+// rides in the login token). A page in a group that is off is closed to every role
+// there. Admins are never limited by a plan.
 
 type Feature = { key: string; routes: string[] }
 const FEATURES = permissionsConfig.features as Feature[]
@@ -42,10 +48,11 @@ export function roleHasFeature(role: string, key: string): boolean {
   return !!perms?.[key]
 }
 
-export function roleCanAccess(role: string, pathname: string): boolean {
+export function roleCanAccess(role: string, pathname: string, planOff?: readonly string[] | null): boolean {
   if (role === 'admin') return true
   if (pathname.startsWith('/admin')) return false
   const owner = featureFor(pathname)
+  if (!planAllows(planOff, pathname, owner)) return false
   if (owner) return roleHasFeature(role, owner)
   return roleHasFeature(role, 'tournaments_list')
 }
