@@ -3,7 +3,7 @@ title: Manage divisions, teams and pools
 category: Setup
 order: 40
 routes: /tournaments/*/divisions
-keywords: divisions teams pools add team edit team delete team move team swap teams assign pools auto-assign pool A pool B unassigned rename division division color waitlist unconfirmed division note notes note for all divisions public note
+keywords: divisions teams pools add team edit team delete team move team swap teams swap schedules same pool trade places assign pools auto-assign pool A pool B unassigned rename division division color waitlist unconfirmed division note notes note for all divisions public note
 ---
 **Divisions & teams** is where you see each division's teams, sort them into pools, and build games and brackets.
 
@@ -20,7 +20,7 @@ keywords: divisions teams pools add team edit team delete team move team swap te
 
 An amber "unassigned" count shows how many teams still need a pool.
 
-**To swap two teams between pools:** in the list, click one team row, then a second, then click the **Swap** button that names both teams. **x Cancel** stops.
+**To swap two teams:** in the list, click one team row, then a second, then click the **Swap** button that names both teams. **x Cancel** stops. They trade places: each takes the other's pool, games and bracket spot, so nothing needs rescheduling. Two teams in the same pool trade their schedules: each plays the other's games, at the other's times. Teams with scored games, or on the waiting list, can't be swapped.
 
 **To add a team by hand:** click **+ Add Team**. Only **Team Name** is required; **Club Name**, **Coach Name**, **Coach Phone** and **Coach Email** can come later. Click **Edit** on a team row to change its details or add a **Team Logo**.
 
