@@ -2,12 +2,12 @@
 title: Set staff pay rates and officials per game
 category: Setup
 order: 26
-routes: /tournaments/*/builder
-keywords: staff pay rates referee pay official pay per game hourly roles officials per game how many refs exceptions championship games umpire title defaults
+routes: /tournaments/*/builder, /tournaments/*/pay-summary
+keywords: staff pay rates referee pay official pay per game hourly roles officials per game how many refs exceptions championship games umpire title defaults head assigner assigner plan pay rate override
 ---
 **Staff pay rates** sets each staff role's pay and how many officials each game needs. The Assigner and the pay report use these numbers.
 
-**Where:** **Setup → Tournament setup → Staff pay rates**.
+**Where:** **Setup → Tournament setup → Staff pay rates**, or **Pay rates** at the top of **Staff pay** (**People → Staff pay**). On the Whistle Ready Assigner plan, which has no Tournament setup, **Pay rates** is where the Head Assigner sets them. There, click **Save pay rates** instead of **Save Changes**.
 
 **To set roles and rates:**
 1. Under **Staff Roles & Pay Rates**, enter a **Rate** for each **Role** and pick **Per game** or **Per hour**.
@@ -25,3 +25,6 @@ keywords: staff pay rates referee pay official pay per game hourly roles officia
 
 **Common problems:**
 - With no exceptions, every game uses the standard count.
+- A new rate applies to games assigned after you save. Games already assigned keep the pay they were given.
+- A **Pay Rate Override** on someone's Staff Pool card comes first, and time entries are paid at the **Hourly Rate** on each person's card.
+- A role you add is saved, but pay comes from the roles every event starts with.

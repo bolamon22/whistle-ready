@@ -35,7 +35,7 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **Who confirmed:** **Confirmed N/N** next to **Notify officials** opens the Confirmations page. On the board, a **✓** after a name means they confirmed that game. If an official can't work a game, it comes off their schedule, you get an email, and the slot shows **open** with their name (for example **open · Brooks can't**). See "See which officials confirmed their games".
 
-**Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games or enter scores. Ask the scheduler or director.
+**Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games or enter scores. Ask the scheduler or director (the Head Assigner on the Assigner plan). To bring games in, see "Import games from TourneyMachine or a spreadsheet".
 
 **To prevent accidental changes:** tick **Lock editing**. This applies on your own browser only.
 

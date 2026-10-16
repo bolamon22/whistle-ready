@@ -25,6 +25,8 @@ The **Platform Dashboard** and **Organizations** pages are for platform admins w
 
 On the organization's page, the **Plan** section has both plans and a switch for each group: **Registration**, **Event setup & scheduling**, **Scores**, **Game-day tools**, **Event money**, **Tasks** and **Website & media**. Click a plan to start from its switches, then turn any group on or off for this organization only (an assigner who wants to run a tournament gets **Registration** and **Event setup & scheduling**, say). Each click saves; **Changed for this organization** shows when the switches differ from the plan. A group that is off leaves the menus and its pages for everyone in that organization, whatever their role. People already signed in get the change within a minute. Officials are always on.
 
+**Setting up a Head Assigner:** pick **Whistle Ready Assigner** and leave every switch off. What they need is part of officials, so it's always on: **+ New Tournament** on their home page, the **Assigner** board with **Import** (a TourneyMachine schedule or any spreadsheet) and **+ Game**, the Staff Pool, availability, confirmations, time entries, and **Staff pay** with **Pay rates**. Turn on **Scores** only if their scorekeepers will enter scores in Whistle Ready, and **Game-day tools** only if they run game day. Leave **Event setup & scheduling** off unless they'll build schedules in Whistle Ready.
+
 **Subscription status** sits under the plan and saves with **Save Changes**. The **Organizations** list shows each plan, with any switch changed (for example **Assigner + Scores**).
 
 **To add people to an organization:**

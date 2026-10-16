@@ -3,7 +3,7 @@ title: Pay staff and track hourly time
 category: Registration & money
 order: 320
 routes: /tournaments/*/pay-summary, /tournaments/*/time-entries
-keywords: pay summary pay report staff pay payroll mark paid unpay csv export referee pay time entries clock in clock out hourly staff athletic trainer field ops manual hours punch clock assigner boys refs girls refs scorekeepers pay groups your part only director marks paid
+keywords: pay summary pay report staff pay payroll mark paid unpay csv export referee pay time entries clock in clock out hourly staff athletic trainer field ops manual hours punch clock assigner boys refs girls refs scorekeepers pay groups your part only director marks paid pay rates misc staff miscellaneous head assigner
 ---
 The **Pay Summary** totals what each staff member earned at this tournament and lets you mark them paid. **Time Entries** tracks hours for hourly staff.
 
@@ -17,6 +17,8 @@ The **Pay Summary** totals what each staff member earned at this tournament and 
 5. To undo, click **Unpay** (you are asked to confirm).
 
 **To export:** click **CSV** for a spreadsheet of every assignment and its pay.
+
+**Pay rates** (directors and Head Assigners) opens this event's rates and officials per game. See "Set staff pay rates and officials per game".
 
 **Assigners see only their own groups.** Staff pay is split into **Boys refs**, **Girls refs**, **Scorekeepers** and **Field ops & trainers**. An assigner sees just the groups picked for them, and the page says which, for example "Showing pay for **Boys refs**". A ref slot goes by the game's division; a division that says neither boys nor girls goes by the ref's own **Can ref** setting.
 - Someone who also has pay in a group the assigner doesn't run shows **Your part only**, with **Director marks paid** instead of **Mark Paid**. One payment covers all of a person's pay at the event, so the director pays them.
@@ -32,5 +34,6 @@ The **Pay Summary** totals what each staff member earned at this tournament and 
 Running entries show **● LIVE**; hand-edited ones show **edited**.
 
 **Common problems:**
-- Only hourly staff (for example athletic trainers and field ops) appear on the punch clock. "No hourly staff on roster." means none are on the roster yet.
-- Rates come from **Setup → Tournament setup → Staff pay rates**.
+- Only hourly staff appear on the punch clock: people in the Staff Pool whose role is **Athletic Trainer** or **Field Operations**. "No hourly staff on roster." means there are none yet.
+- Other paid staff (a gate or parking worker, say): add them to the Staff Pool as **Field Operations** with an **Hourly Rate**, then log their hours here.
+- Per-game rates come from **Pay rates** (also **Setup → Tournament setup → Staff pay rates**). Time entries are paid at the **Hourly Rate** on each person's Staff Pool card.
