@@ -39,7 +39,9 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
         mainEntityOfPage: url,
         datePublished: g.published,
         dateModified: g.updated,
-        author: { '@type': 'Person', name: g.author.name, description: g.author.bio },
+        author: g.author.type === 'Organization'
+          ? { '@type': 'Organization', '@id': `${BRAND.url}/#organization`, name: BRAND.legalName }
+          : { '@type': 'Person', name: g.author.name, description: g.author.bio },
         publisher: { '@type': 'Organization', '@id': `${BRAND.url}/#organization`, name: BRAND.legalName, logo: { '@type': 'ImageObject', url: BRAND.logo } },
       },
       {
@@ -62,7 +64,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
         <p className="mt-3 text-sm text-slate-500">By {g.author.name} · Updated {fmtGuideDate(g.updated)}</p>
         <div className="mt-8 text-[16px]" dangerouslySetInnerHTML={{ __html: mdToHtml(g.body) }} />
         <aside className="mt-12 pt-6 border-t border-slate-200 text-sm text-slate-500">
-          <p className="font-semibold text-slate-700">About the author</p>
+          <p className="font-semibold text-slate-700">About {g.author.type === 'Organization' ? 'Whistle Ready' : 'the author'}</p>
           <p className="mt-1">{g.author.bio}</p>
         </aside>
         <p className="mt-8 text-sm"><Link href="/guides" className="text-teal-700 hover:underline">← All guides</Link></p>

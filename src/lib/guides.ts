@@ -6,6 +6,8 @@
 // - First-hand: real numbers from events we ran and Bo's own rules of thumb.
 //   Generic advice anyone could write does not rank and does not help.
 // - Each guide has an author and an updated date (shown, and in the JSON-LD).
+//   Guides are credited to the Whistle Ready team, not a person (Bo, Oct 16 2026:
+//   he does not want his name on them).
 // - Mention Whistle Ready only where it genuinely helps; never name competitors.
 // - Body is Markdown rendered by app/o/[slug]/_md (headings, lists, links,
 //   > callouts, bold/italic; no tables).
@@ -18,13 +20,14 @@ export type Guide = {
   audience: string      // who it is for, shown on the card
   published: string     // YYYY-MM-DD
   updated: string       // YYYY-MM-DD
-  author: { name: string; bio: string }
+  author: { name: string; bio: string; type: 'Organization' | 'Person' }
   body: string
 }
 
-export const BO = {
-  name: 'Bo Lamon',
-  bio: 'Bo Lamon is the founder of Whistle Ready. He has run youth lacrosse tournaments in Florida for more than a decade and coached high school lacrosse in Florida and New Jersey.',
+export const TEAM = {
+  name: 'The Whistle Ready team',
+  bio: 'Whistle Ready is built by people who have run youth lacrosse tournaments in Florida for more than a decade, and who coach and play the game.',
+  type: 'Organization' as const,
 }
 
 export const GUIDES: Guide[] = [
@@ -35,7 +38,7 @@ export const GUIDES: Guide[] = [
     audience: 'Tournament directors',
     published: '2026-10-16',
     updated: '2026-10-16',
-    author: BO,
+    author: TEAM,
     body: `
 > **The short answer:** plan on about **10 teams per field** for a two-day weekend. Seven fields comfortably hold around 70 teams. Use 50-minute game slots, give every team 2 to 3 games a day, and leave one slot of rest between a team's games whenever you can.
 
