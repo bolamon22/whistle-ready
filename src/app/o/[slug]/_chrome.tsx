@@ -237,7 +237,7 @@ export function OrgFooter({ org, contact, socials, base = '', pages = [] }: { or
           <Link href="/login" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-200 hover:text-teal-300 transition-colors">
             <UserRound size={15} /> Log in to your account
           </Link>
-          <span className="text-xs text-slate-500">Powered by Whistle Ready</span>
+          <a href="https://whistleready.app" className="text-xs text-slate-500 hover:text-teal-300 transition-colors">Powered by Whistle Ready</a>
         </div>
       </div>
     </footer>

@@ -1073,7 +1073,7 @@ export default function PublicTournamentPage() {
       </div>
       <footer className="border-t border-slate-200 mt-6 py-6 text-center">
         <p className="text-xs text-slate-400">{tournament?.name ? `${tournament.name} · ` : ''}Sunshine Events Group</p>
-        <p className="text-xs text-slate-400 mt-1">Powered by <span className="font-semibold text-slate-500">Whistle Ready</span></p>
+        <p className="text-xs text-slate-400 mt-1">Powered by <a href="https://whistleready.app" className="font-semibold text-slate-500 hover:text-slate-700 hover:underline">Whistle Ready</a></p>
       </footer>
       <PublicChirp tournamentId={id as string} tournamentName={tournament?.name} />
     </div>
