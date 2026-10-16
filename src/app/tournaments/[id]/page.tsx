@@ -569,7 +569,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
       {importStep==='mapping'&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-5 border-b border-slate-100"><h2 className="text-lg font-bold">Map Your Columns</h2><p className="text-sm text-slate-500 mt-1">Match each field to a column in your file</p></div>
+            <div className="px-6 py-5 border-b border-slate-100"><h2 className="text-lg font-bold">Map Your Columns</h2><p className="text-sm text-slate-500 mt-1">Match each field to a column in your file</p>
+              {/* An import replaces every game, and their assignments go with them (api/tournaments/[id]/import).
+                  It used to say nothing, so re-importing an updated schedule wiped the board's refs. */}
+              {games.length>0&&(()=>{const assigned=games.reduce((n,g)=>n+(g.assignments?.length||0),0);return<p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Importing replaces all {games.length} games on this board{assigned>0?<> and removes their <strong>{assigned} assignment{assigned===1?'':'s'}</strong></>:null}.</p>})()}
+            </div>
             <div className="px-6 py-4 space-y-3">
               {FIELD_LABELS.map(f=>(
                 <div key={f.key} className="flex items-center gap-4">
@@ -581,7 +585,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
               <button className="btn-secondary" onClick={()=>{setImportStep('idle');setPendingFile(null)}}>Cancel</button>
-              <button className="btn-primary" onClick={confirmImport}>Import Games →</button>
+              <button className="btn-primary" onClick={confirmImport}>{games.length>0?'Replace games →':'Import Games →'}</button>
             </div>
           </div>
         </div>
