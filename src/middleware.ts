@@ -6,7 +6,7 @@ import { LEGAL_PATHS, isLegalPath } from './lib/legalRoutes'
 import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES, aliasRedirectForHost } from './lib/orgDomains'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm', '/confirm-games', '/share', '/guides', ...LEGAL_PATHS]  // /privacy + /terms = the privacy policy and terms of use (Intuit's QuickBooks review links to them); /housing/[code] = housing board; /confirm/[regId] = club team-confirmation (the id IS the key, like /pay); /confirm-games/[token] = an official confirming their games (lib/officialConfirm; already covered by '/confirm', named so a tighter '/confirm' can't lock officials out); /share/[regId] = ready-made messages a director sends their own families (same key model, and they often have no account yet)  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
-const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized']
+const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized', '/switch-org']
 // Tournament pages that need no login. The pretty-URL block below tests against
 // this same list: a public page keeps its short URL via a rewrite, and anything
 // else is sent to the canonical /tournaments/<id>/... URL so the auth checks at
@@ -28,6 +28,40 @@ const ROLE_HOME: Record<string, string> = {
 
 // Page access lives in lib/routeAccess, shared with the tournament nav so a tab
 // the role cannot open is not shown either.
+
+// One login, several organizations (lib/orgMembers). These roles run an
+// organization's events, and they work one organization at a time: an event of any
+// other organization is turned away, its API answered as if nobody were signed in
+// (the field director rule below, applied to organizations) and its staff pages sent
+// through the switcher when the login is a member there, else home. Refs and
+// scorekeepers (staff), clubs and families are not limited here: what they can do on
+// an event is already theirs alone. Admins see everything.
+const ORG_SCOPED = ['director', 'scheduler', 'assigner', 'field_director']
+const EVENT_ORG_MS = 60_000
+const eventOrgs = new Map<string, { org: string | null; at: number }>()
+
+/** The organization that runs an event, null for none, undefined when the lookup
+ *  failed (then the request goes on: the lookup can fail only on our side, and a
+ *  stuck lookup must not lock every director out of every event). */
+async function eventOrg(req: NextRequest, id: string): Promise<string | null | undefined> {
+  const hit = eventOrgs.get(id)
+  if (hit && Date.now() - hit.at < EVENT_ORG_MS) return hit.org
+  try {
+    const r = await fetch(new URL(`/api/event-org?id=${encodeURIComponent(id)}`, req.url))
+    if (!r.ok) return undefined
+    const org = ((await r.json())?.orgId as string | null | undefined) ?? null
+    if (eventOrgs.size > 5000) eventOrgs.clear()
+    eventOrgs.set(id, { org, at: Date.now() })
+    return org
+  } catch { return undefined }
+}
+
+/** The event's organization when it isn't the one this login is working in. */
+async function inOtherOrg(req: NextRequest, t: { role?: unknown; orgId?: unknown }, eventId: string): Promise<string | null> {
+  if (!ORG_SCOPED.includes(String(t.role || ''))) return null
+  const org = await eventOrg(req, eventId)
+  return org && org !== (t.orgId ?? null) ? org : null
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -86,7 +120,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/tournaments/') || pathname.startsWith('/login') || pathname === '/register' ||
       pathname.startsWith('/forgot') || pathname.startsWith('/reset') ||
       pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/profile') ||
-      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/coach') || pathname.startsWith('/vendor') || pathname.startsWith('/media') || pathname.startsWith('/claim') || pathname.startsWith('/share') ||
+      pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/switch-org') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/coach') || pathname.startsWith('/vendor') || pathname.startsWith('/media') || pathname.startsWith('/claim') || pathname.startsWith('/share') ||
       isLegalPath(pathname)
     if (!passthrough) {
       const url = req.nextUrl.clone()
@@ -126,11 +160,14 @@ export async function middleware(req: NextRequest) {
   // A field director works only the events assigned to them (lib/fieldDirector; the
   // list rides in the login token). A call to any other event's API goes through
   // without the login, so they get what the public gets there and no staff data. One
-  // check here instead of one in every /api/tournaments/<id> route.
+  // check here instead of one in every /api/tournaments/<id> route. The same goes for
+  // an event of another organization (ORG_SCOPED above).
   const eventApi = /^\/api\/tournaments\/([^/]+)(?:\/|$)/.exec(pathname)
   if (eventApi && req.cookies.getAll().some(c => c.name.includes('next-auth.session-token'))) {
     const t = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    if (t?.role === 'field_director' && !(Array.isArray(t.events) && t.events.includes(eventApi[1]))) {
+    const notTheirs = (t?.role === 'field_director' && !(Array.isArray(t.events) && t.events.includes(eventApi[1])))
+      || (!!t && !!(await inOtherOrg(req, t, eventApi[1])))
+    if (notTheirs) {
       const anonymous = new Headers(req.headers)
       anonymous.delete('cookie')
       return NextResponse.next({ request: { headers: anonymous } })
@@ -222,8 +259,26 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(ROLE_HOME.field_director, req.url))
   }
 
-  // Check permissions
-  if (roleCanAccess(role, pathname)) return NextResponse.next({ request: { headers: requestHeaders } })
+  // An event of another organization (ORG_SCOPED above): switch to it when this login
+  // works there too (an emailed link into Sunshine's event while working in your
+  // own), else home.
+  if (eventPage && !isAdminPreviewing) {
+    const org = await inOtherOrg(req, token, eventPage[1])
+    if (org) {
+      if (Array.isArray(token.orgs) && token.orgs.includes(org)) {
+        const sw = new URL('/switch-org', req.url)
+        sw.searchParams.set('to', org)
+        sw.searchParams.set('next', pathname + req.nextUrl.search)
+        return NextResponse.redirect(sw)
+      }
+      return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/', req.url))
+    }
+  }
+
+  // Check permissions: the role's, and the organization's plan (lib/orgPlans; an
+  // admin previewing a role isn't held to a plan).
+  const planOff = !isAdminPreviewing && Array.isArray(token.planOff) ? token.planOff.map(String) : null
+  if (roleCanAccess(role, pathname, planOff)) return NextResponse.next({ request: { headers: requestHeaders } })
 
   // Blocked
   return NextResponse.redirect(new URL('/unauthorized', req.url))
