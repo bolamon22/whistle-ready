@@ -12,7 +12,8 @@ import { rosterWorkerIds } from '@/lib/fieldDirector'
 import { sendEmail, emailEnabled, orgSender } from '@/lib/email'
 import { renderEmail, esc, button } from '@/lib/emailLayout'
 import { orgById } from '@/lib/org'
-import { trainingVideo, workerRoles, minutesLabel, trainingLetter, inSendGroup } from '@/lib/training'
+import { trainingVideo, workerRoles, minutesLabel, trainingLetter, inSendGroup, videoOnPlan } from '@/lib/training'
+import { planOffFor } from '@/lib/orgPlanStore'
 import { recordTrainingEmails } from '@/lib/trainingSends'
 
 // Video library -> "Send videos": email chosen training videos to Staff Pool people by
@@ -51,7 +52,10 @@ export async function POST(req: NextRequest) {
   if (!director && gate.role !== 'assigner' && !fd) return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
   const scope = director || fd ? null : await payScopeFor(gate.role, gate.userId)
   const b = await req.json().catch(() => ({} as any))
-  const videoIds: string[] = (Array.isArray(b.videoIds) ? b.videoIds : []).map(String).filter((id: string) => trainingVideo(id) && (director || !['assigner', 'director', 'scheduler'].includes(trainingVideo(id)!.series || '')))
+  // Only videos on the sender's organization's plan (lib/training videoOnPlan), as the
+  // Video library shows them.
+  const planOff = await planOffFor(gate.orgId).catch(() => [])
+  const videoIds: string[] = (Array.isArray(b.videoIds) ? b.videoIds : []).map(String).filter((id: string) => trainingVideo(id) && videoOnPlan(id, planOff) && (director || !['assigner', 'director', 'scheduler'].includes(trainingVideo(id)!.series || '')))
   const roles: string[] = (Array.isArray(b.roles) ? b.roles : []).map(String)
   const picked = new Set<string>((Array.isArray(b.workerIds) ? b.workerIds : []).map(String))
   const note = String(b.note || '').slice(0, 800).trim() // older clients

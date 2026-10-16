@@ -7,7 +7,8 @@ import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
 import { Check, CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, Mail, PlayCircle, Search, Send, Users, X } from 'lucide-react'
 import { WORKER_ROLES } from '@/lib/utils'
-import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo, trainingLetter, SEND_GROUPS, inSendGroup } from '@/lib/training'
+import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo, trainingLetter, SEND_GROUPS, inSendGroup, videoOnPlan, howToOnPlan } from '@/lib/training'
+import { useRole } from '@/lib/role-context'
 import { HOW_TO_VIDEOS, howToSrc, howToPoster, howToMinutes } from '@/lib/howToVideos'
 import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
@@ -79,9 +80,17 @@ export default function VideoLibrary() {
   const fd = path.startsWith('/dashboard/field-director')
   const lead = asg || fd
   const keep = (k: string) => k === 'staff' || (asg && k === 'ref')
-  const lib = lead ? LIB.filter(v => keep(v.series)) : LIB
-  const series = lead ? SERIES.filter(s => keep(s.key)) : SERIES
-  const forFilters = lead ? FOR_FILTERS.filter(([k]) => !['assigner', 'parent', 'club_director', ...(fd ? ['ref'] : [])].includes(k)) : FOR_FILTERS
+  // Only the videos on this organization's plan (lib/training videoOnPlan). An Assigner-plan
+  // organization gets the staff, ref and assigner videos, not setup, scheduling, registration
+  // or game-day ones (Bo, Oct 16 2026). An admin sees them all; in View as, that organization's.
+  const { planOff } = useRole()
+  const onPlan = (v: Lib) => v.series === 'family' ? howToOnPlan(planOff) : videoOnPlan(v.id, planOff)
+  const lib = (lead ? LIB.filter(v => keep(v.series)) : LIB).filter(onPlan)
+  const series = (lead ? SERIES.filter(s => keep(s.key)) : SERIES).filter(s => lib.some(v => v.series === s.key))
+  // A "For" pick only for roles that have videos of their own here: everyone gets Start
+  // here, so a role whose own videos are all off its plan (schedulers, trainers) has none.
+  const forFilters = (lead ? FOR_FILTERS.filter(([k]) => !['assigner', 'parent', 'club_director', ...(fd ? ['ref'] : [])].includes(k)) : FOR_FILTERS)
+    .filter(([k]) => lib.some(v => { const r = rolesOf(v); return r.includes(k) && r.length < ROLE_KEYS.length }))
   const [tab, setTab] = useState<'videos' | 'watched' | 'sent'>('videos')
   const [playing, setPlaying] = useState<Lib | null>(null)
   const [scriptFor, setScriptFor] = useState<Lib | null>(null)
@@ -96,7 +105,7 @@ export default function VideoLibrary() {
   const [fFor, setFFor] = useState<string>('all')
   const [fQ, setFQ] = useState('')
   const shown = useMemo(() => lib.filter(v => (fSeries === 'all' || v.series === fSeries) && (fFor === 'all' || rolesOf(v).includes(fFor))
-    && (!fQ.trim() || `${v.num} ${v.title} ${v.blurb}`.toLowerCase().includes(fQ.trim().toLowerCase()))), [fSeries, fFor, fQ])
+    && (!fQ.trim() || `${v.num} ${v.title} ${v.blurb}`.toLowerCase().includes(fQ.trim().toLowerCase()))), [lib, fSeries, fFor, fQ])
   const filtered = fSeries !== 'all' || fFor !== 'all' || !!fQ.trim()
 
   const loadPeople = () => fetch('/api/training?report=1').then(r => r.ok ? r.json() : null).then(d => { setPeople(Array.isArray(d?.people) ? d.people : []); setEvents(Array.isArray(d?.events) ? d.events : []) }).catch(() => setPeople([]))
@@ -240,7 +249,7 @@ export default function VideoLibrary() {
         </div>
       )}
 
-      {tab === 'watched' && <Watched people={people} events={events} onNudge={(w, v) => { setPicked(new Set(v)); setPreChosen(w); setSending(true) }} />}
+      {tab === 'watched' && <Watched people={people} events={events} planOff={planOff} onNudge={(w, v) => { setPicked(new Set(v)); setPreChosen(w); setSending(true) }} />}
       {tab === 'sent' && (
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
           {sends.length === 0 && <p className="p-6 text-sm text-slate-400 text-center">Nothing sent yet. Tick videos on the Videos tab, then Send.</p>}
@@ -487,7 +496,7 @@ function SendDialog({ ids, people, events, roleKeys, initialChosen, onClose, onS
 type Sort = 'recent' | 'most' | 'least' | 'time' | 'name'
 type Status = '' | 'done' | 'started' | 'none'
 const minsOf = (secs: number) => Math.round(secs / 60)
-function Watched({ people, events, onNudge }: { people: Person[] | null; events: Ev[]; onNudge: (workerIds: string[], videoIds: string[]) => void }) {
+function Watched({ people, events, planOff, onNudge }: { people: Person[] | null; events: Ev[]; planOff: string[]; onNudge: (workerIds: string[], videoIds: string[]) => void }) {
   const [role, setRole] = useState('')
   const [video, setVideo] = useState('')
   const [q, setQ] = useState('')
@@ -540,7 +549,7 @@ function Watched({ people, events, onNudge }: { people: Person[] | null; events:
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative"><Search size={14} className="absolute left-3 top-2.5 text-slate-400" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a name" className="rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm w-48" /></div>
         <select value={role} onChange={e => setRole(e.target.value)} aria-label="Role" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"><option value="">All roles</option>{SEND_GROUPS.map(r => <option key={r} value={r}>{TRAINING_ROLE_LABELS[r]}</option>)}</select>
-        <select value={video} onChange={e => setVideo(e.target.value)} aria-label="Video" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-xs"><option value="">Every video</option>{TRAINING_VIDEOS.map(v => <option key={v.id} value={v.id}>{v.num} {v.title}</option>)}</select>
+        <select value={video} onChange={e => setVideo(e.target.value)} aria-label="Video" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-xs"><option value="">Every video</option>{TRAINING_VIDEOS.filter(v => videoOnPlan(v.id, planOff)).map(v => <option key={v.id} value={v.id}>{v.num} {v.title}</option>)}</select>
         {events.length > 0 && <select value={ev} onChange={e => setEv(e.target.value)} aria-label="Event" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white max-w-[14rem]"><option value="">Any event</option>{events.map(x => <option key={x.id} value={x.id}>Working {x.name}</option>)}</select>}
         <select value={sort} onChange={e => setSort(e.target.value as Sort)} aria-label="Sort" className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
           <option value="recent">Most recent viewers</option><option value="most">Most complete</option><option value="least">Least complete</option><option value="time">Most time watching</option><option value="name">Name A–Z</option>

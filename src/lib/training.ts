@@ -72,6 +72,38 @@ export const TRAINING_GROUPS: TrainingGroup[] = [
 ]
 
 export const trainingVideo = (id: string) => TRAINING_VIDEOS.find(v => v.id === id) || null
+
+// The plan group (lib/orgPlans) a video's pages belong to. An organization whose plan has
+// that group off doesn't get the video: not in the Video library, on the Training page,
+// in what a person is counted against, or in a send (Bo, Oct 16 2026, about the Assigner
+// plan: "It should just have ones that pertain to referees, scorekeepers. How to do the
+// assigning grid ... minimize that to just the necessary videos per organization type and
+// subscription"). Unlisted videos are officials work, which every plan has: signing up,
+// the staff home, availability and the staff ID, the ref series and the assigner series.
+// Game day prep is Sunshine's game-day routine (arrival, the field's flip chart, breaks),
+// so it goes with Game-day tools.
+const VIDEO_NEEDS: Record<string, string[]> = {
+  'keep-score': ['scores'], 'penalties': ['scores'], 'scorer-settings': ['scores'], 'post-final': ['scores'],
+  'game-day-prep': ['gameday'], 'field-request': ['gameday'], 'incidents': ['gameday'], 'checklist': ['gameday'],
+  'directory': ['gameday'], 'injury-report': ['gameday'], 'trainer-call': ['gameday'], 'asg-refneeded': ['gameday'],
+  'dir-create': ['scheduling'], 'dir-setup': ['scheduling'], 'dir-divisions': ['scheduling'], 'dir-schedule': ['scheduling'],
+  'dir-money': ['scheduling', 'money'], 'dir-registrations': ['registration'],
+  'sch-home': ['scheduling'], 'sch-timing': ['scheduling'], 'sch-brackets': ['scheduling'], 'sch-fixes': ['scheduling'], 'sch-weather': ['scheduling'],
+}
+/** False when the organization's plan has switched off a group this video needs.
+ *  `planOff` is the plan's off groups (session.user.planOff, lib/orgPlanStore planOffFor). */
+export function videoOnPlan(id: string, planOff?: readonly string[] | null): boolean {
+  if (!planOff || !planOff.length) return true
+  return !(VIDEO_NEEDS[id] || []).some(g => planOff.includes(g))
+}
+/** The Families & clubs how-to videos are about registration, waivers and the club portal. */
+export const howToOnPlan = (planOff?: readonly string[] | null) => !planOff || !planOff.includes('registration')
+
+/** The groups with only the videos on this plan, and none left empty. */
+export function trainingGroups(planOff?: readonly string[] | null): TrainingGroup[] {
+  if (!planOff || !planOff.length) return TRAINING_GROUPS
+  return TRAINING_GROUPS.map(g => ({ ...g, ids: g.ids.filter(id => videoOnPlan(id, planOff)) })).filter(g => g.ids.length > 0)
+}
 // Served only to signed-in staff (api/training/video/[id]), from videos/training -- not
 // public/ -- so the videos can't be passed around or downloaded by link (Bo, Oct 13 2026).
 export const videoSrc = (id: string) => `/api/training/video/${encodeURIComponent(id)}`
@@ -79,15 +111,17 @@ export const posterSrc = (id: string) => `/training/${id}.jpg`
 export const minutesLabel = (secs: number) => (secs < 60 ? '1 min' : `${Math.round(secs / 60)} min`)
 
 /** The groups a person with these roles should watch. No roles (a director, or a login
- *  without a Staff Pool record) = every group. */
-export function groupsFor(roles: string[] | null | undefined): TrainingGroup[] {
-  if (!roles || !roles.length) return TRAINING_GROUPS
-  return TRAINING_GROUPS.filter(g => !g.roles || g.roles.some(r => roles.includes(r)))
+ *  without a Staff Pool record) = every group. With `planOff`, only the videos on their
+ *  organization's plan (videoOnPlan). */
+export function groupsFor(roles: string[] | null | undefined, planOff?: readonly string[] | null): TrainingGroup[] {
+  const gs = trainingGroups(planOff)
+  if (!roles || !roles.length) return gs
+  return gs.filter(g => !g.roles || g.roles.some(r => roles.includes(r)))
 }
 
 /** The distinct video ids a person with these roles should watch, in order. */
-export function videosFor(roles: string[] | null | undefined): string[] {
-  return Array.from(new Set(groupsFor(roles).flatMap(g => g.ids)))
+export function videosFor(roles: string[] | null | undefined, planOff?: readonly string[] | null): string[] {
+  return Array.from(new Set(groupsFor(roles, planOff).flatMap(g => g.ids)))
 }
 
 /** A Staff Pool person's training roles: their roles (JSON) or main role, plus 'assigner'

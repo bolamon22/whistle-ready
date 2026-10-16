@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle2, ChevronRight, Play, X, GraduationCap } from 'lucide-react'
-import { TRAINING_GROUPS, groupsFor, videosFor, trainingVideo, videoSrc, posterSrc, minutesLabel, type TrainingVideo } from '@/lib/training'
+import { trainingGroups, groupsFor, videosFor, trainingVideo, videoSrc, posterSrc, minutesLabel, type TrainingVideo } from '@/lib/training'
 
 // Training videos for staff (Oct 2026). Each person sees the groups for their roles
 // first ("Start here" for everyone), the rest folded under "More videos". A video
@@ -15,10 +15,12 @@ export default function TrainingPage() {
   const [loaded, setLoaded] = useState(false)
   const [playing, setPlaying] = useState<string | null>(null)
   const [showMore, setShowMore] = useState(false)
+  // Their organization's plan (api/training): only the videos about pages it has.
+  const [planOff, setPlanOff] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/training').then(r => (r.ok ? r.json() : null)).then(d => {
-      if (d) { setRoles(Array.isArray(d.roles) ? d.roles : []); setWatched(new Set(Array.isArray(d.watched) ? d.watched : [])) }
+      if (d) { setRoles(Array.isArray(d.roles) ? d.roles : []); setWatched(new Set(Array.isArray(d.watched) ? d.watched : [])); setPlanOff(Array.isArray(d.planOff) ? d.planOff : []) }
       setLoaded(true)
     }).catch(() => setLoaded(true))
   }, [])
@@ -32,9 +34,10 @@ export default function TrainingPage() {
     fetch('/api/training', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoId: id }) }).catch(() => {})
   }
 
-  const mine = groupsFor(roles)
-  const other = TRAINING_GROUPS.filter(g => !mine.includes(g))
-  const want = videosFor(roles)
+  const mine = groupsFor(roles, planOff)
+  const mineKeys = new Set(mine.map(g => g.key))
+  const other = trainingGroups(planOff).filter(g => !mineKeys.has(g.key))
+  const want = videosFor(roles, planOff)
   const done = want.filter(v => watched.has(v)).length
   const pct = want.length ? Math.round((done / want.length) * 100) : 0
 

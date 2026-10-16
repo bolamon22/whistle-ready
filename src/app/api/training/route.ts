@@ -8,10 +8,11 @@ import { TRAINING_VIDEOS, videosFor, workerRoles } from '@/lib/training'
 import { payScopeFor } from '@/lib/payScope'
 import { seesPay, workerPayGroups } from '@/lib/payGroups'
 import { trainingEmailsTo } from '@/lib/trainingSends'
+import { planOffFor } from '@/lib/orgPlanStore'
 
 // Staff training videos: which ones a person has watched.
 //
-// GET                  -> { roles, watched: [videoId], plays: {videoId: n} } for the signed-in staff member
+// GET                  -> { roles, watched: [videoId], plays: {videoId: n}, planOff } for the signed-in staff member
 // GET ?report=1        -> { people: [...] } every Staff Pool person with plays per video (Video library)
 // GET ?tournamentId=   -> { counts: { workerId: { watched, total } } } for that event's
 //                         roster (directors, admins, field directors, and an assigner for
@@ -39,14 +40,28 @@ async function ensureTable() {
 }
 
 type Row = Record<string, unknown>
+
+// What each person should watch follows their organization's plan (lib/training
+// videoOnPlan): an Assigner-plan organization's people aren't counted against, or shown,
+// videos about pages their plan doesn't have (Bo, Oct 16 2026). One read per organization.
+function plans() {
+  const seen = new Map<string, Promise<string[]>>()
+  return (orgId: unknown): Promise<string[]> => {
+    const k = String(orgId || '')
+    if (!k) return Promise.resolve([])
+    if (!seen.has(k)) seen.set(k, planOffFor(k).catch(() => []))
+    return seen.get(k)!
+  }
+}
+
 async function me(email: string, userId: string, loginRole = '') {
-  const rows = email ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, roles, defaultRole, isAssigner FROM "Worker" WHERE lower(email) = ? ORDER BY createdAt ASC LIMIT 1`, email) : []
+  const rows = email ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, roles, defaultRole, isAssigner, orgId FROM "Worker" WHERE lower(email) = ? ORDER BY createdAt ASC LIMIT 1`, email) : []
   const w = rows[0]
   const roles = w ? workerRoles(w) : []
   if (loginRole === 'assigner' && !roles.includes('assigner')) roles.push('assigner')
   // Schedulers are a login role, not a Staff Pool job, so their videos follow the login.
   if (loginRole === 'scheduler' && !roles.includes('scheduler')) roles.push('scheduler')
-  return { key: w ? String(w.id) : `user:${userId}`, roles }
+  return { key: w ? String(w.id) : `user:${userId}`, roles, orgId: w?.orgId ? String(w.orgId) : null }
 }
 
 type Watched = Record<string, { plays: number; first: string; last: string }>
@@ -113,8 +128,8 @@ export async function GET(req: NextRequest) {
       const scope = director || fd ? null : await payScopeFor(gate.role, gate.userId)
       // An admin also sees the records with no organization (api/training/send).
       let ws = gate.orgId
-        ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" WHERE orgId = ?${gate.role === 'admin' ? ` OR orgId IS NULL OR orgId = ''` : ''} ORDER BY name`, gate.orgId)
-        : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender FROM "Worker" ORDER BY name`)
+        ? await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender, orgId FROM "Worker" WHERE orgId = ?${gate.role === 'admin' ? ` OR orgId IS NULL OR orgId = ''` : ''} ORDER BY name`, gate.orgId)
+        : await prisma.$queryRawUnsafe<Row[]>(`SELECT id, name, email, roles, defaultRole, isAssigner, gender, orgId FROM "Worker" ORDER BY name`)
       if (scope) ws = ws.filter((w: Row) => seesPay(scope, workerPayGroups(w as any)))
       if (fd) {
         const on = gate.events ? await rosterWorkerIds(gate.events) : null
@@ -140,7 +155,10 @@ export async function GET(req: NextRequest) {
             .map((t: Row) => ({ id: String(t.id), name: String(t.name || ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || '') }))
         : []
       const live = new Set(events.map(e => e.id))
-      const people = ws.map((w: Row) => { const roles = workerRoles(w); return { id: String(w.id), name: String(w.name || ''), email: String(w.email || ''), roles, gender: String(w.gender || 'both'), assigned: videosFor(roles), watched: by.get(String(w.id)) || {}, events: (onEvent.get(String(w.id)) || []).filter(t => live.has(t)) } })
+      const planOf = plans()
+      const offs = new Map<string, string[]>()
+      for (const o of Array.from(new Set(ws.map((w: Row) => String(w.orgId || ''))))) offs.set(o, await planOf(o))
+      const people = ws.map((w: Row) => { const roles = workerRoles(w); return { id: String(w.id), name: String(w.name || ''), email: String(w.email || ''), roles, gender: String(w.gender || 'both'), assigned: videosFor(roles, offs.get(String(w.orgId || ''))), watched: by.get(String(w.id)) || {}, events: (onEvent.get(String(w.id)) || []).filter(t => live.has(t)) } })
       return NextResponse.json({ people, events })
     }
     // One person, for their profile on the Staff Pool and the Staff roster: what they
@@ -174,14 +192,16 @@ export async function GET(req: NextRequest) {
           if (hit) lastSent = { at: String(hit.at || ''), by: String(hit.by || '') }
         } catch { /* no log yet */ }
       }
-      return NextResponse.json({ roles, assigned: videosFor(roles), watched: (await watchedBy([w])).get(wid) || {}, lastSent, hasEmail: !!email, email, sends })
+      return NextResponse.json({ roles, assigned: videosFor(roles, await planOffFor(w.orgId as string | null).catch(() => [])), watched: (await watchedBy([w])).get(wid) || {}, lastSent, hasEmail: !!email, email, sends })
     }
     const tid = req.nextUrl.searchParams.get('tournamentId')
     if (tid) {
       const fd = gate.role === 'field_director'
       if (gate.role !== 'admin' && gate.role !== 'director' && !fd && gate.role !== 'assigner') return NextResponse.json({ error: 'Directors, assigners and field directors only' }, { status: 403 })
       const refused = eventGate(gate, tid); if (refused) return refused
-      if (gate.role !== 'admin' && gate.orgId && (await tournamentOrgId(tid)) !== gate.orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
+      const eventOrg = await tournamentOrgId(tid)
+      if (gate.role !== 'admin' && gate.orgId && eventOrg !== gate.orgId) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
+      const off = await planOffFor(eventOrg).catch(() => [])
       const all = await prisma.$queryRawUnsafe<Row[]>(`SELECT w.id, w.email, w.roles, w.defaultRole, w.isAssigner, w.gender FROM "RosterEntry" r JOIN "Worker" w ON w.id = r.workerId WHERE r.tournamentId = ?`, tid)
       // An assigner sees the staff groups they run (lib/payGroups), as in the report.
       const scope = gate.role === 'assigner' ? await payScopeFor(gate.role, gate.userId) : null
@@ -189,7 +209,7 @@ export async function GET(req: NextRequest) {
       const by = await watchedBy(roster)
       const counts: Record<string, { watched: number; total: number }> = {}
       for (const w of roster) {
-        const want = videosFor(workerRoles(w))
+        const want = videosFor(workerRoles(w), off)
         const got = by.get(String(w.id)) || {}
         counts[String(w.id)] = { watched: want.filter(v => got[v]).length, total: want.length }
       }
@@ -197,7 +217,10 @@ export async function GET(req: NextRequest) {
     }
     const who = await me(String(gate.session?.user?.email ?? '').trim().toLowerCase(), gate.userId || '', gate.role)
     const rows = await prisma.$queryRawUnsafe<Row[]>(`SELECT videoId, plays FROM "StaffTraining" WHERE workerKey = ?`, who.key)
-    return NextResponse.json({ roles: who.roles, watched: rows.map((r: Row) => String(r.videoId)), plays: Object.fromEntries(rows.map((r: Row) => [String(r.videoId), Number(r.plays ?? 1) || 1])) })
+    // planOff: their organization's plan, for the Training page and the ref page to show
+    // only its videos. An admin's View as gets the viewed organization's.
+    const planOff = await planOffFor(gate.viewing ? gate.orgId : (who.orgId || gate.orgId)).catch(() => [])
+    return NextResponse.json({ roles: who.roles, watched: rows.map((r: Row) => String(r.videoId)), plays: Object.fromEntries(rows.map((r: Row) => [String(r.videoId), Number(r.plays ?? 1) || 1])), planOff })
   } catch (e) {
     console.error('[api/training] GET failed:', e)
     return NextResponse.json({ error: 'Could not load training' }, { status: 500 })

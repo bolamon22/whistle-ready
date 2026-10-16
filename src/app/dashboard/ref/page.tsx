@@ -81,7 +81,7 @@ export default function RefDashboard() {
   const [eventBusy, setEventBusy] = useState('')
   const [punchBusy, setPunchBusy] = useState(false)
   const [, setNowTick] = useState(0)                  // re-render the elapsed timer
-  const [training, setTraining] = useState<{ roles: string[]; watched: string[] } | null>(null)
+  const [training, setTraining] = useState<{ roles: string[]; watched: string[]; planOff: string[] } | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -91,7 +91,7 @@ export default function RefDashboard() {
       fetch('/api/tournaments').then(r => r.json()),
       fetch('/api/staff-portal').then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([a, t, p]) => {
-      fetch('/api/training').then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.watched)) setTraining({ roles: d.roles || [], watched: d.watched }) }).catch(() => {})
+      fetch('/api/training').then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.watched)) setTraining({ roles: d.roles || [], watched: d.watched, planOff: Array.isArray(d.planOff) ? d.planOff : [] }) }).catch(() => {})
       setAssignments(Array.isArray(a) ? a : [])
       setCheckedIn(new Set((Array.isArray(a) ? a : []).filter((x: any) => x.checkedInAt).map((x: any) => x.game.id)))
       setTournaments(Array.isArray(t) ? t : [])
@@ -423,7 +423,7 @@ export default function RefDashboard() {
 
       {/* Training videos (Oct 2026): how-tos for this person's job, with progress */}
       {training && (() => {
-        const want = videosFor(training.roles)
+        const want = videosFor(training.roles, training.planOff)   // their organization's plan's videos
         const done = want.filter(v => training.watched.includes(v)).length
         const all = want.length > 0 && done === want.length
         return (
