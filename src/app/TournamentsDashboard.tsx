@@ -10,6 +10,7 @@ import { useSession } from 'next-auth/react'
 import GalleryPicker from '@/components/GalleryPicker'
 import { HomeTasksCard, TaskStrip, type OverviewEvent } from '@/components/tasks/TasksOverview'
 import { useRole } from '@/lib/role-context'
+import { useOrg } from '@/lib/org-context'
 import { roleCanAccess } from '@/lib/routeAccess'
 
 interface Tournament {
@@ -53,10 +54,13 @@ const ADMIN_LINKS = [
 
 export default function TournamentsDashboard() {
   const { data: session } = useSession()
-  const isAdmin = session?.user?.role === 'admin'
   // Tasks: the card below the list and a strip on each event's card, for the
   // roles that have the Tasks page (directors; admins always).
-  const { effectiveRole, planOff } = useRole()
+  const { effectiveRole, planOff, isPreview } = useRole()
+  // An admin's tools (the All Orgs picker, Admin tools) stay out of View as, which
+  // shows the page the way the organization's own people see it (lib/previewView).
+  const isAdmin = session?.user?.role === 'admin' && !isPreview
+  const viewedOrg = useOrg()
   const showTasks = !!session && roleCanAccess(effectiveRole, '/tasks', planOff)
   // A scheduler (or any non-director) saw Registrations and Pay Report on every card,
   // links that only end at "unauthorized", plus New, Copy and Edit for events, which
@@ -378,7 +382,7 @@ export default function TournamentsDashboard() {
     <div>
       <div className="page-header">
         <div>
-          <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="section-title">Tournaments</h1>{!isAdmin && orgName && <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{orgName}</span>}</div>
+          <div className="flex items-center gap-3"><OrgLogoMark /><h1 className="section-title">Tournaments</h1>{!isAdmin && (isPreview ? viewedOrg?.name : orgName) && <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{isPreview ? viewedOrg?.name : orgName}</span>}</div>
           <p className="text-sm text-slate-500 mt-1">Manage staff scheduling for each tournament</p>
         </div>
         <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
