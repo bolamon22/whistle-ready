@@ -37,6 +37,10 @@ export default function OrgEditPage() {
   // Plan and feature switches (lib/orgPlans), saved as soon as they change.
   const [plan, setPlan] = useState<(OrgPlan & { by?: string; at?: string }) | null>(null)
   const [planBusy, setPlanBusy] = useState(false)
+  // Roles by this organization's names for them: the director is its plan's owner
+  // (Tournament Director, or Head Assigner on the Assigner plan).
+  const roleName = (r: string) => r === 'director' ? PLANS[plan?.plan ?? 'tournament'].owner
+    : r === 'field_director' ? 'Field Director' : r === 'admin' ? 'Admin' : r.charAt(0).toUpperCase() + r.slice(1)
 
   useEffect(() => {
     if (status === 'loading') return
@@ -288,7 +292,7 @@ export default function OrgEditPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Role</label>
                 <select value={newRole} onChange={e => setNewRole(e.target.value)} className={inp}>
-                  {['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff'].map(r => <option key={r} value={r}>{r === 'field_director' ? 'Field Director' : r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                  {['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff'].map(r => <option key={r} value={r}>{roleName(r)}</option>)}
                 </select>
               </div>
               <label className="flex items-center gap-1.5 text-xs text-slate-600 pb-2 whitespace-nowrap">
@@ -296,7 +300,7 @@ export default function OrgEditPage() {
               </label>
               <button onClick={addMember} disabled={teamBusy || !newEmail.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">Add</button>
             </div>
-            <p className="text-[11px] text-slate-400 mb-4">The user must already have an account. The primary owner gets director access to run the organization. Someone who already works for another organization keeps it and switches between the two from the logo at the top left.</p>
+            <p className="text-[11px] text-slate-400 mb-4">The user must already have an account. The primary owner runs the organization as its {PLANS[plan?.plan ?? 'tournament'].owner}. Someone who already works for another organization keeps it and switches between the two from the logo at the top left.</p>
 
             {teamUsers.length === 0 ? (
               <p className="text-sm text-slate-400">No users assigned to this org yet.</p>
@@ -306,7 +310,7 @@ export default function OrgEditPage() {
                   <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-800 truncate">{u.name}{u.id === ownerUserId && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Owner</span>}</p>
-                      <p className="text-xs text-slate-400 truncate">{u.email} · {u.role}{u.member ? ' · home is another organization' : ''}</p>
+                      <p className="text-xs text-slate-400 truncate">{u.email} · {roleName(u.role)}{u.member ? ' · home is another organization' : ''}</p>
                     </div>
                     {u.role !== 'admin' && (
                     <div className="flex items-center gap-3 flex-shrink-0">

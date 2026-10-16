@@ -149,7 +149,7 @@ export default function OrgsPage() {
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Owner Email <span className="text-gray-400 font-normal">(optional: an existing login, who becomes this org’s director and keeps any org they already have)</span>
+                    Owner Email <span className="text-gray-400 font-normal">(optional: an existing login, who runs this org as its {PLANS[form.plan].owner} and keeps any org they already have)</span>
                   </label>
                   <input
                     type="email"

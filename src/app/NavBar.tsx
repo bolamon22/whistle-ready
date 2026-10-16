@@ -17,7 +17,7 @@ import GlobalSearch from '@/components/nav/GlobalSearch'
 import AccountMenu, { Avatar } from '@/components/nav/AccountMenu'
 import { ViewAsBanner, ViewAsChip, ViewAsRow } from '@/components/nav/ViewAsMenu'
 import { OrgBrand, OrgSheetList, useMyOrgs } from '@/components/nav/OrgSwitcher'
-import { type NavEvent, ROLE_LABELS, currentEvent, currentMenu, todayYmd, visibleMenus } from '@/components/nav/navConfig'
+import { type NavEvent, currentEvent, currentMenu, roleTitle, todayYmd, visibleMenus } from '@/components/nav/navConfig'
 import { isLegalPath } from '@/lib/legalRoutes'
 
 // The app header (redesigned Oct 13 2026; Bo: "we are due for a little bit of a
@@ -178,7 +178,8 @@ export default function NavBar() {
   const canCreate = role === 'admin' || role === 'director'
   const showTheme = isStaffThemeRoute(pathname)
   const showAlerts = !['coach', 'parent', 'club_director'].includes(role)
-  const roleLabel = ROLE_LABELS[role] ?? role
+  // The director is the Head Assigner in an organization on the Assigner plan (lib/orgPlans).
+  const roleLabel = roleTitle(role, org?.plan)
   const taskLabel = overdue > 0 ? `Tasks, ${overdue} overdue` : 'Tasks'
 
   const brand = myOrgs.orgs.length > 1 ? (
@@ -243,7 +244,7 @@ export default function NavBar() {
             {canSeePresence(role) && <div className="hidden flex-shrink-0 xl:block"><WhoIsOn /></div>}
             {isAdmin && <ViewAsChip open={open === 'viewas'} setOpen={o => setOpen(o ? 'viewas' : null)} />}
             <div className="hidden flex-shrink-0 xl:block">
-              <AccountMenu name={session.user?.name} image={session.user?.image} role={role} isAdmin={isAdmin}
+              <AccountMenu name={session.user?.name} image={session.user?.image} role={role} plan={org?.plan} isAdmin={isAdmin}
                 isPreview={isPreview} open={open === 'account'} setOpen={o => setOpen(o ? 'account' : null)}
                 showAlerts={showAlerts} showTheme={showTheme} dark={dark} toggleTheme={toggleTheme} poweredBy={hasOrg} clubPortal={clubPortal} />
             </div>

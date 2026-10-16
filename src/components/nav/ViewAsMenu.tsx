@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { ChevronDown, Eye } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { useOrg } from '@/lib/org-context'
-import { ROLE_LABELS, VIEW_AS_ROLES } from './navConfig'
+import { VIEW_AS_ROLES, roleTitle } from './navConfig'
 
 // An admin's View as (lib/previewView; Bo, Oct 16 2026: "view it as an outside
 // organization, just so I can see what they see ... so I can just switch between
@@ -16,7 +16,7 @@ import { ROLE_LABELS, VIEW_AS_ROLES } from './navConfig'
 // Each browser window with its own cookies keeps its own view, so two views side by
 // side means a second, private window (lib/role-context).
 
-type OrgOption = { id: string; name: string; planLabel: string }
+type OrgOption = { id: string; name: string; planLabel: string; plan: string }
 
 let orgsOnce: Promise<OrgOption[]> | null = null
 function loadOrgs(): Promise<OrgOption[]> {
@@ -24,7 +24,7 @@ function loadOrgs(): Promise<OrgOption[]> {
     orgsOnce = fetch('/api/admin/orgs')
       .then(r => (r.ok ? r.json() : []))
       .then((d: unknown) => (Array.isArray(d) ? d : []).map((o: Record<string, unknown>) => ({
-        id: String(o.id), name: String(o.name || 'Organization'), planLabel: o.planLabel ? String(o.planLabel) : '',
+        id: String(o.id), name: String(o.name || 'Organization'), planLabel: o.planLabel ? String(o.planLabel) : '', plan: o.plan ? String(o.plan) : 'tournament',
       })).sort((a, b) => a.name.localeCompare(b.name)))
       .catch(() => { orgsOnce = null; return [] as OrgOption[] })
   }
@@ -41,15 +41,16 @@ function useOrgOptions(): OrgOption[] | null {
   return orgs
 }
 
-const roleName = (r: string) => ROLE_LABELS[r] ?? r
-
-/** "Lax Club FL as Tournament Director", or the role alone. */
+/** "Lax Club FL as Tournament Director", "Gulf Coast Officials as Head Assigner" (the
+ *  director on the Assigner plan, lib/orgPlans), or the role alone. */
 export function useViewLabel(): string {
   const { effectiveRole, isPreview, previewOrgId } = useRole()
   const org = useOrg()
   if (!isPreview) return ''
-  const where = previewOrgId ? (org?.id === previewOrgId ? org.name : 'this organization') : ''
-  return where ? `${where} as ${roleName(effectiveRole)}` : roleName(effectiveRole)
+  const shown = previewOrgId && org?.id === previewOrgId ? org : null
+  const role = roleTitle(effectiveRole, shown?.plan)
+  const where = previewOrgId ? shown?.name || 'this organization' : ''
+  return where ? `${where} as ${role}` : role
 }
 
 const SELECT = 'h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500'
@@ -62,6 +63,8 @@ export function ViewAsForm({ idPrefix }: { idPrefix: string }) {
   const [role, setRole] = useState(isPreview ? effectiveRole : 'director')
   const [busy, setBusy] = useState<'show' | 'back' | null>(null)
   const same = isPreview && role === effectiveRole && (org || null) === previewOrgId
+  // The roles by this organization's names for them (the director: Head Assigner on the Assigner plan).
+  const plan = orgs?.find(o => o.id === org)?.plan
   const known = !org || !orgs || orgs.some(o => o.id === org)
 
   async function show() { setBusy('show'); await setPreview(org || null, role) }
@@ -80,7 +83,7 @@ export function ViewAsForm({ idPrefix }: { idPrefix: string }) {
       <label htmlFor={`${idPrefix}-role`} className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-slate-700">Role</span>
         <select id={`${idPrefix}-role`} value={role} onChange={e => setRole(e.target.value)} disabled={busy !== null} className={SELECT}>
-          {VIEW_AS_ROLES.map(r => <option key={r} value={r}>{roleName(r)}</option>)}
+          {VIEW_AS_ROLES.map(r => <option key={r} value={r}>{roleTitle(r, plan)}</option>)}
         </select>
       </label>
       <div className="flex gap-2 pt-0.5">

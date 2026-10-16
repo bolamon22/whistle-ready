@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { Check, ChevronDown } from 'lucide-react'
-import { ROLE_LABELS } from './navConfig'
+import { ROLE_LABELS, roleTitle } from './navConfig'
 import { switchOrg } from '@/lib/switchOrg'
 
 // The organization switcher (lib/orgMembers): for a login that works in more than
@@ -11,7 +11,7 @@ import { switchOrg } from '@/lib/switchOrg'
 // the role held in each. Picking one switches the whole app to it. A login in one
 // organization never sees this: its logo stays a plain link home.
 
-export type MyOrg = { orgId: string | null; name: string; logoUrl: string; role: string; home: boolean; plan: string }
+export type MyOrg = { orgId: string | null; name: string; logoUrl: string; role: string; home: boolean; plan: string; planKey?: string }
 
 /** The signed-in login's organizations, loaded once when it has more than one. */
 export function useMyOrgs(): { orgs: MyOrg[]; active: string | null } {
@@ -30,7 +30,7 @@ export function useMyOrgs(): { orgs: MyOrg[]; active: string | null } {
 }
 
 const orgName = (o: MyOrg) => o.orgId ? o.name : `${ROLE_LABELS[o.role] ?? 'Your'} portal`
-const roleLine = (o: MyOrg) => [ROLE_LABELS[o.role] ?? o.role, o.plan && o.plan !== 'Tournament' ? `${o.plan} plan` : ''].filter(Boolean).join(' · ')
+const roleLine = (o: MyOrg) => [roleTitle(o.role, o.planKey), o.plan && o.plan !== 'Tournament' ? `${o.plan} plan` : ''].filter(Boolean).join(' · ')
 
 function Mark({ o, size }: { o: MyOrg; size: string }) {
   return o.logoUrl

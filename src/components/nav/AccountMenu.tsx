@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { signOut } from 'next-auth/react'
 import { BellRing, ChevronDown, LogOut, Shield, UserRound } from 'lucide-react'
-import { ROLE_COLORS, ROLE_LABELS } from './navConfig'
+import { ROLE_COLORS, roleTitle } from './navConfig'
 import { ViewAsRow } from './ViewAsMenu'
 
 // The avatar menu at the right of the header (Bo, Oct 13 2026): your name and
@@ -25,10 +25,11 @@ export function Avatar({ name, image, size = 'h-9 w-9 text-xs' }: { name?: strin
 const ROW = 'flex min-h-[40px] items-center gap-2.5 rounded-xl px-3 text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none'
 const ITEM = `${ROW} font-medium text-slate-900`
 
-export default function AccountMenu({ name, image, role, isAdmin, isPreview, open, setOpen, showAlerts, showTheme, dark, toggleTheme, poweredBy, clubPortal = false }: {
+export default function AccountMenu({ name, image, role, plan, isAdmin, isPreview, open, setOpen, showAlerts, showTheme, dark, toggleTheme, poweredBy, clubPortal = false }: {
   name?: string | null
   image?: string | null
   role: string
+  plan?: string | null        // the organization's plan: names its director (roleTitle)
   isAdmin: boolean            // the signed-in person is an admin (View as)
   isPreview: boolean
   open: boolean
@@ -40,7 +41,7 @@ export default function AccountMenu({ name, image, role, isAdmin, isPreview, ope
   poweredBy: boolean
   clubPortal?: boolean        // this login can open a club's portal (lib/clubAccess)
 }) {
-  const label = ROLE_LABELS[role] ?? role
+  const label = roleTitle(role, plan)
   return (
     <div className="relative flex-shrink-0" data-nav-pop="account">
       <button type="button" aria-label="Your account" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(!open)}
