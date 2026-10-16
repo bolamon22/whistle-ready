@@ -3,7 +3,7 @@ title: Add and edit people in the Staff Pool
 category: Staff
 order: 400
 routes: /staff
-keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh which events add to event tournament roster training videos watched send videos ref level ref levels rank ranking 1 2 3 level 1 level 2 level 3 red yellow green best refs top refs
+keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv first name last name full name map columns delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh which events add to event tournament roster training videos watched send videos ref level ref levels rank ranking 1 2 3 level 1 level 2 level 3 red yellow green best refs top refs
 ---
 The Staff Pool is your organization's master list of everyone who works your events: refs, scorekeepers, athletic trainers and field operations. Each tournament's roster is picked from this pool.
 
@@ -37,7 +37,7 @@ The Staff Pool is your organization's master list of everyone who works your eve
 **To import a spreadsheet:**
 1. Click **Bulk Import**, then choose **Refs** or **Other Staff**.
 2. Click **Upload File** (.xlsx, .xls or .csv).
-3. Under **Map your columns**, match each field to a column in your file. **Name** is required. Check the preview, then click **Import** (the button shows how many staff it will add).
+3. Under **Map your columns**, match each field to a column in your file. For the name, map **Full name**, or **First name** and **Last name** (columns with those names are matched for you, and a name written "Smith, John" comes in as John Smith). Check the preview, then click **Import** (the button shows how many staff it will add).
 4. Click **Pool** to go back to the list.
 
 **To clear out old profiles with no email:**
