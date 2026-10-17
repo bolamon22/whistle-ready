@@ -13,13 +13,14 @@ import { teamsSide } from '@/lib/eventTeams'
 import { isOnline, presenceLabel } from '@/lib/presenceTime'
 import { useRole } from '@/lib/role-context'
 import RefLevelPill from '@/components/RefLevelPill'
+import { scoresShown } from '@/lib/eventScores'
 
 // refLevel (lib/refLevel) comes back only for those who see this person's pay (api/workers).
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null;refLevel?:number|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number|null;worker:Worker }
 interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[];ownClub?:boolean }
 // ownClub: the viewer's own club plays, so someone else posts the score (lib/ownClub).
-interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string;teams?:string[] }
+interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string;teams?:string[];scores?:boolean|null }
 interface Availability { workerId:string;date:string;timeSlots:string }
 interface RosterEntry { workerId:string;gameTarget:number }
 interface GapEntry { gameNumber:string;division:string;location:string;missingRoles:string[] }
@@ -207,7 +208,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [locked,setLocked]=useState(false)
   // Assigners staff games; the scheduler moves and edits them (Bo, Oct 13 2026). They keep
   // refs per game. The API refuses the rest too (api/games/[id], games POST, import).
-  const { effectiveRole }=useRole()
+  const { effectiveRole, planOff }=useRole()
   const noSchedule=effectiveRole==='assigner'
   const gameLocked=locked||noSchedule
   const [showNotify,setShowNotify]=useState(false)
@@ -531,6 +532,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
   if(!tournament)return<div className="text-red-500">Not found</div>
 
   const dates=eventDayList(tournament,games.map(g=>g.date))
+  // Score boxes on the Full cards: the event's choice on New Tournament / Edit, else the Scores add-on (lib/eventScores).
+  const showScores=scoresShown(tournament.scores,planOff)
   const gameGenderOf=(d:string)=>gameGender(d,side)
   // A division that is neither (coed, unnamed) counts as both, so it never hides.
   const filteredOut=(g:Game)=>{
@@ -1523,8 +1526,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
                             {game.isChampionship&&<span className="text-[9px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded-full shrink-0">★</span>}
                           </div>
                           <div className="mb-2 space-y-1">
-                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team1}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked||!!game.ownClub} title={game.ownClub?'Your club plays in this game, so someone else posts its score.':undefined} defaultValue={game.score1??''} onBlur={e=>saveScore(game.id,'score1',e.target.value)} placeholder="—"/></div>
-                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team2}</span><input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked||!!game.ownClub} title={game.ownClub?'Your club plays in this game, so someone else posts its score.':undefined} defaultValue={game.score2??''} onBlur={e=>saveScore(game.id,'score2',e.target.value)} placeholder="—"/></div>
+                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team1}</span>{showScores&&<input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked||!!game.ownClub} title={game.ownClub?'Your club plays in this game, so someone else posts its score.':undefined} defaultValue={game.score1??''} onBlur={e=>saveScore(game.id,'score1',e.target.value)} placeholder="—"/>}</div>
+                            <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team2}</span>{showScores&&<input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked||!!game.ownClub} title={game.ownClub?'Your club plays in this game, so someone else posts its score.':undefined} defaultValue={game.score2??''} onBlur={e=>saveScore(game.id,'score2',e.target.value)} placeholder="—"/>}</div>
                           </div>
                           <div className="space-y-0.5 pt-1" style={{borderTop:`1px solid ${dc.border}`}}>
                             <div className="flex items-center justify-between mb-1">

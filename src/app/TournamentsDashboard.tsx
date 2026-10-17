@@ -14,6 +14,7 @@ import { useOrg } from '@/lib/org-context'
 import { roleCanAccess } from '@/lib/routeAccess'
 import { eventHref } from '@/components/nav/navConfig'
 import { TEAM_KINDS, teamsLabel } from '@/lib/eventTeams'
+import { scoresShown } from '@/lib/eventScores'
 
 interface Tournament {
   id:string; name:string; sport:string; startDate:string; endDate:string
@@ -21,6 +22,7 @@ interface Tournament {
   _count:{ games:number; teamRegistrations:number; registeredTeams:number }
   /** Boys, men's, girls, women's (lib/eventTeams). */
   teams?:string[]
+  scores?:boolean|null   // score boxes on the Assigner board; null = the Scores add-on decides (lib/eventScores)
 }
 
 const SPORTS = ['Lacrosse','Flag Football','Soccer','Football','Basketball','Baseball','Softball','Field Hockey','Hockey','Rugby','Volleyball','Other']
@@ -40,7 +42,7 @@ const DEFAULT_DIVISIONS = [
   'Girls High School A',
 ]
 
-const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50', numFields:'', dayStart:'08:00', dayEnd:'18:00', regMode:'builtin', teamFee:'1495', teams:[] as string[] }
+const EMPTY_FORM = { name:'', sport:'Lacrosse', startDate:'', endDate:'', location:'', scheduleIncrement:'50', numFields:'', dayStart:'08:00', dayEnd:'18:00', regMode:'builtin', teamFee:'1495', teams:[] as string[], scores:null as boolean|null }
 
 const ADMIN_LINKS = [
   { label: '👥 Logins',             href: '/admin/users',              desc: 'Who can sign in, their roles, and when they were last on' },
@@ -67,6 +69,23 @@ function TeamsPicker({ value, onChange }: { value: string[]; onChange: (v: strin
             onClick={() => onChange(on ? value.filter(v => v !== k.value) : [...value, k.value])}
             className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-teal-400 hover:text-teal-700'}`}>
             {k.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// Scores on the Assigner board: on or off (lib/eventScores). Asked next to Teams.
+function ScoresPicker({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Scores on the Assigner">
+      {([[true,'Show scores'],[false,'No scores']] as const).map(([v,l]) => {
+        const on = value === v
+        return (
+          <button key={l} type="button" aria-pressed={on} onClick={() => onChange(v)}
+            className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-teal-400 hover:text-teal-700'}`}>
+            {l}
           </button>
         )
       })}
@@ -161,7 +180,7 @@ export default function TournamentsDashboard() {
 
   // Edit state
   const [editId, setEditId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name:'', sport:'', startDate:'', endDate:'', location:'', teams:[] as string[] })
+  const [editForm, setEditForm] = useState({ name:'', sport:'', startDate:'', endDate:'', location:'', teams:[] as string[], scores:true })
   const [editSaving, setEditSaving] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
   const [editLogoUrl, setEditLogoUrl] = useState('')
@@ -209,6 +228,7 @@ export default function TournamentsDashboard() {
         scheduleIncrement: parseInt(form.scheduleIncrement) || 50,
         registrationDivisions: JSON.stringify(regOn || schedOn ? divisions : []),
         teams: form.teams,
+        scores: scoresShown(form.scores, planOff),
       })
     })
     if (r.ok) {
@@ -263,7 +283,7 @@ export default function TournamentsDashboard() {
 
   function openEdit(t: Tournament) {
     setEditId(t.id)
-    setEditForm({ name:t.name, sport:t.sport, startDate:t.startDate, endDate:t.endDate, location:t.location, teams:t.teams ?? [] })
+    setEditForm({ name:t.name, sport:t.sport, startDate:t.startDate, endDate:t.endDate, location:t.location, teams:t.teams ?? [], scores:scoresShown(t.scores, planOff) })
     setEditLogoUrl(t.logoUrl || '')
   }
 
@@ -492,6 +512,11 @@ export default function TournamentsDashboard() {
                 <TeamsPicker value={form.teams} onChange={teams=>setForm(f=>({...f,teams}))} />
                 <p className="text-[11px] text-gray-400 mt-1">Pick every kind that plays. When a division’s name doesn’t say boys or girls, this decides which refs it needs.</p>
               </div>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="label">Scores on the Assigner</label>
+                <ScoresPicker value={scoresShown(form.scores, planOff)} onChange={scores=>setForm(f=>({...f,scores}))} />
+                <p className="text-[11px] text-gray-400 mt-1">Score boxes on the Assigner’s game cards. Pick No scores when your refs’ schedule doesn’t need them.</p>
+              </div>
               <div><label className="label">Start Date</label><input className="input" type="date" value={form.startDate} onChange={e=>setF('startDate',e.target.value)}/></div>
               <div><label className="label">End Date</label><input className="input" type="date" value={form.endDate} onChange={e=>setF('endDate',e.target.value)}/></div>
               {schedOn && <div>
@@ -636,6 +661,10 @@ export default function TournamentsDashboard() {
               <div>
                 <label className="label">Teams</label>
                 <TeamsPicker value={editForm.teams} onChange={teams=>setEditForm(f=>({...f,teams}))} />
+              </div>
+              <div>
+                <label className="label">Scores on the Assigner</label>
+                <ScoresPicker value={editForm.scores} onChange={scores=>setEditForm(f=>({...f,scores}))} />
               </div>
               <div>
                 <label className="label">Location</label>

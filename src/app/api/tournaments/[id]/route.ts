@@ -7,6 +7,7 @@ import { assignEventSlug, slugOf, slugBase } from '@/lib/eventSlug'
 import { parseDivisionRules, applyRuleChange } from '@/lib/refRules'
 import { eventTeamsOf, saveEventTeams } from '@/lib/eventTeamsStore'
 import { SETS_TEAMS } from '@/lib/eventTeams'
+import { eventScoresOf, saveEventScores } from '@/lib/eventScoresStore'
 export async function GET(_: Request, { params }: { params:{id:string} }) {
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tiebreakers" TEXT NOT NULL DEFAULT '{}'`) } catch {}
   try { await prisma.$executeRawUnsafe(`ALTER TABLE "Tournament" ADD COLUMN "tagline" TEXT DEFAULT ''`) } catch {}
@@ -82,6 +83,7 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
     individualRegEnabled: !!individualRegEnabled,
     individualRegDescription, individualRegTiers, individualRegPositions, individualRegSizes,
     teams: await eventTeamsOf(params.id),   // boys, men's, girls, women's (lib/eventTeams)
+    scores: await eventScoresOf(params.id),  // score boxes on the Assigner board; null = the Scores add-on decides (lib/eventScores)
   })
 }
 // These columns store JSON as TEXT. Callers may send either a plain object OR an
@@ -164,6 +166,10 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   // The kinds of teams (lib/eventTeams), from Edit: the people who set up events.
   if (b.teams !== undefined && SETS_TEAMS.includes(gate.role)) {
     await saveEventTeams(params.id, b.teams, String(gate.session?.user?.name || gate.session?.user?.email || ''))
+  }
+  // Scores on the Assigner board (lib/eventScores), from Edit: the same people.
+  if (b.scores !== undefined && SETS_TEAMS.includes(gate.role)) {
+    await saveEventScores(params.id, b.scores, String(gate.session?.user?.name || gate.session?.user?.email || ''))
   }
   return NextResponse.json({ ...out, slug: await slugOf(params.id) })
 }

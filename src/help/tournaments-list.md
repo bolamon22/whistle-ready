@@ -11,7 +11,7 @@ The **Tournaments** page is your home page. It lists every tournament, with the 
 
 **To create a tournament:**
 1. Click **+ New Tournament** (or **+ New tournament** under the event button in the top bar).
-2. Fill in **Tournament Name** (required), **Sport**, **Teams** (required: click every kind that plays, **Boys**, **Men’s**, **Girls** or **Women’s**), **Start Date**, **End Date** and **Location**.
+2. Fill in **Tournament Name** (required), **Sport**, **Teams** (required: click every kind that plays, **Boys**, **Men’s**, **Girls** or **Women’s**), **Scores on the Assigner** (**Show scores** or **No scores**), **Start Date**, **End Date** and **Location**.
 3. Optional: **Schedule Increment (minutes)**, **Number of fields** (Whistle Ready sets up Field 1 to N for you), **Daily start time** and **Daily end time**.
 4. Under **Team registration**, pick **Use built-in registration** (enter a **Team registration fee**) or **Import from another platform (CSV)**.
 5. Upload a logo if you have one, and tick divisions under **Divisions** (use **Select all defaults**, **Clear all**, or type one in **Add custom division…**).
@@ -21,13 +21,15 @@ On the Whistle Ready Assigner plan the form asks only for the name, sport, teams
 
 **Teams:** when every kind picked is boys and men's (or girls and women's), a division whose name doesn't say boys or girls counts as that side's game. The Assigner's **Boys games** and **Girls games** filter, **Auto-assign**, **Clear**, the boys' and girls' refs pay groups, **Notify officials** and what officials see all go by it. With both sides picked, the division name decides, and a name that says neither can take either kind of ref. To fix a name, see "Assign refs and scorekeepers to games" (**Divisions** on the Assigner).
 
+**Scores on the Assigner:** **Show scores** puts score boxes on the Assigner board's **Full** game cards; **No scores** leaves them off, for assigners whose refs' schedule doesn't need scores. It starts on **Show scores** when your organization has the Scores add-on and **No scores** when it doesn't. Change it any time with **Edit**.
+
 **To copy a tournament (for next year):**
 1. Click **Copy** on the tournament card (or **Copy tournament** at the bottom of its **Dashboard**).
 2. Enter the **New Tournament Name** and dates, then click **Create Copy**.
 
-Copied: venues and fields, divisions, teams, pay rates, ref rules, staff roster and registration settings. Left behind: games, schedule, registrations, assignments and availability.
+Copied: venues and fields, divisions, teams, the scores choice, pay rates, ref rules, staff roster and registration settings. Left behind: games, schedule, registrations, assignments and availability.
 
-**Other card buttons:** **Edit** changes name, sport, teams, dates, location and logo. The card shows the teams next to the sport. **Schedule**, **Staff roster**, **Registrations**, **Staff pay** and **Builder** jump straight to those pages. Click the tournament name to open its **Dashboard** (the **Assigner** board on the Assigner plan, which has no dashboard).
+**Other card buttons:** **Edit** changes name, sport, teams, scores on the Assigner, dates, location and logo. The card shows the teams next to the sport. **Schedule**, **Staff roster**, **Registrations**, **Staff pay** and **Builder** jump straight to those pages. Click the tournament name to open its **Dashboard** (the **Assigner** board on the Assigner plan, which has no dashboard).
 
 **Tasks:** directors and admins see a **Tasks** box above the list, with what's up next across every event, and a line on each tournament card with its open and overdue tasks. Click it to open that event's tasks.
 

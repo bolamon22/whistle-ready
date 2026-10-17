@@ -6,6 +6,7 @@ import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
 import { assignEventSlug } from '@/lib/eventSlug'
 import { eventTeamsMany, saveEventTeams } from '@/lib/eventTeamsStore'
+import { eventScoresMany, saveEventScores } from '@/lib/eventScoresStore'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -55,7 +56,9 @@ async function withPlaced(list: any[]) {
   } catch (e) { console.error('reffedGames', e) }
   // The kinds of teams each event has (lib/eventTeams), for its card and Edit.
   const teams = await eventTeamsMany(list.map(t => t.id))
-  return list.map(t => ({ ...t, teams: teams.get(t.id) ?? [], _count: { ...t._count, placedGames: placed.get(t.id) ?? 0, reffedGames: reffed.get(t.id) ?? 0 } }))
+  // Score boxes on the Assigner board: on, off, or null = follow the Scores add-on (lib/eventScores).
+  const scores = await eventScoresMany(list.map(t => t.id))
+  return list.map(t => ({ ...t, teams: teams.get(t.id) ?? [], scores: scores.get(t.id) ?? null, _count: { ...t._count, placedGames: placed.get(t.id) ?? 0, reffedGames: reffed.get(t.id) ?? 0 } }))
 }
 
 export async function GET(req: Request) {
@@ -121,7 +124,7 @@ export async function POST(req: Request) {
     if (m) orgId = decodeURIComponent(m[1])
   }
 
-  const { name, sport, startDate, endDate, location, scheduleIncrement, registrationDivisions, teams } = await req.json()
+  const { name, sport, startDate, endDate, location, scheduleIncrement, registrationDivisions, teams, scores } = await req.json()
   const tournament = await prisma.tournament.create({
     data: {
       name,
@@ -146,5 +149,9 @@ export async function POST(req: Request) {
   const saved = teams !== undefined
     ? await saveEventTeams(tournament.id, teams, String(session?.user?.name || session?.user?.email || '')).catch(() => [])
     : []
-  return NextResponse.json({ ...tournament, teams: saved }, { status: 201 })
+  // Scores on the Assigner board, asked next to Teams (lib/eventScores).
+  const savedScores = scores !== undefined
+    ? await saveEventScores(tournament.id, scores, String(session?.user?.name || session?.user?.email || '')).catch(() => null)
+    : null
+  return NextResponse.json({ ...tournament, teams: saved, scores: savedScores }, { status: 201 })
 }

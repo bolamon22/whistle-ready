@@ -7,6 +7,7 @@ import { assignEventSlug, slugOf } from '@/lib/eventSlug'
 import { orgGate, requireStaff } from '@/lib/apiAuth'
 import { eventTeamsOf, saveEventTeams } from '@/lib/eventTeamsStore'
 import { SETS_TEAMS } from '@/lib/eventTeams'
+import { eventScoresOf, saveEventScores } from '@/lib/eventScoresStore'
 
 function getClient() {
   return createClient({
@@ -71,6 +72,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Its kinds of teams too (lib/eventTeams).
   const teams = await eventTeamsOf(params.id)
   if (teams.length) await saveEventTeams(newT.id, teams, String(gate.session?.user?.name || gate.session?.user?.email || '')).catch(() => {})
+  // And whether its Assigner board shows scores (lib/eventScores).
+  const scores = await eventScoresOf(params.id)
+  if (scores !== null) await saveEventScores(newT.id, scores, String(gate.session?.user?.name || gate.session?.user?.email || '')).catch(() => {})
 
   // Stamp orgId — inherit from source, or from admin preview cookie
   const client2 = getClient()

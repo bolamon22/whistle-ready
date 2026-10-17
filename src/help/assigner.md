@@ -3,7 +3,7 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: card size full compact mini density layout staffing panel needs crew conflicts filter, notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green rename division divisions division names boys games girls games teams
+keywords: show scores no scores score boxes, card size full compact mini density layout staffing panel needs crew conflicts filter, notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green rename division divisions division names boys games girls games teams
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
@@ -21,7 +21,7 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 - Colors show **Full crew**, **A slot open**, or **Nobody, or double-booked**.
 - The top of the page shows how many slots are filled for the day. A red **double-booked** count appears when someone is on two games at once; click it to see just those games.
 - Filter the games by search, division, **All** / **Boys** / **Girls** (Boys turns blue and Girls pink when on; click it again for All), and **Needs crew** or **Conflicts**. The numbers are that day's games. Games that don't match fade on the grid. **Clear** resets the filters.
-- **Card size** (**Full**, **Compact**, **Mini**) changes how much each game shows.
+- **Card size** (**Full**, **Compact**, **Mini**) changes how much each game shows. **Full** cards have score boxes only when the event is set to **Show scores** (pick **Show scores** or **No scores** on **+ New Tournament** or **Edit** on its card).
 - **Layout** holds **Fit all fields** or **Fixed width** columns, and **Fold staffed**, **Fold all** and **Open all** to collapse time rows.
 - The staffing panel's **Needs** tab shows who is on games that day and **Min staff (busiest day)**, an estimate of how many refs and scorekeepers you need based on **Games/ref**. Click **By day** for each day.
 
