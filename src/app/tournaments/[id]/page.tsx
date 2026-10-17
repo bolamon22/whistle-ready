@@ -4,11 +4,12 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff, Tags } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
-import { gameGender } from '@/lib/gameGender'
+import { gameGender, type GameGender } from '@/lib/gameGender'
+import { teamsSide } from '@/lib/eventTeams'
 import { isOnline, presenceLabel } from '@/lib/presenceTime'
 import { useRole } from '@/lib/role-context'
 import RefLevelPill from '@/components/RefLevelPill'
@@ -18,7 +19,7 @@ interface Worker { id:string;name:string;certLevel:string;defaultRole:string;rol
 interface Assignment { id:string;workerId:string;role:string;payRate:number|null;worker:Worker }
 interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[];ownClub?:boolean }
 // ownClub: the viewer's own club plays, so someone else posts the score (lib/ownClub).
-interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string }
+interface Tournament { id:string;name:string;dates:string;startDate?:string;endDate?:string;divisionRules:string;logoUrl:string;teams?:string[] }
 interface Availability { workerId:string;date:string;timeSlots:string }
 interface RosterEntry { workerId:string;gameTarget:number }
 interface GapEntry { gameNumber:string;division:string;location:string;missingRoles:string[] }
@@ -210,6 +211,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const noSchedule=effectiveRole==='assigner'
   const gameLocked=locked||noSchedule
   const [showNotify,setShowNotify]=useState(false)
+  const [showDivs,setShowDivs]=useState(false)
+  // A division that says neither boys nor girls goes by the event's teams (lib/eventTeams).
+  const side=teamsSide(tournament?.teams)
   // Bumped after Notify officials sends, which also shows those crews to staff.
   const [releaseKey,setReleaseKey]=useState(0)
   // Officials' confirmations (lib/officialConfirm): each slot's answer and the open slots
@@ -329,7 +333,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
     for(const g of games){
       if(g.date!==activeDay)continue
       if(fields.size&&!fields.has(g.location))continue
-      const gg=gameGender(g.division)
+      const gg=gameGender(g.division,side)
       const refsHit=(kinds.has('girls-refs')&&gg!=='boys')||(kinds.has('boys-refs')&&gg!=='girls')
       for(const a of g.assignments){
         if(a.role==='scorekeeper'?kinds.has('scorekeepers'):refsHit&&/^ref[123]$/.test(a.role))n++
@@ -508,7 +512,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   if(!tournament)return<div className="text-red-500">Not found</div>
 
   const dates=eventDayList(tournament,games.map(g=>g.date))
-  const gameGenderOf=gameGender
+  const gameGenderOf=(d:string)=>gameGender(d,side)
   // A division that is neither (coed, unnamed) counts as both, so it never hides.
   const filteredOut=(g:Game)=>{
     if(genderFilter!=='all'){const gg=gameGenderOf(g.division);if(gg!=='both'&&gg!==genderFilter)return true}
@@ -591,6 +595,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
 
+      {showDivs && <DivisionsPanel tournamentId={params.id} games={games} side={side} onClose={()=>setShowDivs(false)} onRenamed={load} />}
       {showNotify && <NotifyOfficials tournamentId={params.id} day={activeDay} dayLabel={activeDay?formatDate(activeDay):''} onClose={()=>setShowNotify(false)} onSent={()=>{load();setReleaseKey(k=>k+1)}} />}
       {/* Auto-assign modal */}
       {showAutoAssign&&(
@@ -872,6 +877,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
           {confirms?.ask && <Link href={`/tournaments/${params.id}/confirmations`} title="Who has confirmed their games" className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><CheckCheck size={13} /> Confirmed {confirms.totals.confirmed}/{confirms.totals.officials}</Link>}
           {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="text-xs font-semibold text-purple-700 border border-purple-200 hover:bg-purple-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Zap size={13} /> Auto-assign</button>}
           {dayGames.length > 0 && <button onClick={() => { resetClear(); setShowClear(true) }} className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Trash2 size={13} /> Clear</button>}
+          {!noSchedule&&games.length>0&&<button onClick={()=>setShowDivs(true)} title="Rename divisions" className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Tags size={13} /> Divisions</button>}
           {!noSchedule&&<button onClick={openAddGame} className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Plus size={13} /> Game</button>}
           {!noSchedule&&<label className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"><Upload size={13} /> Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>}
         </div>
@@ -1261,10 +1267,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
             const nodes=slotRoles(rc).map((role,i)=>{
               const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
               const existing=game.assignments.find(a=>a.role===role)
-              return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} mark={markFor(game.id,role)} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
+              return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} mark={markFor(game.id,role)} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
             })
             const sk=game.assignments.find(a=>a.role==='scorekeeper')
-            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} mark={markFor(game.id,'scorekeeper')} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
+            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} mark={markFor(game.id,'scorekeeper')} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
             return nodes
           }
           // One line: status dot, game, division, the crew by last name. Used by the
@@ -1465,10 +1471,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
                               const role=i===0?'ref1':i===1?'ref2':'ref3'
                               const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
                               const existing=game.assignments.find(a=>a.role===role)
-                              return<div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":"+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+":"+role?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" mark={markFor(game.id,role)}/></div>
+                              return<div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":"+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+":"+role?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" mark={markFor(game.id,role)}/></div>
                             })}
                             {/* Scorekeeper */}
-                            <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" mark={markFor(game.id,'scorekeeper')}/></div>
+                            <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" mark={markFor(game.id,'scorekeeper')}/></div>
                           </div>
                           </>}
                         </td>
@@ -1593,7 +1599,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   )
 }
 
-function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,onAssign,getGameCount,doubled,slotType,chip,displayName,busyFor,mark }:{
+function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,side,onAssign,getGameCount,doubled,slotType,chip,displayName,busyFor,mark }:{
   roleObj:{value:string;label:string;short:string;color:string};existing?:Assignment;workers:Worker[];avails:Availability[];date:string;time:string;disabled:boolean;division:string;onAssign:(w:string)=>void;getGameCount:(id:string)=>number;doubled:Set<string>;slotType:'ref'|'scorekeeper'
   /** Compact board chip; displayName is the short (last) name to show on it. */
   chip?:boolean;displayName?:string
@@ -1602,9 +1608,13 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
   /** Officials' confirmations for this slot (lib/officialConfirm): the holder's answer,
    *  and who said they can't work it when it's open. */
   mark?:{st?:string;declined?:{name:string;note:string}}
+  /** The event's side for a division that says neither (lib/eventTeams). */
+  side?:GameGender
 }){
-  const divLower=division.toLowerCase()
-  const gameGender=divLower.includes('girl')||divLower.includes('women')?'girls':divLower.includes('boy')||divLower.includes('men')?'boys':'both'
+  // Whose game it is (lib/gameGender, the rule Auto-assign uses): the division, or the
+  // event's teams when it says neither. This had its own word match, which read any
+  // name with "men" or "boy" in it ("Clemens Cup") as a boys' game.
+  const gg=gameGender(division,side)
 
   // Availability records are UNavailability (see the Availability page): [] = out all
   // day, ['08:00',...] = out at those start times. No record = available. This read
@@ -1626,8 +1636,8 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
       ]
     :workers.filter(w=>{
         if(w.defaultRole!=='ref')return false
-        if(gameGender==='boys')return w.gender==='boys'||w.gender==='both'
-        if(gameGender==='girls')return w.gender==='girls'||w.gender==='both'
+        if(gg==='boys')return w.gender==='boys'||w.gender==='both'
+        if(gg==='girls')return w.gender==='girls'||w.gender==='both'
         return true
       })
 
@@ -1675,6 +1685,60 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
 
 /** "Notify officials": email (and phone-alert) each official their own games, once
  *  the assignments are ready (api/tournaments/[id]/notify-officials). */
+// Rename divisions from the board (Bo, Oct 17 2026: the assigner needs "to be able to
+// edit division names when need"). The names come in with the imported games, and the
+// Divisions page is off on the Assigner plan. Every game, pool, team and bracket in the
+// division follows the new name (PATCH /api/tournaments/[id]/divisions). The tag is
+// whose game the name makes it (lib/gameGender), so a name with Girls in it shows
+// Girls before it is saved.
+function DivisionsPanel({ tournamentId, games, side, onClose, onRenamed }:{ tournamentId:string;games:Game[];side:GameGender;onClose:()=>void;onRenamed:()=>void }){
+  const [names,setNames]=useState<Record<string,string>>({})
+  const [busy,setBusy]=useState('')
+  const counts=new Map<string,number>()
+  for(const g of games)if(g.division)counts.set(g.division,(counts.get(g.division)||0)+1)
+  const divs=Array.from(counts.keys()).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
+  const sideTag=(d:string)=>{const g=gameGender(d,side);return g==='boys'?{label:'Boys',cls:'bg-sky-50 text-sky-700'}:g==='girls'?{label:'Girls',cls:'bg-pink-50 text-pink-700'}:{label:'Boys & girls',cls:'bg-slate-100 text-slate-600'}}
+  async function rename(oldName:string){
+    const newName=(names[oldName]??oldName).trim()
+    if(!newName||newName===oldName)return
+    setBusy(oldName)
+    try{
+      const r=await fetch(`/api/tournaments/${tournamentId}/divisions`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({oldName,newName})})
+      const d=await r.json().catch(()=>null)
+      if(!r.ok){toast.error(d?.error||'That didn’t save. Please try again.');return}
+      toast.success(`${oldName} is now ${newName}`)
+      setNames(n=>{const x={...n};delete x[oldName];return x})
+      onRenamed()
+    }catch{toast.error('That didn’t save. Please try again.')}
+    finally{setBusy('')}
+  }
+  return(
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">Divisions</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Rename a division and its games move with it. A name that says boys, men’s, girls or women’s decides whose game it is; otherwise the event’s teams do.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {divs.map(d=>{const v=names[d]??d;const changed=!!v.trim()&&v.trim()!==d;const tag=sideTag(v.trim()||d);return(
+            <form key={d} className="px-5 py-3 flex items-center gap-2" onSubmit={e=>{e.preventDefault();rename(d)}}>
+              <div className="flex-1 min-w-0">
+                <input className="input w-full" value={v} onChange={e=>setNames(n=>({...n,[d]:e.target.value}))} aria-label={`Name for ${d}`} />
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400"><span className={`rounded px-1.5 py-0.5 font-semibold ${tag.cls}`}>{tag.label}</span>{counts.get(d)} game{counts.get(d)===1?'':'s'}</div>
+              </div>
+              <button type="submit" disabled={!changed||!!busy} className="btn-primary btn-sm flex-shrink-0">{busy===d?'Saving…':'Rename'}</button>
+            </form>
+          )})}
+          {!divs.length&&<p className="px-5 py-6 text-sm text-slate-500">No divisions yet: they come in with the games you import.</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tournamentId: string; day: string; dayLabel: string; onClose: () => void; onSent?: () => void }) {
   const [scope,setScope]=useState<'all'|'day'>('all')
   const [onlyChanged,setOnlyChanged]=useState(false)
