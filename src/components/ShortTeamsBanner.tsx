@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { findShortTeams, describeFinding, type BalanceGame } from '@/lib/gameBalance'
 
@@ -15,7 +16,7 @@ import { findShortTeams, describeFinding, type BalanceGame } from '@/lib/gameBal
 // not an error. Red is the required-field color.
 export default function ShortTeamsBanner({
   games, guarantee = 0, division, onFix, fixLabel = 'Rebalance pool games', className = '',
-  compact = false, detailsHref = '',
+  compact = false, detailsHref = '', pill = false,
 }: {
   games: BalanceGame[]
   /** Games-per-team promise, 0 to skip that check. */
@@ -29,9 +30,12 @@ export default function ShortTeamsBanner({
   compact?: boolean
   /** Where the full version lives, shown as a link in compact mode. */
   detailsHref?: string
+  /** A small tag for a toolbar that opens the details (the Scheduler header). */
+  pill?: boolean
 }) {
   const findings = findShortTeams(division ? games.filter(g => g.division === division) : games, guarantee)
   if (!findings.length) return null
+  if (pill) return <ShortTeamsPill findings={findings} detailsHref={detailsHref} />
 
   // COMPACT. The full list is five lines of names, which is the right shape on the
   // Divisions page -- that is where pools are built and where the fix button sits.
@@ -90,5 +94,36 @@ export default function ShortTeamsBanner({
         </div>
       </div>
     </div>
+  )
+}
+
+// The toolbar tag (Scheduler, Oct 2026): "1 uneven pool" in amber; click for which pools and
+// the way to Divisions. The banner it replaced took a full row above the board.
+function ShortTeamsPill({ findings, detailsHref }: { findings: ReturnType<typeof findShortTeams>; detailsHref: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <span className="relative inline-flex flex-shrink-0">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        title="Some teams are scheduled fewer games than the rest of their pool"
+        className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100 transition-colors">
+        <AlertTriangle size={13} className="text-amber-600" />
+        {findings.length === 1 ? '1 uneven pool' : `${findings.length} uneven pools`}
+      </button>
+      {open && (<>
+        <span className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+        <div className="absolute left-0 top-full mt-1 z-50 w-80 rounded-xl border border-amber-200 bg-white shadow-lg p-3 whitespace-normal text-left">
+          <p className="text-sm font-semibold text-amber-900">
+            {findings.length === 1 ? 'A pool is uneven' : `${findings.length} pools are uneven`}
+            <span className="font-normal text-amber-800"> — some teams are scheduled fewer games than the rest.</span>
+          </p>
+          <ul className="mt-2 space-y-1">
+            {findings.map(f => (
+              <li key={`${f.division}-${f.pool}`} className="text-xs text-amber-900"><span className="font-semibold">{f.division}:</span> {describeFinding(f)}</li>
+            ))}
+          </ul>
+          {detailsHref && <Link href={detailsHref} className="mt-2 inline-block text-xs font-semibold text-teal-700 underline underline-offset-2 hover:text-teal-800">Fix in Divisions</Link>}
+        </div>
+      </>)}
+    </span>
   )
 }

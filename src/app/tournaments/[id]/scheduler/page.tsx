@@ -13,7 +13,7 @@ import { closuresOf, isFieldClosedAt, fieldClosure, closureLabel, withClosure, b
 import { divisionAbbr, teamRefKey } from '@/lib/names'
 import { divisionColorMap } from '@/lib/divisionColors'
 import { bracketWaits, brokenWait } from '@/lib/bracketOrder'
-import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban, PanelTop, Undo2 } from 'lucide-react'
+import { RefreshCw, RotateCw, Check, CheckCircle2, ArrowLeftRight, X, Send, ArrowLeft, ArrowRight, PanelRight, PanelLeft, Trash2, ChevronUp, ChevronDown, ArrowUpDown, Clock, MapPin, Building2, AlertTriangle, Zap, CloudRain, Bookmark, Eye, MoreHorizontal, Bell, Ban, PanelTop, Undo2, Plus, Filter } from 'lucide-react'
 
 interface Game {
   id: string
@@ -252,6 +252,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [visKey,         setVisKey]         = useState(0)
   // The header's "Tools" menu: the seldom-used actions, so the bar fits on one line.
   const [toolsOpen,      setToolsOpen]      = useState(false)
+  // The Filter popover in the days row: Division, Pool, Team, Game type (they used to fill a row of their own).
+  const [filterOpen,     setFilterOpen]     = useState(false)
   // "Clear games" panel in Tools: which games to send back to Unscheduled.
   const [clrDiv,  setClrDiv]  = useState('__all__')
   const [clrDay,  setClrDay]  = useState<'day' | 'all'>('all')
@@ -1525,15 +1527,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       <TournamentNav id={params.id} name={tMeta.name} logoUrl={tMeta.logoUrl} />
       <Toaster position="top-right" />
 
-      {/* A pool short a team is short of games for everyone it was drawn
-          against, and nothing else on this page would say so -- the per-game
-          issue badges are about placement, not about games that do not exist.
-          Computed live, so it clears itself once the pool is level again.
-          Compact here: the board is what this page is for, and the fix lives on
-          Divisions, which this links to. */}
-      <div className="px-4 pt-3 flex-shrink-0 empty:hidden">
-        <ShortTeamsBanner games={games} compact detailsHref={`/tournaments/${params.id}/divisions`} />
-      </div>
 
       {issueTip && !dragId && (() => {
         const items = gameIssues(issueTip.id)
@@ -1876,25 +1869,39 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           </span>
         </div>
 
-        {/* Day window as one control */}
-        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 h-7 flex-shrink-0" title="Day start and end for the selected day">
-          <Clock size={12} className="text-slate-400" />
-          <input type="time" value={minToHM(dayWin.s)} onChange={e => { if (e.target.value) persistDayWindow(e.target.value, minToHM(dayWin.e)) }}
-            className="text-xs bg-transparent border-0 p-0 w-[92px] text-slate-700 focus:outline-none" aria-label="Day start" />
-          <span className="text-slate-300 text-xs">–</span>
-          <input type="time" value={minToHM(dayWin.e)} onChange={e => { if (e.target.value) persistDayWindow(minToHM(dayWin.s), e.target.value) }}
-            className="text-xs bg-transparent border-0 p-0 w-[92px] text-slate-700 focus:outline-none" aria-label="Day end" />
-        </div>
+        {/* A pool short a team is short of games for everyone it was drawn against, and nothing
+            else here says so. It was a banner across the page; now a small tag that opens the
+            details and the way to Divisions, where it gets fixed (Oct 2026). Computed live. */}
+        <ShortTeamsBanner games={games} pill detailsHref={`/tournaments/${params.id}/divisions`} />
 
         {/* Tools menu */}
         <div className="relative flex-shrink-0" ref={toolsRef}>
           <button onClick={() => { if (!toolsOpen) setClrDiv(gridDiv); setToolsOpen(o => !o) }}
             className={`inline-flex items-center gap-1 text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors ${toolsOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200'}`}
-            title="Renumber, side panel, checkpoint, unschedule all, auto-fill day mode">
+            title="Day hours, weather delay, renumber, parking lot, checkpoint, unschedule">
             <MoreHorizontal size={14} /> Tools
           </button>
           {toolsOpen && (
-            <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-50 text-left whitespace-normal">
+            <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-50 text-left whitespace-normal">
+              {/* Day hours and Weather moved here from the header bar (Oct 2026) so the bar has room. */}
+              <div className="px-2.5 pt-1.5 pb-2 space-y-1.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Clock size={13} className="text-slate-400" /> Day hours{activeDate ? <span className="font-normal text-slate-400">· {fmtDate(activeDate)}</span> : null}</div>
+                <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 h-8 w-full">
+                  <input type="time" value={minToHM(dayWin.s)} onChange={e => { if (e.target.value) persistDayWindow(e.target.value, minToHM(dayWin.e)) }}
+                    className="text-xs bg-transparent border-0 p-0 flex-1 min-w-0 text-slate-700 focus:outline-none" aria-label="Day start" />
+                  <span className="text-slate-300 text-xs">–</span>
+                  <input type="time" value={minToHM(dayWin.e)} onChange={e => { if (e.target.value) persistDayWindow(minToHM(dayWin.s), e.target.value) }}
+                    className="text-xs bg-transparent border-0 p-0 flex-1 min-w-0 text-slate-700 focus:outline-none" aria-label="Day end" />
+                </div>
+              </div>
+              <button
+                onClick={() => { setToolsOpen(false); setShowWeather(true); if (!wxFrom) { const u = dayGames.filter(g => !gameDone(g)).sort((a, b) => hmToMin(a.startTime) - hmToMin(b.startTime)); if (u.length) setWxFrom(u[0].startTime) } }}
+                disabled={dayGames.length === 0}
+                title="Weather delay — push back the rest of today's unplayed games"
+                className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50 disabled:opacity-40">
+                <CloudRain size={13} className="text-amber-500" /> Weather delay or shorten…
+              </button>
+              <div className="my-1 border-t border-slate-100" />
               <button onClick={() => { renumberAll(); setToolsOpen(false) }} className="w-full flex items-center gap-2 text-xs text-slate-700 px-2.5 py-2 rounded-lg hover:bg-slate-50">
                 <RotateCw size={13} className="text-slate-400" /> Renumber all games
               </button>
@@ -1985,14 +1992,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Published
             </span>
           )}
-          <button
-            onClick={() => { setShowWeather(true); if (!wxFrom) { const u = dayGames.filter(g => !gameDone(g)).sort((a, b) => hmToMin(a.startTime) - hmToMin(b.startTime)); if (u.length) setWxFrom(u[0].startTime) } }}
-            disabled={dayGames.length === 0}
-            title="Weather delay — push back the rest of today's unplayed games"
-            className="text-xs font-semibold h-7 px-2.5 rounded-lg border transition-colors disabled:opacity-40 bg-amber-500 hover:bg-amber-600 text-white border-amber-600"
-          >
-            <span className="inline-flex items-center gap-1"><CloudRain size={13} /> Weather</span>
-          </button>
           <button
             onClick={openAutoFill}
             disabled={autoFilling || unscheduled.length === 0}
@@ -2312,52 +2311,98 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       )}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
-      {/* ── Grid filter row ── */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center gap-2 flex-wrap flex-shrink-0">
-        <label className="text-slate-500 text-xs font-semibold">View:</label>
-        <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-slate-100 border border-slate-200 mr-2">
+      {/* ── Days, view and filters in one row (Oct 2026). It was a filter row plus a row of
+          day tabs; Bo: the day toggle "is hard to see sometimes with all the noise", so the
+          days are big buttons and the one you're on is solid teal. ── */}
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 flex items-center gap-2 flex-wrap flex-shrink-0">
+        <div className="flex items-stretch gap-1.5 overflow-x-auto max-w-full" role="tablist" aria-label="Day">
+          {dates.map(d => {
+            const n = games.filter(g => g.date === d).length
+            const removable = n === 0 && !eventDays.includes(d)
+            const on = activeDate === d
+            return (
+              <div key={d} className={`relative flex items-center rounded-xl border-[1.5px] transition-colors flex-shrink-0 ${on ? 'bg-teal-700 border-teal-700 text-white shadow-md shadow-teal-700/20' : 'bg-white border-slate-300 text-slate-700 hover:border-teal-500'}`}>
+                <button role="tab" aria-selected={on} onClick={() => setActiveDate(d)} className={`${removable ? 'pl-3.5 pr-1' : 'px-3.5'} py-1.5 text-left`}>
+                  <span className="block text-sm font-bold leading-tight whitespace-nowrap">{fmtDate(d)}</span>
+                  <span className={`block text-[11px] leading-tight whitespace-nowrap ${on ? 'text-teal-100' : 'text-slate-500'}`}
+                    title={capacity[d] ? `${n} game${n === 1 ? '' : 's'} placed · ${capacity[d].open} of ${capacity[d].total} slots open${capDiv ? ` on fields set for ${capDiv}` : ''}` : `${n} game${n === 1 ? '' : 's'} placed`}>
+                    {n} game{n === 1 ? '' : 's'}{capacity[d] ? ` · ${capacity[d].open} open` : ''}
+                  </span>
+                </button>
+                {removable && (
+                  <button onClick={() => removeDay(d)} aria-label={`Remove ${fmtDate(d)}`} title="Remove this day (no games on it)"
+                    className={`mr-1.5 w-5 h-5 rounded-full flex items-center justify-center ${on ? 'text-teal-100 hover:bg-teal-600' : 'text-slate-400 hover:bg-slate-200 hover:text-slate-700'}`}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )
+          })}
+          <button onClick={addDay} title="Add a day" aria-label="Add a day"
+            className="w-10 flex-shrink-0 rounded-xl border-[1.5px] border-dashed border-slate-300 text-slate-500 hover:border-teal-500 hover:text-teal-700 flex items-center justify-center">
+            <Plus size={16} />
+          </button>
+        </div>
+
+        <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-slate-100 border border-slate-200">
           {([['grid', 'Grid'], ['board', 'Board'], ['timeline', 'Timeline'], ['teams', 'Teams']] as const).map(([v, label]) => (
             <button key={v} onClick={() => setSchedView(v)}
               className={`text-xs font-bold px-3 py-1 rounded-full transition-colors ${schedView === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}
-              title={v === 'grid' ? 'The original grid: fields across, time down' : v === 'board' ? 'Fields across, time down, with the new tiles, drop hints and issues panel' : v === 'timeline' ? 'Fields down, time across, with an issues panel' : 'One row per team, so rest and conflicts show as a shape'}>
+              title={v === 'grid' ? 'The original grid: fields across, time down' : v === 'board' ? 'Fields across, time down, with the new tiles, drop hints and issues panel' : v === 'timeline' ? 'Fields down, time across, with an issues panel' : 'One row per team, so rest and conflicts show as a strip'}>
               {label}
             </button>
           ))}
         </div>
 
-        <label className="text-slate-500 text-xs">Division:</label>
-        <select value={gridDiv}
-          onChange={e => { setGridDiv(e.target.value); setGridPool('__all__'); setGridTeam('__all__') }}
-          className={gridSelectCls}>
-          <option value="__all__">All Divisions</option>
-          {divisions.map(d => <option key={d} value={d}>{d} ({divGameCounts[d] ?? 0})</option>)}
-        </select>
-
-        <label className="text-slate-500 text-xs">Pool:</label>
-        <select value={gridPool}
-          onChange={e => { setGridPool(e.target.value); setGridTeam('__all__') }}
-          className={gridSelectCls}>
-          <option value="__all__">All Pools</option>
-          {gridPools.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-
-        <label className="text-slate-500 text-xs">Team:</label>
-        <select value={gridTeam} onChange={e => setGridTeam(e.target.value)} className={gridSelectCls}>
-          <option value="__all__">All Teams</option>
-          {gridTeams.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-
-        <label className="text-slate-500 text-xs">Game Type:</label>
-        <select value={gridType} onChange={e => setGridType(e.target.value)} className={gridSelectCls}>
-          <option value="__all__">All</option>
-          <option value="pool">Pool</option>
-          <option value="bracket">Bracket</option>
-        </select>
-
-        {(gridDiv !== '__all__' || gridPool !== '__all__' || gridTeam !== '__all__' || gridType !== '__all__') && (
-          <button onClick={() => { setGridDiv('__all__'); setGridPool('__all__'); setGridTeam('__all__'); setGridType('__all__') }}
-            className="text-xs text-slate-400 hover:text-slate-600 underline">
-            Clear
+        {(() => {
+          const nFilters = [gridDiv, gridPool, gridTeam, gridType].filter(v => v !== '__all__').length
+          const lbl = 'block text-[11px] font-semibold text-slate-500 mb-1'
+          const sel = 'w-full text-sm bg-white text-slate-700 border border-slate-300 rounded-lg px-2 py-1.5'
+          return (
+            <div className="relative">
+              <button onClick={() => setFilterOpen(o => !o)} aria-expanded={filterOpen}
+                title="Division, pool, team and game type"
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-lg border transition-colors ${nFilters ? 'bg-teal-50 text-teal-800 border-teal-300' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                <Filter size={13} /> Filter
+                {nFilters > 0 && <span className="min-w-[18px] h-[18px] rounded-full bg-teal-600 text-white text-[11px] font-bold inline-flex items-center justify-center px-1">{nFilters}</span>}
+              </button>
+              {filterOpen && (<>
+                <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
+                <div className="absolute left-0 top-full mt-1 z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-3 space-y-2.5">
+                  <div><label className={lbl}>Division</label>
+                    <select value={gridDiv} onChange={e => { setGridDiv(e.target.value); setGridPool('__all__'); setGridTeam('__all__') }} className={sel}>
+                      <option value="__all__">All divisions</option>
+                      {divisions.map(d => <option key={d} value={d}>{d} ({divGameCounts[d] ?? 0})</option>)}
+                    </select></div>
+                  <div><label className={lbl}>Pool</label>
+                    <select value={gridPool} onChange={e => { setGridPool(e.target.value); setGridTeam('__all__') }} className={sel}>
+                      <option value="__all__">All pools</option>
+                      {gridPools.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select></div>
+                  <div><label className={lbl}>Team</label>
+                    <select value={gridTeam} onChange={e => setGridTeam(e.target.value)} className={sel}>
+                      <option value="__all__">All teams</option>
+                      {gridTeams.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select></div>
+                  <div><label className={lbl}>Game type</label>
+                    <select value={gridType} onChange={e => setGridType(e.target.value)} className={sel}>
+                      <option value="__all__">All</option>
+                      <option value="pool">Pool</option>
+                      <option value="bracket">Bracket</option>
+                    </select></div>
+                  <div className="flex items-center pt-1">
+                    {nFilters > 0 && <button onClick={() => { setGridDiv('__all__'); setGridPool('__all__'); setGridTeam('__all__'); setGridType('__all__') }} className="text-xs text-slate-500 hover:text-slate-800 underline">Clear filters</button>}
+                    <button onClick={() => setFilterOpen(false)} className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 text-white">Done</button>
+                  </div>
+                </div>
+              </>)}
+            </div>
+          )
+        })()}
+        {gridDiv !== '__all__' && (
+          <button onClick={() => { setGridDiv('__all__'); setGridPool('__all__'); setGridTeam('__all__') }} title="Show every division"
+            className="inline-flex items-center gap-1 text-xs font-semibold h-7 px-2.5 rounded-full bg-slate-900 text-white">
+            {gridDiv}{gridPool !== '__all__' ? ` · ${gridPool}` : ''}{gridTeam !== '__all__' ? ` · ${gridTeam}` : ''} <X size={12} />
           </button>
         )}
 
@@ -2366,41 +2411,6 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             <RefreshCw size={13} className="inline -mt-0.5 mr-1" /> Click a game to swap with it
           </span>
         )}
-      </div>
-
-      {/* ── Date Tabs ── */}
-      <div className="bg-white border-b border-slate-200 overflow-x-auto flex-shrink-0">
-        <div className="flex min-w-max">
-          {dates.map(d => {
-            const n = games.filter(g => g.date === d).length
-            const removable = n === 0 && !eventDays.includes(d)
-            return (
-            <div key={d} className={`relative flex items-stretch border-b-2 transition-colors ${
-                activeDate === d ? 'border-teal-600 bg-teal-50/50' : 'border-transparent hover:bg-slate-50'}`}>
-              <button onClick={() => setActiveDate(d)}
-                className={`${removable ? 'pl-5 pr-1' : 'px-5'} py-3 text-sm font-medium whitespace-nowrap ${
-                  activeDate === d ? 'text-teal-600' : 'text-slate-600 hover:text-slate-900'}`}>
-                {fmtDate(d)}
-                <span className="ml-2 text-xs rounded-full px-1.5 py-0.5 bg-slate-100 text-slate-500" title={`${n} game${n === 1 ? '' : 's'} placed`}>{n}</span>
-                {capacity[d] && (
-                  <span className={`ml-1 text-xs rounded-full px-1.5 py-0.5 ${capacity[d].open ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
-                    title={`${capacity[d].open} of ${capacity[d].total} slots open${capDiv ? ` on fields set for ${capDiv}` : ''}`}>{capacity[d].open} open</span>
-                )}
-              </button>
-              {removable && (
-                <button onClick={() => removeDay(d)} aria-label={`Remove ${fmtDate(d)}`} title="Remove this day (no games on it)"
-                  className="self-center mr-2 w-5 h-5 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700">
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-            )
-          })}
-          <button onClick={addDay}
-            className="px-4 py-3 text-sm text-slate-400 hover:text-slate-600 border-b-2 border-transparent hover:bg-slate-50 whitespace-nowrap">
-            + Add Day
-          </button>
-        </div>
       </div>
 
       {/* ── Grid ── */}

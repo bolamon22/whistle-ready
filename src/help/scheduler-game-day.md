@@ -17,7 +17,7 @@ These Scheduler tools handle changes on the day and big rearrangements.
 Nothing can be placed in the closed time, by hand or by Auto-fill. Games already there stay put and show in **Issues** until moved. To undo, click the field's closed label and choose **Reopen all day**.
 
 **To handle a weather delay:**
-1. Click **Weather**.
+1. Open **Tools** and click **Weather delay or shorten…**.
 2. Choose **Delay** to push back the rest of today's unplayed games by a number of minutes, or **Shorten** to re-stack them into shorter time slots.
 3. Set **Affect games starting at or after**.
 4. Click **Apply delay** or **Apply shorten**.
@@ -35,5 +35,5 @@ The window warns if games would pass the day's end. Earlier games are not touche
 - **Unschedule games**: pick a division, **All days** or one day, and **Pool + bracket**, **Pool only** or **Bracket only**, then click **Unschedule**. A checkpoint is saved first, so **Revert** undoes it.
 
 **Common problems:**
-- **Weather** is greyed out on a day with no games.
+- **Weather delay or shorten…** is greyed out on a day with no games.
 - Remember to **Publish** after a delay so the public page shows the new times.
