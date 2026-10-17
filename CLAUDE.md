@@ -519,7 +519,10 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   own because a link preview needs og:image and the public layout's metadata never sees `?division=`. Its data comes
   from `lib/championShare.loadChampionShare`: null (a 404) unless the final is decided, the schedule is public and the
   row is public, never a private photo; team names follow the bracket's seed and W-/L- sources like BracketChart.
-  `champions` is in middleware's PUBLIC_TOURNAMENT_PATH and ThemeShell's public list.
+  `champions` is in middleware's PUBLIC_TOURNAMENT_PATH and ThemeShell's public list. The hero marks itself with
+  `lib/chirpKeepClear`, so PublicChirp's greeting card waits while it is in the lower 60% of the screen (it covered
+  the buttons). Team circles with no logo use `lib/names` `teamInitials` (skips class years: "Madskillz 2033/34" is M)
+  on the public page, both bracket views and the hero.
 - **Staff W-9 upload (Oct 11).** W-9 card on the staff portal (`components/StaffW9Card.tsx`, `/dashboard/staff`),
   `GET/POST /api/staff-portal/w9` (worker from the session email, oldest record, never from the request). All W-9
   storage goes through `lib/staffW9.ts`: encrypted data URL in AppSetting `w9:{workerId}`, `w9meta:{workerId}`
