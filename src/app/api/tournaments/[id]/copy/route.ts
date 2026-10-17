@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { createClient } from '@libsql/client'
 import { assignEventSlug, slugOf } from '@/lib/eventSlug'
+import { orgGate, requireStaff } from '@/lib/apiAuth'
+import { eventTeamsOf, saveEventTeams } from '@/lib/eventTeamsStore'
+import { SETS_TEAMS } from '@/lib/eventTeams'
 
 function getClient() {
   return createClient({
@@ -13,6 +16,12 @@ function getClient() {
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  // The people who set up events, in their own organization. This had no sign-in
+  // check, so anyone holding an event's id could add copies of it to that
+  // organization.
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  if (!SETS_TEAMS.includes(gate.role)) return NextResponse.json({ error: 'Only the director can copy an event.' }, { status: 403 })
+  const away = await orgGate(gate, params.id); if (away) return away
   const { name, startDate, endDate, dates } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 })
 
@@ -59,6 +68,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // The copy's slug: same base, this event's year. Duplicating Monster Mash 2026
   // into 2027 turns monstermash26 into monstermash27 with nothing typed.
   await assignEventSlug(newT.id, { name: newT.name, startDate: newT.startDate, from: await slugOf(params.id) })
+  // Its kinds of teams too (lib/eventTeams).
+  const teams = await eventTeamsOf(params.id)
+  if (teams.length) await saveEventTeams(newT.id, teams, String(gate.session?.user?.name || gate.session?.user?.email || '')).catch(() => {})
 
   // Stamp orgId — inherit from source, or from admin preview cookie
   const client2 = getClient()
@@ -88,7 +100,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     args: [venuesJson, newT.id],
   })
 
-  // Copy staff roster entries
+  // Copy staff roster entries. The new event has none yet, so nothing can clash:
+  // `skipDuplicates` isn't supported on this database (SQLite) and threw here, after
+  // the copy was made, so Copy answered with an error for any event with a roster
+  // and a second try made a second copy.
   const rosterEntries = await prisma.rosterEntry.findMany({ where: { tournamentId: params.id } })
   if (rosterEntries.length > 0) {
     await prisma.rosterEntry.createMany({
@@ -98,7 +113,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         gameTarget: r.gameTarget,
         notes: r.notes ?? undefined,
       })),
-      skipDuplicates: true,
     })
   }
 
