@@ -22,9 +22,12 @@ export function HowToPlayer({ id, onClose }: { id: string; onClose: () => void }
   )
 }
 
-/** "Watch how (1 min video)": plays a how-to video in place, no sign-in needed. */
-export default function HowToVideoLink({ id, label = 'Watch how', className = '' }: { id: string; label?: string; className?: string }) {
+/** "Watch how (1 min video)": plays a how-to video in place (members-only ones only
+ *  play for a signed-in club director or staff, see lib/howToVideos). */
+export default function HowToVideoLink({ id, label = 'Watch how', className = '', openOnWatch = false }: { id: string; label?: string; className?: string; openOnWatch?: boolean }) {
   const [open, setOpen] = useState(false)
+  // ?watch=<id> (the emailed link to a members-only video) plays it on arrival.
+  useEffect(() => { if (openOnWatch && new URLSearchParams(window.location.search).get('watch') === id) setOpen(true) }, [openOnWatch, id])
   const v = howToVideo(id)
   if (!v) return null
   return (

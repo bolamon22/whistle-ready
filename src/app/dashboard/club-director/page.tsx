@@ -705,7 +705,7 @@ export default function ClubDirectorDashboard() {
               ? <img src={heroLogo} alt="" className="h-14 w-14 rounded-xl object-contain bg-white border border-gray-200 shrink-0" />
               : <span aria-hidden="true" className="h-14 w-14 rounded-xl bg-violet-600 text-white text-lg font-bold flex items-center justify-center shrink-0">{initials(clubTitle)}</span>}
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-600">Club director{hasHowTo(selTournamentRow?.orgSlug) && <HowToVideoLink id="club-portal" label="Tour your portal" className="ml-3 normal-case tracking-normal" />}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-600">Club director{hasHowTo(selTournamentRow?.orgSlug) && <HowToVideoLink id="club-portal" label="Tour your portal" className="ml-3 normal-case tracking-normal" openOnWatch />}</p>
               <h1 className="text-2xl font-extrabold text-gray-900 leading-tight break-words">{clubTitle}</h1>
               {selTournamentName && tab !== 'history' && (
                 <div className="mt-1.5 flex items-center gap-x-2 gap-y-1 flex-wrap text-sm">

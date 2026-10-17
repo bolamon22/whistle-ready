@@ -16,8 +16,8 @@ function db() {
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const title = 'How-to videos for families and clubs'
-  const description = 'Short videos: signing your player’s waiver, and using your club director’s portal.'
+  const title = 'How-to videos for families and coaches'
+  const description = 'Short videos: signing your player’s waiver, your parent dashboard, and the coach waiver.'
   const url = orgAbs(params.slug, '/how-to')
   return { title: { absolute: title }, description, alternates: { canonical: url }, openGraph: { title, description, url } }
 }
@@ -47,7 +47,7 @@ export default async function HowToPage({ params }: { params: { slug: string } }
         <div className="max-w-3xl mx-auto px-6 py-14">
           <Link href={base || '/'} className="text-sm text-teal-200 hover:text-white inline-flex items-center gap-1"><ChevronLeft size={14} /> Back</Link>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-3">How-to videos</h1>
-          <p className="text-teal-100 mt-3 max-w-xl">Quick videos for families and club directors. Each one is about a minute.</p>
+          <p className="text-teal-100 mt-3 max-w-xl">Quick videos for families and coaches. Each one is about a minute.</p>
         </div>
       </section>
       <main className="max-w-3xl mx-auto px-6 py-12 w-full flex-1">

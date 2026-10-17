@@ -1,21 +1,22 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import { PlayCircle } from 'lucide-react'
-import { HOW_TO_VIDEOS, howToPoster, howToMinutes, howToVideo } from '@/lib/howToVideos'
+import { PUBLIC_HOW_TO_VIDEOS, howToPoster, howToMinutes } from '@/lib/howToVideos'
 import { HowToPlayer } from '@/components/HowToVideoLink'
 
-/** The video cards. ?v=<id> (the links in our emails) opens that one straight away. */
+/** The video cards. ?v=<id> (the links in our emails) opens that one straight away.
+ *  Members-only videos (the club portal tour) are not on this public page. */
 export default function HowToGrid() {
   const [open, setOpen] = useState('')
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('v') || ''
-    if (howToVideo(v)) setOpen(v)
+    if (PUBLIC_HOW_TO_VIDEOS.some(x => x.id === v)) setOpen(v)
   }, [])
   const close = useCallback(() => setOpen(''), [])
   return (
     <>
       <div className="grid gap-5 sm:grid-cols-2">
-        {HOW_TO_VIDEOS.map(v => (
+        {PUBLIC_HOW_TO_VIDEOS.map(v => (
           <button key={v.id} type="button" onClick={() => setOpen(v.id)}
             className="text-left bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md hover:border-teal-300 transition">
             <div className="relative aspect-[9/16] max-h-80 w-full bg-slate-100 overflow-hidden">

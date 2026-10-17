@@ -7,7 +7,7 @@ import { orgById, orgBySlug, tournamentOrgId, type Org } from '@/lib/org'
 import { sendEmail } from '@/lib/email'
 import { mdToEmailHtml } from '@/lib/emailMd'
 import { orgBaseUrl } from '@/lib/orgDomains'
-import { HOW_TO_VIDEOS, hasHowTo, howToPath, howToMinutes } from '@/lib/howToVideos'
+import { PUBLIC_HOW_TO_VIDEOS, hasHowTo, howToPath, howToMinutes } from '@/lib/howToVideos'
 import { AUDIENCES, type AudienceId } from '@/lib/chirpNudges'
 import { keepRegistered, registeredKeys, waitlistedKeys, dropWaitlisted } from '@/lib/poolMembership'
 import { cleanName, nameKey } from '@/lib/names'
@@ -231,7 +231,7 @@ HOW TO ANSWER
 === EVENT INFO ===
 ${scope.facts}
 
-${hasHowTo(scope.org?.slug) ? `=== HOW-TO VIDEOS ===\nWhen one of these covers the question, end your reply with its Watch link on its own line, exactly as written.\n${HOW_TO_VIDEOS.map(v => `- For ${v.audience.toLowerCase()}: ${v.title}. ${v.blurb} [Watch: ${v.title} (${howToMinutes(v.secs)})](${orgBaseUrl(scope.org?.slug, APP_URL)}${howToPath(v.id)})`).join('\n')}\n\n` : ''}=== HOW-TO PAGES ===
+${hasHowTo(scope.org?.slug) ? `=== HOW-TO VIDEOS ===\nWhen one of these covers the question, end your reply with its Watch link on its own line, exactly as written.\n${PUBLIC_HOW_TO_VIDEOS.map(v => `- For ${v.audience.toLowerCase()}: ${v.title}. ${v.blurb} [Watch: ${v.title} (${howToMinutes(v.secs)})](${orgBaseUrl(scope.org?.slug, APP_URL)}${howToPath(v.id)})`).join('\n')}\n\n` : ''}=== HOW-TO PAGES ===
 ${picked.length ? picked.map(a => `PAGE: ${a.title}\n${a.body}`).join('\n\n') : '(no page matched)'}`
 }
 
