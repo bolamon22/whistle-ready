@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
+import { requireStaff, isStaffRequest, orgGate } from '@/lib/apiAuth'
 import { getPublicVisibility } from '@/lib/publicView'
 import { dropWaitlisted, involvesWaitlisted } from '@/lib/poolMembership'
 import { nameKey } from '@/lib/names'
@@ -158,12 +158,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 // PATCH: rename a division (cascade to teams, pools, games)
+// From the Divisions page, and from the Assigner board on the Assigner plan (Bo, Oct
+// 17 2026: the head assigner needs "to be able to edit division names when need").
+// The people who can open the Divisions page: directors (the Head Assigner),
+// schedulers and admins, in their own organization. Any staff login, a ref included,
+// could rename any event's divisions here.
+const RENAMES = ['admin', 'director', 'scheduler']
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  if (!RENAMES.includes(gate.role)) return NextResponse.json({ error: 'Only the director can rename divisions.' }, { status: 403 })
+  const away = await orgGate(gate, params.id); if (away) return away
   try {
-    const { oldName, newName } = await req.json()
-    if (!oldName || !newName?.trim()) return NextResponse.json({ error: 'oldName and newName required' }, { status: 400 })
+    const body = await req.json()
+    const oldName = String(body?.oldName ?? '')
+    const newName = String(body?.newName ?? '').trim().slice(0, 80)
+    if (!oldName || !newName) return NextResponse.json({ error: 'oldName and newName required' }, { status: 400 })
+    if (newName === oldName) return NextResponse.json({ ok: true, count: 0, games: 0 })
+    // Onto another division's name would merge the two, pools and all: refused. Only
+    // the same name with different capitals goes through.
+    const taken = await prisma.game.findFirst({ where: { tournamentId: params.id, division: newName }, select: { id: true } })
+      ?? await prisma.registeredTeam.findFirst({ where: { registration: { tournamentId: params.id }, division: newName }, select: { id: true } })
+    const sameName = newName.toLowerCase() === oldName.toLowerCase()
+    const others = sameName ? [] : (await prisma.game.findMany({ where: { tournamentId: params.id }, select: { division: true }, distinct: ['division'] }))
+      .map(g => g.division).filter(d => d !== oldName && d.toLowerCase() === newName.toLowerCase())
+    if ((taken && !sameName) || others.length) return NextResponse.json({ error: `There's already a division called ${others[0] || newName}.` }, { status: 409 })
 
     // Find all teams in this division via registrations.
     // Deliberately NOT filtered by deletedAt: a removed registration can be restored,
@@ -173,6 +191,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       where: { registration: { tournamentId: params.id }, division: oldName },
       select: { id: true },
     })
+    let gamesMoved = 0
 
     await Promise.all([
       // Update all RegisteredTeam records
@@ -186,7 +205,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       prisma.game.updateMany({
         where: { tournamentId: params.id, division: oldName },
         data: { division: newName.trim() },
-      }).catch(() => {}),
+      }).then(r => { gamesMoved = r.count }).catch(() => {}),
       // Update brackets
       prisma.bracket.updateMany({
         where: { tournamentId: params.id, division: oldName },
@@ -207,8 +226,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // A renamed division stays pool play only and keeps its public note.
     await renameNoBracket(params.id, oldName, newName.trim()).catch(() => {})
     await renameDivisionNote(params.id, oldName, newName.trim()).catch(() => {})
+    // Its color on the Scheduler (keyed "<event>-<division>", api/.../division-colors).
+    await prisma.$executeRawUnsafe(`UPDATE "DivisionColor" SET id = ?, division = ? WHERE tournamentId = ? AND division = ?`,
+      `${params.id}-${newName.trim()}`, newName.trim(), params.id, oldName).catch(() => {})
 
-    return NextResponse.json({ ok: true, count: teams.length })
+    return NextResponse.json({ ok: true, count: teams.length, games: gamesMoved })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to rename division' }, { status: 500 })
