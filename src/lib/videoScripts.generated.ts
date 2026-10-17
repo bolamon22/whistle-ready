@@ -271,9 +271,9 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "lines": [
       "Sign in to Whistle Ready on your computer, and you land on your assigner home. You assign officials for Sunshine Events Group tournaments from here.",
       "Up next is your next tournament: the dates, the venue, and how many games already have a full referee crew.",
-      "Five buttons take you everywhere you need. Assign opens the Assigner board, where you put officials on games.",
-      "By official shows every game, or every person, with their pay. Roster is who is working this event. Availability shows who can work each day, and who hasn’t answered.",
-      "And Ref pay totals what each official earned, so you can mark them paid.",
+      "Six buttons take you everywhere you need. Assign opens the Assigner board, where you put officials on games.",
+      "By official shows every game, or every person, with their pay. Staff roster is who is working this event. Availability shows who can work each day, and who hasn’t answered.",
+      "And Staff pay totals what each official earned, so you can mark them paid.",
       "Your other events are listed below, with the same buttons. Use Find a tournament to search, or switch to past events."
     ],
     "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
@@ -419,7 +419,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "title": "Paying your officials",
     "intro": "Whistle Ready assigner training. Paying your officials.",
     "lines": [
-      "Ref pay totals what everyone earned at this event, what has been paid, and what is still outstanding.",
+      "Staff pay totals what everyone earned at this event, what has been paid, and what is still outstanding.",
       "Each official shows their total and how they want to be paid, like Zelle, Venmo, or check. Click a row to see each game and its pay.",
       "Pay rates come from the event’s setup. A rate override on someone’s roster entry changes their pay for new games.",
       "Once you pay someone, click Mark Paid, check the amount and method, and confirm.",
@@ -488,7 +488,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "You can also offer an early-bird discount until a date.",
       "Under that is the confirmation letter clubs get after they register. Leave it blank to use your standard letter, or write your own and preview it.",
       "Registration types turns on team registration, individual player registration, or both.",
-      "Staff pay rates sets what you pay each role, per game or per hour. It feeds staff pay and the assigners’ pay report.",
+      "Staff pay rates sets what you pay each role, per game or per hour. It feeds Staff pay, for you and your assigners.",
       "Officials per game sets how many refs each game needs, with exceptions for divisions that use more or fewer.",
       "Standings tiebreakers decides how tied teams are ranked, and how teams advance to the bracket.",
       "Click Save Changes when you are done."
@@ -547,7 +547,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "title": "Your scheduler home",
     "intro": "Whistle Ready scheduler training. Your scheduler home.",
     "lines": [
-      "Your home page lists each tournament. Schedule opens its games, Staff shows who is working, and Builder opens its setup.",
+      "Your home page lists each tournament. Schedule opens its games, Divisions its pools and brackets, Manage its dashboard, and Setup its basics.",
       "Setup holds what every schedule is built from: divisions, venues and fields, game timing, and standings tiebreakers. Fees and staff pay stay with the director.",
       "The Setup menu at the top gets you around. Divisions and teams holds the pools and brackets. The Scheduler puts games on fields and times.",
       "Under Live, Post scores enters results. Scores drive the standings, and the standings set the bracket seeds.",

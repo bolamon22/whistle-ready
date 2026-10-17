@@ -29,7 +29,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'ref-gameday', num: 'R3', series: 'ref', title: 'Game day as a ref', blurb: 'Field requests, staff contacts, live scoring if needed, rules and incidents.', secs: 49 },
   // Assigner training (Oct 13 2026): filmed on a computer screen, for the people who staff
   // Sunshine Events Group games.
-  { id: 'asg-home', num: 'A01', series: 'assigner', title: 'Your assigner home', blurb: 'Your next event, how many games are reffed, and the five buttons.', secs: 54 },
+  { id: 'asg-home', num: 'A01', series: 'assigner', title: 'Your assigner home', blurb: 'Your next event, how many games are reffed, and the six buttons.', secs: 54 },
   { id: 'asg-crew', num: 'A02', series: 'assigner', title: 'Build your crew', blurb: 'The Staff Pool, invites, the recruiting link and the letter to forward.', secs: 60 },
   { id: 'asg-roster', num: 'A03', series: 'assigner', title: 'Your tournament roster', blurb: 'Who is working the event, editing someone, filters and Exhibit A.', secs: 61 },
   { id: 'asg-out', num: 'A04', series: 'assigner', title: 'Who can work, and who hasn’t answered', blurb: 'The Availability page: who answered, ref coverage, setting an answer for someone, and emailing who hasn’t answered.', secs: 65 },
@@ -45,14 +45,14 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   // tournament directors"). Computer videos; in the Video library, not in a staff group.
   { id: 'dir-create', num: 'D01', series: 'director', title: 'Create a tournament', blurb: 'Name, dates, park and fields, game slots, team fee, logo, divisions, and copying last year’s event.', secs: 87 },
   { id: 'dir-setup', num: 'D02', series: 'director', title: 'Tournament setup: the basics', blurb: 'The setup page, divisions and their Full badges, venues, field hours, and game timing.', secs: 75 },
-  { id: 'dir-money', num: 'D03', series: 'director', title: 'Tournament setup: fees, pay and standings', blurb: 'Team fees and division rates, the confirmation letter, registration types, staff pay, officials per game, and tiebreakers.', secs: 74 },
+  { id: 'dir-money', num: 'D03', series: 'director', title: 'Tournament setup: fees, pay and standings', blurb: 'Team fees and division rates, the confirmation letter, registration types, staff pay, officials per game, and tiebreakers.', secs: 73 },
   { id: 'dir-divisions', num: 'D04', series: 'director', title: 'Divisions, pools and brackets', blurb: 'Pools, auto-assigning teams, generating games, the bracket, Bulk Generate, and showing pools publicly.', secs: 71 },
   { id: 'dir-schedule', num: 'D05', series: 'director', title: 'Build and publish the schedule', blurb: 'The Board view: placing games, Auto-fill, the Issues panel, weather delays, closing a field, and Publish.', secs: 94 },
   { id: 'dir-registrations', num: 'D06', series: 'director', title: 'Team registrations and payments', blurb: 'Totals, balances, filtering, recording a check, the Pay link, Email clubs, and adding or importing teams.', secs: 67 },
   // Scheduler training (Bo, Oct 14 2026: "they would be similar to the tournament director
   // but they would need all things with scheduling seeding etc. they just don't have the
   // money aspect"). The money-free director videos (D02, D04, D05) are in their group too.
-  { id: 'sch-home', num: 'S01', series: 'scheduler', title: 'Your scheduler home', blurb: 'Your tournaments, the Setup sections you use, and the Setup and Live menus.', secs: 53 },
+  { id: 'sch-home', num: 'S01', series: 'scheduler', title: 'Your scheduler home', blurb: 'Your tournaments, the Setup sections you use, and the Setup and Live menus.', secs: 54 },
   { id: 'sch-timing', num: 'S02', series: 'scheduler', title: 'Game timing and tiebreakers', blurb: 'The schedule increment, game format, how teams advance, and the tiebreaker order.', secs: 60 },
   { id: 'sch-brackets', num: 'S03', series: 'scheduler', title: 'Brackets and seeding', blurb: 'Formats, the 2-game guarantee, seeding from standings, the preview, and flights.', secs: 79 },
   { id: 'sch-fixes', num: 'S04', series: 'scheduler', title: 'Bracket games and fixes', blurb: 'Placing bracket games, Seeding time, moving and swapping games, exact times, and Undo.', secs: 61 },
