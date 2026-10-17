@@ -9,7 +9,7 @@ import { Check, CheckCircle2, ChevronLeft, ChevronDown, ChevronRight, FileText, 
 import { WORKER_ROLES } from '@/lib/utils'
 import { TRAINING_VIDEOS, TRAINING_GROUPS, TRAINING_ROLE_LABELS, audienceFor, posterSrc, videoSrc, minutesLabel, trainingVideo, trainingLetter, SEND_GROUPS, inSendGroup, videoOnPlan, howToOnPlan } from '@/lib/training'
 import { useRole } from '@/lib/role-context'
-import { HOW_TO_VIDEOS, howToSrc, howToPoster, howToMinutes } from '@/lib/howToVideos'
+import { HOW_TO_VIDEOS, howToSrc, howToPoster, howToMinutes, howToVis, type HowToVisMap, type HowToVisibility } from '@/lib/howToVideos'
 import { VIDEO_SCRIPTS } from '@/lib/videoScripts.generated'
 
 // The Video library (Bo, Oct 13 2026: "one location that I can refer to to see all the
@@ -43,7 +43,7 @@ const SERIES: { key: Lib['series']; label: string; note: string }[] = [
   { key: 'assigner', label: 'Assigner training', note: 'Computer videos for the people who staff your games. Inside their login on the Training page.' },
   { key: 'scheduler', label: 'Scheduler training', note: 'Computer videos for schedulers: timing and tiebreakers, brackets and seeding, fixing the schedule and weather. Inside their login on the Training page, with the director videos that have no money in them.' },
   { key: 'director', label: 'Director training', note: 'Computer videos for tournament directors: setting up an event and running it. Here in the Video library.' },
-  { key: 'family', label: 'Families & clubs', note: 'Public how-to videos, Sunshine Events Group branded: on the waiver, the club portal, club emails and sunshineeventsgroup.com/how-to. Not tracked.' },
+  { key: 'family', label: 'Families & clubs', note: 'How-to videos, Sunshine Events Group branded: on the waiver, the club portal, club emails and sunshineeventsgroup.com/how-to. Pick who can see each one: Public, or Club directors only. Not tracked.' },
 ]
 const ROLE_KEYS = ['scorekeeper', 'ref', 'field_ops', 'athletic_trainer', 'assigner', 'scheduler']
 // "Who it's for" filter. Staff roles come from the Training page groups (a group with no
@@ -108,6 +108,17 @@ export default function VideoLibrary() {
   const [fFor, setFFor] = useState<Set<string>>(new Set())
   const flip = (set: (f: (s: Set<string>) => Set<string>) => void, k: string) => set(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
   const [fQ, setFQ] = useState('')
+  // Visibility (Bo, Oct 17 2026: decide which videos are public and which are internal).
+  // Staff videos are always staff only; a family video is Public or Club directors, and
+  // the director can change it here (api/how-to/visibility).
+  const [vis, setVis] = useState<HowToVisMap>({})
+  useEffect(() => { fetch('/api/how-to/visibility', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.visibility) setVis(d.visibility) }).catch(() => {}) }, [])
+  const saveVis = async (id: string, v: HowToVisibility) => {
+    const prev = vis; setVis({ ...vis, [id]: v })
+    const r = await fetch('/api/how-to/visibility', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, visibility: v }) }).catch(() => null)
+    const d = r ? await r.json().catch(() => ({})) : {}
+    if (!r?.ok) { setVis(prev); alert(d.error || 'Could not save who can see it') } else if (d.visibility) setVis(d.visibility)
+  }
   const shown = useMemo(() => lib.filter(v => (!fSeries.size || fSeries.has(v.series)) && (!fFor.size || rolesOf(v).some(r => fFor.has(r)))
     && (!fQ.trim() || `${v.num} ${v.title} ${v.blurb}`.toLowerCase().includes(fQ.trim().toLowerCase()))), [lib, fSeries, fFor, fQ])
   const filtered = fSeries.size > 0 || fFor.size > 0 || !!fQ.trim()
@@ -229,6 +240,23 @@ export default function VideoLibrary() {
                       </div>
                     </div>
                     <p className="text-xs text-slate-500 leading-snug">{v.blurb}</p>
+                    {(() => {
+                      const cur = v.series === 'family' ? howToVis(v.id, vis) : 'staff'
+                      const look = cur === 'public' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : cur === 'members' ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                      const name = cur === 'public' ? 'Public' : cur === 'members' ? 'Club directors' : 'Staff only'
+                      const why = cur === 'public' ? 'Anyone can watch it: the public how-to page, public Chirp and the waiver pages.' : cur === 'members' ? 'Only signed-in club directors and your staff. Not on the public site or public Chirp.' : 'Only your signed-in staff, on their Training page.'
+                      return (
+                        <div className="flex items-center gap-1.5 text-[11px]" title={why}>
+                          <span className="text-slate-400 font-semibold">Who can see it</span>
+                          {v.series === 'family' && !lead
+                            ? <select value={cur} onChange={e => saveVis(v.id, e.target.value as HowToVisibility)} aria-label={`Who can see ${v.title}`} className={`border rounded-full px-2 py-0.5 font-semibold ${look}`}>
+                                <option value="public">Public</option>
+                                <option value="members">Club directors</option>
+                              </select>
+                            : <span className={`border rounded-full px-2 py-0.5 font-semibold ${look}`}>{name}</span>}
+                        </div>
+                      )
+                    })()}
                     <div className="mt-auto pt-2 flex items-center justify-between gap-2 text-xs">
                       <button type="button" onClick={() => setScriptFor(v)} className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-900">
                         <FileText size={13} /> Script{notes[v.id] ? <span className="ml-1 text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5">changes noted</span> : ''}

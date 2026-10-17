@@ -3,6 +3,7 @@ import { sendEmail, orgSender } from '@/lib/email'
 import { orgForTournament, orgLogoUrl } from '@/lib/org'
 import { tournamentAbs } from '@/lib/seo'
 import { howToEmailLinks } from '@/lib/howToVideos'
+import { getHowToVisibility } from '@/lib/videoVisibility'
 import { renderEmail, absUrl, imageSize, fitBox } from '@/lib/emailLayout'
 import { letterBodyHtml } from '@/lib/inviteLetter'
 import { COMM_KINDS, commLetterFor, mergeCommLetter, type CommKind } from '@/lib/commLetters'
@@ -251,8 +252,9 @@ export async function runCommSend(args: {
   // How-to video links (lib/howToVideos; this org only): the waiver video under a
   // waiver button, the portal tour on every club letter.
   const absPath = (path: string) => tournamentAbs(org?.slug, path)
-  const portalVideo = howToEmailLinks(org?.slug, absPath, ['club-portal'])
-  const letterVideo = howToEmailLinks(org?.slug, absPath, cta === 'waiver' ? ['waiver', 'club-portal'] : ['club-portal'])
+  const howToVis = await getHowToVisibility()
+  const portalVideo = howToEmailLinks(org?.slug, absPath, ['club-portal'], howToVis)
+  const letterVideo = howToEmailLinks(org?.slug, absPath, cta === 'waiver' ? ['waiver', 'club-portal'] : ['club-portal'], howToVis)
   const now = new Date().toISOString()
 
   // Directors linked to each club, read once for the whole batch. The account

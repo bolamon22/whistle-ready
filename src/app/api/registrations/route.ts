@@ -12,6 +12,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { SITE_URL, tournamentAbs } from '@/lib/seo'
 import { hasHowTo, howToPath } from '@/lib/howToVideos'
+import { getHowToVisibility } from '@/lib/videoVisibility'
 import { waiverCounts, summarizeClub, coachSignatures } from '@/lib/waiverCounts'
 import { cleanName, nameKey } from '@/lib/names'
 import { isDivisionFull } from '@/lib/regStatus'
@@ -257,7 +258,7 @@ async function buildAndSendConfirmation(reg: any, portal?: PortalLogin, sameName
       gameDayUrl: base(`/tournaments/${reg.tournamentId}/today`),
       // Waivers are in-app now — point families at the tournament's online form.
       waiverUrl: base(`/tournaments/${reg.tournamentId}/player-waiver`),
-      ...(hasHowTo(org?.slug) ? { waiverVideoUrl: base(howToPath('waiver')), portalVideoUrl: base(howToPath('club-portal')) } : {}),
+      ...(hasHowTo(org?.slug) ? await (async () => { const vis = await getHowToVisibility(); return { waiverVideoUrl: base(howToPath('waiver', vis)), portalVideoUrl: base(howToPath('club-portal', vis)) } })() : {}),
       // The account box. Made or linked on the form just now: the portal is
       // ready, so no set-up link. A returning contact already linked to this
       // club here (lib/clubDirectorLinks): welcome back. A contact with an

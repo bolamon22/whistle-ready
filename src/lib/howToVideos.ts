@@ -11,11 +11,19 @@
 
 export const HOW_TO_ORG_SLUG = 'sunshine-events-group'
 
-// A members-only video (Bo, Oct 17 2026: the club director's portal tour shows a
-// competitor how the portal works, so it's for signed-in club directors only). It is
-// left off the public /how-to page and public Chirp, its file sits in videos/how-to
-// outside public/, streamed by api/how-to/video to signed-in club directors and staff,
-// and its links go to the portal, where it plays after they sign in.
+// Who may see each video (Bo, Oct 17 2026: "determine which videos are okay for public
+// view versus which ones are internal"; tournament how-tos for parents, players and
+// coaches are fine in public, the club portal tour is not, since it shows a competitor
+// how the portal works). `members` sets the default; the Video library can change it
+// (AppSetting `howToVisibility`, lib/videoVisibility). A non-public video is left off the
+// public /how-to page, public Chirp and the "Watch how" links on public pages; it streams
+// only through api/how-to/video to a signed-in club director or staff member, and its
+// emailed links go to the club portal, where it plays after they sign in.
+// Files: a video that is public by default lives in public/how-to (served straight from
+// the CDN); a members one in videos/how-to, outside public/. Only Public and Club
+// directors are offered for these; staff training videos are always staff only.
+export type HowToVisibility = 'public' | 'members'
+export type HowToVisMap = Record<string, HowToVisibility>
 export type HowToVideo = { id: string; title: string; audience: string; blurb: string; secs: number; members?: boolean }
 
 export const HOW_TO_VIDEOS: HowToVideo[] = [
@@ -30,14 +38,22 @@ export const HOW_TO_VIDEOS: HowToVideo[] = [
 ]
 
 export const howToVideo = (id: string) => HOW_TO_VIDEOS.find(v => v.id === id) || null
+/** Who may see a video: the Video library's choice, else the default above. */
+export const howToVis = (id: string, map?: HowToVisMap | null): HowToVisibility =>
+  map?.[id] === 'public' || map?.[id] === 'members' ? map[id] : howToVideo(id)?.members ? 'members' : 'public'
 /** The ones anyone may see: the public /how-to page and public Chirp list only these. */
-export const PUBLIC_HOW_TO_VIDEOS = HOW_TO_VIDEOS.filter(v => !v.members)
+export const publicHowTo = (map?: HowToVisMap | null) => HOW_TO_VIDEOS.filter(v => howToVis(v.id, map) === 'public')
+/** Default-only list, for code that has no settings to hand. */
+export const PUBLIC_HOW_TO_VIDEOS = publicHowTo()
 export const hasHowTo = (orgSlug?: string | null) => !!orgSlug && orgSlug === HOW_TO_ORG_SLUG
-export const howToSrc = (id: string) => howToVideo(id)?.members ? `/api/how-to/video/${encodeURIComponent(id)}` : `/how-to/${id}.mp4`
+/** The file: straight from the CDN when it is public and lives in public/, else through
+ *  api/how-to/video, which checks who is asking. */
+export const howToSrc = (id: string, map?: HowToVisMap | null) =>
+  howToVis(id, map) === 'public' && !howToVideo(id)?.members ? `/how-to/${id}.mp4` : `/api/how-to/video/${encodeURIComponent(id)}`
 export const howToPoster = (id: string) => `/how-to/${id}.jpg`
 /** The public page path, relative to the org's site (sunshineeventsgroup.com/how-to).
  *  A members-only video links to the club portal instead, which asks them to sign in. */
-export const howToPath = (id?: string) => id && howToVideo(id)?.members
+export const howToPath = (id?: string, map?: HowToVisMap | null) => id && howToVis(id, map) !== 'public'
   ? `/dashboard/club-director?watch=${encodeURIComponent(id)}`
   : `/how-to${id ? `?v=${encodeURIComponent(id)}` : ''}`
 export const howToMinutes = (secs: number) => `${Math.max(1, Math.round(secs / 60))} min`
@@ -51,12 +67,12 @@ const EMAIL_LABELS: Record<string, string> = {
 
 /** One quiet line of video links for a club email. `abs` turns a site path into a
  *  full URL on the org's domain (lib/seo tournamentAbs). Empty for other orgs. */
-export function howToEmailLinks(orgSlug: string | null | undefined, abs: (path: string) => string, ids: string[]): { html: string; text: string } {
+export function howToEmailLinks(orgSlug: string | null | undefined, abs: (path: string) => string, ids: string[], map?: HowToVisMap | null): { html: string; text: string } {
   if (!hasHowTo(orgSlug)) return { html: '', text: '' }
   const vids = ids.map(howToVideo).filter((v): v is HowToVideo => !!v)
   if (!vids.length) return { html: '', text: '' }
   const label = (v: HowToVideo) => `${EMAIL_LABELS[v.id] || v.title} (${howToMinutes(v.secs)} video)`
-  const html = `<p style="margin:16px 0 0;font-size:13px;color:#64748b">&#9654;&#xFE0E; ${vids.map(v => `<a href="${abs(howToPath(v.id))}" style="color:#0f766e">${label(v)}</a>`).join(' &nbsp;·&nbsp; ')}</p>`
-  const text = vids.map(v => `${label(v)}: ${abs(howToPath(v.id))}`).join('\n')
+  const html = `<p style="margin:16px 0 0;font-size:13px;color:#64748b">&#9654;&#xFE0E; ${vids.map(v => `<a href="${abs(howToPath(v.id, map))}" style="color:#0f766e">${label(v)}</a>`).join(' &nbsp;·&nbsp; ')}</p>`
+  const text = vids.map(v => `${label(v)}: ${abs(howToPath(v.id, map))}`).join('\n')
   return { html, text }
 }

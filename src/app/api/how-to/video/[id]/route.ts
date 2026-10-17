@@ -4,13 +4,15 @@ import { createReadStream, statSync } from 'fs'
 import path from 'path'
 import { Readable } from 'stream'
 import { authOptions } from '@/lib/auth'
-import { howToVideo } from '@/lib/howToVideos'
+import { howToVideo, howToVis } from '@/lib/howToVideos'
+import { getHowToVisibility } from '@/lib/videoVisibility'
 
-// Members-only how-to videos (lib/howToVideos `members`), streamed to a signed-in club
-// director or staff member, never to parents, coaches or the public (Bo, Oct 17 2026:
-// the club portal tour would show a competitor how the portal works). The files live in
-// videos/how-to/, outside public/, so there is no public URL; next.config.js traces them
-// into this function. Range requests let the player seek.
+// How-to videos that aren't served straight from public/ (lib/howToVideos howToSrc). A
+// video set to Club directors streams only to a signed-in club director or staff member,
+// never to parents, coaches or the public (Bo, Oct 17 2026: the club portal tour would
+// show a competitor how the portal works); one set to Public streams to anyone. Members
+// files live in videos/how-to/, outside public/; next.config.js traces both folders into
+// this function. Range requests let the player seek.
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -18,20 +20,26 @@ export const runtime = 'nodejs'
 const SHUT_OUT = ['parent', 'coach']
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  const role = String((session?.user as any)?.role || '')
-  if (!session) return new Response('Sign in to watch', { status: 401 })
-  if (!role || SHUT_OUT.includes(role)) return new Response('Not allowed', { status: 403 })
   const id = String(params.id || '')
-  if (!/^[a-z0-9-]+$/.test(id) || !howToVideo(id)?.members) return new Response('Not found', { status: 404 })
-  const file = path.join(process.cwd(), 'videos', 'how-to', `${id}.mp4`)
-  let size = 0
-  try { size = statSync(file).size } catch { return new Response('Not found', { status: 404 }) }
+  if (!/^[a-z0-9-]+$/.test(id) || !howToVideo(id)) return new Response('Not found', { status: 404 })
+  const open = howToVis(id, await getHowToVisibility()) === 'public'
+  if (!open) {
+    const session = await getServerSession(authOptions)
+    const role = String((session?.user as any)?.role || '')
+    if (!session) return new Response('Sign in to watch', { status: 401 })
+    if (!role || SHUT_OUT.includes(role)) return new Response('Not allowed', { status: 403 })
+  }
+  let file = ''; let size = 0
+  for (const dir of [['videos', 'how-to'], ['public', 'how-to']]) {
+    const f = path.join(process.cwd(), ...dir, `${id}.mp4`)
+    try { size = statSync(f).size; file = f; break } catch { /* try the next folder */ }
+  }
+  if (!file) return new Response('Not found', { status: 404 })
 
   const headers: Record<string, string> = {
     'Content-Type': 'video/mp4',
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'private, no-store',
+    'Cache-Control': open ? 'public, max-age=300' : 'private, no-store',
     'Content-Disposition': 'inline',
     'X-Content-Type-Options': 'nosniff',
   }

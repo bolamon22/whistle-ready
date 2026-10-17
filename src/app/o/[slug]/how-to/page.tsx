@@ -5,7 +5,7 @@ import { ChevronLeft } from 'lucide-react'
 import type { Metadata } from 'next'
 import { OrgHeader, OrgFooter, buildNav, orgBase, PageRec } from '../_chrome'
 import { orgAbs } from '@/lib/seo'
-import { hasHowTo } from '@/lib/howToVideos'
+import { hasHowTo, publicHowTo } from '@/lib/howToVideos'
 import HowToGrid from './HowToGrid'
 
 // Same cache policy as the org's other pages (see [page]/page.tsx for why).
@@ -35,6 +35,13 @@ export default async function HowToPage({ params }: { params: { slug: string } }
     if (cr.rows.length) content = JSON.parse(((cr.rows[0] as any).value as string) || '{}')
   } catch { /* no content */ }
   if (content.logo) org.logoUrl = content.logo
+  // Which videos are Public (the Video library's Visibility, lib/videoVisibility).
+  let vis: any = {}
+  try {
+    const vr = await client.execute({ sql: 'SELECT value FROM "AppSetting" WHERE key = ?', args: ['howToVisibility'] })
+    if (vr.rows.length) vis = JSON.parse(((vr.rows[0] as any).value as string) || '{}')
+  } catch { /* defaults */ }
+  const ids = publicHowTo(vis).map(v => v.id)
   const pages: PageRec[] = Array.isArray(content.pages) ? content.pages : []
   const gallery: any[] = Array.isArray(content.gallery) ? content.gallery : []
   const base = orgBase(params.slug)
@@ -51,7 +58,7 @@ export default async function HowToPage({ params }: { params: { slug: string } }
         </div>
       </section>
       <main className="max-w-3xl mx-auto px-6 py-12 w-full flex-1">
-        <HowToGrid />
+        <HowToGrid ids={ids} />
       </main>
       <OrgFooter org={org} contact={content.contact || {}} socials={content.socials || {}} base={base} pages={pages} />
     </div>

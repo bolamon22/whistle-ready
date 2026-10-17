@@ -7,7 +7,8 @@ import { orgById, orgBySlug, tournamentOrgId, type Org } from '@/lib/org'
 import { sendEmail } from '@/lib/email'
 import { mdToEmailHtml } from '@/lib/emailMd'
 import { orgBaseUrl } from '@/lib/orgDomains'
-import { PUBLIC_HOW_TO_VIDEOS, hasHowTo, howToPath, howToMinutes } from '@/lib/howToVideos'
+import { publicHowTo, hasHowTo, howToPath, howToMinutes, type HowToVisMap } from '@/lib/howToVideos'
+import { getHowToVisibility } from '@/lib/videoVisibility'
 import { AUDIENCES, type AudienceId } from '@/lib/chirpNudges'
 import { keepRegistered, registeredKeys, waitlistedKeys, dropWaitlisted } from '@/lib/poolMembership'
 import { cleanName, nameKey } from '@/lib/names'
@@ -24,7 +25,7 @@ const APP_URL = process.env.APP_PUBLIC_URL || 'https://whistleready.app'
 // emailed to the org when the visitor closes the chat, so the organizer sees
 // what the public asks (Bo, Oct 3 2026: "have it emailed to info@sunshinelax.com").
 
-export type PublicScope = { key: string; title: string; org: Org | null; facts: string; tournamentId?: string }
+export type PublicScope = { key: string; title: string; org: Org | null; facts: string; tournamentId?: string; howTo?: HowToVisMap }
 
 const clip = (s: unknown, n: number) => String(s ?? '').slice(0, n)
 
@@ -165,7 +166,7 @@ DIVISIONS (${divisions.length}): ${divisions.join(', ') || 'TBA'}
 ${fees.length ? `FEES (per team):\n${fees.join('\n')}\n` : ''}${c.hotelsUrl || c.hotels ? `HOTELS: ${c.hotelsUrl ? `book at ${c.hotelsUrl}` : ''}${c.hotels ? ` ${clip(c.hotels, 400)}` : ''}\n` : ''}${locations.length ? `VENUES:\n${locations.map((l: any) => `- ${l.name || 'Venue'}${l.address ? ` — ${l.address}` : ''}`).join('\n')}\n` : ''}${c.overview ? `OVERVIEW:\n${clip(c.overview, 800)}\n` : ''}${rules ? `RULES (from the Rules page ${base}/rules):\n${clip(rules, 6000)}\n` : ''}${teams ? `TEAMS BY DIVISION AND POOL (as listed on the schedule page):\n${teams}\n` : ''}${released ? `NOW: ${nowET()} (Eastern)\n${SCHEDULE_KEY}\nSCHEDULE (${games.length} games, in time order):\n${sched}` : `SCHEDULE: NOT RELEASED YET. The organizer hasn't published game times, fields or opponents. Once it's released, every team's games appear on the schedule page (${base}/public).`}`
   if (org) facts += await orgPagesText(org.id)
   if (userTeam) facts += `\n\nThe person chatting is with team "${clip(userTeam, 60)}". For "my team", their schedule or results, focus on that team's games.`
-  return { key: tournamentId, title: tt.name, org, facts, tournamentId }
+  return { key: tournamentId, title: tt.name, org, facts, tournamentId, howTo: await getHowToVisibility() }
 }
 
 /** The org website: upcoming events with links, and the org's own pages. */
@@ -187,7 +188,7 @@ export async function orgScope(slug: string, page = ''): Promise<PublicScope | n
 WEBSITE PAGES: home ${p || '/'} | results ${p}/results | stats ${p}/stats | photos ${p}/gallery | book a photographer ${p}/photographers | work with us ${p}/work | register a player ${p}/register/player | vendor booth ${p}/register/vendor
 UPCOMING EVENTS:
 ${events || 'None posted yet.'}` + await orgPagesText(org.id, p)
-  return { key: `org:${org.id}`, title: `${org.name} website`, org, facts }
+  return { key: `org:${org.id}`, title: `${org.name} website`, org, facts, howTo: await getHowToVisibility() }
 }
 
 async function orgPagesText(orgId: string, prefix = ''): Promise<string> {
@@ -231,7 +232,7 @@ HOW TO ANSWER
 === EVENT INFO ===
 ${scope.facts}
 
-${hasHowTo(scope.org?.slug) ? `=== HOW-TO VIDEOS ===\nWhen one of these covers the question, end your reply with its Watch link on its own line, exactly as written.\n${PUBLIC_HOW_TO_VIDEOS.map(v => `- For ${v.audience.toLowerCase()}: ${v.title}. ${v.blurb} [Watch: ${v.title} (${howToMinutes(v.secs)})](${orgBaseUrl(scope.org?.slug, APP_URL)}${howToPath(v.id)})`).join('\n')}\n\n` : ''}=== HOW-TO PAGES ===
+${hasHowTo(scope.org?.slug) ? `=== HOW-TO VIDEOS ===\nWhen one of these covers the question, end your reply with its Watch link on its own line, exactly as written.\n${publicHowTo(scope.howTo).map(v => `- For ${v.audience.toLowerCase()}: ${v.title}. ${v.blurb} [Watch: ${v.title} (${howToMinutes(v.secs)})](${orgBaseUrl(scope.org?.slug, APP_URL)}${howToPath(v.id, scope.howTo)})`).join('\n')}\n\n` : ''}=== HOW-TO PAGES ===
 ${picked.length ? picked.map(a => `PAGE: ${a.title}\n${a.body}`).join('\n\n') : '(no page matched)'}`
 }
 
