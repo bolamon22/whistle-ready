@@ -2,7 +2,7 @@ import { getPublicVisibility } from '@/lib/publicView'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { chirpReply, cleanId, cleanPage, lastQuestion, recentQuestions } from '@/lib/chirp'
-import { cleanConvoId, cleanVisitor, logPublicTurn, orgScope, publicCovered, publicPrompt, tournamentScope } from '@/lib/publicChirp'
+import { cleanConvoId, cleanVisitor, fixAppAnswer, logPublicTurn, orgScope, publicCovered, publicPrompt, tournamentScope } from '@/lib/publicChirp'
 import { orgBySlug, orgForTournament } from '@/lib/org'
 import { isAudience } from '@/lib/chirpNudges'
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const question = lastQuestion(body.messages)
     const audience = isAudience(body.audience) ? body.audience : undefined
-    const message = await chirpReply(publicPrompt(scope, page, recentQuestions(body.messages), audience), body.messages)
+    const message = fixAppAnswer(question, await chirpReply(publicPrompt(scope, page, recentQuestions(body.messages), audience), body.messages))
 
     // The question list behind Chirp insights (anonymous).
     try {

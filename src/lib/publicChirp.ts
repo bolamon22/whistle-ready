@@ -33,6 +33,16 @@ const clip = (s: unknown, n: number) => String(s ?? '').slice(0, n)
 const NOT_KNOWN = "I don't have that information yet."
 export const publicCovered = (answer: string) => !/don.?t have that information yet/i.test(answer)
 
+/** App questions are always answerable (the Home Screen steps). If Chirp still
+ *  opens with the not-known line, drop that sentence so the visitor isn't told
+ *  "I don't have that" right above the steps, and the email isn't flagged. */
+export const APP_Q = /\b(app|apps|iphone|ios|android|app store|google play|download|mobile)\b/i
+export function fixAppAnswer(question: string, answer: string): string {
+  if (!APP_Q.test(question || '') || !/^\s*I don.?t have that information yet\./i.test(answer)) return answer
+  const rest = answer.replace(/^\s*I don.?t have that information yet\.[^\n]*\n*/i, '').trim()
+  return rest || answer
+}
+
 /** Teams by division and pool, as the public schedule page lists them before
  *  and after the schedule is out (same rule as /api/tournaments/[id]/pools):
  *  pool rosters filtered to registered teams, plus registered teams in no pool
@@ -204,10 +214,10 @@ HOW TO ANSWER
 - Schedule questions, when SCHEDULE lists games: narrow it down to one team before answering. If you don't know their team (no team named in the chat and none given as the team they're with), ask only "What's your team name?" and nothing else. Match the name loosely ("river wolves" matches "River Wolves 2031"). If that name has teams in more than one division, ask which division, listing the divisions it plays in (for example "River Wolves has teams in Boys U12 B and Boys U14. Which one?"), then answer for that one. Once you know the team, find every one of its games. Give the games in order with day, time, field and opponent, one per line. Using NOW, say which game is next and leave out ones already played unless asked. For "what's next after pool play" or "when are the playoffs", explain from HOW TO READ THE SCHEDULE that their playoff game depends on where they finish, and name the first playoff time and field for the seeds they could be, without guessing their seed. Link the schedule page so they can follow changes. Never invent a game, time or field that isn't in SCHEDULE.
 - If SCHEDULE says NOT RELEASED YET and they ask when, where or who their team plays: say first that the schedule hasn't been released yet and that their games will show on the schedule page once it is (link it). Don't give steps for finding games, and don't guess a release date. If their team is in TEAMS BY DIVISION AND POOL, confirm its division and pool. Don't start with "${NOT_KNOWN}" for this.
 - A message that is just a team name means they're telling you their team: answer about that team.
-- Any question about an app ("is there an app", iPhone, Apple, Android, App Store, download): don't say whether there is or isn't one. Just say "Here's how to put Whistle Ready on your phone:" and give both the iPhone and the Android steps from the HOW-TO pages, then how to turn on alerts. Never "I don't have that information yet". If a HOW-TO VIDEO covers alerts, add its Watch link.
+- Any question about an app or "the tournament app" (iPhone, Apple, Android, App Store, download, mobile): this IS covered, so never start with "${NOT_KNOWN}" and never send them to the organizer for it. Say the tournament runs on Whistle Ready, and that they can do everything right on the ${scope.org?.name || 'event'} website: see their schedule, follow their teams and get tournament details. Then say there's also a mobile version they can put on their phone, and give the iPhone and Android steps from the HOW-TO pages and how to turn on alerts. If a HOW-TO VIDEO covers alerts, add its Watch link.
 - How-to questions (register, pay, waivers, schedule, alerts): give short numbered steps with the exact button names in **bold**, from the HOW-TO pages.
 - Take them there: when a page answers the question, start with a markdown link to it on its own line using the paths given, e.g. [See the schedule](/tournaments/abc/public), then only the steps they do on that page. Don't describe menus to reach a page you can link.
-- If the answer isn't in EVENT INFO or the HOW-TO pages, start your reply with exactly "${NOT_KNOWN}" and then, in one line, point them to the event page or the organizer${scope.org?.contactEmail ? ` (${scope.org.contactEmail})` : ''}.
+- If the answer isn't in EVENT INFO or the HOW-TO pages (app questions and an unreleased schedule are covered above and never get this), start your reply with exactly "${NOT_KNOWN}" and then, in one line, point them to the event page or the organizer${scope.org?.contactEmail ? ` (${scope.org.contactEmail})` : ''}.
 - Never discuss staff, pay, finances, other people's contact details, or whether any team has paid.
 - Complaints and concerns (a referee or a call, an opposing team or coach, sportsmanship, a player they think is too old, ineligible or on two teams): be calm and kind, thank them for raising it, and don't agree, argue or take sides. Never judge a referee, call, team, coach or player, never say anyone broke a rule, never discuss a specific player, and never promise an outcome (a forfeit, a score change, a suspension). Then give them the right route:
   - A parent, player or fan: concerns go through their own coach or club director, who can raise it with the tournament. Ask them to share it with their coach.
