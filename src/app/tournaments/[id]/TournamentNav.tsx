@@ -8,6 +8,7 @@ import HelpCenter from '@/components/HelpCenter'
 import { useSession } from 'next-auth/react'
 import { useRole } from '@/lib/role-context'
 import { roleCanAccess } from '@/lib/routeAccess'
+import { useOrg } from '@/lib/org-context'
 
 interface Props {
   id: string
@@ -33,6 +34,8 @@ type NavItem = {
   href: string; label: string; sect?: string
   /** Left out for roles that can open this page, where the same thing already is. */
   unlessCan?: string
+  /** Only for organizations on these plans (lib/orgPlans). */
+  plans?: string[]
 }
 /** wide: a tab only on wider screens; the phone tab bar has room for six. */
 type NavGroup = { label: string; href?: string; items?: NavItem[]; wide?: boolean }
@@ -100,6 +103,10 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     { label: 'People', items: [
       // Order IS the grouping — keep same-section items adjacent or the heading
       // prints twice.
+      // The head assigner's customer for this event (Bo, Oct 17 2026: "where I can add
+      // them to an existing tournament"), Assigner plan only: on the Tournament plan the
+      // organization is the tournament director itself.
+      { href: `${base}/tournament-director`,  label: 'Tournament director',    sect: 'Customer', plans: ['assigner'] },
       { href: `${base}/registrations`,        label: 'Team registrations',     sect: 'Teams & players' },
       { href: `${base}/player-waivers`,       label: 'Player waivers',         sect: 'Teams & players' },
       { href: `${base}/coach-waivers`,        label: 'Coach waivers',          sect: 'Teams & players' },
@@ -132,6 +139,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   // than flash an empty bar.
   const { status } = useSession()
   const { effectiveRole, planOff } = useRole()
+  const org = useOrg()
   // Register (the public team registration form) only when the plan has Registration:
   // on the Assigner plan the organization doesn't take registrations.
   const registers = !planOff.includes('registration')
@@ -141,7 +149,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
   // field director.
   const home = [`${base}/dashboard`, base, `${base}/scheduler`, `${base}/assignments`, `${base}/communications`, `${base}/roster`].find(canOpen) ?? `${base}/dashboard`
   const groups: NavGroup[] = allGroups
-    .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href) && !(i.unlessCan && status === 'authenticated' && canOpen(i.unlessCan))) } : g)
+    .map(g => g.items ? { ...g, items: g.items.filter(i => canOpen(i.href) && !(i.unlessCan && status === 'authenticated' && canOpen(i.unlessCan)) && (!i.plans || i.plans.includes(org?.plan || 'tournament'))) } : g)
     .filter(g => g.href ? canOpen(g.href) : (g.items?.length ?? 0) > 0)
   const phoneGroups = groups.filter(g => !g.wide)
 
