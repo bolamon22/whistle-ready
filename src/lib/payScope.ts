@@ -11,6 +11,7 @@ import {
   type PayGroup, type PayScope, DEFAULT_ASSIGNER_GROUPS, FULL_PAY_SCOPE, NO_PAY_SCOPE,
   cleanPayGroups, payScopeOf, seesPay, assignmentPayGroups, timeEntryPayGroups, workerPayGroups, entryHours,
 } from '@/lib/payGroups'
+import { eventSidesOf } from '@/lib/eventTeamsStore'
 
 const PREFIX = 'assignerPay:'
 
@@ -73,20 +74,21 @@ export async function payAccess(scope: PayScope, pairs: { workerId: string; tour
   if (!pairs.length) return out
   const workerIds = Array.from(new Set(pairs.map(p => p.workerId)))
   const tids = Array.from(new Set(pairs.map(p => p.tournamentId)))
-  const [assignments, entries, workers] = await Promise.all([
+  const [assignments, entries, workers, sides] = await Promise.all([
     prisma.assignment.findMany({
       where: { workerId: { in: workerIds }, game: { tournamentId: { in: tids } } },
       select: { workerId: true, role: true, payRate: true, game: { select: { tournamentId: true, division: true } } },
     }),
     prisma.timeEntry.findMany({ where: { workerId: { in: workerIds }, tournamentId: { in: tids } } }),
     prisma.worker.findMany({ where: { id: { in: workerIds } }, select: { id: true, roles: true, defaultRole: true, gender: true, hourlyRate: true } }),
+    eventSidesOf(tids),
   ])
   const byId = new Map(workers.map(w => [w.id, w]))
   const tally = new Map<string, { seen: number; hidden: number; total: number }>()
   const at = (k: string) => { let t = tally.get(k); if (!t) { t = { seen: 0, hidden: 0, total: 0 }; tally.set(k, t) } return t }
   for (const a of assignments) {
     const t = at(payKey(a.workerId, a.game.tournamentId))
-    if (seesPay(scope, assignmentPayGroups(a.role, a.game.division, byId.get(a.workerId)?.gender))) { t.seen++; t.total += a.payRate } else t.hidden++
+    if (seesPay(scope, assignmentPayGroups(a.role, a.game.division, byId.get(a.workerId)?.gender, sides.get(a.game.tournamentId)))) { t.seen++; t.total += a.payRate } else t.hidden++
   }
   for (const e of entries) {
     const w = byId.get(e.workerId), t = at(payKey(e.workerId, e.tournamentId))

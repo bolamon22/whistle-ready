@@ -7,15 +7,17 @@ import { type PayScope, assignmentPayGroups, seesPay } from '@/lib/payGroups'
 import { payScopeFor } from '@/lib/payScope'
 import { checkInsFor } from '@/lib/staffCheckIn'
 import { releaseFilter } from '@/lib/staffReleaseStore'
+import { eventSideOf } from '@/lib/eventTeamsStore'
+import type { GameGender } from '@/lib/gameGender'
 
 // Staff only. These had no sign-in check: anyone with a tournament id could
 // read every official's contact and pay, or assign and unassign games. Pay
 // rates and worker pay/contact fields are blanked for roles without them, and
 // for an assigner outside their pay groups (Oct 13 2026: the boys' and girls'
 // assigners each see their own refs' pay, not each other's or the scorekeepers').
-const shape = (a: any, role: string, scope: PayScope, division: string) => ({
+const shape = (a: any, role: string, scope: PayScope, division: string, side: GameGender) => ({
   ...a,
-  payRate: canSeeStaffPay(role) && seesPay(scope, assignmentPayGroups(a.role, division, a.worker?.gender)) ? a.payRate : null,
+  payRate: canSeeStaffPay(role) && seesPay(scope, assignmentPayGroups(a.role, division, a.worker?.gender, side)) ? a.payRate : null,
   worker: a.worker ? redactWorker(a.worker, role, scope) : a.worker,
 })
 export async function POST(req: Request) {
@@ -30,7 +32,7 @@ export async function POST(req: Request) {
   const payRates=parsePayRates(game.tournament.payRates)
   const payRate=worker.payRateOverride??getPayRate(worker.certLevel,role,payRates)
   const scope=await payScopeFor(gate.role,gate.userId)
-  return NextResponse.json(shape(await prisma.assignment.upsert({where:{gameId_role:{gameId,role}},create:{gameId,workerId,role,payRate},update:{workerId,payRate},include:{worker:true}}), gate.role, scope, game.division),{status:201})
+  return NextResponse.json(shape(await prisma.assignment.upsert({where:{gameId_role:{gameId,role}},create:{gameId,workerId,role,payRate},update:{workerId,payRate},include:{worker:true}}), gate.role, scope, game.division, await eventSideOf(game.tournamentId)),{status:201})
 }
 
 export async function GET(req: Request) {
@@ -39,15 +41,16 @@ export async function GET(req: Request) {
   const tournamentId = searchParams.get('tournamentId')
   if (!tournamentId) return NextResponse.json([], { status: 200 })
   const away = await orgGate(gate, tournamentId); if (away) return away
-  const [assignments, games, scope] = await Promise.all([
+  const [assignments, games, scope, side] = await Promise.all([
     prisma.assignment.findMany({ where: { game: { tournamentId } }, include: { worker: true } }),
     prisma.game.findMany({ where: { tournamentId }, select: { id: true, division: true } }),
     payScopeFor(gate.role, gate.userId),
+    eventSideOf(tournamentId),
   ])
   const division = new Map(games.map(g => [g.id, g.division]))
   // Refs and scorekeepers: only crews the assigner has shown (lib/staffRelease).
   const visible = await releaseFilter(gate.role, [tournamentId])
   const shown = assignments.filter(a => visible(tournamentId, a.role, division.get(a.gameId) ?? ''))
   const checks = await checkInsFor(shown.map(a => a.id))
-  return NextResponse.json(shown.map(a => shape({ ...a, gameId: a.gameId, checkedInAt: checks.get(a.id) || null }, gate.role, scope, division.get(a.gameId) ?? '')))
+  return NextResponse.json(shown.map(a => shape({ ...a, gameId: a.gameId, checkedInAt: checks.get(a.id) || null }, gate.role, scope, division.get(a.gameId) ?? '', side)))
 }

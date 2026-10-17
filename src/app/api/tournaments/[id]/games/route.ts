@@ -11,6 +11,7 @@ import { syncBracketPlaceholders } from '@/lib/bracketPlaceholders'
 import { ownClubTeams, isOwnClubGame } from '@/lib/ownClub'
 import { seesUnreleased } from '@/lib/staffRelease'
 import { releaseFilter } from '@/lib/staffReleaseStore'
+import { eventSideOf } from '@/lib/eventTeamsStore'
 
 // Two audiences, two URLs:
 //   ?view=public  -> what the public schedule may show. Never includes staff
@@ -38,11 +39,12 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
     // the director. This list used to hand every rate and payout handle to any staff.
     const who = await viewer()
     const scope = await payScopeFor(who.role, who.userId)
+    const side = scope.all ? 'both' : await eventSideOf(params.id)
     const games = rows.map(g => scope.all ? g : ({
       ...g,
       assignments: g.assignments.map(a => ({
         ...a,
-        payRate: seesPay(scope, assignmentPayGroups(a.role, g.division, a.worker?.gender)) ? a.payRate : null,
+        payRate: seesPay(scope, assignmentPayGroups(a.role, g.division, a.worker?.gender, side)) ? a.payRate : null,
         // A field director also gets the email and phone of their own staff only, not refs'.
         worker: who.role === 'field_director' ? redactWorker(a.worker, who.role, scope) : redactWorkerPay(a.worker, who.role, scope),
       })),

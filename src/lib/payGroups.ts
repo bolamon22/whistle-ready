@@ -8,7 +8,7 @@
 // all sort pay the same way. The assigner's chosen groups are read on the server
 // by lib/payScope.
 
-import { gameGender } from './gameGender'
+import { gameGender, type GameGender } from './gameGender'
 
 export type PayGroup = 'boys' | 'girls' | 'scorekeepers' | 'ops'
 
@@ -55,12 +55,13 @@ function refGroups(gender?: string | null): PayGroup[] {
 }
 
 /** The group(s) one game slot's pay belongs to. A ref slot follows the game's
- *  division; a division that says neither boys nor girls follows the ref's own
- *  setting, so a coed game counts for both assigners only when the ref does both. */
-export function assignmentPayGroups(role: string, division: string, workerGender?: string | null): PayGroup[] {
+ *  division, or the event's side when the division says neither (lib/eventTeams);
+ *  a game that is still neither follows the ref's own setting, so a coed game counts
+ *  for both assigners only when the ref does both. */
+export function assignmentPayGroups(role: string, division: string, workerGender?: string | null, side: GameGender = 'both'): PayGroup[] {
   if (role === 'scorekeeper') return ['scorekeepers']
   if (/^ref/.test(role || '')) {
-    const g = gameGender(division)
+    const g = gameGender(division, side)
     return g === 'both' ? refGroups(workerGender) : [g]
   }
   return ['ops']
