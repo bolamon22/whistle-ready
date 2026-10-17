@@ -169,6 +169,14 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   prints, per role, the pages with no help page.
 - Renamed a button or menu? grep `src/help` for the old words.
 
+### Add-ons and the tournament director
+Each plan group (lib/orgPlans) is an add-on an organization can have on or off. On the Assigner plan the head
+assigner's customer, the tournament director (role `client`, lib/clientEvents), sees part of the events picked
+for them (Bo, Oct 17 2026: "make sure that model holds true for other add-on features as we go"). Adding or
+changing an add-on: decide what the tournament director sees of it, add it to `CLIENT_SECTIONS` in
+lib/clientView, and show it on /dashboard/client. The client role is in `EXTERNAL_ROLES` (lib/apiAuth): it never
+gets a staff API, only /api/client/* through `requireClientEvent`.
+
 ## Design standard (UI consistency)
 - Icons: lucide-react only — never emoji.
 - Palette: neutral slate base + teal as the single accent; semantic green / red / amber
@@ -309,6 +317,19 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   (Staff, Pay Report) and Financials (Staff Pay) use the same names. Help: 16 pages. Narration still says "Roster"
   and "Ref pay" in videos asg-home and asg-pay (re-record to match); asg-crew's "Open it from Staff at the top"
   is right again. Tests: 18 nav checks (scratch).
+- **Tournament director area (Oct 17).** Bo: on the Assigner plan "our customer is the actual ... head assigner
+  ref" and the tournament director is theirs; they need "the game schedule, or the referee schedule, the fees they
+  gotta pay", and "the tournament directors actually are the one that pays the staff. Normally." New role
+  `client` (Tournament Director on the Assigner plan, "Tournament Director (client)" on Logins), added on Your
+  team with a **Sees** events picker (AppSetting `clientEvents:{userId}`, /api/client-events); the invite makes a
+  login only, no Staff Pool record. Home /dashboard/client (events, assigner contact, Powered by Whistle Ready card
+  that sends the /api/inquiry lead), event /dashboard/client/[id]: Schedule (officials' names and phones, open
+  referee spots) and Staff pay (lib/clientPay: Staff pay's own numbers and paid rule, Mark paid / Unpay on the
+  shared PaymentRecord, amount worked out on the server). Assigning fee per game or per event (AppSetting
+  `assigningFee:{tid}`, lib/assigningFee) set from the bar on Staff pay (AssigningFeeBar, Assigner plan), which
+  also names the event's tournament directors and links **See their view** (the head assigner and admins can open
+  /dashboard/client/[id]). Final scores show when Scores is on (lib/clientView). Tests: 62 real-Prisma checks
+  (scratch); dropping `client` from EXTERNAL_ROLES fails them.
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
