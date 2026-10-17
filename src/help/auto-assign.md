@@ -7,7 +7,7 @@ keywords: auto assign auto-assign automatic fill slots clear assignments reset w
 ---
 Auto-assign fills a day's open ref and scorekeeper slots for you. Clear removes assignments in bulk when you need to start over.
 
-**Where:** **Setup → Assigner**, toolbar at the top. Pick the day first; both buttons work on the day shown.
+**Where:** **Setup → Assigner**. **Auto-assign** is at the top right; **Clear assignments…** is in the **⋯** menu next to it. Pick the day first; both work on the day shown.
 
 **To auto-assign:**
 1. Click **Auto-assign**.
@@ -17,7 +17,7 @@ Auto-assign fills a day's open ref and scorekeeper slots for you. Clear removes 
 5. Click **Run Again** to retry, or **Close**.
 
 **To clear assignments:**
-1. Click **Clear**.
+1. Click **⋯**, then **Clear assignments…**.
 2. Under **What do you want to clear?**, tick **Girls Referees**, **Boys Referees** and/or **Score Keepers**.
 3. Enter **Your name (for the audit log)**.
 4. Type **DELETE** in the confirm box and click **Clear**.

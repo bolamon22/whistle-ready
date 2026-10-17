@@ -3,27 +3,31 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green rename division divisions division names boys games girls games teams
+keywords: card size full compact mini density layout staffing panel needs crew conflicts filter, notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green rename division divisions division names boys games girls games teams
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
 **Where:** **Setup → Assigner**.
 
 **To assign staff on the grid:**
-1. Pick the day from the tabs.
-2. The staff bar above the grid lists everyone on the tournament roster. Use **Find a name**, sort by **Fewest games** or **A–Z**, and filter **All**, **Boys refs**, **Girls refs** or **SK**. The button at the end of the bar (**All** with a count) opens the full list. The number after a name is how many games they have that day. A red, yellow or green **L1**, **L2** or **L3** is the ref's level (3 is the highest), which you set on the Staff Pool; only directors, admins and assigners see it.
+1. Pick the day from the day buttons at the top (each shows how many games it has).
+2. Click **Staffing** (or **Staff** on the strip at the right edge) to open the staffing panel. Its **Staff** tab lists everyone on the tournament roster. Use **Find a name**, filter **All**, **Boys**, **Girls** or **SK**, and click **Fewest games first** to switch to **A–Z**. The number after a name is how many games they have that day. A red, yellow or green **L1**, **L2** or **L3** is the ref's level (3 is the highest), which you set on the Staff Pool; only directors, admins and assigners see it.
 3. Drag a name onto a game's slot, or click the slot and pick a name.
-4. To change how many refs a game needs, use the minus and plus buttons on the game. To set every game that day at once, click **1**, **2** or **3** next to **Refs per game**.
+4. To change how many refs a game needs, use the minus and plus buttons on the game. To set every game that day at once, open **Layout** and click **1 ref**, **2 refs** or **3 refs**.
+
+**The staffing panel:** it starts minimized to a strip of three buttons (**Staff**, **Needs**, **Portal**) at the right edge. Clicking one slides the panel in over the board; **»** minimizes it again. The pin button keeps it open beside the board instead (on a wide screen; remembered on this browser).
 
 **Reading the grid:**
 - Colors show **Full crew**, **A slot open**, or **Nobody, or double-booked**.
-- The bar shows how many slots are filled and how many people are **double-booked**.
-- **Min staff (busiest day)** estimates how many refs and scorekeepers you need, based on **Games/ref**. Click **By day** for each day.
-- Use **Fold staffed**, **Fold all** and **Open all** to collapse time rows, and **Density** (**Full**, **Compact**, **Mini**) to change card size.
+- The top of the page shows how many slots are filled for the day. A red **double-booked** count appears when someone is on two games at once; click it to see just those games.
+- Filter the games by search, division, **All** / **Boys** / **Girls**, and **All games** / **Needs crew** / **Conflicts** (the numbers are that day's games). Games that don't match fade on the grid. **Clear filters** resets them.
+- **Card size** (**Full**, **Compact**, **Mini**) changes how much each game shows.
+- **Layout** holds **Fit all fields** or **Fixed width** columns, and **Fold staffed**, **Fold all** and **Open all** to collapse time rows.
+- The staffing panel's **Needs** tab shows who is on games that day and **Min staff (busiest day)**, an estimate of how many refs and scorekeepers you need based on **Games/ref**. Click **By day** for each day.
 
 **Other views:** **List**, **Division** and **Staff** (pick a name under **View schedule for:** to see one person's games). In the list view, click a game to open **Assign Staff** and pick names for each slot.
 
-**What staff can see (Staff portal):** the **Staff portal** box under the buttons shows, for **Boys officials**, **Girls officials** and **Scorekeepers**, whether they can see their games yet. Until a group is shown, its games are only on this board: they aren't on the officials' staff home or My games, and nobody is told. Build and fix the schedule first, then click **Show to staff** (this emails nobody) or send **Notify officials**, which shows that group's games as it sends. **Hide** takes them off the staff portal again; nothing on the board changes. A new event starts with every group hidden.
+**What staff can see (Staff portal):** the **Staff portal** tab of the staffing panel (**Portal** on the strip at the right edge) shows, for **Boys officials**, **Girls officials** and **Scorekeepers**, whether they can see their games yet. Until a group is shown, its games are only on this board: they aren't on the officials' staff home or My games, and nobody is told. Build and fix the schedule first, then click **Show to staff** (this emails nobody) or send **Notify officials**, which shows that group's games as it sends. **Hide** takes them off the staff portal again; nothing on the board changes. A new event starts with every group hidden.
 
 **Tell your officials (Notify officials):**
 1. When the assignments are ready, click **Notify officials** at the top of the Assigner.
@@ -33,13 +37,13 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 5. Click **Send to N officials**. Each official gets an email with only their own games (day, time, field, game, teams and whether they're a referee or scorekeeper). Anyone who turned on Whistle Ready alerts gets a phone alert too.
 6. After you make changes, send again with **Only officials whose games changed since the last send** ticked, so everyone else isn't emailed twice. Games that moved after someone confirmed them need confirming again.
 
-**Who confirmed:** **Confirmed N/N** next to **Notify officials** opens the Confirmations page. On the board, a **✓** after a name means they confirmed that game. If an official can't work a game, it comes off their schedule, you get an email, and the slot shows **open** with their name (for example **open · Brooks can't**). See "See which officials confirmed their games".
+**Who confirmed:** **Confirmed N/N** next to **Auto-assign** opens the Confirmations page. On the board, a **✓** after a name means they confirmed that game. If an official can't work a game, it comes off their schedule, you get an email, and the slot shows **open** with their name (for example **open · Brooks can't**). See "See which officials confirmed their games".
 
-**To rename a division:** click **Divisions** at the top of the Assigner (the Head Assigner, directors and schedulers). Change the name and click **Rename**: every game in the division moves with it. The tag under each name shows whose game it is, **Boys**, **Girls** or **Boys & girls**, from the name, or from the event's **Teams** when the name says neither, so adding Boys or Girls to a name changes it. A name another division already has is refused.
+**To rename a division:** click the **⋯** button at the top right of the Assigner, then **Divisions** (the Head Assigner, directors and schedulers). Change the name and click **Rename**: every game in the division moves with it. The tag under each name shows whose game it is, **Boys**, **Girls** or **Boys & girls**, from the name, or from the event's **Teams** when the name says neither, so adding Boys or Girls to a name changes it. A name another division already has is refused.
 
 **Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games, rename divisions or enter scores. Ask the scheduler or director (the Head Assigner on the Assigner plan). To bring games in, see "Import games from TourneyMachine or a spreadsheet".
 
-**To prevent accidental changes:** tick **Lock editing**. This applies on your own browser only.
+**To prevent accidental changes:** click **⋯**, then **Lock editing**. A **Locked** tag shows at the top; click it to unlock. This applies on your own browser only.
 
 **Common problems:**
 - Assigning someone already on a game at the same time asks you to confirm before it double-books them.

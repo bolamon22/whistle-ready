@@ -4,7 +4,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff, Tags } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, PanelRight, Search } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
@@ -240,15 +240,24 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [density,setDensityRaw]=useState<Density>('compact')
   const [fitFields,setFitFieldsRaw]=useState(true)
   const [miniOpen,setMiniOpen]=useState<Set<string>>(new Set())   // games shown as a card while in Mini
-  const [staffOpen,setStaffOpen]=useState(false)
+  // Staffing panel (Oct 2026 redesign): the staff list, the staffing needs and the Staff portal
+  // switches moved off the top of the page. Minimized to a rail, a slide-in over the board, or
+  // pinned beside it (pinned is remembered on this browser).
+  const [panelMode,setPanelModeRaw]=useState<'rail'|'open'|'pinned'>('rail')
+  const [panelTab,setPanelTab]=useState<'staff'|'needs'|'portal'>('staff')
+  const [statusFilter,setStatusFilter]=useState<'all'|'open'|'bad'>('all')
+  const [moreOpen,setMoreOpen]=useState(false)
+  const [layoutOpen,setLayoutOpen]=useState(false)
   const [staffSearch,setStaffSearch]=useState('')
   const [staffSort,setStaffSort]=useState<'load'|'name'>('load')
   const [staffFilter,setStaffFilter]=useState<'all'|'boys'|'girls'|'sk'>('all')
   useEffect(()=>{try{
     const d=localStorage.getItem('assignerDensity:'+params.id); if(d==='full'||d==='compact'||d==='mini')setDensityRaw(d)
     const f=localStorage.getItem('assignerFit:'+params.id); if(f==='0')setFitFieldsRaw(false)
+    if(localStorage.getItem('assignerPanel')==='pinned')setPanelModeRaw('pinned')
   }catch{}},[params.id])
   function setDensity(d:Density){setDensityRaw(d);setMiniOpen(new Set());try{localStorage.setItem('assignerDensity:'+params.id,d)}catch{}}
+  function setPanelMode(m:'rail'|'open'|'pinned'){setPanelModeRaw(m);try{localStorage.setItem('assignerPanel',m==='pinned'?'pinned':'rail')}catch{}}
   function setFitFields(v:boolean){setFitFieldsRaw(v);try{localStorage.setItem('assignerFit:'+params.id,v?'1':'0')}catch{}}
 
   // Game edit/add
@@ -518,6 +527,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
     if(genderFilter!=='all'){const gg=gameGenderOf(g.division);if(gg!=='both'&&gg!==genderFilter)return true}
     if(listDivFilter!=='all'&&g.division!==listDivFilter)return true
     if(listSearch&&![g.gameNumber,g.team1,g.team2,g.division,g.location].some(s=>String(s||'').toLowerCase().includes(listSearch.toLowerCase())))return true
+    if(statusFilter!=='all'){const c=crewOf(g,getDoubleBookedWorkers(g.startTime,g.date));if(statusFilter==='open'&&c.open===0)return true;if(statusFilter==='bad'&&!c.dbl)return true}
     return false
   }
   const outCls='grayscale opacity-30 hover:grayscale-0 hover:opacity-100'
@@ -565,10 +575,20 @@ export default function GridPage({ params }: { params:{id:string} }) {
   })()
   const divColorMap=new Map<string,ReturnType<typeof getDivisionColor>>()
   ;[...new Set(dayGames.map(g=>g.division))].forEach(d=>divColorMap.set(d,getDivisionColor(d)))
+  // Day-level counts for the header and filters: slots to fill (refs + scorekeeper per game),
+  // how many are filled, who is on two games at once, games still short and games with a clash.
+  let slotsTotal=0,slotsFilled=0,openGames=0,badGames=0; const doubledIds=new Set<string>()
+  for(const t of times)getDoubleBookedWorkers(t).forEach(id=>doubledIds.add(id))
+  for(const g of dayGames){if(g.isCanceled)continue;const rc=slotsOf(g);slotsTotal+=rc+1;slotsFilled+=g.assignments.filter(a=>a.role==='scorekeeper'||slotRoles(rc).includes(a.role)).length;const c=crewOf(g,getDoubleBookedWorkers(g.startTime));if(c.open)openGames++;if(c.dbl)badGames++}
+  const staffedTimes=times.filter(t=>{const gs=dayGames.filter(g=>g.startTime===t&&!g.isCanceled);return gs.length>0&&gs.every(g=>crewOf(g,getDoubleBookedWorkers(t)).full)})
+  const segBtn=(on:boolean)=>`h-8 px-3 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${on?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-900'}`
+  const barBtn='h-9 px-3 rounded-lg border border-slate-200 bg-white text-[13px] font-medium text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5 whitespace-nowrap transition-colors'
+  const menuItem='w-full h-9 px-2.5 rounded-lg flex items-center gap-2.5 text-sm text-slate-700 hover:bg-slate-100 text-left'
+  const chipBtn='h-8 px-3 rounded-full border border-slate-200 bg-white text-[12.5px] font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900 disabled:opacity-40 transition-colors'
 
   return(
     <>
-    <div>
+    <div className={games.length>0?(panelMode==='pinned'?'md:pr-[72px] xl:pr-[336px]':'md:pr-[72px]'):''}>
       {/* Import modal */}
       {importStep==='mapping'&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -851,72 +871,260 @@ export default function GridPage({ params }: { params:{id:string} }) {
         stats={{ games: games.length, assigned: assignedCount, pct: Math.round(assignedCount / Math.max(games.length, 1) * 100) }}
       />
 
-      {/* Toolbar: counts + view switcher + actions */}
-      <div className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <span className="text-sky-600">{assignedBoysRefs} Boys refs</span>
-          <span className="text-slate-300">·</span>
-          <span className="text-pink-600">{assignedGirlsRefs} Girls refs</span>
-          {assignedBothRefs > 0 && <><span className="text-slate-300">·</span><span className="text-slate-600">{assignedBothRefs} Both</span></>}
-          <span className="text-slate-300">·</span>
-          <span className="text-emerald-600">{assignedSKs} SKs</span>
+      {/* Header (Oct 2026 redesign). Assigners said the page was too busy: seven bands sat above the
+          first game. Now one action row, one view row and one filter row; the staff list, the
+          staffing needs and the Staff portal switches live in the Staffing panel on the right. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {viewMode==='grid'&&dayGames.length>0&&(
+          <div className="flex items-center gap-2.5 mr-1">
+            <span className="text-sm text-slate-600 whitespace-nowrap"><b className="font-semibold text-slate-900 tabular-nums">{slotsFilled}</b> of <span className="tabular-nums">{slotsTotal}</span> slots filled</span>
+            <span className="hidden sm:block w-28 h-1.5 rounded-full bg-slate-200 overflow-hidden"><span className="block h-full rounded-full bg-teal-600 transition-all" style={{width:`${slotsTotal?Math.round(slotsFilled/slotsTotal*100):0}%`}}/></span>
+          </div>
+        )}
+        {viewMode==='grid'&&doubledIds.size>0&&<button type="button" onClick={()=>setStatusFilter('bad')} title="Show only the games where someone is on two games at once" className="h-7 px-2.5 rounded-full border border-red-200 bg-red-50 text-red-700 text-xs font-semibold inline-flex items-center gap-1.5"><AlertTriangle size={13}/> {doubledIds.size} double-booked</button>}
+        {locked&&<button type="button" onClick={()=>toggleLock(false)} className="h-7 px-2.5 rounded-full border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold inline-flex items-center gap-1.5"><Lock size={13}/> Locked · click to unlock</button>}
+        <div className="flex-1"/>
+        {confirms?.ask && <Link href={`/tournaments/${params.id}/confirmations`} title="Who has confirmed their games" className={`${barBtn} text-teal-700`}><CheckCheck size={15}/> Confirmed {confirms.totals.confirmed}/{confirms.totals.officials}</Link>}
+        {dayGames.length>0&&<button type="button" onClick={()=>{setShowAutoAssign(true);setAutoResult(null)}} className={barBtn}><Zap size={15} className="text-purple-600"/> Auto-assign</button>}
+        {games.length>0&&<button type="button" onClick={()=>setShowNotify(true)} className="h-9 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold inline-flex items-center gap-1.5 whitespace-nowrap transition-colors"><Send size={15}/> Notify officials</button>}
+        <div className="relative">
+          <button type="button" aria-label="More actions" title="More actions" aria-expanded={moreOpen} onClick={()=>{setMoreOpen(o=>!o);setLayoutOpen(false)}} className={`${barBtn} w-9 px-0 justify-center`}><MoreHorizontal size={16}/></button>
+          {moreOpen&&(<>
+            <div className="fixed inset-0 z-40" onClick={()=>setMoreOpen(false)}/>
+            <div className="absolute right-0 top-11 z-50 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+              {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);openAddGame()}}><Plus size={15} className="text-slate-400"/> Add a game</button>}
+              {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);fileRef.current?.click()}}><Upload size={15} className="text-slate-400"/> Import schedule</button>}
+              {!noSchedule&&games.length>0&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);setShowDivs(true)}}><Tags size={15} className="text-slate-400"/> Divisions</button>}
+              {!noSchedule&&<div className="my-1 border-t border-slate-100"/>}
+              <button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);toggleLock(!locked)}}><Lock size={15} className="text-slate-400"/> {locked?'Unlock editing':'Lock editing'}</button>
+              {dayGames.length>0&&(<>
+                <div className="my-1 border-t border-slate-100"/>
+                <button type="button" className={`${menuItem} text-red-600 hover:bg-red-50`} onClick={()=>{setMoreOpen(false);resetClear();setShowClear(true)}}><Trash2 size={15}/> Clear assignments…</button>
+              </>)}
+            </div>
+          </>)}
+          {!noSchedule&&<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/>}
         </div>
-        <div className="flex-1" />
-        {games.length > 0 && (
-          <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-1">
-            {(['grid','list','division','staff'] as const).map(v => (
-              <button key={v} onClick={() => setViewMode(v)}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors ${viewMode === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-                {v === 'grid' ? <><LayoutGrid size={13} /> Grid</> : v === 'list' ? <><List size={13} /> List</> : v === 'division' ? <><Rows3 size={13} /> Division</> : <><User size={13} /> Staff</>}
+      </div>
+
+      {/* Day, view, card size, layout and the Staffing panel */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {dates.length>0&&viewMode!=='staff'&&(
+          <div className="inline-flex flex-wrap p-1 rounded-xl bg-slate-100 gap-0.5" role="tablist" aria-label="Day">
+            {dates.map(d=>{const n=games.filter(g=>g.date===d).length;return(
+              <button key={d} type="button" role="tab" aria-selected={activeDay===d} onClick={()=>setActiveDay(d)} className={segBtn(activeDay===d)}>{formatDate(d)}<span className="text-[11px] font-normal text-slate-400">{n} games</span></button>
+            )})}
+          </div>
+        )}
+        {games.length>0&&(
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" aria-label="View">
+            {(['grid','list','division','staff'] as const).map(v=>(
+              <button key={v} type="button" onClick={()=>setViewMode(v)} aria-pressed={viewMode===v} className={segBtn(viewMode===v)}>
+                {v==='grid'?<><LayoutGrid size={14}/> Grid</>:v==='list'?<><List size={14}/> List</>:v==='division'?<><Rows3 size={14}/> Division</>:<><User size={14}/> Staff</>}
               </button>
             ))}
           </div>
         )}
-        <div className="flex items-center gap-1.5">
-          {games.length > 0 && <button onClick={() => setShowNotify(true)} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 border border-teal-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Send size={13} /> Notify officials</button>}
-          {confirms?.ask && <Link href={`/tournaments/${params.id}/confirmations`} title="Who has confirmed their games" className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><CheckCheck size={13} /> Confirmed {confirms.totals.confirmed}/{confirms.totals.officials}</Link>}
-          {dayGames.length > 0 && <button onClick={() => { setShowAutoAssign(true); setAutoResult(null) }} className="text-xs font-semibold text-purple-700 border border-purple-200 hover:bg-purple-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Zap size={13} /> Auto-assign</button>}
-          {dayGames.length > 0 && <button onClick={() => { resetClear(); setShowClear(true) }} className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Trash2 size={13} /> Clear</button>}
-          {!noSchedule&&games.length>0&&<button onClick={()=>setShowDivs(true)} title="Rename divisions" className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Tags size={13} /> Divisions</button>}
-          {!noSchedule&&<button onClick={openAddGame} className="text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors"><Plus size={13} /> Game</button>}
-          {!noSchedule&&<label className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"><Upload size={13} /> Import<input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect}/></label>}
-        </div>
+        <div className="flex-1"/>
+        {viewMode==='grid'&&dayGames.length>0&&(<>
+          <span className="text-xs font-medium text-slate-500">Card size</span>
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" aria-label="Card size">
+            {(['full','compact','mini'] as const).map(d=><button key={d} type="button" onClick={()=>setDensity(d)} aria-pressed={density===d} className={segBtn(density===d)} title={d==='full'?'The large card: both teams, scores and one row per slot':d==='compact'?'Three lines: game, teams, officials as chips':'One line per game: who is on it'}>{d==='full'?'Full':d==='compact'?'Compact':'Mini'}</button>)}
+          </div>
+          <div className="relative">
+            <button type="button" aria-expanded={layoutOpen} onClick={()=>{setLayoutOpen(o=>!o);setMoreOpen(false)}} className={barBtn}><SlidersHorizontal size={15}/> Layout</button>
+            {layoutOpen&&(<>
+              <div className="fixed inset-0 z-40" onClick={()=>setLayoutOpen(false)}/>
+              <div className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl space-y-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Columns</p>
+                  <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5">
+                    <button type="button" onClick={()=>setFitFields(true)} className={segBtn(fitFields)} title="Fields share the width of the window">Fit all fields</button>
+                    <button type="button" onClick={()=>setFitFields(false)} className={segBtn(!fitFields)} title="Fixed-width columns that scroll sideways">Fixed width</button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Start-time rows</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button type="button" onClick={()=>{setCollapsedTimes(new Set(staffedTimes));setLayoutOpen(false)}} className={chipBtn} title="Fold every start time whose games all have a full crew">Fold staffed</button>
+                    <button type="button" onClick={()=>{setCollapsedTimes(new Set(times));setLayoutOpen(false)}} className={chipBtn}>Fold all</button>
+                    <button type="button" onClick={()=>{setCollapsedTimes(new Set());setLayoutOpen(false)}} className={chipBtn}>Open all</button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Refs per game · every game this day</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1,2,3].map(n=><button key={n} type="button" disabled={locked} onClick={()=>{applyDefaultRefs(n);setLayoutOpen(false)}} className={chipBtn} title={`Set every game on this day to ${n} ref${n===1?'':'s'}; use − / + on a game to change just that one`}>{n} ref{n===1?'':'s'}</button>)}
+                  </div>
+                </div>
+              </div>
+            </>)}
+          </div>
+        </>)}
+        {games.length>0&&<button type="button" onClick={()=>setPanelMode(panelMode==='rail'?'open':'rail')} aria-pressed={panelMode!=='rail'} className={panelMode!=='rail'?'h-9 px-3 rounded-lg bg-slate-900 text-white text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap':barBtn}><PanelRight size={15}/> Staffing</button>}
       </div>
 
-      {games.length > 0 && <StaffPortalVisibility tournamentId={params.id} refreshKey={releaseKey} />}
-
-      {/* Day tabs */}
-      {dates.length > 0 && viewMode !== 'staff' && (
-        <div className="flex gap-0 border-b border-slate-200 mb-4 flex-wrap">
-          {dates.map(d => (
-            <button key={d} onClick={() => setActiveDay(d)}
-              className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeDay === d ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-              {formatDate(d)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* ── Sub-bar: filters (only for grid/list/division views) ─────── */}
-      {viewMode !== 'staff' && (
-        <div className="bg-white border border-slate-200 rounded-xl px-4 py-2 mb-5 flex items-center gap-3 flex-wrap">
-          <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Filter</span>
-          <span className="text-slate-300 text-xs">|</span>
-          <select className="bg-white text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" value={listDivFilter} onChange={e=>setListDivFilter(e.target.value)}>
+      {/* Filters: the grid fades games that don't match; List and Division leave them out */}
+      {viewMode!=='staff'&&games.length>0&&(
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <label className="h-9 flex items-center gap-2 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-400 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/15 w-full sm:w-64">
+            <Search size={15}/>
+            <input className="flex-1 min-w-0 bg-transparent text-sm text-slate-800 placeholder-slate-400 focus:outline-none" placeholder="Search team, game, field…" aria-label="Search games" value={listSearch} onChange={e=>setListSearch(e.target.value)}/>
+          </label>
+          <select className="h-9 bg-white text-slate-700 border border-slate-200 rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/15 focus:border-teal-500" aria-label="Division" value={listDivFilter} onChange={e=>setListDivFilter(e.target.value)}>
             <option value="all">All divisions</option>
             {[...new Set(games.map(g=>g.division))].sort().map(d=><option key={d} value={d}>{d}</option>)}
           </select>
-          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 border border-slate-200" role="group" aria-label="Boys or girls games">
-            {([['all','All games'],['boys','Boys games'],['girls','Girls games']] as const).map(([k,l])=>(
-              <button key={k} type="button" onClick={()=>setGenderFilter(k)} aria-pressed={genderFilter===k}
-                className={`px-2.5 py-0.5 rounded-md text-xs font-semibold transition-colors ${genderFilter===k?(k==='girls'?'bg-pink-600 text-white':k==='boys'?'bg-sky-600 text-white':'bg-slate-900 text-white'):'text-slate-600 hover:text-slate-900'}`}>{l}</button>
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Boys or girls games">
+            {([['all','All'],['boys','Boys'],['girls','Girls']] as const).map(([k,l])=>(
+              <button key={k} type="button" onClick={()=>setGenderFilter(k)} aria-pressed={genderFilter===k} className={segBtn(genderFilter===k)}>{l}</button>
             ))}
           </div>
-          <input className="bg-white text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 w-44" placeholder="Search team, game…" value={listSearch} onChange={e=>setListSearch(e.target.value)}/>
-          {(listSearch||listDivFilter!=='all'||genderFilter!=='all')&&<button className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all');setGenderFilter('all')}}><X size={12} /> Clear</button>}
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Crew status">
+            <button type="button" onClick={()=>setStatusFilter('all')} aria-pressed={statusFilter==='all'} className={segBtn(statusFilter==='all')}>All games</button>
+            <button type="button" onClick={()=>setStatusFilter('open')} aria-pressed={statusFilter==='open'} className={segBtn(statusFilter==='open')} title="Games with a slot still open">Needs crew <span className="text-[11px] tabular-nums text-slate-400">{openGames}</span></button>
+            <button type="button" onClick={()=>setStatusFilter('bad')} aria-pressed={statusFilter==='bad'} className={segBtn(statusFilter==='bad')} title="Games where someone is on two games at once">Conflicts <span className="text-[11px] tabular-nums text-slate-400">{badGames}</span></button>
+          </div>
+          {(listSearch||listDivFilter!=='all'||genderFilter!=='all'||statusFilter!=='all')&&<button type="button" className="h-9 px-2 text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all');setGenderFilter('all');setStatusFilter('all')}}><X size={14}/> Clear filters</button>}
         </div>
       )}
-      {viewMode === 'staff' && <div className="mb-5"/>}
+      {viewMode==='staff'&&<div className="mb-2"/>}
+
+      {/* Staffing panel: a rail when minimized; a slide-in over the board, or pinned beside it */}
+      {games.length>0&&panelMode==='rail'&&(
+        <nav aria-label="Staffing" className="hidden md:flex fixed right-3 top-1/2 -translate-y-1/2 z-30 w-14 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-lg flex-col gap-1">
+          {([['staff','Staff',Users],['needs','Needs',ClipboardList],['portal','Portal',Eye]] as const).map(([k,l,Icon])=>(
+            <button key={k} type="button" onClick={()=>{setPanelTab(k);setPanelMode('open')}} title={k==='staff'?'Staff: drag names onto slots':k==='needs'?'Needs: how many refs and scorekeepers':'Staff portal: what officials can see'} className="h-14 w-full rounded-xl flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-slate-600 hover:bg-teal-50 hover:text-teal-700 transition-colors"><Icon size={18}/>{l}</button>
+          ))}
+        </nav>
+      )}
+      {games.length>0&&panelMode!=='rail'&&(
+        <aside aria-label="Staffing" className={`fixed right-3 top-20 bottom-3 z-40 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden ${panelMode==='open'?'shadow-2xl':'shadow-sm'}`}>
+          <div className="flex items-center gap-1 pl-4 pr-2 pt-2.5">
+            <span className="text-sm font-semibold text-slate-800">Staffing</span>
+            <div className="flex-1"/>
+            <button type="button" onClick={()=>setPanelMode(panelMode==='pinned'?'open':'pinned')} aria-pressed={panelMode==='pinned'} title={panelMode==='pinned'?'Unpin: float over the board':'Pin open beside the board'} aria-label={panelMode==='pinned'?'Unpin the staffing panel':'Pin the staffing panel open'} className={`hidden xl:inline-flex w-8 h-8 rounded-lg items-center justify-center transition-colors ${panelMode==='pinned'?'bg-teal-50 text-teal-700':'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}><Pin size={15}/></button>
+            <button type="button" onClick={()=>setPanelMode('rail')} title="Minimize" aria-label="Minimize the staffing panel" className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"><ChevronsRight size={16}/></button>
+          </div>
+          <div className="flex border-b border-slate-100 px-2" role="tablist">
+            {([['staff','Staff'],['needs','Needs'],['portal','Staff portal']] as const).map(([k,l])=>(
+              <button key={k} type="button" role="tab" aria-selected={panelTab===k} onClick={()=>setPanelTab(k)} className={`h-10 px-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${panelTab===k?'border-slate-900 text-slate-900':'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>
+            ))}
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-3">
+            {panelTab==='staff'&&(()=>{
+              const q=staffSearch.trim().toLowerCase()
+              const list=rosterWorkers.filter(w=>{
+                if(q&&!w.name.toLowerCase().includes(q))return false
+                if(staffFilter==='sk')return canScorekeeper(w)
+                if(staffFilter==='boys')return w.defaultRole==='ref'&&(w.gender==='boys'||w.gender==='both')
+                if(staffFilter==='girls')return w.defaultRole==='ref'&&(w.gender==='girls'||w.gender==='both')
+                return true
+              }).map(w=>({w,count:getGameCount(w.id)})).sort((a,b)=>staffSort==='load'?(a.count-b.count||a.w.name.localeCompare(b.w.name)):a.w.name.localeCompare(b.w.name))
+              const loadCls=(n:number)=>n>=8?'bg-red-50 text-red-700':n>=5?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'
+              const canDrag=!locked&&viewMode==='grid'
+              return(
+                <div className="space-y-2.5">
+                  <input value={staffSearch} onChange={e=>setStaffSearch(e.target.value)} placeholder="Find a name" aria-label="Find a staff member" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15"/>
+                  <div className="grid grid-cols-4 p-1 rounded-xl bg-slate-100 gap-0.5">
+                    {([['all','All'],['boys','Boys'],['girls','Girls'],['sk','SK']] as const).map(([k,l])=><button key={k} type="button" onClick={()=>setStaffFilter(k)} aria-pressed={staffFilter===k} className={`${segBtn(staffFilter===k)} justify-center`}>{l}</button>)}
+                  </div>
+                  <div className="flex items-center text-xs text-slate-500">
+                    <span>{list.length} {list.length===1?'person':'people'}{canDrag?' · drag onto a slot':''}</span>
+                    <div className="flex-1"/>
+                    <button type="button" onClick={()=>setStaffSort(staffSort==='load'?'name':'load')} className="h-7 px-2 rounded-md hover:bg-slate-100 hover:text-slate-800">{staffSort==='load'?'Fewest games first':'A–Z'}</button>
+                  </div>
+                  {viewMode!=='grid'&&<p className="text-xs text-slate-400">Switch to Grid to drag names onto games.</p>}
+                  <div className="space-y-0.5">
+                    {list.length===0?(
+                      <p className="text-xs text-slate-400 italic py-2">{rosterWorkers.length===0?'No staff on the roster yet.':'Nobody matches.'}</p>
+                    ):list.map(({w,count})=>{
+                      const kind=staffKind(w)
+                      // Presence keys only come back for roles allowed to see them (api/workers).
+                      const showPresence='lastSeenAt' in w
+                      const on=showPresence&&isOnline(w.lastSeenAt)
+                      return(
+                        <div key={w.id} draggable={canDrag}
+                          onDragStart={e=>{e.dataTransfer.setData('workerId',w.id);e.dataTransfer.effectAllowed='copy';setDragWorker(w)}}
+                          onDragEnd={()=>{setDragWorker(null);setDragSlot(null)}}
+                          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${canDrag?'cursor-grab active:cursor-grabbing hover:bg-slate-50':'cursor-default'} ${dragWorker?.id===w.id?'opacity-40':''}`}
+                          title={`${w.name} · ${kind.label} · ${certLabel(w.certLevel)}${w.refLevel&&w.defaultRole==='ref'?` · Ref level ${w.refLevel}`:''} · ${count} game${count!==1?'s':''} today${showPresence?` · ${presenceLabel(w)}`:''}`}>
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${kind.dot}`}/>
+                          {w.defaultRole==='ref'&&<RefLevelPill level={w.refLevel}/>}
+                          <span className="flex-1 min-w-0 truncate text-sm font-medium text-slate-700">{w.name}</span>
+                          {on&&<span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100 shrink-0" aria-label="On now"/>}
+                          <span className={`text-[11px] font-bold px-1.5 rounded-full shrink-0 ${loadCls(count)}`}>{count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+            {panelTab==='needs'&&(
+              <div className="space-y-3">
+                {activeDay&&(
+                  <div className="rounded-xl border border-slate-200 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">On games · {formatDate(activeDay)}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium">
+                      <span className="text-sky-700">{assignedBoysRefs} boys refs</span>
+                      <span className="text-pink-700">{assignedGirlsRefs} girls refs</span>
+                      {assignedBothRefs>0&&<span className="text-slate-600">{assignedBothRefs} both</span>}
+                      <span className="text-emerald-700">{assignedSKs} SKs</span>
+                    </div>
+                  </div>
+                )}
+                <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2">
+          {(()=>{
+            const pB=Math.max(0,...dayReqs.map(d=>Math.ceil(d.boys/gamesPerRef)))
+            const pG=Math.max(0,...dayReqs.map(d=>Math.ceil(d.girls/gamesPerRef)))
+            const pBoth=Math.max(0,...dayReqs.map(d=>Math.ceil(d.both/gamesPerRef)))
+            const pS=Math.max(0,...dayReqs.map(d=>d.fields))
+            const rc={boys:0,girls:0,both:0,sk:0}
+            for(const w of rosterWorkers){const r=staffRank(w);if(r===0)rc.boys++;else if(r===1)rc.girls++;else if(r===2)rc.both++;else rc.sk++}
+            return(
+              <>
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <ClipboardList size={14} className="text-sky-500 shrink-0"/>
+                <span className="font-semibold text-slate-700">Min staff (busiest day):</span>
+                <span className="font-medium text-sky-700">~{pB} boys · ~{pG} girls refs{pBoth?` · ~${pBoth} either`:''} · ~{pS} scorekeeper{pS!==1?'s':''}</span>
+                <label className="ml-auto flex items-center gap-1 text-slate-500">
+                  <span>Games/ref:</span>
+                  <input type="number" min="1" value={gamesPerRef} onChange={e=>changeGamesPerRef(parseInt(e.target.value))} className="w-12 border border-slate-300 rounded px-1.5 py-0.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-sky-400"/>
+                </label>
+                <button type="button" onClick={()=>setReqsOpen(v=>!v)} className="flex items-center gap-0.5 text-slate-500 hover:text-slate-700">{reqsOpen?<ChevronUp size={13}/>:<ChevronDown size={13}/>}<span>By day</span></button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs mt-1">
+                <span className="font-semibold text-slate-700">On roster:</span>
+                <span className="text-slate-600">{rc.boys} boys · {rc.girls} girls{rc.both?` · ${rc.both} both`:''} refs · {rc.sk} scorekeeper{rc.sk!==1?'s':''}</span>
+                <span className="text-slate-400">({rosterWorkers.length} total)</span>
+              </div>
+              </>
+            )
+          })()}
+          {reqsOpen&&(
+            <div className="mt-2 pt-2 border-t border-sky-200 space-y-1">
+              {dayReqs.map(d=>{
+                const minBoys=Math.ceil(d.boys/gamesPerRef),minGirls=Math.ceil(d.girls/gamesPerRef),minBoth=Math.ceil(d.both/gamesPerRef)
+                return(
+                  <div key={d.date} className="text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="font-semibold text-slate-700 w-28 shrink-0">{formatDate(d.date)}</span>
+                    <span className="text-slate-500">{d.games} games · {d.refSlots} ref slots{(d.boys||d.girls)?` (${d.boys} boys, ${d.girls} girls${d.both?`, ${d.both} either`:''})`:''} · {d.fields} field{d.fields!==1?'s':''}</span>
+                    <span className="text-slate-400">→</span>
+                    <span className="font-medium text-sky-700">~{minBoys} boys, ~{minGirls} girls ref{minGirls!==1?'s':''}{minBoth?`, ~${minBoth} either`:''}, {d.fields} scorekeeper{d.fields!==1?'s':''}</span>
+                  </div>
+                )
+              })}
+              <p className="text-[10px] text-slate-400 pt-0.5">Scorekeepers stay on one field all day, so one per field. Refs based on {gamesPerRef} games each; refs who do both sides may lower the total.</p>
+            </div>
+          )}
+                </div>
+              </div>
+            )}
+            {panelTab==='portal'&&<StaffPortalVisibility tournamentId={params.id} refreshKey={releaseKey} inPanel/>}
+          </div>
+        </aside>
+      )}
 
       {/* ── LIST VIEW ── */}
       {viewMode==='list'&&games.length>0&&(()=>{
@@ -1107,147 +1315,6 @@ export default function GridPage({ params }: { params:{id:string} }) {
         )
       })()}
 
-      {viewMode==='grid'&&games.length>0&&(
-        <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2">
-          {(()=>{
-            const pB=Math.max(0,...dayReqs.map(d=>Math.ceil(d.boys/gamesPerRef)))
-            const pG=Math.max(0,...dayReqs.map(d=>Math.ceil(d.girls/gamesPerRef)))
-            const pBoth=Math.max(0,...dayReqs.map(d=>Math.ceil(d.both/gamesPerRef)))
-            const pS=Math.max(0,...dayReqs.map(d=>d.fields))
-            const rc={boys:0,girls:0,both:0,sk:0}
-            for(const w of rosterWorkers){const r=staffRank(w);if(r===0)rc.boys++;else if(r===1)rc.girls++;else if(r===2)rc.both++;else rc.sk++}
-            return(
-              <>
-              <div className="flex items-center gap-2 flex-wrap text-xs">
-                <ClipboardList size={14} className="text-sky-500 shrink-0"/>
-                <span className="font-semibold text-slate-700">Min staff (busiest day):</span>
-                <span className="font-medium text-sky-700">~{pB} boys · ~{pG} girls refs{pBoth?` · ~${pBoth} either`:''} · ~{pS} scorekeeper{pS!==1?'s':''}</span>
-                <label className="ml-auto flex items-center gap-1 text-slate-500">
-                  <span>Games/ref:</span>
-                  <input type="number" min="1" value={gamesPerRef} onChange={e=>changeGamesPerRef(parseInt(e.target.value))} className="w-12 border border-slate-300 rounded px-1.5 py-0.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-sky-400"/>
-                </label>
-                <button type="button" onClick={()=>setReqsOpen(v=>!v)} className="flex items-center gap-0.5 text-slate-500 hover:text-slate-700">{reqsOpen?<ChevronUp size={13}/>:<ChevronDown size={13}/>}<span>By day</span></button>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap text-xs mt-1">
-                <span className="font-semibold text-slate-700">On roster:</span>
-                <span className="text-slate-600">{rc.boys} boys · {rc.girls} girls{rc.both?` · ${rc.both} both`:''} refs · {rc.sk} scorekeeper{rc.sk!==1?'s':''}</span>
-                <span className="text-slate-400">({rosterWorkers.length} total)</span>
-              </div>
-              </>
-            )
-          })()}
-          {reqsOpen&&(
-            <div className="mt-2 pt-2 border-t border-sky-200 space-y-1">
-              {dayReqs.map(d=>{
-                const minBoys=Math.ceil(d.boys/gamesPerRef),minGirls=Math.ceil(d.girls/gamesPerRef),minBoth=Math.ceil(d.both/gamesPerRef)
-                return(
-                  <div key={d.date} className="text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="font-semibold text-slate-700 w-28 shrink-0">{formatDate(d.date)}</span>
-                    <span className="text-slate-500">{d.games} games · {d.refSlots} ref slots{(d.boys||d.girls)?` (${d.boys} boys, ${d.girls} girls${d.both?`, ${d.both} either`:''})`:''} · {d.fields} field{d.fields!==1?'s':''}</span>
-                    <span className="text-slate-400">→</span>
-                    <span className="font-medium text-sky-700">~{minBoys} boys, ~{minGirls} girls ref{minGirls!==1?'s':''}{minBoth?`, ~${minBoth} either`:''}, {d.fields} scorekeeper{d.fields!==1?'s':''}</span>
-                  </div>
-                )
-              })}
-              <p className="text-[10px] text-slate-400 pt-0.5">Scorekeepers stay on one field all day, so one per field. Refs based on {gamesPerRef} games each; refs who do both sides may lower the total.</p>
-            </div>
-          )}
-        </div>
-      )}
-      {viewMode==='grid'&&dayGames.length>0&&(()=>{
-        // Day-level counts for the toolbar: slots to fill (refs + scorekeeper per game),
-        // how many are filled, who is on two games at once.
-        let slotsTotal=0,slotsFilled=0; const doubledIds=new Set<string>()
-        for(const g of dayGames){if(g.isCanceled)continue;const rc=slotsOf(g);slotsTotal+=rc+1;slotsFilled+=g.assignments.filter(a=>a.role==='scorekeeper'||slotRoles(rc).includes(a.role)).length}
-        for(const t of times)getDoubleBookedWorkers(t).forEach(id=>doubledIds.add(id))
-        const staffedTimes=times.filter(t=>{const gs=dayGames.filter(g=>g.startTime===t&&!g.isCanceled);return gs.length>0&&gs.every(g=>crewOf(g,getDoubleBookedWorkers(t)).full)})
-        const seg=(on:boolean)=>`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-colors ${on?'bg-slate-900 text-white':'text-slate-600 hover:text-slate-900'}`
-        const btn='px-2 py-0.5 rounded-full border border-slate-300 bg-white hover:border-slate-400 font-medium text-slate-600 transition-colors'
-        return(
-        <div className="mb-3 flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-          <span className="font-semibold text-slate-600">Density</span>
-          <div className="inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200">
-            {(['full','compact','mini'] as const).map(d=><button key={d} type="button" onClick={()=>setDensity(d)} className={seg(density===d)} title={d==='full'?'The large card: full names, one picker per slot':d==='compact'?'Three lines: game, teams, officials as chips':'One line per game: who is on it'}>{d==='full'?'Full':d==='compact'?'Compact':'Mini'}</button>)}
-          </div>
-          <button type="button" onClick={()=>setFitFields(!fitFields)} aria-pressed={fitFields}
-            className={`px-2.5 py-0.5 rounded-full border text-[11px] font-bold transition-colors ${fitFields?'bg-slate-900 text-white border-slate-900':'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
-            title={fitFields?'Fields share the width of the window. Click for fixed-width columns that scroll sideways.':'Fixed-width columns that scroll sideways. Click to fit every field on the screen.'}>
-            Fit all fields{fitFields?'':': off'}
-          </button>
-          <span className="text-slate-300">|</span>
-          <span className="font-semibold text-slate-600">Rows</span>
-          <button type="button" onClick={()=>setCollapsedTimes(new Set(staffedTimes))} className={btn} title="Fold every start time whose games all have a full crew">Fold staffed</button>
-          <button type="button" onClick={()=>setCollapsedTimes(new Set(times))} className={btn}>Fold all</button>
-          <button type="button" onClick={()=>setCollapsedTimes(new Set())} className={btn}>Open all</button>
-          <span className="text-slate-300">|</span>
-          <span className="font-semibold text-slate-600">Refs per game</span>
-          {[1,2,3].map(n=>(
-            <button key={n} type="button" disabled={locked} onClick={()=>applyDefaultRefs(n)} className="px-2 py-0.5 rounded-md border border-slate-300 bg-white hover:bg-sky-50 hover:border-sky-400 font-medium text-slate-600 transition-colors disabled:opacity-40" title={`Set every game on this day to ${n} ref${n===1?'':'s'}; use − / + on a game to change just that one`}>{n}</button>
-          ))}
-          <span className="ml-auto flex items-center gap-2 flex-wrap">
-            <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold ${slotsFilled>=slotsTotal?'bg-emerald-50 border-emerald-200 text-emerald-700':'bg-amber-50 border-amber-200 text-amber-800'}`}>{slotsFilled} of {slotsTotal} slots filled{slotsTotal>slotsFilled?` · ${slotsTotal-slotsFilled} open`:''}</span>
-            {doubledIds.size>0&&<span className="px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-red-50 border-red-200 text-red-700">{doubledIds.size} double-booked</span>}
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <input type="checkbox" checked={locked} onChange={e=>toggleLock(e.target.checked)} className="accent-sky-600"/>
-              <Lock size={13} className={locked?'text-sky-600':'text-slate-400'}/>
-              <span className={`font-medium ${locked?'text-sky-700':'text-slate-600'}`}>Lock editing</span>
-            </label>
-          </span>
-        </div>
-        )})()}
-      {/* Staff drawer: one row, fewest games first, with search and quick filters.
-          The six-row pill wall it replaced pushed the grid down the screen and put
-          the two refs with 0 games at the end of row four. "All N" opens it out. */}
-      {viewMode==='grid'&&dayGames.length>0&&(()=>{
-        const q=staffSearch.trim().toLowerCase()
-        const list=rosterWorkers.filter(w=>{
-          if(q&&!w.name.toLowerCase().includes(q))return false
-          if(staffFilter==='sk')return canScorekeeper(w)
-          if(staffFilter==='boys')return w.defaultRole==='ref'&&(w.gender==='boys'||w.gender==='both')
-          if(staffFilter==='girls')return w.defaultRole==='ref'&&(w.gender==='girls'||w.gender==='both')
-          return true
-        }).map(w=>({w,count:getGameCount(w.id)})).sort((a,b)=>staffSort==='load'?(a.count-b.count||a.w.name.localeCompare(b.w.name)):a.w.name.localeCompare(b.w.name))
-        const loadCls=(n:number)=>n>=8?'bg-red-50 text-red-700':n>=5?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'
-        const seg=(on:boolean)=>`px-2 py-0.5 rounded-full text-[11px] font-bold transition-colors ${on?'bg-slate-900 text-white':'text-slate-600 hover:text-slate-900'}`
-        return(
-        <div className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2 flex items-start gap-2">
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <span className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide"><Users size={14} className="text-slate-400"/><span className="hidden 2xl:inline">Staff · drag onto a slot</span></span>
-            <input value={staffSearch} onChange={e=>setStaffSearch(e.target.value)} placeholder="Find a name" aria-label="Find a staff member" className="h-6 w-32 rounded-md border border-slate-300 bg-slate-50 px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-teal-500"/>
-            <div className="inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200">
-              <button type="button" onClick={()=>setStaffSort('load')} className={seg(staffSort==='load')} title="Fewest games first">Fewest games</button>
-              <button type="button" onClick={()=>setStaffSort('name')} className={seg(staffSort==='name')}>A–Z</button>
-            </div>
-            <div className="inline-flex p-0.5 rounded-full bg-slate-100 border border-slate-200">
-              {([['all','All'],['boys','Boys refs'],['girls','Girls refs'],['sk','SK']] as const).map(([k,l])=><button key={k} type="button" onClick={()=>setStaffFilter(k)} className={seg(staffFilter===k)}>{l}</button>)}
-            </div>
-          </div>
-          <div className={`flex gap-1.5 min-w-0 flex-1 ${staffOpen?'flex-wrap':'overflow-hidden h-6'}`}>
-            {list.length===0?(
-              <span className="text-xs text-slate-400 italic pt-1">{rosterWorkers.length===0?'No staff on the roster yet.':'Nobody matches.'}</span>
-            ):list.map(({w,count})=>{
-              const kind=staffKind(w)
-              // Presence keys only come back for roles allowed to see them (api/workers).
-              const showPresence='lastSeenAt' in w
-              const on=showPresence&&isOnline(w.lastSeenAt)
-              return(
-                <div key={w.id} draggable={!locked}
-                  onDragStart={e=>{e.dataTransfer.setData('workerId',w.id);e.dataTransfer.effectAllowed='copy';setDragWorker(w)}}
-                  onDragEnd={()=>{setDragWorker(null);setDragSlot(null)}}
-                  className={`flex items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-2 pr-1 h-6 text-[11px] whitespace-nowrap shrink-0 transition-colors ${locked?'opacity-60 cursor-default':'cursor-grab active:cursor-grabbing hover:border-sky-400'} ${dragWorker?.id===w.id?'opacity-40':''}`}
-                  title={`${w.name} · ${kind.label} · ${certLabel(w.certLevel)}${w.refLevel&&w.defaultRole==='ref'?` · Ref level ${w.refLevel}`:''} · ${count} game${count!==1?'s':''} today${showPresence?` · ${presenceLabel(w)}`:''}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${kind.dot}`}/>
-                  {w.defaultRole==='ref'&&<RefLevelPill level={w.refLevel}/>}
-                  <span className="font-medium text-slate-700">{w.name}</span>
-                  {on&&<span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100" aria-label="On now"/>}
-                  <span className={`text-[10px] font-bold px-1.5 rounded-full ${loadCls(count)}`}>{count}</span>
-                </div>
-              )
-            })}
-          </div>
-          <button type="button" onClick={()=>setStaffOpen(o=>!o)} className="shrink-0 h-6 px-2.5 rounded-full border border-slate-300 bg-white text-[11px] font-bold text-slate-600 hover:border-slate-400">{staffOpen?'Fewer ▴':`All ${list.length} ▾`}</button>
-        </div>
-        )})()}
       {/* ── GRID VIEW ── */}
       {viewMode==='grid'&&games.length===0?(
         <div className="card p-16 text-center"><div className="text-5xl mb-4">📋</div><p className="font-semibold text-slate-700">No games imported yet</p><p className="text-sm text-slate-400 mt-1">Click "↑ Import" to upload your schedule</p></div>
@@ -1842,7 +1909,7 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
 // staff portal or it's not visible at this time"). Assignments are hidden from staff
 // until shown here or by Notify officials; the board itself always shows them.
 // Server: api/tournaments/[id]/staff-release, lib/staffRelease.
-function StaffPortalVisibility({ tournamentId, refreshKey }: { tournamentId: string; refreshKey: number }) {
+function StaffPortalVisibility({ tournamentId, refreshKey, inPanel }: { tournamentId: string; refreshKey: number; inPanel?: boolean }) {
   type Row = { crew: Crew; shown: boolean; shownAt: string; shownBy: string; officials: number; games: number }
   const [rows,setRows]=useState<Row[]|null>(null)
   const [busy,setBusy]=useState<Crew|null>(null)
@@ -1866,12 +1933,12 @@ function StaffPortalVisibility({ tournamentId, refreshKey }: { tournamentId: str
   if(denied||!rows) return null
   const when=(iso:string)=>iso?new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''
   return (
-    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-2">
-        <p className="text-sm font-bold text-slate-800">Staff portal</p>
+    <div className={inPanel?'':'mb-4 rounded-xl border border-slate-200 bg-white p-3'}>
+      <div className={inPanel?'mb-3':'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-2'}>
+        {!inPanel&&<p className="text-sm font-bold text-slate-800">Staff portal</p>}
         <p className="text-xs text-slate-500">What refs and scorekeepers can see. Hidden games are only on this board. Notify officials shows a group’s games when it sends.</p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className={inPanel?'grid grid-cols-1 gap-2':'grid grid-cols-1 sm:grid-cols-3 gap-2'}>
         {rows.map(c=>(
           <div key={c.crew} className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${c.shown?'border-teal-200 bg-teal-50/60':'border-amber-200 bg-amber-50/60'}`}>
             {c.shown?<Eye size={16} className="text-teal-600 flex-shrink-0"/>:<EyeOff size={16} className="text-amber-600 flex-shrink-0"/>}
