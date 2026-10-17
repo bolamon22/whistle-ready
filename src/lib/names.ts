@@ -97,3 +97,12 @@ export function divisionAbbr(name: string): string {
   }
   return (core + suffix).trim() || raw.slice(0, 4).toUpperCase()
 }
+
+/** The letters in a team's circle when it has no logo: the first letter of its
+ *  first two words, skipping short ones ("FC", "LS") and any that don't start
+ *  with a letter, like a class year: "Madskillz 2033/34" is "M", not "M2", and
+ *  "LM 2030 Select" is "S", not "2S". Every team crest on the public pages uses it. */
+export function teamInitials(name: string): string {
+  const n = (name || '').trim()
+  return n.split(/\s+/).filter(w => w.length > 2 && /^[a-z]/i.test(w)).slice(0, 2).map(w => w[0].toUpperCase()).join('') || n.substring(0, 2).toUpperCase()
+}

@@ -1,6 +1,7 @@
 'use client'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Trophy, ArrowRight, Network, List } from 'lucide-react'
+import { teamInitials } from '@/lib/names'
 import { BracketView, LogosContext, isPlaceholderTeam, type BkBracket, type BkBracketGame, type BkSchedGame } from '@/components/BracketDiagram'
 import ChampionHero, { SAMPLE_CHAMP_PICTURE, type ChampMedia } from '@/components/ChampionHero'
 
@@ -41,7 +42,7 @@ function Avatar({ name }: { name: string | null }) {
   const logos = useContext(LogosContext)
   if (!name) return <span className="w-6 h-6 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 text-[10px] font-bold flex items-center justify-center flex-shrink-0">?</span>
   if (logos[name]) return <span className="w-6 h-6 rounded-full overflow-hidden bg-white border border-slate-200 flex-shrink-0"><img src={logos[name]} alt="" className="w-full h-full object-contain" /></span>
-  const initials = name.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('') || name.substring(0, 2).toUpperCase()
+  const initials = teamInitials(name)
   const colors = ['#0B1F3A', '#0E7490', '#0F766E', '#334155', '#475569', '#0D9488']
   const idx = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length
   return <span className="w-6 h-6 rounded-full text-white text-[9px] font-extrabold flex items-center justify-center flex-shrink-0" style={{ backgroundColor: colors[idx] }}>{initials}</span>

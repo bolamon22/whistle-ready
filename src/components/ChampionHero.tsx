@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Trophy, Share2, Route, Camera, Film, Eye, Check, Play } from 'lucide-react'
 import { useKeepChirpClear } from '@/lib/chirpKeepClear'
+import { teamInitials } from '@/lib/names'
 
 // The champions across the top of a division's bracket once the final is scored (Bo,
 // Oct 17 2026: "a hero type image of the champion team", then "a five second video of
@@ -71,7 +72,7 @@ export default function ChampionHero({ media, team, logo, division, flight, even
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2500) } catch { /* no clipboard here */ }
   }
 
-  const initials = team.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('') || team.substring(0, 2).toUpperCase()
+  const initials = teamInitials(team)
   const label = media.sample ? 'Sample picture' : hasVideo ? 'Champions’ video' : 'Champions’ photo'
   return (
     <div className="space-y-2">

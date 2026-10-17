@@ -1,6 +1,7 @@
 'use client'
 import { createContext, useContext, useState } from 'react'
 import { Trophy, Medal, ChevronDown, ChevronUp } from 'lucide-react'
+import { teamInitials } from '@/lib/names'
 
 // The bracket drawing from the public event page, shared with the Scheduler's
 // bracket pop-over (Bo, Oct 11 2026: "Is there a reason the bracket can't look
@@ -53,7 +54,7 @@ function MirrorBracket({bracket,scheduledGames,showFlight,preview=false,pick}:{b
     const sz='w-7 h-7'
     if(!isTbd&&logos[name])return<div className={`${sz} rounded-full overflow-hidden bg-white border border-slate-200 flex-shrink-0`}><img src={logos[name]} alt="" className="w-full h-full object-contain"/></div>
     if(isTbd)return<div className={`${sz} rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0`}><span className="text-gray-300 text-[9px]">?</span></div>
-    const initials=name.split(' ').filter((w:string)=>w.length>2).slice(0,2).map((w:string)=>w[0].toUpperCase()).join('')||name.substring(0,2).toUpperCase()
+    const initials=teamInitials(name)
     const colors=['#1a3a5c','#8b1a1a','#1a5c3a','#5c3a1a','#3a1a5c','#1a5c5c','#5c1a4a','#2a4a1a']
     const idx=name.split('').reduce((a:number,c:string)=>a+c.charCodeAt(0),0)%colors.length
     return<div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 text-[9px]`} style={{backgroundColor:colors[idx]}}>{initials}</div>
@@ -186,7 +187,7 @@ export function BracketView({bracketList,scheduledGames,preview=false,poolOnly=f
     const sz='w-7 h-7'
     if(!isTbd&&logos[name])return<div className={`${sz} rounded-full overflow-hidden bg-white border border-slate-200 flex-shrink-0`}><img src={logos[name]} alt="" className="w-full h-full object-contain"/></div>
     if(isTbd)return<div className={`${sz} rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0`}><span className="text-gray-300 text-[9px]">?</span></div>
-    const initials=name.split(' ').filter((w:string)=>w.length>2).slice(0,2).map((w:string)=>w[0].toUpperCase()).join('')||name.substring(0,2).toUpperCase()
+    const initials=teamInitials(name)
     const colors=['#1a3a5c','#8b1a1a','#1a5c3a','#5c3a1a','#3a1a5c','#1a5c5c','#5c1a4a','#2a4a1a']
     const idx=name.split('').reduce((a:number,c:string)=>a+c.charCodeAt(0),0)%colors.length
     return<div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 text-[9px]`} style={{backgroundColor:colors[idx]}}>{initials}</div>

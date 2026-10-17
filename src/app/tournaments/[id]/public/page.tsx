@@ -6,7 +6,7 @@ import LiveTicker from '@/components/LiveTicker'
 import FollowButton from '@/components/FollowButton'
 import FollowAlertsSheet from '@/components/FollowAlertsSheet'
 import { deviceId as getDeviceId } from '@/lib/pushClient'
-import { nameKey, teamRefKey } from '@/lib/names'
+import { nameKey, teamRefKey, teamInitials } from '@/lib/names'
 import { BracketView, LogosContext, isPlaceholderTeam, type BkBracket } from '@/components/BracketDiagram'
 import BracketChart from '@/components/BracketChart'
 import type { ChampMedia } from '@/components/ChampionHero'
@@ -44,7 +44,7 @@ function TeamAvatar({name,size='md'}:{name:string,size?:'sm'|'md'|'lg'}) {
   const sz=size==='lg'?'w-16 h-16 text-lg':size==='sm'?'w-8 h-8 text-xs':'w-11 h-11 text-sm'
   const url=logos[name]
   if(url) return <div className={`${sz} rounded-full overflow-hidden bg-white border border-slate-200 flex-shrink-0`}><img src={url} alt="" className="w-full h-full object-contain"/></div>
-  const initials = name.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0].toUpperCase()).join('')||name.substring(0,2).toUpperCase()
+  const initials = teamInitials(name)
   const colors=['#1a3a5c','#8b1a1a','#1a5c3a','#5c3a1a','#3a1a5c','#1a5c5c','#5c1a4a','#2a4a1a']
   const idx=name.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%colors.length
   return <div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`} style={{backgroundColor:colors[idx]}}>{initials}</div>
