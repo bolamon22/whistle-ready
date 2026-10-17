@@ -90,7 +90,7 @@ export default function ExhibitAPage({ params }: { params: { id: string } }) {
           </div>
         )}
         {rows.length === 0 && (
-          <p className="text-sm text-slate-500">No confirmed staff on the roster yet — add people on the Staff Roster page first.</p>
+          <p className="text-sm text-slate-500">No confirmed staff on the roster yet — add people on the Staff roster page first.</p>
         )}
       </div>
 

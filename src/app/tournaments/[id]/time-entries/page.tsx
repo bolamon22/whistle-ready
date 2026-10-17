@@ -80,11 +80,12 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
     <div>
       <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
 
-      {/* Staff sub-nav */}
+      {/* Staff sub-nav. Each tab has the one name the page goes by everywhere (Bo,
+          Oct 17 2026): Staff roster and Staff pay, as in the People menu. */}
       <div className="flex items-center gap-0.5 sm:gap-1 mb-5 sm:mb-6 border-b border-slate-200 overflow-x-auto">
         <Link href={`/tournaments/${params.id}/roster`}
           className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
-          <Users size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Staff Roster
+          <Users size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Staff roster
         </Link>
         <Link href={`/tournaments/${params.id}/availability`}
           className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
@@ -93,17 +94,17 @@ export default function TimeEntriesPage({ params }: { params:{id:string} }) {
         <IfCanOpen href={`/tournaments/${params.id}/time-entries`}>
           <Link href={`/tournaments/${params.id}/time-entries`}
             className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-teal-600 text-teal-700 transition-colors whitespace-nowrap">
-            <Clock size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Time Entries
+            <Clock size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Time entries
           </Link>
         </IfCanOpen>
         <IfCanOpen href={`/tournaments/${params.id}/pay-summary`}>
           <Link href={`/tournaments/${params.id}/pay-summary`}
             className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
-            <Wallet size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Pay Summary
+            <Wallet size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Staff pay
           </Link>
         </IfCanOpen>
       </div>
-      <div className="page-header"><div><h1 className="section-title">Hourly Staff Time</h1><p className="text-sm text-slate-500 mt-1">Athletic Trainers &amp; Field Ops — tap Start/Stop to track hours</p></div></div>
+      <div className="page-header"><div><h1 className="section-title">Time entries</h1><p className="text-sm text-slate-500 mt-1">Athletic Trainers &amp; Field Ops — tap Start/Stop to track hours</p></div></div>
 
       {dates.length>0&&<div className="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">{dates.map(d=><button key={d} onClick={()=>setActiveDay(d)} className={`px-3 sm:px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap ${activeDay===d?'border-teal-600 text-teal-700':'border-transparent text-slate-500 hover:text-slate-700'}`}>{formatDate(d)}</button>)}</div>}
 

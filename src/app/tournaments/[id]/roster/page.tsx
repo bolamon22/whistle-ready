@@ -120,7 +120,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   const [addSearch, setAddSearch] = useState('')
   const [addRole, setAddRole] = useState('all')
   const [addCert, setAddCert] = useState('all')
-  // Can ref (boys / girls / both): one value shared with Availability and Pay summary.
+  // Can ref (boys / girls / both): one value shared with Availability and Staff pay.
   const [gender, setGender] = useRefGender(params.id)
   // Confirmed and Available are tabs, not one long page (Oct 2026: Monster Mash has 43
   // confirmed and a long pool below them, and it was all one scroll).
@@ -372,11 +372,12 @@ export default function RosterPage({ params }: { params:{id:string} }) {
 
       <TournamentNav id={params.id} name={tournament.name} logoUrl={tournament.logoUrl} />
 
-      {/* Staff sub-nav */}
+      {/* Staff sub-nav. Each tab has the one name the page goes by everywhere (Bo,
+          Oct 17 2026): Staff roster and Staff pay, as in the People menu. */}
       <div className="flex items-center gap-0.5 sm:gap-1 mb-5 sm:mb-6 border-b border-slate-200 overflow-x-auto">
         <Link href={`/tournaments/${params.id}/roster`}
           className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-teal-600 text-teal-700 whitespace-nowrap">
-          <Users size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Staff Roster
+          <Users size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Staff roster
         </Link>
         <Link href={`/tournaments/${params.id}/availability`}
           className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
@@ -385,20 +386,20 @@ export default function RosterPage({ params }: { params:{id:string} }) {
         <IfCanOpen href={`/tournaments/${params.id}/time-entries`}>
           <Link href={`/tournaments/${params.id}/time-entries`}
             className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
-            <Clock size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Time Entries
+            <Clock size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Time entries
           </Link>
         </IfCanOpen>
         <IfCanOpen href={`/tournaments/${params.id}/pay-summary`}>
           <Link href={`/tournaments/${params.id}/pay-summary`}
             className="px-2 sm:px-4 py-2 text-[13px] sm:text-sm font-medium border-b-2 -mb-px border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap">
-            <Wallet size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Pay Summary
+            <Wallet size={15} className="hidden sm:inline align-text-bottom mr-1.5" />Staff pay
           </Link>
         </IfCanOpen>
       </div>
 
       <div className="page-header">
         <div>
-          <h1 className="section-title">Staff Roster</h1>
+          <h1 className="section-title">Staff roster</h1>
           <p className="text-sm text-slate-500 mt-1">Confirm who's working this tournament · {onRoster.length} confirmed</p>
         </div>
         <div className="flex items-center gap-2">
