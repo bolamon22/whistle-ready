@@ -48,4 +48,5 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 **Common problems:**
 - Assigning someone already on a game at the same time asks you to confirm before it double-books them.
 - Only people on the tournament's **Staff roster** appear here.
+- In a game's edit box, **Cancel game** takes the game out of the event: it stays on the board marked **Canceled**, stops counting as a game for both teams, and leaves the public schedule. **Restore game** brings it back. To just close the box, click **Close**. To take a game off the schedule for now, use **Park**.
 - Assigning a game doesn't tell the official, and they can't see it until their group is shown under **Staff portal**. Use **Notify officials** when you're ready. People with no email on the **Staff roster** are listed in the Notify box.

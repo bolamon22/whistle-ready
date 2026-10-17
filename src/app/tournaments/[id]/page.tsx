@@ -391,8 +391,13 @@ export default function GridPage({ params }: { params:{id:string} }) {
     setGameSaving(false)
   }
 
+  // Canceling keeps the game on the board but takes it out of the event: it stops
+  // counting toward pool games and leaves the public schedule. The button used to
+  // read just "Cancel", next to the dialog's own "Cancel", and Bo canceled Girls LS
+  // P1 thinking it closed the box (Oct 17 2026). So it says what it does, and asks.
   async function cancelGame(g:Game){
     const next=!g.isCanceled
+    if(next&&!confirm(`Cancel game #${g.gameNumber} (${g.team1} vs ${g.team2})?\n\nIt stays on the board marked Canceled, stops counting as a game for both teams, and comes off the public schedule. You can restore it any time.\n\nTo just close this box, click Close instead.`))return
     await fetch(`/api/games/${g.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({isCanceled:next})})
     toast.success(next?'Game canceled':'Game restored');setEditGame(null);await load()
   }
@@ -1628,7 +1633,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
               {editGame&&!showAddGame&&(
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={()=>unscheduleGame(editGame)} className="btn-sm btn-secondary text-orange-600 text-xs" title="Remove from grid and park until you find a slot">🅿 Park</button>
-                  <button onClick={()=>cancelGame(editGame)} className={`btn-sm text-xs ${editGame.isCanceled?'btn-secondary text-emerald-600':'btn-secondary text-amber-600'}`}>{editGame.isCanceled?'Restore':'Cancel'}</button>
+                  <button onClick={()=>cancelGame(editGame)} className={`btn-sm text-xs ${editGame.isCanceled?'btn-secondary text-emerald-600':'btn-secondary text-amber-600'}`}>{editGame.isCanceled?'Restore game':'Cancel game'}</button>
                   <button onClick={()=>deleteGame(editGame)} className="btn-sm btn-secondary text-red-500 text-xs">Delete</button>
                 </div>
               )}
@@ -1660,7 +1665,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
               </div>
               <div className="col-span-2 flex gap-2 pt-2">
                 <button type="submit" className={`btn-primary ${editConflicts?'bg-amber-500 hover:bg-amber-600':''}`} disabled={gameSaving}>{gameSaving?'Saving…':editConflicts?'Save Anyway':showAddGame?'Add Game':'Save Changes'}</button>
-                <button type="button" className="btn-secondary" onClick={()=>{setEditGame(null);setShowAddGame(false)}}>Cancel</button>
+                <button type="button" className="btn-secondary" onClick={()=>{setEditGame(null);setShowAddGame(false)}}>Close</button>
               </div>
             </form>
           </div>

@@ -548,7 +548,9 @@ function SelectionBar({ p, sel, teamCount, onCancel, swapArmed, onSwapToggle, on
         {isBracket(sel) && p.onToggleIfNeeded && <button onClick={() => p.onToggleIfNeeded!(sel.id)} aria-pressed={!!sel.ifNeeded} title={sel.ifNeededFromBracket ? `Named "${sel.bracketLabel}" in the bracket. Rename it there to change.` : sel.ifNeeded ? 'Marked If needed. Click to make it a regular game.' : 'Mark as If needed: only played on a certain result, e.g. if the 1 seed loses'} className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${sel.ifNeeded ? 'bg-violet-300 text-violet-950 hover:bg-violet-200' : 'border border-violet-300/70 text-violet-100 hover:bg-emerald-800'}`}>{sel.ifNeeded ? 'If needed ✓' : 'If needed'}</button>}
         {placed && p.onSwap && <button onClick={onSwapToggle} aria-pressed={swapArmed} title="Swap this game's slot with another game: click Swap, then the other game. Or drag this game onto it." className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${swapArmed ? 'bg-amber-300 text-amber-950 hover:bg-amber-200' : 'bg-emerald-200 text-emerald-950 hover:bg-emerald-100'}`}>{swapArmed ? 'Swapping…' : 'Swap'}</button>}
         {placed && <button onClick={() => { p.onUnschedule(sel.id); onCancel() }} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100">Unschedule</button>}
-        <button onClick={onCancel} className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800">Cancel</button>
+        {/* "Done", not "Cancel": this only puts the game down. Next to a game,
+            "Cancel" reads as canceling the game (Bo, Oct 17 2026). */}
+        <button onClick={onCancel} title="Put the game down without moving it" className="text-[11px] font-bold leading-none px-2.5 py-1 rounded-full border border-emerald-300/60 text-emerald-100 hover:bg-emerald-800">Done</button>
       </div>
     </div>
   )
@@ -1625,7 +1627,7 @@ export function TeamLanesView(p: ViewsProps) {
             <div className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full bg-slate-900 text-white text-xs flex-shrink-0 self-start">
               <span>Pick a time in the header for <b>{gameLabel(sel, p.divAbbr)}</b></span>
               {sel.date && sel.startTime && <button onClick={() => { p.onUnschedule(sel.id); setSelId(null); setSlot(null) }} className="px-2.5 py-1 rounded-full border border-slate-600 text-red-200 font-bold">Unschedule</button>}
-              <button onClick={() => { setSelId(null); setSlot(null) }} className="px-2.5 py-1 rounded-full bg-slate-700 font-bold">Cancel</button>
+              <button onClick={() => { setSelId(null); setSlot(null) }} title="Put the game down without moving it" className="px-2.5 py-1 rounded-full bg-slate-700 font-bold">Done</button>
             </div>
           )}
         </div>
