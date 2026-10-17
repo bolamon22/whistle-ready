@@ -81,7 +81,7 @@ export default function DirectorDashboard() {
               { href: `/tournaments/${t.id}/scores`, Icon: Target, label: 'Scores' },
               { href: `/tournaments/${t.id}/ops`, Icon: Radio, label: 'Field Req' },
               { href: `/tournaments/${t.id}/broadcast`, Icon: Megaphone, label: 'Broadcast' },
-              { href: `/tournaments/${t.id}/roster`, Icon: Users, label: 'Staff' },
+              { href: `/tournaments/${t.id}/roster`, Icon: Users, label: 'Staff roster' },
               { href: `/tournaments/${t.id}/pay-summary`, Icon: Wallet, label: 'Staff pay' },
             ].filter((a, i) => i === 0 || can(a.href)).slice(0, 4)
             return (

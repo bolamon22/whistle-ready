@@ -19,7 +19,7 @@ export default function FieldDirectorDashboard() {
         { href: `/tournaments/${id}/tables`,         Icon: ClipboardList, label: 'Score tables' },
         { href: `/tournaments/${id}/incidents`,      Icon: TriangleAlert, label: 'Issues' },
         { href: `/tournaments/${id}/awards`,         Icon: Trophy,        label: 'Awards' },
-        { href: `/tournaments/${id}/roster`,         Icon: Users,         label: 'Staff' },
+        { href: `/tournaments/${id}/roster`,         Icon: Users,         label: 'Staff roster' },
         { href: `/tournaments/${id}/availability`,   Icon: CalendarClock, label: 'Availability' },
         { href: `/tournaments/${id}/vendor-requests`, Icon: Store,        label: 'Vendors' },
         { href: `/tournaments/${id}/public`,         Icon: CalendarDays,  label: 'Schedule' },

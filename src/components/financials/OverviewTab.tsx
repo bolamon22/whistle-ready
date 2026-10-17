@@ -399,7 +399,7 @@ function StaffDetail({ fin, tournamentId }: { fin: Finance; tournamentId: string
       </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => setShow(v => !v)} aria-expanded={show} className={pillBtnTeal}>{show ? 'Hide each person' : `Show each person (${s.rows.length})`}</button>
-        <Link href={`/tournaments/${tournamentId}/pay-summary`} className={pillBtn}>Open Staff Pay</Link>
+        <Link href={`/tournaments/${tournamentId}/pay-summary`} className={pillBtn}>Open Staff pay</Link>
       </div>
       {show && (
         <div className="border border-slate-200 rounded-xl overflow-hidden max-w-3xl">

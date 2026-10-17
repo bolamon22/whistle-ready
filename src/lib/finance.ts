@@ -161,7 +161,7 @@ export function buildFinance(o: {
   if (staffRows.length) {
     bills.push({
       id: 'staff', kind: 'staff', name: 'Referees & game staff',
-      sub: `${staffRows.length} pay line${staffRows.length === 1 ? '' : 's'}${staff.refs ? ` · ${staff.refs} referee${staff.refs === 1 ? '' : 's'}` : ''}${staff.others ? ` · ${staff.others} other` : ''} · from Staff Pay`,
+      sub: `${staffRows.length} pay line${staffRows.length === 1 ? '' : 's'}${staff.refs ? ` · ${staff.refs} referee${staff.refs === 1 ? '' : 's'}` : ''}${staff.others ? ` · ${staff.others} other` : ''} · from Staff pay`,
       status: staff.paid >= staff.owed - 0.005 ? 'Paid' : staff.paid > 0 ? 'Part paid' : 'Unpaid',
       tone: staff.paid >= staff.owed - 0.005 ? 'paid' : 'owed',
       committed: staff.owed, paid: staff.paid, owed: round2(staff.owed - staff.paid),

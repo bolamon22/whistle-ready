@@ -253,7 +253,7 @@ export default function FinancialsPage() {
           </Link>
           <Link href={`/tournaments/${tournamentId}/pay-summary`}
             className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100 whitespace-nowrap">
-            <Users size={15} /> Staff Pay ({staffSummary.length})
+            <Users size={15} /> Staff pay ({staffSummary.length})
           </Link>
         </div>
 

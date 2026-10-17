@@ -379,9 +379,9 @@ export default function TournamentsDashboard() {
                 {showTasks && taskEvents.byId[t.id] && <TaskStrip ev={taskEvents.byId[t.id]} today={taskEvents.today} />}
                 <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
                   <Link href={`/tournaments/${t.id}`} className="btn-primary btn-sm justify-center whitespace-nowrap">Schedule</Link>
-                  {can(`/tournaments/${t.id}/roster`) && <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff</Link>}
+                  {can(`/tournaments/${t.id}/roster`) && <Link href={`/tournaments/${t.id}/roster`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff roster</Link>}
                   {can(`/tournaments/${t.id}/registrations`) && <Link href={`/tournaments/${t.id}/registrations`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-purple-600 border-purple-200 hover:bg-purple-50"><span className="hidden sm:inline">📋 </span>Registrations</Link>}
-                  {can(`/tournaments/${t.id}/pay-summary`) && <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Pay Report</Link>}
+                  {can(`/tournaments/${t.id}/pay-summary`) && <Link href={`/tournaments/${t.id}/pay-summary`} className="btn-secondary btn-sm justify-center whitespace-nowrap">Staff pay</Link>}
                   {can(`/tournaments/${t.id}/builder`) && <Link href={`/tournaments/${t.id}/builder`} className="btn-secondary btn-sm justify-center whitespace-nowrap text-blue-600 border-blue-200 hover:bg-blue-50"><span className="hidden sm:inline">🏗 </span>Builder</Link>}
                 </div>
               </div>
