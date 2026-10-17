@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { createClient } from '@libsql/client'
 import { requireStaff } from '@/lib/apiAuth'
 import { assignEventSlug } from '@/lib/eventSlug'
+import { eventTeamsMany, saveEventTeams } from '@/lib/eventTeamsStore'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -52,7 +53,9 @@ async function withPlaced(list: any[]) {
         GROUP BY g."tournamentId"`, ...ids)
     for (const r of rr) reffed.set(r.tournamentId, Number(r.n))
   } catch (e) { console.error('reffedGames', e) }
-  return list.map(t => ({ ...t, _count: { ...t._count, placedGames: placed.get(t.id) ?? 0, reffedGames: reffed.get(t.id) ?? 0 } }))
+  // The kinds of teams each event has (lib/eventTeams), for its card and Edit.
+  const teams = await eventTeamsMany(list.map(t => t.id))
+  return list.map(t => ({ ...t, teams: teams.get(t.id) ?? [], _count: { ...t._count, placedGames: placed.get(t.id) ?? 0, reffedGames: reffed.get(t.id) ?? 0 } }))
 }
 
 export async function GET(req: Request) {
@@ -118,7 +121,7 @@ export async function POST(req: Request) {
     if (m) orgId = decodeURIComponent(m[1])
   }
 
-  const { name, sport, startDate, endDate, location, scheduleIncrement, registrationDivisions } = await req.json()
+  const { name, sport, startDate, endDate, location, scheduleIncrement, registrationDivisions, teams } = await req.json()
   const tournament = await prisma.tournament.create({
     data: {
       name,
@@ -139,5 +142,9 @@ export async function POST(req: Request) {
       await db().execute({ sql: 'UPDATE "Tournament" SET orgId = ? WHERE id = ?', args: [orgId, tournament.id] })
     } catch { /* non-fatal */ }
   }
-  return NextResponse.json(tournament, { status: 201 })
+  // Boys, men's, girls, women's: asked on New Tournament (lib/eventTeams).
+  const saved = teams !== undefined
+    ? await saveEventTeams(tournament.id, teams, String(session?.user?.name || session?.user?.email || '')).catch(() => [])
+    : []
+  return NextResponse.json({ ...tournament, teams: saved }, { status: 201 })
 }
