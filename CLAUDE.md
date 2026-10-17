@@ -515,8 +515,11 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   `staff: true`. `BracketChart` takes `champMedia` (by B#) and renders `components/ChampionHero` over a decided final
   (else the old banner); the champions' path and the final are gold. The public page reads `?division=&tab=` (Share
   links) and `preview=champions` (the Awards page's **Preview on the bracket**; a decided final with nothing added
-  shows `public/champions-sample.svg`). Not built: a share preview image per champion (the layout's metadata has no
-  searchParams, so it would need its own page).
+  shows `public/champions-sample.svg`). The hero's **Share** sends `/tournaments/[id]/champions/[gameId]`, a page of its
+  own because a link preview needs og:image and the public layout's metadata never sees `?division=`. Its data comes
+  from `lib/championShare.loadChampionShare`: null (a 404) unless the final is decided, the schedule is public and the
+  row is public, never a private photo; team names follow the bracket's seed and W-/L- sources like BracketChart.
+  `champions` is in middleware's PUBLIC_TOURNAMENT_PATH and ThemeShell's public list.
 - **Staff W-9 upload (Oct 11).** W-9 card on the staff portal (`components/StaffW9Card.tsx`, `/dashboard/staff`),
   `GET/POST /api/staff-portal/w9` (worker from the session email, oldest record, never from the request). All W-9
   storage goes through `lib/staffW9.ts`: encrypted data URL in AppSetting `w9:{workerId}`, `w9meta:{workerId}`
