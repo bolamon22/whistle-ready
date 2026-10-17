@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff, eventGate } from '@/lib/apiAuth'
+import { readAwards as read, awardsKey as key, AWARD_PUBLISH_ROLES, type AwardMark as Mark } from '@/lib/awards'
+import { isChampionVideoUrl } from '@/lib/championMedia'
 
 // Awards and champion photos, one row per division (Bo, Oct 14 2026: the field director
 // makes sure "awards are given out [and the] photo of champs [is] taken"). A division
 // with a championship game is keyed by that game; a pool-play-only division by its name,
 // so its winner still gets medals and a photo. Any staff login can tick a row (field ops
 // usually hands out the medals); the record keeps who and when.
-// AppSetting `awards:<tournamentId>` = { [key]: { awards, photo, photoUrl, note, by, at } }.
-
-const key = (id: string) => `awards:${id}`
-type Mark = { awards?: boolean; photo?: boolean; photoUrl?: string; note?: string; by?: string; at?: string }
+// AppSetting `awards:<tournamentId>` = { [key]: { awards, photo, photoUrl, videoUrl, posterUrl, public, note, by, at } }
+// (lib/awards). `public` puts the photo or video on the division's public bracket (Oct 17).
 
 async function ensure() {
   try { await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AppSetting" ("key" TEXT NOT NULL PRIMARY KEY, "value" TEXT NOT NULL, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`) } catch { /* exists */ }
-}
-async function read(id: string): Promise<Record<string, Mark>> {
-  try { const r = await prisma.appSetting.findUnique({ where: { key: key(id) } }); const v = r ? JSON.parse(r.value) : {}; return v && typeof v === 'object' ? v : {} } catch { return {} }
 }
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
@@ -31,7 +28,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     if (!champs.length) return [{ key: `div:${d}`, division: d, game: null, mark: marks[`div:${d}`] || {} }]
     return champs.map(g => ({ key: g.id, division: d, game: g, mark: marks[g.id] || {} }))
   })
-  return NextResponse.json({ rows })
+  return NextResponse.json({ rows, canPublish: AWARD_PUBLISH_ROLES.includes(gate.role) })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -47,6 +44,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (typeof b.awards === 'boolean') next.awards = b.awards
   if (typeof b.photo === 'boolean') next.photo = b.photo
   if (typeof b.photoUrl === 'string') { const u = b.photoUrl.slice(0, 300); if (u && !u.startsWith('/api/img/')) return NextResponse.json({ error: 'Upload the photo here' }, { status: 400 }); next.photoUrl = u; if (u) next.photo = true }
+  // The champions' clip (lib/championMedia) and its cover frame. An empty string takes
+  // the video off the row; the file stays in storage.
+  if (typeof b.videoUrl === 'string') {
+    const u = b.videoUrl.slice(0, 500)
+    if (u && !isChampionVideoUrl(u, params.id)) return NextResponse.json({ error: 'Upload the video here' }, { status: 400 })
+    next.videoUrl = u
+    if (!u) next.posterUrl = ''
+  }
+  if (typeof b.posterUrl === 'string') { const u = b.posterUrl.slice(0, 300); if (u && !u.startsWith('/api/img/')) return NextResponse.json({ error: 'Upload the photo here' }, { status: 400 }); next.posterUrl = u }
+  // Show on the public bracket. Staff take the photo; the people running the day post it.
+  if (typeof b.public === 'boolean') {
+    if (!AWARD_PUBLISH_ROLES.includes(gate.role)) return NextResponse.json({ error: 'A director or field director puts it on the public bracket' }, { status: 403 })
+    if (b.public && !next.photoUrl && !next.videoUrl) return NextResponse.json({ error: 'Add the photo or video first' }, { status: 400 })
+    next.public = b.public
+  }
   if (typeof b.note === 'string') next.note = b.note.replace(/\s+/g, ' ').trim().slice(0, 200)
   all[k] = next
   const value = JSON.stringify(all)

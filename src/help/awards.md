@@ -3,7 +3,7 @@ title: Awards and champion photos
 category: Game day
 order: 546
 routes: /tournaments/*/awards
-keywords: awards medals trophy champions champion photo team photo championship awards given photo taken field director field ops end of day
+keywords: awards medals trophy champions champion photo team photo champion video clip championship awards given photo taken field director field ops end of day public bracket show on the public bracket preview share hero
 ---
 Awards keeps track of the medals or trophy and the champions' photo for every division, so none get missed at the end of the day.
 
@@ -15,5 +15,10 @@ Awards keeps track of the medals or trophy and the champions' photo for every di
 1. Hand out the awards, then tap **Awards given**.
 2. Take the champions' photo, then tap **Photo taken**.
 3. To keep the photo with the event, tap **Add the photo** and take or pick it. Adding a photo also ticks **Photo taken**.
+4. For a few seconds of them celebrating with the trophy, tap **Add a video** and take or pick the clip. Up to 10 seconds; 5 is plenty. **Replace video** and **Remove video** change it.
+
+**To put it on the public bracket:** a director, admin or field director turns on **Show on the public bracket**. Once that division's final is scored, families see the photo (or the video, playing silently on a loop) across the top of its bracket, with **Share** and **Light up their path**. Until it's turned on, only staff can see the photo and video.
+
+**Preview on the bracket** opens the division's public bracket the way families will see it, but only for you. With no photo or video yet, it shows a sample picture.
 
 A row turns green with **Done** when both are ticked. The top line counts how many divisions are done. Each row shows who ticked it last and when. Tap a ticked button again to untick it.
