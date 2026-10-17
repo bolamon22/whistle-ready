@@ -13,6 +13,7 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { gameGender } from '@/lib/gameGender'
+import { eventSideOf } from '@/lib/eventTeamsStore'
 import { eventDayList } from '@/lib/eventDays'
 import { ensureVisibilityColumns } from '@/lib/publicView'
 import { AvailAnswer, DayState, isAvailAnswer, outTimesFor, sortTimes } from '@/lib/availabilityAnswers'
@@ -57,7 +58,10 @@ export type SlotInfo = { t: string; n: number; refs: { boys: number; girls: numb
 
 /** Each day's game start times in clock order, canceled games left out. */
 export async function gameSlots(tournamentId: string): Promise<Map<string, SlotInfo[]>> {
-  const games = await prisma.game.findMany({ where: { tournamentId, isCanceled: false }, select: { date: true, startTime: true, refCount: true, division: true } })
+  const [games, side] = await Promise.all([
+    prisma.game.findMany({ where: { tournamentId, isCanceled: false }, select: { date: true, startTime: true, refCount: true, division: true } }),
+    eventSideOf(tournamentId),
+  ])
   const byDay = new Map<string, Map<string, SlotInfo>>()
   for (const g of games) {
     const d = String(g.date || '').slice(0, 10), t = String(g.startTime || '').trim()
@@ -65,7 +69,7 @@ export async function gameSlots(tournamentId: string): Promise<Map<string, SlotI
     const day = byDay.get(d) || new Map<string, SlotInfo>(); byDay.set(d, day)
     const s = day.get(t) || { t, n: 0, refs: { boys: 0, girls: 0, both: 0 } }; day.set(t, s)
     s.n++
-    s.refs[gameGender(g.division)] += Math.max(0, Number(g.refCount) || 0)
+    s.refs[gameGender(g.division, side)] += Math.max(0, Number(g.refCount) || 0)
   }
   const out = new Map<string, SlotInfo[]>()
   for (const [d, m] of Array.from(byDay.entries())) out.set(d, sortTimes(Array.from(m.keys())).map(t => m.get(t)!))

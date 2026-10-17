@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getPayRate, parsePayRates, parseJsonDeep } from '@/lib/utils'
 import { requireStaff } from '@/lib/apiAuth'
-import { gameGender } from '@/lib/gameGender'
+import { gameGender, type GameGender } from '@/lib/gameGender'
+import { eventSideOf } from '@/lib/eventTeamsStore'
 import { effectiveUnavailability } from '@/lib/availability'
 
 interface WorkerRow {
@@ -11,8 +12,8 @@ interface WorkerRow {
 }
 
 
-function genderMatch(workerGender: string, division: string): boolean {
-  const g = gameGender(division)
+function genderMatch(workerGender: string, division: string, side: GameGender): boolean {
+  const g = gameGender(division, side)
   if (g === 'girls' && workerGender === 'boys') return false
   if (g === 'boys' && workerGender === 'girls') return false
   return true
@@ -33,6 +34,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const { date, stickyScorekeeper, fill, preview, apply, skFields } = await req.json()
+  // A division that says neither boys nor girls goes by the event's teams (lib/eventTeams).
+  const side = await eventSideOf(params.id)
   // What to fill (Bo, Oct 12 2026: "options to auto assign Score keepers, Girls Refs,
   // and Boys refs independently"). Leaving one out leaves its slots alone, so staff
   // can run girls' refs first, check them, then the rest. Default: everything.
@@ -43,7 +46,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
   // Games that aren't boys' or girls' (coed, or a name that says neither) go with
   // either refs choice.
-  const refsWanted = (division: string) => { const g = gameGender(division); return g === 'girls' ? want.girls : g === 'boys' ? want.boys : (want.boys || want.girls) }
+  const refsWanted = (division: string) => { const g = gameGender(division, side); return g === 'girls' ? want.girls : g === 'boys' ? want.boys : (want.boys || want.girls) }
 
   const tournament = await prisma.tournament.findUnique({ where: { id: params.id } })
   if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -258,12 +261,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         // Ref slot. On a boys' or girls' game, refs who only do that side go first and
         // refs who do both are the fallback: girls' refs are the scarce ones, and a
         // both-ways ref used up on a boys' game at 9:40 can't cover a girls' game then.
-        const gg = gameGender(game.division)
+        const gg = gameGender(game.division, side)
         const flex = (w: WorkerRow) => (gg !== 'both' && (w.gender || 'both') === 'both' ? 1 : 0)
         const eligible = sortByLoad(
           refs.filter(w =>
             isEligible(w.id, game.startTime) &&
-            genderMatch(w.gender, game.division)
+            genderMatch(w.gender, game.division, side)
           )
         ).sort((a, b) => flex(a) - flex(b))
         const worker = eligible[0]

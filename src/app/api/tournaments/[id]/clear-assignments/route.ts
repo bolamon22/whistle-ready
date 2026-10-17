@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { gameGender } from '@/lib/gameGender'
+import { eventSideOf } from '@/lib/eventTeamsStore'
 
 // Clear a day's assignments by kind (girls' refs, boys' refs, scorekeepers) and,
 // optionally, by field (Bo, Oct 12 2026: "maybe we can do by field").
@@ -35,8 +36,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     select: { id: true, division: true, assignments: { select: { id: true, role: true } } },
   })
   const ids: string[] = []
+  const side = await eventSideOf(params.id)   // a division that says neither: the event's teams
   for (const g of games) {
-    const gg = gameGender(g.division)
+    const gg = gameGender(g.division, side)
     for (const a of g.assignments) {
       const hit = a.role === 'scorekeeper'
         ? kinds.has('scorekeepers')
