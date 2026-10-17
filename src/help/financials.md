@@ -12,7 +12,7 @@ keywords: financials money profit loss P&L revenue expenses net cash outstanding
 **What is on it:**
 - Top tiles: **Total Revenue**, **Total Expenses**, **Gross Profit** and **Net Cash**.
 - **P&L Summary**: **Revenue** (registration fees, approved vendor booths, other income), **Collected so far**, **Outstanding from teams**, **Outstanding from vendors**, then **Expenses** (staff pay, other expenses), **Paid out to staff**, **Staff still owed**, **Net Cash Position** and **Expenses as % of revenue**.
-- Shortcuts: **Team Fees** (Team registrations), **Vendors** (Vendor requests) and **Staff Pay** (the Pay Summary).
+- Shortcuts: **Team Fees** (Team registrations), **Vendors** (Vendor requests) and **Staff pay**.
 
 **To add an expense or income:**
 1. Click **Add Expense** or **Add Income**.
@@ -26,4 +26,4 @@ keywords: financials money profit loss P&L revenue expenses net cash outstanding
 
 **Common problems:**
 - Deleting a transaction asks for confirmation.
-- Staff costs come from assignments and pay rates; mark staff paid on the Pay Summary.
+- Staff costs come from assignments and pay rates; mark staff paid on **Staff pay**.

@@ -42,4 +42,4 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 **Common problems:**
 - Assigning someone already on a game at the same time asks you to confirm before it double-books them.
 - Only people on the tournament's **Staff roster** appear here.
-- Assigning a game doesn't tell the official, and they can't see it until their group is shown under **Staff portal**. Use **Notify officials** when you're ready. People with no email on the Roster are listed in the Notify box.
+- Assigning a game doesn't tell the official, and they can't see it until their group is shown under **Staff portal**. Use **Notify officials** when you're ready. People with no email on the **Staff roster** are listed in the Notify box.

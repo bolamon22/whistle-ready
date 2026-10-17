@@ -5,9 +5,9 @@ order: 420
 routes: /tournaments/*/roster
 keywords: staff roster tournament roster confirm staff add staff to event remove staff who is working refs scorekeepers trainers field ops bulk edit other events training videos watched send videos ref level ranking level 1 2 3 red yellow green
 ---
-The Staff Roster is the list of people confirmed to work this tournament. Only people on the roster show up in the Assigner, the **Availability** page and the staff directory, and only they are asked which days they can work.
+The **Staff roster** is the list of people confirmed to work this tournament. Only people on the roster show up in the Assigner, the **Availability** page and the staff directory, and only they are asked which days they can work.
 
-**Where:** **People → Staff roster**. Tabs across the top also open **Availability**, **Time Entries** and **Pay Summary**.
+**Where:** **People → Staff roster**. Tabs across the top also open **Availability**, **Time entries** and **Staff pay**.
 
 **To add people:**
 1. Scroll to **Available to Add**. This lists everyone in your Staff Pool who is not on this event yet.
@@ -31,4 +31,4 @@ The Staff Roster is the list of people confirmed to work this tournament. Only p
 
 **Common problems:**
 - **Remove** happens right away with no confirmation.
-- If **Available to Add** is empty, the person isn't in your Staff Pool yet. Add them under **People** → **Staff Pool** in the top bar first.
+- If **Available to Add** is empty, the person isn't in your Staff Pool yet. Add them under **Staff** → **Staff Pool** in the top bar first.

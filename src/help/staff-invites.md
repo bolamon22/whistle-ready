@@ -7,7 +7,7 @@ keywords: invite staff app login claim link invite link resend recruiting link s
 ---
 Staff need their own login to see their games, open the scorekeeper and use the game day tools. You can email invites, copy a personal link to text, or share one public signup link with new recruits.
 
-**Where:** **People** → **Staff Pool** in the top bar. A signup link is also on **People → Staff roster**.
+**Where:** **Staff** → **Staff Pool** in the top bar. A signup link is also on **People → Staff roster**.
 
 **To invite people already in your pool:**
 1. On the Staff Pool, find the person. The **App** column shows **Registered**, **Invited**, **Not invited** or **No email**.

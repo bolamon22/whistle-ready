@@ -3,7 +3,7 @@ title: Find your way around (the top bar)
 category: Getting started
 order: 1.5
 routes:
-keywords: top bar header menu menus navigation events people organization admin event button switch event next event new tournament search find ctrl k cmd k tasks overdue who's on view as account initials profile game-day alerts appearance dark mode light mode sign out phone menu logins staff pool switch organization your organizations
+keywords: top bar header menu menus navigation events people organization admin event button switch event next event new tournament search find ctrl k cmd k tasks overdue who's on view as account initials profile game-day alerts appearance dark mode light mode sign out phone menu logins staff pool staff menu people menu switch organization your organizations
 ---
 The top bar is the same on every page, and it shows only what your role can open.
 
@@ -11,9 +11,9 @@ The top bar is the same on every page, and it shows only what your role can open
 - **Your logo** takes you to your home page. If you work for more than one organization, it has an arrow and opens **Your organizations** instead: pick one to switch (see "Work for more than one organization").
 - **The event button** shows the event you're working on and its dates, with **On now**, **Tomorrow** or **in 11 days**. It's the event whose pages you're on, or else the next one. Click it to jump to another upcoming event, **All tournaments** or **+ New tournament**.
 - **Events:** **All tournaments**, **Tasks** and **Event contacts**.
-- **People:** **Staff Pool**, **Logins** (admins), **Your team** (directors) and **Training videos**.
+- **Staff:** **Staff Pool**, **Your team** (directors) and **Training videos**: your organization's staff, across every event. Each event's own people (its teams, staff roster, media and vendors) are in that event's **People** menu.
 - **Organization:** **Website**, **Forms**, **Social scheduler**, **Club database**, **Brand & media**, **Rules library** and **Photographers**.
-- **Admin** (admins only): **Platform dashboard**, **Organizations**, **Permissions**, **Roadmap** and **Payment providers**.
+- **Admin** (admins only): **Platform dashboard**, **Organizations**, **Logins**, **Permissions**, **Roadmap** and **Payment providers**.
 - **Search** finds events, staff, logins (admins), clubs and pages. Type at least two letters, then click a result, or use the arrow keys and Enter. **Ctrl K** (**Cmd K** on a Mac) jumps to it from anywhere.
 - **Tasks** (the checklist button) shows a red number when tasks are overdue.
 - **2 on** shows how many other people are in the app right now. Click it to see who.
@@ -27,4 +27,4 @@ The menu holding the page you're on is underlined. A menu with nothing your role
 **Common problems:**
 - Can't find a page you used before? Search for its name, for example "forms" or "rules".
 - The event button shows a different event than you want? Click it and pick yours. Opening any page of an event makes it the one shown.
-- No **People** or **Organization** menu? Your role doesn't include those pages. Ask an admin if you need them.
+- No **Staff** or **Organization** menu? Your role doesn't include those pages. Ask an admin if you need them.

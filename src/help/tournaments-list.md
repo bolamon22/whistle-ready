@@ -25,7 +25,7 @@ On the Whistle Ready Assigner plan the form asks only for the name, sport, dates
 
 Copied: venues and fields, divisions, pay rates, ref rules, staff roster and registration settings. Left behind: games, schedule, registrations, assignments and availability.
 
-**Other card buttons:** **Edit** changes name, sport, dates, location and logo. **Schedule**, **Staff**, **Registrations**, **Pay Report** and **Builder** jump straight to those pages. Click the tournament name to open its **Dashboard** (the **Assigner** board on the Assigner plan, which has no dashboard).
+**Other card buttons:** **Edit** changes name, sport, dates, location and logo. **Schedule**, **Staff roster**, **Registrations**, **Staff pay** and **Builder** jump straight to those pages. Click the tournament name to open its **Dashboard** (the **Assigner** board on the Assigner plan, which has no dashboard).
 
 **Tasks:** directors and admins see a **Tasks** box above the list, with what's up next across every event, and a line on each tournament card with its open and overdue tasks. Click it to open that event's tasks.
 

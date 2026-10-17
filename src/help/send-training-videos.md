@@ -16,7 +16,7 @@ Staff training videos play inside each person's Whistle Ready login, and the app
 **To see what you've sent someone:** their **Profile** lists every training email under **Emailed to** their name: when, how many videos, who sent it, and **Sent** or **Not sent**. Hover a video they haven't watched to see when it was emailed. **Sent** means our email service took it. Whether it was delivered or opened shows in SendGrid's Activity feed. Watching is what counts: a video turns green once they've watched it.
 
 **To send to a group:**
-1. Open **People** → **Training videos**, tick the videos, and click **Send**.
+1. Open **Staff** → **Training videos**, tick the videos, and click **Send**.
 2. To send to people working one event, pick it under **Working an event**. Roles then count only people on that event's staff roster. Pick **Everyone working it** to send to all of them.
 3. Pick roles, such as **Scorekeepers** or **Athletic trainers**. A role that's on shows a check. Tap it again to turn it off.
 4. Add people by name under **…and/or these people**, or type email addresses.

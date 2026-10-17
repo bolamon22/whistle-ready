@@ -7,7 +7,7 @@ keywords: staff profile staff page payment history earned games worked notes pho
 ---
 Each staff member has a profile page with their contact details, notes, photo and a history of what they've been paid across tournaments.
 
-**Where:** open it from **People → Staff roster → Pay Summary** by clicking a person's photo. The page shows **Staff Pool** at the top so you can go back to the full list.
+**Where:** open it from **People → Staff roster → Staff pay** by clicking a person's photo. The page shows **Staff Pool** at the top so you can go back to the full list.
 
 **What you'll see:**
 - Contact details, **Can Ref** (for refs) and **Pay Method**. Directors, admins and assigners also see a ref's level (**L1** to **L3**) next to their cert.

@@ -7,7 +7,7 @@ keywords: logins login user management users add user create account role change
 ---
 **Logins** (once called User Management) is the admin list of every account. Add users, change roles, reset passwords, link club directors to their clubs, or delete accounts.
 
-**Where:** **People** → **Logins** in the top bar, or the **Logins** tab on any admin page. Searching a name or email in the top bar and picking it under **Logins** opens this page filtered to that person.
+**Where:** **Admin** → **Logins** in the top bar, or the **Logins** tab on any admin page. Searching a name or email in the top bar and picking it under **Logins** opens this page filtered to that person.
 
 **To add a user:**
 1. Click **+ Add login**.

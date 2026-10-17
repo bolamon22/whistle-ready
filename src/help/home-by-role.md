@@ -9,13 +9,13 @@ After you sign in, Whistle Ready opens a home page that fits your role. Each one
 
 **Director home:**
 - Shows **Hi, (your name)** and a **Your team** button for adding staff.
-- Each tournament has **Manage**, **Scores**, **Field Req** and **Broadcast**.
+- Each tournament has **Manage**, **Scores**, **Field Req** and **Broadcast**. On the Whistle Ready Assigner plan: **Manage**, **Staff roster** and **Staff pay**.
 - With no tournaments yet, it shows two starting steps: **Add your first tournament** and **Add your staff & admins**.
 - **Events** → **All tournaments** in the top bar opens the full tournaments list.
 
 **Assigner home:**
 - Find your event with **Find a tournament**. The **Up next** card shows how many games have their full ref crew.
-- Each tournament has **Assign** (the Assigner board), **By official**, **Roster**, **Availability** and **Ref pay**.
+- Each tournament has **Assign** (the Assigner board), **By official**, **Staff roster**, **Availability**, **Staff pay** and **Training**.
 
 **Scheduler home:**
 - The next event shows under **Up next**.
