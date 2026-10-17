@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Target, Radio, Megaphone, LayoutDashboard, Globe, Users, Trophy, UserPlus, ArrowRight, Sparkles, Wallet } from 'lucide-react'
+import { Target, Radio, Megaphone, LayoutDashboard, Globe, Users, Trophy, UserPlus, ArrowRight, Sparkles, Wallet, Handshake } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { roleCanAccess } from '@/lib/routeAccess'
 import { eventHref, roleTitle } from '@/components/nav/navConfig'
@@ -83,6 +83,8 @@ export default function DirectorDashboard() {
               { href: `/tournaments/${t.id}/broadcast`, Icon: Megaphone, label: 'Broadcast' },
               { href: `/tournaments/${t.id}/roster`, Icon: Users, label: 'Staff roster' },
               { href: `/tournaments/${t.id}/pay-summary`, Icon: Wallet, label: 'Staff pay' },
+              // The event's tournament director, the head assigner's customer (Assigner plan).
+              ...(org?.plan === 'assigner' ? [{ href: `/tournaments/${t.id}/tournament-director`, Icon: Handshake, label: 'Tournament director' }] : []),
             ].filter((a, i) => i === 0 || can(a.href)).slice(0, 4)
             return (
               <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
