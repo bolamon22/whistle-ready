@@ -4,7 +4,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, PanelRight, Search } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
@@ -598,7 +598,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
   return(
     <>
-    <div className={games.length>0?(panelMode==='pinned'?'md:pr-[72px] xl:pr-[336px]':'md:pr-[72px]'):''}>
+    <div className={games.length>0&&panelMode==='pinned'?'xl:pr-[336px]':''}>
       {/* Import modal */}
       {importStep==='mapping'&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -974,7 +974,15 @@ export default function GridPage({ params }: { params:{id:string} }) {
             </>)}
           </div>
         </>)}
-        {games.length>0&&<button type="button" onClick={()=>setPanelMode(panelMode==='rail'?'open':'rail')} aria-pressed={panelMode!=='rail'} className={panelMode!=='rail'?'h-9 px-3 rounded-lg bg-slate-900 text-white text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap':barBtn}><PanelRight size={15}/> Staffing</button>}
+        {/* The Staffing panel opens from here (it used to have a strip on the right edge that took
+            72px from the grid). Clicking the open tab again closes the panel. */}
+        {games.length>0&&(
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Staffing panel">
+            {([['staff','Staff',Users],['needs','Needs',ClipboardList],['portal','Portal',Eye]] as const).map(([k,l,Icon])=>{const on=panelMode!=='rail'&&panelTab===k;return(
+              <button key={k} type="button" aria-pressed={on} onClick={()=>{if(on)setPanelMode('rail');else{setPanelTab(k);if(panelMode==='rail')setPanelMode('open')}}} title={k==='staff'?'Staff: drag names onto slots':k==='needs'?'Needs: how many refs and scorekeepers':'Staff portal: what officials can see'} className={segBtn(on)}><Icon size={14}/> {l}</button>
+            )})}
+          </div>
+        )}
       </div>
 
       {/* Filters: the grid fades games that don't match; List and Division leave them out */}
@@ -1004,16 +1012,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
       {viewMode==='staff'&&<div className="mb-2"/>}
       </div>
 
-      {/* Staffing panel: a rail when minimized; a slide-in over the board, or pinned beside it */}
-      {games.length>0&&panelMode==='rail'&&(
-        <nav aria-label="Staffing" className="hidden md:flex fixed right-3 top-1/2 -translate-y-1/2 z-30 w-14 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-lg flex-col gap-1">
-          {([['staff','Staff',Users],['needs','Needs',ClipboardList],['portal','Portal',Eye]] as const).map(([k,l,Icon])=>(
-            <button key={k} type="button" onClick={()=>{setPanelTab(k);setPanelMode('open')}} title={k==='staff'?'Staff: drag names onto slots':k==='needs'?'Needs: how many refs and scorekeepers':'Staff portal: what officials can see'} className="h-14 w-full rounded-xl flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-slate-600 hover:bg-teal-50 hover:text-teal-700 transition-colors"><Icon size={18}/>{l}</button>
-          ))}
-        </nav>
-      )}
+      {/* Staffing panel: hidden until Staff, Needs or Portal is clicked; a slide-in over the board, or pinned beside it */}
       {games.length>0&&panelMode!=='rail'&&(
-        <aside aria-label="Staffing" className={`fixed right-3 top-20 bottom-3 z-40 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden ${panelMode==='open'?'shadow-2xl':'shadow-sm'}`}>
+        <aside aria-label="Staffing" className={`fixed right-3 top-[72px] bottom-3 z-40 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden ${panelMode==='open'?'shadow-2xl':'shadow-sm'}`}>
           <div className="flex items-center gap-1 pl-4 pr-2 pt-2.5">
             <span className="text-sm font-semibold text-slate-800">Staffing</span>
             <div className="flex-1"/>
