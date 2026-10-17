@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { tournamentOrgId } from '@/lib/org'
 import { CREWS, crewsOf, isCrew, type Crew } from '@/lib/staffRelease'
 import { getRelease, setRelease } from '@/lib/staffReleaseStore'
+import { eventSideOf } from '@/lib/eventTeamsStore'
 
 // The Assigner's "Staff portal" switches (lib/staffRelease): whether refs and
 // scorekeepers can see their games yet, per crew.
@@ -15,18 +16,19 @@ import { getRelease, setRelease } from '@/lib/staffReleaseStore'
 const MANAGERS = ['admin', 'director', 'assigner']
 
 async function state(tournamentId: string) {
-  const [rel, games] = await Promise.all([
+  const [rel, games, side] = await Promise.all([
     getRelease(tournamentId),
     prisma.game.findMany({
       where: { tournamentId, isCanceled: false },
       select: { division: true, startTime: true, location: true, assignments: { select: { role: true, workerId: true } } },
     }),
+    eventSideOf(tournamentId),   // a division that says neither: the event's teams
   ])
   const people: Record<Crew, Set<string>> = { boys: new Set(), girls: new Set(), scorekeepers: new Set() }
   const slots: Record<Crew, number> = { boys: 0, girls: 0, scorekeepers: 0 }
   for (const g of games) {
     if (!g.startTime || !g.location) continue
-    for (const a of g.assignments) for (const c of crewsOf(a.role, g.division)) { people[c].add(a.workerId); slots[c]++ }
+    for (const a of g.assignments) for (const c of crewsOf(a.role, g.division, side)) { people[c].add(a.workerId); slots[c]++ }
   }
   return {
     saved: rel.saved,

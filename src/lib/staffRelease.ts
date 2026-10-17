@@ -1,4 +1,4 @@
-import { gameGender } from './gameGender'
+import { gameGender, type GameGender } from './gameGender'
 
 // WHEN OFFICIALS SEE THEIR GAMES (Bo, Oct 15 2026).
 //
@@ -24,15 +24,16 @@ export type ReleaseState = Record<Crew, CrewRelease>
 
 export function isCrew(v: unknown): v is Crew { return (CREWS as readonly string[]).includes(String(v)) }
 
-/** Which crews an assignment belongs to, from its slot and the game's division. */
-export function crewsOf(role: string, division: string): Crew[] {
+/** Which crews an assignment belongs to, from its slot and the game's division (or
+ *  the event's side, lib/eventTeams, when the division says neither). */
+export function crewsOf(role: string, division: string, side: GameGender = 'both'): Crew[] {
   if (role === 'scorekeeper') return ['scorekeepers']
-  const g = gameGender(division)
+  const g = gameGender(division, side)
   return g === 'both' ? ['boys', 'girls'] : [g]
 }
 
-export function isReleased(rel: ReleaseState, role: string, division: string): boolean {
-  return crewsOf(role, division).some(c => !!rel[c])
+export function isReleased(rel: ReleaseState, role: string, division: string, side: GameGender = 'both'): boolean {
+  return crewsOf(role, division, side).some(c => !!rel[c])
 }
 
 // Logins that always see every assignment, shown or not: the people who build and

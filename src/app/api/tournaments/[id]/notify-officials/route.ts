@@ -9,6 +9,7 @@ import { addDaysISO, dayTitle, eventToday } from '@/lib/availabilityAnswers'
 import { answersFor, confirmLinks, gameSig, readAsk, stateOf, writeAsk } from '@/lib/officialConfirm'
 import { CREWS, crewsOf, isCrew, type Crew } from '@/lib/staffRelease'
 import { getRelease, setRelease } from '@/lib/staffReleaseStore'
+import { eventSideOf } from '@/lib/eventTeamsStore'
 
 // "Notify officials" on the Assigner board (Bo, Oct 13 2026: "we should have a way
 // for them to notify the refs when the schedule is ready"). Assigning never told
@@ -55,12 +56,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const confirm = !!b.confirm
   const reminder = !!b.reminder
   const only = Array.isArray(b.workerIds) ? new Set((b.workerIds as unknown[]).map(String)) : null
-  const release = await getRelease(params.id)
+  // A division that says neither boys nor girls goes by the event's teams (lib/eventTeams).
+  const [release, side] = await Promise.all([getRelease(params.id), eventSideOf(params.id)])
   const crews: Crew[] = Array.isArray(b.crews) ? Array.from(new Set((b.crews as unknown[]).filter(isCrew)))
     : only ? CREWS.filter(c => !!release[c]) : [...CREWS]
   // The preview runs with nobody picked too: it gives the picker its counts.
   if (!crews.length && !b.preview) return NextResponse.json({ error: only ? 'None of these games are showing on the staff portal yet.' : 'Pick who to notify.' }, { status: 400 })
-  const inCrews = (role: string, division: string) => crewsOf(role, division).some(c => crews.includes(c))
+  const inCrews = (role: string, division: string) => crewsOf(role, division, side).some(c => crews.includes(c))
 
   const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { id: true, name: true, startDate: true } })
   if (!t) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -89,7 +91,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     for (const a of g.assignments) {
       const w: any = a.worker
       if (!w) continue
-      for (const c of crewsOf(a.role, g.division)) { crewPeople[c].add(w.id); crewGames[c]++ }
+      for (const c of crewsOf(a.role, g.division, side)) { crewPeople[c].add(w.id); crewGames[c]++ }
       if (!inCrews(a.role, g.division)) continue
       const p = people.get(w.id) || { id: w.id, name: String(w.name || ''), email: String(w.email || '').trim(), rows: [] }
       p.rows.push({ date: g.date, time: g.startTime, field: g.location, division: g.division, num: g.gameNumber, teams: `${g.team1} vs ${g.team2}`, role: roleLabel(a.role), gameId: g.id, roleKey: a.role, sig: gameSig(g) })
@@ -105,7 +107,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Remembered per crew ("<workerId>|<crew>"), so a boys-only send and a later
   // girls-only send don't count each other as changes. Sends from before crews
   // were stored under the bare worker id, for all their games.
-  const crewRows = (p: { rows: Row[] }, c: Crew) => p.rows.filter(r => crewsOf(r.roleKey, r.division).includes(c))
+  const crewRows = (p: { rows: Row[] }, c: Crew) => p.rows.filter(r => crewsOf(r.roleKey, r.division, side).includes(c))
   const unchanged = (p: { id: string; rows: Row[] }) => {
     const mine = crews.filter(c => crewRows(p, c).length)
     if (mine.length && mine.every(c => sent[`${p.id}|${c}`])) return mine.every(c => sent[`${p.id}|${c}`].sig === sigOf(crewRows(p, c)))

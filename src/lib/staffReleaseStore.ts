@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import { eventToday } from '@/lib/availabilityAnswers'
 import { CREWS, isReleased, seesUnreleased, type Crew, type ReleaseState } from '@/lib/staffRelease'
+import { eventSidesOf } from '@/lib/eventTeamsStore'
 
 // Stored per event in AppSetting `staffRelease:<tournamentId>`:
 // { boys: { at, by } | null, girls: ..., scorekeepers: ... }. See lib/staffRelease.
@@ -49,6 +50,6 @@ export async function releaseFilter(role: unknown, tournamentIds: string[]): Pro
   if (seesUnreleased(role)) return () => true
   const ids = Array.from(new Set(tournamentIds.filter(Boolean)))
   const states = new Map<string, ReleaseState>()
-  await Promise.all(ids.map(async id => { states.set(id, await getRelease(id)) }))
-  return (tid, r, division) => { const s = states.get(tid); return !!s && isReleased(s, r, division) }
+  const [sides] = await Promise.all([eventSidesOf(ids), ...ids.map(async id => { states.set(id, await getRelease(id)) })])
+  return (tid, r, division) => { const s = states.get(tid); return !!s && isReleased(s, r, division, sides.get(tid)) }
 }

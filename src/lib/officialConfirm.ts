@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { eventToday } from '@/lib/availabilityAnswers'
 import { isReleased } from '@/lib/staffRelease'
 import { getRelease } from '@/lib/staffReleaseStore'
+import { eventSideOf } from '@/lib/eventTeamsStore'
 
 // Officials confirm their games (Bo, Oct 15 2026: the referee assigners "would like
 // to have a way to send an email to their officials once they're ready to release
@@ -105,6 +106,7 @@ export async function officialSlots(tournamentId: string, workerId?: string, opt
   // shownOnly: what the official may see -- crews the assigner has shown on the
   // staff portal (lib/staffRelease). The assigner's own views pass nothing.
   const rel = opts.shownOnly ? await getRelease(tournamentId) : null
+  const side = rel ? await eventSideOf(tournamentId) : 'both'
   const games = await prisma.game.findMany({
     where: { tournamentId, isCanceled: false },
     select: { id: true, date: true, startTime: true, location: true, gameNumber: true, division: true, team1: true, team2: true,
@@ -113,7 +115,7 @@ export async function officialSlots(tournamentId: string, workerId?: string, opt
   const out: OfficialSlot[] = []
   for (const g of games) {
     if (!g.startTime || !g.location) continue
-    for (const a of g.assignments) if (!rel || isReleased(rel, a.role, g.division)) out.push({
+    for (const a of g.assignments) if (!rel || isReleased(rel, a.role, g.division, side)) out.push({
       gameId: g.id, role: a.role, workerId: a.workerId, workerName: String(a.worker?.name || ''), workerEmail: String(a.worker?.email || '').trim(),
       date: g.date, time: g.startTime, field: g.location, num: g.gameNumber, division: g.division, teams: `${g.team1} vs ${g.team2}`, sig: gameSig(g),
     })
