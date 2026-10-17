@@ -11,7 +11,7 @@ import { usePathname } from 'next/navigation'
 // the Oct 13 2026 header redesign.
 // True on the signed-in routes that get the Light/Dark treatment. Shared with <NavBar>.
 export function isStaffThemeRoute(pathname: string) {
-  const isPublic = /\/public(\/|$)/.test(pathname) || /^\/claim(\/|$)/.test(pathname) || /^\/tournaments\/[^/]+\/(event|rules|p|today|player-waiver|coach-waiver|vendor-request|register|player-register)(\/|$)/.test(pathname)
+  const isPublic = /\/public(\/|$)/.test(pathname) || /^\/claim(\/|$)/.test(pathname) || /^\/tournaments\/[^/]+\/(event|rules|p|today|player-waiver|coach-waiver|vendor-request|register|player-register|champions)(\/|$)/.test(pathname)
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register')
   const isSite = pathname.startsWith('/o/')  // public org website = fixed light theme
   return !isPublic && !isAuthPage && !isSite

@@ -744,7 +744,9 @@ export default function PublicTournamentPage() {
     fetch(`/api/tournaments/${id}/champion-media${deepLink.preview?'?preview=1':''}`).then(r=>r.ok?r.json():null).then(d=>{
       if(!d||!Array.isArray(d.media))return
       const byGame:Record<string,ChampMedia>={}
-      d.media.forEach((m:any)=>{if(m&&typeof m.gameId==='string'&&(m.url||m.videoUrl))byGame[m.gameId]={url:String(m.url||''),...(m.videoUrl?{videoUrl:String(m.videoUrl)}:{}),...(m.preview?{preview:true}:{})}})
+      // A public one shares the champion's own page, whose link preview is the photo
+      // (tournaments/[id]/champions/[gameId]); a preview has none yet.
+      d.media.forEach((m:any)=>{if(m&&typeof m.gameId==='string'&&(m.url||m.videoUrl))byGame[m.gameId]={url:String(m.url||''),...(m.videoUrl?{videoUrl:String(m.videoUrl)}:{}),...(m.preview?{preview:true}:(m.url?{shareUrl:`/tournaments/${id}/champions/${encodeURIComponent(m.gameId)}`}:{}))}})
       setChampMedia({byGame,staff:!!d.staff})
     }).catch(()=>{})
   },[id,deepLink.read,deepLink.preview])

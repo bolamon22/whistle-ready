@@ -18,15 +18,20 @@ export type ChampMedia = {
   preview?: boolean
   /** Staff preview with nothing added yet: the built-in sample picture. */
   sample?: boolean
+  /** The champion's own page (/tournaments/<id>/champions/<gameId>), whose link preview
+   *  is this photo. Share sends it; without one, Share sends the division's bracket. */
+  shareUrl?: string
 }
 
 export const SAMPLE_CHAMP_PICTURE = '/champions-sample.svg'
 
 // result: "Beat H44 8–6 in the final"; detail: "Sun 1:50 PM · Field 5", shown from md up
-// (on a phone it wrapped one word onto a line of its own).
-export default function ChampionHero({ media, team, logo, division, flight, eventName, year, result, detail, chips, onPath }: {
+// (on a phone it wrapped one word onto a line of its own). The second button lights the
+// champions' path on the bracket (onPath), or, on the champion's share page, opens the
+// bracket (bracketHref).
+export default function ChampionHero({ media, team, logo, division, flight, eventName, year, result, detail, chips, onPath, bracketHref }: {
   media: ChampMedia; team: string; logo?: string; division: string; flight?: string; eventName?: string; year?: string
-  result: string; detail?: string; chips: string[]; onPath: () => void
+  result: string; detail?: string; chips: string[]; onPath?: () => void; bracketHref?: string
 }) {
   const [copied, setCopied] = useState(false)
   // Muted, looping and inline, so phones play it in place like a moving photo. Families
@@ -47,10 +52,13 @@ export default function ChampionHero({ media, team, logo, division, flight, even
   const share = async () => {
     let url = ''
     try {
-      const u = new URL(window.location.href)
-      u.search = ''; u.hash = ''
-      u.searchParams.set('division', division); u.searchParams.set('tab', 'bracket')
-      url = u.toString()
+      if (media.shareUrl) url = new URL(media.shareUrl, window.location.href).toString()
+      else {
+        const u = new URL(window.location.href)
+        u.search = ''; u.hash = ''
+        u.searchParams.set('division', division); u.searchParams.set('tab', 'bracket')
+        url = u.toString()
+      }
     } catch { return }
     const title = `${team}: ${division} champions${eventName ? `, ${eventName}` : ''}`
     if (typeof navigator !== 'undefined' && (navigator as any).share) {
@@ -105,9 +113,15 @@ export default function ChampionHero({ media, team, logo, division, flight, even
             <button type="button" onClick={share} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full bg-white/95 px-5 text-sm font-semibold text-[#0b1f3a] md:flex-none">
               {copied ? <><Check size={16} />Link copied</> : <><Share2 size={16} />Share</>}
             </button>
-            <button type="button" onClick={onPath} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 text-sm font-semibold text-white md:flex-none">
-              <Route size={16} /><span className="md:hidden">Their path</span><span className="hidden md:inline">Light up their path</span>
-            </button>
+            {bracketHref ? (
+              <a href={bracketHref} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 text-sm font-semibold text-white md:flex-none">
+                <Route size={16} /><span className="md:hidden">Full bracket</span><span className="hidden md:inline">See the bracket</span>
+              </a>
+            ) : onPath ? (
+              <button type="button" onClick={onPath} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 text-sm font-semibold text-white md:flex-none">
+                <Route size={16} /><span className="md:hidden">Their path</span><span className="hidden md:inline">Light up their path</span>
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
