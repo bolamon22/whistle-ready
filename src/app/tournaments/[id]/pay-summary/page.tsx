@@ -6,6 +6,8 @@ import { Users, Calendar, Clock, Wallet, Download, ChevronUp, ChevronDown, Bankn
 import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
 import PayRatesPanel from '@/components/PayRatesPanel'
+import AssigningFeeBar from '@/components/AssigningFeeBar'
+import { useOrg } from '@/lib/org-context'
 import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/StaffGenderFilter'
 import { useRole } from '@/lib/role-context'
 import { canSeeMoney } from '@/lib/roleScope'
@@ -37,6 +39,10 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   // Assigner plan this is the only place to set them.
   const { effectiveRole }=useRole()
   const setsRates=canSeeMoney(effectiveRole)
+  // On the Assigner plan the event's tournament director (the head assigner's customer,
+  // lib/clientEvents) and the assigning fee they pay on top of staff pay.
+  const org=useOrg()
+  const clientBar=setsRates&&org?.plan==='assigner'
   const [showRates,setShowRates]=useState(false)
 
   async function load(){
@@ -141,6 +147,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
         </div>
       </div>
       {setsRates&&showRates&&<PayRatesPanel id={params.id} onClose={()=>setShowRates(false)} />}
+      {clientBar&&<AssigningFeeBar tournamentId={params.id} />}
 
       {data.summary.length===0?<div className="card p-12 text-center text-slate-400"><p className="font-medium">{scoped&&!data.scope!.groups.length?'You don’t see any staff pay yet. Ask the director to pick your pay groups.':scoped?`No pay yet for ${data.scope!.label}`:'No assignments yet'}</p></div>:(
         <div className="space-y-3">
