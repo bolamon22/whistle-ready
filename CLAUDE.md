@@ -175,7 +175,9 @@ assigner's customer, the tournament director (role `client`, lib/clientEvents), 
 for them (Bo, Oct 17 2026: "make sure that model holds true for other add-on features as we go"). Adding or
 changing an add-on: decide what the tournament director sees of it, add it to `CLIENT_SECTIONS` in
 lib/clientView, and show it on /dashboard/client. The client role is in `EXTERNAL_ROLES` (lib/apiAuth): it never
-gets a staff API, only /api/client/* through `requireClientEvent`.
+gets a staff API, only /api/client/* through `requireClientEvent`. A tournament director sees an event only after
+a pick on Your team or by accepting an invite sent for it (`clientInviteEvents:{token}`), never because an email
+matches: the event's own record (lib/eventClient) is a name, email and phone, and grants nothing.
 
 ## Design standard (UI consistency)
 - Icons: lucide-react only — never emoji.
@@ -330,6 +332,14 @@ gets a staff API, only /api/client/* through `requireClientEvent`.
   also names the event's tournament directors and links **See their view** (the head assigner and admins can open
   /dashboard/client/[id]). Final scores show when Scores is on (lib/clientView). Tests: 62 real-Prisma checks
   (scratch); dropping `client` from EXTERNAL_ROLES fails them.
+- **An event's tournament director (Oct 17).** Bo: "Do they need to be invited first? We should be able to just
+  add their name in at least." Each event on the Assigner plan has **People → Tournament director**
+  (/tournaments/[id]/tournament-director, the director only; also on the Head Assigner home and Staff pay's bar):
+  a name, with email and phone optional (AppSetting `eventClient:{tid}`, lib/eventClient). **Invite … to see this
+  event** (lib/clientInvite, the same letter Your team sends) makes an invite that carries the event; accepting it
+  adds the event to their `clientEvents`. An existing login gets the event right away, except from the event page
+  someone already on the team with another role (`keepRole`; without it the head assigner's own email made him a
+  tournament director). Tests: 80 real-Prisma checks (scratch).
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
