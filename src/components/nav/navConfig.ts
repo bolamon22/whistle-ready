@@ -3,6 +3,12 @@
 // into four menus. Each link shows only to roles that can open it (lib/routeAccess,
 // the same rule middleware enforces), so nobody sees a link that leads to "not
 // allowed", and a menu with nothing in it is left out.
+//
+// Staff, not People (Bo, Oct 17 2026): the event header has its own People menu
+// (the teams, staff, media and vendors at that one event), and two menus with one
+// name kept confusing people being shown around the app. This one is the
+// organization's own staff, across every event. Logins, which only admins can
+// open, sits in Admin, next to Organizations as on the admin pages' tabs.
 
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -17,7 +23,7 @@ export type NavItem = {
   roles?: string[]          // only these roles, on top of the route check
   badge?: 'overdue'         // the overdue tasks count
 }
-export type NavMenuKey = 'events' | 'people' | 'org' | 'admin'
+export type NavMenuKey = 'events' | 'staff' | 'org' | 'admin'
 export type NavMenu = { key: NavMenuKey; label: string; note?: string; items: NavItem[] }
 
 export const NAV_MENUS: NavMenu[] = [
@@ -26,9 +32,8 @@ export const NAV_MENUS: NavMenu[] = [
     { href: '/tasks', label: 'Tasks', desc: 'Your checklist for each event', icon: ListChecks, badge: 'overdue' },
     { href: '/contacts', label: 'Event contacts', desc: 'Venues, vendors, rentals, city and county', icon: BookUser },
   ] },
-  { key: 'people', label: 'People', items: [
+  { key: 'staff', label: 'Staff', items: [
     { href: '/staff', label: 'Staff Pool', desc: 'Refs, scorekeepers, trainers and field ops', icon: Users },
-    { href: '/admin/users', label: 'Logins', desc: 'Who can sign in and when they were last on', icon: KeyRound },
     { href: '/dashboard/org', label: 'Your team', desc: 'Add people to your organization and set roles', icon: UserCog, roles: ['director'] },
     { href: '/dashboard/org/videos', label: 'Training videos', desc: 'Send videos to staff and see who watched', icon: GraduationCap, roles: ['admin', 'director'] },
     { href: '/dashboard/assigner/videos', label: 'Training videos', desc: 'Send videos to the officials you run', icon: GraduationCap, roles: ['assigner'] },
@@ -46,6 +51,7 @@ export const NAV_MENUS: NavMenu[] = [
   { key: 'admin', label: 'Admin', note: 'Only admins see this menu', items: [
     { href: '/admin', label: 'Platform dashboard', desc: 'Every organization at a glance', icon: LayoutGrid },
     { href: '/admin/orgs', label: 'Organizations', desc: 'Add or edit organizations', icon: Building },
+    { href: '/admin/users', label: 'Logins', desc: 'Who can sign in and when they were last on', icon: KeyRound },
     { href: '/admin/permissions', label: 'Permissions', desc: 'What each role can open', icon: Shield },
     { href: '/admin/roadmap', label: 'Roadmap', desc: 'What gets built next', icon: Map },
     { href: '/admin/payment-providers', label: 'Payment providers', desc: 'How each organization takes payments', icon: CreditCard },

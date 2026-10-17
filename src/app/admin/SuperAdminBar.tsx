@@ -8,7 +8,7 @@ import { useRole } from '@/lib/role-context'
 
 // The admin pages' tabs, under the app header. Light, like the rest of the app,
 // since the Oct 13 2026 header redesign (it was a dark bar with its own brand and
-// a Back link). Users is called Logins now, to match the People menu.
+// a Back link). Users is called Logins now, as in the Admin menu.
 //
 // Viewing picks the organization the admin pages and the app show. Each one shows its
 // plan (lib/orgPlans), and the eye opens it the way its director sees it (View as,

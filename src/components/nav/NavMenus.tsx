@@ -5,7 +5,7 @@ import { ChevronDown } from 'lucide-react'
 import type { NavMenu, NavMenuKey } from './navConfig'
 
 // The four header menus at desktop width (xl and up). A menu with one link is
-// just that link, under the link's own name (a field director's People menu is only
+// just that link, under the link's own name (a field director's Staff menu is only
 // Training videos). Open state lives in NavBar so only one menu is open at a time,
 // and a click outside, Escape or a page change closes it.
 export default function NavMenus({ menus, open, setOpen, current, overdue }: {
