@@ -101,12 +101,16 @@ export default function VideoLibrary() {
   const [people, setPeople] = useState<Person[] | null>(null)
   const [events, setEvents] = useState<Ev[]>([])
   const [sends, setSends] = useState<SendLog[]>([])
-  const [fSeries, setFSeries] = useState<string>('all')
-  const [fFor, setFFor] = useState<string>('all')
+  // Type and For take more than one pick (Bo, Oct 17 2026: field ops also watch the
+  // scorekeeper videos, so he ticks Field ops and Scorekeepers and sends both). An empty
+  // set is All / Everyone.
+  const [fSeries, setFSeries] = useState<Set<string>>(new Set())
+  const [fFor, setFFor] = useState<Set<string>>(new Set())
+  const flip = (set: (f: (s: Set<string>) => Set<string>) => void, k: string) => set(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
   const [fQ, setFQ] = useState('')
-  const shown = useMemo(() => lib.filter(v => (fSeries === 'all' || v.series === fSeries) && (fFor === 'all' || rolesOf(v).includes(fFor))
+  const shown = useMemo(() => lib.filter(v => (!fSeries.size || fSeries.has(v.series)) && (!fFor.size || rolesOf(v).some(r => fFor.has(r)))
     && (!fQ.trim() || `${v.num} ${v.title} ${v.blurb}`.toLowerCase().includes(fQ.trim().toLowerCase()))), [lib, fSeries, fFor, fQ])
-  const filtered = fSeries !== 'all' || fFor !== 'all' || !!fQ.trim()
+  const filtered = fSeries.size > 0 || fFor.size > 0 || !!fQ.trim()
 
   const loadPeople = () => fetch('/api/training?report=1').then(r => r.ok ? r.json() : null).then(d => { setPeople(Array.isArray(d?.people) ? d.people : []); setEvents(Array.isArray(d?.events) ? d.events : []) }).catch(() => setPeople([]))
   const loadSends = () => fetch('/api/training/send').then(r => r.ok ? r.json() : null).then(d => setSends(Array.isArray(d?.sends) ? d.sends : [])).catch(() => {})
@@ -168,15 +172,16 @@ export default function VideoLibrary() {
             {series.length > 1 && <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">Type</span>}
             {series.length > 1 && [['all', 'All'] as [string, string], ...series.map(s => [s.key, s.label] as [string, string])].map(([k, label]) => {
               const n = k === 'all' ? lib.length : lib.filter(v => v.series === k).length
-              return <Chip key={k} on={fSeries === k} onClick={() => setFSeries(k)}>{label} <span className="opacity-60">{n}</span></Chip>
+              return <Chip key={k} on={k === 'all' ? !fSeries.size : fSeries.has(k)} onClick={() => k === 'all' ? setFSeries(new Set()) : flip(setFSeries, k)}>{label} <span className="opacity-60">{n}</span></Chip>
             })}
             <div className="relative ml-auto w-full sm:w-56"><Search size={14} className="absolute left-3 top-2.5 text-slate-400" /><input value={fQ} onChange={e => setFQ(e.target.value)} placeholder="Search videos" aria-label="Search videos" className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-1.5 text-sm" /></div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">For</span>
-            <Chip on={fFor === 'all'} onClick={() => setFFor('all')}>Everyone</Chip>
-            {forFilters.map(([k, label]) => <Chip key={k} on={fFor === k} onClick={() => setFFor(k)}>{label}</Chip>)}
-            {filtered && <button type="button" onClick={() => { setFSeries('all'); setFFor('all'); setFQ('') }} className="text-xs font-semibold text-slate-500 hover:text-slate-800 ml-1">Clear filters</button>}
+            <Chip on={!fFor.size} onClick={() => setFFor(new Set())}>Everyone</Chip>
+            {forFilters.map(([k, label]) => <Chip key={k} on={fFor.has(k)} onClick={() => flip(setFFor, k)}>{label}</Chip>)}
+            <span className="text-xs text-slate-400">Tap more than one to combine them.</span>
+            {filtered && <button type="button" onClick={() => { setFSeries(new Set()); setFFor(new Set()); setFQ('') }} className="text-xs font-semibold text-slate-500 hover:text-slate-800 ml-1">Clear filters</button>}
           </div>
         </div>
       )}
