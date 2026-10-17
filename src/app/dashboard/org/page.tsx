@@ -14,7 +14,7 @@ import { useOrg } from '@/lib/org-context'
 import { PLANS } from '@/lib/orgPlans'
 
 const ROLES = ['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff']
-const ROLE_LABEL: Record<string, string> = { director: 'Director', scheduler: 'Scheduler', assigner: 'Assigner', field_director: 'Field Director', coach: 'Coach', staff: 'Staff' }
+const ROLE_LABEL: Record<string, string> = { director: 'Director', scheduler: 'Scheduler', assigner: 'Assigner', field_director: 'Field Director', client: 'Tournament Director', coach: 'Coach', staff: 'Staff' }
 
 export default function OrgTeamPage() {
   const { data: session, status } = useSession()
@@ -25,6 +25,11 @@ export default function OrgTeamPage() {
   // On the Assigner plan the director is called the Head Assigner (lib/orgPlans).
   const org = useOrg()
   const roleName = (r: string) => (r === 'director' && org?.plan === 'assigner' ? PLANS.assigner.owner : ROLE_LABEL[r])
+  // On the Assigner plan the head assigner can add the tournament directors they work
+  // for (lib/clientEvents, Bo Oct 17 2026: "that is their customer"). Anyone who is
+  // one already keeps the choice in their own menu whatever the plan.
+  const roles = org?.plan === 'assigner' ? [...ROLES.slice(0, 4), 'client', ...ROLES.slice(4)] : ROLES
+  const rolesFor = (r: string) => (roles.includes(r) ? roles : [...roles, r].filter(x => ROLE_LABEL[x]))
   const [users, setUsers] = useState<any[]>([])
   const [invites, setInvites] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,6 +40,8 @@ export default function OrgTeamPage() {
   const [lastLink, setLastLink] = useState('')
   // Which staff pay each assigner sees (lib/payGroups).
   const [payAccess, setPayAccess] = useState<Record<string, { groups: PayGroup[]; custom: boolean }>>({})
+  // Which events each tournament director sees (lib/clientEvents).
+  const [cl, setCl] = useState<{ clients: Record<string, { orgId: string | null; events: string[] }>; events: FieldDirectorEvent[] }>({ clients: {}, events: [] })
   // Which events each field director works (lib/fieldDirector).
   const [fd, setFd] = useState<{ fieldDirectors: Record<string, { orgId: string | null; events: string[] }>; events: FieldDirectorEvent[] }>({ fieldDirectors: {}, events: [] })
 
@@ -49,6 +56,7 @@ export default function OrgTeamPage() {
     try { const d = await fetch('/api/org/users').then(r => r.ok ? r.json() : null); if (d) { setUsers(d.users || []); setInvites(d.invites || []) } } catch {} finally { setLoading(false) }
     try { const p = await fetch('/api/assigner-pay').then(r => r.ok ? r.json() : null); if (p?.assigners) setPayAccess(p.assigners) } catch {}
     try { const f = await fetch('/api/field-director-events').then(r => r.ok ? r.json() : null); if (f?.fieldDirectors) setFd({ fieldDirectors: f.fieldDirectors, events: Array.isArray(f.events) ? f.events : [] }) } catch {}
+    try { const c = await fetch('/api/client-events').then(r => r.ok ? r.json() : null); if (c?.clients) setCl({ clients: c.clients, events: Array.isArray(c.events) ? c.events : [] }) } catch {}
   }
   async function add() {
     if (!email.trim()) return
@@ -86,9 +94,10 @@ export default function OrgTeamPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
           <div><label className="block text-xs font-medium text-slate-500 mb-1">Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="person@example.com" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" /></div>
           <div><label className="block text-xs font-medium text-slate-500 mb-1">Name (optional)</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" /></div>
-          <div><label className="block text-xs font-medium text-slate-500 mb-1">Role</label><select value={newRole} onChange={e => setNewRole(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">{ROLES.map(r => <option key={r} value={r}>{roleName(r)}</option>)}</select></div>
+          <div><label className="block text-xs font-medium text-slate-500 mb-1">Role</label><select value={newRole} onChange={e => setNewRole(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">{roles.map(r => <option key={r} value={r}>{roleName(r)}</option>)}</select></div>
           <div className="flex items-end"><button onClick={add} disabled={busy || !email.trim()} className="w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"><UserPlus size={15} /> Add / invite</button></div>
         </div>
+        {newRole === 'client' && <p className="text-xs text-slate-500 mb-3">A tournament director you work for. Once they're added, pick their events under their name: they see only those, with the schedule, who is on each game and their phone numbers, and Staff pay, so they can pay your staff. They can't change anything else.</p>}
         {lastLink && <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex items-center gap-2"><Link2 size={13} /><span className="truncate flex-1">{lastLink}</span><button onClick={() => copy(lastLink)} className="text-teal-600 font-semibold">Copy</button></div>}
       </div>
 
@@ -104,7 +113,7 @@ export default function OrgTeamPage() {
                 <span className="flex-shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700" title="Whistle Ready admins see every organization; only an admin can change them">Admin</span>
               ) : (
               <div className="flex items-center gap-2 flex-shrink-0">
-                <select value={ROLES.includes(u.role) ? u.role : 'staff'} onChange={e => changeRole(u.id, e.target.value)} aria-label={`Role for ${u.name}`} className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">{ROLES.map(r => <option key={r} value={r}>{roleName(r)}</option>)}</select>
+                <select value={rolesFor(u.role).includes(u.role) ? u.role : 'staff'} onChange={e => changeRole(u.id, e.target.value)} aria-label={`Role for ${u.name}`} className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">{rolesFor(u.role).map(r => <option key={r} value={r}>{roleName(r)}</option>)}</select>
                 <button onClick={() => removeUser(u.id)} className="text-slate-300 hover:text-red-500" title="Remove" aria-label={`Remove ${u.name}`}><Trash2 size={15} /></button>
               </div>
               )}
@@ -114,6 +123,13 @@ export default function OrgTeamPage() {
                 <AssignerPayAccess key={u.id + ':' + (payAccess[u.id]?.groups ?? []).join(',')} userId={u.id}
                   groups={payAccess[u.id]?.groups ?? DEFAULT_ASSIGNER_GROUPS} custom={payAccess[u.id]?.custom}
                   onSaved={groups => setPayAccess(p => ({ ...p, [u.id]: { groups, custom: true } }))} />
+              </div>
+            )}
+            {u.role === 'client' && (
+              <div className="mt-2 pt-2 border-t border-slate-100">
+                <FieldDirectorEvents key={u.id + ':' + (cl.clients[u.id]?.events ?? []).join(',') + ':' + cl.events.length} userId={u.id} events={cl.events}
+                  endpoint="/api/client-events" label="Sees" tone="amber" selected={cl.clients[u.id]?.events ?? []}
+                  onSaved={events => setCl(p => ({ ...p, clients: { ...p.clients, [u.id]: { orgId: p.clients[u.id]?.orgId ?? null, events } } }))} />
               </div>
             )}
             {u.role === 'field_director' && (

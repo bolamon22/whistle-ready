@@ -6,6 +6,7 @@ import { orgById } from '@/lib/org'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 import { notifyStaffRegistered } from '@/lib/staffNotify'
 import { giveStaffAccess } from '@/lib/staffLogin'
+import { addToOrg } from '@/lib/orgMembers'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -38,6 +39,16 @@ async function claimStillValid(token: string): Promise<boolean> {
     args: [token],
   })
   return chk.rows.length > 0
+}
+
+/** The login role and organization a Your team invite carries (raw columns), so a
+ *  head assigner's tournament director (role `client`, lib/clientEvents) gets their
+ *  own short form and no Staff Pool record. */
+async function inviteRole(token: string): Promise<{ role: string; orgId: string | null }> {
+  try {
+    const r = await db().execute({ sql: `SELECT loginRole, orgId FROM "StaffInvite" WHERE token = ?`, args: [token] })
+    return { role: String(r.rows[0]?.loginRole || ''), orgId: (r.rows[0]?.orgId as string) ?? null }
+  } catch { return { role: '', orgId: null } }   // columns not added yet: a staff invite
 }
 
 function parseWorkerRoles(worker: Record<string, unknown>): string[] {
@@ -77,6 +88,11 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   if (!invite) return NextResponse.json({ error: 'Invalid invite link' }, { status: 404 })
   if (invite.usedAt) return NextResponse.json({ error: 'This invite has already been used' }, { status: 410 })
   if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'This invite has expired' }, { status: 410 })
+
+  const asked = await inviteRole(params.token)
+  if (asked.role === 'client') {
+    return NextResponse.json({ kind: 'client', email: invite.email, name: invite.name, tournamentName: null, orgName: (await orgById(asked.orgId))?.name ?? null })
+  }
 
   let tournamentName: string | null = null
   if (invite.tournamentId) {
@@ -159,6 +175,29 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     if (!invite) return NextResponse.json({ error: 'Invalid invite link' }, { status: 404 })
     if (invite.usedAt) return NextResponse.json({ error: 'Already used' }, { status: 410 })
     if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'Expired' }, { status: 410 })
+
+    // ── A head assigner's tournament director: a login only. No Staff Pool record,
+    //    roster spot or staff questions: they're the assigner's customer, not staff.
+    const asked = await inviteRole(params.token)
+    if (asked.role === 'client') {
+      const tdName = String(body?.name || '').trim(), tdPassword = String(body?.password || '')
+      if (!tdName || !tdPassword) return NextResponse.json({ error: 'Name and password are required' }, { status: 400 })
+      if (tdPassword.length < 6) return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+      if (!asked.orgId) return NextResponse.json({ error: 'Invalid invite link' }, { status: 404 })
+      const tdEmail = String(invite.email || '').toLowerCase()
+      const had = await db().execute({ sql: `SELECT id FROM "User" WHERE lower(email) = ? LIMIT 1`, args: [tdEmail] })
+      const hadId = had.rows[0]?.id ? String(had.rows[0].id) : null
+      if (hadId) {
+        // Their login keeps its password and its home; they become this organization's.
+        const r = await addToOrg(hadId, asked.orgId, 'client', 'invite')
+        if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+      } else {
+        const u = await prisma.user.create({ data: { name: tdName, email: tdEmail, password: await bcrypt.hash(tdPassword, 12), role: 'client' } })
+        await db().execute({ sql: `UPDATE "User" SET orgId = ? WHERE id = ?`, args: [asked.orgId, u.id] })
+      }
+      await prisma.staffInvite.update({ where: { token: params.token }, data: { usedAt: new Date() } })
+      return NextResponse.json({ ok: true, alreadyHadAccount: !!hadId })
+    }
 
     const { name, role, gender, certLevel, phone, password } = body
     if (!name || !role || !password) return NextResponse.json({ error: 'Name, role, and password are required' }, { status: 400 })

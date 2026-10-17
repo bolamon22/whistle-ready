@@ -6,14 +6,24 @@ import { dateRange } from '@/components/nav/navConfig'
 
 // Which events one field director works (lib/fieldDirector): they see only these, on
 // their home page and everywhere else. Each click saves. Used on Logins (admin) and
-// Your team (director). Several field directors can work the same event.
+// Your team (director). Several field directors can work the same event. A head
+// assigner's tournament director (lib/clientEvents) gets the same picker with its own
+// endpoint, label and color (Oct 17 2026).
 export type FieldDirectorEvent = { id: string; name: string; startDate: string; endDate: string; orgId: string | null }
 
-export default function FieldDirectorEvents({ userId, events, selected, onSaved }: {
+const TONES = {
+  orange: { on: 'bg-orange-600 border-orange-600 text-white', off: 'hover:border-orange-400 hover:text-orange-700', when: 'text-orange-100' },
+  amber: { on: 'bg-amber-600 border-amber-600 text-white', off: 'hover:border-amber-400 hover:text-amber-700', when: 'text-amber-100' },
+}
+
+export default function FieldDirectorEvents({ userId, events, selected, onSaved, endpoint = '/api/field-director-events', label = 'Works', tone = 'orange' }: {
   userId: string
   events: FieldDirectorEvent[]
   selected: string[]
   onSaved?: (events: string[]) => void
+  endpoint?: string
+  label?: string
+  tone?: keyof typeof TONES
 }) {
   const [sel, setSel] = useState<string[]>(selected)
   const [busy, setBusy] = useState(false)
@@ -23,7 +33,7 @@ export default function FieldDirectorEvents({ userId, events, selected, onSaved 
     const next = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id]
     setSel(next); setBusy(true)
     try {
-      const res = await fetch('/api/field-director-events', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, events: next }) })
+      const res = await fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, events: next }) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setSel(before); toast.error(d?.error || 'That didn’t save. Please try again.'); return }
       const saved: string[] = Array.isArray(d?.events) ? d.events : next
@@ -35,15 +45,15 @@ export default function FieldDirectorEvents({ userId, events, selected, onSaved 
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Events they work">
-      <span className="text-[11px] font-semibold text-slate-500 mr-0.5">Works</span>
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={label === 'Works' ? 'Events they work' : 'Their events'}>
+      <span className="text-[11px] font-semibold text-slate-500 mr-0.5">{label}</span>
       {events.map(e => {
         const on = sel.includes(e.id)
         const when = dateRange(e)
         return (
           <button key={e.id} type="button" disabled={busy} onClick={() => toggle(e.id)} aria-pressed={on} title={when ? `${e.name}, ${when}` : e.name}
-            className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border transition-colors disabled:opacity-60 ${on ? 'bg-orange-600 border-orange-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:border-orange-400 hover:text-orange-700'}`}>
-            {on ? '✓ ' : ''}{e.name}{when ? <span className={on ? 'text-orange-100' : 'text-slate-400'}> · {when}</span> : null}
+            className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border transition-colors disabled:opacity-60 ${on ? TONES[tone].on : `bg-white border-slate-300 text-slate-500 ${TONES[tone].off}`}`}>
+            {on ? '✓ ' : ''}{e.name}{when ? <span className={on ? TONES[tone].when : 'text-slate-400'}> · {when}</span> : null}
           </button>
         )
       })}

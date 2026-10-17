@@ -54,6 +54,9 @@ export default function AcceptInvitePage() {
   // Claim invites link an EXISTING staff-pool record — role/cert are already on file,
   // so the form is just (email if we don't have one) + password.
   const isClaim = invite?.kind === 'claim'
+  // A head assigner's tournament director (lib/clientEvents): a login only, no staff
+  // questions. They see their events' schedule, officials and staff pay.
+  const isClient = invite?.kind === 'client'
 
   useEffect(() => {
     fetch(`/api/invite/${token}`)
@@ -74,7 +77,8 @@ export default function AcceptInvitePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!isClaim && !role) { setError('Please select your role'); return }
+    if (!isClaim && !isClient && !role) { setError('Please select your role'); return }
+    if (isClient && !name.trim()) { setError('Please enter your name'); return }
     if (isClaim && invite?.needEmail && !email.trim().includes('@')) { setError('Please enter your email address'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     if (password !== confirm) { setError('Passwords do not match'); return }
@@ -85,7 +89,7 @@ export default function AcceptInvitePage() {
     const res = await fetch(`/api/invite/${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(isClaim ? { password, email: email.trim() } : { name, role, gender, certLevel, phone, password }),
+      body: JSON.stringify(isClaim ? { password, email: email.trim() } : isClient ? { name: name.trim(), password } : { name, role, gender, certLevel, phone, password }),
     })
     const data = await res.json()
 
@@ -123,7 +127,7 @@ export default function AcceptInvitePage() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-10 max-w-sm w-full text-center">
         <div className="text-4xl mb-4">🎉</div>
         <h1 className="text-xl font-bold text-slate-800 mb-2">You're all set!</h1>
-        <p className="text-sm text-slate-500 mb-6">{hadAccount ? 'You already have a Whistle Ready login with this email — sign in with your existing password.' : isClaim ? 'Your staff login is ready. Sign in to see your assignments and schedule.' : 'Your staff profile has been created. Sign in to see your schedule.'}</p>
+        <p className="text-sm text-slate-500 mb-6">{hadAccount ? 'You already have a Whistle Ready login with this email — sign in with your existing password.' : isClient ? 'Your login is ready. Sign in to see your tournament.' : isClaim ? 'Your staff login is ready. Sign in to see your assignments and schedule.' : 'Your staff profile has been created. Sign in to see your schedule.'}</p>
         <Link href="/login" className="inline-block bg-teal-500 hover:bg-teal-400 text-white font-semibold text-sm px-6 py-2.5 rounded-xl transition-colors">
           Sign in →
         </Link>
@@ -137,9 +141,9 @@ export default function AcceptInvitePage() {
 
         <div className="bg-[#0f1f3d] px-6 py-5">
           <p className="text-xs text-teal-400 font-medium mb-1">
-            {isClaim ? (invite?.orgName ?? 'Whistle Ready') + ' · Staff login' : (invite?.tournamentName ?? 'Whistle Ready') + ' · Staff Invite'}
+            {isClient ? (invite?.orgName ?? 'Whistle Ready') + ' · Tournament director' : isClaim ? (invite?.orgName ?? 'Whistle Ready') + ' · Staff login' : (invite?.tournamentName ?? 'Whistle Ready') + ' · Staff Invite'}
           </p>
-          <h1 className="text-lg font-bold text-white">{isClaim ? 'Create your staff login' : 'Welcome aboard'}</h1>
+          <h1 className="text-lg font-bold text-white">{isClient ? 'See your tournament' : isClaim ? 'Create your staff login' : 'Welcome aboard'}</h1>
           <p className="text-xs text-slate-400 mt-1">{isClaim ? (invite?.email ?? 'Set up your account below') : invite?.email}</p>
         </div>
 
@@ -170,7 +174,21 @@ export default function AcceptInvitePage() {
             </>
           )}
 
-          {!isClaim && (<>
+          {isClient && (
+            <>
+              <p className="text-sm text-slate-600">{invite?.orgName ?? 'Your assigner'} shares your tournament with you here: the schedule with who is on each game and their phone numbers, and Staff pay, what each person earned and how they want to be paid.</p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Your name</label>
+                <input
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  value={name} onChange={e => setName(e.target.value)}
+                  placeholder="Full name" required autoComplete="name"
+                />
+              </div>
+            </>
+          )}
+
+          {!isClaim && !isClient && (<>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Your name</label>
             <input
@@ -258,9 +276,9 @@ export default function AcceptInvitePage() {
 
           {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
-          <button type="submit" disabled={submitting || (!isClaim && !role)}
+          <button type="submit" disabled={submitting || (!isClaim && !isClient && !role)}
             className="w-full bg-teal-500 hover:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm py-3 rounded-xl transition-colors">
-            {submitting ? (isClaim ? 'Creating your login…' : 'Setting up your profile…') : (isClaim ? 'Create my login →' : 'Join the staff →')}
+            {submitting ? (isClaim || isClient ? 'Creating your login…' : 'Setting up your profile…') : (isClaim || isClient ? 'Create my login →' : 'Join the staff →')}
           </button>
         </form>
       </div>
