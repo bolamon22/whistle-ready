@@ -4,7 +4,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, LayoutGrid, List, Rows3, User, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
@@ -590,6 +590,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
   let slotsTotal=0,slotsFilled=0,openGames=0,badGames=0; const doubledIds=new Set<string>()
   for(const t of times)getDoubleBookedWorkers(t).forEach(id=>doubledIds.add(id))
   for(const g of dayGames){if(g.isCanceled)continue;const rc=slotsOf(g);slotsTotal+=rc+1;slotsFilled+=g.assignments.filter(a=>a.role==='scorekeeper'||slotRoles(rc).includes(a.role)).length;const c=crewOf(g,getDoubleBookedWorkers(g.startTime));if(c.open)openGames++;if(c.dbl)badGames++}
+  let nBoysGames=0,nGirlsGames=0
+  for(const g of dayGames){if(g.isCanceled)continue;const gg=gameGenderOf(g.division);if(gg==='boys')nBoysGames++;else if(gg==='girls')nGirlsGames++}
   const staffedTimes=times.filter(t=>{const gs=dayGames.filter(g=>g.startTime===t&&!g.isCanceled);return gs.length>0&&gs.every(g=>crewOf(g,getDoubleBookedWorkers(t)).full)})
   const segBtn=(on:boolean)=>`h-8 px-3 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${on?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-900'}`
   const barBtn='h-9 px-3 rounded-lg border border-slate-200 bg-white text-[13px] font-medium text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5 whitespace-nowrap transition-colors'
@@ -887,11 +889,26 @@ export default function GridPage({ params }: { params:{id:string} }) {
           While the panel floats open, these rows make room for it so Notify officials and ⋯ stay
           reachable; the grid underneath keeps its full width. */}
       <div className={panelMode==='open'?'md:pr-[248px]':''}>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* Row 1: which day and view, how full the day is, and the actions */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {dates.length>0&&viewMode!=='staff'&&(
+          <div className="inline-flex flex-wrap p-1 rounded-xl bg-slate-100 gap-0.5" role="tablist" aria-label="Day">
+            {dates.map(d=>{const n=games.filter(g=>g.date===d).length;return(
+              <button key={d} type="button" role="tab" aria-selected={activeDay===d} onClick={()=>setActiveDay(d)} className={segBtn(activeDay===d)}>{formatDate(d)}<span className="text-[11px] font-normal text-slate-400 tabular-nums">{n}</span></button>
+            )})}
+          </div>
+        )}
+        {games.length>0&&(
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" aria-label="View">
+            {(['grid','list','division','staff'] as const).map(v=>(
+              <button key={v} type="button" onClick={()=>setViewMode(v)} aria-pressed={viewMode===v} className={segBtn(viewMode===v)}>{v==='grid'?'Grid':v==='list'?'List':v==='division'?'Division':'Staff'}</button>
+            ))}
+          </div>
+        )}
         {viewMode==='grid'&&dayGames.length>0&&(
-          <div className="flex items-center gap-2.5 mr-1">
-            <span className="text-sm text-slate-600 whitespace-nowrap"><b className="font-semibold text-slate-900 tabular-nums">{slotsFilled}</b> of <span className="tabular-nums">{slotsTotal}</span> slots filled</span>
-            <span className="hidden sm:block w-28 h-1.5 rounded-full bg-slate-200 overflow-hidden"><span className="block h-full rounded-full bg-teal-600 transition-all" style={{width:`${slotsTotal?Math.round(slotsFilled/slotsTotal*100):0}%`}}/></span>
+          <div className="flex items-center gap-2 ml-1">
+            <span className="text-[13px] text-slate-600 whitespace-nowrap"><b className="font-semibold text-slate-900 tabular-nums">{slotsFilled}</b>/<span className="tabular-nums">{slotsTotal}</span> filled</span>
+            <span className="hidden sm:block w-16 h-1.5 rounded-full bg-slate-200 overflow-hidden"><span className="block h-full rounded-full bg-teal-600 transition-all" style={{width:`${slotsTotal?Math.round(slotsFilled/slotsTotal*100):0}%`}}/></span>
           </div>
         )}
         {viewMode==='grid'&&doubledIds.size>0&&<button type="button" onClick={()=>setStatusFilter('bad')} title="Show only the games where someone is on two games at once" className="h-7 px-2.5 rounded-full border border-red-200 bg-red-50 text-red-700 text-xs font-semibold inline-flex items-center gap-1.5"><AlertTriangle size={13}/> {doubledIds.size} double-booked</button>}
@@ -920,32 +937,35 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       </div>
 
-      {/* Day, view, card size, layout and the Staffing panel */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        {dates.length>0&&viewMode!=='staff'&&(
-          <div className="inline-flex flex-wrap p-1 rounded-xl bg-slate-100 gap-0.5" role="tablist" aria-label="Day">
-            {dates.map(d=>{const n=games.filter(g=>g.date===d).length;return(
-              <button key={d} type="button" role="tab" aria-selected={activeDay===d} onClick={()=>setActiveDay(d)} className={segBtn(activeDay===d)}>{formatDate(d)}<span className="text-[11px] font-normal text-slate-400">{n} games</span></button>
-            )})}
-          </div>
-        )}
-        {games.length>0&&(
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" aria-label="View">
-            {(['grid','list','division','staff'] as const).map(v=>(
-              <button key={v} type="button" onClick={()=>setViewMode(v)} aria-pressed={viewMode===v} className={segBtn(viewMode===v)}>
-                {v==='grid'?<><LayoutGrid size={14}/> Grid</>:v==='list'?<><List size={14}/> List</>:v==='division'?<><Rows3 size={14}/> Division</>:<><User size={14}/> Staff</>}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex-1"/>
-        {viewMode==='grid'&&dayGames.length>0&&(<>
-          <span className="text-xs font-medium text-slate-500">Card size</span>
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" aria-label="Card size">
-            {(['full','compact','mini'] as const).map(d=><button key={d} type="button" onClick={()=>setDensity(d)} aria-pressed={density===d} className={segBtn(density===d)} title={d==='full'?'The large card: both teams, scores and one row per slot':d==='compact'?'Three lines: game, teams, officials as chips':'One line per game: who is on it'}>{d==='full'?'Full':d==='compact'?'Compact':'Mini'}</button>)}
-          </div>
-          <div className="relative">
-            <button type="button" aria-expanded={layoutOpen} onClick={()=>{setLayoutOpen(o=>!o);setMoreOpen(false)}} className={barBtn}><SlidersHorizontal size={15}/> Layout</button>
+      {/* Row 2: find and filter on the left (Boys / Girls stays one click away), how the board looks on the right */}
+      {games.length>0&&(
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {viewMode!=='staff'&&(<>
+            <label className="h-9 flex items-center gap-2 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-400 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/15 w-full sm:w-56">
+              <Search size={15}/>
+              <input className="flex-1 min-w-0 bg-transparent text-sm text-slate-800 placeholder-slate-400 focus:outline-none" placeholder="Search team, game, field…" aria-label="Search games" value={listSearch} onChange={e=>setListSearch(e.target.value)}/>
+            </label>
+            <select className="h-9 max-w-[12rem] bg-white text-slate-700 border border-slate-200 rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/15 focus:border-teal-500" aria-label="Division" value={listDivFilter} onChange={e=>setListDivFilter(e.target.value)}>
+              <option value="all">All divisions</option>
+              {[...new Set(games.map(g=>g.division))].sort().map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+            {/* Boys / Girls: blue or pink when on, with that day's game count; clicking the one that's on goes back to All. */}
+            <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Boys or girls games">
+              <button type="button" onClick={()=>setGenderFilter('all')} aria-pressed={genderFilter==='all'} className={segBtn(genderFilter==='all')}>All</button>
+              <button type="button" onClick={()=>setGenderFilter(genderFilter==='boys'?'all':'boys')} aria-pressed={genderFilter==='boys'} className={genderFilter==='boys'?'h-8 px-3 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap bg-sky-600 text-white shadow-sm':segBtn(false)}><span className={`w-2 h-2 rounded-full ${genderFilter==='boys'?'bg-white':'bg-sky-600'}`}/>Boys<span className={`text-[11px] font-normal tabular-nums ${genderFilter==='boys'?'text-sky-100':'text-slate-400'}`}>{nBoysGames}</span></button>
+              <button type="button" onClick={()=>setGenderFilter(genderFilter==='girls'?'all':'girls')} aria-pressed={genderFilter==='girls'} className={genderFilter==='girls'?'h-8 px-3 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap bg-pink-600 text-white shadow-sm':segBtn(false)}><span className={`w-2 h-2 rounded-full ${genderFilter==='girls'?'bg-white':'bg-pink-600'}`}/>Girls<span className={`text-[11px] font-normal tabular-nums ${genderFilter==='girls'?'text-pink-100':'text-slate-400'}`}>{nGirlsGames}</span></button>
+            </div>
+            <button type="button" onClick={()=>setStatusFilter(statusFilter==='open'?'all':'open')} aria-pressed={statusFilter==='open'} title="Games with a slot still open" className={`h-8 px-3 rounded-full border text-[12.5px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${statusFilter==='open'?'border-amber-500 bg-amber-50 text-amber-800':'border-slate-200 bg-white text-slate-600 hover:border-slate-400'}`}>Needs crew <span className="text-[11px] tabular-nums opacity-70">{openGames}</span></button>
+            <button type="button" onClick={()=>setStatusFilter(statusFilter==='bad'?'all':'bad')} aria-pressed={statusFilter==='bad'} title="Games where someone is on two games at once" className={`h-8 px-3 rounded-full border text-[12.5px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${statusFilter==='bad'?'border-red-500 bg-red-50 text-red-700':'border-slate-200 bg-white text-slate-600 hover:border-slate-400'}`}>Conflicts <span className="text-[11px] tabular-nums opacity-70">{badGames}</span></button>
+            {(listSearch||listDivFilter!=='all'||genderFilter!=='all'||statusFilter!=='all')&&<button type="button" className="h-8 px-2 text-[13px] text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all');setGenderFilter('all');setStatusFilter('all')}}><X size={14}/> Clear</button>}
+          </>)}
+          <div className="flex-1"/>
+          {viewMode==='grid'&&dayGames.length>0&&(<>
+            <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Card size" title="Card size">
+              {(['full','compact','mini'] as const).map(d=><button key={d} type="button" onClick={()=>setDensity(d)} aria-pressed={density===d} className={segBtn(density===d)} title={d==='full'?'Card size: full. Both teams, scores and one row per slot':d==='compact'?'Card size: compact. Game, teams, officials as chips':'Card size: mini. One line per game'}>{d==='full'?'Full':d==='compact'?'Compact':'Mini'}</button>)}
+            </div>
+            <div className="relative">
+              <button type="button" aria-label="Layout" title="Layout: column width, fold rows, refs per game" aria-expanded={layoutOpen} onClick={()=>{setLayoutOpen(o=>!o);setMoreOpen(false)}} className={`${barBtn} w-9 px-0 justify-center`}><SlidersHorizontal size={15}/></button>
             {layoutOpen&&(<>
               <div className="fixed inset-0 z-40" onClick={()=>setLayoutOpen(false)}/>
               <div className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl space-y-3">
@@ -972,44 +992,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 </div>
               </div>
             </>)}
-          </div>
-        </>)}
-        {/* The Staffing panel opens from here (it used to have a strip on the right edge that took
-            72px from the grid). Clicking the open tab again closes the panel. */}
-        {games.length>0&&(
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Staffing panel">
-            {([['staff','Staff',Users],['needs','Needs',ClipboardList],['portal','Portal',Eye]] as const).map(([k,l,Icon])=>{const on=panelMode!=='rail'&&panelTab===k;return(
-              <button key={k} type="button" aria-pressed={on} onClick={()=>{if(on)setPanelMode('rail');else{setPanelTab(k);if(panelMode==='rail')setPanelMode('open')}}} title={k==='staff'?'Staff: drag names onto slots':k==='needs'?'Needs: how many refs and scorekeepers':'Staff portal: what officials can see'} className={segBtn(on)}><Icon size={14}/> {l}</button>
-            )})}
-          </div>
-        )}
-      </div>
-
-      {/* Filters: the grid fades games that don't match; List and Division leave them out */}
-      {viewMode!=='staff'&&games.length>0&&(
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <label className="h-9 flex items-center gap-2 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-400 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/15 w-full sm:w-64">
-            <Search size={15}/>
-            <input className="flex-1 min-w-0 bg-transparent text-sm text-slate-800 placeholder-slate-400 focus:outline-none" placeholder="Search team, game, field…" aria-label="Search games" value={listSearch} onChange={e=>setListSearch(e.target.value)}/>
-          </label>
-          <select className="h-9 bg-white text-slate-700 border border-slate-200 rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/15 focus:border-teal-500" aria-label="Division" value={listDivFilter} onChange={e=>setListDivFilter(e.target.value)}>
-            <option value="all">All divisions</option>
-            {[...new Set(games.map(g=>g.division))].sort().map(d=><option key={d} value={d}>{d}</option>)}
-          </select>
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Boys or girls games">
-            {([['all','All'],['boys','Boys'],['girls','Girls']] as const).map(([k,l])=>(
-              <button key={k} type="button" onClick={()=>setGenderFilter(k)} aria-pressed={genderFilter===k} className={segBtn(genderFilter===k)}>{l}</button>
-            ))}
-          </div>
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Crew status">
-            <button type="button" onClick={()=>setStatusFilter('all')} aria-pressed={statusFilter==='all'} className={segBtn(statusFilter==='all')}>All games</button>
-            <button type="button" onClick={()=>setStatusFilter('open')} aria-pressed={statusFilter==='open'} className={segBtn(statusFilter==='open')} title="Games with a slot still open">Needs crew <span className="text-[11px] tabular-nums text-slate-400">{openGames}</span></button>
-            <button type="button" onClick={()=>setStatusFilter('bad')} aria-pressed={statusFilter==='bad'} className={segBtn(statusFilter==='bad')} title="Games where someone is on two games at once">Conflicts <span className="text-[11px] tabular-nums text-slate-400">{badGames}</span></button>
-          </div>
-          {(listSearch||listDivFilter!=='all'||genderFilter!=='all'||statusFilter!=='all')&&<button type="button" className="h-9 px-2 text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors" onClick={()=>{setListSearch('');setListDivFilter('all');setGenderFilter('all');setStatusFilter('all')}}><X size={14}/> Clear filters</button>}
+            </div>
+          </>)}
+          <button type="button" onClick={()=>setPanelMode(panelMode==='rail'?'open':'rail')} aria-pressed={panelMode!=='rail'} title="Staff list, staffing needs and the Staff portal" className={panelMode!=='rail'?'h-9 px-3 rounded-lg bg-slate-900 text-white text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap':barBtn}><Users size={15}/> Staffing</button>
         </div>
       )}
-      {viewMode==='staff'&&<div className="mb-2"/>}
       </div>
 
       {/* Staffing panel: hidden until Staff, Needs or Portal is clicked; a slide-in over the board, or pinned beside it */}

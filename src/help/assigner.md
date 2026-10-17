@@ -10,24 +10,24 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 **Where:** **Setup → Assigner**.
 
 **To assign staff on the grid:**
-1. Pick the day from the day buttons at the top (each shows how many games it has).
-2. Click **Staff** (next to **Layout**) to open the staffing panel. Its **Staff** tab lists everyone on the tournament roster. Use **Find a name**, filter **All**, **Boys**, **Girls** or **SK**, and click **Fewest games first** to switch to **A–Z**. The number after a name is how many games they have that day. A red, yellow or green **L1**, **L2** or **L3** is the ref's level (3 is the highest), which you set on the Staff Pool; only directors, admins and assigners see it.
+1. Pick the day from the day buttons at the top left (the number is how many games it has).
+2. Click **Staffing** (at the right end of the second row) to open the staffing panel. Its **Staff** tab lists everyone on the tournament roster. Use **Find a name**, filter **All**, **Boys**, **Girls** or **SK**, and click **Fewest games first** to switch to **A–Z**. The number after a name is how many games they have that day. A red, yellow or green **L1**, **L2** or **L3** is the ref's level (3 is the highest), which you set on the Staff Pool; only directors, admins and assigners see it.
 3. Drag a name onto a game's slot, or click the slot and pick a name.
-4. To change how many refs a game needs, use the minus and plus buttons on the game. To set every game that day at once, open **Layout** and click **1 ref**, **2 refs** or **3 refs**.
+4. To change how many refs a game needs, use the minus and plus buttons on the game. To set every game that day at once, open **Layout** (the sliders button next to **Card size**) and click **1 ref**, **2 refs** or **3 refs**.
 
-**The staffing panel:** it stays out of the way until you click **Staff**, **Needs** or **Portal** in the row with **Card size** and **Layout**. The panel then slides in over the board (the buttons at the top move over so they stay in reach); click the same button again, **»**, or the Esc key to close it. The pin button keeps it open beside the board instead (on a wide screen; remembered on this browser).
+**The staffing panel:** it stays out of the way until you click **Staffing**. The panel then slides in over the board (the buttons at the top move over so they stay in reach) with three tabs: **Staff**, **Needs** and **Staff portal**. Click **Staffing** again, **»**, or the Esc key to close it. The pin button keeps it open beside the board instead (on a wide screen; remembered on this browser).
 
 **Reading the grid:**
 - Colors show **Full crew**, **A slot open**, or **Nobody, or double-booked**.
 - The top of the page shows how many slots are filled for the day. A red **double-booked** count appears when someone is on two games at once; click it to see just those games.
-- Filter the games by search, division, **All** / **Boys** / **Girls**, and **All games** / **Needs crew** / **Conflicts** (the numbers are that day's games). Games that don't match fade on the grid. **Clear filters** resets them.
+- Filter the games by search, division, **All** / **Boys** / **Girls** (Boys turns blue and Girls pink when on; click it again for All), and **Needs crew** or **Conflicts**. The numbers are that day's games. Games that don't match fade on the grid. **Clear** resets the filters.
 - **Card size** (**Full**, **Compact**, **Mini**) changes how much each game shows.
 - **Layout** holds **Fit all fields** or **Fixed width** columns, and **Fold staffed**, **Fold all** and **Open all** to collapse time rows.
 - The staffing panel's **Needs** tab shows who is on games that day and **Min staff (busiest day)**, an estimate of how many refs and scorekeepers you need based on **Games/ref**. Click **By day** for each day.
 
 **Other views:** **List**, **Division** and **Staff** (pick a name under **View schedule for:** to see one person's games). In the list view, click a game to open **Assign Staff** and pick names for each slot.
 
-**What staff can see (Staff portal):** the **Staff portal** tab of the staffing panel (**Portal** next to **Layout**) shows, for **Boys officials**, **Girls officials** and **Scorekeepers**, whether they can see their games yet. Until a group is shown, its games are only on this board: they aren't on the officials' staff home or My games, and nobody is told. Build and fix the schedule first, then click **Show to staff** (this emails nobody) or send **Notify officials**, which shows that group's games as it sends. **Hide** takes them off the staff portal again; nothing on the board changes. A new event starts with every group hidden.
+**What staff can see (Staff portal):** the **Staff portal** tab of the staffing panel (open **Staffing**, then **Staff portal**) shows, for **Boys officials**, **Girls officials** and **Scorekeepers**, whether they can see their games yet. Until a group is shown, its games are only on this board: they aren't on the officials' staff home or My games, and nobody is told. Build and fix the schedule first, then click **Show to staff** (this emails nobody) or send **Notify officials**, which shows that group's games as it sends. **Hide** takes them off the staff portal again; nothing on the board changes. A new event starts with every group hidden.
 
 **Tell your officials (Notify officials):**
 1. When the assignments are ready, click **Notify officials** at the top of the Assigner.
