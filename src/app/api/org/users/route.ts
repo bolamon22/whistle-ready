@@ -5,7 +5,7 @@ import { createClient } from '@libsql/client'
 import { sendEmail } from '@/lib/email'
 import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 import { MEMBER_ROLES, addToOrg, orgPeople, removeFromOrg, setRoleIn } from '@/lib/orgMembers'
-import { orgById } from '@/lib/org'
+import { inviteClient } from '@/lib/clientInvite'
 import crypto from 'crypto'
 
 // Owner/director self-serve management of THEIR organization's users.
@@ -64,6 +64,14 @@ export async function POST(req: NextRequest) {
     const newRole = ASSIGNABLE_ROLES.includes(body.role) ? body.role : 'staff'
     if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
 
+    // A head assigner's tournament director (lib/clientEvents) isn't joining a team:
+    // their own letter, and no staff questions when they accept (lib/clientInvite).
+    if (newRole === 'client') {
+      const r = await inviteClient({ email, name, orgId, by: String(s?.user?.email || '') })
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+      return NextResponse.json(r.assigned ? { ok: true, assigned: true, member: r.member } : { ok: true, inviteUrl: r.inviteUrl })
+    }
+
     const client = db(); await ensureInviteCol(client)
 
     // Already has an account → into this org with the chosen role (lib/orgMembers:
@@ -84,17 +92,6 @@ export async function POST(req: NextRequest) {
     const inviteUrl = `${APP_URL}/invite/${token}`
 
     // email optional — owner can copy the link; sendEmail never throws
-    // A head assigner's tournament director (lib/clientEvents) isn't joining a team:
-    // the letter says what they'll see and who shared it.
-    if (newRole === 'client') {
-      const esc = (v: string) => v.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string))
-      const orgName = (await orgById(orgId))?.name || 'Your assigner'
-      await sendEmail({
-        to: email, subject: `${orgName} shared your tournament on Whistle Ready`,
-        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px"><h2 style="color:#0f172a">${esc(orgName)} shared your tournament</h2><p style="color:#475569">${name ? `Hi ${esc(name)}, ` : ''}${esc(orgName)} assigns your officials in Whistle Ready. Set up your login to see the schedule with who is on each game and their phone numbers, and Staff pay: what each person earned and how they want to be paid.</p><a href="${inviteUrl}" style="display:inline-block;background:#14b8a6;color:#fff;font-weight:600;padding:12px 28px;border-radius:10px;text-decoration:none">Set up my login →</a><p style="color:#94a3b8;font-size:13px;margin-top:24px">Link expires in 7 days.</p></div>`,
-      })
-      return NextResponse.json({ ok: true, inviteUrl })
-    }
     await sendEmail({
       to: email, subject: `You're invited to join the team`,
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px"><h2 style="color:#0f172a">You've been invited to join the team</h2><p style="color:#475569">${name ? `Hi ${name}, ` : ''}click below to set up your account.</p><a href="${inviteUrl}" style="display:inline-block;background:#14b8a6;color:#fff;font-weight:600;padding:12px 28px;border-radius:10px;text-decoration:none">Accept invite →</a><p style="color:#94a3b8;font-size:13px;margin-top:24px">Link expires in 7 days.</p></div>`,

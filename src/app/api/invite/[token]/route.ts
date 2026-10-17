@@ -7,6 +7,8 @@ import { ensureStaffInviteTable } from '@/lib/staffInviteTable'
 import { notifyStaffRegistered } from '@/lib/staffNotify'
 import { giveStaffAccess } from '@/lib/staffLogin'
 import { addToOrg } from '@/lib/orgMembers'
+import { clientEvents, saveClientEvents } from '@/lib/clientEvents'
+import { inviteEvents } from '@/lib/eventClient'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -187,6 +189,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       const tdEmail = String(invite.email || '').toLowerCase()
       const had = await db().execute({ sql: `SELECT id FROM "User" WHERE lower(email) = ? LIMIT 1`, args: [tdEmail] })
       const hadId = had.rows[0]?.id ? String(had.rows[0].id) : null
+      let userId = hadId
       if (hadId) {
         // Their login keeps its password and its home; they become this organization's.
         const r = await addToOrg(hadId, asked.orgId, 'client', 'invite')
@@ -194,6 +197,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       } else {
         const u = await prisma.user.create({ data: { name: tdName, email: tdEmail, password: await bcrypt.hash(tdPassword, 12), role: 'client' } })
         await db().execute({ sql: `UPDATE "User" SET orgId = ? WHERE id = ?`, args: [asked.orgId, u.id] })
+        userId = u.id
+      }
+      // An invite sent from an event's Tournament director page carries that event
+      // (lib/eventClient): accepting THIS invite gives it, never a matching email.
+      const evs = await inviteEvents(params.token)
+      if (evs.length && userId) {
+        const inOrg = await db().execute({ sql: `SELECT id FROM "Tournament" WHERE orgId = ? AND id IN (${evs.map(() => '?').join(', ')})`, args: [asked.orgId, ...evs] })
+        const ok = inOrg.rows.map(r => String(r.id))
+        if (ok.length) await saveClientEvents(userId, [...(await clientEvents(userId)), ...ok], 'invite')
       }
       await prisma.staffInvite.update({ where: { token: params.token }, data: { usedAt: new Date() } })
       return NextResponse.json({ ok: true, alreadyHadAccount: !!hadId })
