@@ -6,7 +6,7 @@ audience: both
 routes: /tournaments/*/public, /tournaments/*/today, /tournaments/*/event, /dashboard/parent, /dashboard/staff
 keywords: tournament app, what app, which app, app, apple app, iphone app, ios app, app store, android app, google play, download, install, download the app, is there an app, home screen, add to home screen, notifications, alerts, push notifications, phone, mobile app, whistle ready app
 ---
-Our tournaments run on Whistle Ready. You can do everything right on the website: see your schedule, follow your teams and get tournament details. There's also a mobile version you can put on your phone. You add it to your Home Screen once from your browser, and it opens full screen like any other app, with alerts.
+Our tournaments run on Whistle Ready. You can do everything right on the website: see your schedule, follow your teams and get tournament details. There's nothing to download: the website works as the app. Add it to your Home Screen once from your browser, and it opens full screen like any other app, with alerts.
 
 **iPhone:**
 1. Open the event's schedule page (or your staff or parent home page) in **Safari**. It has to be Safari for alerts to work.
