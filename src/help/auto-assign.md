@@ -3,7 +3,7 @@ title: Auto-assign or clear a day's assignments
 category: Staff
 order: 445
 routes: /tournaments/*
-keywords: auto assign auto-assign automatic fill slots clear assignments reset wipe remove all assignments delete assignments scorekeepers one field
+keywords: auto assign auto-assign automatic fill slots clear assignments reset wipe remove all assignments delete assignments scorekeepers one field boys refs girls refs teams division
 ---
 Auto-assign fills a day's open ref and scorekeeper slots for you. Clear removes assignments in bulk when you need to start over.
 
@@ -25,4 +25,5 @@ Auto-assign fills a day's open ref and scorekeeper slots for you. Clear removes 
 **Common problems:**
 - Clearing cannot be undone.
 - The **Clear** button stays grayed out until you tick at least one group, enter your name and type DELETE exactly.
+- Boys' or girls' game: from the division's name, or, when the name says neither, from the event's **Teams** (picked on **+ New Tournament** or with **Edit** on its card). A game that is still neither can take either kind of ref. **Clear** sorts games the same way.
 - Auto-assign follows each person's answers on the **Availability** page: it only puts them on games they said they can work. People who haven't answered count as available, so remind them first.

@@ -3,7 +3,7 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green
+keywords: notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green rename division divisions division names boys games girls games teams
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
@@ -35,7 +35,9 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **Who confirmed:** **Confirmed N/N** next to **Notify officials** opens the Confirmations page. On the board, a **✓** after a name means they confirmed that game. If an official can't work a game, it comes off their schedule, you get an email, and the slot shows **open** with their name (for example **open · Brooks can't**). See "See which officials confirmed their games".
 
-**Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games or enter scores. Ask the scheduler or director (the Head Assigner on the Assigner plan). To bring games in, see "Import games from TourneyMachine or a spreadsheet".
+**To rename a division:** click **Divisions** at the top of the Assigner (the Head Assigner, directors and schedulers). Change the name and click **Rename**: every game in the division moves with it. The tag under each name shows whose game it is, **Boys**, **Girls** or **Boys & girls**, from the name, or from the event's **Teams** when the name says neither, so adding Boys or Girls to a name changes it. A name another division already has is refused.
+
+**Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games, rename divisions or enter scores. Ask the scheduler or director (the Head Assigner on the Assigner plan). To bring games in, see "Import games from TourneyMachine or a spreadsheet".
 
 **To prevent accidental changes:** tick **Lock editing**. This applies on your own browser only.
 
