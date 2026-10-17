@@ -340,6 +340,20 @@ matches: the event's own record (lib/eventClient) is a name, email and phone, an
   adds the event to their `clientEvents`. An existing login gets the event right away, except from the event page
   someone already on the team with another role (`keepRole`; without it the head assigner's own email made him a
   tournament director). Tests: 80 real-Prisma checks (scratch).
+- **Teams at setup, division names on the board (Oct 17).** Bo: "When the assigner is setting up the tournament,
+  we should ask if it's boys, men's, Girls or women's teams. they also need to be able to edit division names".
+  New Tournament (every plan, required) and Edit pick any of Boys, Men's, Girls, Women's; the card shows them
+  (AppSetting `eventTeams:{tid}`, lib/eventTeams pure, lib/eventTeamsStore server; tournaments GET/POST/PATCH and
+  Copy carry `teams`). When every pick is one side, a division name that says neither is that side's game:
+  `gameGender(division, side)`. Whose game it is: always that, with `eventSideOf` / `eventSidesOf`, never a word
+  match of your own (the board's ref picker had one that read "Clemens" as men's). Every caller passes the side:
+  pay groups, payScope, pay-summary, games, assignments, staff release (+ store, officialConfirm), Notify
+  officials, availability slots, Auto-assign, Clear, the board. **Divisions** on the Assigner board renames
+  (director, scheduler, admin): PATCH /api/tournaments/[id]/divisions now checks role and org (any staff login
+  could rename any event's divisions), refuses a name another division has (case-only changes pass) and moves
+  its DivisionColor. Copy now needs a director or scheduler of that org (it had no sign-in check) and dropped
+  `skipDuplicates`, which SQLite rejects: Copy errored after making the copy for any event with a roster. Tests:
+  41 real-Prisma checks (scratch); each change fails one without it.
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
