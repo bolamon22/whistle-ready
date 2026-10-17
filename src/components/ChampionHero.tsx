@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Trophy, Share2, Route, Camera, Film, Eye, Check, Play } from 'lucide-react'
+import { useKeepChirpClear } from '@/lib/chirpKeepClear'
 
 // The champions across the top of a division's bracket once the final is scored (Bo,
 // Oct 17 2026: "a hero type image of the champion team", then "a five second video of
@@ -34,6 +35,9 @@ export default function ChampionHero({ media, team, logo, division, flight, even
   result: string; detail?: string; chips: string[]; onPath?: () => void; bracketHref?: string
 }) {
   const [copied, setCopied] = useState(false)
+  // Chirp's greeting card waits while this is on screen, so it never covers the buttons.
+  const heroRef = useRef<HTMLElement>(null)
+  useKeepChirpClear(heroRef)
   // Muted, looping and inline, so phones play it in place like a moving photo. Families
   // who asked their phone for less motion or less data get the photo and a Play button.
   const [autoplay, setAutoplay] = useState(false)
@@ -79,7 +83,7 @@ export default function ChampionHero({ media, team, logo, division, flight, even
             : 'Preview: only staff see this until Show on the public bracket is turned on in Awards.'}
         </p>
       )}
-      <section aria-label={`${[division, flight].filter(Boolean).join(' ')} champions`} className="relative h-[480px] overflow-hidden rounded-2xl bg-[#0b1f3a] shadow-lg md:h-[470px]">
+      <section ref={heroRef} aria-label={`${[division, flight].filter(Boolean).join(' ')} champions`} className="relative h-[480px] overflow-hidden rounded-2xl bg-[#0b1f3a] shadow-lg md:h-[470px]">
         {media.url && <img src={media.url} alt={media.sample ? 'Sample picture of a team holding up a trophy' : `${team}, the ${division} champions`} className="absolute inset-0 h-full w-full object-cover object-[50%_40%]" />}
         {showVideo && (
           <video src={media.videoUrl} poster={media.url || undefined} autoPlay muted loop playsInline preload="auto"

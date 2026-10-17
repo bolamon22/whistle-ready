@@ -6,6 +6,7 @@ import ChirpInput from '@/components/ChirpInput'
 import ChirpText from '@/components/ChirpText'
 import { pickNudge, audienceTopics, AUDIENCES, isAudience, type AudienceId, type NudgeEvent, type Topic } from '@/lib/chirpNudges'
 import { ChirpLauncher, ChirpGreeting, ChirpHeader, ChirpWelcome, ChirpNote, useGreeting, useChirpHistory, ChirpHeaderActions, ChirpHistoryList } from '@/components/ChirpLauncher'
+import { useChirpKeepClear } from '@/lib/chirpKeepClear'
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -60,6 +61,8 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
   // Not told who they are yet: a general greeting asks that instead.
   const askWho = !audience && !nudge.pageSpecific
   const greeting = useGreeting(`${scopeKey}-${nudge.id}`, open, info.loaded && !!path, 6000, nudge.pageSpecific ? 0 : 2)
+  // Held back while the champions' photo is on screen (lib/chirpKeepClear), so it doesn't cover its buttons.
+  const keepClear = useChirpKeepClear()
 
   // Keep the chat across pages: a link in an answer moves to that page, and on
   // tournament pages that remounts this widget, so the conversation lives in
@@ -169,7 +172,7 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
 
   return (
     <>
-      {greeting.show && (
+      {greeting.show && !keepClear && (
         <ChirpGreeting
           title={askWho ? `Hi! I'm Chirp, the ${info.orgName || 'event'} help desk.` : nudge.title}
           body={askWho ? 'What brings you here today? Pick one and I\'ll show you what people like you usually ask.' : nudge.body}
