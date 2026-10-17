@@ -1,7 +1,8 @@
 'use client'
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Trophy, ArrowRight, Network, List } from 'lucide-react'
 import { BracketView, LogosContext, isPlaceholderTeam, type BkBracket, type BkBracketGame, type BkSchedGame } from '@/components/BracketDiagram'
+import ChampionHero, { SAMPLE_CHAMP_PICTURE, type ChampMedia } from '@/components/ChampionHero'
 
 // The public event page's bracket (Bo, Oct 12 2026: "not blown away by the
 // bracket ... I like the mobile approach but would like to see the chart on desktop
@@ -13,6 +14,9 @@ import { BracketView, LogosContext, isPlaceholderTeam, type BkBracket, type BkBr
 //            lights its path in gold and dims the rest.
 //   Rounds - one round at a time as a list (the phone default), each game saying
 //            where its winner goes next.
+// Once the final is scored, the champions' photo or video from the Awards page sits on
+// top (components/ChampionHero, Oct 17 2026) when staff have put it on the public
+// bracket; otherwise the plain champion banner. Their path is gold, and so is the final.
 // Formats that are not one knockout tree (double elimination's losers side, the
 // mirrored consolation tournament) keep the older drawing in BracketDiagram.
 
@@ -20,7 +24,7 @@ type Side = { name: string | null; label: string; seed: string }
 type GameV = {
   key: string; num: string; bg: BkBracketGame; round: string; isChamp: boolean
   a: Side; b: Side; s1: number | null; s2: number | null; final: boolean
-  winner: string | null; when: string; time: string; field: string; ifNeeded: boolean
+  winner: string | null; when: string; time: string; field: string; ifNeeded: boolean; date: string
 }
 
 // Sized so an 8-team chart (5 columns) fits the event page's max-w-6xl column
@@ -45,13 +49,15 @@ function Avatar({ name }: { name: string | null }) {
 
 function GameCard({ v, focus, onPick, dim = false, fixed = false }: { v: GameV; focus: string | null; onPick: (t: string) => void; dim?: boolean; fixed?: boolean }) {
   const onPath = !!focus && (v.a.name === focus || v.b.name === focus)
-  const ring = onPath ? 'ring-[3px] ring-amber-200 shadow-lg' : v.isChamp ? 'ring-2 ring-teal-300 shadow-[0_0_28px_rgba(45,212,191,0.45)]' : 'shadow-sm'
+  // A decided final turns gold, with the champions' line lit.
+  const crowned = v.isChamp && v.final && !!v.winner
+  const ring = onPath ? 'ring-[3px] ring-amber-200 shadow-lg' : crowned ? 'ring-2 ring-amber-300 shadow-[0_0_28px_rgba(253,230,138,0.55)]' : v.isChamp ? 'ring-2 ring-teal-300 shadow-[0_0_28px_rgba(45,212,191,0.45)]' : 'shadow-sm'
   const status = v.final ? { t: 'Final', c: 'bg-slate-100 text-slate-600' } : v.ifNeeded ? { t: 'If needed', c: 'bg-violet-50 text-violet-700' } : v.time ? { t: v.time, c: 'bg-teal-50 text-teal-700' } : { t: 'TBD', c: 'bg-slate-100 text-slate-500' }
   const row = (s: Side, score: number | null, win: boolean, lose: boolean) => {
     const me = !!s.name && s.name === focus
     return (
       <button type="button" disabled={!s.name} onClick={() => s.name && onPick(s.name)}
-        className={`flex items-center gap-2 w-[calc(100%+12px)] -mx-1.5 px-1.5 min-h-[34px] rounded-lg text-left transition-colors ${me ? 'bg-amber-100' : s.name ? 'hover:bg-slate-50' : ''}`}>
+        className={`flex items-center gap-2 w-[calc(100%+12px)] -mx-1.5 px-1.5 min-h-[34px] rounded-lg text-left transition-colors ${me ? 'bg-amber-100' : crowned && s.name === v.winner ? 'bg-amber-50' : s.name ? 'hover:bg-slate-50' : ''}`}>
         <span className={`min-w-[20px] h-5 px-1 rounded-full text-[11px] font-extrabold flex items-center justify-center flex-shrink-0 ${s.seed ? 'bg-teal-50 text-teal-700' : 'text-transparent'}`}>{s.seed || '0'}</span>
         {!fixed && <Avatar name={s.name} />}
         <span className={`flex-1 min-w-0 truncate text-[13.5px] ${!s.name ? 'italic text-slate-400' : lose ? 'text-slate-400 line-through decoration-slate-300' : win ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'}`}>{s.label}</span>
@@ -116,6 +122,7 @@ function buildGames(bracket: BkBracket, sched: BkSchedGame[]) {
       when: sg && sg.date ? `${dayShort(sg.date)} ${t12(sg.startTime)}` : (sg && sg.startTime ? t12(sg.startTime) : ''),
       time: sg && sg.startTime ? t12(sg.startTime) : '',
       field: sg ? ((sg.location || '').split(' - ').pop() || sg.location || '') : '', ifNeeded: !!sg?.ifNeeded,
+      date: sg?.date || '',
     }
     memo[n] = v
     return v
@@ -176,12 +183,16 @@ function layout(main: BkBracketGame[], memo: Record<number, GameV>) {
   return { placed, root: root.gameNumber, feeders, byN, width, height, two, center, cols, depth, maxDepth }
 }
 
-export default function BracketChart({ bracketList, scheduledGames, poolOnly = false }: { bracketList: BkBracket[]; scheduledGames: BkSchedGame[]; poolOnly?: boolean }) {
+// champMedia: the champions' photo or video by the final's game number (B5), from
+// /api/tournaments/[id]/champion-media. sampleChamps: a staff preview, where a decided
+// final with nothing added yet shows the sample picture.
+export default function BracketChart({ bracketList, scheduledGames, poolOnly = false, champMedia, sampleChamps = false, division = '', eventName = '' }: { bracketList: BkBracket[]; scheduledGames: BkSchedGame[]; poolOnly?: boolean; champMedia?: Record<string, ChampMedia>; sampleChamps?: boolean; division?: string; eventName?: string }) {
   const [view, setView] = useState<'chart' | 'rounds'>('chart')
   const [focus, setFocus] = useState<string | null>(null)
   const [roundIdx, setRoundIdx] = useState<Record<string, number>>({})
   useEffect(() => { try { if (window.innerWidth < 768) setView('rounds') } catch { /* server */ } }, [])
   const pick = (t: string) => setFocus(f => f === t ? null : t)
+  const focusOn = (t: string) => setFocus(t)
 
   if (bracketList.length === 0) return <BracketView bracketList={[]} scheduledGames={[]} poolOnly={poolOnly} />
 
@@ -203,16 +214,19 @@ export default function BracketChart({ bracketList, scheduledGames, poolOnly = f
         const legacy = bracket.games.some(g => g.section === 'losers') || (bracket.format === '2gg' && bracket.games.some(g => (g.label || '').toLowerCase().includes('consolation championship')))
         const flightTitle = bracketList.length > 1 ? `Flight ${bracket.flight || 'A'}` : ''
         if (legacy) return <div key={bracket.id}>{flightTitle && <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-2">{flightTitle}</h3>}<BracketView bracketList={[bracket]} scheduledGames={scheduledGames} /></div>
-        return <OneBracket key={bracket.id} bracket={bracket} sched={scheduledGames} title={flightTitle} view={view} focus={focus} pick={pick}
+        return <OneBracket key={bracket.id} bracket={bracket} sched={scheduledGames} title={flightTitle} view={view} focus={focus} pick={pick} focusOn={focusOn}
+          champMedia={champMedia} sampleChamps={sampleChamps} division={division} eventName={eventName}
           roundIdx={roundIdx[bracket.id]} setRoundIdx={(i: number) => setRoundIdx(r => ({ ...r, [bracket.id]: i }))} />
       })}
     </div>
   )
 }
 
-function OneBracket({ bracket, sched, title, view, focus, pick, roundIdx, setRoundIdx }: { bracket: BkBracket; sched: BkSchedGame[]; title: string; view: 'chart' | 'rounds'; focus: string | null; pick: (t: string) => void; roundIdx?: number; setRoundIdx: (i: number) => void }) {
+function OneBracket({ bracket, sched, title, view, focus, pick, focusOn, champMedia, sampleChamps, division, eventName, roundIdx, setRoundIdx }: { bracket: BkBracket; sched: BkSchedGame[]; title: string; view: 'chart' | 'rounds'; focus: string | null; pick: (t: string) => void; focusOn: (t: string) => void; champMedia?: Record<string, ChampMedia>; sampleChamps: boolean; division: string; eventName: string; roundIdx?: number; setRoundIdx: (i: number) => void }) {
   const { memo, main, maxRound } = useMemo(() => buildGames(bracket, sched), [bracket, sched])
   const lay = useMemo(() => layout(main, memo), [main, memo])
+  const logos = useContext(LogosContext)
+  const boardRef = useRef<HTMLDivElement>(null)
   const placement = bracket.games.filter(g => g.section === 'consolation' || g.section === 'losers').map(g => memo[g.gameNumber]).filter(Boolean)
   if (!lay) return <BracketView bracketList={[bracket]} scheduledGames={sched} />
   const root = memo[lay.root]
@@ -221,12 +235,29 @@ function OneBracket({ bracket, sched, title, view, focus, pick, roundIdx, setRou
   // champion / status banner
   const champ = root.final ? root.winner : null
   const runnerUp = champ ? (root.a.name === champ ? root.b.name : root.a.name) : null
+  // The champions' photo or video, else the sample picture in a staff preview.
+  const media: ChampMedia | null = champ ? (champMedia?.[root.num] || (sampleChamps ? { url: SAMPLE_CHAMP_PICTURE, sample: true } : null)) : null
+  const champSide = champ ? (root.a.name === champ ? root.a : root.b) : null
+  const hi = Math.max(root.s1 ?? 0, root.s2 ?? 0), lo = Math.min(root.s1 ?? 0, root.s2 ?? 0)
+  // Their seed and the bracket games they won on the way; the final is in the line above.
+  const champChips = champ ? [
+    champSide?.seed ? `No. ${champSide.seed} seed` : '',
+    ...main.map(g => memo[g.gameNumber]).filter(v => v && v.key !== root.key && v.final && v.winner === champ)
+      .sort((x, y) => x.bg.round - y.bg.round)
+      .map(v => `${v.round.replace(/finals$/, 'final')}: ${Math.max(v.s1 ?? 0, v.s2 ?? 0)}\u2013${Math.min(v.s1 ?? 0, v.s2 ?? 0)} over ${v.a.name === champ ? v.b.label : v.a.label}`),
+  ].filter(Boolean) : []
+  const lightPath = () => {
+    if (!champ) return
+    focusOn(champ)
+    setTimeout(() => { try { boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch { /* old browser */ } }, 60)
+  }
   const rounds = Array.from(new Set(main.map(g => g.round))).sort((a, b) => a - b)
   const roundGames = (r: number) => main.filter(g => g.round === r).sort((a, b) => a.gameNumber - b.gameNumber).map(g => memo[g.gameNumber])
   const progress = rounds.map(r => { const gs = roundGames(r), done = gs.filter(v => v.final).length; return { label: roundLabel(r, maxRound), done, total: gs.length } })
 
   const edgeStyle = (child: GameV, parent: GameV) => {
     if (focus && inG(child, focus) && inG(parent, focus)) return { stroke: '#FDE68A', width: 3, dash: '' }
+    if (!focus && champ && child.winner === champ && inG(parent, champ)) return { stroke: '#FDE68A', width: 3, dash: '' }
     if (child.final) return { stroke: 'rgba(94,234,212,0.8)', width: 2, dash: '' }
     return { stroke: 'rgba(255,255,255,0.38)', width: 2, dash: '5 5' }
   }
@@ -260,7 +291,11 @@ function OneBracket({ bracket, sched, title, view, focus, pick, roundIdx, setRou
     <div className="space-y-4">
       {title && <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">{title}</h3>}
       {/* banner */}
-      {champ ? (
+      {champ && media ? (
+        <ChampionHero media={media} team={champ} logo={logos[champ]} division={division} flight={title} eventName={eventName} year={(root.date || '').slice(0, 4)}
+          result={`Beat ${runnerUp} ${hi}\u2013${lo} in the final`} detail={root.when ? `${root.when}${root.field ? ` \u00b7 ${root.field}` : ''}` : ''}
+          chips={champChips} onPath={lightPath} />
+      ) : champ ? (
         <div className="flex items-center gap-4 flex-wrap rounded-2xl px-5 py-4 text-white shadow-lg" style={{ background: 'linear-gradient(135deg,#0B1F3A 0%,#0E7490 55%,#0B1F3A 100%)' }}>
           <span className="w-12 h-12 rounded-full bg-amber-200 text-slate-900 flex items-center justify-center flex-shrink-0"><Trophy size={24} /></span>
           <div className="flex-1 min-w-0"><p className="text-[10px] font-bold uppercase tracking-widest text-teal-200">Champion</p><p className="text-xl font-extrabold truncate">{champ}</p><p className="text-[13px] text-teal-100">Beat {runnerUp} {Math.max(root.s1!, root.s2!)}–{Math.min(root.s1!, root.s2!)} in the final</p></div>
@@ -274,7 +309,7 @@ function OneBracket({ bracket, sched, title, view, focus, pick, roundIdx, setRou
       )}
 
       {view === 'chart' ? (
-        <div className="rounded-2xl p-3" style={{ background: 'linear-gradient(160deg,#0B1F3A 0%,#0E7490 60%,#0B1F3A 100%)' }}>
+        <div ref={boardRef} className="rounded-2xl p-3" style={{ background: 'linear-gradient(160deg,#0B1F3A 0%,#0E7490 60%,#0B1F3A 100%)' }}>
           {lay.width > 700 && <p className="md:hidden flex items-center gap-1.5 text-xs font-semibold text-teal-200 mb-2"><ArrowRight size={14} />Swipe to see the whole bracket</p>}
           <div className="overflow-x-auto pb-1">
             <div className="relative mx-auto" style={{ width: lay.width, height: lay.height }}>
@@ -291,11 +326,11 @@ function OneBracket({ bracket, sched, title, view, focus, pick, roundIdx, setRou
           <div className="flex items-center gap-4 flex-wrap mt-3 text-xs text-teal-100">
             <span className="flex items-center gap-1.5"><span className="w-5 border-t-2 border-teal-300/80" />Team advanced</span>
             <span className="flex items-center gap-1.5"><span className="w-5 border-t-2 border-dashed border-white/40" />Not played yet</span>
-            <span className="flex items-center gap-1.5"><span className="w-5 border-t-[3px] border-amber-200" />Selected team&apos;s path</span>
+            <span className="flex items-center gap-1.5"><span className="w-5 border-t-[3px] border-amber-200" />{champ && !focus ? "The champions' path" : "Selected team's path"}</span>
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div ref={boardRef} className="space-y-3">
           <div className="flex p-1 gap-1 bg-slate-200 rounded-full">
             {tabs.map((t, i) => <button key={t} onClick={() => setRoundIdx(i)} className={`flex-1 min-h-[40px] rounded-full text-[13px] font-bold transition-colors ${i === ri ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{t.replace('Quarterfinals', 'Quarters').replace('Semifinals', 'Semis').replace('Championship', 'Final')}</button>)}
           </div>

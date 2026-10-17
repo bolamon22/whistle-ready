@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo, useCallback, useContext, createContext, Fragment } from 'react'
+import { useEffect, useState, useMemo, useCallback, useContext, useRef, createContext, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
 import LiveTicker from '@/components/LiveTicker'
@@ -9,6 +9,7 @@ import { deviceId as getDeviceId } from '@/lib/pushClient'
 import { nameKey, teamRefKey } from '@/lib/names'
 import { BracketView, LogosContext, isPlaceholderTeam, type BkBracket } from '@/components/BracketDiagram'
 import BracketChart from '@/components/BracketChart'
+import type { ChampMedia } from '@/components/ChampionHero'
 
 // Follower counts per team, from /follows. Bo wants Follow to read like Instagram --
 // "how many people are following a particular team" -- so the number sits under
@@ -376,11 +377,15 @@ function TeamSheet({division,team,divGames,pool,poolRows,overallRows,bracketList
   )
 }
 
-function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,divTiebreakers=tiebreakers,advanceBy='division',scheduleLive=true,rosters=[],notes,poolOnly=false}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];divTiebreakers?:string[];advanceBy?:'division'|'pool';scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean}) {
+function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,divTiebreakers=tiebreakers,advanceBy='division',scheduleLive=true,rosters=[],notes,poolOnly=false,champMedia,sampleChamps=false,eventName='',initialTab=''}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];divTiebreakers?:string[];advanceBy?:'division'|'pool';scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean;champMedia?:Record<string,ChampMedia>;sampleChamps?:boolean;eventName?:string;initialTab?:DivTab|''}) {
   // Every team on this view plays in `division`; follows are per (division, team).
   const followed=(team:string)=>isFollowed(division,team)
   const onFollow=(team:string)=>toggleFollow(division,team)
-  const [divTab,setDivTab]=useState<DivTab>('standings')
+  const [divTab,setDivTab]=useState<DivTab>(initialTab||'standings')
+  // Opened from a link (a shared champions' photo, the Awards page's Preview): bring
+  // the division into view under the event's header.
+  const viewRef=useRef<HTMLDivElement>(null)
+  useEffect(()=>{if(!initialTab)return;const t=setTimeout(()=>{try{viewRef.current?.scrollIntoView({behavior:'smooth',block:'start'})}catch{}},350);return()=>clearTimeout(t)},[])// eslint-disable-line react-hooks/exhaustive-deps
   const [selectedTeam,setSelectedTeam]=useState<string|null>(null)
   const [sheetTeam,setSheetTeam]=useState<string|null>(null)
   const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'|'mine'|'live'>('all')
@@ -430,6 +435,10 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
   // with "Not scheduled" captions.
   const scheduleGames=divGames.sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):a.startTime<b.startTime?-1:1)
   const bracketGames=divGames
+  // The champions' photo or video for this division's finals, by game number (B5),
+  // which is how the bracket names its games (components/ChampionHero).
+  const champByNum:Record<string,ChampMedia>={}
+  if(champMedia) divGames.forEach(g=>{const m=champMedia[g.id];if(m&&g.gameNumber)champByNum[g.gameNumber]=m})
   // Who really plays each game, bracket placeholders resolved where scores and seeds
   // decide them: the team filter and the team sheet go by this, so a team's Sunday
   // bracket games (still stored as Seed 1 / W-B1) show up under its name.
@@ -442,7 +451,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
   const tabLabels:{[k in DivTab]:string}={standings:'Standings',schedule:'Schedule',bracket:'Bracket'}
 
   return (
-    <div>
+    <div ref={viewRef} className="scroll-mt-24">
       {/* Notes staff wrote on the Divisions page (lib/divisionNotes): this division's,
           then the one for every division. */}
       {notes&&(notes.division||notes.all)&&(
@@ -655,7 +664,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
       })()}
 
       {scheduleLive && divTab==='bracket' && (
-        <BracketChart bracketList={bracketList} scheduledGames={bracketGames} poolOnly={poolOnly}/>
+        <BracketChart bracketList={bracketList} scheduledGames={bracketGames} poolOnly={poolOnly} champMedia={champByNum} sampleChamps={sampleChamps} division={division} eventName={eventName}/>
       )}
 
       {sheetTeam && (()=>{
@@ -718,6 +727,27 @@ export default function PublicTournamentPage() {
   const liveRosters=useMemo(()=>pubVis.schedule==='live'?poolRosters.filter(r=>!r.unassigned):poolRosters,[poolRosters,pubVis.schedule])
   const [annOpen,setAnnOpen]=useState(false)
   const [followCounts,setFollowCounts]=useState<Record<string,number>>({})
+  // Links into one division (Bo, Oct 17 2026): Share on the champions' photo opens
+  // ?division=<name>&tab=bracket, and the Awards page's Preview adds preview=champions,
+  // which shows signed-in staff the champions' photo or video before it is public.
+  const [deepLink,setDeepLink]=useState<{division:string;tab:DivTab|'';preview:boolean;read:boolean}>({division:'',tab:'',preview:false,read:false})
+  useEffect(()=>{
+    let division='',tab:DivTab|''='',preview=false
+    try{const q=new URLSearchParams(window.location.search);division=q.get('division')||'';const t=q.get('tab');if(t==='standings'||t==='schedule'||t==='bracket')tab=t;preview=q.get('preview')==='champions'}catch{}
+    setDeepLink({division,tab,preview,read:true})
+  },[])
+  // Photos and clips staff put on the public bracket in Awards (api/.../champion-media),
+  // by championship game id; `staff` says the preview was granted.
+  const [champMedia,setChampMedia]=useState<{byGame:Record<string,ChampMedia>;staff:boolean}>({byGame:{},staff:false})
+  useEffect(()=>{
+    if(!deepLink.read)return
+    fetch(`/api/tournaments/${id}/champion-media${deepLink.preview?'?preview=1':''}`).then(r=>r.ok?r.json():null).then(d=>{
+      if(!d||!Array.isArray(d.media))return
+      const byGame:Record<string,ChampMedia>={}
+      d.media.forEach((m:any)=>{if(m&&typeof m.gameId==='string'&&(m.url||m.videoUrl))byGame[m.gameId]={url:String(m.url||''),...(m.videoUrl?{videoUrl:String(m.videoUrl)}:{}),...(m.preview?{preview:true}:{})}})
+      setChampMedia({byGame,staff:!!d.staff})
+    }).catch(()=>{})
+  },[id,deepLink.read,deepLink.preview])
 
   useEffect(()=>{
     Promise.all([
@@ -809,6 +839,14 @@ export default function PublicTournamentPage() {
     liveRosters.forEach(r=>{if(r.division&&r.teams.length)set.add(r.division)})
     return Array.from(set).sort()
   },[games,liveRosters])
+  // A link that names a division opens it, once, as soon as the divisions are known.
+  const deepOpened=useRef(false)
+  useEffect(()=>{
+    if(deepOpened.current||!deepLink.division||!divisions.length)return
+    deepOpened.current=true
+    const hit=divisions.find(d=>nameKey(d)===nameKey(deepLink.division))
+    if(hit)setSelectedDiv(hit)
+  },[deepLink.division,divisions])
 
   // Per-division: last updated time and champion
   const allTeamsWithMeta=useMemo(()=>{
@@ -1067,6 +1105,10 @@ export default function PublicTournamentPage() {
               rosters={liveRosters.filter(r=>r.division===selectedDiv)}
               notes={{division:noteFor(selectedDiv),all:divNotes.all}}
               poolOnly={poolOnlyDivs.some(n=>nameKey(n)===nameKey(selectedDiv))}
+              champMedia={champMedia.byGame}
+              sampleChamps={deepLink.preview&&champMedia.staff}
+              eventName={tournament?.name||''}
+              initialTab={deepLink.division&&nameKey(deepLink.division)===nameKey(selectedDiv)?deepLink.tab:''}
             />
           </div>
         )}
