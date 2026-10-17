@@ -3,11 +3,13 @@ title: Pay staff and track hourly time
 category: Registration & money
 order: 320
 routes: /tournaments/*/pay-summary, /tournaments/*/time-entries
-keywords: pay summary pay report staff pay payroll mark paid unpay csv export referee pay time entries clock in clock out hourly staff athletic trainer field ops manual hours punch clock assigner boys refs girls refs scorekeepers pay groups your part only director marks paid pay rates misc staff miscellaneous head assigner
+keywords: pay summary pay report staff pay payroll mark paid unpay csv export referee pay time entries clock in clock out hourly staff athletic trainer field ops manual hours punch clock assigner boys refs girls refs scorekeepers pay groups your part only director marks paid pay rates misc staff miscellaneous head assigner tournament director assigning fee see their view
 ---
 **Staff pay** totals what each staff member earned at this tournament and lets you mark them paid. **Time entries** tracks hours for hourly staff.
 
 **Where:** **People → Staff pay**, or the **Staff pay** and **Time entries** tabs on **People → Staff roster**. **Staff pay** is also a button on the tournament card and on **Financials**.
+
+**On the Whistle Ready Assigner plan:** above the list, **Tournament director** names who sees this event's Staff pay, with **See their view**, and **Assigning fee** sets what they pay you on top (see "Share an event with your tournament director"). People the tournament director marks paid show paid here too.
 
 **To pay staff:**
 1. Open **Staff pay**. The header shows **Total**, **Paid** and **Outstanding**.

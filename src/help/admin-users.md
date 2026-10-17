@@ -45,7 +45,7 @@ A link opens that club's registrations at that tournament as they are when you a
 
 **To find people:**
 - Type in **Search people, jobs, clubs…**: a name, email, role, staff job (for example "trainer" or "ref") or club name.
-- Click a chip: **Everyone**, **Office** (admins, directors, schedulers, assigners, field directors), **Staff**, **Clubs & coaches** (and anyone linked to a club) or **Parents**. Each shows how many match.
+- Click a chip: **Everyone**, **Office** (admins, directors, schedulers, assigners, field directors), **Staff**, **Clubs & coaches** (and anyone linked to a club), **Clients** (a head assigner's tournament directors, shown when there are any) or **Parents**. Each shows how many match.
 - Under **Staff**, pick a job: **Refs**, **Scorekeepers**, **Athletic trainers**, **Field ops**, or **No staff record**.
 - **Last on** narrows to people on now, on in the last 7 or 30 days, or with **No visit recorded**. Visits are recorded from Oct 12, 2026.
 - Sort by **Newest first**, **Name A–Z** or **Last on**. **Clear filters** resets.

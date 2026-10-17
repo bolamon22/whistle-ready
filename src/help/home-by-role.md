@@ -17,6 +17,8 @@ After you sign in, Whistle Ready opens a home page that fits your role. Each one
 - Find your event with **Find a tournament**. The **Up next** card shows how many games have their full ref crew.
 - Each tournament has **Assign** (the Assigner board), **By official**, **Staff roster**, **Availability**, **Staff pay** and **Training**.
 
+**Tournament director home** (the Whistle Ready Assigner plan): each event the head assigner shared with **Schedule** and **Staff pay**, the assigner's phone and email, and **Powered by Whistle Ready**.
+
 **Scheduler home:**
 - The next event shows under **Up next**.
 - Each tournament has **Schedule**, **Divisions**, **Manage** and **Setup**, and a progress bar such as "198 games · 11 placed". "No games yet" means no schedule exists yet.
