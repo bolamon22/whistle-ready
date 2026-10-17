@@ -177,6 +177,10 @@ covers it, add a line to the closest one and say so in your summary to Bo.
 - Use the shared primitives in `src/components/ui` (Card, SectionHeader, StatCard,
   ActionButton); see `src/components/ui/README.md`. Shared game grid: `src/components/GameGrid.tsx`.
 - Sentence case; avoid heavy bold.
+- One name per page: its menu item, page title, tabs, home and card buttons and help page all use the same
+  words (**Staff roster**, **Staff pay**, **Time entries**; not Roster, Pay Summary, Pay Report or Ref pay).
+  Top-bar menus are the organization across every event and the event header is that one event, so the two
+  never share a menu name (Oct 17 2026: the top bar's People became **Staff**).
 - Note: the BracketBuilder/scoring bracket views are intentionally their own visual style
   (CFP "rail" layout); the rest of the app follows the light slate/teal standard.
 
@@ -296,6 +300,15 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   drop off-plan ids. The Video library filters by `useRole().planOff` (an admin sees all). Assigner plan: 19 of 42
   (Start here basics, R1-R3, the assigner series minus A11 Ref needed), plus live scoring with Scores on. Chirp's
   video list still ignores the plan. Tests: 22 pure + 14 real-Prisma (scratch).
+- **Menu names, app-wide (Oct 17).** Bo: the top bar's **People** and the event header's **People** kept confusing
+  people being shown around. The top-bar menu is now **Staff** (key `staff`: Staff Pool, Your team, Training videos)
+  and **Logins** (admins only) moved to **Admin**, after Organizations, as on SuperAdminBar's tabs. The event's
+  **People** menu stays: the teams, staff, media and vendors at that event. One name per page: the event staff tabs
+  read Staff roster · Availability · Time entries · Staff pay and the titles match (Time entries was "Hourly Staff
+  Time"); the director and field director homes (Staff), the assigner home (Roster, Ref pay), the tournament card
+  (Staff, Pay Report) and Financials (Staff Pay) use the same names. Help: 16 pages. Narration still says "Roster"
+  and "Ref pay" in videos asg-home and asg-pay (re-record to match); asg-crew's "Open it from Staff at the top"
+  is right again. Tests: 18 nav checks (scratch).
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
