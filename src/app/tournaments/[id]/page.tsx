@@ -257,6 +257,16 @@ export default function GridPage({ params }: { params:{id:string} }) {
     if(localStorage.getItem('assignerPanel')==='pinned')setPanelModeRaw('pinned')
   }catch{}},[params.id])
   function setDensity(d:Density){setDensityRaw(d);setMiniOpen(new Set());try{localStorage.setItem('assignerDensity:'+params.id,d)}catch{}}
+  // Escape closes an open menu first, then a floating Staffing panel (pinned stays put).
+  useEffect(()=>{
+    function onKey(e:KeyboardEvent){
+      if(e.key!=='Escape')return
+      if(moreOpen||layoutOpen){setMoreOpen(false);setLayoutOpen(false);return}
+      if(panelMode==='open')setPanelModeRaw('rail')
+    }
+    window.addEventListener('keydown',onKey)
+    return()=>window.removeEventListener('keydown',onKey)
+  },[moreOpen,layoutOpen,panelMode])
   function setPanelMode(m:'rail'|'open'|'pinned'){setPanelModeRaw(m);try{localStorage.setItem('assignerPanel',m==='pinned'?'pinned':'rail')}catch{}}
   function setFitFields(v:boolean){setFitFieldsRaw(v);try{localStorage.setItem('assignerFit:'+params.id,v?'1':'0')}catch{}}
 
@@ -873,7 +883,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
       {/* Header (Oct 2026 redesign). Assigners said the page was too busy: seven bands sat above the
           first game. Now one action row, one view row and one filter row; the staff list, the
-          staffing needs and the Staff portal switches live in the Staffing panel on the right. */}
+          staffing needs and the Staff portal switches live in the Staffing panel on the right.
+          While the panel floats open, these rows make room for it so Notify officials and ⋯ stay
+          reachable; the grid underneath keeps its full width. */}
+      <div className={panelMode==='open'?'md:pr-[248px]':''}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {viewMode==='grid'&&dayGames.length>0&&(
           <div className="flex items-center gap-2.5 mr-1">
@@ -989,6 +1002,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
       {viewMode==='staff'&&<div className="mb-2"/>}
+      </div>
 
       {/* Staffing panel: a rail when minimized; a slide-in over the board, or pinned beside it */}
       {games.length>0&&panelMode==='rail'&&(

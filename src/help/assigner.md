@@ -15,7 +15,7 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 3. Drag a name onto a game's slot, or click the slot and pick a name.
 4. To change how many refs a game needs, use the minus and plus buttons on the game. To set every game that day at once, open **Layout** and click **1 ref**, **2 refs** or **3 refs**.
 
-**The staffing panel:** it starts minimized to a strip of three buttons (**Staff**, **Needs**, **Portal**) at the right edge. Clicking one slides the panel in over the board; **»** minimizes it again. The pin button keeps it open beside the board instead (on a wide screen; remembered on this browser).
+**The staffing panel:** it starts minimized to a strip of three buttons (**Staff**, **Needs**, **Portal**) at the right edge. Clicking one slides the panel in over the board (the buttons at the top move over so they stay in reach); **»** or the Esc key minimizes it again. The pin button keeps it open beside the board instead (on a wide screen; remembered on this browser).
 
 **Reading the grid:**
 - Colors show **Full crew**, **A slot open**, or **Nobody, or double-booked**.
