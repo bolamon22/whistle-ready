@@ -177,7 +177,8 @@ export default function NavBar() {
   const event = canEvents && today ? currentEvent(tournaments, pathname, today) : null
   const canCreate = role === 'admin' || role === 'director'
   const showTheme = isStaffThemeRoute(pathname)
-  const showAlerts = !['coach', 'parent', 'club_director'].includes(role)
+  // Game-day alerts are for staff; a head assigner's tournament director (client) isn't.
+  const showAlerts = !['coach', 'parent', 'club_director', 'client'].includes(role)
   // The director is the Head Assigner in an organization on the Assigner plan (lib/orgPlans).
   const roleLabel = roleTitle(role, org?.plan)
   const taskLabel = overdue > 0 ? `Tasks, ${overdue} overdue` : 'Tasks'

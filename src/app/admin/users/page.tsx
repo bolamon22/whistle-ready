@@ -26,7 +26,7 @@ interface ClubLink { id: string; tournamentId: string; clubName: string }
 interface Tournament { id: string; name: string }
 interface Registration { clubName: string; tournamentId: string }
 
-const ROLES = ['admin','director','club_director','assigner','scheduler','field_director','coach','staff','parent']
+const ROLES = ['admin','director','club_director','assigner','scheduler','field_director','client','coach','staff','parent']
 
 const ROLE_LABELS: Record<string, string> = {
   scorekeeper:   'Scorekeeper (old role)',
@@ -37,6 +37,7 @@ const ROLE_LABELS: Record<string, string> = {
   assigner:      'Assigner',
   scheduler:     'Scheduler',
   field_director: 'Field Director',
+  client:        'Tournament Director (client)',
   coach:         'Coach',
   staff:         'Staff',
   parent:        'Parent',
@@ -49,6 +50,7 @@ const ROLE_COLORS: Record<string, string> = {
   assigner:      'bg-indigo-100 text-indigo-700',
   scheduler:     'bg-cyan-100 text-cyan-700',
   field_director: 'bg-orange-100 text-orange-700',
+  client:        'bg-amber-100 text-amber-800',
   coach:         'bg-blue-100 text-blue-700',
   staff:         'bg-teal-100 text-teal-700',
   parent:        'bg-pink-100 text-pink-700',
@@ -58,14 +60,16 @@ const ROLE_COLORS: Record<string, string> = {
 // trainer, field ops) logs in as Staff; their job comes from their Staff Pool record,
 // matched by email. Bo, Oct 13 2026: a trainer showed only as "Staff" and searching
 // "trainer" found nobody.
-type Who = 'all' | 'office' | 'staff' | 'clubs' | 'parents'
+type Who = 'all' | 'office' | 'staff' | 'clubs' | 'clients' | 'parents'
 const WHO: { key: Who; label: string }[] = [
   { key: 'all', label: 'Everyone' }, { key: 'office', label: 'Office' }, { key: 'staff', label: 'Staff' },
-  { key: 'clubs', label: 'Clubs & coaches' }, { key: 'parents', label: 'Parents' },
+  { key: 'clubs', label: 'Clubs & coaches' }, { key: 'clients', label: 'Clients' }, { key: 'parents', label: 'Parents' },
 ]
 const whoOf = (role: string): Who =>
   ['admin', 'director', 'scheduler', 'assigner', 'field_director'].includes(role) ? 'office'
   : ['club_director', 'coach'].includes(role) ? 'clubs'
+  // A head assigner's tournament director (lib/clientEvents, Oct 17 2026).
+  : role === 'client' ? 'clients'
   : role === 'parent' ? 'parents' : 'staff'
 // A login that directs a club shows under Clubs & coaches too, whatever its role: a
 // field director who runs his own club is in both lists (Oct 13 2026).
@@ -299,7 +303,7 @@ function AdminUsersInner() {
       {/* Filters */}
       <div className="mb-4 space-y-2">
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Who">
-          {WHO.map(w => (
+          {WHO.filter(w => w.key !== 'clients' || whoCount('clients') > 0 || who === 'clients').map(w => (
             <button key={w.key} type="button" aria-pressed={who === w.key} className={chip(who === w.key)}
               onClick={() => { setWho(w.key); setJob('all') }}>
               {w.label} <span className="opacity-60 font-medium">{whoCount(w.key)}</span>

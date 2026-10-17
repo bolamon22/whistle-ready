@@ -7,6 +7,7 @@ import { roleHasFeature } from './routeAccess'
 import { tournamentOrgId } from '@/lib/org'
 import { prisma } from '@/lib/db'
 import { orgScoped } from '@/lib/orgScope'
+import { clientEvents } from '@/lib/clientEvents'
 
 // Shared authorization for API route handlers.
 //
@@ -22,8 +23,10 @@ import { orgScoped } from '@/lib/orgScope'
 //   const { role } = gate            // gate.session / gate.userId also available
 
 // External (non-staff) roles: real people who log in, but who must never edit
-// tournament operations. Everyone else is staff.
-const EXTERNAL_ROLES = ['coach', 'parent', 'club_director']
+// tournament operations. Everyone else is staff. `client` is a head assigner's
+// tournament director (lib/clientEvents, Oct 17 2026): their data comes only from
+// /api/client/*, through requireClientEvent below, never from a staff route.
+const EXTERNAL_ROLES = ['coach', 'parent', 'club_director', 'client']
 
 export type AuthResult =
   | { ok: true; session: any; role: string; userId: string; orgId: string | null; events: string[] | null; viewing?: boolean }
@@ -181,6 +184,45 @@ export async function requireFeature(feature: string): Promise<AuthResult> {
   if (b.role === 'admin') return ok(b)
   if (!EXTERNAL_ROLES.includes(b.role) && b.role && roleHasFeature(b.role, feature)) return ok(b)
   return { ok: false, res: NextResponse.json({ error: 'Your role does not have access to this' }, { status: 403 }) }
+}
+
+/** The tournament director's home (/api/client/events): the tournament director, a
+ *  head assigner checking what they see, or an admin (View as). The route picks the
+ *  events by role. */
+export async function requireClientHome(): Promise<AuthResult> {
+  const b = await base()
+  if ('res' in b) return { ok: false, res: b.res }
+  if (['client', 'director', 'admin'].includes(b.role) || (b.session?.user as any)?.role === 'admin') return ok(b)
+  return { ok: false, res: NextResponse.json({ error: 'Not allowed' }, { status: 403 }) }
+}
+
+/** One event's tournament director area (lib/clientEvents, /dashboard/client). Open to
+ *  - the tournament director (role `client`) for an event picked for them, in the
+ *    organization they're working in;
+ *  - that organization's director, the head assigner, to see what they see;
+ *  - an admin: any event, or in View as only the viewed organization's (a View as of a
+ *    tournament director sees every event there, since no one person is being viewed).
+ *  `as` says which. Anything else is not found (another organization's event) or
+ *  refused. */
+export async function requireClientEvent(tournamentId: string | null | undefined):
+  Promise<(Extract<AuthResult, { ok: true }> & { as: 'client' | 'director' | 'admin' }) | { ok: false; res: NextResponse }> {
+  const b = await base()
+  if ('res' in b) return { ok: false, res: b.res }
+  const g = ok(b) as Extract<AuthResult, { ok: true }>
+  const notFound = { ok: false as const, res: NextResponse.json({ error: 'Not found' }, { status: 404 }) }
+  const id = String(tournamentId || '')
+  if (!id) return notFound
+  const realAdmin = g.session?.user?.role === 'admin'
+  if (realAdmin && !g.viewing) return { ...g, as: 'admin' }
+  const org = await tournamentOrgId(id)
+  if (!org || org !== g.orgId) return notFound
+  if (g.role === 'client') {
+    if (realAdmin) return { ...g, as: 'admin' }
+    return (await clientEvents(g.userId)).includes(id) ? { ...g, as: 'client' } : notFound
+  }
+  if (g.role === 'director') return { ...g, as: 'director' }
+  if (realAdmin) return { ...g, as: 'admin' }
+  return { ok: false, res: NextResponse.json({ error: 'Not allowed' }, { status: 403 }) }
 }
 
 /** Tournament director (or admin) only — for destructive or high-trust actions. */

@@ -15,7 +15,7 @@
 import { type PayScope, seesPay, workerPayGroups } from './payGroups'
 
 /** Roles an admin can preview with "View as". */
-export const PREVIEW_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'field_director', 'coach', 'staff', 'parent'] as const
+export const PREVIEW_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'field_director', 'client', 'coach', 'staff', 'parent'] as const
 
 /** Dollar amounts: invoices, payments, balances, income, expenses. */
 export const canSeeMoney = (role: string) => role === 'admin' || role === 'director'

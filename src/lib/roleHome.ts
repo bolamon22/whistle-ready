@@ -15,6 +15,7 @@ const HOME: Record<string, string> = {
   assigner:      '/dashboard/assigner',
   scheduler:     '/dashboard/scheduler',
   field_director: '/dashboard/field-director',
+  client:        '/dashboard/client',
   coach:         '/dashboard/coach',
   staff:         '/dashboard/staff',
   ref:           '/dashboard/ref',

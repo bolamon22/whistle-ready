@@ -131,17 +131,21 @@ export function eventHref(role: string, id: string, planOff?: readonly string[] 
 // ── Roles, for the account menu and View as ──
 export const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin', director: 'Tournament Director', club_director: 'Club Director', assigner: 'Assigner',
-  scheduler: 'Scheduler', field_director: 'Field Director', coach: 'Coach', staff: 'Staff', parent: 'Parent',
+  scheduler: 'Scheduler', field_director: 'Field Director', client: 'Tournament Director (client)', coach: 'Coach', staff: 'Staff', parent: 'Parent',
 }
 export const ROLE_COLORS: Record<string, string> = {
   admin: 'bg-red-100 text-red-700', director: 'bg-purple-100 text-purple-700', club_director: 'bg-violet-100 text-violet-700',
-  assigner: 'bg-indigo-100 text-indigo-700', scheduler: 'bg-cyan-100 text-cyan-700', field_director: 'bg-orange-100 text-orange-700', coach: 'bg-blue-100 text-blue-700',
+  assigner: 'bg-indigo-100 text-indigo-700', scheduler: 'bg-cyan-100 text-cyan-700', field_director: 'bg-orange-100 text-orange-700', client: 'bg-amber-100 text-amber-800', coach: 'bg-blue-100 text-blue-700',
   staff: 'bg-teal-100 text-teal-700', parent: 'bg-pink-100 text-pink-700',
 }
 /** The roles an admin can preview the app as. */
-export const VIEW_AS_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'field_director', 'coach', 'staff', 'parent']
+export const VIEW_AS_ROLES = ['director', 'club_director', 'assigner', 'scheduler', 'field_director', 'client', 'coach', 'staff', 'parent']
 /** A role's name in an organization on this plan (lib/orgPlans): the director is the
  *  Head Assigner on the Assigner plan, the Tournament Director otherwise. */
 export function roleTitle(role: string, plan?: string | null): string {
+  // A head assigner's customer (lib/clientEvents) is simply their Tournament Director
+  // inside that organization; elsewhere (Logins lists every organization) the role
+  // says it's a client, so it isn't mistaken for a Tournament-plan director.
+  if (role === 'client' && plan === 'assigner') return 'Tournament Director'
   return role === 'director' ? ownerTitle(plan) : ROLE_LABELS[role] ?? role
 }

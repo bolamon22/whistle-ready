@@ -21,8 +21,9 @@ import { prisma } from '@/lib/db'
 // director can add, change or remove an admin login.
 // Server only: never import this from a client component.
 
-/** Roles an organization can give someone (the same list Your team offers). */
-export const MEMBER_ROLES = ['director', 'scheduler', 'assigner', 'field_director', 'coach', 'staff']
+/** Roles an organization can give someone (the same list Your team offers). `client`
+ *  is a head assigner's tournament director (lib/clientEvents). */
+export const MEMBER_ROLES = ['director', 'scheduler', 'assigner', 'field_director', 'client', 'coach', 'staff']
 /** Logins that belong to families and clubs, not to an organization's staff. */
 const OUTSIDE_ROLES = ['coach', 'parent', 'club_director']
 

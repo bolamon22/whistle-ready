@@ -477,6 +477,36 @@
       "staff_applications": false,
       "org_admin": false,
       "tasks": false
+    },
+    "client": {
+      "tournaments_list": false,
+      "tournament_dashboard": false,
+      "tournament_schedule": false,
+      "tournament_setup": false,
+      "tournament_roster": false,
+      "tournament_availability": false,
+      "tournament_assignments": false,
+      "tournament_time_entries": false,
+      "tournament_pay_summary": false,
+      "tournament_financials": false,
+      "tournament_registrations": false,
+      "tournament_player_regs": false,
+      "tournament_people": false,
+      "tournament_vendors": false,
+      "staff_applications": false,
+      "tournament_settings": false,
+      "staff_pool": false,
+      "admin_users": false,
+      "org_admin": false,
+      "cd_overview": false,
+      "cd_players": false,
+      "cd_schedule": false,
+      "cd_billing": false,
+      "tournament_scores": false,
+      "game_scorekeeper": false,
+      "staff_gameday": false,
+      "tasks": false,
+      "social_scheduler": false
     }
   }
 }

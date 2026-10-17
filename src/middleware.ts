@@ -22,6 +22,7 @@ const ROLE_HOME: Record<string, string> = {
   assigner:      '/dashboard/assigner',
   scheduler:     '/dashboard/scheduler',
   field_director: '/dashboard/field-director',
+  client:        '/dashboard/client',
   coach:         '/dashboard/coach',
   staff:         '/dashboard/staff',
   parent:        '/dashboard/parent',
