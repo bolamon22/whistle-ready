@@ -505,6 +505,18 @@ covers it, add a line to the closest one and say so in your summary to Bo.
   body}` → `updateScheduled` (queued rows only, else 404; refuses over 200/4000 chars and unknown fields;
   `type: 'returning'` refused, no editor yet). `claimDue` re-reads the row after claiming, so an edit saved
   mid-claim can't go out as the old wording. Only that send changes; saved letters stay as they are.
+- **Champions' photo and video on the public bracket (Oct 17).** Awards rows (AppSetting `awards:<id>`, now read
+  through `lib/awards.ts`) also hold `videoUrl` + `posterUrl` (a clip of 10 s / 40 MB at most, sent browser to Vercel
+  Blob under `champions/<tournamentId>/` via `POST /api/tournaments/[id]/awards/upload-video`; the PATCH only accepts
+  that folder, `lib/championMedia.isChampionVideoUrl`) and `public`, which only `AWARD_PUBLISH_ROLES` (admin, director,
+  field_director) may set; the GET returns `canPublish`. Photos are now shrunk to 2000 px JPEG before upload
+  (`uploadChampionPhoto`). `GET /api/tournaments/[id]/champion-media` (no login) lists the public rows' media by
+  championship game id while the schedule is public; `?preview=1` from staff adds the private ones (`preview`) and
+  `staff: true`. `BracketChart` takes `champMedia` (by B#) and renders `components/ChampionHero` over a decided final
+  (else the old banner); the champions' path and the final are gold. The public page reads `?division=&tab=` (Share
+  links) and `preview=champions` (the Awards page's **Preview on the bracket**; a decided final with nothing added
+  shows `public/champions-sample.svg`). Not built: a share preview image per champion (the layout's metadata has no
+  searchParams, so it would need its own page).
 - **Staff W-9 upload (Oct 11).** W-9 card on the staff portal (`components/StaffW9Card.tsx`, `/dashboard/staff`),
   `GET/POST /api/staff-portal/w9` (worker from the session email, oldest record, never from the request). All W-9
   storage goes through `lib/staffW9.ts`: encrypted data URL in AppSetting `w9:{workerId}`, `w9meta:{workerId}`
