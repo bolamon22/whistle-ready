@@ -3,17 +3,19 @@ import { orgGate, requireDirector, requireStaffPay } from '@/lib/apiAuth'
 import { assigningFeeOf, feeTotal, normalizeFee, saveAssigningFee } from '@/lib/assigningFee'
 import { staffedGames } from '@/lib/clientPay'
 import { clientsOfEvent } from '@/lib/clientEvents'
+import { eventClientOf } from '@/lib/eventClient'
 import prisma from '@/lib/db'
 
 // The head assigner's assigning fee on an event (lib/assigningFee), shown with Staff pay
 // and in the tournament director's area. GET -> { fee, games, total, clients }: the fee,
-// the games it counts and what it comes to, and the event's tournament directors.
+// the games it counts and what it comes to, the event's tournament director (their
+// name, lib/eventClient) and who of them can log in to see it.
 // PUT { amount, per } (the director) -> the same.
 
 async function answer(id: string) {
-  const [fee, games, ids] = await Promise.all([assigningFeeOf(id), staffedGames(id), clientsOfEvent(id)])
+  const [fee, games, ids, contact] = await Promise.all([assigningFeeOf(id), staffedGames(id), clientsOfEvent(id), eventClientOf(id)])
   const users = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } }) : []
-  return { fee, games, total: feeTotal(fee, games), clients: users.map(u => ({ id: u.id, name: u.name, email: u.email })) }
+  return { fee, games, total: feeTotal(fee, games), contact, clients: users.map(u => ({ id: u.id, name: u.name, email: u.email })) }
 }
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {

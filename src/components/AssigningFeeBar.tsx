@@ -10,7 +10,7 @@ import { Eye, Users } from 'lucide-react'
 // see, and the assigning fee they pay on top of staff pay (lib/assigningFee).
 
 type Fee = { amount: number; per: 'game' | 'event' }
-type Answer = { fee: Fee; games: number; total: number; clients: { id: string; name: string; email: string }[] }
+type Answer = { fee: Fee; games: number; total: number; contact?: { name: string } | null; clients: { id: string; name: string; email: string }[] }
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`
 
 export default function AssigningFeeBar({ tournamentId }: { tournamentId: string }) {
@@ -40,9 +40,11 @@ export default function AssigningFeeBar({ tournamentId }: { tournamentId: string
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Users size={15} className="text-teal-600" aria-hidden />
             <span className="font-semibold text-slate-800">Tournament director:</span>
-            {a.clients.length ? a.clients.map(c => c.name).join(', ') : <span>none yet. Add them on <Link href="/dashboard/org" className="font-semibold text-teal-700">Your team</Link> and pick this event.</span>}
+            {a.contact?.name || a.clients.length
+              ? <>{a.contact?.name || a.clients.map(c => c.name).join(', ')} <Link href={`/tournaments/${tournamentId}/tournament-director`} className="font-semibold text-teal-700">Edit</Link></>
+              : <Link href={`/tournaments/${tournamentId}/tournament-director`} className="font-semibold text-teal-700">Add them</Link>}
           </p>
-          <p className="mt-1 text-xs text-slate-500">They see the schedule with officials and Staff pay, and can mark people paid. <Link href={`/dashboard/client/${tournamentId}`} className="inline-flex items-center gap-1 font-semibold text-teal-700"><Eye size={12} aria-hidden />See their view</Link></p>
+          <p className="mt-1 text-xs text-slate-500">{a.clients.length ? 'They see the schedule with officials and Staff pay, and can mark people paid.' : a.contact?.name ? 'To let them see this event, click Edit and invite them.' : 'A name is enough. Inviting them to log in is optional.'} <Link href={`/dashboard/client/${tournamentId}`} className="inline-flex items-center gap-1 font-semibold text-teal-700"><Eye size={12} aria-hidden />See their view</Link></p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm font-semibold text-slate-700" htmlFor="assigning-fee">Assigning fee</label>
