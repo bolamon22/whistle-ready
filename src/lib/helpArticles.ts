@@ -41,6 +41,7 @@ export const TOURNAMENT_PAGES: { label: string; path: string; public?: boolean }
   { label: 'People → Player waivers', path: '/player-waivers' },
   { label: 'People → Coach waivers', path: '/coach-waivers' },
   { label: 'People → Travel & hotels', path: '/travel' },
+  { label: 'People → Tournament director (Assigner plan)', path: '/tournament-director' },
   { label: 'People → Staff roster', path: '/roster' },
   { label: 'People → Staff applications', path: '/staff-applications' },
   { label: 'People → Vendor requests', path: '/vendor-requests' },

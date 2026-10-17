@@ -23,7 +23,7 @@ The **Your team** page is where a director adds people to the organization, chan
 
 **To pick a field director's events:** on a Field Director's card, click the events next to **Works**. Each click saves. They see only those events, so pick at least one.
 
-**To pick a tournament director's events:** on a Tournament Director's card, click the events next to **Sees**. Each click saves. They see only those events.
+**To pick a tournament director's events:** on a Tournament Director's card, click the events next to **Sees**. Each click saves. They see only those events. You can also add them from the event: **People → Tournament director**.
 
 **To remove someone:** click the trash icon next to their name and confirm. This removes them from your organization only; anything they do for another organization stays.
 

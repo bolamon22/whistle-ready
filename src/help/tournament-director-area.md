@@ -2,16 +2,21 @@
 title: Share an event with your tournament director
 category: Organization
 order: 610
-routes: /dashboard/org, /tournaments/*/pay-summary, /dashboard/client
-keywords: tournament director client customer share schedule referee schedule officials phone numbers staff pay mark paid unpay assigning fee per game per event head assigner assigner plan see their view sees events td powered by whistle ready
+routes: /dashboard/org, /tournaments/*/pay-summary, /tournaments/*/tournament-director, /dashboard/client
+keywords: tournament director client customer share schedule referee schedule officials phone numbers staff pay mark paid unpay assigning fee per game per event head assigner assigner plan see their view sees events td powered by whistle ready add name existing tournament event invite optional stop sharing copy link
 ---
-On the Whistle Ready Assigner plan, the tournament director you assign officials for can log in and see their event: the schedule with who is on each game and their phone numbers, and **Staff pay**, since the tournament director normally pays the staff. They see only the events you pick, and the only thing they can change is marking people paid.
+On the Whistle Ready Assigner plan, each event can have its tournament director: the customer you assign officials for. Their name is enough. With their email, you can also let them log in and see the event: the schedule with who is on each game and their phone numbers, and **Staff pay**, since the tournament director normally pays the staff. They see only the events you share, and the only thing they can change is marking people paid.
 
-**Where:** **Staff** → **Your team** to add them; **People → Staff pay** for your assigning fee and **See their view**.
+**Where:** on the event, **People → Tournament director** (or **Tournament director** on the event's card on your home page). **Staff → Your team** lists every tournament director and the events each one sees. **People → Staff pay** has your assigning fee.
 
-**To add a tournament director:**
-1. On **Your team**, enter their **Email** (and **Name**), pick **Tournament Director** as the **Role**, and click **Add / invite**. Someone new gets an email saying your organization shared their tournament, with a link to set up their login.
-2. Under their name, click the events next to **Sees**. Each click saves. They see only those events.
+**To add a tournament director to an event:**
+1. Open **People → Tournament director**, enter their **Name**, and click **Save**. That's all it takes; **Email** and **Phone** are optional, and they don't need a login.
+2. To let them see the event, add their **Email**, click **Save**, then **Invite (their name) to see this event**. Someone new gets an email saying your organization shared their tournament, with a link to set up their login, and sees the event once they accept. Someone who already has a login sees it right away.
+3. Until they accept, the invite shows under **Their login**, with **Copy link** (to send it yourself) and **Send the invite again**.
+
+**To stop sharing an event:** under **Their login**, click **Stop sharing**. They keep their login and any other events you shared.
+
+**From Your team:** enter their **Email** (and **Name**), pick **Tournament Director** as the **Role**, and click **Add / invite**. Then click the events next to **Sees** under their name. Each click saves.
 
 **What they see:**
 - **Their home page:** each of their events with how many games have every referee, **Schedule** and **Staff pay** buttons, your organization's phone and email, and a small **Powered by Whistle Ready** card.
@@ -21,8 +26,9 @@ On the Whistle Ready Assigner plan, the tournament director you assign officials
 
 **To set your assigning fee:** on **Staff pay**, enter the **Assigning fee**, pick **per game** (each game with at least one official; canceled games don't count) or **for the event**, and click **Save**. Their **Staff pay** shows it next to the staff pay, with your organization's Zelle when it has one.
 
-**To check what they see:** click **See their view** on **Staff pay**.
+**To check what they see:** click **See their view** on the event's **Tournament director** page or on **Staff pay**.
 
 **Common problems:**
-- They see no events: pick their events next to **Sees** on **Your team**.
-- **Tournament Director** isn't in the **Role** list: it's offered on the Whistle Ready Assigner plan.
+- They see no events: invite them from the event's **Tournament director** page, or pick their events next to **Sees** on **Your team**.
+- "That email already has a role on your team": someone on your team (a referee, say) signs in with that email, and a login has one role in your organization. Use a different email, or change their role on **Your team**.
+- **Tournament director** isn't in the event's **People** menu, or **Tournament Director** isn't in the **Role** list: both are on the Whistle Ready Assigner plan, for the head assigner.
