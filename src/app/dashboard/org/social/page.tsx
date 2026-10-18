@@ -296,7 +296,7 @@ function SocialInner() {
     let { when, days } = reel
     // The day picked in the Reel maker for a Countdown: post then (today = in 10 minutes,
     // ready to approve or publish right away), so the number on the graphic is right.
-    if (opts.day && opts.day !== localDayKey(when)) {
+    if (opts.day && (opts.day !== localDayKey(when) || opts.day === localDayKey(new Date()))) {
       const [y, m, d] = opts.day.split('-').map(Number)
       when = opts.day === localDayKey(new Date()) ? (() => { const t = new Date(Date.now() + 10 * 60000); t.setMinutes(Math.ceil(t.getMinutes() / 5) * 5, 0, 0); return t })() : new Date(y, m - 1, d, when.getHours(), when.getMinutes())
       days = daysAt(p, when)

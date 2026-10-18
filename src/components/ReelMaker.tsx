@@ -220,7 +220,9 @@ async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
 
 export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay }: Props) {
   const today = dayKey(new Date())
-  const [day, setDay] = useState(postDay && postDay >= today ? postDay : today)
+  // Starts on today (Bo, Oct 18 2026: the first open day was Thursday, so a Reel he
+  // wanted out now said "2 days out"). Pick another day here before making the Reel.
+  const [day, setDay] = useState(today)
   // The countdown number: days from the chosen posting day to the event, when we know both.
   const dayDays = eventStart ? daysBetween(day, eventStart) : null
   const days = eventStart ? (dayDays != null && dayDays >= 0 ? dayDays : null) : daysProp
@@ -449,20 +451,21 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
         {state === 'loading' && <p className="text-sm text-slate-500 text-center mt-3">Building the post…</p>}
         {err && <p className="text-sm text-rose-700 text-center mt-3">{err}</p>}
         <div className="mt-4 flex flex-col gap-2">
+          {eventStart && state !== 'recording' && (
+            <div className={`flex items-center gap-2 text-sm flex-wrap rounded-lg px-2.5 py-2 ${hasCountdown ? 'bg-orange-50 text-orange-900' : 'text-slate-700'}`}>
+              <span className="font-semibold shrink-0">Posts on</span>
+              <input type="date" value={day} min={today} max={eventStart} disabled={playing || using} onChange={e => e.target.value && setDay(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white" />
+              {day !== today && <button type="button" onClick={() => setDay(today)} className="text-xs font-bold text-teal-700 hover:underline">Today</button>}
+              <span className="text-xs">{day === today ? 'Today: the post opens 10 minutes from now, ready to approve or publish.' : postDay === day ? 'The next open day.' : ''}{hasCountdown && dayDays != null && dayDays >= 0 ? <b>{dayDays === 0 ? ' Countdown shows game day.' : ` Countdown shows ${dayDays} day${dayDays === 1 ? '' : 's'} out.`}</b> : ''}</span>
+              {postDay && postDay !== day && postDay > today && <button type="button" onClick={() => setDay(postDay)} className="text-xs font-bold text-teal-700 hover:underline">Next open day</button>}
+            </div>
+          )}
           {token && state !== 'recording' && (
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <span className="font-semibold shrink-0">Length</span>
               <div className="flex-1 grid grid-cols-3 gap-1">
                 {LENGTHS.filter(l => !squadMode || l.sec >= (squad!.length <= 2 ? 15 : 30)).map(l => <button key={l.sec} type="button" disabled={playing || using} onClick={() => setLen(l.sec)} className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${len === l.sec ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-600 hover:border-teal-400'}`}>{l.sec} sec<span className="block font-normal text-[10px] text-slate-500">{squadMode ? `${squad!.length} players` : l.looks === 1 ? '1 look' : `${l.looks} looks`}</span></button>)}
               </div>
-            </div>
-          )}
-          {eventStart && hasCountdown && state !== 'recording' && (
-            <div className="flex items-center gap-2 text-sm text-slate-700 flex-wrap">
-              <span className="font-semibold shrink-0">Posts on</span>
-              <input type="date" value={day} min={today} max={eventStart} disabled={playing || using} onChange={e => e.target.value && setDay(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white" />
-              {day !== today && <button type="button" onClick={() => setDay(today)} className="text-xs font-bold text-teal-700 hover:underline">Today</button>}
-              <span className="text-xs text-slate-500">{dayDays == null || dayDays < 0 ? '' : dayDays === 0 ? 'Countdown shows game day' : `Countdown shows ${dayDays} day${dayDays === 1 ? '' : 's'} out`}</span>
             </div>
           )}
           {(token || squadMode) && state !== 'recording' && (
