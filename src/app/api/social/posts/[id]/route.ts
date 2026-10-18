@@ -92,11 +92,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   if (action === 'cancel') {
-    if (TERMINAL.includes(post.status) || post.status === 'published') {
-      return NextResponse.json({ error: 'Cannot cancel a post that already published' }, { status: 400 })
+    // Also stops one that's still 'publishing' while Instagram processes the video
+    // (Bo, Oct 18 2026: "Can you stop it? It says it's still in progress"): the cron
+    // only finishes rows still in 'publishing', so canceling before Meta publishes the
+    // container means it never goes out. Once it has a post id it's live: delete it
+    // on Instagram instead.
+    if (post.status === 'published' || post.externalPostId) {
+      return NextResponse.json({ error: 'It already went out — delete it in the Instagram or Facebook app' }, { status: 400 })
     }
-    const updated = await prisma.scheduledPost.update({ where: { id: post.id }, data: { status: 'canceled' } })
-    return NextResponse.json({ ok: true, post: updated })
+    const claim = await prisma.scheduledPost.updateMany({ where: { id: post.id, status: { in: ['draft', 'scheduled', 'failed', 'publishing'] }, externalPostId: '' }, data: { status: 'canceled', externalContainerId: '', lastError: post.status === 'publishing' ? 'Stopped before it went out' : '' } })
+    if (!claim.count) return NextResponse.json({ error: 'It just went out — delete it in the Instagram or Facebook app' }, { status: 409 })
+    return NextResponse.json({ ok: true })
   }
 
   // Plain field edit (caption / mediaUrls / scheduledFor) — only while the post
