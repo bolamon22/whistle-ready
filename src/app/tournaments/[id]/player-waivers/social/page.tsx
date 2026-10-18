@@ -202,7 +202,7 @@ export default function SocialPhotos() {
               <p>All week we're counting down on Instagram by spotlighting players who'll be on the field, and we'd love {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} to be one of them.</p>
               <p>Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: <span className="text-teal-700 font-semibold">[Yes or no: answer here]</span></p>
               <p>Saying yes? Add your Instagram handle on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post. Then please like, share and repost it!</p>
-              <p className="text-slate-500">Rather not? Choose No or ignore the email, and it won't be posted.</p>
+              <p className="text-slate-500">A yes doesn't guarantee a post this time: we're asking more families than we have posts for, so the card may be saved for future events instead. Rather not? Choose No or ignore the email, and it won't be posted.</p>
             </div>
             <p className="text-xs text-slate-500 mt-2">Send me a test emails you the real letter for {pickedList[0]?.playerName || 'the first player'}. Its link works but saves nothing, and the family isn't contacted.</p>
             <div className="mt-4 rounded-lg border border-slate-200 p-3">

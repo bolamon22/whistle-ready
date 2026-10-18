@@ -73,7 +73,7 @@ export const firstName = (full: unknown) => String(full || '').trim().split(/\s+
 
 /** The words the parent agrees to, shown on the page. */
 export function photoPermissionText(orgName: string, tournamentName: string): string {
-  return `${orgName} may post this player card, in a graphic like the examples shown, with the player's first name and team, on its Instagram and Facebook in the lead-up to ${tournamentName}, and use it to promote future events. You can ask for a post to be taken down at any time.`
+  return `${orgName} may post this player card, in a graphic like the examples shown, with the player's first name and team, on its Instagram and Facebook in the lead-up to ${tournamentName}, and use it to promote future events. Saying yes doesn't guarantee a post: we ask more families than we have room to feature. You can ask for a post to be taken down at any time.`
 }
 
 /** "@handle" from whatever the website editor holds (a handle or a profile URL), or ''. */
@@ -132,7 +132,7 @@ export function photoAskEmail(a: {
     <p style="margin:0 0 6px">Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds:</p>
     ${button(a.link, 'Yes or no: answer here')}
     <p style="margin:16px 0 14px">Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!</p>
-    <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card${posts.length ? ' in a graphic like one of these' : ''}, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
+    <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card${posts.length ? ' in a graphic like one of these' : ''}, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}, and to promote future events. A yes doesn't guarantee ${P} will be featured this time: we're asking more families than we have posts for, so the card may be saved for future events instead. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
     <p style="margin:18px 0 0">See you on the field!<br>The ${esc(a.orgName)} team</p>
   `
   const html = renderEmail({
@@ -154,7 +154,7 @@ export function photoAskEmail(a: {
     '',
     "Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!",
     '',
-    `What we'd post: ${player}'s player card, with first name and team, on our Instagram and Facebook before and during ${a.tournamentName}${when}. Rather not? Choose No on that page or just ignore this email, and it won't be posted.`,
+    `What we'd post: ${player}'s player card, with first name and team, on our Instagram and Facebook before and during ${a.tournamentName}${when}, and to promote future events. A yes doesn't guarantee ${player} will be featured this time: we're asking more families than we have posts for, so the card may be saved for future events instead. Rather not? Choose No on that page or just ignore this email, and it won't be posted.`,
     '',
     'See you on the field!',
     `The ${a.orgName} team`,
