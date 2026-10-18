@@ -66,7 +66,35 @@ const BARLOW = 'Barlow Condensed'
 const fit = (text: string, maxW: number, max: number) => Math.min(max, Math.floor(maxW / (Math.max(1, text.length) * 0.5)))
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s)
 
+// Small "Whistle Ready" mark in a corner of every post (Bo: "maybe it's just the small
+// Whistle Ready logo on the bottom corner"), placed where each look has room. Drawn as
+// type rather than the logo file, which has its own dark background and fine print.
+const MARK_AT: Record<PostStyle, CSSProperties> = {
+  committed: { right: 28, bottom: 140 },
+  premiere: { right: 28, bottom: 132 },
+  draft: { right: 28, top: 28 },
+  countdown: { right: 28, top: 16 },
+  'committed-photo': { right: 28, top: 24 },
+  'draft-photo': { right: 28, top: 28 },
+  'countdown-photo': { right: 28, bottom: 24 },
+}
+
 export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: PostData; width?: number }) {
+  const look: PostStyle = usesPhoto(style) && !d.photoSrc ? style.replace('-photo', '') as PostStyle : style
+  const k = width / POST_W
+  const at = Object.fromEntries(Object.entries(MARK_AT[look]).map(([key, v]) => [key, Math.round(Number(v) * k)]))
+  return (
+    <div style={{ display: 'flex', position: 'relative', width: Math.round(POST_W * k), height: Math.round(POST_H * k) }}>
+      <PostBody style={look} d={d} width={width} />
+      <div style={{ position: 'absolute', ...at, display: 'flex', alignItems: 'center', background: 'rgba(11,18,32,0.72)', borderRadius: Math.round(999 * k), padding: `${Math.round(7 * k)}px ${Math.round(16 * k)}px`, fontFamily: ANTON, fontSize: Math.round(26 * k), letterSpacing: '0.04em', lineHeight: 1 }}>
+        <div style={{ display: 'flex', color: '#ffffff' }}>WHISTLE</div>
+        <div style={{ display: 'flex', color: '#2dd4bf', marginLeft: Math.round(7 * k) }}>READY</div>
+      </div>
+    </div>
+  )
+}
+
+function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData; width?: number }) {
   if (usesPhoto(style) && !d.photoSrc) style = style.replace('-photo', '') as PostStyle   // no photo on file: the card version
   const k = width / POST_W
   const u = (n: number) => Math.round(n * k * 10) / 10
@@ -75,6 +103,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
   const team = cut(d.team, 34)
   const where = cut(d.location, 34)
   const event = d.tournamentName || 'the tournament'
+  const eventCaps = `${cut(d.tournamentName || 'GAME DAY', 30).toUpperCase()}.`
 
   const root: CSSProperties = {
     width: u(POST_W), height: u(POST_H), display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -214,22 +243,31 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
       return (
         <div style={{ ...root, background: '#0a0a0a' }}>
           <div style={{ position: 'absolute', left: 0, top: 0, display: 'flex' }}>{photo(POST_W, 1240)}</div>
-          <div style={{ position: 'absolute', left: 0, top: 0, width: u(POST_W), height: u(1240), display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 40%, rgba(10,10,10,0.9) 68%, #0a0a0a 100%)' }} />
+          <div style={{ position: 'absolute', left: 0, top: 0, width: u(POST_W), height: u(1240), display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 34%, rgba(10,10,10,0.88) 58%, #0a0a0a 100%)' }} />
           <div style={{ ...caps(30, '#ffffff', 0.32), marginTop: u(52) }}>OFFICIAL ANNOUNCEMENT</div>
-          <div style={{ position: 'absolute', left: u(64), bottom: u(140), width: u(952), display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(200), lineHeight: 0.95 }}>COMMITTED</div>
-            <div style={{ display: 'flex', width: u(952), height: u(8), background: accent, marginTop: u(6) }} />
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: u(28) }}>
-              <div style={{ display: 'flex', alignItems: 'center', width: u(640) }}>
-                {teamLogo(110, { marginRight: u(22) })}
-                <div style={{ display: 'flex', flexDirection: 'column', width: u(d.clubLogoSrc ? 488 : 640) }}>
-                  <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, d.clubLogoSrc ? 488 : 600, 120)), lineHeight: 1 }}>{first}</div>
-                  <div style={{ ...caps(26, '#e2e8f0', 0.12, 600), marginTop: u(10) }}>{cut(statLine, 64)}</div>
+          {/* Reads top to bottom as one sentence: COMMITTED TO [event logo], then who (Bo:
+              "put the Monster Mash logo up higher so it looks like they're committing to it"). */}
+          <div style={{ position: 'absolute', left: u(64), bottom: u(136), width: u(952), display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(180), lineHeight: 0.95 }}>COMMITTED</div>
+              <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(96), lineHeight: 1, color: '#e2e8f0', marginLeft: u(22), marginBottom: u(8) }}>TO</div>
+            </div>
+            <div style={{ display: 'flex', marginTop: u(18) }}>
+              {d.logoSrc ? (
+                <div style={{ display: 'flex', background: '#ffffff', borderRadius: u(20), padding: `${u(16)}px ${u(28)}px`, boxShadow: `0 ${u(14)}px ${u(40)}px rgba(0,0,0,0.5)` }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={d.logoSrc} width={u(480)} height={u(160)} alt="" style={{ objectFit: 'contain' }} />
                 </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <div style={{ ...caps(24, '#94a3b8', 0.2), marginBottom: u(10) }}>COMMITTED TO</div>
-                {logo(240, 110)}
+              ) : (
+                <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(event.toUpperCase(), 952, 110)), lineHeight: 1, color: '#ffffff' }}>{event.toUpperCase()}</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', width: u(952), height: u(6), background: accent, marginTop: u(26) }} />
+            <div style={{ display: 'flex', alignItems: 'center', marginTop: u(22) }}>
+              {teamLogo(100, { marginRight: u(22) })}
+              <div style={{ display: 'flex', flexDirection: 'column', width: u(d.clubLogoSrc ? 810 : 952) }}>
+                <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 700, 110)), lineHeight: 1 }}>{first}</div>
+                <div style={{ ...caps(26, '#e2e8f0', 0.12, 600), marginTop: u(8) }}>{cut(statLine, 64)}</div>
               </div>
             </div>
           </div>
@@ -301,20 +339,21 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
           )}
           <div style={{ display: 'flex', marginTop: u(26) }}>
             <div style={caps(44, '#ffffff', 0.06)}>{first}</div>
-            <div style={{ ...caps(44, '#94a3b8', 0.06), marginLeft: u(14) }}>IS</div>
+            <div style={{ ...caps(44, '#94a3b8', 0.06), marginLeft: u(14) }}>IS READY FOR</div>
           </div>
-          <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(130), lineHeight: 1, color: hot, marginTop: u(4) }}>WHISTLE READY.</div>
+          <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(eventCaps, 936, 130)), lineHeight: 1, color: hot, marginTop: u(4) }}>{eventCaps}</div>
         </div>
       </div>
     )
   }
 
-  // countdown (Bo, Oct 18 2026: not "Who's Next?", which read as a challenge; "<Name> is Whistle Ready." ties in the campaign)
+  // countdown (Bo, Oct 18 2026: not "Who's Next?", which read as a challenge; then not "is Whistle
+  // Ready" either: name the tournament, and let the small Whistle Ready mark carry the brand)
   const hot = '#f97316'
   const n = d.daysOut
   return (
     <div style={{ ...root, background: '#0a0a0a' }}>
-      <div style={{ display: 'flex', width: u(936), justifyContent: 'space-between', alignItems: 'center', marginTop: u(52) }}>
+      <div style={{ display: 'flex', width: u(936), justifyContent: 'space-between', alignItems: 'center', marginTop: u(70) }}>
         {lockup(190, 90)}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <div style={caps(28, '#ffffff', 0.16)}>{(d.dates || '').toUpperCase()}</div>
@@ -337,9 +376,9 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
       </div>
       <div style={{ display: 'flex', marginTop: u(34) }}>
         <div style={caps(40, '#ffffff', 0.06)}>{first}</div>
-        <div style={{ ...caps(40, '#94a3b8', 0.06), marginLeft: u(12) }}>IS</div>
+        <div style={{ ...caps(40, '#94a3b8', 0.06), marginLeft: u(12) }}>IS READY FOR</div>
       </div>
-      <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(104), lineHeight: 1, color: hot, marginTop: u(6) }}>WHISTLE READY.</div>
+      <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(eventCaps, 900, 104)), lineHeight: 1, color: hot, marginTop: u(6) }}>{eventCaps}</div>
     </div>
   )
 }
