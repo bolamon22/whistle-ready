@@ -231,6 +231,7 @@ function OrgSiteEditorInner() {
   const [hist, setHist] = useState<{ totalEvents: number; totalGames: number; champs: number } | null>(null)
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const scrollNext = useRef(!!sp.get('sec'))
+  const loadedOnce = useRef(false)
 
   // Picking from the list scrolls the preview to that part; clicking it in the preview
   // doesn't, because you're already looking at it.
@@ -268,6 +269,12 @@ function OrgSiteEditorInner() {
     if (status === 'loading') return
     if (!session) { router.replace('/login'); return }
     if (role !== 'director' && role !== 'admin') { router.replace('/'); return }
+    // Load once. next-auth hands back a new session object whenever the window regains
+    // focus, which re-ran this and replaced unpublished edits with the saved copy: move a
+    // section, glance at the live site in another tab, come back, and the move was gone
+    // (Bo, Oct 18 2026: "it doesn't seem to be keeping it when I publish").
+    if (loadedOnce.current) return
+    loadedOnce.current = true
     ;(async () => {
       try {
         if (qOrg) { setOrg({ name: qName, slug: qSlug }) }
