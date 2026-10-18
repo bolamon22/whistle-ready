@@ -123,7 +123,7 @@ export function ensureVendorInvoiceColumns(): Promise<void> {
 }
 
 // ── derived columns ──────────────────────────────────────────────────────────
-const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature', 'photoUrl', 'cardLink', 'photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt', 'photoOkName'])
+const SKIP_IN_SEARCH = new Set(['tournamentId', 'agree', 'signature', 'photoUrl', 'cardLink', 'photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt', 'photoOkName', 'photoAskStyles', 'photoAskSchedAt', 'photoAskSchedBy'])
 function derived(data: any) {
   const d = data || {}
   // coachFullName belongs here too: without it every coach submission stored a

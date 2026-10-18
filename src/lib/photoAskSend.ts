@@ -7,7 +7,7 @@ import { absUrl } from '@/lib/emailLayout'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { eventDates } from '@/lib/vendorApproval'
 import { signPhotoToken, photoAskRecipients, photoAskEmail, instagramHandle } from '@/lib/photoConsent'
-import { POST_STYLES } from '@/lib/socialPosts'
+import { POST_STYLES, pickStyles, type PostStyle } from '@/lib/socialPosts'
 
 // Sending the photo-permission letter (lib/photoConsent). One function for the
 // Send button, the test send and the scheduled send, so a scheduled letter can't
@@ -71,11 +71,15 @@ export async function askable(ctx: PhotoAskContext, subId: string, opts: { test?
  * Email one family (or, with testTo, one staff member) the letter. Marks the
  * waiver as asked unless it's a test. Returns an error string on failure.
  */
-export async function sendPhotoAsk(ctx: PhotoAskContext, s: FormSubmission, by: string, testTo?: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendPhotoAsk(ctx: PhotoAskContext, s: FormSubmission, by: string, testTo?: string, styles?: PostStyle[]): Promise<{ ok: boolean; error?: string }> {
   const d = s.data || {}
+  // Which example posts to show: the ones staff picked for this send, else the ones
+  // saved when it was scheduled, else all four.
+  const picked = styles?.length ? styles : pickStyles(d.photoAskStyles)
+  const shown = picked.length ? picked : POST_STYLES.map(p => p.id)
   const to = testTo ? [testTo] : photoAskRecipients(d)
   if (!to.length) return { ok: false, error: 'no parent email' }
-  const token = signPhotoToken({ s: s.id, o: ctx.orgId, ...(testTo ? { x: true } : {}) })
+  const token = signPhotoToken({ s: s.id, o: ctx.orgId, y: shown.join(','), ...(testTo ? { x: true } : {}) })
   const link = `${ctx.appBase}/pass/photo-ok/${encodeURIComponent(token)}`
   const passToken = ctx.passOn ? (s.passToken || await ensurePassToken(ctx.orgId, s.id)) : null
   const mail = photoAskEmail({
@@ -83,13 +87,13 @@ export async function sendPhotoAsk(ctx: PhotoAskContext, s: FormSubmission, by: 
     parentName: String(d.parentName || ''), playerName: String(d.playerName || ''),
     photoUrl: String(d.photoUrl || ''),
     cardUrl: passToken ? `/pass/${passToken}/card.png` : '',
-    posts: passToken ? POST_STYLES.map(p => ({ label: p.label, url: `${ctx.appBase}/pass/${passToken}/post/${p.id}.png?w=540` })) : [],
+    posts: passToken ? POST_STYLES.filter(p => shown.includes(p.id)).map(p => ({ label: p.label, url: `${ctx.appBase}/pass/${passToken}/post/${p.id}.png?w=540` })) : [],
     link, base: ctx.appBase,
   })
   const res = await sendEmail({ ...ctx.sender, to, subject: testTo ? `[Test] ${mail.subject}` : mail.subject, html: mail.html, text: mail.text })
   if (!res.ok) return { ok: false, error: res.error || 'send failed' }
   if (!testTo) {
-    await updateSubmissionData(ctx.orgId, s.id, { photoAskAt: new Date().toISOString(), photoAskBy: by, photoAskSchedAt: '', photoAskSchedBy: '' }, by || 'staff')
+    await updateSubmissionData(ctx.orgId, s.id, { photoAskAt: new Date().toISOString(), photoAskBy: by, photoAskSchedAt: '', photoAskSchedBy: '', photoAskStyles: shown.join(',') }, by || 'staff')
   }
   return { ok: true }
 }

@@ -20,10 +20,12 @@ import { renderEmail, button, esc, absUrl } from '@/lib/emailLayout'
 //   photoIg        Instagram handle they want tagged / invited as a Collab ('' = none)
 //   photoClubIg    the club's Instagram handle, to tag / invite too ('' = none)
 //   photoClubFb    the club's Facebook page name (facebook.com/<this>) ('' = none)
+//   photoAskStyles which example posts the email showed, comma list of lib/socialPosts
+//                  styles (staff pick them per send; '' = all four)
 // Neither the parent edit whitelist (lib/parentWaiverFields) nor the staff one
 // (EDITABLE in the player-waivers route) includes these, so only this flow sets them.
 
-export const PHOTO_FIELDS = ['photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt', 'photoOkName', 'photoIg', 'photoClubIg', 'photoClubFb'] as const
+export const PHOTO_FIELDS = ['photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt', 'photoOkName', 'photoIg', 'photoClubIg', 'photoClubFb', 'photoAskStyles'] as const
 
 // ── the link ──────────────────────────────────────────────────────────────────
 // An HMAC token naming the waiver and its org, like the parent-account token in
@@ -32,8 +34,9 @@ export const PHOTO_FIELDS = ['photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt',
 // the player card and in public hands, and must not be able to grant permission.
 // Good for 60 days, long enough to answer late and to change your mind.
 
-/** x: a staff test send. The page works the same, but nothing it answers is saved. */
-type PhotoToken = { s: string; o: string; x?: boolean }
+/** x: a staff test send. The page works the same, but nothing it answers is saved.
+ *  y: the example post styles the email showed (comma list), so the page shows the same ones. */
+type PhotoToken = { s: string; o: string; x?: boolean; y?: string }
 const secret = () => process.env.NEXTAUTH_SECRET || ''
 const sign = (payload: string) => crypto.createHmac('sha256', secret()).update(`photook.${payload}`).digest('base64url')
 
@@ -49,9 +52,9 @@ export function readPhotoToken(token: string): PhotoToken | null {
   const a = Buffer.from(sig), b = Buffer.from(sign(payload))
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
   try {
-    const { s, o, e, x } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+    const { s, o, e, x, y } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (typeof s !== 'string' || typeof o !== 'string' || !s || !o) return null
-    return Number(e) > Date.now() ? { s, o, ...(x === true ? { x: true } : {}) } : null
+    return Number(e) > Date.now() ? { s, o, ...(x === true ? { x: true } : {}), ...(typeof y === 'string' && /^[a-z,]{1,80}$/.test(y) ? { y } : {}) } : null
   } catch { return null }
 }
 
@@ -132,7 +135,7 @@ export function photoAskEmail(a: {
     <p style="margin:0 0 6px">Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds:</p>
     ${button(a.link, 'Yes or no: answer here')}
     <p style="margin:16px 0 14px">Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!</p>
-    <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card${posts.length ? ' in a graphic like one of these' : ''}, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}, and to promote future events. A yes doesn't guarantee ${P} will be featured this time: we're asking more families than we have posts for, so the card may be saved for future events instead. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
+    <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card${posts.length === 1 ? ' in a graphic like this one' : posts.length ? ' in a graphic like one of these' : ''}, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}, and to promote future events. A yes doesn't guarantee ${P} will be featured this time: we're asking more families than we have posts for, so the card may be saved for future events instead. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
     <p style="margin:18px 0 0">See you on the field!<br>The ${esc(a.orgName)} team</p>
   `
   const html = renderEmail({
@@ -149,7 +152,7 @@ export function photoAskEmail(a: {
     '',
     `All week we're counting down on ${ig} by spotlighting players who'll be on the field, and we'd love ${player} to be one of them.`,
     '',
-    ...(posts.length ? [`Here's the kind of post we're planning, with ${player}'s card: ${posts.map(p => `${p.label}: ${p.url}`).join('  ')}`, ''] : []),
+    ...(posts.length ? [`${posts.length === 1 ? `Here's what ${player}'s post will look like` : "Here's the kind of post we're planning"}, with ${player}'s card: ${posts.map(p => `${p.label}: ${p.url}`).join('  ')}`, ''] : []),
     `Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: ${a.link}`,
     '',
     "Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!",
@@ -164,6 +167,11 @@ export function photoAskEmail(a: {
 
 /** Two-by-two grid of example posts. Tables, not flexbox: this is email. */
 function postGrid(posts: { label: string; url: string }[], P: string): string {
+  if (posts.length === 1) {
+    const p = posts[0]
+    return `<p style="margin:18px 0 8px"><strong>Here's what ${P}'s post will look like:</strong></p>
+  <p style="margin:0 0 14px"><a href="${esc(p.url)}" target="_blank" style="text-decoration:none"><img src="${esc(p.url)}" width="320" alt="${esc(p.label)} post with ${P}'s card" style="display:block;width:320px;max-width:100%;height:auto;border-radius:12px;border:0"></a></p>`
+  }
   const cell = (p: { label: string; url: string }) => `<td width="50%" valign="top" style="padding:5px">
       <a href="${esc(p.url)}" target="_blank" style="text-decoration:none"><img src="${esc(p.url)}" width="262" alt="${esc(p.label)} post with ${P}'s card" style="display:block;width:100%;max-width:262px;height:auto;border-radius:10px;border:0"></a>
       <div style="font-size:12px;color:#64748b;text-align:center;padding-top:4px">${esc(p.label)}</div>

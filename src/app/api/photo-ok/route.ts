@@ -5,7 +5,7 @@ import { playerPassEnabled } from '@/lib/playerPass'
 import { readPhotoToken, firstName, photoPermissionText, instagramHandle, facebookPage } from '@/lib/photoConsent'
 import { prisma } from '@/lib/db'
 import { sendPushToOrg } from '@/lib/push'
-import { POST_STYLES } from '@/lib/socialPosts'
+import { POST_STYLES, pickStyles } from '@/lib/socialPosts'
 
 // Public: a parent answering "may we share this photo on social media?"
 // (lib/photoConsent). No login -- the signed token in the emailed link is the
@@ -15,6 +15,13 @@ import { POST_STYLES } from '@/lib/socialPosts'
 //        clubInstagram?, clubFacebook? }  (handles to tag / invite as Collabs; kept only with a yes)
 // Only the player's first name and team go back to the browser: the link can be
 // forwarded, so it must not hand out the waiver's other details.
+
+// The example posts the family's email showed (carried in the link), else the ones
+// saved on the waiver, else all four.
+function shownStyles(fromLink: unknown, saved: unknown) {
+  const a = pickStyles(fromLink); if (a.length) return a
+  const b = pickStyles(saved); return b.length ? b : POST_STYLES.map(p => p.id)
+}
 
 async function load(token: string) {
   const t = readPhotoToken(token)
@@ -42,7 +49,7 @@ export async function GET(req: NextRequest) {
     orgName,
     tournamentName,
     photo: passOn && hit.s.passToken ? `/pass/${hit.s.passToken}/card.png` : String(d.photoUrl || ''),
-    posts: passOn && hit.s.passToken ? POST_STYLES.map(p => ({ label: p.label, url: `/pass/${hit.s.passToken}/post/${p.id}.png?w=540` })) : [],
+    posts: passOn && hit.s.passToken ? POST_STYLES.filter(p => shownStyles(hit.t.y, d.photoAskStyles).includes(p.id)).map(p => ({ label: p.label, url: `/pass/${hit.s.passToken}/post/${p.id}.png?w=540` })) : [],
     answer: String(d.photoOk || ''),
     answeredAt: String(d.photoOkAt || ''),
     instagram: String(d.photoIg || ''),

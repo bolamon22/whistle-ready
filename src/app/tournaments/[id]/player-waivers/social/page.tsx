@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, Send, Check, Download, Mail } from 'lucide-react'
-import { POST_STYLES } from '@/lib/socialPosts'
+import { POST_STYLES, type PostStyle } from '@/lib/socialPosts'
 
 // Photos for social: every player at this event who added a photo to their card.
 // Staff pick the good ones and ask the families (lib/photoConsent); the parent
@@ -46,6 +46,9 @@ export default function SocialPhotos() {
   const [later, setLater] = useState(true)              // Schedule (default: it's usually late at night) vs Send now
   const [sendAt, setSendAt] = useState(tomorrowMorning)
   const [tick, setTick] = useState(0)
+  const [styles, setStyles] = useState<Set<PostStyle>>(() => new Set(POST_STYLES.map(s => s.id)))   // example posts the email shows
+  const styleList = POST_STYLES.filter(s => styles.has(s.id)).map(s => s.id)
+  const toggleStyle = (s: PostStyle) => setStyles(cur => { const n = new Set(cur); n.has(s) ? n.delete(s) : n.add(s); return n })
 
   useEffect(() => {
     setLoading(true)
@@ -77,7 +80,7 @@ export default function SocialPhotos() {
     if (!p) return
     setTesting(true)
     try {
-      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testId: p.id }) })
+      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testId: p.id, styles: styleList }) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || !j.sent) { toast.error(j.error || j.errors?.[0] || j.skipped?.[0] || 'Could not send the test'); return }
       toast.success(`Test sent to ${j.to}. Check your inbox.`)
@@ -96,7 +99,7 @@ export default function SocialPhotos() {
   async function send() {
     setSending(true)
     try {
-      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [...picked], resend: pickedResend, ...(later ? { sendAt: new Date(sendAt).toISOString() } : {}) }) })
+      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [...picked], styles: styleList, resend: pickedResend, ...(later ? { sendAt: new Date(sendAt).toISOString() } : {}) }) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { toast.error(j.error || 'Could not send'); return }
       if (later) toast.success(`Scheduled ${j.scheduled} for ${when(j.sendAt)}`)
@@ -194,12 +197,31 @@ export default function SocialPhotos() {
         <div className="fixed inset-0 z-20 bg-slate-900/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5">
             <h2 className="text-lg font-bold text-slate-900 inline-flex items-center gap-2"><Mail size={18} /> Ask {pickedList.length} famil{pickedList.length === 1 ? 'y' : 'ies'}</h2>
-            <p className="text-sm text-slate-600 mt-1">Each parent on the waiver gets this email with four example posts built from their player's card (Committed, Now Showing, Draft Day, Who's Next) and a Yes / No link:</p>
+            <p className="text-sm text-slate-600 mt-1">Each parent on the waiver gets this email with a Yes / No link and the posts you pick below, built from their own player's card.</p>
+            <fieldset className="mt-3">
+              <legend className="text-xs font-semibold text-slate-700 mb-1.5">Posts to show {styleList.length === 1 ? '(one: "here\'s what the post will look like")' : `(${styleList.length}: "the kind of post we're planning")`}</legend>
+              <div className="grid grid-cols-4 gap-2">
+                {POST_STYLES.map(s => {
+                  const on = styles.has(s.id)
+                  const src = pickedList[0]?.cardUrl ? pickedList[0].cardUrl.replace(/\/card\.png$/, `/post/${s.id}.png?w=540`) : ''
+                  return (
+                    <label key={s.id} className={`relative cursor-pointer rounded-lg border-2 overflow-hidden ${on ? 'border-teal-600' : 'border-slate-200 opacity-50'}`}>
+                      <input type="checkbox" checked={on} onChange={() => toggleStyle(s.id)} className="sr-only" />
+                      {src ? <img src={src} alt={`${s.label} post for ${pickedList[0]?.playerName}`} className="w-full aspect-[4/5] object-cover bg-slate-100" loading="lazy" /> : <div className="w-full aspect-[4/5] bg-slate-100" />}
+                      <span className="block text-[11px] font-semibold text-center py-1 text-slate-700">{s.label}</span>
+                      {on && <span className="absolute top-1 right-1 h-5 w-5 rounded bg-teal-600 text-white flex items-center justify-center"><Check size={13} /></span>}
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Previews show {pickedList[0]?.playerName.split(' ')[0] || 'the first player'}'s card; each family sees their own. To give different players different posts, ask them in separate batches.</p>
+            </fieldset>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-2">
               <p className="font-semibold">Subject: {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} made the cut for this tournament</p>
               <p>Hi {pickedList[0]?.parentName.split(' ')[0] || 'there'},</p>
               <p><strong>{pickedList[0]?.playerName.split(' ')[0] || 'Alex'} made the cut!</strong> Out of every player card for this tournament, {pickedList[0]?.playerName.split(' ')[0] || 'Alex'}'s is one of our favorites.</p>
               <p>All week we're counting down on Instagram by spotlighting players who'll be on the field, and we'd love {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} to be one of them.</p>
+              <p className="text-slate-500">[{styleList.length === 1 ? `Here's what ${pickedList[0]?.playerName.split(' ')[0] || 'Alex'}'s post will look like: the ${POST_STYLES.find(s => s.id === styleList[0])?.label} post` : `Here's the kind of post we're planning: ${styleList.length} example posts`}]</p>
               <p>Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: <span className="text-teal-700 font-semibold">[Yes or no: answer here]</span></p>
               <p>Saying yes? Add your Instagram handle on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post. Then please like, share and repost it!</p>
               <p className="text-slate-500">A yes doesn't guarantee a post this time: we're asking more families than we have posts for, so the card may be saved for future events instead. Rather not? Choose No or ignore the email, and it won't be posted.</p>
@@ -220,9 +242,9 @@ export default function SocialPhotos() {
             </div>
             {pickedResend && <p className="text-xs text-amber-700 mt-2">Some of these were already asked. They'll get the email again.</p>}
             <div className="mt-4 flex gap-2 justify-end">
-              <button type="button" onClick={sendTest} disabled={testing || sending} className="mr-auto text-sm rounded-lg border border-teal-600 text-teal-700 px-4 py-2 disabled:opacity-50">{testing ? 'Sending test…' : `Send me a test (${pickedList[0]?.playerName.split(' ')[0] || ''})`}</button>
+              <button type="button" onClick={sendTest} disabled={testing || sending || !styleList.length} className="mr-auto text-sm rounded-lg border border-teal-600 text-teal-700 px-4 py-2 disabled:opacity-50">{testing ? 'Sending test…' : `Send me a test (${pickedList[0]?.playerName.split(' ')[0] || ''})`}</button>
               <button type="button" onClick={() => setConfirm(false)} className="text-sm rounded-lg border border-slate-300 px-4 py-2 text-slate-700">Cancel</button>
-              <button type="button" onClick={send} disabled={sending} className="text-sm rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold px-4 py-2 disabled:opacity-50">{sending ? (later ? 'Scheduling…' : 'Sending…') : `${later ? 'Schedule' : 'Send'} ${pickedList.length} email${pickedList.length === 1 ? '' : 's'}`}</button>
+              <button type="button" onClick={send} disabled={sending || !styleList.length} className="text-sm rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold px-4 py-2 disabled:opacity-50">{sending ? (later ? 'Scheduling…' : 'Sending…') : `${later ? 'Schedule' : 'Send'} ${pickedList.length} email${pickedList.length === 1 ? '' : 's'}`}</button>
             </div>
           </div>
         </div>

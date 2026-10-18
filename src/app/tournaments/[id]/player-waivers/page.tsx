@@ -22,7 +22,7 @@ const LABELS: Record<string, string> = {
   photoOk: 'OK to post photo', photoOkAt: 'Photo answer on', photoOkName: 'Photo answered by', photoAskAt: 'Photo permission asked', photoIg: 'Instagram to tag', photoClubIg: 'Club Instagram', photoClubFb: 'Club Facebook',
 }
 const DETAIL_ORDER = Object.keys(LABELS)
-const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl', 'photoAskBy']
+const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl', 'photoAskBy', 'photoAskStyles', 'photoAskSchedBy']
 const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber', 'position', 'homeCity', 'homeState', 'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone', 'hotel', 'hotelName', 'signature']
 const PAGE = 100
 

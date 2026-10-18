@@ -6,6 +6,7 @@ import { appBaseUrl, playerPassEnabled } from '@/lib/playerPass'
 import { emailEnabled } from '@/lib/email'
 import { photoAskRecipients } from '@/lib/photoConsent'
 import { photoAskContext, askable, sendPhotoAsk } from '@/lib/photoAskSend'
+import { pickStyles } from '@/lib/socialPosts'
 
 // Staff: player cards for social media, and the families' permission to use them
 // (lib/photoConsent, lib/photoAskSend).
@@ -16,6 +17,8 @@ import { photoAskContext, askable, sendPhotoAsk } from '@/lib/photoAskSend'
 //           players who already answered are never asked again.
 //   POST  { ids, sendAt: ISO } → schedules the same letter; /api/social-photos/cron sends
 //           it when the time comes.
+//   Sends and schedules take styles?: string[], the example posts the email shows
+//   (lib/socialPosts; default all four). A scheduled send keeps them on the waiver.
 //   POST  { cancelIds: string[] } → takes those players off the schedule.
 //   POST  { testId } → sends that player's letter to the signed-in staff member only,
 //           with a test link: the page works, but nothing answered on it is saved,
@@ -98,6 +101,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!emailEnabled()) return NextResponse.json({ error: 'Email is not configured, so nothing was sent.' }, { status: 503 })
   if (testId && !by) return NextResponse.json({ error: 'Your login has no email address to send the test to.' }, { status: 400 })
   const resend = body.resend === true
+  const styles = pickStyles(body.styles)
+  if (Array.isArray(body.styles) && !styles.length) return NextResponse.json({ error: 'Pick at least one post style to show.' }, { status: 400 })
 
   // A send time: in the future (a minute's grace for a slow click), within 30 days.
   let sendAt = ''
@@ -118,11 +123,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const c = await askable(ctx, id, { test: !!testId, resend })
       if (!c.ok) { skipped.push(`${c.name}: ${c.reason}`); continue }
       if (sendAt) {
-        await updateSubmissionData(r.orgId, id, { photoAskSchedAt: sendAt, photoAskSchedBy: by }, by || 'staff')
+        await updateSubmissionData(r.orgId, id, { photoAskSchedAt: sendAt, photoAskSchedBy: by, photoAskStyles: styles.join(',') }, by || 'staff')
         scheduled++
         continue
       }
-      const res = await sendPhotoAsk(ctx, c.sub, by, testId ? by : undefined)
+      const res = await sendPhotoAsk(ctx, c.sub, by, testId ? by : undefined, styles)
       if (!res.ok) { errors.push(`${c.name}: ${res.error}`); continue }
       sent++
       if (testId) return NextResponse.json({ ok: true, sent, test: true, to: by, skipped, errors })

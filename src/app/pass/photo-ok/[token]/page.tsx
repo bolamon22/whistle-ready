@@ -75,8 +75,8 @@ export default function PhotoPermissionPage() {
 
             {info.posts && info.posts.length ? (
               <>
-                <p className="text-center text-sm text-slate-300 mb-3">Here's the kind of post we're planning:</p>
-                <div className="grid grid-cols-2 gap-3">
+                <p className="text-center text-sm text-slate-300 mb-3">{info.posts.length === 1 ? `Here's what ${info.player || 'the'}${info.player ? "'s" : ''} post will look like:` : "Here's the kind of post we're planning:"}</p>
+                <div className={info.posts.length === 1 ? 'grid grid-cols-1 max-w-[320px] mx-auto' : 'grid grid-cols-2 gap-3'}>
                   {info.posts.map(p => (
                     <figure key={p.url} className="m-0">
                       <img src={p.url} alt={`${p.label} post with ${info.player}'s card`} loading="lazy"

@@ -23,6 +23,11 @@ export const POST_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'countdown', label: "Who's Next" },
 ]
 export const isPostStyle = (s: string): s is PostStyle => POST_STYLES.some(p => p.id === s)
+/** Valid styles from an array or a comma list, in the standard order. [] when none. */
+export function pickStyles(v: unknown): PostStyle[] {
+  const want = new Set((Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()))
+  return POST_STYLES.map(p => p.id).filter(id => want.has(id))
+}
 
 export type PostData = {
   cardSrc: string          // data URL of the player's card PNG (720×1140)
