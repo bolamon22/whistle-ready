@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Download, Film, RotateCcw } from 'lucide-react'
+import { X, Download, Film, RotateCcw, Volume2 } from 'lucide-react'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
 
 // Turns one social post (lib/socialPosts, /pass/<token>/post/<style>.png) into an
@@ -164,6 +164,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
   const raf = useRef(0)
   const [state, setState] = useState<'loading' | 'preview' | 'recording' | 'done' | 'error'>('loading')
   const [out, setOut] = useState<{ url: string; ext: string } | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [showVideo, setShowVideo] = useState(false)   // after recording: the real video, with sound, instead of the silent loop
   const [err, setErr] = useState('')
 
   // Load the post and the fonts, then loop the preview.
@@ -208,7 +210,38 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     tick()
   }
 
+  // Play the animation once from the top with the music out loud (Bo: "Can I just hear it
+  // in the preview?"). Nothing is recorded.
+  async function playWithSound() {
+    const c = canvas.current, img = imgRef.current
+    if (!c || !img || playing) return
+    setShowVideo(false); setPlaying(true)
+    cancelAnimationFrame(raf.current)
+    const ctx = c.getContext('2d')!
+    let audioCtx: AudioContext | null = null
+    try {
+      audioCtx = new AudioContext()
+      const buf = await fetch('/reel-beat.mp3').then(r => r.arrayBuffer()).then(b => audioCtx!.decodeAudioData(b))
+      const node = audioCtx.createBufferSource(); node.buffer = buf
+      const gain = audioCtx.createGain()
+      gain.gain.setValueAtTime(0.9, audioCtx.currentTime)
+      gain.gain.setValueAtTime(0.9, audioCtx.currentTime + dur - 0.8)
+      gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + dur)
+      node.connect(gain).connect(audioCtx.destination)
+      node.start()
+    } catch { /* still play the picture */ }
+    const t0 = performance.now()
+    const tick = () => {
+      const t = (performance.now() - t0) / 1000
+      paint(ctx, img, Math.min(t, dur))
+      if (t < dur + 0.4) raf.current = requestAnimationFrame(tick)
+      else { audioCtx?.close().catch(() => {}); setPlaying(false); loop() }
+    }
+    tick()
+  }
+
   async function record() {
+    setShowVideo(false)
     const c = canvas.current, img = imgRef.current
     if (!c || !img) return
     if (typeof MediaRecorder === 'undefined' || !('captureStream' in c)) { setErr("This browser can't record video. Try Chrome."); setState('error'); return }
@@ -229,6 +262,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
       gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + dur)
       const dest = audioCtx.createMediaStreamDestination()
       srcNode.connect(gain).connect(dest)
+      gain.connect(audioCtx.destination)        // and out the speakers, so you hear it while it records
       tracks.push(...dest.stream.getAudioTracks())
       srcNode.start()
     } catch { /* no music: still make the video */ }
@@ -241,6 +275,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
       const blob = new Blob(chunks, { type: mime || 'video/webm' })
       setOut(o => { if (o) URL.revokeObjectURL(o.url); return { url: URL.createObjectURL(blob), ext } })
       setState('done')
+      setShowVideo(true)
       loop()
     }
     rec.start(250)
@@ -264,19 +299,28 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
           <h2 className="font-bold text-slate-900">{label} · Reel</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="ml-auto h-9 w-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"><X size={20} /></button>
         </div>
-        <canvas ref={canvas} width={W} height={H} className="w-full max-w-[300px] mx-auto block rounded-xl bg-black aspect-[9/16]" />
+        <canvas ref={canvas} width={W} height={H} className={`w-full max-w-[300px] mx-auto rounded-xl bg-black aspect-[9/16] ${showVideo && out ? 'hidden' : 'block'}`} />
+        {showVideo && out && (
+          // The recorded Reel itself, with its music: what you'll post.
+          <video src={out.url} controls autoPlay playsInline className="w-full max-w-[300px] mx-auto block rounded-xl bg-black aspect-[9/16]" />
+        )}
         {state === 'loading' && <p className="text-sm text-slate-500 text-center mt-3">Building the post…</p>}
         {err && <p className="text-sm text-rose-700 text-center mt-3">{err}</p>}
         <div className="mt-4 flex flex-col gap-2">
+          {state !== 'recording' && state !== 'loading' && state !== 'error' && (
+            <button type="button" onClick={playWithSound} disabled={playing} className="w-full rounded-lg border border-slate-300 text-slate-700 font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              <Volume2 size={16} /> {playing ? 'Playing…' : 'Play with sound'}
+            </button>
+          )}
           {state === 'recording'
             ? <p className="text-sm text-slate-600 text-center">Recording with music… keep this tab open ({dur} seconds).</p>
-            : <button type="button" onClick={record} disabled={state === 'loading' || state === 'error'} className="w-full rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-40">
+            : <button type="button" onClick={record} disabled={state === 'loading' || state === 'error' || playing} className="w-full rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-40">
                 {state === 'done' ? <><RotateCcw size={16} /> Record again</> : <><Film size={16} /> Make the Reel (with music)</>}
               </button>}
           {out && state !== 'recording' && (
             <a href={out.url} download={`${fileName}.${out.ext}`} className="w-full rounded-lg border border-teal-600 text-teal-700 font-semibold py-2.5 inline-flex items-center justify-center gap-2"><Download size={16} /> Save {out.ext.toUpperCase()}</a>
           )}
-          <p className="text-xs text-slate-500">The preview loops silently; the saved video has our own music track. To use a trending sound instead, lower it in Instagram when you post. Post only once the family says Yes.</p>
+          <p className="text-xs text-slate-500">The preview loops silently; press Play with sound to hear it with the music. After you make the Reel, the finished video plays here with sound before you save it. To use a trending sound instead, lower it in Instagram when you post. Post only once the family says Yes.</p>
         </div>
       </div>
     </div>
