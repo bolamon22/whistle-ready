@@ -47,7 +47,20 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
   squad?: { token: string; first: string; style: string }[]
   /** The social scheduler: hand the finished Reel (MP4) and a cover frame straight to
    *  a post instead of saving the file. Resolves once it's uploaded. */
-  onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean }) => Promise<void> }
+  onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string }) => Promise<void>
+  /** Scheduler: the event's first day and the day the post is planned for (YYYY-MM-DD).
+   *  With both, a Countdown look gets a "Posts on" day picker so its number matches the
+   *  day it goes out (Bo, Oct 18 2026: a Reel made for Thursday said "2 days out" when
+   *  he wanted to post it Sunday). */
+  eventStart?: string
+  postDay?: string }
+
+const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function daysBetween(from: string, to: string): number | null {
+  const a = /^(\d{4})-(\d{2})-(\d{2})/.exec(from), b = /^(\d{4})-(\d{2})-(\d{2})/.exec(to)
+  if (!a || !b) return null
+  return Math.round((Date.UTC(+b[1], +b[2] - 1, +b[3]) - Date.UTC(+a[1], +a[2] - 1, +a[3])) / 86_400_000)
+}
 
 const loadImg = (url: string) => new Promise<HTMLImageElement | null>(res => {
   if (!url) return res(null)
@@ -205,7 +218,12 @@ async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
   return { h264: has('avc1') || has('avc3'), aac: has('mp4a') }
 }
 
-export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose, token, initialSong, onUse, squad }: Props) {
+export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay }: Props) {
+  const today = dayKey(new Date())
+  const [day, setDay] = useState(postDay && postDay >= today ? postDay : today)
+  // The countdown number: days from the chosen posting day to the event, when we know both.
+  const dayDays = eventStart ? daysBetween(day, eventStart) : null
+  const days = eventStart ? (dayDays != null && dayDays >= 0 ? dayDays : null) : daysProp
   const squadMode = !!squad && squad.length > 1
   const isCustomLook = (s: string) => s in CUSTOM_REELS
   const [len, setLen] = useState<number>(squadMode ? (squad!.length <= 2 ? 15 : 30) : 8)
@@ -221,7 +239,9 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
   const single = slots.length === 1 && !squadMode
   const segDur = single ? (token && isCustomLook(slots[0].style) ? CUSTOM_REELS[slots[0].style] : DUR) : (len - endDur) / slots.length
   const dur = single ? segDur : len
-  const slotsKey = slots.map(x => `${x.token}:${x.style}`).join('|') + `|${len}`
+  const slotsKey = slots.map(x => `${x.token}:${x.style}`).join('|') + `|${len}|${days ?? ''}`
+  const hasCountdown = slots.some(x => lookKind(x.style) === 'countdown')
+  const qDays = days != null && days >= 0 ? `?days=${days}` : ''
   const customs = useRef<Record<string, { data: ReelData; imgs: ReelImages }>>({})
   const imgsRef = useRef<(HTMLImageElement | null)[]>([])
   const paint = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, t: number) => {
@@ -230,7 +250,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     if (endDur && t >= body) { drawEnd(ctx, t - body, endDur, imgs[n - 1] || img, event, sub, slots.map(x => x.who)); return }
     const i = Math.max(0, Math.min(n - 1, Math.floor(t / segDur)))
     const tl = t - i * segDur, slot = slots[i], im = imgs[i] || img
-    const c = slot.token ? customs.current[slot.token] : undefined
+    const c = slot.token ? customs.current[slot.token + qDays] : undefined
     if (c && isCustomLook(slot.style)) (slot.style === 'rookie' ? drawRookie : drawCountdown)(ctx, tl, c.data, { ...c.imgs, post: im })
     else draw(ctx, im, slot.style, tl, event, sub, days, segDur)
     if (n > 1 || endDur) { // a quick dip to black between parts
@@ -265,7 +285,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     document.head.appendChild(link)
     setState('loading'); setOut(null); recorded.current = null; setShowVideo(false); setErr('')
     cancelAnimationFrame(raf.current)
-    const q = days != null && days >= 0 ? `?days=${days}` : ''
+    const q = qDays
     ;(async () => {
       try { await Promise.all([document.fonts.load('68px Anton'), document.fonts.load('600 34px "Barlow Condensed"')]) } catch {}
       const imgs = await Promise.all(slots.map(x => loadImg(x.token ? `/pass/${encodeURIComponent(x.token)}/post/${x.style}.png${q}` : src)))
@@ -273,13 +293,13 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
       const first = imgs.find((x): x is HTMLImageElement => !!x)
       if (!first) { setErr('Could not load the post image.'); setState('error'); return }
       // Hand-built Reels (Rookie Card, Countdown) need each player's pieces, once per player.
-      const need = Array.from(new Set(slots.filter(x => x.token && isCustomLook(x.style) && !customs.current[x.token]).map(x => x.token)))
+      const need = Array.from(new Set(slots.filter(x => x.token && isCustomLook(x.style) && !customs.current[x.token + q]).map(x => x.token)))
       await Promise.all(need.map(async tk => {
         try {
           const data = await fetch(`/pass/${encodeURIComponent(tk)}/reel${q}`).then(r => r.ok ? r.json() : null)
           if (data) {
             const [photo, clubLogo, eventLogo] = await Promise.all([loadImg(data.photo), loadImg(data.clubLogo), loadImg(data.eventLogo)])
-            customs.current[tk] = { data, imgs: { photo, clubLogo, eventLogo } }
+            customs.current[tk + q] = { data, imgs: { photo, clubLogo, eventLogo } }   // keyed by day too: the countdown number is in the data
           }
         } catch { /* fall back to the generic animation */ }
       }))
@@ -407,7 +427,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
         poster = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.86))
         loop()
       }
-      await onUse(blob, poster, dur, { igSong: song === 'ig' })
+      await onUse(blob, poster, dur, { igSong: song === 'ig', ...(eventStart ? { day } : {}) })
     } catch (e: any) {
       setErr(String(e?.message || 'Upload failed'))
     } finally { setUsing(false) }
@@ -435,6 +455,14 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
               <div className="flex-1 grid grid-cols-3 gap-1">
                 {LENGTHS.filter(l => !squadMode || l.sec >= (squad!.length <= 2 ? 15 : 30)).map(l => <button key={l.sec} type="button" disabled={playing || using} onClick={() => setLen(l.sec)} className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${len === l.sec ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-600 hover:border-teal-400'}`}>{l.sec} sec<span className="block font-normal text-[10px] text-slate-500">{squadMode ? `${squad!.length} players` : l.looks === 1 ? '1 look' : `${l.looks} looks`}</span></button>)}
               </div>
+            </div>
+          )}
+          {eventStart && hasCountdown && state !== 'recording' && (
+            <div className="flex items-center gap-2 text-sm text-slate-700 flex-wrap">
+              <span className="font-semibold shrink-0">Posts on</span>
+              <input type="date" value={day} min={today} max={eventStart} disabled={playing || using} onChange={e => e.target.value && setDay(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white" />
+              {day !== today && <button type="button" onClick={() => setDay(today)} className="text-xs font-bold text-teal-700 hover:underline">Today</button>}
+              <span className="text-xs text-slate-500">{dayDays == null || dayDays < 0 ? '' : dayDays === 0 ? 'Countdown shows game day' : `Countdown shows ${dayDays} day${dayDays === 1 ? '' : 's'} out`}</span>
             </div>
           )}
           {(token || squadMode) && state !== 'recording' && (

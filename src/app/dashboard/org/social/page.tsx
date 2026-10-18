@@ -290,9 +290,17 @@ function SocialInner() {
     const when = whenFor(list[0]); setReel({ p: list[0], look: looks[0], when, days: daysAt(list[0], when), squad: list, looks })
   }
   /** ReelMaker hands back the recorded MP4: upload it and open Compose with it. */
-  async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean }) {
+  async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string }) {
     if (!reel) return
-    const { p, look, when, days, squad } = reel
+    const { p, look, squad } = reel
+    let { when, days } = reel
+    // The day picked in the Reel maker for a Countdown: post then (today = in 10 minutes,
+    // ready to approve or publish right away), so the number on the graphic is right.
+    if (opts.day && opts.day !== localDayKey(when)) {
+      const [y, m, d] = opts.day.split('-').map(Number)
+      when = opts.day === localDayKey(new Date()) ? (() => { const t = new Date(Date.now() + 10 * 60000); t.setMinutes(Math.ceil(t.getMinutes() / 5) * 5, 0, 0); return t })() : new Date(y, m - 1, d, when.getHours(), when.getMinutes())
+      days = daysAt(p, when)
+    }
     const thumbnailUrl = poster ? await uploadJpeg(poster, `${fileSlug(p, look)}-cover.jpg`).catch(() => '') : ''
     const name = `${fileSlug(p, look)}-reel.mp4`
     const up = await blobUpload(name, new File([video], name, { type: 'video/mp4' }), { access: 'public', handleUploadUrl: '/api/social/upload-video' })
@@ -546,6 +554,7 @@ function SocialInner() {
         label={reel.squad ? `Squad · ${reel.squad.map(x => firstOf(x.playerName)).join(', ')}` : `${firstOf(reel.p.playerName)} · ${lookLabel(reel.look)}`}
         event={reel.p.event.name || 'Game day'} sub={storySub(reel.p)} days={reel.days} fileName={reel.squad ? `squad-${reel.squad.map(x => firstOf(x.playerName)).join('-')}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-') : fileSlug(reel.p, reel.look)} token={reel.p.token}
         squad={reel.squad?.map((x, i) => ({ token: x.token, first: firstOf(x.playerName), style: reel.looks?.[i] || reel.look }))}
+        eventStart={reel.p.event.start} postDay={localDayKey(reel.when)}
         initialSong="ig" onUse={useReel} onClose={() => setReel(null)} />}
     </div>
   )
