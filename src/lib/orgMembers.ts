@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/db'
+import { archivedOrgIds } from '@/lib/orgArchive'
 
 // One login in more than one organization (Bo, Oct 16 2026: an assigner who works
 // Sunshine's events "wants to use it for his own. So he would have the same login,
@@ -63,7 +64,9 @@ export async function membershipsOf(userId: string, home?: Home | null): Promise
     for (const r of rows) if (String(r.orgId) !== h.orgId) out.push({ orgId: String(r.orgId), role: String(r.role), home: false })
   } catch (e) { console.error('[orgMembers] read', e) }
   if (!out.length && h.orgId === null) out.push({ orgId: null, role: h.role, home: true })
-  return out
+  // An archived organization (lib/orgArchive) is closed to its people.
+  const closed = await archivedOrgIds()
+  return closed.size ? out.filter(m => !m.orgId || !closed.has(m.orgId)) : out
 }
 
 /** The entry a login works in: the organization it picked when it's still a member

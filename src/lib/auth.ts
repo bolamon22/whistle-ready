@@ -42,6 +42,7 @@ async function loadAccount(userId: string, want: string | null, fresh = false): 
       const ms = await membershipsOf(userId, home)
       const pick = pickActive(ms, want)
       if (pick) { a.role = pick.role; a.orgId = pick.orgId }
+      else a.orgId = null   // every organization of theirs is archived (lib/orgArchive)
       a.orgs = ms.map(m => m.orgId).filter((o): o is string => !!o)
       a.switchable = ms.length > 1
       a.planOff = await planOffFor(a.orgId)
