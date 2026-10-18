@@ -307,8 +307,11 @@ function SocialInner() {
     const thumbnailUrl = poster ? await uploadJpeg(poster, `${fileSlug(p, look)}-cover.jpg`).catch(() => '') : ''
     const name = `${fileSlug(p, look)}-reel.mp4`
     const up = await blobUpload(name, new File([video], name, { type: 'video/mp4' }), { access: 'public', handleUploadUrl: '/api/social/upload-video' })
+    // The browser records a fragmented MP4 with no audio track when there's no built-in
+    // song; Instagram rejects that (2207082). Re-mux it server-side into a standard MP4.
+    const vurl = await normalizeReel(up.url, why => toast.error(`Couldn't finish the video for Instagram (${why}). Facebook will take it; Instagram may not.`, { duration: 8000 }))
     setReel(null)
-    const media: Media[] = [{ url: up.url, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920, builtIn: !opts.igSong }]
+    const media: Media[] = [{ url: vurl, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920, builtIn: !opts.igSong }]
     if (squad && squad.length > 1) {
       // Collab takes 3: the shared club first, then families; the rest are tagged in the Reel.
       const h = squadHandles(squad)
