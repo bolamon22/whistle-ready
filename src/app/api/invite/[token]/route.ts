@@ -9,6 +9,7 @@ import { giveStaffAccess } from '@/lib/staffLogin'
 import { addToOrg } from '@/lib/orgMembers'
 import { clientEvents, saveClientEvents } from '@/lib/clientEvents'
 import { inviteEvents } from '@/lib/eventClient'
+import { sendTrainingWelcome } from '@/lib/trainingWelcome'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -169,6 +170,8 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         org: await orgById(workerOrgId), orgId: workerOrgId, name: String(worker.name ?? claim.name ?? email), email,
         phone: (worker.phone as string | null) ?? null, roles: parseWorkerRoles(worker), source: 'claim',
       })
+      // Their training videos, in a follow-up email (lib/trainingWelcome).
+      await sendTrainingWelcome(String(claim.workerId))
       return NextResponse.json({ ok: true, workerId: String(claim.workerId) })
     }
 
@@ -286,6 +289,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     // Office heads-up — Bo wants to know the moment someone registers
     await notifyStaffRegistered({ org: await orgById(orgId), orgId, name, email, phone: phone || null, roles: [defaultRole], source: 'invite' })
 
+    await sendTrainingWelcome(workerId)   // their training videos (lib/trainingWelcome)
     return NextResponse.json({ ok: true, workerId, alreadyHadAccount: !!existingUser })
   } catch (e) {
     console.error(e)

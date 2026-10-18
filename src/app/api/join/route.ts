@@ -25,6 +25,7 @@ async function upcomingEvents(client: ReturnType<typeof db>, orgId: string) {
 }
 import { allowRequest, clientIp, rateLimitedResponse } from '@/lib/rateLimit'
 import { setSmsConsent } from '@/lib/smsConsentDb'
+import { sendTrainingWelcome } from '@/lib/trainingWelcome'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -259,6 +260,10 @@ export async function POST(req: NextRequest) {
     // silently revoke a yes they gave the first time — absence already means no
     // to every reader (see smsConsentFor).
     if (smsConsent && workerId) await setSmsConsent(workerId, true, 'join')
+
+    // Then their training videos, in a follow-up email (lib/trainingWelcome). Once per
+    // person, so signing up for a second event doesn't send them again.
+    if (workerId) await sendTrainingWelcome(workerId)
 
     // Office heads-up — Bo wants to know the moment someone registers
     await notifyStaffRegistered({ org, orgId, name, email, phone, roles: [role], source: 'signup', events: joined.map(e => e.name), referredBy })
