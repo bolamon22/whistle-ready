@@ -522,7 +522,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Click Place games. Anything that doesn’t fit stays in the Unscheduled list. It saves a checkpoint first, so Revert undoes the whole fill.",
       "The Issues panel flags problems as you go. Day health shows how full each time slot is, and how many back-to-backs you have.",
       "To check each team’s day for a long wait, switch to Teams, then back to the Board.",
-      "Rain delay? Weather pushes the rest of the day back, or tightens the time slots. To close a field, hover its name and click the closed sign. Close it for the whole day or part of it.",
+      "Rain delay? Under Tools, Weather pushes the rest of the day back, or tightens the time slots. To close a field, hover its name and click the closed sign. Close it for the whole day or part of it.",
       "The schedule stays a draft until you click Publish. That puts it on your public page, and can alert the phones of parents who follow those teams.",
       "Change something later? Publish again. Only the teams whose games moved get an alert."
     ],
@@ -576,7 +576,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Pick the format: single elimination, double elimination, or both-ways consolation. Then set how many teams advance, and any extra consolation games.",
       "For a division with only two pool games, the 2-game guarantee gives every first-round loser a second game, and adds If needed games for you.",
       "Click Generate Bracket. Its games join the Unscheduled list in the Scheduler, waiting for a spot after pool play.",
-      "The seed order follows your standings tiebreakers. Click Seed from standings to fill every seed, or type a team into any seed yourself. Then click Save Seeds.",
+      "The seed order follows your standings tiebreakers. Once every pool game has a score, click Seed from standings to fill every seed, or type a team into any seed yourself. Then click Save Seeds.",
       "Preview shows the bracket with the seeds in place. Click a team to change it, or the pencil to change a matchup.",
       "A big division? Split into flights makes two brackets, each with its own champion. Set the cutoff, pick each flight’s format, and click Split.",
       "Switch between the flights at the top. When pool play ends on game day, come back, click Seed from standings again, and save. The public bracket updates."
@@ -587,7 +587,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "title": "Bracket games\nand fixes",
     "intro": "Whistle Ready scheduler training. Bracket games and fixes.",
     "lines": [
-      "Bracket games wait in the Unscheduled list after pool play. Pick the day and the division, then switch the list to Bracket.",
+      "Bracket games wait in the Unscheduled list after pool play. Pick the day, choose the division under Filter, then switch the list to Bracket.",
       "Click a seeded game. Seeding time marks the slots before pool play ends, plus one slot to set the seeds.",
       "Click the first green slot after that to place it. The next game is picked up for you.",
       "A game fed by another has to wait for that game to end. Before B1 ends marks the slots that are too early.",
@@ -601,7 +601,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "title": "Weather delays and\nfield closures",
     "intro": "Whistle Ready scheduler training. Weather delays and field closures.",
     "lines": [
-      "Lightning or a storm on game day? Open the Scheduler on that day, and click Weather.",
+      "Lightning or a storm on game day? Open the Scheduler on that day, click Tools, then Weather delay or shorten.",
       "Delay pushes back every game from the time you pick. Choose how long, and when the delay starts. Games with a score, and canceled games, stay put.",
       "Shorten keeps the end of the day, and tightens the rest into shorter time slots instead.",
       "Click Apply delay. Every game from 12:10 on moves at once. It saves a checkpoint first, so if it was a mistake, Revert puts the day back.",
