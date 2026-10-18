@@ -20,11 +20,15 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const tid = pass.submission.tournamentId
   const start = tid ? await prisma.$queryRawUnsafe<any[]>('SELECT startDate FROM "Tournament" WHERE id = ?', tid).then((r: any[]) => String(r?.[0]?.startDate || '')).catch(() => '') : ''
   const facts = startFacts(start)
+  // days= sets the countdown number for a Reel scheduled ahead of time (the social
+  // scheduler makes it for the day it will post, not for today), like post/<style>.png.
+  const daysParam = new URL(req.url).searchParams.get('days')
+  const daysOut = daysParam != null && /^\d{1,3}$/.test(daysParam) ? Number(daysParam) : facts.daysOut
   const img = (kind: string, url: string) => (url ? `/pass/${params.token}/img/${kind}` : '')
   return NextResponse.json({
     first: firstName(c.playerName),
     jersey: c.jersey, position: c.position, club: c.clubName, team: c.teamName, division: c.division,
-    event: { name: c.tournamentName, dates: c.tournamentDates, location: c.location, startShort: facts.startShort, year: facts.year, daysOut: facts.daysOut },
+    event: { name: c.tournamentName, dates: c.tournamentDates, location: c.location, startShort: facts.startShort, year: facts.year, daysOut },
     photo: img('photo', c.photoUrl), clubLogo: img('club', c.clubLogoUrl), eventLogo: img('event', c.tournamentLogoUrl),
   }, { headers: { 'Cache-Control': 'private, max-age=60' } })
 }

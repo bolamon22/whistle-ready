@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import { createInstagramContainer, createInstagramCarouselChildren, createInstagramCarouselParent, carouselItems, getInstagramContainerStatus, publishInstagramContainer, publishFacebook, postFirstComment, findLivePost, refreshLongLivedToken, getInstagramAudio, type PublishSpec } from '@/lib/social'
 import { getPostAudio, setPostAudio, takesAudio, loadOrgUserToken } from '@/lib/socialAudio'
+import { getPostCollab, setPostCollab } from '@/lib/socialPlayers'
 import { sendPushToOrg } from '@/lib/push'
 import { encrypt, decrypt } from '@/lib/encrypt'
 
@@ -44,6 +45,11 @@ async function markPublished(post: PostWithAccount, externalPostId: string, perm
     const a = await getPostAudio(post.id).catch(() => null)
     if (a?.dropped) audioWarn = `Published without the Instagram song "${a.title}": ${a.dropped}`
   }
+  // Same for Collab invites Instagram refused (a private account, a typo in a handle).
+  if (post.socialAccount?.platform === 'instagram' && post.placement === 'feed') {
+    const c = await getPostCollab(post.id).catch(() => null)
+    if (c?.dropped) audioWarn = [audioWarn, `Published without the Collab invite (${c.usernames.map(u => '@' + u).join(', ')}): ${c.dropped}`].filter(Boolean).join(' · ')
+  }
   if (audioWarn) await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: audioWarn } }).catch(() => {})
   if (!post.firstComment.trim() || post.placement === 'story' || !post.socialAccount) return { id: post.id, status: 'published', error: audioWarn || undefined }
   let warn = ''
@@ -86,7 +92,15 @@ async function finishInstagram(post: PostWithAccount, containerId: string, budge
       }
       await new Promise(r => setTimeout(r, 4000))
     }
-    const parent = await createInstagramCarouselParent(account, childIds, post.caption)
+    // Collab invites go on the album container. If Instagram refuses them, publish
+    // without them rather than miss the slot; markPublished notes it on the post.
+    const collab = await getPostCollab(post.id).catch(() => null)
+    let parent = await createInstagramCarouselParent(account, childIds, post.caption, collab?.usernames)
+    if (!parent.ok && collab) {
+      const err = parent.error
+      parent = await createInstagramCarouselParent(account, childIds, post.caption)
+      if (parent.ok) await setPostCollab(post.id, { usernames: collab.usernames, dropped: err }).catch(() => {})
+    } else if (parent.ok && collab?.dropped) await setPostCollab(post.id, { usernames: collab.usernames }).catch(() => {})
     if (!parent.ok) return fail(post, parent.error)
     containerId = parent.data.containerId
     await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: containerId } }).catch(() => {})
@@ -170,6 +184,18 @@ export async function publishScheduledPost(postId: string, fromStatus: string | 
         await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: pending } })
         return await finishInstagram(post, pending, waitMs)
       }
+      // Collab invites (lib/socialPlayers) on a feed photo or Reel. If Instagram
+      // refuses them, the post goes out without them and says so afterwards.
+      const collab = post.placement === 'feed' ? await getPostCollab(post.id).catch(() => null) : null
+      const base: PublishSpec = collab ? { ...spec, collaborators: collab.usernames } : spec
+      const create = async (sp: PublishSpec) => {
+        const c = await createInstagramContainer(account, sp)
+        if (c.ok) { if (sp.collaborators?.length && collab?.dropped) await setPostCollab(post.id, { usernames: collab.usernames }).catch(() => {}); return c }
+        if (!sp.collaborators?.length || !collab) return c
+        const c2 = await createInstagramContainer(account, { ...sp, collaborators: undefined })
+        if (c2.ok) await setPostCollab(post.id, { usernames: collab.usernames, dropped: c.error }).catch(() => {})
+        return c2
+      }
       // Instagram song on a Reel: check it's still attachable right before
       // publishing (tracks get pulled), and if Meta refuses it, publish the Reel
       // with its own sound rather than miss the slot — the post says so after.
@@ -178,7 +204,7 @@ export async function publishScheduledPost(postId: string, fromStatus: string | 
         const userToken = await loadOrgUserToken(post.orgId).catch(() => null)
         const still = await getInstagramAudio(account, audio.audioId, userToken)
         if (still.ok) {
-          const c = await createInstagramContainer(account, { ...spec, audio: { audioId: audio.audioId, audioVolume: audio.audioVolume, videoVolume: audio.videoVolume } })
+          const c = await create({ ...base, audio: { audioId: audio.audioId, audioVolume: audio.audioVolume, videoVolume: audio.videoVolume } })
           if (c.ok) {
             if (audio.dropped) await setPostAudio(post.id, { ...audio, dropped: undefined }) // a Retry that worked this time
             return await finishInstagram(post, c.data.containerId, waitMs)
@@ -188,7 +214,7 @@ export async function publishScheduledPost(postId: string, fromStatus: string | 
           await setPostAudio(post.id, { ...audio, dropped: still.error })
         }
       }
-      const c = await createInstagramContainer(account, spec)
+      const c = await create(base)
       if (!c.ok) return await fail(post, c.error)
       return await finishInstagram(post, c.data.containerId, waitMs)
     }

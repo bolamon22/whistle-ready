@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db'
 import { randomUUID } from 'crypto'
 import { isVideoUrl } from '@/lib/social'
 import { cleanAudio, getPostAudioMany, setPostAudio, takesAudio } from '@/lib/socialAudio'
+import { cleanPlayerLink, setPostPlayer, setPostCollab, getPostCollabMany } from '@/lib/socialPlayers'
+import { cleanCollaborators } from '@/lib/playerPostText'
 
 // Queue + calendar data for the social scheduler. A post always starts as a
 // 'draft' here — only PATCH .../posts/[id] with action:'approve' (director/
@@ -29,7 +31,9 @@ export async function GET(req: NextRequest) {
   })
   // The Instagram song each Reel carries (AppSetting, see src/lib/socialAudio.ts).
   const audio = await getPostAudioMany(posts.filter(p => takesAudio(p, p.socialAccount?.platform)).map(p => p.id)).catch(() => ({} as Record<string, any>))
-  return NextResponse.json({ posts: posts.map(p => audio[p.id] ? { ...p, audio: audio[p.id] } : p) })
+  // Instagram Collab invites (lib/socialPlayers), for the post drawer.
+  const collab = await getPostCollabMany(posts.filter(p => p.socialAccount?.platform === 'instagram' && p.placement === 'feed').map(p => p.id)).catch(() => ({} as Record<string, any>))
+  return NextResponse.json({ posts: posts.map(p => ({ ...p, ...(audio[p.id] ? { audio: audio[p.id] } : {}), ...(collab[p.id] ? { collab: collab[p.id] } : {}) })) })
 }
 
 export async function POST(req: NextRequest) {
@@ -44,6 +48,9 @@ export async function POST(req: NextRequest) {
   const mediaType: 'image' | 'video' | 'carousel' = urls.length > 1 || body.mediaType === 'carousel' ? 'carousel' : body.mediaType === 'video' ? 'video' : 'image'
   if (mediaType === 'carousel' && (urls.length < 2 || urls.length > 10)) return NextResponse.json({ error: 'A carousel takes 2–10 photos or videos' }, { status: 400 })
   const thumbnailUrl: string = typeof body.thumbnailUrl === 'string' ? body.thumbnailUrl : ''
+  // A player post from the scheduler's tray brings its own 9:16 Story version of the
+  // 4:5 feed graphic, so the Story copy fills the screen instead of showing bars.
+  const storyMediaUrl: string = typeof body.storyMediaUrl === 'string' && /^(https:\/\/|\/api\/img\/)/.test(body.storyMediaUrl) ? body.storyMediaUrl : ''
   // The Story copy can go out at its own time (e.g. a couple of hours after the
   // feed post, for a second look). Defaults to the same time.
   const storyAt = body.storyScheduledFor ? new Date(body.storyScheduledFor) : null
@@ -73,7 +80,9 @@ export async function POST(req: NextRequest) {
           // Stories have no caption/first comment on either platform.
           firstComment: placement === 'feed' && typeof firstComment === 'string' ? firstComment : '',
           // A Story carries one file: a carousel's Story copy is its first slide.
-          ...(placement === 'story' && mediaType === 'carousel'
+          ...(placement === 'story' && storyMediaUrl
+            ? { mediaUrls: JSON.stringify([storyMediaUrl]), mediaType: 'image', thumbnailUrl: '' }
+            : placement === 'story' && mediaType === 'carousel'
             ? { mediaUrls: JSON.stringify(urls.slice(0, 1)), mediaType: isVideoUrl(urls[0]) ? 'video' : 'image', thumbnailUrl: isVideoUrl(urls[0]) ? thumbnailUrl : '' }
             : { mediaUrls: JSON.stringify(urls), mediaType, thumbnailUrl }),
           placement,
@@ -88,5 +97,15 @@ export async function POST(req: NextRequest) {
     const igIds = new Set(accounts.filter(a => a.platform === 'instagram').map(a => a.id))
     for (const p of posts) if (igIds.has(p.socialAccountId) && takesAudio(p, 'instagram')) await setPostAudio(p.id, audio)
   }
+  // Collab invites ride on the Instagram feed post only (Instagram doesn't take them
+  // on Stories, and Facebook has no equivalent through the API).
+  const collaborators = cleanCollaborators(body.collaborators)
+  if (collaborators.length) {
+    const igIds = new Set(accounts.filter(a => a.platform === 'instagram').map(a => a.id))
+    for (const p of posts) if (igIds.has(p.socialAccountId) && p.placement === 'feed') await setPostCollab(p.id, { usernames: collaborators }).catch(() => {})
+  }
+  // Which cleared player(s) this features, so the tray marks them posted.
+  const player = cleanPlayerLink(body.player)
+  if (player) for (const p of posts) await setPostPlayer(p.id, player).catch(() => {})
   return NextResponse.json({ ok: true, post: posts[0], posts })
 }

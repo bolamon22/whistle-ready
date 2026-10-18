@@ -206,6 +206,9 @@ export type PublishSpec = {
   items?: CarouselItem[]
   /** An Instagram song for a Reel (Instagram feed video only). Volumes 0–100. */
   audio?: { audioId: string; audioVolume: number; videoVolume: number }
+  /** Instagram usernames invited as Collaborators (max 3; feed image, Reel or
+   *  carousel only — Instagram doesn't take them on Stories). */
+  collaborators?: string[]
 }
 export type CarouselItem = { url: string; type: 'image' | 'video' }
 
@@ -233,9 +236,10 @@ export async function createInstagramCarouselChildren(account: { externalId: str
 
 /** Instagram carousel, step 2: the album container that points at the children.
  *  Poll it with getInstagramContainerStatus and publish it like any container. */
-export async function createInstagramCarouselParent(account: { externalId: string; accessToken: string }, childIds: string[], caption: string): Promise<Result<{ containerId: string }>> {
+export async function createInstagramCarouselParent(account: { externalId: string; accessToken: string }, childIds: string[], caption: string, collaborators?: string[]): Promise<Result<{ containerId: string }>> {
   const body: Record<string, string> = { access_token: decrypt(account.accessToken), media_type: 'CAROUSEL', children: childIds.join(',') }
   if (caption) body.caption = caption
+  if (collaborators?.length) body.collaborators = JSON.stringify(collaborators.slice(0, 3))
   const r = await graphPost<{ id: string }>(`/${account.externalId}/media`, body)
   if (!r.ok) return r
   return { ok: true, data: { containerId: r.data.id } }
@@ -290,6 +294,7 @@ export async function createInstagramContainer(account: { externalId: string; ac
     body.video_url = absoluteUrl(spec.mediaUrl)
     body.share_to_feed = 'true'
     if (spec.caption) body.caption = spec.caption
+    if (spec.collaborators?.length) body.collaborators = JSON.stringify(spec.collaborators.slice(0, 3))
     if (spec.coverUrl) body.cover_url = absoluteUrl(spec.coverUrl)
     if (spec.audio) {
       // Meta's form: the configuration is a JSON string in the form body.
@@ -301,6 +306,7 @@ export async function createInstagramContainer(account: { externalId: string; ac
   } else {
     body.image_url = absoluteUrl(spec.mediaUrl)
     if (spec.caption) body.caption = spec.caption
+    if (spec.collaborators?.length) body.collaborators = JSON.stringify(spec.collaborators.slice(0, 3))
   }
   const r = await graphPost<{ id: string }>(`/${account.externalId}/media`, body)
   if (!r.ok) return r
