@@ -3,6 +3,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
 import { randomUUID } from 'crypto'
 import { isVideoUrl } from '@/lib/social'
+import { cleanAudio, getPostAudioMany, setPostAudio, takesAudio } from '@/lib/socialAudio'
 
 // Queue + calendar data for the social scheduler. A post always starts as a
 // 'draft' here — only PATCH .../posts/[id] with action:'approve' (director/
@@ -26,7 +27,9 @@ export async function GET(req: NextRequest) {
     where, orderBy: { scheduledFor: 'asc' },
     include: { socialAccount: { select: { id: true, platform: true, label: true, status: true } } },
   })
-  return NextResponse.json({ posts })
+  // The Instagram song each Reel carries (AppSetting, see src/lib/socialAudio.ts).
+  const audio = await getPostAudioMany(posts.filter(p => takesAudio(p, p.socialAccount?.platform)).map(p => p.id)).catch(() => ({} as Record<string, any>))
+  return NextResponse.json({ posts: posts.map(p => audio[p.id] ? { ...p, audio: audio[p.id] } : p) })
 }
 
 export async function POST(req: NextRequest) {
@@ -78,6 +81,12 @@ export async function POST(req: NextRequest) {
         },
       }))
     }
+  }
+  // An Instagram song only rides on the Instagram Reel(s) in the set.
+  const audio = cleanAudio(body.audio)
+  if (audio) {
+    const igIds = new Set(accounts.filter(a => a.platform === 'instagram').map(a => a.id))
+    for (const p of posts) if (igIds.has(p.socialAccountId) && takesAudio(p, 'instagram')) await setPostAudio(p.id, audio)
   }
   return NextResponse.json({ ok: true, post: posts[0], posts })
 }

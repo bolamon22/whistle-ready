@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { encrypt, decrypt } from '@/lib/encrypt'
+import { saveOrgUserToken } from '@/lib/socialAudio'
 
 // Social scheduler — native Instagram/Facebook connect + publish + insights.
 //
@@ -21,6 +22,9 @@ import { encrypt, decrypt } from '@/lib/encrypt'
 
 const GRAPH_VERSION = 'v21.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
+// The Instagram Audio API (music on Reels) is documented on v22.0; use it for
+// audio search and for Reel containers that carry a song.
+const GRAPH_AUDIO_BASE = 'https://graph.facebook.com/v22.0'
 
 // instagram_manage_insights sits in the same "your own business" bucket as
 // content_publish — pulling analytics on your own account needs no more
@@ -47,9 +51,9 @@ export function socialEnabled(): boolean {
 function appId() { return process.env.META_APP_ID || '' }
 function appSecret() { return process.env.META_APP_SECRET || '' }
 
-async function graphGet<T = any>(path: string, params: Record<string, string>): Promise<Result<T>> {
+async function graphGet<T = any>(path: string, params: Record<string, string>, base: string = GRAPH_BASE): Promise<Result<T>> {
   try {
-    const url = new URL(`${GRAPH_BASE}${path}`)
+    const url = new URL(`${base}${path}`)
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
     const res = await fetch(url.toString())
     const json: any = await res.json().catch(() => ({}))
@@ -60,9 +64,9 @@ async function graphGet<T = any>(path: string, params: Record<string, string>): 
   }
 }
 
-async function graphPost<T = any>(path: string, body: Record<string, string>): Promise<Result<T>> {
+async function graphPost<T = any>(path: string, body: Record<string, string>, base: string = GRAPH_BASE): Promise<Result<T>> {
   try {
-    const url = new URL(`${GRAPH_BASE}${path}`)
+    const url = new URL(`${base}${path}`)
     const res = await fetch(url.toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -145,6 +149,8 @@ export async function completeConnect(orgId: string, userId: string, code: strin
   if (!pages.ok) return pages
 
   const expiresAt = new Date(Date.now() + long.data.expiresInSeconds * 1000)
+  // Kept for the Instagram Audio API, which wants a user token (see socialAudio.ts).
+  await saveOrgUserToken(orgId, long.data.token, expiresAt)
   let connected = 0
   for (const page of pages.data) {
     // Facebook Page itself.
@@ -198,6 +204,8 @@ export type PublishSpec = {
   coverUrl?: string
   /** Carousel slides, in order (2–10). Only for mediaType 'carousel', feed only. */
   items?: CarouselItem[]
+  /** An Instagram song for a Reel (Instagram feed video only). Volumes 0–100. */
+  audio?: { audioId: string; audioVolume: number; videoVolume: number }
 }
 export type CarouselItem = { url: string; type: 'image' | 'video' }
 
@@ -233,6 +241,38 @@ export async function createInstagramCarouselParent(account: { externalId: strin
   return { ok: true, data: { containerId: r.data.id } }
 }
 
+export type IgAudio = { audioId: string; title: string; artist: string; cover: string; durationMs: number; previewUrl: string; type: string }
+function toIgAudio(a: any): IgAudio {
+  return {
+    audioId: String(a.audio_id || a.id || ''), title: String(a.title || ''), artist: String(a.display_artist || a.ig_username || ''),
+    cover: String(a.cover_artwork_thumbnail_uri || a.cover_artwork_thumbnail_url || a.profile_picture_url || ''),
+    durationMs: Number(a.duration_in_ms) || 0, previewUrl: String(a.download_url || ''), type: String(a.audio_type || ''),
+  }
+}
+
+/** Instagram music search (Meta Audio API, Facebook Login accounts only). With no
+ *  query it returns what's trending. Only audio Meta has cleared for third-party
+ *  apps comes back, so it's a subset of the in-app library. Tries the account's
+ *  Page token, then the org's user token (the docs ask for a user token). */
+export async function searchInstagramAudio(account: { externalId: string; accessToken: string }, opts: { query?: string; type?: 'music' | 'original_sound'; userToken?: string | null }): Promise<Result<IgAudio[]>> {
+  const params = (token: string): Record<string, string> => ({ audio_type: opts.type || 'music', user_id: account.externalId, access_token: token, ...(opts.query ? { search_query: opts.query.slice(0, 100) } : {}) })
+  let r = await graphGet<{ audio?: any[]; data?: any[] }>('/ig_audio', params(decrypt(account.accessToken)), GRAPH_AUDIO_BASE)
+  if (!r.ok && opts.userToken) r = await graphGet<{ audio?: any[]; data?: any[] }>('/ig_audio', params(opts.userToken), GRAPH_AUDIO_BASE)
+  if (!r.ok) return r
+  return { ok: true, data: (r.data.audio || r.data.data || []).map(toIgAudio).filter(a => a.audioId) }
+}
+
+/** Is this song still available to attach? (Tracks can be pulled after scheduling.) */
+export async function getInstagramAudio(account: { externalId: string; accessToken: string }, audioId: string, userToken?: string | null): Promise<Result<IgAudio>> {
+  const params = (token: string) => ({ user_id: account.externalId, access_token: token })
+  let r = await graphGet<any>(`/${audioId}`, params(decrypt(account.accessToken)), GRAPH_AUDIO_BASE)
+  if (!r.ok && userToken) r = await graphGet<any>(`/${audioId}`, params(userToken), GRAPH_AUDIO_BASE)
+  if (!r.ok) return r
+  const a = toIgAudio(r.data)
+  if (!a.audioId) return { ok: false, error: 'That song is no longer available on Instagram' }
+  return { ok: true, data: a }
+}
+
 export type ContainerStatus = 'FINISHED' | 'IN_PROGRESS' | 'ERROR' | 'EXPIRED' | 'PUBLISHED' | 'UNKNOWN'
 
 /** Step 1 of an Instagram publish: create the media container. Images are usually
@@ -251,6 +291,13 @@ export async function createInstagramContainer(account: { externalId: string; ac
     body.share_to_feed = 'true'
     if (spec.caption) body.caption = spec.caption
     if (spec.coverUrl) body.cover_url = absoluteUrl(spec.coverUrl)
+    if (spec.audio) {
+      // Meta's form: the configuration is a JSON string in the form body.
+      body.audio_configuration = JSON.stringify({ audio_id: spec.audio.audioId, audio_volume: spec.audio.audioVolume, video_volume: spec.audio.videoVolume })
+      const r = await graphPost<{ id: string }>(`/${account.externalId}/media`, body, GRAPH_AUDIO_BASE)
+      if (!r.ok) return r
+      return { ok: true, data: { containerId: r.data.id } }
+    }
   } else {
     body.image_url = absoluteUrl(spec.mediaUrl)
     if (spec.caption) body.caption = spec.caption

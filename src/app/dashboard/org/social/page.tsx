@@ -15,7 +15,7 @@ import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
-import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb, Layers, ArrowLeft, ArrowRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb, Layers, ArrowLeft, ArrowRight, Music, Pause, Search } from 'lucide-react'
 
 type Status = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
 interface Account { id: string; platform: 'instagram' | 'facebook'; label: string; status: string; lastError: string; tokenExpiresAt: string | null }
@@ -23,7 +23,12 @@ interface Post {
   id: string; socialAccountId: string; caption: string; mediaUrls: string; scheduledFor: string; status: Status
   approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string; permalink: string; importedAt: string | null; mediaType: 'image' | 'video' | 'carousel'; placement: 'feed' | 'story'; thumbnailUrl: string
   socialAccount?: { id: string; platform: string; label: string; status: string }
+  audio?: Song
 }
+// An Instagram song on a Reel (Meta Audio API; src/lib/socialAudio.ts).
+type Song = { audioId: string; title: string; artist: string; cover: string; durationMs: number; audioVolume: number; videoVolume: number; dropped?: string }
+const sameSong = (a?: Song | null, b?: Song | null) => (a?.audioId || '') === (b?.audioId || '') && (a?.audioVolume ?? 100) === (b?.audioVolume ?? 100) && (a?.videoVolume ?? 100) === (b?.videoVolume ?? 100)
+const mmss = (ms: number) => { const t = Math.round(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}` }
 
 const STATUS_LABEL: Record<string, string> = { draft: 'Needs approval', scheduled: 'Scheduled', publishing: 'Publishing…', published: 'Published', failed: 'Failed', canceled: 'Canceled' }
 const STATUS_TEXT: Record<string, string> = { draft: 'text-amber-700', scheduled: 'text-emerald-700', publishing: 'text-emerald-700', published: 'text-slate-500', failed: 'text-rose-600', canceled: 'text-slate-400' }
@@ -309,7 +314,7 @@ function SocialInner() {
                         <div key={p.id} draggable={p.status !== 'published' && p.status !== 'publishing'} onDragStart={() => { dragId.current = p.id }} onDragEnd={() => { dragId.current = null }} onClick={() => setDrawer({ kind: 'post', id: p.id, mode: 'preview' })}
                           className="rounded-xl bg-slate-50 border border-slate-200 p-2 flex gap-2 items-center cursor-pointer hover:-translate-y-px hover:border-slate-300 hover:shadow-md transition">
                           <Thumb post={p} />
-                          <div className="min-w-0 flex-1"><div className="text-xs font-bold leading-tight line-clamp-2">{kindLabel(p) && <span className="text-slate-500">{kindLabel(p)} · </span>}{firstLine(p.caption || (p.placement === 'story' ? 'Story' : ''))}</div><div className={`text-[11px] font-bold mt-0.5 flex flex-wrap gap-x-1.5 ${STATUS_TEXT[p.status]}`}>{STATUS_LABEL[p.status]}<span className="text-slate-500">{fmtTime(new Date(p.scheduledFor))}</span></div></div>
+                          <div className="min-w-0 flex-1"><div className="text-xs font-bold leading-tight line-clamp-2">{kindLabel(p) && <span className="text-slate-500">{kindLabel(p)}{p.audio ? ' ♪' : ''} · </span>}{firstLine(p.caption || (p.placement === 'story' ? 'Story' : ''))}</div><div className={`text-[11px] font-bold mt-0.5 flex flex-wrap gap-x-1.5 ${STATUS_TEXT[p.status]}`}>{STATUS_LABEL[p.status]}<span className="text-slate-500">{fmtTime(new Date(p.scheduledFor))}</span></div></div>
                         </div>
                       ))}
                       {dayIdeas.map(idea => { const c = AUD_CLS[idea.aud] || AUD_CLS.all; return (
@@ -382,7 +387,7 @@ function DrawerHead({ title, onClose, children }: { title: string; onClose: () =
 const inputCls = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500'
 const labelCls = 'block text-[11px] font-extrabold uppercase tracking-wide text-slate-500 mb-1.5'
 
-function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, mediaType: firstType = 'image', placement = 'feed', poster: firstPoster, slides }: { platform: string; label: string; caption: string; imgSrc?: string; when: Date; mediaType?: 'image' | 'video' | 'carousel'; placement?: Placement; poster?: string; slides?: Media[] }) {
+function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, mediaType: firstType = 'image', placement = 'feed', poster: firstPoster, slides, song }: { platform: string; label: string; caption: string; imgSrc?: string; when: Date; mediaType?: 'image' | 'video' | 'carousel'; placement?: Placement; poster?: string; slides?: Media[]; song?: Song | null }) {
   const ig = platform === 'instagram'
   const handle = label.replace(/^@/, '')
   const isStory = placement === 'story'
@@ -410,7 +415,7 @@ function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, media
   }
   return (
     <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
-      <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-500">{ig ? (deck ? `Instagram carousel · ${deck.length} slides` : isVideo ? 'Instagram Reel · also shows in the feed' : 'Instagram post') : `${fmtDate(when)} · Public${deck ? ` · ${deck.length} photos` : ''}`}</div></div></div>
+      <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-500">{ig ? (deck ? `Instagram carousel · ${deck.length} slides` : isVideo ? (song ? <span className="inline-flex items-center gap-1"><Music size={10} />{song.title}{song.artist ? ` · ${song.artist}` : ''}</span> : 'Instagram Reel · also shows in the feed') : 'Instagram post') : `${fmtDate(when)} · Public${deck ? ` · ${deck.length} photos` : ''}`}</div></div></div>
       {!ig && <div className="px-3 pb-2.5 text-sm whitespace-pre-wrap leading-snug">{caption || <span className="text-slate-500">No caption yet</span>}</div>}
       <div className={`${frame} relative bg-slate-200 grid place-items-center text-slate-500 text-xs tracking-widest`}>{mediaEl}
         {deck && deck.length > 1 && <>
@@ -537,6 +542,72 @@ function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => 
   )
 }
 
+/** Instagram's own music for a Reel. Searches /api/social/audio (trending when
+ *  the box is empty), previews a clip, and sets the song + the two volumes. */
+function MusicPicker({ song, setSong }: { song: Song | null; setSong: (s: Song | null) => void }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [list, setList] = useState<{ audioId: string; title: string; artist: string; cover: string; durationMs: number; previewUrl: string }[]>([])
+  const [playing, setPlaying] = useState('')
+  const audioEl = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => () => { audioEl.current?.pause() }, [])
+  async function search(query: string) {
+    setBusy(true); setErr('')
+    try { const d = await api(`/api/social/audio?q=${encodeURIComponent(query)}`); setList(d.audio || []) }
+    catch (e: any) { setErr(e.message); setList([]) } finally { setBusy(false) }
+  }
+  function toggle(id: string, url: string) {
+    if (!url) { toast('No preview for this one'); return }
+    if (playing === id) { audioEl.current?.pause(); setPlaying(''); return }
+    audioEl.current?.pause()
+    const a = new Audio(url); audioEl.current = a; a.onended = () => setPlaying(''); a.play().then(() => setPlaying(id)).catch(() => toast.error("Couldn't play the preview"))
+  }
+  const openPicker = () => { setOpen(true); if (!list.length) search('') }
+  return (
+    <div>
+      <label className={labelCls}>Instagram music <span className="normal-case tracking-normal font-semibold text-slate-400">· licensed by Instagram, Reels only</span></label>
+      {song ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-2.5 flex flex-col gap-2">
+          <div className="flex items-center gap-2.5">
+            {song.cover ? <img src={song.cover} alt="" className="w-10 h-10 rounded-lg object-cover flex-none" /> : <span className="w-10 h-10 rounded-lg bg-pink-50 text-pink-600 grid place-items-center flex-none"><Music size={16} /></span>}
+            <div className="min-w-0 flex-1"><div className="text-sm font-bold truncate">{song.title}</div><div className="text-xs text-slate-500 truncate">{song.artist}{song.durationMs ? ` · ${mmss(song.durationMs)}` : ''}</div></div>
+            <button type="button" onClick={openPicker} className="text-xs font-bold text-teal-700 hover:underline">Change</button>
+            <button type="button" onClick={() => setSong(null)} className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-rose-600" aria-label="Remove song"><X size={14} /></button>
+          </div>
+          {([['Song volume', 'audioVolume'], ["Video's own sound", 'videoVolume']] as const).map(([lab, k]) => (
+            <label key={k} className="flex items-center gap-2 text-[11px] text-slate-600"><span className="w-28 flex-none">{lab}</span><input type="range" min={0} max={100} step={5} value={song[k]} onChange={e => setSong({ ...song, [k]: Number(e.target.value) })} className="flex-1 accent-teal-600" /><span className="w-8 text-right tabular-nums">{song[k]}</span></label>
+          ))}
+          {song.dropped && <div className="text-[11px] text-amber-700">Last time this song couldn't be attached: {song.dropped}</div>}
+        </div>
+      ) : !open && <button type="button" onClick={openPicker} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 hover:border-pink-400 hover:text-pink-700"><Music size={14} /> Add a song from Instagram</button>}
+      {open && (
+        <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-2.5 flex flex-col gap-2">
+          <div className="flex gap-2"><div className="relative flex-1"><Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search(q) } }} placeholder="Search songs or artists — empty shows trending" className={inputCls + ' !pl-8 !py-2 text-xs'} /></div>
+            <button type="button" onClick={() => search(q)} disabled={busy} className="rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 disabled:opacity-50">{busy ? '…' : 'Search'}</button>
+            <button type="button" onClick={() => { audioEl.current?.pause(); setPlaying(''); setOpen(false) }} className="w-8 rounded-xl text-slate-500 hover:bg-slate-200 grid place-items-center" aria-label="Close music search"><X size={14} /></button></div>
+          {err && <div className="text-xs text-rose-700 bg-rose-50 rounded-lg px-2.5 py-2">{err}</div>}
+          {!err && !busy && !list.length && <div className="text-xs text-slate-500 px-1">No songs found{q ? ` for "${q}"` : ''}. Instagram only shares part of its library with outside apps.</div>}
+          <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+            {list.map(t => (
+              <div key={t.audioId} className="flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 p-1.5">
+                <button type="button" onClick={() => toggle(t.audioId, t.previewUrl)} className="relative w-9 h-9 rounded-lg overflow-hidden flex-none bg-slate-200 grid place-items-center" aria-label={playing === t.audioId ? 'Pause preview' : 'Play preview'}>
+                  {t.cover && <img src={t.cover} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                  <span className="relative w-6 h-6 rounded-full bg-black/55 text-white grid place-items-center">{playing === t.audioId ? <Pause size={11} /> : <Play size={11} fill="currentColor" />}</span>
+                </button>
+                <div className="min-w-0 flex-1"><div className="text-xs font-bold truncate">{t.title || 'Untitled'}</div><div className="text-[11px] text-slate-500 truncate">{t.artist}{t.durationMs ? ` · ${mmss(t.durationMs)}` : ''}</div></div>
+                <button type="button" onClick={() => { audioEl.current?.pause(); setPlaying(''); setSong({ audioId: t.audioId, title: t.title, artist: t.artist, cover: t.cover, durationMs: t.durationMs, audioVolume: song?.audioVolume ?? 100, videoVolume: song?.videoVolume ?? 30 }); setOpen(false) }} className="rounded-lg border border-teal-500 text-teal-700 hover:bg-teal-50 text-xs font-bold px-2.5 py-1">Use</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="text-[11px] text-slate-500 mt-1.5">Instagram adds the song when it publishes (it doesn't let apps preview the finished Reel). Facebook and Stories keep the video's own sound. If Instagram pulls the song before then, the Reel still goes out and the post says so.</div>
+    </div>
+  )
+}
+
 type StoryTiming = { mode: 'same' } | { mode: 'offset'; minutes: number } | { mode: 'morning' } | { mode: 'custom'; at: Date }
 function storyTimeFor(t: StoryTiming, feed: Date): Date {
   if (t.mode === 'offset') return new Date(feed.getTime() + t.minutes * 60000)
@@ -544,8 +615,8 @@ function storyTimeFor(t: StoryTiming, feed: Date): Date {
   if (t.mode === 'custom') return t.at
   return feed
 }
-interface EditProps { slides?: Media[]; setSlides?: (s: Media[]) => void; storyTiming?: StoryTiming; setStoryTiming?: (t: StoryTiming) => void; aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
-function EditFields({ slides, setSlides, storyTiming, setStoryTiming, aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
+interface EditProps { song?: Song | null; setSong?: (s: Song | null) => void; slides?: Media[]; setSlides?: (s: Media[]) => void; storyTiming?: StoryTiming; setStoryTiming?: (t: StoryTiming) => void; aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
+function EditFields({ song, setSong, slides, setSlides, storyTiming, setStoryTiming, aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
   const past = when < new Date()
   const [ai, setAi] = useState<{ open: boolean; brief: string; busy: boolean; options: { label: string; caption: string }[]; hashtags: string }>({ open: !!aiInit, brief: aiInit || '', busy: false, options: [], hashtags: '' })
   const plats = platforms || (accounts ? Array.from(new Set(accounts.filter(a => acctIds?.includes(a.id)).map(a => a.platform))) : ['instagram'])
@@ -591,6 +662,7 @@ function EditFields({ slides, setSlides, storyTiming, setStoryTiming, aiInit, pl
           <div className="text-[11px] text-slate-500 mt-1.5">{isVideo && (media.durationSec || 0) > 60 ? 'Over 60 s, so it can go out as a Reel but not a Story.' : carousel ? 'Pick both and the Story gets slide 1 (a Story takes one photo or video).' : 'Pick both to publish it to the feed and your Story.'}{isVideo && media.width && media.height && Math.abs(media.width / media.height - 9 / 16) > 0.05 ? ` This is ${media.width}×${media.height} — Reels and Stories are 9:16, so it'll show with bars.` : ''}</div>
         </div>
       )}
+      {setSong && isVideo && !carousel && plats.includes('instagram') && !storyOnly && (!placements || placements.includes('feed')) && <MusicPicker song={song || null} setSong={setSong} />}
       {!storyOnly && <div>
         <div className="flex items-center justify-between mb-1.5"><label className={labelCls + ' !mb-0'}>Caption</label><button type="button" onClick={() => setAi(a => ({ ...a, open: !a.open }))} className={`inline-flex items-center gap-1 text-xs font-bold rounded-lg px-2 py-1 ${ai.open ? 'bg-violet-100 text-violet-800' : 'text-violet-700 hover:bg-violet-50'}`}><Sparkles size={13} /> Write with AI</button></div>
         <textarea value={caption} onChange={e => setCaption(e.target.value)} maxLength={2200} rows={5} className={inputCls + ' resize-y leading-snug'} placeholder="Write the caption…" /><div className="text-right text-[11px] text-slate-500 mt-1 tabular-nums">{caption.length}/2200</div>
@@ -638,21 +710,22 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
   const [confirmNow, setConfirmNow] = useState(false); const [publishing, setPublishing] = useState(false)
   const [when, setWhen] = useState(new Date(post.scheduledFor))
   const [slides, setSlides] = useState<Media[]>(toSlides(post))
+  const [song, setSong] = useState<Song | null>(post.audio || null)
   const med: Media | undefined = slides[0]
   const setMed = (m: Media) => setSlides([m, ...slides.slice(1)])
   const img = med?.url
   const [confirmDel, setConfirmDel] = useState(false)
-  useEffect(() => { setCaption(post.caption); setFirstComment(post.firstComment || ''); setWhen(new Date(post.scheduledFor)); setSlides(toSlides(post)); setConfirmDel(false); setConfirmNow(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls, post.firstComment, post.thumbnailUrl, post.mediaType])
+  useEffect(() => { setCaption(post.caption); setFirstComment(post.firstComment || ''); setWhen(new Date(post.scheduledFor)); setSlides(toSlides(post)); setSong(post.audio || null); setConfirmDel(false); setConfirmNow(false) }, [post.id, post.status, post.caption, post.scheduledFor, post.mediaUrls, post.firstComment, post.thumbnailUrl, post.mediaType])
   const a = post.socialAccount || { platform: 'instagram', label: '' }
   const editable = post.status === 'draft' || post.status === 'scheduled' || post.status === 'failed'
-  const dirty = caption !== post.caption || firstComment !== (post.firstComment || '') || +when !== +new Date(post.scheduledFor) || slides.map(x => x.url).join('|') !== media(post).join('|') || (med?.thumbnailUrl || '') !== (post.thumbnailUrl || '')
-  const save = () => onPatch(post.id, { caption, firstComment, scheduledFor: when.toISOString(), ...slidesBody(slides) }, 'Saved')
+  const dirty = !sameSong(song, post.audio) || caption !== post.caption || firstComment !== (post.firstComment || '') || +when !== +new Date(post.scheduledFor) || slides.map(x => x.url).join('|') !== media(post).join('|') || (med?.thumbnailUrl || '') !== (post.thumbnailUrl || '')
+  const save = () => onPatch(post.id, { caption, firstComment, scheduledFor: when.toISOString(), ...slidesBody(slides), ...(!sameSong(song, post.audio) ? { audio: song } : {}) }, 'Saved')
   const isStory = post.placement === 'story'
   const draftSiblings = siblings.filter(s => s.status === 'draft').length
   const statusLine = post.status === 'draft' ? <div className="rounded-xl bg-amber-50 text-amber-800 text-xs font-bold px-3 py-2.5">Needs approval · scheduled for {fmtLong(when)}</div>
     : post.status === 'scheduled' ? <div className="rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold px-3 py-2.5 flex gap-2"><Check size={14} className="flex-none mt-px" />Approved · publishes automatically {fmtLong(when)}</div>
     : post.status === 'failed' ? <div className="rounded-xl bg-rose-50 text-rose-700 text-xs font-bold px-3 py-2.5">{post.lastError || 'Publish failed'}</div>
-    : post.status === 'published' ? <div className="rounded-xl bg-slate-100 text-slate-600 text-xs font-bold px-3 py-2.5 flex items-center gap-2 flex-wrap"><span>Published {post.publishedAt ? fmtLong(new Date(post.publishedAt)) : ''}{post.importedAt ? ' · imported' : ''}</span>{post.permalink && <a href={post.permalink} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-teal-700 hover:underline">Open on {a.platform === 'instagram' ? 'Instagram' : 'Facebook'} <ExternalLink size={12} /></a>}</div>
+    : post.status === 'published' ? <div className="rounded-xl bg-slate-100 text-slate-600 text-xs font-bold px-3 py-2.5 flex items-center gap-2 flex-wrap">{post.lastError && <span className="basis-full text-amber-700 font-semibold">{post.lastError}</span>}<span>Published {post.publishedAt ? fmtLong(new Date(post.publishedAt)) : ''}{post.importedAt ? ' · imported' : ''}</span>{post.permalink && <a href={post.permalink} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-teal-700 hover:underline">Open on {a.platform === 'instagram' ? 'Instagram' : 'Facebook'} <ExternalLink size={12} /></a>}</div>
     : <div className="rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold px-3 py-2.5">{post.lastError || (post.mediaType === 'video' && a.platform === 'instagram' ? 'Publishing — Instagram is processing the video…' : 'Publishing right now…')}</div>
   return (
     <>
@@ -661,8 +734,8 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
-        {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} slides={slides} />
-          : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
+        {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} slides={slides} song={song} />
+          : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
         {post.status === 'published' && (metrics
           ? <div className="grid grid-cols-4 gap-2">{[['Reached', metrics.reach], ['Likes', metrics.likes], ['Comments', metrics.comments], [a.platform === 'instagram' ? 'Saves' : 'Shares', a.platform === 'instagram' ? metrics.saves : metrics.shares]].map(([l, v]) => <div key={String(l)} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2"><div className="text-lg font-extrabold tabular-nums">{fmtNum(Number(v))}</div><div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{l}</div></div>)}<div className="col-span-4 text-[11px] text-slate-500">Insights as of {fmtDate(new Date(metrics.fetchedAt))} {fmtTime(new Date(metrics.fetchedAt))} · refreshes every 4 hours</div></div>
           : <div className="text-xs text-slate-500">No insights yet — the next snapshot runs within 4 hours.</div>)}
@@ -688,7 +761,7 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
 }
 
 function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose, onSaved }: { when: Date; idea?: Idea; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [slides, setSlides] = useState<Media[]>([]); const med: Media | undefined = slides[0]; const setMed = (m: Media) => setSlides([m, ...slides.slice(1)]); const [storyTiming, setStoryTiming] = useState<StoryTiming>({ mode: 'same' }); const [placements, setPlacements] = useState<Placement[]>(idea?.weight === 'story' ? ['story'] : ['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
+  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [slides, setSlides] = useState<Media[]>([]); const med: Media | undefined = slides[0]; const setMed = (m: Media) => setSlides([m, ...slides.slice(1)]); const [storyTiming, setStoryTiming] = useState<StoryTiming>({ mode: 'same' }); const [song, setSong] = useState<Song | null>(null); const [placements, setPlacements] = useState<Placement[]>(idea?.weight === 'story' ? ['story'] : ['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
   const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   const [cMode, setCMode] = useState<'edit' | 'preview'>('edit')
@@ -704,7 +777,7 @@ function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose,
     if (storyAt < new Date()) { toast.error('The Story time has passed — pick a later one'); return }
     setBusy(true)
     try {
-      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, ...slidesBody(slides), placements, scheduledFor: at.toISOString(), ...(both && +storyAt !== +at ? { storyScheduledFor: storyAt.toISOString() } : {}) }) })
+      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, ...slidesBody(slides), placements, scheduledFor: at.toISOString(), ...(song && slides.length === 1 && med?.mediaType === 'video' && placements.includes('feed') ? { audio: song } : {}), ...(both && +storyAt !== +at ? { storyScheduledFor: storyAt.toISOString() } : {}) }) })
       const n = acctIds.length * placements.length; const acctNote = (n > 1 ? ` (${n} posts)` : '') + (both && +storyAt !== +at ? ` · Story ${fmtDate(storyAt)} ${fmtTime(storyAt)}` : '')
       if (approve) { await api(`/api/social/posts/${d.post.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'approve' }) }); toast.success(`Scheduled${acctNote} — publishes ${fmtDate(at)} at ${fmtTime(at)}`) }
       else toast.success(`Saved${acctNote} — waiting on approval`)
@@ -718,10 +791,10 @@ function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose,
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {cMode === 'preview' && img && previewAcct ? <>
-          {placements.includes('feed') && <div><div className={labelCls}>{slides.length > 1 ? 'Carousel' : med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} slides={slides} /></div>}
+          {placements.includes('feed') && <div><div className={labelCls}>{slides.length > 1 ? 'Carousel' : med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} slides={slides} song={previewAcct.platform === 'instagram' && slides.length === 1 ? song : null} /></div>}
           {placements.includes('story') && <div><div className={labelCls}>Story · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption="" imgSrc={img} when={when} mediaType={med?.mediaType} placement="story" poster={med?.thumbnailUrl} /></div>}
           {firstComment && placements.includes('feed') && <div className="text-xs text-slate-500"><span className="font-bold uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{firstComment}</div>}
-        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
+        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">

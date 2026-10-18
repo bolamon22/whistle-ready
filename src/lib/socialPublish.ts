@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
-import { createInstagramContainer, createInstagramCarouselChildren, createInstagramCarouselParent, carouselItems, getInstagramContainerStatus, publishInstagramContainer, publishFacebook, postFirstComment, findLivePost, refreshLongLivedToken, type PublishSpec } from '@/lib/social'
+import { createInstagramContainer, createInstagramCarouselChildren, createInstagramCarouselParent, carouselItems, getInstagramContainerStatus, publishInstagramContainer, publishFacebook, postFirstComment, findLivePost, refreshLongLivedToken, getInstagramAudio, type PublishSpec } from '@/lib/social'
+import { getPostAudio, setPostAudio, takesAudio, loadOrgUserToken } from '@/lib/socialAudio'
 import { sendPushToOrg } from '@/lib/push'
 import { encrypt, decrypt } from '@/lib/encrypt'
 
@@ -36,14 +37,22 @@ async function markPublished(post: PostWithAccount, externalPostId: string, perm
     where: { id: post.id },
     data: { status: 'published', externalPostId, publishedAt: new Date(), lastError: '', externalContainerId: '', ...(permalink ? { permalink } : {}) },
   })
-  if (!post.firstComment.trim() || post.placement === 'story' || !post.socialAccount) return { id: post.id, status: 'published' }
+  // A song that had to be left off (pulled by Instagram, or Meta refused it) is
+  // noted on the post so nobody is surprised the Reel went out without it.
+  let audioWarn = ''
+  if (takesAudio(post, post.socialAccount?.platform)) {
+    const a = await getPostAudio(post.id).catch(() => null)
+    if (a?.dropped) audioWarn = `Published without the Instagram song "${a.title}": ${a.dropped}`
+  }
+  if (audioWarn) await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: audioWarn } }).catch(() => {})
+  if (!post.firstComment.trim() || post.placement === 'story' || !post.socialAccount) return { id: post.id, status: 'published', error: audioWarn || undefined }
   let warn = ''
   try {
     const c = await postFirstComment(post.socialAccount, externalPostId, post.firstComment.trim())
     if (!c.ok) warn = `Published, but the first comment didn't post: ${c.error}`
   } catch (e: any) { warn = `Published, but the first comment didn't post: ${e?.message || 'unexpected error'}` }
-  if (warn) await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: warn } }).catch(() => {})
-  return { id: post.id, status: 'published', error: warn || undefined }
+  if (warn || audioWarn) await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: [audioWarn, warn].filter(Boolean).join(' · ') } }).catch(() => {})
+  return { id: post.id, status: 'published', error: [audioWarn, warn].filter(Boolean).join(' · ') || undefined }
 }
 
 /** Is this post already on the account (sent, but never recorded)? */
@@ -160,6 +169,24 @@ export async function publishScheduledPost(postId: string, fromStatus: string | 
         // Save the slide containers first, so an interrupted run can resume them.
         await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: pending } })
         return await finishInstagram(post, pending, waitMs)
+      }
+      // Instagram song on a Reel: check it's still attachable right before
+      // publishing (tracks get pulled), and if Meta refuses it, publish the Reel
+      // with its own sound rather than miss the slot — the post says so after.
+      const audio = takesAudio(post, account.platform) ? await getPostAudio(post.id).catch(() => null) : null
+      if (audio) {
+        const userToken = await loadOrgUserToken(post.orgId).catch(() => null)
+        const still = await getInstagramAudio(account, audio.audioId, userToken)
+        if (still.ok) {
+          const c = await createInstagramContainer(account, { ...spec, audio: { audioId: audio.audioId, audioVolume: audio.audioVolume, videoVolume: audio.videoVolume } })
+          if (c.ok) {
+            if (audio.dropped) await setPostAudio(post.id, { ...audio, dropped: undefined }) // a Retry that worked this time
+            return await finishInstagram(post, c.data.containerId, waitMs)
+          }
+          await setPostAudio(post.id, { ...audio, dropped: c.error })
+        } else {
+          await setPostAudio(post.id, { ...audio, dropped: still.error })
+        }
       }
       const c = await createInstagramContainer(account, spec)
       if (!c.ok) return await fail(post, c.error)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff, requireDirector } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
 import { publishScheduledPost, recoverStuckPosts } from '@/lib/socialPublish'
+import { cleanAudio, setPostAudio, takesAudio } from '@/lib/socialAudio'
 
 // Publish-now waits on Instagram video processing, so it needs the longer limit.
 export const maxDuration = 60
@@ -13,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!gate.ok) return gate.res
   if (!gate.orgId) return NextResponse.json({ error: 'No organization selected' }, { status: 403 })
 
-  const post = await prisma.scheduledPost.findFirst({ where: { id: params.id, orgId: gate.orgId } })
+  const post = await prisma.scheduledPost.findFirst({ where: { id: params.id, orgId: gate.orgId }, include: { socialAccount: { select: { platform: true } } } })
   if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await req.json().catch(() => ({})) as any
@@ -115,8 +116,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (typeof body.thumbnailUrl === 'string') data.thumbnailUrl = body.thumbnailUrl
   if (Array.isArray(body.mediaUrls)) data.mediaUrls = JSON.stringify(body.mediaUrls)
   if (body.scheduledFor) data.scheduledFor = new Date(body.scheduledFor)
-  if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
-  const updated = await prisma.scheduledPost.update({ where: { id: post.id }, data })
+  // Instagram song: `audio: {...}` sets it, `audio: null` removes it. Only a
+  // Reel (Instagram feed video) can carry one.
+  const audioTouched = body.audio !== undefined
+  if (Object.keys(data).length === 0 && !audioTouched) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+  const updated = Object.keys(data).length ? await prisma.scheduledPost.update({ where: { id: post.id }, data }) : post
+  if (audioTouched) {
+    const audio = cleanAudio(body.audio)
+    await setPostAudio(post.id, audio && takesAudio(updated, post.socialAccount?.platform) ? audio : null)
+  }
   return NextResponse.json({ ok: true, post: updated })
 }
 

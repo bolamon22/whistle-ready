@@ -241,6 +241,18 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   (`storyScheduledFor` on POST /api/social/posts); each row keeps its own time
   through approval. Also restored `recoverStuckPosts(onlyIds)` — the committed copy
   had lost it, so "Check now" on a young stuck post did nothing.
+- **Instagram music on Reels (Oct 18)** — Meta's Audio API (Facebook Login accounts
+  only, which ours are). `GET /api/social/audio?q=` searches `/ig_audio` (v22.0;
+  empty query = trending); the compose/edit screen shows a "Instagram music" picker
+  for Instagram feed videos with song + "video's own sound" volumes. The choice is
+  stored in AppSetting `postAudio:{postId}` (src/lib/socialAudio.ts — no column, so
+  no migration) and only on Instagram Reel rows; Facebook and Stories keep the
+  video's sound. At publish the song is re-checked (`GET /{audio_id}`); if it was
+  pulled or Meta refuses `audio_configuration`, the Reel still publishes with its
+  own sound and the post's lastError says so. Meta's docs ask for a *user* token on
+  the audio endpoints, so Connect now also stores the long-lived user token
+  (AppSetting `socialUserToken:{orgId}`, encrypted); search tries the Page token
+  first. If search errors, reconnect Instagram once.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
