@@ -290,9 +290,11 @@ function SocialInner() {
     const when = whenFor(list[0]); setReel({ p: list[0], look: looks[0], when, days: daysAt(list[0], when), squad: list, looks })
   }
   /** ReelMaker hands back the recorded MP4: upload it and open Compose with it. */
-  async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string }) {
+  async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string; order?: number[] }) {
     if (!reel) return
-    const { p, look, squad } = reel
+    const { p, look } = reel
+    // The squad in the order it was arranged in the Reel maker (caption and Collab follow it).
+    const squad = reel.squad && opts.order?.length === reel.squad.length ? opts.order.map(i => reel.squad![i]) : reel.squad
     let { when, days } = reel
     // The day picked in the Reel maker for a Countdown: post then (today = in 10 minutes,
     // ready to approve or publish right away), so the number on the graphic is right.

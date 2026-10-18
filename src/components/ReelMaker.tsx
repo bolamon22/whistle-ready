@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Download, Film, RotateCcw, Volume2, Check } from 'lucide-react'
+import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
 import { FAVORITE_STYLES, POST_STYLES } from '@/lib/socialPosts'
@@ -47,7 +47,7 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
   squad?: { token: string; first: string; style: string }[]
   /** The social scheduler: hand the finished Reel (MP4) and a cover frame straight to
    *  a post instead of saving the file. Resolves once it's uploaded. */
-  onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string }) => Promise<void>
+  onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string; order?: number[] }) => Promise<void>
   /** Scheduler: the event's first day and the day the post is planned for (YYYY-MM-DD).
    *  With both, a Countdown look gets a "Posts on" day picker so its number matches the
    *  day it goes out (Bo, Oct 18 2026: a Reel made for Thursday said "2 days out" when
@@ -235,7 +235,10 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const [picks, setPicks] = useState<string[]>(() => squadMode ? squad!.map(p => p.style)
     : [style, ...FAVORITE_STYLES.filter(s => s !== style && lookKind(s) !== lookKind(style))].slice(0, 4))
   const lookCount = squadMode ? squad!.length : token ? (LENGTHS.find(l => l.sec === len)?.looks || 1) : 1
-  const slots = squadMode ? squad!.map((p, i) => ({ token: p.token, style: picks[i] || p.style, who: p.first }))
+  // Squad order (Bo: "reorder them ... I might watch the video and say it should be
+  // different"): indexes into `squad`; picks stay keyed by the player's original index.
+  const [order, setOrder] = useState<number[]>(() => (squad || []).map((_, i) => i))
+  const slots = squadMode ? order.map(i => ({ token: squad![i].token, style: picks[i] || squad![i].style, who: squad![i].first }))
     : picks.slice(0, lookCount).map(s => ({ token: token || '', style: s, who: '' }))
   const endDur = squadMode ? END : 0
   const single = slots.length === 1 && !squadMode
@@ -429,7 +432,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
         poster = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.86))
         loop()
       }
-      await onUse(blob, poster, dur, { igSong: song === 'ig', ...(eventStart ? { day } : {}) })
+      await onUse(blob, poster, dur, { igSong: song === 'ig', ...(eventStart ? { day } : {}), ...(squadMode ? { order } : {}) })
     } catch (e: any) {
       setErr(String(e?.message || 'Upload failed'))
     } finally { setUsing(false) }
@@ -471,15 +474,27 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
           {(token || squadMode) && state !== 'recording' && (
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-semibold text-slate-700">{squadMode ? 'Players & looks' : slots.length > 1 ? 'Looks, in order' : 'Look'}</span>
-              {slots.map((x, i) => (
-                <label key={i} className="flex items-center gap-2 text-xs text-slate-600">
-                  <span className="w-20 shrink-0 font-semibold truncate">{squadMode ? x.who : `${i + 1}.`}</span>
-                  <select value={x.style} disabled={playing || using} onChange={e => setPicks(ps => { const n = [...ps]; while (n.length <= i) n.push(x.style); n[i] = e.target.value; return n })} className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
+              {slots.map((x, i) => {
+                const pi = squadMode ? order[i] : i   // which pick this row edits
+                // Move a part up or down: squad → swap players; one player → swap looks.
+                const move = (d: number) => {
+                  const j = i + d; if (j < 0 || j >= slots.length) return
+                  if (squadMode) setOrder(o => { const n = [...o]; [n[i], n[j]] = [n[j], n[i]]; return n })
+                  else setPicks(ps => { const n = [...ps]; [n[i], n[j]] = [n[j], n[i]]; return n })
+                }
+                return (
+                <div key={`${x.token}-${i}`} className="flex items-center gap-2 text-xs text-slate-600">
+                  {slots.length > 1 && <span className="flex flex-col shrink-0">
+                    <button type="button" onClick={() => move(-1)} disabled={i === 0 || playing || using} aria-label="Move up" className="h-4 w-6 grid place-items-center text-slate-500 hover:text-slate-900 disabled:opacity-25"><ChevronUp size={14} /></button>
+                    <button type="button" onClick={() => move(1)} disabled={i === slots.length - 1 || playing || using} aria-label="Move down" className="h-4 w-6 grid place-items-center text-slate-500 hover:text-slate-900 disabled:opacity-25"><ChevronDown size={14} /></button>
+                  </span>}
+                  <span className="w-20 shrink-0 font-semibold truncate">{squadMode ? `${i + 1}. ${x.who}` : `${i + 1}.`}</span>
+                  <select value={x.style} disabled={playing || using} onChange={e => setPicks(ps => { const n = [...ps]; while (n.length <= pi) n.push(x.style); n[pi] = e.target.value; return n })} className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
                     <optgroup label="Favorites">{FAV_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
                     <optgroup label="More looks">{MORE_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
                   </select>
-                </label>
-              ))}
+                </div>
+              )})}
             </div>
           )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (
