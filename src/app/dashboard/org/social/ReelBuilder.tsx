@@ -18,6 +18,8 @@ import { normalizeReel } from '@/lib/normalizeReel'
 import { X, Play, Pause, Upload, Film, Music, ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import type { IdeaEvent } from '@/lib/socialIdeas'
 import { REEL_SONGS } from '@/lib/reelSongs'
+import { groupTracks, orgSongId } from '@/lib/reelMusic'
+import { useOrgMusic } from '@/components/useOrgMusic'
 
 // The track list is shared with the player-post Reels (lib/reelSongs).
 export const REEL_TRACKS = REEL_SONGS
@@ -166,7 +168,10 @@ export default function ReelBuilder({ initialPhotos, events, site, onDone, onClo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const bpm = REEL_TRACKS.find(x => x.id === track)?.bpm || 120
+  // The org's own music list (lib/reelMusic; tracks are added in the player Reel maker).
+  const music = useOrgMusic()
+  const trackSrc = (id: string) => music.tracks.find(t => orgSongId(t.id) === id)?.url || `/social-music/${id}.mp3`
+  const bpm = REEL_TRACKS.find(x => x.id === track)?.bpm || 120   // org tracks: 120 (cuts every half second)
   const beat = 60 / bpm
   const beatsPer = pace === 'fast' ? 2 : pace === 'normal' ? 4 : 6
   const per = Math.max(0.9, beat * beatsPer)                       // seconds per photo, on the beat
@@ -204,7 +209,7 @@ export default function ReelBuilder({ initialPhotos, events, site, onDone, onClo
   function previewTrack(id: string) {
     audioEl.current?.pause()
     if (previewing === id) { setPreviewing(''); return }
-    const src = id === 'own' && ownFile ? URL.createObjectURL(ownFile) : `/social-music/${id}.mp3`
+    const src = id === 'own' && ownFile ? URL.createObjectURL(ownFile) : trackSrc(id)
     const a = new Audio(src); audioEl.current = a; a.onended = () => setPreviewing('')
     a.play().then(() => setPreviewing(id)).catch(() => toast.error("Couldn't play that track"))
   }
@@ -224,7 +229,7 @@ export default function ReelBuilder({ initialPhotos, events, site, onDone, onClo
     try {
       if (track !== 'none') {
         audioCtx = new AudioContext()
-        const raw = track === 'own' && ownFile ? await ownFile.arrayBuffer() : await fetch(`/social-music/${track}.mp3`).then(r => r.arrayBuffer())
+        const raw = track === 'own' && ownFile ? await ownFile.arrayBuffer() : await fetch(trackSrc(track)).then(r => r.arrayBuffer())
         const buf = await audioCtx.decodeAudioData(raw)
         const srcNode = audioCtx.createBufferSource(); srcNode.buffer = buf; srcNode.loop = buf.duration < total
         const gain = audioCtx.createGain()
@@ -345,6 +350,19 @@ export default function ReelBuilder({ initialPhotos, events, site, onDone, onClo
             <div>
               <div className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 mb-1.5">Music</div>
               <div className="flex flex-col gap-1">
+                {groupTracks(music.tracks).map(g => (
+                  <div key={g.label} className="flex flex-col gap-1">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-1">{g.label}</div>
+                    {g.tracks.map(t => { const id = orgSongId(t.id); return (
+                      <div key={id} className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 ${track === id ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                        <button type="button" onClick={() => previewTrack(id)} className="w-7 h-7 rounded-full bg-slate-800 text-white grid place-items-center flex-none" aria-label={previewing === id ? 'Pause' : 'Play'}>{previewing === id ? <Pause size={11} /> : <Play size={11} fill="currentColor" />}</button>
+                        <button type="button" disabled={busy} onClick={() => setTrack(id)} className="flex-1 min-w-0 text-left text-xs font-bold truncate">{t.title}</button>
+                        {track === id && <Check size={14} className="text-teal-700" />}
+                      </div>
+                    ) })}
+                  </div>
+                ))}
+                {music.tracks.length > 0 && <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-1">Built-in</div>}
                 {REEL_TRACKS.map(tk => (
                   <div key={tk.id} className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 ${track === tk.id ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
                     <button type="button" onClick={() => previewTrack(tk.id)} className="w-7 h-7 rounded-full bg-slate-800 text-white grid place-items-center flex-none" aria-label={previewing === tk.id ? 'Pause' : 'Play'}>{previewing === tk.id ? <Pause size={11} /> : <Play size={11} fill="currentColor" />}</button>

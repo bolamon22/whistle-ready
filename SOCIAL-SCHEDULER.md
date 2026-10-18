@@ -309,3 +309,13 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
   still gets connected automatically), and surfacing insight numbers (reach /
   interactions) on the page — the cron already stores them.
+## Your music list (Oct 18 2026)
+
+Each organization keeps its own Reel music next to the ten built-in tracks (lib/reelMusic,
+lib/reelMusicServer, /api/social/music, /api/social/music/upload). In the player Reel maker,
+"Add music (MP3)…" then "Save" files the track under a category (Champions & victory, Stadium
+anthems, Sports rock, Hip-hop, Epic orchestral, Drumline & marching, Calm & feel-good, Other);
+it then shows, grouped, in the Song list of both Reel makers. Stored as AppSetting
+`reelMusic:{orgId}`; the MP3s live in Blob storage. Per org on purpose: free libraries such as
+Pixabay Music allow use in our own videos but not handing the files to other organizations.
+Make a Reel uses 120 BPM for cuts on these tracks.

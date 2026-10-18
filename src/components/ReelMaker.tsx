@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
+import { MUSIC_CATEGORIES, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
+import { useOrgMusic } from './useOrgMusic'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
 import { FAVORITE_STYLES, POST_STYLES } from '@/lib/socialPosts'
 
@@ -277,7 +279,27 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const [ownFile, setOwnFile] = useState<File | null>(null)
   const ownUrl = useRef('')
   // 'ig' (scheduler only): record without music; the post adds an Instagram song when it publishes.
-  const songUrl = song === 'none' || song === 'ig' ? '' : song === 'own' ? ownUrl.current : trackUrl(song)
+  // The org's own music list (lib/reelMusic), next to the built-ins.
+  const music = useOrgMusic()
+  const songUrl = song === 'none' || song === 'ig' ? '' : song === 'own' ? ownUrl.current
+    : isOrgSong(song) ? (music.tracks.find(t => orgSongId(t.id) === song)?.url || '') : trackUrl(song)
+  const [saveTitle, setSaveTitle] = useState('')
+  const [saveCat, setSaveCat] = useState<string>('champions')
+  const [saving, setSaving] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  async function saveToList() {
+    if (!ownFile || saving) return
+    setSaving(true); setErr('')
+    try { const t = await music.add(ownFile, saveTitle.trim() || titleFromFile(ownFile.name), saveCat); setSong(orgSongId(t.id)) }
+    catch (e: any) { setErr(String(e?.message || 'Could not save the track')) }
+    finally { setSaving(false) }
+  }
+  async function removeFromList() {
+    const t = music.tracks.find(x => orgSongId(x.id) === song)
+    if (!t) return
+    try { await music.remove(t.id); setSong(initialSong || 'trap-hype') } catch (e: any) { setErr(String(e?.message || 'Could not remove it')) }
+    setConfirmRemove(false)
+  }
   const [showVideo, setShowVideo] = useState(false)   // after recording: the real video, with sound, instead of the silent loop
   const [err, setErr] = useState('')
   // The Reel's cover (Bo, Oct 18 2026: "pick the cover photo ourselves ... it kind of just
@@ -525,7 +547,10 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
               <select value={song} onChange={e => setSong(e.target.value)} disabled={playing}
                 className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
                 {onUse && <option value="ig">Instagram trending song (pick it on the post)</option>}
-                {REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.title} · {x.mood}</option>)}
+                {groupTracks(music.tracks).map(g => (
+                  <optgroup key={g.label} label={g.label}>{g.tracks.map(t => <option key={t.id} value={orgSongId(t.id)}>{t.title}</option>)}</optgroup>
+                ))}
+                <optgroup label="Built-in">{REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.title} · {x.mood}</option>)}</optgroup>
                 {ownFile && <option value="own">{ownFile.name} (your file)</option>}
                 <option value="none">No music</option>
               </select>
@@ -533,11 +558,31 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
           )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (
             <label className="text-xs text-teal-700 font-semibold cursor-pointer self-start">
-              Use your own MP3…
+              Add music (MP3)…
               <input type="file" accept="audio/mpeg,audio/mp3,audio/mp4,audio/aac,audio/wav,audio/x-m4a" className="sr-only"
-                onChange={e => { const f = e.target.files?.[0]; if (f) { if (ownUrl.current) URL.revokeObjectURL(ownUrl.current); ownUrl.current = URL.createObjectURL(f); setOwnFile(f); setSong('own') } e.target.value = '' }} />
-              <span className="text-slate-500 font-normal"> (only music you have the rights to)</span>
+                onChange={e => { const f = e.target.files?.[0]; if (f) { if (ownUrl.current) URL.revokeObjectURL(ownUrl.current); ownUrl.current = URL.createObjectURL(f); setOwnFile(f); setSong('own'); setSaveTitle(titleFromFile(f.name)) } e.target.value = '' }} />
+              <span className="text-slate-500 font-normal"> (only music you have the rights to, e.g. Pixabay Music)</span>
             </label>
+          )}
+          {song === 'own' && ownFile && state !== 'recording' && (
+            // Keep it for next time: it joins the org's music list under a category.
+            <div className="rounded-lg border border-teal-200 bg-teal-50/50 p-2 flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-teal-900">Save it to your music list for every Reel</span>
+              <div className="flex gap-1.5 flex-wrap">
+                <input value={saveTitle} onChange={e => setSaveTitle(e.target.value)} maxLength={80} placeholder="Track name" aria-label="Track name" className="flex-1 min-w-[120px] rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
+                <select value={saveCat} onChange={e => setSaveCat(e.target.value)} aria-label="Category" className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
+                  {MUSIC_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+                <button type="button" onClick={saveToList} disabled={saving || playing} className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 py-1.5 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+              </div>
+            </div>
+          )}
+          {isOrgSong(song) && state !== 'recording' && (
+            <div className="text-xs text-slate-500 self-start">
+              {confirmRemove
+                ? <>Remove it from the music list? Reels already made keep it. <button type="button" onClick={removeFromList} className="font-bold text-rose-700 hover:underline">Yes, remove</button> · <button type="button" onClick={() => setConfirmRemove(false)} className="font-semibold hover:underline">Keep</button></>
+                : <button type="button" onClick={() => setConfirmRemove(true)} className="hover:text-rose-700 hover:underline">Remove this track from the music list</button>}
+            </div>
           )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (
             <button type="button" onClick={playWithSound} disabled={playing} className="w-full rounded-lg border border-slate-300 text-slate-700 font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-50">
