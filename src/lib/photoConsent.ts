@@ -126,7 +126,7 @@ export function photoAskEmail(a: {
   const ig = a.instagram ? `Instagram (${a.instagram})` : 'Instagram'
   const when = a.dates ? ` (${a.dates})` : ''
   const subject = `${player} made the cut for ${a.tournamentName}`
-  const posts = (a.posts || []).filter(p => p.url).slice(0, 4)
+  const posts = (a.posts || []).filter(p => p.url).slice(0, 8)
   const body = `
     <p style="margin:0 0 14px">${esc(hi)}</p>
     <p style="margin:0 0 14px"><strong>${P} made the cut!</strong> Out of every player card for ${esc(a.tournamentName)}, ${P}'s is one of our favorites.</p>

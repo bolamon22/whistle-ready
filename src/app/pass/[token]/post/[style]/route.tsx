@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { appBaseUrl, imageForSatori, loadPlayerPass } from '@/lib/playerPass'
 import { passCardDataUrl } from '@/lib/passCardImage'
 import { firstName } from '@/lib/photoConsent'
-import { PostArt, POST_W, POST_H, isPostStyle, loadPostFonts, startFacts } from '@/lib/socialPosts'
+import { PostArt, POST_W, POST_H, isPostStyle, usesPhoto, loadPostFonts, startFacts } from '@/lib/socialPosts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,8 +25,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const q = new URL(req.url).searchParams
   const width = Math.min(POST_W, Math.max(360, Math.round(Number(q.get('w')) || POST_W)))
   const tid = pass.submission.tournamentId
+  // The photo looks draw the family's own photo; without one they fall back to the card.
+  const photoSrc = usesPhoto(style) ? await imageForSatori(pass.card.photoUrl, base) : ''
   const [cardSrc, logoSrc, fonts, start] = await Promise.all([
-    passCardDataUrl(pass, base),
+    photoSrc ? Promise.resolve('') : passCardDataUrl(pass, base),
     imageForSatori(pass.card.tournamentLogoUrl, base),
     loadPostFonts().catch(() => undefined),
     tid ? prisma.$queryRawUnsafe<any[]>('SELECT startDate FROM "Tournament" WHERE id = ?', tid).then((r: any[]) => String(r?.[0]?.startDate || '')).catch(() => '') : Promise.resolve(''),
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const daysOut = daysParam != null && /^\d{1,3}$/.test(daysParam) ? Number(daysParam) : facts.daysOut
   const c = pass.card
   const d = {
-    cardSrc, logoSrc,
+    cardSrc, logoSrc, photoSrc,
     first: firstName(c.playerName),
     club: c.clubName, team: c.teamName, division: c.division, jersey: c.jersey, position: c.position,
     tournamentName: c.tournamentName, dates: c.tournamentDates, location: c.location, orgName: c.orgName,

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, Send, Check, Download, Mail } from 'lucide-react'
-import { POST_STYLES, type PostStyle } from '@/lib/socialPosts'
+import { POST_STYLES, DEFAULT_STYLES, type PostStyle } from '@/lib/socialPosts'
 
 // Photos for social: every player at this event who added a photo to their card.
 // Staff pick the good ones and ask the families (lib/photoConsent); the parent
@@ -46,7 +46,7 @@ export default function SocialPhotos() {
   const [later, setLater] = useState(true)              // Schedule (default: it's usually late at night) vs Send now
   const [sendAt, setSendAt] = useState(tomorrowMorning)
   const [tick, setTick] = useState(0)
-  const [styles, setStyles] = useState<Set<PostStyle>>(() => new Set(POST_STYLES.map(s => s.id)))   // example posts the email shows
+  const [styles, setStyles] = useState<Set<PostStyle>>(() => new Set(DEFAULT_STYLES))   // example posts the email shows
   const styleList = POST_STYLES.filter(s => styles.has(s.id)).map(s => s.id)
   const toggleStyle = (s: PostStyle) => setStyles(cur => { const n = new Set(cur); n.has(s) ? n.delete(s) : n.add(s); return n })
 
