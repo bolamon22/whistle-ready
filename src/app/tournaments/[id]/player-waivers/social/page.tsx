@@ -149,11 +149,12 @@ export default function SocialPhotos() {
             <h2 className="text-lg font-bold text-slate-900 inline-flex items-center gap-2"><Mail size={18} /> Ask {pickedList.length} famil{pickedList.length === 1 ? 'y' : 'ies'}</h2>
             <p className="text-sm text-slate-600 mt-1">Each parent on the waiver gets this email with their player's card and a Yes / No link:</p>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-2">
-              <p className="font-semibold">Subject: Can we feature {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} on Instagram?</p>
+              <p className="font-semibold">Subject: {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} made the cut for this tournament</p>
               <p>Hi {pickedList[0]?.parentName.split(' ')[0] || 'there'},</p>
-              <p>{pickedList[0]?.playerName.split(' ')[0] || 'Alex'}'s player card photo for this tournament is one of our favorites. We'd love to share it on our Instagram and Facebook to help promote the tournament.</p>
-              <p>We'll only post it if a parent or guardian says yes. It takes one tap: <span className="text-teal-700 font-semibold">[Yes or no: answer here]</span></p>
-              <p className="text-slate-500">If you'd rather we didn't, choose No on that page or just ignore this email, and we won't use the photo.</p>
+              <p><strong>{pickedList[0]?.playerName.split(' ')[0] || 'Alex'} made the cut!</strong> Out of every player card for this tournament, {pickedList[0]?.playerName.split(' ')[0] || 'Alex'}'s is one of our favorites.</p>
+              <p>All week we're counting down on Instagram by spotlighting players who'll be on the field, and we'd love {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} to be one of them.</p>
+              <p>Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: <span className="text-teal-700 font-semibold">[Yes or no: answer here]</span></p>
+              <p className="text-slate-500">Rather not? Choose No or ignore the email, and it won't be posted.</p>
             </div>
             {pickedResend && <p className="text-xs text-amber-700 mt-2">Some of these were already asked. They'll get the email again.</p>}
             <div className="mt-4 flex gap-2 justify-end">

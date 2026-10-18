@@ -67,17 +67,33 @@ export function photoAskRecipients(d: any): string[] {
 
 export const firstName = (full: unknown) => String(full || '').trim().split(/\s+/)[0] || ''
 
-/** The words the parent agrees to, shown on the page and repeated in the email. */
+/** The words the parent agrees to, shown on the page. */
 export function photoPermissionText(orgName: string, tournamentName: string): string {
-  return `${orgName} may share this photo and player card, with the player's first name and team, on its Instagram and Facebook pages to promote ${tournamentName} and future events. You can ask for a post to be taken down at any time.`
+  return `${orgName} may post this player card, with the player's first name and team, on its Instagram and Facebook in the lead-up to ${tournamentName}, and use it to promote future events. You can ask for a post to be taken down at any time.`
+}
+
+/** "@handle" from whatever the website editor holds (a handle or a profile URL), or ''. */
+export function instagramHandle(v: unknown): string {
+  const s = String(v || '').trim()
+  if (!s) return ''
+  const m = /instagram\.com\/([A-Za-z0-9._]+)/i.exec(s)
+  const h = (m ? m[1] : s).replace(/^@/, '')
+  return /^[A-Za-z0-9._]{1,30}$/.test(h) ? `@${h}` : ''
 }
 
 // ── the letter ────────────────────────────────────────────────────────────────
+// Bo, Oct 18 2026: "letting them know that we really like their picture ... we want
+// to know if we can post their player card on Instagram leading up to the
+// tournament, letting people know they'll be there. Make it sound important and fun."
 
 export function photoAskEmail(a: {
   orgName: string
   logoUrl?: string
   tournamentName: string
+  /** "Oct 24–25, 2026" (lib/vendorApproval eventDates), or ''. */
+  dates?: string
+  /** "@seglacrosse", or '' when the org has none on file. */
+  instagram?: string
   parentName: string
   playerName: string
   photoUrl: string
@@ -86,16 +102,21 @@ export function photoAskEmail(a: {
   base: string
 }): { subject: string; html: string; text: string } {
   const player = firstName(a.playerName) || 'your player'
-  const hi = firstName(a.parentName) ? `Hi ${esc(firstName(a.parentName))},` : 'Hi,'
+  const P = esc(player)
+  const hi = firstName(a.parentName) ? `Hi ${firstName(a.parentName)},` : 'Hi,'
   const photo = absUrl(a.base, a.cardUrl || a.photoUrl)
-  const subject = `Can we feature ${player} on Instagram?`
+  const ig = a.instagram ? `Instagram (${a.instagram})` : 'Instagram'
+  const when = a.dates ? ` (${a.dates})` : ''
+  const subject = `${player} made the cut for ${a.tournamentName}`
   const body = `
-    <p style="margin:0 0 14px">${hi}</p>
-    <p style="margin:0 0 14px">${esc(player)}'s player card photo for ${esc(a.tournamentName)} is one of our favorites. We'd love to share it on our Instagram and Facebook to help promote the tournament.</p>
-    ${photo ? `<p style="margin:18px 0"><img src="${photo}" width="220" alt="${esc(player)}'s player card" style="display:block;width:220px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e2e8f0"></p>` : ''}
-    <p style="margin:0 0 6px">We'll only post it if a parent or guardian says yes. It takes one tap:</p>
+    <p style="margin:0 0 14px">${esc(hi)}</p>
+    <p style="margin:0 0 14px"><strong>${P} made the cut!</strong> Out of every player card for ${esc(a.tournamentName)}, ${P}'s is one of our favorites.</p>
+    <p style="margin:0 0 14px">All week we're counting down on ${esc(ig)} by spotlighting players who'll be on the field, and we'd love ${P} to be one of them.</p>
+    ${photo ? `<p style="margin:18px 0"><img src="${photo}" width="220" alt="${P}'s player card" style="display:block;width:220px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e2e8f0"></p>` : ''}
+    <p style="margin:0 0 6px">Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds:</p>
     ${button(a.link, 'Yes or no: answer here')}
-    <p style="margin:14px 0 0;font-size:13px;color:#64748b">If you'd rather we didn't, choose No on that page or just ignore this email, and we won't use the photo. Changed your mind later? Use the same link, or reply to this email.</p>
+    <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
+    <p style="margin:18px 0 0">See you on the field!<br>The ${esc(a.orgName)} team</p>
   `
   const html = renderEmail({
     orgName: a.orgName,
@@ -105,15 +126,18 @@ export function photoAskEmail(a: {
     footerNote: 'You got this because you signed the player waiver for this event.',
   })
   const text = [
-    hi.replace(/<[^>]+>/g, ''),
+    hi,
     '',
-    `${player}'s player card photo for ${a.tournamentName} is one of our favorites. We'd love to share it on our Instagram and Facebook to help promote the tournament.`,
+    `${player} made the cut! Out of every player card for ${a.tournamentName}, ${player}'s is one of our favorites.`,
     '',
-    `We'll only post it if a parent or guardian says yes. Answer here: ${a.link}`,
+    `All week we're counting down on ${ig} by spotlighting players who'll be on the field, and we'd love ${player} to be one of them.`,
     '',
-    "If you'd rather we didn't, choose No on that page or just ignore this email, and we won't use the photo.",
+    `Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: ${a.link}`,
     '',
-    a.orgName,
+    `What we'd post: ${player}'s player card, with first name and team, on our Instagram and Facebook before and during ${a.tournamentName}${when}. Rather not? Choose No on that page or just ignore this email, and it won't be posted.`,
+    '',
+    'See you on the field!',
+    `The ${a.orgName} team`,
   ].join('\n')
   return { subject, html, text }
 }

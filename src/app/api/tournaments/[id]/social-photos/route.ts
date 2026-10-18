@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireFeature } from '@/lib/apiAuth'
 import { tournamentOrgId, orgById, orgLogoUrl } from '@/lib/org'
 import { listSubmissions, getSubmission, updateSubmissionData, ensurePassToken } from '@/lib/formSubmissions'
-import { appBaseUrl, playerPassEnabled } from '@/lib/playerPass'
+import { appBaseUrl, playerPassEnabled, orgSiteConfig } from '@/lib/playerPass'
 import { sendEmail, orgSender, emailEnabled } from '@/lib/email'
 import { absUrl } from '@/lib/emailLayout'
 import { orgBaseUrl } from '@/lib/orgDomains'
-import { signPhotoToken, photoAskRecipients, photoAskEmail } from '@/lib/photoConsent'
+import { signPhotoToken, photoAskRecipients, photoAskEmail, instagramHandle } from '@/lib/photoConsent'
+import { eventDates } from '@/lib/vendorApproval'
 import { prisma } from '@/lib/db'
 
 // Staff: player photos for social media, and the families' permission to use them
@@ -74,11 +75,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const resend = body.resend === true
 
   try {
-    const [org, t, passOn] = await Promise.all([
+    const [org, t, passOn, site] = await Promise.all([
       orgById(r.orgId),
-      prisma.tournament.findUnique({ where: { id: params.id }, select: { name: true } }),
+      prisma.tournament.findUnique({ where: { id: params.id }, select: { name: true, startDate: true, endDate: true } }),
       playerPassEnabled(r.orgId),
+      orgSiteConfig(r.orgId),
     ])
+    const dates = eventDates(t?.startDate || '', t?.endDate || '')
+    const instagram = instagramHandle(site.socials.instagram)
     const appBase = appBaseUrl(req)
     const orgBase = orgBaseUrl(org?.slug)
     const logo = absUrl(orgBase, await orgLogoUrl(org?.id, org?.logoUrl))
@@ -105,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const link = `${appBase}/pass/photo-ok/${encodeURIComponent(token)}`
       const passToken = passOn ? (s.passToken || await ensurePassToken(r.orgId, s.id)) : null
       const mail = photoAskEmail({
-        orgName, logoUrl: logo, tournamentName,
+        orgName, logoUrl: logo, tournamentName, dates, instagram,
         parentName: String(d.parentName || ''), playerName: name,
         photoUrl: String(d.photoUrl || ''),
         cardUrl: passToken ? `/pass/${passToken}/card.png` : '',
