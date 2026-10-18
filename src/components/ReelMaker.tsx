@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Download, Film, RotateCcw, Volume2 } from 'lucide-react'
+import { X, Download, Film, RotateCcw, Volume2, Check } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
 
@@ -27,7 +27,12 @@ const easeBack = (p: number) => { const c = 1.6, x = clamp(p) - 1; return 1 + (c
 
 type Props = { src: string; style: string; label: string; event: string; sub: string; days?: number | null; fileName: string; onClose: () => void
   /** The player's pass token: lets Rookie Card and Countdown use their hand-built Reels (components/reelCustom). */
-  token?: string }
+  token?: string
+  /** Song to start on (a lib/reelSongs id). */
+  initialSong?: string
+  /** The social scheduler: hand the finished Reel (MP4) and a cover frame straight to
+   *  a post instead of saving the file. Resolves once it's uploaded. */
+  onUse?: (video: Blob, poster: Blob | null, durationSec: number) => Promise<void> }
 
 const loadImg = (url: string) => new Promise<HTMLImageElement | null>(res => {
   if (!url) return res(null)
@@ -153,7 +158,15 @@ function pickMime(): { mime: string; ext: string } {
   return { mime: '', ext: 'webm' }
 }
 
-export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose, token }: Props) {
+/** Which codecs an MP4 actually holds ('avc1'/'mp4a' sample entries vs 'vp09'/'Opus').
+ *  Some browsers label a VP9 file video/mp4; Instagram only takes H.264 + AAC. */
+async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
+  const u = new Uint8Array(await blob.arrayBuffer())
+  const has = (tag: string) => { const c = [...tag].map(ch => ch.charCodeAt(0)); for (let i = 0; i < u.length - 4; i++) if (u[i] === c[0] && u[i + 1] === c[1] && u[i + 2] === c[2] && u[i + 3] === c[3]) return true; return false }
+  return { h264: has('avc1') || has('avc3'), aac: has('mp4a') }
+}
+
+export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose, token, initialSong, onUse }: Props) {
   const isCustom = !!token && style in CUSTOM_REELS
   const dur = isCustom ? CUSTOM_REELS[style] : DUR
   const custom = useRef<{ data: ReelData; imgs: ReelImages } | null>(null)
@@ -168,7 +181,9 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
   const [state, setState] = useState<'loading' | 'preview' | 'recording' | 'done' | 'error'>('loading')
   const [out, setOut] = useState<{ url: string; ext: string } | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [song, setSong] = useState('trap-hype')         // a lib/reelSongs id | 'own' | 'none'
+  const [song, setSong] = useState(initialSong || 'trap-hype')         // a lib/reelSongs id | 'own' | 'none'
+  const recorded = useRef<Blob | null>(null)
+  const [using, setUsing] = useState(false)
   const [ownFile, setOwnFile] = useState<File | null>(null)
   const ownUrl = useRef('')
   const songUrl = song === 'none' ? '' : song === 'own' ? ownUrl.current : trackUrl(song)
@@ -187,7 +202,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
       if (!alive) return
       if (isCustom) {
         try {
-          const data = await fetch(`/pass/${token}/reel`).then(r => r.ok ? r.json() : null)
+          const data = await fetch(`/pass/${token}/reel${days != null ? `?days=${days}` : ''}`).then(r => r.ok ? r.json() : null)
           if (data) {
             const [photo, clubLogo, eventLogo] = await Promise.all([loadImg(data.photo), loadImg(data.clubLogo), loadImg(data.eventLogo)])
             custom.current = { data, imgs: { photo, clubLogo, eventLogo } }
@@ -282,6 +297,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     rec.onstop = () => {
       audioCtx?.close().catch(() => {})
       const blob = new Blob(chunks, { type: mime || 'video/webm' })
+      recorded.current = blob
       setOut(o => { if (o) URL.revokeObjectURL(o.url); return { url: URL.createObjectURL(blob), ext } })
       setState('done')
       setShowVideo(true)
@@ -300,8 +316,32 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
 
   useEffect(() => () => { if (out) URL.revokeObjectURL(out.url) }, [out])
 
+  // Scheduler: check the file is one Instagram takes, grab a cover frame, hand both over.
+  async function useInPost() {
+    const blob = recorded.current, c = canvas.current, img = imgRef.current
+    if (!blob || !onUse || using) return
+    setUsing(true); setErr('')
+    try {
+      const codecs = out?.ext === 'mp4' ? await mp4Codecs(blob) : { h264: false, aac: false }
+      if (!codecs.h264 || (song !== 'none' && !codecs.aac)) {
+        setErr("This browser saved the video in a format Instagram won't accept. Make the Reel in Chrome on a computer, or Safari.")
+        return
+      }
+      let poster: Blob | null = null
+      if (c && img) {
+        cancelAnimationFrame(raf.current)
+        paint(c.getContext('2d')!, img, Math.min(dur - 1, dur * 0.7))
+        poster = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.86))
+        loop()
+      }
+      await onUse(blob, poster, dur)
+    } catch (e: any) {
+      setErr(String(e?.message || 'Upload failed'))
+    } finally { setUsing(false) }
+  }
+
   return (
-    <div className="fixed inset-0 z-40 bg-slate-900/80 flex items-center justify-center p-3" role="dialog" aria-modal="true" aria-label={`${label} Reel`} onClick={onClose}>
+    <div className={`fixed inset-0 ${onUse ? 'z-[60]' : 'z-40'} bg-slate-900/80 flex items-center justify-center p-3`} role="dialog" aria-modal="true" aria-label={`${label} Reel`} onClick={() => { if (!using) onClose() }}>
       <div className="bg-white rounded-2xl p-4 w-full max-w-md max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-3">
           <Film size={18} className="text-teal-700" />
@@ -345,6 +385,11 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
             : <button type="button" onClick={record} disabled={state === 'loading' || state === 'error' || playing} className="w-full rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-40">
                 {state === 'done' ? <><RotateCcw size={16} /> Record again</> : <><Film size={16} /> Make the Reel (with music)</>}
               </button>}
+          {out && state !== 'recording' && onUse && (
+            <button type="button" onClick={useInPost} disabled={using} className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              <Check size={16} /> {using ? 'Uploading the Reel…' : 'Use this Reel in the post'}
+            </button>
+          )}
           {out && state !== 'recording' && (
             <a href={out.url} download={`${fileName}.${out.ext}`} className="w-full rounded-lg border border-teal-600 text-teal-700 font-semibold py-2.5 inline-flex items-center justify-center gap-2"><Download size={16} /> Save {out.ext.toUpperCase()}</a>
           )}

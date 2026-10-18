@@ -14,6 +14,11 @@ import { upload as blobUpload } from '@vercel/blob/client'
 import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ReelBuilder from './ReelBuilder'
+import PlayersTray, { planList, type ClearedData } from './PlayersTray'
+import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
+import ReelMaker from '@/components/ReelMaker'
+import { POST_STYLES } from '@/lib/socialPosts'
+import { lookFor, daysUntil, playerCaption, rollCallCaption, collabFor, songFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
 import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb, Layers, ArrowLeft, ArrowRight, Music, Pause, Search } from 'lucide-react'
@@ -25,6 +30,16 @@ interface Post {
   approvedByUserId: string; lastError: string; publishedAt: string | null; firstComment: string; groupId: string; permalink: string; importedAt: string | null; mediaType: 'image' | 'video' | 'carousel'; placement: 'feed' | 'story'; thumbnailUrl: string
   socialAccount?: { id: string; platform: string; label: string; status: string }
   audio?: Song
+  /** Instagram Collab invite on this post (lib/socialPlayers). */
+  collab?: { usernames: string[]; dropped?: string }
+}
+/** Compose opened from the "Cleared to post" tray: everything filled in. */
+interface ComposeSeed {
+  key: string; caption: string; slides: Media[]
+  /** The 9:16 Story version of the feed graphic (the Story copy uses it instead of the 4:5). */
+  storyUrl?: string
+  placements: Placement[]; storyTiming: StoryTiming; collab: string[]; player: PostPlayerLink
+  note: string; dayKey: string; countdown: boolean
 }
 // An Instagram song on a Reel (Meta Audio API; src/lib/socialAudio.ts).
 type Song = { audioId: string; title: string; artist: string; cover: string; durationMs: number; audioVolume: number; videoVolume: number; dropped?: string }
@@ -115,10 +130,13 @@ function SocialInner() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'queue' | 'insights'>('week')
   const [rangeStart, setRangeStart] = useState(() => startOfWeek(new Date()))
-  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date; idea?: Idea } | { kind: 'idea'; idea: Idea } | { kind: 'chirp' } | { kind: 'accounts' } | null>(null)
+  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date; idea?: Idea; seed?: ComposeSeed } | { kind: 'idea'; idea: Idea } | { kind: 'chirp' } | { kind: 'accounts' } | null>(null)
   const [ideaSrc, setIdeaSrc] = useState<IdeaSource | null>(null)
   const [fitFor, setFitFor] = useState<string>('')
   const [chirpMsgs, setChirpMsgs] = useState<ChirpMsg[]>([])
+  const [cleared, setCleared] = useState<ClearedData | null>(null)
+  const [playerBusy, setPlayerBusy] = useState('')
+  const [reel, setReel] = useState<{ p: ClearedPlayer; look: string; when: Date; days: number | null } | null>(null)
   const dragId = useRef<string | null>(null)
   const today = new Date()
 
@@ -136,11 +154,12 @@ function SocialInner() {
 
   async function load() {
     try {
-      const [p, a, q, ins, ide] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null), api('/api/social/ideas').catch(() => null)])
+      const [p, a, q, ins, ide, cl] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null), api('/api/social/ideas').catch(() => null), api('/api/social/players').catch(() => null)])
       setPosts(p.posts || []); setAccounts(a.accounts || []); setConfigured(a.configured !== false)
       if (q) setQueue(q)
       if (ins) setInsights(ins)
       if (ide) setIdeaSrc(ide)
+      if (cl) setCleared(cl)
     } catch (e: any) { toast.error(e.message) } finally { setLoading(false) }
   }
 
@@ -203,6 +222,125 @@ function SocialInner() {
     } catch (e: any) { toast.error(e.message); await load() }
   }
   function newPostOn(day: Date) { const d = new Date(day); d.setHours(11, 0, 0, 0); setDrawer({ kind: 'new', when: d }) }
+
+  // ── cleared players (the "Cleared to post" tray) ──
+  const liveAccounts = accounts.filter(a => a.status !== 'disconnected')
+  // Days a player post can go out: from today (if there's still time) up to the day
+  // before the event starts, at the queue slot for that weekday, else 6:30 PM.
+  function playerDays(p: ClearedPlayer): Date[] {
+    const out: Date[] = []; const now = new Date()
+    const start = new Date(p.event.start + 'T00:00:00')
+    for (let d = new Date(now.getFullYear(), now.getMonth(), now.getDate()); d < start && out.length < 90; d = addDays(d, 1)) {
+      const slot = queue.slots.filter(s => s.dow === d.getDay()).sort((a, b) => a.h * 60 + a.m - (b.h * 60 + b.m))[0]
+      const at = new Date(d); at.setHours(slot ? slot.h : 18, slot ? slot.m : 30, 0, 0)
+      if (at.getTime() > now.getTime() + 30 * 60000) out.push(at)
+    }
+    return out
+  }
+  const takenKeys = () => new Set(posts.filter(p => p.status !== 'canceled').map(p => localDayKey(new Date(p.scheduledFor))))
+  /** The first day before the event with nothing scheduled; else the first day; else an hour from now. */
+  function whenFor(p: ClearedPlayer): Date {
+    const days = playerDays(p); const taken = takenKeys()
+    const at = days.find(d => !taken.has(localDayKey(d))) || days[0]
+    if (at) return at
+    const d = new Date(Date.now() + 60 * 60000); d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0); return d
+  }
+  const daysAt = (p: ClearedPlayer, when: Date) => { const n = daysUntil(localDayKey(when), p.event.start); return n != null && n >= 0 ? n : null }
+  const storySub = (p: ClearedPlayer) => [p.event.dates, p.event.location].filter(Boolean).join(' · ')
+  const lookLabel = (s: string) => POST_STYLES.find(x => x.id === s)?.label || s
+  const fileSlug = (p: ClearedPlayer, s: string) => `${firstOf(p.playerName)}-${s}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
+  const seedFor = (p: ClearedPlayer, look: string, when: Date, days: number | null, kind: PostPlayerLink['kind'], slides: Media[], extra: Partial<ComposeSeed> = {}): ComposeSeed => ({
+    key: `${p.id}-${look}-${kind}-${Date.now()}`,
+    caption: playerCaption(p, look, days, ideaSrc?.site || ''),
+    slides, placements: ['feed', 'story'], storyTiming: { mode: 'morning' }, collab: collabFor(p),
+    player: { submissionIds: [p.id], tournamentId: p.tournamentId, style: look, kind, days },
+    note: `${p.playerName}${p.jersey ? ` #${p.jersey}` : ''} · ${lookLabel(look)}${kind === 'reel' ? ' Reel' : kind === 'story' ? ' Story' : ''}`,
+    dayKey: localDayKey(when), countdown: baseLook(look) === 'countdown', ...extra,
+  })
+  /** Post (feed + Story) or Story only: render the graphics, upload, open Compose filled in. */
+  async function composePlayer(p: ClearedPlayer, look: string, mode: 'post' | 'story') {
+    if (!liveAccounts.length) { toast.error('Connect an account first'); return }
+    const when = whenFor(p); const days = daysAt(p, when)
+    setPlayerBusy(`Building ${firstOf(p.playerName)}'s ${mode === 'story' ? 'Story' : 'post'}…`)
+    try {
+      const storyUrl = await uploadJpeg(await storyJpeg(p.token, look, days, { event: p.event.name, sub: storySub(p), handle: p.instagram }), `${fileSlug(p, look)}-story.jpg`)
+      if (mode === 'story') {
+        setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'story', [{ url: storyUrl, mediaType: 'image', width: 1080, height: 1920 }], { placements: ['story'], collab: [] }) })
+      } else {
+        const feedUrl = await uploadJpeg(await feedJpeg(p.token, look, days), `${fileSlug(p, look)}.jpg`)
+        setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'post', [{ url: feedUrl, mediaType: 'image', width: 1080, height: 1350 }], { storyUrl }) })
+      }
+    } catch (e: any) { toast.error(e.message) } finally { setPlayerBusy('') }
+  }
+  function reelPlayer(p: ClearedPlayer, look: string) {
+    if (!liveAccounts.length) { toast.error('Connect an account first'); return }
+    const when = whenFor(p); setReel({ p, look, when, days: daysAt(p, when) })
+  }
+  /** ReelMaker hands back the recorded MP4: upload it and open Compose with it. */
+  async function useReel(video: Blob, poster: Blob | null, durationSec: number) {
+    if (!reel) return
+    const { p, look, when, days } = reel
+    const thumbnailUrl = poster ? await uploadJpeg(poster, `${fileSlug(p, look)}-cover.jpg`).catch(() => '') : ''
+    const name = `${fileSlug(p, look)}-reel.mp4`
+    const up = await blobUpload(name, new File([video], name, { type: 'video/mp4' }), { access: 'public', handleUploadUrl: '/api/social/upload-video' })
+    setReel(null)
+    setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', [{ url: up.url, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920 }]) })
+    toast.success('Reel ready — check the post and save it')
+  }
+  /** "Plan all cleared players": one feed post + Story per player with nothing
+   *  scheduled, each on its own open day before the event, plus a Roll Call carousel
+   *  per event with 3+ cleared players. All drafts: nothing posts until approved. */
+  async function planAll() {
+    if (!cleared || !liveAccounts.length) return
+    const { posts: todo, rollcalls } = planList(cleared.players)
+    const ids = liveAccounts.map(a => a.id); const site = ideaSrc?.site || ''
+    const taken = takenKeys(); const perDay: Record<string, number> = {}
+    const total = todo.length + rollcalls.length
+    let made = 0, skipped = 0
+    // A free day; when every day already has something, double up at lunchtime on the
+    // least-used day (players) or two days out (Roll Call).
+    const pickDay = (p: ClearedPlayer, fallback: 'least' | 'late'): Date | null => {
+      const days = playerDays(p)
+      let at = days.find(d => !taken.has(localDayKey(d)))
+      if (!at && days.length) {
+        const d = fallback === 'late' ? days[Math.max(0, days.length - 2)] : [...days].sort((a, b) => (perDay[localDayKey(a)] || 0) - (perDay[localDayKey(b)] || 0))[0]
+        at = new Date(d); at.setHours(12, 30, 0, 0); if (at < new Date()) at = d
+      }
+      if (at) { const k = localDayKey(at); taken.add(k); perDay[k] = (perDay[k] || 0) + 1 }
+      return at || null
+    }
+    const idx: Record<string, number> = {}
+    for (const p of todo) {
+      setPlayerBusy(`Making ${made + skipped + 1} of ${total}…`)
+      try {
+        const when = pickDay(p, 'least')
+        if (!when) { skipped++; continue }
+        const i = idx[p.tournamentId] = (idx[p.tournamentId] ?? -1) + 1
+        const look = lookFor(p.event.daysOut, i); const n = daysAt(p, when)
+        const [feed, story] = await Promise.all([feedJpeg(p.token, look, n), storyJpeg(p.token, look, n, { event: p.event.name, sub: storySub(p), handle: p.instagram })])
+        const [feedUrl, storyUrl] = await Promise.all([uploadJpeg(feed, `${fileSlug(p, look)}.jpg`), uploadJpeg(story, `${fileSlug(p, look)}-story.jpg`)])
+        await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: ids, caption: playerCaption(p, look, n, site), mediaUrls: [feedUrl], mediaType: 'image', placements: ['feed', 'story'], scheduledFor: when.toISOString(), storyScheduledFor: storyTimeFor({ mode: 'morning' }, when).toISOString(), storyMediaUrl: storyUrl, collaborators: collabFor(p), player: { submissionIds: [p.id], tournamentId: p.tournamentId, style: look, kind: 'post', days: n } }) })
+        made++
+      } catch { skipped++ }
+    }
+    for (const list of rollcalls) {
+      setPlayerBusy(`Making ${made + skipped + 1} of ${total} (Roll Call)…`)
+      try {
+        const group = list.slice(0, 10); const p0 = group[0]
+        const when = pickDay(p0, 'late')
+        if (!when) { skipped++; continue }
+        const n = daysAt(p0, when)
+        const blobs = await Promise.all(group.map(p => feedJpeg(p.token, 'jersey', n)))
+        const urls = await Promise.all(blobs.map((b, i) => uploadJpeg(b, `${fileSlug(group[i], 'jersey')}.jpg`)))
+        await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: ids, caption: rollCallCaption(group, site), mediaUrls: urls, mediaType: 'carousel', placements: ['feed'], scheduledFor: when.toISOString(), player: { submissionIds: group.map(p => p.id), tournamentId: p0.tournamentId, style: 'jersey', kind: 'rollcall', days: n } }) })
+        made++
+      } catch { skipped++ }
+    }
+    setPlayerBusy('')
+    await load()
+    if (made) toast.success(`Made ${made} draft${made === 1 ? '' : 's'} — they're in Approvals${skipped ? ` · ${skipped} couldn't be made` : ''}`, { duration: 6000 })
+    else toast.error('No drafts were made — the events may have started, or the graphics failed to build')
+  }
 
   if (status === 'loading' || loading) return <div className="min-h-screen bg-slate-50 p-10 text-center text-slate-400">Loading…</div>
 
@@ -290,6 +428,9 @@ function SocialInner() {
           </div>
         )}
 
+        {/* cleared players */}
+        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} />}
+
         {/* calendar */}
         {view === 'week' && (
           <div className="flex flex-col gap-3">
@@ -372,11 +513,16 @@ function SocialInner() {
       {drawer && <div className="fixed inset-0 z-40 bg-slate-900/40" onClick={() => setDrawer(null)} />}
       <div className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[460px] bg-white border-l border-slate-200 shadow-2xl flex flex-col transition-transform duration-200 ${drawer ? 'translate-x-0' : 'translate-x-full'}`}>
         {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer reelEvents={(ideaSrc?.events || []).filter(e => e.end >= localDayKey(new Date()))} reelSite={ideaSrc?.site} post={byId(drawer.id)!} metrics={insights.latest[drawer.id]} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
-        {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || 'blank'} reelEvents={(ideaSrc?.events || []).filter(e => e.end >= localDayKey(new Date()))} reelSite={ideaSrc?.site} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(drawer.idea?.src === 'chirp' ? { kind: 'chirp' } : null)} onSaved={async () => { setDrawer(null); await load() }} />}
+        {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || drawer.seed?.key || 'blank'} seed={drawer.seed} reelEvents={(ideaSrc?.events || []).filter(e => e.end >= localDayKey(new Date()))} reelSite={ideaSrc?.site} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(drawer.idea?.src === 'chirp' ? { kind: 'chirp' } : null)} onSaved={async () => { setDrawer(null); await load() }} />}
         {drawer?.kind === 'chirp' && <ChirpPanel msgs={chirpMsgs} setMsgs={setChirpMsgs} site={ideaSrc?.site} onClose={() => setDrawer(null)} onDraft={idea => { if (!accounts.length) { toast.error('Connect an account first'); return } draftFromIdea(idea) }} />}
         {drawer?.kind === 'idea' && <IdeaDrawer idea={drawer.idea} canDraft={accounts.length > 0} onClose={() => setDrawer(null)} onDraft={() => draftFromIdea(drawer.idea)} onDismiss={() => { saveIdeaSettings({ dismiss: drawer.idea.key }); setDrawer(null); toast('Idea hidden') }} />}
         {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} queue={queue} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
       </div>
+
+      {/* a cleared player's Reel: recorded here, then handed to Compose */}
+      {reel && <ReelMaker src={postPngUrl(reel.p.token, reel.look, reel.days)} style={reel.look} label={`${firstOf(reel.p.playerName)} · ${lookLabel(reel.look)}`}
+        event={reel.p.event.name || 'Game day'} sub={storySub(reel.p)} days={reel.days} fileName={fileSlug(reel.p, reel.look)} token={reel.p.token}
+        initialSong={songFor(reel.p.event.name)} onUse={useReel} onClose={() => setReel(null)} />}
     </div>
   )
 }
@@ -737,6 +883,7 @@ function PostDrawer({ reelEvents, reelSite, post, metrics, siblings, queue, mode
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
+        {post.collab && a.platform === 'instagram' && <div className="text-xs text-slate-600"><span className="font-bold text-slate-700">Collab invite:</span> {post.collab.usernames.map(u => '@' + u).join(', ')}{post.collab.dropped && <span className="text-amber-700"> · not sent: {post.collab.dropped}</span>}</div>}
         {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} slides={slides} song={song} />
           : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
         {post.status === 'published' && (metrics
@@ -763,8 +910,13 @@ function PostDrawer({ reelEvents, reelSite, post, metrics, siblings, queue, mode
   )
 }
 
-function ComposeDrawer({ reelEvents, reelSite, when: init, idea, accounts, queue, canApprove, onClose, onSaved }: { reelEvents?: IdeaEvent[]; reelSite?: string; when: Date; idea?: Idea; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [slides, setSlides] = useState<Media[]>([]); const med: Media | undefined = slides[0]; const setMed = (m: Media) => setSlides([m, ...slides.slice(1)]); const [storyTiming, setStoryTiming] = useState<StoryTiming>({ mode: 'same' }); const [song, setSong] = useState<Song | null>(null); const [placements, setPlacements] = useState<Placement[]>(idea?.weight === 'story' ? ['story'] : ['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
+function ComposeDrawer({ reelEvents, reelSite, when: init, idea, seed, accounts, queue, canApprove, onClose, onSaved }: { reelEvents?: IdeaEvent[]; reelSite?: string; when: Date; idea?: Idea; seed?: ComposeSeed; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [caption, setCaption] = useState(seed?.caption || ''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [slides, setSlides] = useState<Media[]>(seed?.slides || []); const med: Media | undefined = slides[0]; const setMed = (m: Media) => setSlides([m, ...slides.slice(1)]); const [storyTiming, setStoryTiming] = useState<StoryTiming>(seed?.storyTiming || { mode: 'same' }); const [song, setSong] = useState<Song | null>(null); const [placements, setPlacements] = useState<Placement[]>(seed?.placements || (idea?.weight === 'story' ? ['story'] : ['feed'])); const [acctIds, setAcctIds] = useState<string[]>(accounts.filter(a => a.status !== 'disconnected').map(a => a.id)); const [busy, setBusy] = useState(false)
+  // A cleared player's post: who to invite as Instagram Collaborators (toggleable), and
+  // the 9:16 Story graphic, kept only while the feed graphic is the one it was made for.
+  const [collab, setCollab] = useState<string[]>(seed?.collab || [])
+  const storyMediaUrl = seed?.storyUrl && slides.length === 1 && slides[0]?.url === seed.slides[0]?.url ? seed.storyUrl : ''
+  const toIg = accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')
   const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   const [cMode, setCMode] = useState<'edit' | 'preview'>('edit')
@@ -780,7 +932,8 @@ function ComposeDrawer({ reelEvents, reelSite, when: init, idea, accounts, queue
     if (storyAt < new Date()) { toast.error('The Story time has passed — pick a later one'); return }
     setBusy(true)
     try {
-      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, ...slidesBody(slides), placements, scheduledFor: at.toISOString(), ...(song && slides.length === 1 && med?.mediaType === 'video' && placements.includes('feed') ? { audio: song } : {}), ...(both && +storyAt !== +at ? { storyScheduledFor: storyAt.toISOString() } : {}) }) })
+      const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, ...slidesBody(slides), placements, scheduledFor: at.toISOString(), ...(song && slides.length === 1 && med?.mediaType === 'video' && placements.includes('feed') ? { audio: song } : {}), ...(both && +storyAt !== +at ? { storyScheduledFor: storyAt.toISOString() } : {}),
+        ...(seed ? { player: seed.player } : {}), ...(collab.length && toIg && placements.includes('feed') ? { collaborators: collab } : {}), ...(storyMediaUrl && placements.includes('story') ? { storyMediaUrl } : {}) }) })
       const n = acctIds.length * placements.length; const acctNote = (n > 1 ? ` (${n} posts)` : '') + (both && +storyAt !== +at ? ` · Story ${fmtDate(storyAt)} ${fmtTime(storyAt)}` : '')
       if (approve) { await api(`/api/social/posts/${d.post.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'approve' }) }); toast.success(`Scheduled${acctNote} — publishes ${fmtDate(at)} at ${fmtTime(at)}`) }
       else toast.success(`Saved${acctNote} — waiting on approval`)
@@ -789,15 +942,25 @@ function ComposeDrawer({ reelEvents, reelSite, when: init, idea, accounts, queue
   }
   return (
     <>
-      <DrawerHead title={idea ? 'New post · from an idea' : 'New post'} onClose={onClose}>
+      <DrawerHead title={seed ? 'New post · cleared player' : idea ? 'New post · from an idea' : 'New post'} onClose={onClose}>
         {img && <div className="inline-flex p-1 gap-0.5 rounded-xl bg-slate-100 border border-slate-200">{(['edit', 'preview'] as const).map(m => <button key={m} onClick={() => setCMode(m)} className={`px-3 py-1 rounded-lg text-xs font-bold capitalize ${cMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{m}</button>)}</div>}
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {cMode === 'preview' && img && previewAcct ? <>
           {placements.includes('feed') && <div><div className={labelCls}>{slides.length > 1 ? 'Carousel' : med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} slides={slides} song={previewAcct.platform === 'instagram' && slides.length === 1 ? song : null} /></div>}
-          {placements.includes('story') && <div><div className={labelCls}>Story · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption="" imgSrc={img} when={when} mediaType={med?.mediaType} placement="story" poster={med?.thumbnailUrl} /></div>}
+          {placements.includes('story') && <div><div className={labelCls}>Story · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption="" imgSrc={storyMediaUrl || img} when={when} mediaType={storyMediaUrl ? 'image' : med?.mediaType} placement="story" poster={med?.thumbnailUrl} /></div>}
           {firstComment && placements.includes('feed') && <div className="text-xs text-slate-500"><span className="font-bold uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{firstComment}</div>}
-        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
+        </> : <>{seed && (
+          <div className="rounded-xl bg-teal-50 border border-teal-200 px-3 py-2.5 text-xs text-teal-900 flex flex-col gap-1.5">
+            <div className="font-bold">Cleared player · {seed.note}</div>
+            {seed.collab.length > 0 && placements.includes('feed') ? <>
+              <div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">Instagram Collab invite</span>{seed.collab.map(u => { const on = collab.includes(u); return <button key={u} type="button" onClick={() => setCollab(on ? collab.filter(x => x !== u) : [...collab, u])} className={`rounded-full border px-2 py-0.5 font-bold ${on ? 'border-teal-500 bg-white text-teal-800' : 'border-slate-300 text-slate-400 line-through'}`}>@{u}{on && <Check size={11} className="inline ml-1" />}</button> })}</div>
+              <div className="text-teal-800/80">{toIg ? 'They get an invite on Instagram; once they accept, the post shows on their profile too. The handles are in the caption either way.' : 'Collab invites are Instagram only. Pick the Instagram account to send them.'}</div>
+            </> : seed.collab.length === 0 && seed.player.kind !== 'story' ? <div className="text-teal-800/80">The family didn't give an Instagram handle, so there's no Collab invite.</div> : null}
+            {storyMediaUrl && placements.includes('story') && <div className="text-teal-800/80">The Story uses the full-screen 9:16 version.</div>}
+            {seed.countdown && localDayKey(when) !== seed.dayKey && <div className="text-amber-800 font-bold">The countdown on this graphic was made for {fmtDate(new Date(seed.dayKey + 'T12:00:00'))}. Posting on a different day? Make it again from the tray so the number matches.</div>}
+          </div>
+        )}{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">

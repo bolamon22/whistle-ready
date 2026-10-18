@@ -265,6 +265,28 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   file is checked for H.264 + AAC sample entries; browsers that record other codecs
   (e.g. Chromium without proprietary codecs) get told to use Chrome or Safari instead
   of uploading a file Instagram would reject.
+- **Cleared to post (Oct 18)** — players whose family said Yes on the photo-permission
+  page (`photoOk = 'yes'` on the waiver, lib/photoConsent) show in a tray above the
+  calendar (`PlayersTray.tsx`, data from `GET /api/social/players` → lib/socialPlayers
+  `loadClearedPlayers`). Each card has **Post** (feed + 9:16 Story, Story next morning),
+  **Reel** (the player Reel from components/ReelMaker, recorded then handed straight to
+  the post via its `onUse` prop) and **Story** (9:16 only), and a look picker. All three
+  open Compose filled in: caption from lib/playerPostText (first name + team only, no
+  urgency), the family's and club's Instagram as **Collab invites**, the next open day
+  before the event. Graphics: `/pass/<token>/post/<style>.png` redrawn to JPEG in the
+  browser (Instagram takes JPEG only) and a 9:16 Story version built on a canvas
+  (`playerMedia.ts`); the Story copy of a feed post uses it via `storyMediaUrl` on
+  `POST /api/social/posts`. Countdown graphics are made for the scheduled day (`days=`
+  on the post PNG and on `/pass/<token>/reel`), and Compose warns if the date moves.
+  **Plan all cleared players** makes one draft per player with nothing scheduled, each
+  on its own open day, plus a Roll Call carousel (Name on the Back slides) per event
+  with 3+ cleared players. Everything is a draft until approved.
+  Records (AppSetting, no migration): `postPlayer:<postId>` (which players a post
+  features, so the tray shows Posted) and `postCollab:<postId>` (usernames, max 3).
+  Collaborators go on IG feed photos, Reels and carousel album containers as the
+  `collaborators` JSON array (Meta: feed image, Reels and carousels only, not Stories);
+  if Instagram refuses them the post goes out without them and the post says so
+  (`dropped`, shown by markPublished like a dropped song).
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
