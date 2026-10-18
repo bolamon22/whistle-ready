@@ -9,7 +9,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 // Lives under /pass so it inherits that path's public passthrough on every
 // domain; the static "photo-ok" segment wins over /pass/[token].
 
-type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; instagram: string; clubInstagram: string; clubFacebook: string; club: string; permission: string }
+type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; instagram: string; clubInstagram: string; clubFacebook: string; club: string; permission: string; test?: boolean }
 
 export default function PhotoPermissionPage() {
   const { token } = useParams() as { token: string }
@@ -64,6 +64,9 @@ export default function PhotoPermissionPage() {
         {!error && !info && <p className="text-center text-slate-400 mt-16 text-sm">Loading…</p>}
         {info && (
           <>
+            {info.test && (
+              <div className="mb-5 rounded-lg bg-amber-300 text-slate-900 text-sm font-semibold px-3 py-2 text-center">Test preview: this is what the family sees. Nothing you answer here is saved.</div>
+            )}
             <div className="text-center mb-5">
               <div className="text-xs uppercase tracking-[0.2em] text-teal-300">{info.tournamentName}</div>
               <h1 className="text-2xl font-extrabold leading-tight mt-1">Can we share {info.player || 'this'}{info.player ? "'s" : ''} photo?</h1>

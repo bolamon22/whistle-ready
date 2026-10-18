@@ -37,6 +37,7 @@ export default function SocialPhotos() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [confirm, setConfirm] = useState(false)
   const [sending, setSending] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -64,6 +65,19 @@ export default function SocialPhotos() {
     setPicked(s => { const n = new Set(s); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n })
   }
 
+  async function sendTest() {
+    const p = pickedList[0]
+    if (!p) return
+    setTesting(true)
+    try {
+      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testId: p.id }) })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || !j.sent) { toast.error(j.error || j.errors?.[0] || j.skipped?.[0] || 'Could not send the test'); return }
+      toast.success(`Test sent to ${j.to}. Check your inbox.`)
+    } catch { toast.error('Could not send the test') }
+    finally { setTesting(false) }
+  }
+
   async function send() {
     setSending(true)
     try {
@@ -86,7 +100,7 @@ export default function SocialPhotos() {
           <Link href={`/tournaments/${id}/player-waivers`} className="text-sm text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5"><ArrowLeft size={15} /> Player waivers</Link>
           <div className="sm:ml-2 min-w-0">
             <h1 className="text-lg font-bold text-slate-900 leading-tight">Photos for social</h1>
-            <p className="text-xs text-slate-500">Pick the best player photos and ask the families. Only post the ones marked Yes.</p>
+            <p className="text-xs text-slate-500">Pick the best player cards and ask the families. Only post the ones marked Yes.</p>
           </div>
           <button type="button" disabled={!picked.size || !emailReady} onClick={() => setConfirm(true)}
             className="sm:ml-auto inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2.5 disabled:opacity-40">
@@ -116,8 +130,8 @@ export default function SocialPhotos() {
             const on = picked.has(p.id)
             return (
               <div key={p.id} className={`bg-white rounded-xl border overflow-hidden flex flex-col ${on ? 'border-teal-500 ring-2 ring-teal-500' : 'border-slate-200'}`}>
-                <button type="button" onClick={() => toggle(p)} disabled={!askable(p)} className="relative block aspect-square bg-slate-100 disabled:cursor-default" aria-pressed={on} aria-label={`Pick ${p.playerName}`}>
-                  <img src={p.photoUrl} alt={p.playerName} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                <button type="button" onClick={() => toggle(p)} disabled={!askable(p)} className="relative block aspect-[720/1140] bg-slate-100 disabled:cursor-default" aria-pressed={on} aria-label={`Pick ${p.playerName}`}>
+                  <img src={p.cardUrl || p.photoUrl} alt={`${p.playerName}'s player card`} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
                   {askable(p) && (
                     <span className={`absolute top-2 left-2 h-7 w-7 rounded-md border-2 flex items-center justify-center ${on ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white/90 border-white text-transparent'}`}><Check size={16} /></span>
                   )}
@@ -135,8 +149,8 @@ export default function SocialPhotos() {
                   {!p.emails.length && st === 'new' && <div className="text-[11px] text-rose-700">No parent email on the waiver</div>}
                   {st === 'yes' && (
                     <div className="mt-auto pt-1 flex gap-3 text-xs">
-                      <a href={p.photoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700"><Download size={12} /> Photo</a>
-                      {p.cardUrl && <a href={p.cardUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700"><Download size={12} /> Card</a>}
+                      {p.cardUrl && <a href={p.cardUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700 font-semibold"><Download size={12} /> Card</a>}
+                      <a href={p.photoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-slate-500"><Download size={12} /> Photo only</a>
                     </div>
                   )}
                 </div>
@@ -160,8 +174,10 @@ export default function SocialPhotos() {
               <p>Saying yes? Add your Instagram handle on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post. Then please like, share and repost it!</p>
               <p className="text-slate-500">Rather not? Choose No or ignore the email, and it won't be posted.</p>
             </div>
+            <p className="text-xs text-slate-500 mt-2">Send me a test emails you the real letter for {pickedList[0]?.playerName || 'the first player'}. Its link works but saves nothing, and the family isn't contacted.</p>
             {pickedResend && <p className="text-xs text-amber-700 mt-2">Some of these were already asked. They'll get the email again.</p>}
             <div className="mt-4 flex gap-2 justify-end">
+              <button type="button" onClick={sendTest} disabled={testing || sending} className="mr-auto text-sm rounded-lg border border-teal-600 text-teal-700 px-4 py-2 disabled:opacity-50">{testing ? 'Sending test…' : `Send me a test (${pickedList[0]?.playerName.split(' ')[0] || ''})`}</button>
               <button type="button" onClick={() => setConfirm(false)} className="text-sm rounded-lg border border-slate-300 px-4 py-2 text-slate-700">Cancel</button>
               <button type="button" onClick={send} disabled={sending} className="text-sm rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold px-4 py-2 disabled:opacity-50">{sending ? 'Sending…' : `Send ${pickedList.length} email${pickedList.length === 1 ? '' : 's'}`}</button>
             </div>

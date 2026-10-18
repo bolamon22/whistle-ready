@@ -32,7 +32,8 @@ export const PHOTO_FIELDS = ['photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt',
 // the player card and in public hands, and must not be able to grant permission.
 // Good for 60 days, long enough to answer late and to change your mind.
 
-type PhotoToken = { s: string; o: string }
+/** x: a staff test send. The page works the same, but nothing it answers is saved. */
+type PhotoToken = { s: string; o: string; x?: boolean }
 const secret = () => process.env.NEXTAUTH_SECRET || ''
 const sign = (payload: string) => crypto.createHmac('sha256', secret()).update(`photook.${payload}`).digest('base64url')
 
@@ -48,9 +49,9 @@ export function readPhotoToken(token: string): PhotoToken | null {
   const a = Buffer.from(sig), b = Buffer.from(sign(payload))
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
   try {
-    const { s, o, e } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+    const { s, o, e, x } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (typeof s !== 'string' || typeof o !== 'string' || !s || !o) return null
-    return Number(e) > Date.now() ? { s, o } : null
+    return Number(e) > Date.now() ? { s, o, ...(x === true ? { x: true } : {}) } : null
   } catch { return null }
 }
 

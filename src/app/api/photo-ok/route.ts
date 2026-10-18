@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
     clubFacebook: String(d.photoClubFb || ''),
     club: String(d.clubName || ''),
     permission: photoPermissionText(orgName, tournamentName),
+    test: hit.t.x === true,
   })
 }
 
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
     if (String(body.instagram || '').trim() && !instagramHandle(body.instagram)) return NextResponse.json({ error: "That doesn't look like an Instagram handle. Try something like @yourname, or leave it blank." }, { status: 400 })
     if (String(body.clubInstagram || '').trim() && !instagramHandle(body.clubInstagram)) return NextResponse.json({ error: "The club's Instagram doesn't look like a handle. Try something like @clubname, or leave it blank." }, { status: 400 })
   }
+  // A staff test link: answer like a parent would, but save nothing.
+  if (hit.t.x === true) return NextResponse.json({ ok: true, answer, test: true, instagram: answer === 'yes' ? instagramHandle(body.instagram) : '' })
   await updateSubmissionData(hit.t.o, hit.s.id, {
     photoOk: answer,
     photoOkAt: new Date().toISOString(),
