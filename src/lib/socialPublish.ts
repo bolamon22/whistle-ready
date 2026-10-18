@@ -48,7 +48,8 @@ async function markPublished(post: PostWithAccount, externalPostId: string, perm
   // Same for Collab invites Instagram refused (a private account, a typo in a handle).
   if (post.socialAccount?.platform === 'instagram' && post.placement === 'feed') {
     const c = await getPostCollab(post.id).catch(() => null)
-    if (c?.dropped) audioWarn = [audioWarn, `Published without the Collab invite (${c.usernames.map(u => '@' + u).join(', ')}): ${c.dropped}`].filter(Boolean).join(' · ')
+    if (c?.dropped && c.usernames.length) audioWarn = [audioWarn, `Published without the Collab invite (${c.usernames.map(u => '@' + u).join(', ')}): ${c.dropped}`].filter(Boolean).join(' · ')
+    if (c?.droppedTags && c.tags?.length) audioWarn = [audioWarn, `Published without tagging ${c.tags.map(u => '@' + u).join(', ')}: ${c.droppedTags}`].filter(Boolean).join(' · ')
   }
   if (audioWarn) await prisma.scheduledPost.update({ where: { id: post.id }, data: { lastError: audioWarn } }).catch(() => {})
   if (!post.firstComment.trim() || post.placement === 'story' || !post.socialAccount) return { id: post.id, status: 'published', error: audioWarn || undefined }
@@ -96,11 +97,11 @@ async function finishInstagram(post: PostWithAccount, containerId: string, budge
     // without them rather than miss the slot; markPublished notes it on the post.
     const collab = await getPostCollab(post.id).catch(() => null)
     let parent = await createInstagramCarouselParent(account, childIds, post.caption, collab?.usernames)
-    if (!parent.ok && collab) {
+    if (!parent.ok && collab?.usernames.length) {
       const err = parent.error
       parent = await createInstagramCarouselParent(account, childIds, post.caption)
-      if (parent.ok) await setPostCollab(post.id, { usernames: collab.usernames, dropped: err }).catch(() => {})
-    } else if (parent.ok && collab?.dropped) await setPostCollab(post.id, { usernames: collab.usernames }).catch(() => {})
+      if (parent.ok) await setPostCollab(post.id, { ...collab, dropped: err }).catch(() => {})
+    } else if (parent.ok && collab?.dropped) await setPostCollab(post.id, { ...collab, dropped: undefined }).catch(() => {})
     if (!parent.ok) return fail(post, parent.error)
     containerId = parent.data.containerId
     await prisma.scheduledPost.update({ where: { id: post.id }, data: { externalContainerId: containerId } }).catch(() => {})
@@ -187,14 +188,21 @@ export async function publishScheduledPost(postId: string, fromStatus: string | 
       // Collab invites (lib/socialPlayers) on a feed photo or Reel. If Instagram
       // refuses them, the post goes out without them and says so afterwards.
       const collab = post.placement === 'feed' ? await getPostCollab(post.id).catch(() => null) : null
-      const base: PublishSpec = collab ? { ...spec, collaborators: collab.usernames } : spec
+      const base: PublishSpec = collab ? { ...spec, collaborators: collab.usernames.length ? collab.usernames : undefined, userTags: collab.tags?.length ? collab.tags : undefined } : spec
+      // Tags go first if Instagram objects (an account it can't tag), then the Collab invite.
       const create = async (sp: PublishSpec) => {
         const c = await createInstagramContainer(account, sp)
-        if (c.ok) { if (sp.collaborators?.length && collab?.dropped) await setPostCollab(post.id, { usernames: collab.usernames }).catch(() => {}); return c }
-        if (!sp.collaborators?.length || !collab) return c
-        const c2 = await createInstagramContainer(account, { ...sp, collaborators: undefined })
-        if (c2.ok) await setPostCollab(post.id, { usernames: collab.usernames, dropped: c.error }).catch(() => {})
-        return c2
+        if (c.ok) { if (collab && (collab.dropped || collab.droppedTags)) await setPostCollab(post.id, { usernames: collab.usernames, tags: collab.tags }).catch(() => {}); return c }
+        if (!collab) return c
+        if (sp.userTags?.length) {
+          const c2 = await createInstagramContainer(account, { ...sp, userTags: undefined })
+          if (c2.ok) { await setPostCollab(post.id, { usernames: collab.usernames, tags: collab.tags, droppedTags: c.error }).catch(() => {}); return c2 }
+        }
+        if (sp.collaborators?.length || sp.userTags?.length) {
+          const c3 = await createInstagramContainer(account, { ...sp, collaborators: undefined, userTags: undefined })
+          if (c3.ok) { await setPostCollab(post.id, { usernames: collab.usernames, tags: collab.tags, dropped: sp.collaborators?.length ? c.error : undefined, droppedTags: sp.userTags?.length ? c.error : undefined }).catch(() => {}); return c3 }
+        }
+        return c
       }
       // Instagram song on a Reel: check it's still attachable right before
       // publishing (tracks get pulled), and if Meta refuses it, publish the Reel

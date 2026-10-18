@@ -209,6 +209,8 @@ export type PublishSpec = {
   /** Instagram usernames invited as Collaborators (max 3; feed image, Reel or
    *  carousel only — Instagram doesn't take them on Stories). */
   collaborators?: string[]
+  /** Instagram usernames tagged in a feed photo or Reel (up to 20; not carousels or Stories). */
+  userTags?: string[]
 }
 export type CarouselItem = { url: string; type: 'image' | 'video' }
 
@@ -295,6 +297,7 @@ export async function createInstagramContainer(account: { externalId: string; ac
     body.share_to_feed = 'true'
     if (spec.caption) body.caption = spec.caption
     if (spec.collaborators?.length) body.collaborators = JSON.stringify(spec.collaborators.slice(0, 3))
+    if (spec.userTags?.length) body.user_tags = JSON.stringify(spec.userTags.slice(0, 20).map(username => ({ username })))
     if (spec.coverUrl) body.cover_url = absoluteUrl(spec.coverUrl)
     if (spec.audio) {
       // Meta's form: the configuration is a JSON string in the form body.
@@ -307,6 +310,8 @@ export async function createInstagramContainer(account: { externalId: string; ac
     body.image_url = absoluteUrl(spec.mediaUrl)
     if (spec.caption) body.caption = spec.caption
     if (spec.collaborators?.length) body.collaborators = JSON.stringify(spec.collaborators.slice(0, 3))
+    // Photo tags need a spot on the image: spread them along the bottom edge.
+    if (spec.userTags?.length) { const t = spec.userTags.slice(0, 20); body.user_tags = JSON.stringify(t.map((username, i) => ({ username, x: Number(((i + 1) / (t.length + 1)).toFixed(3)), y: 0.92 }))) }
   }
   const r = await graphPost<{ id: string }>(`/${account.externalId}/media`, body)
   if (!r.ok) return r

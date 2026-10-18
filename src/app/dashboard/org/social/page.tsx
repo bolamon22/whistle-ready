@@ -18,7 +18,7 @@ import PlayersTray, { planList, type ClearedData } from './PlayersTray'
 import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
 import ReelMaker from '@/components/ReelMaker'
 import { POST_STYLES } from '@/lib/socialPosts'
-import { lookFor, daysUntil, playerCaption, rollCallCaption, collabFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
+import { lookFor, daysUntil, playerCaption, rollCallCaption, squadCaption, squadHandles, collabFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
 import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb, Layers, ArrowLeft, ArrowRight, Music, Pause, Search } from 'lucide-react'
@@ -31,7 +31,7 @@ interface Post {
   socialAccount?: { id: string; platform: string; label: string; status: string }
   audio?: Song
   /** Instagram Collab invite on this post (lib/socialPlayers). */
-  collab?: { usernames: string[]; dropped?: string }
+  collab?: { usernames: string[]; tags?: string[]; dropped?: string; droppedTags?: string }
 }
 /** Compose opened from the "Cleared to post" tray: everything filled in. */
 interface ComposeSeed {
@@ -39,6 +39,8 @@ interface ComposeSeed {
   /** The 9:16 Story version of the feed graphic (the Story copy uses it instead of the 4:5). */
   storyUrl?: string
   placements: Placement[]; storyTiming: StoryTiming; collab: string[]; player: PostPlayerLink
+  /** Squad Reels: handles the 3 Collab slots couldn't take, tagged in the Reel instead. */
+  tags?: string[]
   note: string; dayKey: string; countdown: boolean
   /** Reel made without music: open Instagram's trending songs on the post. */
   pickSong?: boolean
@@ -140,7 +142,7 @@ function SocialInner() {
   const [chirpMsgs, setChirpMsgs] = useState<ChirpMsg[]>([])
   const [cleared, setCleared] = useState<ClearedData | null>(null)
   const [playerBusy, setPlayerBusy] = useState('')
-  const [reel, setReel] = useState<{ p: ClearedPlayer; look: string; when: Date; days: number | null } | null>(null)
+  const [reel, setReel] = useState<{ p: ClearedPlayer; look: string; when: Date; days: number | null; squad?: ClearedPlayer[]; looks?: string[] } | null>(null)
   const dragId = useRef<string | null>(null)
   const today = new Date()
 
@@ -280,15 +282,31 @@ function SocialInner() {
     if (!liveAccounts.length) { toast.error('Connect an account first'); return }
     const when = whenFor(p); setReel({ p, look, when, days: daysAt(p, when) })
   }
+  /** Squad Reel: 2–4 cleared players from one event, each in the look picked in the tray. */
+  function squadReel(list: ClearedPlayer[], looks: string[]) {
+    if (!liveAccounts.length) { toast.error('Connect an account first'); return }
+    if (list.length < 2 || list.length > 4) { toast.error('Pick 2 to 4 players'); return }
+    if (new Set(list.map(p => p.tournamentId)).size > 1) { toast.error('Pick players from the same event'); return }
+    const when = whenFor(list[0]); setReel({ p: list[0], look: looks[0], when, days: daysAt(list[0], when), squad: list, looks })
+  }
   /** ReelMaker hands back the recorded MP4: upload it and open Compose with it. */
   async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean }) {
     if (!reel) return
-    const { p, look, when, days } = reel
+    const { p, look, when, days, squad } = reel
     const thumbnailUrl = poster ? await uploadJpeg(poster, `${fileSlug(p, look)}-cover.jpg`).catch(() => '') : ''
     const name = `${fileSlug(p, look)}-reel.mp4`
     const up = await blobUpload(name, new File([video], name, { type: 'video/mp4' }), { access: 'public', handleUploadUrl: '/api/social/upload-video' })
     setReel(null)
-    setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', [{ url: up.url, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920, builtIn: !opts.igSong }], { pickSong: opts.igSong }) })
+    const media: Media[] = [{ url: up.url, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920, builtIn: !opts.igSong }]
+    if (squad && squad.length > 1) {
+      // Collab takes 3: the shared club first, then families; the rest are tagged in the Reel.
+      const h = squadHandles(squad)
+      setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', media, {
+        pickSong: opts.igSong, caption: squadCaption(squad, ideaSrc?.site || ''), collab: h.collab, tags: h.tags,
+        player: { submissionIds: squad.map(x => x.id), tournamentId: p.tournamentId, style: look, kind: 'reel', days },
+        note: `Squad Reel · ${squad.map(x => firstOf(x.playerName)).join(', ')}`, countdown: (reel.looks || []).some(l => baseLook(l) === 'countdown'),
+      }) })
+    } else setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', media, { pickSong: opts.igSong }) })
     toast.success(opts.igSong ? 'Reel ready — pick a trending song, then save' : 'Reel ready — check the post and save it')
   }
   /** "Plan all cleared players": one feed post + Story per player with nothing
@@ -433,7 +451,7 @@ function SocialInner() {
         )}
 
         {/* cleared players */}
-        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} />}
+        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onSquad={squadReel} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} />}
 
         {/* calendar */}
         {view === 'week' && (
@@ -524,8 +542,10 @@ function SocialInner() {
       </div>
 
       {/* a cleared player's Reel: recorded here, then handed to Compose */}
-      {reel && <ReelMaker src={postPngUrl(reel.p.token, reel.look, reel.days)} style={reel.look} label={`${firstOf(reel.p.playerName)} · ${lookLabel(reel.look)}`}
-        event={reel.p.event.name || 'Game day'} sub={storySub(reel.p)} days={reel.days} fileName={fileSlug(reel.p, reel.look)} token={reel.p.token}
+      {reel && <ReelMaker key={reel.squad ? reel.squad.map(x => x.id).join('-') : `${reel.p.id}-${reel.look}`} src={postPngUrl(reel.p.token, reel.look, reel.days)} style={reel.look}
+        label={reel.squad ? `Squad · ${reel.squad.map(x => firstOf(x.playerName)).join(', ')}` : `${firstOf(reel.p.playerName)} · ${lookLabel(reel.look)}`}
+        event={reel.p.event.name || 'Game day'} sub={storySub(reel.p)} days={reel.days} fileName={reel.squad ? `squad-${reel.squad.map(x => firstOf(x.playerName)).join('-')}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-') : fileSlug(reel.p, reel.look)} token={reel.p.token}
+        squad={reel.squad?.map((x, i) => ({ token: x.token, first: firstOf(x.playerName), style: reel.looks?.[i] || reel.look }))}
         initialSong="ig" onUse={useReel} onClose={() => setReel(null)} />}
     </div>
   )
@@ -889,7 +909,10 @@ function PostDrawer({ reelEvents, reelSite, post, metrics, siblings, queue, mode
       </DrawerHead>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
-        {post.collab && a.platform === 'instagram' && <div className="text-xs text-slate-600"><span className="font-bold text-slate-700">Collab invite:</span> {post.collab.usernames.map(u => '@' + u).join(', ')}{post.collab.dropped && <span className="text-amber-700"> · not sent: {post.collab.dropped}</span>}</div>}
+        {post.collab && a.platform === 'instagram' && <div className="text-xs text-slate-600 flex flex-col gap-0.5">
+          {post.collab.usernames.length > 0 && <div><span className="font-bold text-slate-700">Collab invite:</span> {post.collab.usernames.map(u => '@' + u).join(', ')}{post.collab.dropped && <span className="text-amber-700"> · not sent: {post.collab.dropped}</span>}</div>}
+          {!!post.collab.tags?.length && <div><span className="font-bold text-slate-700">Tagged:</span> {post.collab.tags.map(u => '@' + u).join(', ')}{post.collab.droppedTags && <span className="text-amber-700"> · not tagged: {post.collab.droppedTags}</span>}</div>}
+        </div>}
         {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} slides={slides} song={song} />
           : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
         {post.status === 'published' && (metrics
@@ -921,6 +944,7 @@ function ComposeDrawer({ reelEvents, reelSite, when: init, idea, seed, accounts,
   // A cleared player's post: who to invite as Instagram Collaborators (toggleable), and
   // the 9:16 Story graphic, kept only while the feed graphic is the one it was made for.
   const [collab, setCollab] = useState<string[]>(seed?.collab || [])
+  const [tags, setTags] = useState<string[]>(seed?.tags || [])
   const storyMediaUrl = seed?.storyUrl && slides.length === 1 && slides[0]?.url === seed.slides[0]?.url ? seed.storyUrl : ''
   const toIg = accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')
   const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
@@ -939,7 +963,7 @@ function ComposeDrawer({ reelEvents, reelSite, when: init, idea, seed, accounts,
     setBusy(true)
     try {
       const d = await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: acctIds, caption, firstComment, ...slidesBody(slides), placements, scheduledFor: at.toISOString(), ...(song && slides.length === 1 && med?.mediaType === 'video' && placements.includes('feed') ? { audio: song } : {}), ...(both && +storyAt !== +at ? { storyScheduledFor: storyAt.toISOString() } : {}),
-        ...(seed ? { player: seed.player } : {}), ...(collab.length && toIg && placements.includes('feed') ? { collaborators: collab } : {}), ...(storyMediaUrl && placements.includes('story') ? { storyMediaUrl } : {}) }) })
+        ...(seed ? { player: seed.player } : {}), ...(collab.length && toIg && placements.includes('feed') ? { collaborators: collab } : {}), ...(tags.length && toIg && placements.includes('feed') ? { userTags: tags } : {}), ...(storyMediaUrl && placements.includes('story') ? { storyMediaUrl } : {}) }) })
       const n = acctIds.length * placements.length; const acctNote = (n > 1 ? ` (${n} posts)` : '') + (both && +storyAt !== +at ? ` · Story ${fmtDate(storyAt)} ${fmtTime(storyAt)}` : '')
       if (approve) { await api(`/api/social/posts/${d.post.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'approve' }) }); toast.success(`Scheduled${acctNote} — publishes ${fmtDate(at)} at ${fmtTime(at)}`) }
       else toast.success(`Saved${acctNote} — waiting on approval`)
@@ -961,7 +985,8 @@ function ComposeDrawer({ reelEvents, reelSite, when: init, idea, seed, accounts,
             <div className="font-bold">Cleared player · {seed.note}</div>
             {seed.collab.length > 0 && placements.includes('feed') ? <>
               <div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">Instagram Collab invite</span>{seed.collab.map(u => { const on = collab.includes(u); return <button key={u} type="button" onClick={() => setCollab(on ? collab.filter(x => x !== u) : [...collab, u])} className={`rounded-full border px-2 py-0.5 font-bold ${on ? 'border-teal-500 bg-white text-teal-800' : 'border-slate-300 text-slate-400 line-through'}`}>@{u}{on && <Check size={11} className="inline ml-1" />}</button> })}</div>
-              <div className="text-teal-800/80">{toIg ? 'They get an invite on Instagram; once they accept, the post shows on their profile too. The handles are in the caption either way.' : 'Collab invites are Instagram only. Pick the Instagram account to send them.'}</div>
+              {!!seed.tags?.length && <div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">Tagged in the Reel</span>{seed.tags.map(u => { const on = tags.includes(u); return <button key={u} type="button" onClick={() => setTags(on ? tags.filter(x => x !== u) : [...tags, u])} className={`rounded-full border px-2 py-0.5 font-bold ${on ? 'border-teal-500 bg-white text-teal-800' : 'border-slate-300 text-slate-400 line-through'}`}>@{u}{on && <Check size={11} className="inline ml-1" />}</button> })}</div>}
+              <div className="text-teal-800/80">{toIg ? `They get an invite on Instagram; once they accept, the post shows on their profile too.${seed.tags?.length ? ' Instagram allows 3 Collabs, so everyone else is tagged: they get a notification and it shows under their Tagged tab.' : ''} The handles are in the caption either way.` : 'Collab invites are Instagram only. Pick the Instagram account to send them.'}</div>
             </> : seed.collab.length === 0 && seed.player.kind !== 'story' ? <div className="text-teal-800/80">The family didn't give an Instagram handle, so there's no Collab invite.</div> : null}
             {storyMediaUrl && placements.includes('story') && <div className="text-teal-800/80">The Story uses the full-screen 9:16 version.</div>}
             {seed.pickSong && <div className="text-pink-800 font-semibold">This Reel has no music yet: pick a song from Instagram's trending list below. Instagram adds it to the Reel when it publishes (the Story and Facebook copies stay silent).</div>}

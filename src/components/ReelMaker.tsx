@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Download, Film, RotateCcw, Volume2, Check } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
-import { FAVORITE_STYLES } from '@/lib/socialPosts'
+import { FAVORITE_STYLES, POST_STYLES } from '@/lib/socialPosts'
 
 // Length (Bo, Oct 18 2026: "choose between 8, 15 seconds ... maybe even 30 if we really
 // feel like we have a good one"). Longer Reels don't stretch one graphic: they play the
@@ -12,6 +12,10 @@ import { FAVORITE_STYLES } from '@/lib/socialPosts'
 // dipping to black between them. 8 s = one look, 15 s = two, 30 s = four.
 const LENGTHS = [{ sec: 8, looks: 1 }, { sec: 15, looks: 2 }, { sec: 30, looks: 4 }] as const
 const lookKind = (s: string) => s.replace(/(-to)?-photo$/, '')
+const FAV_LOOKS = FAVORITE_STYLES.map(id => POST_STYLES.find(s => s.id === id)).filter((s): s is (typeof POST_STYLES)[number] => !!s)
+const MORE_LOOKS = POST_STYLES.filter(s => !FAVORITE_STYLES.includes(s.id))
+/** Squad Reels close on a card naming everyone ("Ready for Monster Mash"). */
+const END = 2.5
 
 // Turns one social post (lib/socialPosts, /pass/<token>/post/<style>.png) into an
 // 8-, 15- or 30-second vertical Instagram Reel with music, right in the browser (Bo, Oct 18 2026:
@@ -38,6 +42,9 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
   token?: string
   /** Song to start on (a lib/reelSongs id). */
   initialSong?: string
+  /** Squad Reel (Bo, Oct 18 2026: "pick like two to four players and show different
+   *  looks with them"): one segment per player, each in its own look, then an end card. */
+  squad?: { token: string; first: string; style: string }[]
   /** The social scheduler: hand the finished Reel (MP4) and a cover frame straight to
    *  a post instead of saving the file. Resolves once it's uploaded. */
   onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean }) => Promise<void> }
@@ -155,6 +162,30 @@ function draw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, style: strin
   ctx.restore()
 }
 
+/** Squad Reel end card: everyone's first name under the event, over a blurred post. */
+function drawEnd(ctx: CanvasRenderingContext2D, t: number, len: number, bg: HTMLImageElement, event: string, sub: string, names: string[]) {
+  ctx.save()
+  ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, W, H)
+  ctx.save(); ctx.filter = 'blur(44px) brightness(0.3) saturate(1.2)'
+  ctx.drawImage(bg, (W - W * 1.6) / 2, (H - 1350 * 1.6) / 2, W * 1.6, 1350 * 1.6); ctx.restore()
+  const a = clamp(t / 0.4), up = (1 - easeOut(t / 0.6)) * 40
+  ctx.globalAlpha = a; ctx.textAlign = 'center'
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '600 52px "Barlow Condensed", Arial, sans-serif'
+  ctx.fillText('READY FOR', W / 2, 720 + up)
+  ctx.fillStyle = '#ffffff'; ctx.font = '120px Anton, Impact, sans-serif'
+  ctx.fillText(event.toUpperCase(), W / 2, 860 + up, W - 100)
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '600 40px "Barlow Condensed", Arial, sans-serif'
+  ctx.fillText(sub.toUpperCase(), W / 2, 940 + up, W - 120)
+  const who = names.filter(Boolean).map(n => n.toUpperCase()).join(' · ')
+  if (who) { ctx.fillStyle = '#f97316'; ctx.font = '76px Anton, Impact, sans-serif'; ctx.fillText(who, W / 2, 1120 + up, W - 100) }
+  ctx.fillStyle = '#ffffff'; ctx.font = '84px Anton, Impact, sans-serif'
+  ctx.globalAlpha = a * clamp((t - 0.5) / 0.5)
+  ctx.fillText('SEE YOU ON THE FIELD', W / 2, 1600)
+  ctx.globalAlpha = 1
+  if (t > len - 0.35) { ctx.fillStyle = `rgba(0,0,0,${clamp((t - (len - 0.35)) / 0.35)})`; ctx.fillRect(0, 0, W, H) }
+  ctx.restore()
+}
+
 function pickMime(): { mime: string; ext: string } {
   const opts = [
     { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', ext: 'mp4' },
@@ -174,27 +205,37 @@ async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
   return { h264: has('avc1') || has('avc3'), aac: has('mp4a') }
 }
 
-export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose, token, initialSong, onUse }: Props) {
-  const isCustomLook = (s: string) => !!token && s in CUSTOM_REELS
-  const [len, setLen] = useState<number>(8)
-  // The looks this Reel plays, in order. Longer lengths need the pass token to draw the others.
-  const want = (token && LENGTHS.find(l => l.sec === len)?.looks) || 1
-  const seq = [style, ...FAVORITE_STYLES.filter(s => s !== style && lookKind(s) !== lookKind(style))].slice(0, want)
-  const segDur = seq.length === 1 ? (isCustomLook(style) ? CUSTOM_REELS[style] : DUR) : len / seq.length
-  const dur = seq.length === 1 ? segDur : len
-  const custom = useRef<{ data: ReelData; imgs: ReelImages } | null>(null)
-  const imgsRef = useRef<HTMLImageElement[]>([])
+export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose, token, initialSong, onUse, squad }: Props) {
+  const squadMode = !!squad && squad.length > 1
+  const isCustomLook = (s: string) => s in CUSTOM_REELS
+  const [len, setLen] = useState<number>(squadMode ? (squad!.length <= 2 ? 15 : 30) : 8)
+  // The look for each part, picked by staff (Bo: "I'd like to be able to pick the looks").
+  // One player: up to 4 parts, starting from the chosen look and Bo's favorites. Squad:
+  // one part per player, each starting on the look picked in the tray.
+  const [picks, setPicks] = useState<string[]>(() => squadMode ? squad!.map(p => p.style)
+    : [style, ...FAVORITE_STYLES.filter(s => s !== style && lookKind(s) !== lookKind(style))].slice(0, 4))
+  const lookCount = squadMode ? squad!.length : token ? (LENGTHS.find(l => l.sec === len)?.looks || 1) : 1
+  const slots = squadMode ? squad!.map((p, i) => ({ token: p.token, style: picks[i] || p.style, who: p.first }))
+    : picks.slice(0, lookCount).map(s => ({ token: token || '', style: s, who: '' }))
+  const endDur = squadMode ? END : 0
+  const single = slots.length === 1 && !squadMode
+  const segDur = single ? (token && isCustomLook(slots[0].style) ? CUSTOM_REELS[slots[0].style] : DUR) : (len - endDur) / slots.length
+  const dur = single ? segDur : len
+  const slotsKey = slots.map(x => `${x.token}:${x.style}`).join('|') + `|${len}`
+  const customs = useRef<Record<string, { data: ReelData; imgs: ReelImages }>>({})
+  const imgsRef = useRef<(HTMLImageElement | null)[]>([])
   const paint = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, t: number) => {
     const imgs = imgsRef.current.length ? imgsRef.current : [img]
-    const n = Math.min(seq.length, imgs.length)
+    const n = slots.length, body = n * segDur
+    if (endDur && t >= body) { drawEnd(ctx, t - body, endDur, imgs[n - 1] || img, event, sub, slots.map(x => x.who)); return }
     const i = Math.max(0, Math.min(n - 1, Math.floor(t / segDur)))
-    const tl = t - i * segDur, look = seq[i], im = imgs[i] || img
-    const c = custom.current
-    if (c && isCustomLook(look)) (look === 'rookie' ? drawRookie : drawCountdown)(ctx, tl, c.data, { ...c.imgs, post: im })
-    else draw(ctx, im, look, tl, event, sub, days, segDur)
-    if (n > 1) { // a quick dip to black between looks
+    const tl = t - i * segDur, slot = slots[i], im = imgs[i] || img
+    const c = slot.token ? customs.current[slot.token] : undefined
+    if (c && isCustomLook(slot.style)) (slot.style === 'rookie' ? drawRookie : drawCountdown)(ctx, tl, c.data, { ...c.imgs, post: im })
+    else draw(ctx, im, slot.style, tl, event, sub, days, segDur)
+    if (n > 1 || endDur) { // a quick dip to black between parts
       let a = 0
-      if (i < n - 1 && tl > segDur - 0.3) a = clamp((tl - (segDur - 0.3)) / 0.3)
+      if ((i < n - 1 || endDur) && tl > segDur - 0.3) a = clamp((tl - (segDur - 0.3)) / 0.3)
       if (i > 0 && tl < 0.25) a = Math.max(a, 1 - clamp(tl / 0.25))
       if (a > 0) { ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.fillRect(0, 0, W, H) }
     }
@@ -215,38 +256,40 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
   const [showVideo, setShowVideo] = useState(false)   // after recording: the real video, with sound, instead of the silent loop
   const [err, setErr] = useState('')
 
-  // Load the post and the fonts, then loop the preview.
+  // Load every part's post (and the fonts), then loop the preview. Runs again when a
+  // look or the length changes.
   useEffect(() => {
     let alive = true
     const link = document.createElement('link')
     link.rel = 'stylesheet'; link.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600&display=swap'
     document.head.appendChild(link)
-    setState('loading'); setOut(null); recorded.current = null; setShowVideo(false)
+    setState('loading'); setOut(null); recorded.current = null; setShowVideo(false); setErr('')
     cancelAnimationFrame(raf.current)
-    // The other looks of a longer Reel; any that fail to load are simply left out.
-    const extra = Promise.all(seq.slice(1).map(s => loadImg(`/pass/${token}/post/${s}.png${days != null && days >= 0 ? `?days=${days}` : ''}`)))
-    const img = new Image()
-    img.onload = async () => {
+    const q = days != null && days >= 0 ? `?days=${days}` : ''
+    ;(async () => {
       try { await Promise.all([document.fonts.load('68px Anton'), document.fonts.load('600 34px "Barlow Condensed"')]) } catch {}
+      const imgs = await Promise.all(slots.map(x => loadImg(x.token ? `/pass/${encodeURIComponent(x.token)}/post/${x.style}.png${q}` : src)))
       if (!alive) return
-      imgsRef.current = [img, ...(await extra).filter((x): x is HTMLImageElement => !!x)]
-      if (seq.some(isCustomLook) && !custom.current) {
+      const first = imgs.find((x): x is HTMLImageElement => !!x)
+      if (!first) { setErr('Could not load the post image.'); setState('error'); return }
+      // Hand-built Reels (Rookie Card, Countdown) need each player's pieces, once per player.
+      const need = Array.from(new Set(slots.filter(x => x.token && isCustomLook(x.style) && !customs.current[x.token]).map(x => x.token)))
+      await Promise.all(need.map(async tk => {
         try {
-          const data = await fetch(`/pass/${token}/reel${days != null ? `?days=${days}` : ''}`).then(r => r.ok ? r.json() : null)
+          const data = await fetch(`/pass/${encodeURIComponent(tk)}/reel${q}`).then(r => r.ok ? r.json() : null)
           if (data) {
             const [photo, clubLogo, eventLogo] = await Promise.all([loadImg(data.photo), loadImg(data.clubLogo), loadImg(data.eventLogo)])
-            custom.current = { data, imgs: { photo, clubLogo, eventLogo } }
+            customs.current[tk] = { data, imgs: { photo, clubLogo, eventLogo } }
           }
-        } catch { /* fall back to the generic Reel */ }
-      }
+        } catch { /* fall back to the generic animation */ }
+      }))
       if (!alive) return
-      imgRef.current = img; setState('preview'); loop()
-    }
-    img.onerror = () => { if (alive) { setErr('Could not load the post image.'); setState('error') } }
-    img.src = src
+      imgsRef.current = imgs.map(x => x || first)
+      imgRef.current = first; setState('preview'); loop()
+    })()
     return () => { alive = false; cancelAnimationFrame(raf.current); link.remove() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, len])
+  }, [slotsKey])
 
   function loop() {
     cancelAnimationFrame(raf.current)
@@ -390,8 +433,22 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <span className="font-semibold shrink-0">Length</span>
               <div className="flex-1 grid grid-cols-3 gap-1">
-                {LENGTHS.map(l => <button key={l.sec} type="button" disabled={playing || using} onClick={() => setLen(l.sec)} className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${len === l.sec ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-600 hover:border-teal-400'}`}>{l.sec} sec<span className="block font-normal text-[10px] text-slate-500">{l.looks === 1 ? '1 look' : `${l.looks} looks`}</span></button>)}
+                {LENGTHS.filter(l => !squadMode || l.sec >= (squad!.length <= 2 ? 15 : 30)).map(l => <button key={l.sec} type="button" disabled={playing || using} onClick={() => setLen(l.sec)} className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${len === l.sec ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-600 hover:border-teal-400'}`}>{l.sec} sec<span className="block font-normal text-[10px] text-slate-500">{squadMode ? `${squad!.length} players` : l.looks === 1 ? '1 look' : `${l.looks} looks`}</span></button>)}
               </div>
+            </div>
+          )}
+          {(token || squadMode) && state !== 'recording' && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-slate-700">{squadMode ? 'Players & looks' : slots.length > 1 ? 'Looks, in order' : 'Look'}</span>
+              {slots.map((x, i) => (
+                <label key={i} className="flex items-center gap-2 text-xs text-slate-600">
+                  <span className="w-20 shrink-0 font-semibold truncate">{squadMode ? x.who : `${i + 1}.`}</span>
+                  <select value={x.style} disabled={playing || using} onChange={e => setPicks(ps => { const n = [...ps]; while (n.length <= i) n.push(x.style); n[i] = e.target.value; return n })} className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
+                    <optgroup label="Favorites">{FAV_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
+                    <optgroup label="More looks">{MORE_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
+                  </select>
+                </label>
+              ))}
             </div>
           )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (

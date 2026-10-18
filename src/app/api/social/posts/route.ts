@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto'
 import { isVideoUrl } from '@/lib/social'
 import { cleanAudio, getPostAudioMany, setPostAudio, takesAudio } from '@/lib/socialAudio'
 import { cleanPlayerLink, setPostPlayer, setPostCollab, getPostCollabMany } from '@/lib/socialPlayers'
-import { cleanCollaborators } from '@/lib/playerPostText'
+import { cleanCollaborators, cleanHandles } from '@/lib/playerPostText'
 
 // Queue + calendar data for the social scheduler. A post always starts as a
 // 'draft' here — only PATCH .../posts/[id] with action:'approve' (director/
@@ -99,10 +99,12 @@ export async function POST(req: NextRequest) {
   }
   // Collab invites ride on the Instagram feed post only (Instagram doesn't take them
   // on Stories, and Facebook has no equivalent through the API).
+  // Squad Reels also tag the people the 3 Collab slots couldn't take (not on carousels).
   const collaborators = cleanCollaborators(body.collaborators)
-  if (collaborators.length) {
+  const userTags = mediaType === 'carousel' ? [] : cleanHandles(body.userTags, 20).filter(u => !collaborators.some(c => c.toLowerCase() === u.toLowerCase()))
+  if (collaborators.length || userTags.length) {
     const igIds = new Set(accounts.filter(a => a.platform === 'instagram').map(a => a.id))
-    for (const p of posts) if (igIds.has(p.socialAccountId) && p.placement === 'feed') await setPostCollab(p.id, { usernames: collaborators }).catch(() => {})
+    for (const p of posts) if (igIds.has(p.socialAccountId) && p.placement === 'feed') await setPostCollab(p.id, { usernames: collaborators, tags: userTags }).catch(() => {})
   }
   // Which cleared player(s) this features, so the tray marks them posted.
   const player = cleanPlayerLink(body.player)

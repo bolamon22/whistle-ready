@@ -287,6 +287,16 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   `collaborators` JSON array (Meta: feed image, Reels and carousels only, not Stories);
   if Instagram refuses them the post goes out without them and the post says so
   (`dropped`, shown by markPublished like a dropped song).
+- **Reel lengths, picked looks, Squad Reels (Oct 18)** — the player Reel maker
+  (components/ReelMaker) runs 8, 15 or 30 s; longer Reels play 2 or 4 of the player's
+  looks in a row, and every part's look is picked from a dropdown (Bo's favorites first,
+  lib/socialPosts FAVORITE_STYLES). **Squad Reel**: tick 2–4 cleared players from one
+  event in the tray → one part per player (each in its own look) + a 2.5 s end card
+  naming them. Instagram takes only 3 Collaborators, so `squadHandles` puts the club most
+  of them share first, then families; everyone else goes in `user_tags` on the Reel
+  (`userTags` on POST /api/social/posts, stored as `tags` in `postCollab:<postId>`).
+  If Instagram refuses the tags, the Reel goes out without them (`droppedTags`), then
+  without the Collab invite as a last resort; the post says which.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages

@@ -32,15 +32,17 @@ export type ClearedPlayer = {
   posts: { postId: string; status: string; kind: string; style: string; scheduledFor: string }[]
 }
 
-/** Instagram usernames for the Collab invite: no @, valid characters, no repeats, at most 3 (Instagram's limit). */
-export function cleanCollaborators(v: unknown): string[] {
+/** Instagram usernames: no @, valid characters, no repeats, at most `max`. */
+export function cleanHandles(v: unknown, max = 20): string[] {
   const out: string[] = []
   for (const x of Array.isArray(v) ? v : []) {
     const u = String(x || '').trim().replace(/^@/, '')
     if (/^[A-Za-z0-9._]{1,30}$/.test(u) && !out.some(o => o.toLowerCase() === u.toLowerCase())) out.push(u)
   }
-  return out.slice(0, 3)
+  return out.slice(0, max)
 }
+/** For the Collab invite: at most 3 (Instagram's limit). */
+export const cleanCollaborators = (v: unknown): string[] => cleanHandles(v, 3)
 
 export const firstOf = (full: string) => String(full || '').trim().split(/\s+/)[0] || 'Player'
 
@@ -128,6 +130,30 @@ export function rollCallCaption(list: ClearedPlayer[], site: string): string {
   const names = list.map(p => `${firstOf(p.playerName)}${p.jersey ? ` #${p.jersey}` : ''} · ${teamLabel(p)}`)
   const tags = Array.from(new Set(list.flatMap(p => [p.instagram, p.clubInstagram]).filter(Boolean))).slice(0, 20).join(' ')
   return [`Roll call for ${E}. Swipe to meet who's on the field.`, '', ...names, '', `${E}${e?.dates ? ` · ${e.dates}` : ''}${e?.location ? ` · ${e.location}` : ''}`, site ? `Info: ${bareSite(site)}` : '', '', [tags, [eventTag(E), '#lacrosse'].filter(Boolean).join(' ')].filter(Boolean).join('\n')].join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/** A Squad Reel's handles. Collab takes only 3, so the club most of the players share
+ *  goes first (one invite reaches every family that follows it), then the families;
+ *  everyone left over is tagged in the Reel instead (up to 20). */
+export function squadHandles(list: Pick<ClearedPlayer, 'instagram' | 'clubInstagram'>[]): { collab: string[]; tags: string[] } {
+  const count = new Map<string, number>()
+  for (const p of list) if (p.clubInstagram) count.set(p.clubInstagram.toLowerCase(), (count.get(p.clubInstagram.toLowerCase()) || 0) + 1)
+  const clubs = Array.from(new Set(list.map(p => p.clubInstagram).filter(Boolean))).sort((a, b) => (count.get(b.toLowerCase()) || 0) - (count.get(a.toLowerCase()) || 0))
+  const order = cleanHandles([...clubs, ...list.map(p => p.instagram)], 40)
+  return { collab: order.slice(0, 3), tags: order.slice(3, 23) }
+}
+
+/** Squad Reel caption: 2–4 players at one event. */
+export function squadCaption(list: ClearedPlayer[], site: string): string {
+  const e = list[0]?.event
+  const E = e?.name || 'the tournament'
+  const clubs = Array.from(new Set(list.map(p => p.club.trim()).filter(Boolean)))
+  const first = clubs.length === 1 ? `${clubs[0]} is ready for ${E}.` : `Ready for ${E}.`
+  const names = list.map(p => `${firstOf(p.playerName)}${p.jersey ? ` #${p.jersey}` : ''} · ${teamLabel(p)}`)
+  const where = [e?.dates, e?.location].filter(Boolean).join(' · ')
+  const tags = Array.from(new Set(list.flatMap(p => [p.instagram, p.clubInstagram]).filter(Boolean))).join(' ')
+  const hashtags = [eventTag(E), '#lacrosse', '#ImWhistleReady'].filter(Boolean).join(' ')
+  return [first, '', ...names, '', where, site ? `Info: ${bareSite(site)}` : '', '', tags, hashtags].join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 /** Collab invites for one player's post: the family's account, then the club's. */

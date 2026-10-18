@@ -4,7 +4,7 @@ import { playerPassEnabled } from '@/lib/playerPass'
 import { eventDates } from '@/lib/vendorApproval'
 import { startFacts } from '@/lib/socialPosts'
 import { instagramHandle } from '@/lib/photoConsent'
-import { cleanCollaborators, type PostPlayerLink, type ClearedPlayer } from '@/lib/playerPostText'
+import { cleanCollaborators, cleanHandles, type PostPlayerLink, type ClearedPlayer } from '@/lib/playerPostText'
 
 // Cleared players on the social scheduler (Bo, Oct 18 2026: "can we put the yes's on
 // the social scheduler as potential posts ... just a few clicks to post a reel or add
@@ -59,23 +59,31 @@ export async function getPostPlayersMany(postIds: string[]): Promise<Record<stri
 
 // ── Collab invites ────────────────────────────────────────────────────────────
 
-export type PostCollab = { usernames: string[]; dropped?: string }
+/** usernames: Collab invites (max 3). tags: people tagged in the Reel or photo (Squad
+ *  Reels: everyone the 3 Collab slots couldn't take). dropped / droppedTags: why
+ *  Instagram refused them at publish time. */
+export type PostCollab = { usernames: string[]; tags?: string[]; dropped?: string; droppedTags?: string }
+
+function readCollab(raw: string): PostCollab | null {
+  try {
+    const v = JSON.parse(raw)
+    const usernames = cleanCollaborators(v.usernames), tags = cleanHandles(v.tags)
+    if (!usernames.length && !tags.length) return null
+    return { usernames, ...(tags.length ? { tags } : {}), ...(v.dropped ? { dropped: String(v.dropped) } : {}), ...(v.droppedTags ? { droppedTags: String(v.droppedTags) } : {}) }
+  } catch { return null }
+}
 
 export async function setPostCollab(postId: string, c: PostCollab | null): Promise<void> {
   await ensureTable()
-  if (!c || !c.usernames.length) { await prisma.appSetting.deleteMany({ where: { key: collabKey(postId) } }).catch(() => {}); return }
-  await put(collabKey(postId), JSON.stringify({ usernames: cleanCollaborators(c.usernames), ...(c.dropped ? { dropped: c.dropped.slice(0, 300) } : {}) }))
+  const usernames = cleanCollaborators(c?.usernames), tags = cleanHandles(c?.tags)
+  if (!c || (!usernames.length && !tags.length)) { await prisma.appSetting.deleteMany({ where: { key: collabKey(postId) } }).catch(() => {}); return }
+  await put(collabKey(postId), JSON.stringify({ usernames, ...(tags.length ? { tags } : {}), ...(c.dropped ? { dropped: c.dropped.slice(0, 300) } : {}), ...(c.droppedTags ? { droppedTags: c.droppedTags.slice(0, 300) } : {}) }))
 }
 
 export async function getPostCollab(postId: string): Promise<PostCollab | null> {
   await ensureTable()
   const row = await prisma.appSetting.findUnique({ where: { key: collabKey(postId) } }).catch(() => null)
-  if (!row) return null
-  try {
-    const v = JSON.parse(row.value)
-    const usernames = cleanCollaborators(v.usernames)
-    return usernames.length ? { usernames, ...(v.dropped ? { dropped: String(v.dropped) } : {}) } : null
-  } catch { return null }
+  return row ? readCollab(row.value) : null
 }
 
 export async function getPostCollabMany(postIds: string[]): Promise<Record<string, PostCollab>> {
@@ -83,7 +91,7 @@ export async function getPostCollabMany(postIds: string[]): Promise<Record<strin
   await ensureTable()
   const rows = await prisma.appSetting.findMany({ where: { key: { in: postIds.map(collabKey) } } }).catch(() => [] as { key: string; value: string }[])
   const out: Record<string, PostCollab> = {}
-  for (const r of rows) { try { const v = JSON.parse(r.value); const u = cleanCollaborators(v.usernames); if (u.length) out[r.key.slice('postCollab:'.length)] = { usernames: u, ...(v.dropped ? { dropped: String(v.dropped) } : {}) } } catch {} }
+  for (const r of rows) { const c = readCollab(r.value); if (c) out[r.key.slice('postCollab:'.length)] = c }
   return out
 }
 

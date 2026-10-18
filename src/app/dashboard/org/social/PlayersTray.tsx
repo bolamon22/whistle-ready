@@ -6,7 +6,7 @@
 // composePlayer / reelPlayer / planAll in page.tsx). Data: /api/social/players.
 import { useState } from 'react'
 import Link from 'next/link'
-import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users } from 'lucide-react'
+import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users, X } from 'lucide-react'
 import { POST_STYLES, FAVORITE_STYLES } from '@/lib/socialPosts'
 import { lookFor, teamLabel, type ClearedPlayer } from '@/lib/playerPostText'
 import { postPngUrl } from './playerMedia'
@@ -32,15 +32,18 @@ const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { we
 const STATUS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled', publishing: 'Publishing', published: 'Posted', failed: 'Failed' }
 const KIND: Record<string, string> = { post: 'Post', reel: 'Reel', story: 'Story', rollcall: 'Roll Call' }
 
-export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onPlanAll }: {
+export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onSquad, onPlanAll }: {
   data: ClearedData; canPost: boolean; busy: string
   onPost: (p: ClearedPlayer, look: string) => void
   onReel: (p: ClearedPlayer, look: string) => void
   onStory: (p: ClearedPlayer, look: string) => void
+  /** Squad Reel: 2–4 ticked players from one event, each in their card's look. */
+  onSquad: (players: ClearedPlayer[], looks: string[]) => void
   onPlanAll: () => void
 }) {
   const [looks, setLooks] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState(false)
+  const [sel, setSel] = useState<string[]>([])   // ticked for a Squad Reel, in the order ticked
   if (!data.passOn) return null
   const { players, waiting } = data
   if (!players.length && !waiting) return null
@@ -50,6 +53,9 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
   const list = [...players].sort((a, b) => (a.posts.length ? 1 : 0) - (b.posts.length ? 1 : 0))
   const events = Array.from(new Map(players.map(p => [p.tournamentId, p.event])).entries())
   const lookOf = (p: ClearedPlayer) => looks[p.id] || lookFor(p.event.daysOut, 0)
+  const picked = sel.map(id => players.find(p => p.id === id)).filter((p): p is ClearedPlayer => !!p)
+  const sameEvent = new Set(picked.map(p => p.tournamentId)).size <= 1
+  const squadOk = picked.length >= 2 && picked.length <= 4 && sameEvent
 
   if (!players.length) return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-600 flex items-center gap-2 flex-wrap">
@@ -77,6 +83,17 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
           ) : <button onClick={() => setConfirm(true)} disabled={!canPost || !planN} title={!canPost ? 'Connect an account first' : !planN ? 'Every cleared player already has a post' : ''} className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-3 py-2 disabled:opacity-40"><Sparkles size={13} /> Plan all cleared players</button>}
       </div>
 
+      {picked.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-xs">
+          <span className="font-bold text-pink-900">Squad Reel · {picked.map(p => p.playerName.split(' ')[0]).join(', ')}</span>
+          <span className="text-pink-800/80">{!sameEvent ? 'Pick players from the same event.' : picked.length < 2 ? 'Tick 1–3 more players (2–4 in all).' : picked.length > 4 ? 'Four players at most.' : `${picked.length <= 2 ? '15' : '30'} seconds, one look each (change them in the next step), then an end card naming everyone.`}</span>
+          <span className="ml-auto inline-flex gap-1.5">
+            <button onClick={() => onSquad(picked, picked.map((p, i) => looks[p.id] || lookFor(p.event.daysOut, i)))} disabled={!squadOk || !canPost || !!busy} className="rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-bold px-3 py-1.5 inline-flex items-center gap-1 disabled:opacity-40"><Film size={12} /> Make Squad Reel</button>
+            <button onClick={() => setSel([])} className="rounded-lg text-pink-800 font-bold px-2 py-1.5 inline-flex items-center gap-1"><X size={12} /> Clear</button>
+          </span>
+        </div>
+      )}
+
       <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
         {list.map(p => {
           const look = lookOf(p)
@@ -88,6 +105,9 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={postPngUrl(p.token, look, null, 360)} alt={`${p.playerName}, ${look} post`} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                 {p.posts.length > 0 && <span className="absolute top-2 left-2 rounded-md bg-white/90 text-slate-800 text-[10px] font-extrabold px-1.5 py-0.5 inline-flex items-center gap-1"><Check size={10} />{STATUS[last.status] || 'Planned'}</span>}
+                <label className="absolute top-2 right-2 rounded-md bg-white/90 text-slate-800 text-[10px] font-extrabold px-1.5 py-0.5 inline-flex items-center gap-1 cursor-pointer" title="Add to a Squad Reel">
+                  <input type="checkbox" checked={sel.includes(p.id)} onChange={e => setSel(e.target.checked ? [...sel, p.id] : sel.filter(x => x !== p.id))} className="accent-pink-600" /> Squad
+                </label>
               </div>
               <div className="p-2.5 flex flex-col gap-0.5 min-w-0">
                 <div className="text-sm font-extrabold truncate">{p.playerName}{p.jersey ? ` #${p.jersey}` : ''}</div>
