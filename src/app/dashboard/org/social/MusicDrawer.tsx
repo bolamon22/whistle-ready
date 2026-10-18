@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { X, Music, Play, Pause, Trash2, Upload, ExternalLink } from 'lucide-react'
 import { useOrgMusic } from '@/components/useOrgMusic'
-import { MUSIC_CATEGORIES, groupTracks, titleFromFile, type OrgTrack } from '@/lib/reelMusic'
+import { allCategories, groupTracks, titleFromFile, type OrgTrack } from '@/lib/reelMusic'
 
 export default function MusicDrawer({ onClose }: { onClose: () => void }) {
   const music = useOrgMusic()
@@ -16,6 +16,17 @@ export default function MusicDrawer({ onClose }: { onClose: () => void }) {
   const [queue, setQueue] = useState<string[]>([])           // file names still uploading
   const [playing, setPlaying] = useState('')
   const [confirmDel, setConfirmDel] = useState('')
+  const [newCat, setNewCat] = useState<string | null>(null)   // typing a new category's name
+  const [confirmCat, setConfirmCat] = useState('')
+  const cats = allCategories(music.categories)
+  async function addCat() {
+    const label = (newCat || '').trim()
+    if (!label) return
+    try { const c = await music.addCategory(label); setCat(c.id); setNewCat(null); toast.success(`Added "${c.label}"`) } catch (e: any) { toast.error(e.message) }
+  }
+  async function removeCat(id: string) {
+    try { await music.removeCategory(id); if (cat === id) setCat('champions'); setConfirmCat('') } catch (e: any) { toast.error(e.message) }
+  }
   const audio = useRef<HTMLAudioElement | null>(null)
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => () => { audio.current?.pause() }, [])   // stop the preview when the drawer closes
@@ -60,10 +71,26 @@ export default function MusicDrawer({ onClose }: { onClose: () => void }) {
           <div className="text-sm font-bold text-teal-900">Add tracks</div>
           <label className="flex items-center gap-2 text-xs text-slate-700">
             <span className="font-semibold shrink-0">File them under</span>
-            <select value={cat} onChange={e => setCat(e.target.value)} className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold">
-              {MUSIC_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            <select value={newCat !== null ? '__new' : cat} onChange={e => { if (e.target.value === '__new') setNewCat(''); else { setNewCat(null); setCat(e.target.value) } }} className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold">
+              {cats.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              <option value="__new">＋ New category…</option>
             </select>
           </label>
+          {newCat !== null && (
+            <div className="flex gap-1.5">
+              <input autoFocus value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCat(); if (e.key === 'Escape') setNewCat(null) }} maxLength={40} placeholder="e.g. Country, Throwbacks, Walk-up songs" aria-label="New category name" className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs" />
+              <button type="button" onClick={addCat} disabled={!newCat.trim()} className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 disabled:opacity-40">Add</button>
+              <button type="button" onClick={() => setNewCat(null)} className="text-xs text-slate-500 hover:underline px-1">Cancel</button>
+            </div>
+          )}
+          {music.categories.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap text-[11px]">
+              <span className="text-slate-500 font-semibold mr-0.5">Your categories:</span>
+              {music.categories.map(c => confirmCat === c.id
+                ? <span key={c.id} className="rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5">Remove {c.label}? Its tracks move to Other. <button type="button" onClick={() => removeCat(c.id)} className="font-bold text-rose-700 hover:underline">Remove</button> · <button type="button" onClick={() => setConfirmCat('')} className="hover:underline">Keep</button></span>
+                : <span key={c.id} className="inline-flex items-center rounded-full bg-white border border-slate-300 pl-2 pr-1 py-0.5 font-semibold text-slate-700">{c.label}<button type="button" onClick={() => setConfirmCat(c.id)} aria-label={`Remove the category ${c.label}`} className="ml-0.5 text-slate-400 hover:text-rose-700"><X size={11} /></button></span>)}
+            </div>
+          )}
           <button type="button" onClick={() => input.current?.click()} className="rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm py-2.5 inline-flex items-center justify-center gap-2"><Upload size={15} /> Choose MP3s (or drop them here)</button>
           <input ref={input} type="file" multiple accept="audio/mpeg,audio/mp3,audio/mp4,audio/aac,audio/wav,audio/x-m4a,.mp3,.m4a,.wav" hidden onChange={e => { const fs = Array.from(e.target.files || []); e.target.value = ''; if (fs.length) addFiles(fs) }} />
           {queue.length > 0 && <div className="text-xs text-teal-800 font-semibold">Uploading {queue.length}… {queue[0]}</div>}
@@ -74,7 +101,7 @@ export default function MusicDrawer({ onClose }: { onClose: () => void }) {
         </div>
 
         {!music.tracks.length && !queue.length && <p className="text-sm text-slate-500 text-center py-4">No tracks yet. Add some above; the ten built-in tracks are always there too.</p>}
-        {groupTracks(music.tracks).map(g => (
+        {groupTracks(music.tracks, music.categories).map(g => (
           <div key={g.label}>
             <div className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 mb-1.5">{g.label} · {g.tracks.length}</div>
             <div className="flex flex-col gap-1.5">
@@ -84,7 +111,7 @@ export default function MusicDrawer({ onClose }: { onClose: () => void }) {
                   <input defaultValue={t.title} key={t.title} maxLength={80} aria-label="Track name" onBlur={e => save(t, { title: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                     className="flex-1 min-w-0 rounded-lg border border-transparent hover:border-slate-200 focus:border-teal-400 px-1.5 py-1 text-sm font-semibold focus:outline-none" />
                   <select value={t.category} onChange={e => save(t, { category: e.target.value })} aria-label="Category" className="w-[118px] flex-none rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-600">
-                    {MUSIC_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    {cats.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                   </select>
                   {confirmDel === t.id
                     ? <span className="flex-none flex items-center gap-1 text-[11px]"><button type="button" onClick={() => del(t)} className="font-bold text-rose-700 hover:underline">Remove</button><button type="button" onClick={() => setConfirmDel('')} className="text-slate-500 hover:underline">Keep</button></span>

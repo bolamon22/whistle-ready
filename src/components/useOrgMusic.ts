@@ -3,13 +3,14 @@
 // to it, remove one. Failing to load just means only the built-in tracks show.
 import { useCallback, useEffect, useState } from 'react'
 import { upload as blobUpload } from '@vercel/blob/client'
-import type { OrgTrack } from '@/lib/reelMusic'
+import type { OrgTrack, MusicCategory } from '@/lib/reelMusic'
 
 export function useOrgMusic() {
   const [tracks, setTracks] = useState<OrgTrack[]>([])
+  const [categories, setCategories] = useState<MusicCategory[]>([])   // the org's own; built-ins are in lib/reelMusic
   useEffect(() => {
     let alive = true
-    fetch('/api/social/music').then(r => r.ok ? r.json() : { tracks: [] }).then(j => { if (alive) setTracks(Array.isArray(j.tracks) ? j.tracks : []) }).catch(() => {})
+    fetch('/api/social/music').then(r => r.ok ? r.json() : { tracks: [] }).then(j => { if (alive) { setTracks(Array.isArray(j.tracks) ? j.tracks : []); setCategories(Array.isArray(j.categories) ? j.categories : []) } }).catch(() => {})
     return () => { alive = false }
   }, [])
 
@@ -40,5 +41,21 @@ export function useOrgMusic() {
     setTracks(j.tracks)
   }, [])
 
-  return { tracks, add, remove, update }
+  /** Make a category of your own; returns it (or the existing one with that name). */
+  const addCategory = useCallback(async (label: string): Promise<MusicCategory> => {
+    const r = await fetch('/api/social/music', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'addCategory', label }) })
+    const j = await r.json().catch(() => ({} as any))
+    if (!r.ok || !j.category) throw new Error(j.error || 'Could not add the category')
+    setCategories(j.categories)
+    return j.category as MusicCategory
+  }, [])
+  /** Remove one of your categories; its tracks move to Other. */
+  const removeCategory = useCallback(async (id: string) => {
+    const r = await fetch('/api/social/music', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'removeCategory', id }) })
+    const j = await r.json().catch(() => ({} as any))
+    if (!r.ok) throw new Error(j.error || 'Could not remove it')
+    setCategories(j.categories); setTracks(j.tracks)
+  }, [])
+
+  return { tracks, categories, add, remove, update, addCategory, removeCategory }
 }

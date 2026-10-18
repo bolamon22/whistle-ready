@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown, Save, Music } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
-import { MUSIC_CATEGORIES, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
+import { allCategories, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
 import { useOrgMusic } from './useOrgMusic'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
 import { FAVORITE_STYLES, POST_STYLES } from '@/lib/socialPosts'
@@ -565,7 +565,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
               <select value={song} onChange={e => { if (e.target.value === '__add') { fileInput.current?.click(); return } setSong(e.target.value) }} disabled={playing}
                 className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
                 {onUse && <option value="ig">Instagram trending song (pick it on the post)</option>}
-                {groupTracks(music.tracks).map(g => (
+                {groupTracks(music.tracks, music.categories).map(g => (
                   <optgroup key={g.label} label={g.label}>{g.tracks.map(t => <option key={t.id} value={orgSongId(t.id)}>{t.title}</option>)}</optgroup>
                 ))}
                 <optgroup label="Built-in">{REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.title} · {x.mood}</option>)}</optgroup>
@@ -591,7 +591,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
               <div className="flex gap-1.5 flex-wrap">
                 <input value={saveTitle} onChange={e => setSaveTitle(e.target.value)} maxLength={80} placeholder="Track name" aria-label="Track name" className="flex-1 min-w-[120px] rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
                 <select value={saveCat} onChange={e => setSaveCat(e.target.value)} aria-label="Category" className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
-                  {MUSIC_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  {allCategories(music.categories).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
                 <button type="button" onClick={saveToList} disabled={saving || playing} className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 py-1.5 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
               </div>

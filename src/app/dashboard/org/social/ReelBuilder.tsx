@@ -350,7 +350,7 @@ export default function ReelBuilder({ initialPhotos, events, site, onDone, onClo
             <div>
               <div className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 mb-1.5">Music</div>
               <div className="flex flex-col gap-1">
-                {groupTracks(music.tracks).map(g => (
+                {groupTracks(music.tracks, music.categories).map(g => (
                   <div key={g.label} className="flex flex-col gap-1">
                     <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-1">{g.label}</div>
                     {g.tracks.map(t => { const id = orgSongId(t.id); return (

@@ -319,3 +319,6 @@ it then shows, grouped, in the Song list of both Reel makers. Stored as AppSetti
 `reelMusic:{orgId}`; the MP3s live in Blob storage. Per org on purpose: free libraries such as
 Pixabay Music allow use in our own videos but not handing the files to other organizations.
 Make a Reel uses 120 BPM for cuts on these tracks.
+Country was added as a category, and each org can make its own categories (Music library →
+"+ New category..."; AppSetting `reelMusicCats:{orgId}`, ids "c-<slug>"). Removing one moves
+its tracks to Other. The scheduler header's Music button opens the library (MusicDrawer).
