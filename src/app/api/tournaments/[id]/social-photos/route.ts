@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireFeature } from '@/lib/apiAuth'
-import { tournamentOrgId, orgById, orgLogoUrl } from '@/lib/org'
-import { listSubmissions, getSubmission, updateSubmissionData, ensurePassToken } from '@/lib/formSubmissions'
-import { appBaseUrl, playerPassEnabled, orgSiteConfig } from '@/lib/playerPass'
-import { sendEmail, orgSender, emailEnabled } from '@/lib/email'
-import { absUrl } from '@/lib/emailLayout'
-import { orgBaseUrl } from '@/lib/orgDomains'
-import { signPhotoToken, photoAskRecipients, photoAskEmail, instagramHandle } from '@/lib/photoConsent'
-import { eventDates } from '@/lib/vendorApproval'
-import { prisma } from '@/lib/db'
+import { tournamentOrgId } from '@/lib/org'
+import { listSubmissions, getSubmission, updateSubmissionData } from '@/lib/formSubmissions'
+import { appBaseUrl, playerPassEnabled } from '@/lib/playerPass'
+import { emailEnabled } from '@/lib/email'
+import { photoAskRecipients } from '@/lib/photoConsent'
+import { photoAskContext, askable, sendPhotoAsk } from '@/lib/photoAskSend'
 
-// Staff: player photos for social media, and the families' permission to use them
-// (lib/photoConsent).
+// Staff: player cards for social media, and the families' permission to use them
+// (lib/photoConsent, lib/photoAskSend).
 //   GET   → { players: [...], emailReady } every live player waiver at this event that
 //           has a photo, with the permission state.
 //   POST  { ids: string[], resend?: boolean } → emails the parent(s) of each picked
-//           player a yes/no link. Players already asked are skipped unless resend;
+//           player a yes/no link now. Players already asked are skipped unless resend;
 //           players who already answered are never asked again.
+//   POST  { ids, sendAt: ISO } → schedules the same letter; /api/social-photos/cron sends
+//           it when the time comes.
+//   POST  { cancelIds: string[] } → takes those players off the schedule.
 //   POST  { testId } → sends that player's letter to the signed-in staff member only,
 //           with a test link: the page works, but nothing answered on it is saved,
 //           and the player is not marked as asked.
@@ -58,6 +58,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           askAt: String(d.photoAskAt || ''),
           ok: String(d.photoOk || ''),
           okAt: String(d.photoOkAt || ''),
+          schedAt: String(d.photoAskSchedAt || ''),
           okName: String(d.photoOkName || ''),
           instagram: String(d.photoIg || ''),
           clubInstagram: String(d.photoClubIg || ''),
@@ -74,62 +75,59 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const r = await gate(params.id)
   if ('res' in r) return r.res
   const body = await req.json().catch(() => ({})) as any
+  const by = String(r.g.session?.user?.email || '')
+  const list = (v: unknown): string[] => Array.isArray(v) ? v.map(x => String(x)).filter(Boolean) : []
+
+  // Take players off the schedule.
+  const cancelIds = list(body.cancelIds)
+  if (cancelIds.length) {
+    let canceled = 0
+    for (const id of cancelIds) {
+      const s = await getSubmission(r.orgId, id)
+      if (!s || String(s.data?.tournamentId || '') !== params.id || !s.data?.photoAskSchedAt) continue
+      await updateSubmissionData(r.orgId, id, { photoAskSchedAt: '', photoAskSchedBy: '' }, by || 'staff')
+      canceled++
+    }
+    return NextResponse.json({ ok: true, canceled })
+  }
+
   const testId = String(body.testId || '').trim()
-  const ids: string[] = testId ? [testId] : Array.isArray(body.ids) ? body.ids.map((x: unknown) => String(x)).filter(Boolean) : []
-  if (!ids.length) return NextResponse.json({ error: 'Pick at least one photo.' }, { status: 400 })
+  const ids = testId ? [testId] : list(body.ids)
+  if (!ids.length) return NextResponse.json({ error: 'Pick at least one player.' }, { status: 400 })
   if (ids.length > 200) return NextResponse.json({ error: 'That is more than 200 players. Split it up.' }, { status: 400 })
   if (!emailEnabled()) return NextResponse.json({ error: 'Email is not configured, so nothing was sent.' }, { status: 503 })
+  if (testId && !by) return NextResponse.json({ error: 'Your login has no email address to send the test to.' }, { status: 400 })
   const resend = body.resend === true
 
-  try {
-    const [org, t, passOn, site] = await Promise.all([
-      orgById(r.orgId),
-      prisma.tournament.findUnique({ where: { id: params.id }, select: { name: true, startDate: true, endDate: true } }),
-      playerPassEnabled(r.orgId),
-      orgSiteConfig(r.orgId),
-    ])
-    const dates = eventDates(t?.startDate || '', t?.endDate || '')
-    const instagram = instagramHandle(site.socials.instagram)
-    const appBase = appBaseUrl(req)
-    const orgBase = orgBaseUrl(org?.slug)
-    const logo = absUrl(orgBase, await orgLogoUrl(org?.id, org?.logoUrl))
-    const sender = orgSender(org)
-    const orgName = org?.name || 'Sunshine Events Group'
-    const tournamentName = t?.name || 'the tournament'
-    const by = String(r.g.session?.user?.email || '')
-    if (testId && !by) return NextResponse.json({ error: 'Your login has no email address to send the test to.' }, { status: 400 })
+  // A send time: in the future (a minute's grace for a slow click), within 30 days.
+  let sendAt = ''
+  if (body.sendAt && !testId) {
+    const t = new Date(String(body.sendAt))
+    if (isNaN(t.getTime())) return NextResponse.json({ error: 'That send time is not a valid date.' }, { status: 400 })
+    if (t.getTime() < Date.now() - 60_000) return NextResponse.json({ error: 'That send time has already passed. Pick a later one, or send now.' }, { status: 400 })
+    if (t.getTime() > Date.now() + 30 * 86_400_000) return NextResponse.json({ error: 'Schedule it within the next 30 days.' }, { status: 400 })
+    sendAt = t.toISOString()
+  }
 
-    let sent = 0
+  try {
+    const ctx = await photoAskContext(r.orgId, params.id, appBaseUrl(req))
+    let sent = 0, scheduled = 0
     const skipped: string[] = []
     const errors: string[] = []
     for (const id of ids) {
-      const s = await getSubmission(r.orgId, id)
-      const d = s?.data || {}
-      const name = String(d.playerName || id)
-      if (!s || s.formType !== 'player' || String(d.tournamentId || '') !== params.id || s.archivedAt) { skipped.push(`${name}: not a player at this event`); continue }
-      if (!String(d.photoUrl || '').trim()) { skipped.push(`${name}: no photo`); continue }
-      if (!testId && (d.photoOk === 'yes' || d.photoOk === 'no')) { skipped.push(`${name}: already answered`); continue }
-      if (!testId && d.photoAskAt && !resend) { skipped.push(`${name}: already asked`); continue }
-      const to = testId ? [by] : photoAskRecipients(d)
-      if (!to.length) { skipped.push(`${name}: no parent email`); continue }
-
-      const token = signPhotoToken({ s: s.id, o: r.orgId, ...(testId ? { x: true } : {}) })
-      const link = `${appBase}/pass/photo-ok/${encodeURIComponent(token)}`
-      const passToken = passOn ? (s.passToken || await ensurePassToken(r.orgId, s.id)) : null
-      const mail = photoAskEmail({
-        orgName, logoUrl: logo, tournamentName, dates, instagram,
-        parentName: String(d.parentName || ''), playerName: name,
-        photoUrl: String(d.photoUrl || ''),
-        cardUrl: passToken ? `/pass/${passToken}/card.png` : '',
-        link, base: appBase,
-      })
-      const res = await sendEmail({ ...sender, to, subject: testId ? `[Test] ${mail.subject}` : mail.subject, html: mail.html, text: mail.text })
-      if (!res.ok) { errors.push(`${name}: ${res.error || 'send failed'}`); continue }
+      const c = await askable(ctx, id, { test: !!testId, resend })
+      if (!c.ok) { skipped.push(`${c.name}: ${c.reason}`); continue }
+      if (sendAt) {
+        await updateSubmissionData(r.orgId, id, { photoAskSchedAt: sendAt, photoAskSchedBy: by }, by || 'staff')
+        scheduled++
+        continue
+      }
+      const res = await sendPhotoAsk(ctx, c.sub, by, testId ? by : undefined)
+      if (!res.ok) { errors.push(`${c.name}: ${res.error}`); continue }
       sent++
       if (testId) return NextResponse.json({ ok: true, sent, test: true, to: by, skipped, errors })
-      await updateSubmissionData(r.orgId, s.id, { photoAskAt: new Date().toISOString(), photoAskBy: by }, by || 'staff')
     }
-    return NextResponse.json({ ok: true, sent, skipped, errors })
+    return NextResponse.json({ ok: true, sent, scheduled, sendAt, skipped, errors })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Could not send' }, { status: 500 })
   }

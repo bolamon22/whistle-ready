@@ -21,6 +21,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/social-photos/cron",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/social/insights-cron",
       "schedule": "0 */4 * * *"
     },

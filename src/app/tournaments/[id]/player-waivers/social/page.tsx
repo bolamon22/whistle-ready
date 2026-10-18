@@ -14,17 +14,21 @@ import { ArrowLeft, Send, Check, Download, Mail } from 'lucide-react'
 type Player = {
   id: string; playerName: string; clubName: string; teamName: string; jersey: string; position: string
   photoUrl: string; cardUrl: string; parentName: string; emails: string[]
-  askAt: string; ok: string; okAt: string; okName: string; instagram: string; clubInstagram: string; clubFacebook: string
+  askAt: string; schedAt: string; ok: string; okAt: string; okName: string; instagram: string; clubInstagram: string; clubFacebook: string
 }
-type Filter = 'all' | 'new' | 'asked' | 'yes' | 'no'
+type Filter = 'all' | 'new' | 'scheduled' | 'asked' | 'yes' | 'no'
 
-const state = (p: Player): Exclude<Filter, 'all'> => p.ok === 'yes' ? 'yes' : p.ok === 'no' ? 'no' : p.askAt ? 'asked' : 'new'
+const state = (p: Player): Exclude<Filter, 'all'> => p.ok === 'yes' ? 'yes' : p.ok === 'no' ? 'no' : p.schedAt ? 'scheduled' : p.askAt ? 'asked' : 'new'
 const CHIP: Record<Exclude<Filter, 'all'>, { label: string; cls: string }> = {
   new: { label: 'Not asked', cls: 'bg-slate-100 text-slate-600' },
+  scheduled: { label: 'Scheduled', cls: 'bg-sky-100 text-sky-800' },
   asked: { label: 'Asked · waiting', cls: 'bg-amber-100 text-amber-800' },
   yes: { label: 'Yes · OK to post', cls: 'bg-emerald-100 text-emerald-800' },
   no: { label: 'No', cls: 'bg-rose-100 text-rose-800' },
 }
+const when = (iso: string) => { try { return new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) } catch { return '' } }
+// Tomorrow at 8:00 AM, in the browser's own time zone, as a datetime-local value.
+const tomorrowMorning = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T08:00` }
 const day = (iso: string) => { try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) } catch { return '' } }
 
 export default function SocialPhotos() {
@@ -38,6 +42,8 @@ export default function SocialPhotos() {
   const [confirm, setConfirm] = useState(false)
   const [sending, setSending] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [later, setLater] = useState(true)              // Schedule (default: it's usually late at night) vs Send now
+  const [sendAt, setSendAt] = useState(tomorrowMorning)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -51,12 +57,12 @@ export default function SocialPhotos() {
   }, [id, tick])
 
   const counts = useMemo(() => {
-    const c = { all: players.length, new: 0, asked: 0, yes: 0, no: 0 }
+    const c = { all: players.length, new: 0, scheduled: 0, asked: 0, yes: 0, no: 0 }
     for (const p of players) c[state(p)]++
     return c
   }, [players])
   const shown = useMemo(() => filter === 'all' ? players : players.filter(p => state(p) === filter), [players, filter])
-  const askable = (p: Player) => (state(p) === 'new' || state(p) === 'asked') && p.emails.length > 0
+  const askable = (p: Player) => (state(p) === 'new' || state(p) === 'asked' || state(p) === 'scheduled') && p.emails.length > 0
   const pickedList = players.filter(p => picked.has(p.id))
   const pickedResend = pickedList.some(p => state(p) === 'asked')
 
@@ -78,13 +84,22 @@ export default function SocialPhotos() {
     finally { setTesting(false) }
   }
 
+  async function unschedule(p: Player) {
+    try {
+      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cancelIds: [p.id] }) })
+      if (!r.ok) { toast.error('Could not cancel'); return }
+      toast.success(`${p.playerName.split(' ')[0]} taken off the schedule`); setTick(t => t + 1)
+    } catch { toast.error('Could not cancel') }
+  }
+
   async function send() {
     setSending(true)
     try {
-      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [...picked], resend: pickedResend }) })
+      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [...picked], resend: pickedResend, ...(later ? { sendAt: new Date(sendAt).toISOString() } : {}) }) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { toast.error(j.error || 'Could not send'); return }
-      toast.success(`Asked ${j.sent} famil${j.sent === 1 ? 'y' : 'ies'}`)
+      if (later) toast.success(`Scheduled ${j.scheduled} for ${when(j.sendAt)}`)
+      else toast.success(`Asked ${j.sent} famil${j.sent === 1 ? 'y' : 'ies'}`)
       if (j.errors?.length) toast.error(`${j.errors.length} didn't send: ${j.errors[0]}`)
       else if (j.skipped?.length) toast(`${j.skipped.length} skipped: ${j.skipped[0]}`)
       setPicked(new Set()); setConfirm(false); setTick(t => t + 1)
@@ -102,13 +117,13 @@ export default function SocialPhotos() {
             <h1 className="text-lg font-bold text-slate-900 leading-tight">Photos for social</h1>
             <p className="text-xs text-slate-500">Pick the best player cards and ask the families. Only post the ones marked Yes.</p>
           </div>
-          <button type="button" disabled={!picked.size || !emailReady} onClick={() => setConfirm(true)}
+          <button type="button" disabled={!picked.size || !emailReady} onClick={() => { setSendAt(tomorrowMorning()); setConfirm(true) }}
             className="sm:ml-auto inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2.5 disabled:opacity-40">
             <Send size={15} /> Ask permission{picked.size ? ` (${picked.size})` : ''}
           </button>
         </div>
         <div className="max-w-6xl mx-auto px-4 pb-3 flex flex-wrap gap-2">
-          {(['all', 'new', 'asked', 'yes', 'no'] as Filter[]).map(f => (
+          {(['all', 'new', 'scheduled', 'asked', 'yes', 'no'] as Filter[]).map(f => (
             <button key={f} type="button" onClick={() => setFilter(f)}
               className={`text-xs font-semibold rounded-full px-3 py-1.5 border ${filter === f ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
               {f === 'all' ? 'All' : CHIP[f].label.split(' ·')[0]} <span className="opacity-70">{counts[f]}</span>
@@ -123,6 +138,11 @@ export default function SocialPhotos() {
         {error && <p className="text-sm text-rose-700">{error}</p>}
         {!loading && !error && !shown.length && (
           <p className="text-sm text-slate-500">{players.length ? 'No players in this group.' : 'No player has added a photo for this event yet.'}</p>
+        )}
+        {counts.yes > 0 && filter !== 'yes' && (
+          <button type="button" onClick={() => setFilter('yes')} className="mb-4 w-full text-left rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 hover:bg-emerald-100">
+            <strong>{counts.yes} famil{counts.yes === 1 ? 'y has' : 'ies have'} said yes.</strong> Tap to see the cards that are cleared to post, with the handles to tag.
+          </button>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {shown.map(p => {
@@ -140,8 +160,9 @@ export default function SocialPhotos() {
                   <div className="font-semibold text-slate-900 text-sm truncate">{p.playerName}{p.jersey ? ` #${p.jersey}` : ''}</div>
                   <div className="text-xs text-slate-500 truncate">{p.teamName || p.clubName}</div>
                   <span className={`self-start text-[11px] font-semibold rounded-full px-2 py-0.5 ${CHIP[st].cls}`}>
-                    {CHIP[st].label}{st === 'asked' ? ` · ${day(p.askAt)}` : (st === 'yes' || st === 'no') ? ` · ${day(p.okAt)}` : ''}
+                    {CHIP[st].label}{st === 'scheduled' ? ` · ${when(p.schedAt)}` : st === 'asked' ? ` · ${day(p.askAt)}` : (st === 'yes' || st === 'no') ? ` · ${day(p.okAt)}` : ''}
                   </span>
+                  {st === 'scheduled' && <button type="button" onClick={() => unschedule(p)} className="self-start text-[11px] text-slate-500 underline underline-offset-2">Cancel scheduled email</button>}
                   {st === 'yes' && p.okName && <div className="text-[11px] text-slate-500 truncate">By {p.okName}</div>}
                   {st === 'yes' && p.instagram && <a href={`https://instagram.com/${p.instagram.replace(/^@/, '')}`} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-teal-700 truncate">Tag {p.instagram}</a>}
                   {st === 'yes' && p.clubInstagram && <a href={`https://instagram.com/${p.clubInstagram.replace(/^@/, '')}`} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-teal-700 truncate">Club IG {p.clubInstagram}</a>}
@@ -175,11 +196,24 @@ export default function SocialPhotos() {
               <p className="text-slate-500">Rather not? Choose No or ignore the email, and it won't be posted.</p>
             </div>
             <p className="text-xs text-slate-500 mt-2">Send me a test emails you the real letter for {pickedList[0]?.playerName || 'the first player'}. Its link works but saves nothing, and the family isn't contacted.</p>
+            <div className="mt-4 rounded-lg border border-slate-200 p-3">
+              <div className="flex gap-2" role="group" aria-label="When to send">
+                <button type="button" onClick={() => setLater(false)} aria-pressed={!later} className={`flex-1 text-sm rounded-md px-3 py-1.5 border ${!later ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 text-slate-600'}`}>Send now</button>
+                <button type="button" onClick={() => setLater(true)} aria-pressed={later} className={`flex-1 text-sm rounded-md px-3 py-1.5 border ${later ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 text-slate-600'}`}>Schedule</button>
+              </div>
+              {later && (
+                <div className="mt-3">
+                  <label htmlFor="sp-send-at" className="block text-xs font-medium text-slate-600 mb-1">Send on</label>
+                  <input id="sp-send-at" type="datetime-local" value={sendAt} onChange={e => setSendAt(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                  <p className="text-xs text-slate-500 mt-1">Goes out within 15 minutes of that time. You'll get an email when it's sent. To spread them over the week, schedule a few players at a time on different days.</p>
+                </div>
+              )}
+            </div>
             {pickedResend && <p className="text-xs text-amber-700 mt-2">Some of these were already asked. They'll get the email again.</p>}
             <div className="mt-4 flex gap-2 justify-end">
               <button type="button" onClick={sendTest} disabled={testing || sending} className="mr-auto text-sm rounded-lg border border-teal-600 text-teal-700 px-4 py-2 disabled:opacity-50">{testing ? 'Sending test…' : `Send me a test (${pickedList[0]?.playerName.split(' ')[0] || ''})`}</button>
               <button type="button" onClick={() => setConfirm(false)} className="text-sm rounded-lg border border-slate-300 px-4 py-2 text-slate-700">Cancel</button>
-              <button type="button" onClick={send} disabled={sending} className="text-sm rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold px-4 py-2 disabled:opacity-50">{sending ? 'Sending…' : `Send ${pickedList.length} email${pickedList.length === 1 ? '' : 's'}`}</button>
+              <button type="button" onClick={send} disabled={sending} className="text-sm rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold px-4 py-2 disabled:opacity-50">{sending ? (later ? 'Scheduling…' : 'Sending…') : `${later ? 'Schedule' : 'Send'} ${pickedList.length} email${pickedList.length === 1 ? '' : 's'}`}</button>
             </div>
           </div>
         </div>

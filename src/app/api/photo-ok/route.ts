@@ -4,6 +4,7 @@ import { orgById } from '@/lib/org'
 import { playerPassEnabled } from '@/lib/playerPass'
 import { readPhotoToken, firstName, photoPermissionText, instagramHandle, facebookPage } from '@/lib/photoConsent'
 import { prisma } from '@/lib/db'
+import { sendPushToOrg } from '@/lib/push'
 
 // Public: a parent answering "may we share this photo on social media?"
 // (lib/photoConsent). No login -- the signed token in the emailed link is the
@@ -76,5 +77,17 @@ export async function POST(req: NextRequest) {
     // with spaces) is kept as typed so staff can still look it up.
     photoClubFb: answer === 'yes' ? (facebookPage(body.clubFacebook) || String(body.clubFacebook || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 80)) : '',
   }, `parent (photo permission): ${name || 'no name given'}`)
+  // Staff phones (the same alerts as new registrations): a yes is what they're
+  // waiting on to post.
+  if (answer === 'yes') {
+    const d = hit.s.data || {}
+    const tags = [instagramHandle(body.instagram), instagramHandle(body.clubInstagram)].filter(Boolean).join(' ')
+    await sendPushToOrg(hit.t.o, {
+      title: `Photo OK: ${String(d.playerName || 'a player').trim()}`,
+      body: `${name} said yes to posting the player card.${tags ? ` Tag ${tags}.` : ''}`,
+      url: `/tournaments/${String(d.tournamentId || '')}/player-waivers/social`,
+      tag: `photo-ok-${hit.s.id}`,
+    })
+  }
   return NextResponse.json({ ok: true, answer, instagram: answer === 'yes' ? instagramHandle(body.instagram) : '' })
 }
