@@ -13,6 +13,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
 import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
+import ReelBuilder from './ReelBuilder'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
 import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb, Layers, ArrowLeft, ArrowRight, Music, Pause, Search } from 'lucide-react'
@@ -370,8 +371,8 @@ function SocialInner() {
       {/* drawer */}
       {drawer && <div className="fixed inset-0 z-40 bg-slate-900/40" onClick={() => setDrawer(null)} />}
       <div className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[460px] bg-white border-l border-slate-200 shadow-2xl flex flex-col transition-transform duration-200 ${drawer ? 'translate-x-0' : 'translate-x-full'}`}>
-        {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer post={byId(drawer.id)!} metrics={insights.latest[drawer.id]} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
-        {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || 'blank'} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(drawer.idea?.src === 'chirp' ? { kind: 'chirp' } : null)} onSaved={async () => { setDrawer(null); await load() }} />}
+        {drawer?.kind === 'post' && byId(drawer.id) && <PostDrawer reelEvents={(ideaSrc?.events || []).filter(e => e.end >= localDayKey(new Date()))} reelSite={ideaSrc?.site} post={byId(drawer.id)!} metrics={insights.latest[drawer.id]} siblings={posts.filter(x => x.groupId && x.groupId === byId(drawer.id)!.groupId && x.id !== drawer.id)} queue={queue} mode={drawer.mode} setMode={m => setDrawer({ ...drawer, mode: m })} canApprove={canApprove} onClose={() => setDrawer(null)} onApprove={approve} onPublishNow={publishNow} onPatch={patch} onDelete={remove} />}
+        {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || 'blank'} reelEvents={(ideaSrc?.events || []).filter(e => e.end >= localDayKey(new Date()))} reelSite={ideaSrc?.site} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(drawer.idea?.src === 'chirp' ? { kind: 'chirp' } : null)} onSaved={async () => { setDrawer(null); await load() }} />}
         {drawer?.kind === 'chirp' && <ChirpPanel msgs={chirpMsgs} setMsgs={setChirpMsgs} site={ideaSrc?.site} onClose={() => setDrawer(null)} onDraft={idea => { if (!accounts.length) { toast.error('Connect an account first'); return } draftFromIdea(idea) }} />}
         {drawer?.kind === 'idea' && <IdeaDrawer idea={drawer.idea} canDraft={accounts.length > 0} onClose={() => setDrawer(null)} onDraft={() => draftFromIdea(drawer.idea)} onDismiss={() => { saveIdeaSettings({ dismiss: drawer.idea.key }); setDrawer(null); toast('Idea hidden') }} />}
         {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} queue={queue} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
@@ -615,8 +616,8 @@ function storyTimeFor(t: StoryTiming, feed: Date): Date {
   if (t.mode === 'custom') return t.at
   return feed
 }
-interface EditProps { song?: Song | null; setSong?: (s: Song | null) => void; slides?: Media[]; setSlides?: (s: Media[]) => void; storyTiming?: StoryTiming; setStoryTiming?: (t: StoryTiming) => void; aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
-function EditFields({ song, setSong, slides, setSlides, storyTiming, setStoryTiming, aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
+interface EditProps { reelEvents?: IdeaEvent[]; reelSite?: string; song?: Song | null; setSong?: (s: Song | null) => void; slides?: Media[]; setSlides?: (s: Media[]) => void; storyTiming?: StoryTiming; setStoryTiming?: (t: StoryTiming) => void; aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
+function EditFields({ reelEvents, reelSite, song, setSong, slides, setSlides, storyTiming, setStoryTiming, aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
   const past = when < new Date()
   const [ai, setAi] = useState<{ open: boolean; brief: string; busy: boolean; options: { label: string; caption: string }[]; hashtags: string }>({ open: !!aiInit, brief: aiInit || '', busy: false, options: [], hashtags: '' })
   const plats = platforms || (accounts ? Array.from(new Set(accounts.filter(a => acctIds?.includes(a.id)).map(a => a.platform))) : ['instagram'])
@@ -634,6 +635,7 @@ function EditFields({ song, setSong, slides, setSlides, storyTiming, setStoryTim
   const hasIg = !accounts || accounts.some(a => acctIds?.includes(a.id) && a.platform === 'instagram')
   const hasFb = plats.includes('facebook')
   const both = !!placements && placements.includes('feed') && placements.includes('story')
+  const [reelOpen, setReelOpen] = useState(false)
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
   return (
     <>
@@ -646,7 +648,8 @@ function EditFields({ song, setSong, slides, setSlides, storyTiming, setStoryTim
           {(acctIds?.length || 0) > 1 && <div className="text-[11px] text-slate-500 mt-1.5">One post per account — approving one approves the set.</div>}
         </div>
       )}
-      <div><label className={labelCls}>{carousel ? `Carousel · ${slides!.length} slides` : isVideo ? 'Video' : 'Photo or video'}</label><MediaBox media={media} onChange={setMedia} />
+      <div><div className="flex items-center justify-between mb-1.5"><label className={labelCls + ' !mb-0'}>{carousel ? `Carousel · ${slides!.length} slides` : isVideo ? 'Video' : 'Photo or video'}</label><button type="button" onClick={() => setReelOpen(true)} className="inline-flex items-center gap-1 text-xs font-bold rounded-lg px-2 py-1 text-pink-700 hover:bg-pink-50" title="Turn photos into a Reel with music"><Film size={13} /> Make a Reel</button></div><MediaBox media={media} onChange={setMedia} />
+        {reelOpen && <ReelBuilder initialPhotos={(slides || (media ? [media] : [])).filter(x => x.mediaType === 'image').map(x => x.url)} events={reelEvents || []} site={reelSite} onClose={() => setReelOpen(false)} onDone={m => { if (setSlides) setSlides([m]); else setMedia(m); setReelOpen(false) }} />}
         {slides && setSlides && media?.url && !storyOnly && <div className="mt-2"><SlidesStrip slides={slides} setSlides={setSlides} /></div>}
         {carousel && <div className="text-[11px] text-slate-500 mt-1.5 flex flex-col gap-0.5">
           <span>Instagram crops every slide to slide 1's shape — keep them the same size (e.g. all 1080×1350).</span>
@@ -704,7 +707,7 @@ function EditFields({ song, setSong, slides, setSlides, storyTiming, setStoryTim
   )
 }
 
-function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove, onClose, onApprove, onPublishNow, onPatch, onDelete }: { post: Post; metrics?: PostMetrics; siblings: Post[]; queue: QueueInfo; mode: 'preview' | 'edit'; setMode: (m: 'preview' | 'edit') => void; canApprove: boolean; onClose: () => void; onApprove: (p: Post) => void; onPublishNow: (p: Post) => Promise<void>; onPatch: (id: string, body: any, msg?: string) => Promise<boolean>; onDelete: (id: string, msg: string) => void }) {
+function PostDrawer({ reelEvents, reelSite, post, metrics, siblings, queue, mode, setMode, canApprove, onClose, onApprove, onPublishNow, onPatch, onDelete }: { reelEvents?: IdeaEvent[]; reelSite?: string; post: Post; metrics?: PostMetrics; siblings: Post[]; queue: QueueInfo; mode: 'preview' | 'edit'; setMode: (m: 'preview' | 'edit') => void; canApprove: boolean; onClose: () => void; onApprove: (p: Post) => void; onPublishNow: (p: Post) => Promise<void>; onPatch: (id: string, body: any, msg?: string) => Promise<boolean>; onDelete: (id: string, msg: string) => void }) {
   const [caption, setCaption] = useState(post.caption)
   const [firstComment, setFirstComment] = useState(post.firstComment || '')
   const [confirmNow, setConfirmNow] = useState(false); const [publishing, setPublishing] = useState(false)
@@ -735,7 +738,7 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5">
         {statusLine}
         {mode === 'preview' || !editable ? <NativePreview platform={a.platform} label={a.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType || post.mediaType} placement={post.placement} poster={med?.thumbnailUrl} slides={slides} song={song} />
-          : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
+          : <EditFields platforms={[a.platform]} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} queue={queue} showFirstComment={a.platform === 'instagram'} storyOnly={isStory} />}
         {post.status === 'published' && (metrics
           ? <div className="grid grid-cols-4 gap-2">{[['Reached', metrics.reach], ['Likes', metrics.likes], ['Comments', metrics.comments], [a.platform === 'instagram' ? 'Saves' : 'Shares', a.platform === 'instagram' ? metrics.saves : metrics.shares]].map(([l, v]) => <div key={String(l)} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2"><div className="text-lg font-extrabold tabular-nums">{fmtNum(Number(v))}</div><div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{l}</div></div>)}<div className="col-span-4 text-[11px] text-slate-500">Insights as of {fmtDate(new Date(metrics.fetchedAt))} {fmtTime(new Date(metrics.fetchedAt))} · refreshes every 4 hours</div></div>
           : <div className="text-xs text-slate-500">No insights yet — the next snapshot runs within 4 hours.</div>)}
@@ -760,7 +763,7 @@ function PostDrawer({ post, metrics, siblings, queue, mode, setMode, canApprove,
   )
 }
 
-function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose, onSaved }: { when: Date; idea?: Idea; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
+function ComposeDrawer({ reelEvents, reelSite, when: init, idea, accounts, queue, canApprove, onClose, onSaved }: { reelEvents?: IdeaEvent[]; reelSite?: string; when: Date; idea?: Idea; accounts: Account[]; queue: QueueInfo; canApprove: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
   const [caption, setCaption] = useState(''); const [firstComment, setFirstComment] = useState(''); const [when, setWhen] = useState(init); const [slides, setSlides] = useState<Media[]>([]); const med: Media | undefined = slides[0]; const setMed = (m: Media) => setSlides([m, ...slides.slice(1)]); const [storyTiming, setStoryTiming] = useState<StoryTiming>({ mode: 'same' }); const [song, setSong] = useState<Song | null>(null); const [placements, setPlacements] = useState<Placement[]>(idea?.weight === 'story' ? ['story'] : ['feed']); const [acctIds, setAcctIds] = useState<string[]>(accounts.map(a => a.id)); const [busy, setBusy] = useState(false)
   const img = med?.url; const storyOnly = placements.length === 1 && placements[0] === 'story'
   const nextQueue = queue.next.map(s => new Date(s)).find(d => d > new Date())
@@ -794,7 +797,7 @@ function ComposeDrawer({ when: init, idea, accounts, queue, canApprove, onClose,
           {placements.includes('feed') && <div><div className={labelCls}>{slides.length > 1 ? 'Carousel' : med?.mediaType === 'video' && previewAcct.platform === 'instagram' ? 'Reel' : 'Feed post'} · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption={caption} imgSrc={img} when={when} mediaType={med?.mediaType} placement="feed" poster={med?.thumbnailUrl} slides={slides} song={previewAcct.platform === 'instagram' && slides.length === 1 ? song : null} /></div>}
           {placements.includes('story') && <div><div className={labelCls}>Story · {previewAcct.label}</div><NativePreview platform={previewAcct.platform} label={previewAcct.label} caption="" imgSrc={img} when={when} mediaType={med?.mediaType} placement="story" poster={med?.thumbnailUrl} /></div>}
           {firstComment && placements.includes('feed') && <div className="text-xs text-slate-500"><span className="font-bold uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{firstComment}</div>}
-        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
+        </> : <>{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">

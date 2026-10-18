@@ -253,6 +253,18 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   the audio endpoints, so Connect now also stores the long-lived user token
   (AppSetting `socialUserToken:{orgId}`, encrypted); search tries the Page token
   first. If search errors, reconnect Instagram once.
+- **Make a Reel (Oct 18)** — "Make a Reel" on the compose/edit media box opens
+  `ReelBuilder.tsx`: up to 10 photos (pre-filled from the post's photos) + headline +
+  small line + optional end card for an upcoming event + pace (2/4/6 beats per photo,
+  so cuts land on the beat) + music → a 1080×1920 MP4 recorded in the browser
+  (canvas + Web Audio → MediaRecorder, the same approach as src/components/ReelMaker.tsx;
+  nothing renders on Vercel), uploaded via the existing Blob route and dropped in as
+  the post's video. Music: five original tracks in public/social-music (synthesized
+  from scratch by scripts/make-social-music.py — no samples, nothing to license), the
+  user's own MP3, or none (then add an Instagram song on the post). Before upload the
+  file is checked for H.264 + AAC sample entries; browsers that record other codecs
+  (e.g. Chromium without proprietary codecs) get told to use Chrome or Safari instead
+  of uploading a file Instagram would reject.
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages
