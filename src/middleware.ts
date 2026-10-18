@@ -6,7 +6,7 @@ import { LEGAL_PATHS, isLegalPath } from './lib/legalRoutes'
 import { orgSlugForHost, hostOnly, LEGACY_REDIRECTS, LEGACY_JUNK_PREFIXES, ORG_ICON_SLUGS, ORG_ICON_FILES, aliasRedirectForHost } from './lib/orgDomains'
 import { orgScoped } from './lib/orgScope'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm', '/confirm-games', '/share', '/guides', ...LEGAL_PATHS]  // /privacy + /terms = the privacy policy and terms of use (Intuit's QuickBooks review links to them); /housing/[code] = housing board; /confirm/[regId] = club team-confirmation (the id IS the key, like /pay); /confirm-games/[token] = an official confirming their games (lib/officialConfirm; already covered by '/confirm', named so a tighter '/confirm' can't lock officials out); /share/[regId] = ready-made messages a director sends their own families (same key model, and they often have no account yet)  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
+const PUBLIC_ROUTES = ['/unavailable', '/login', '/register', '/o/', '/forgot', '/reset', '/find', '/invite', '/join', '/verify', '/housing', '/confirm', '/confirm-games', '/share', '/guides', ...LEGAL_PATHS]  // /privacy + /terms = the privacy policy and terms of use (Intuit's QuickBooks review links to them); /housing/[code] = housing board; /confirm/[regId] = club team-confirmation (the id IS the key, like /pay); /confirm-games/[token] = an official confirming their games (lib/officialConfirm; already covered by '/confirm', named so a tighter '/confirm' can't lock officials out); /share/[regId] = ready-made messages a director sends their own families (same key model, and they often have no account yet)  // /o/[slug] = public org website; forgot/reset = password recovery; /find = public look-up; /invite + /join = staff signup links (recipients have NO account yet — the pages are token/code-gated themselves)
 const ALL_ROLES_ROUTES = ['/profile', '/api/profile', '/api/auth', '/dashboard/', '/unauthorized', '/switch-org']
 // Tournament pages that need no login. The pretty-URL block below tests against
 // this same list: a public page keeps its short URL via a rewrite, and anything
@@ -56,6 +56,30 @@ async function eventOrg(req: NextRequest, id: string): Promise<string | null | u
     eventOrgs.set(id, { org, at: Date.now() })
     return org
   } catch { return undefined }
+}
+
+// Archived organizations (lib/orgArchive) are offline: their public site and their
+// events' public pages show /unavailable. Read at most once a minute per instance, and
+// only on those public pages; a failed read takes nothing offline.
+const ARCHIVED_MS = 60_000
+let archived: { at: number; slugs: Set<string>; tids: Set<string> } | null = null
+async function archivedLists(req: NextRequest): Promise<{ slugs: Set<string>; tids: Set<string> }> {
+  if (archived && Date.now() - archived.at < ARCHIVED_MS) return archived
+  let slugs = new Set<string>(), tids = new Set<string>()
+  try {
+    const r = await fetch(new URL('/api/archived-orgs', req.url))
+    const d = r.ok ? await r.json() : null
+    slugs = new Set(((d?.slugs ?? []) as unknown[]).map(s => String(s).toLowerCase()))
+    tids = new Set(((d?.tournamentIds ?? []) as unknown[]).map(String))
+  } catch { /* nothing offline */ }
+  archived = { at: Date.now(), slugs, tids }
+  return archived
+}
+function unavailable(req: NextRequest): NextResponse {
+  const url = req.nextUrl.clone()
+  url.pathname = '/unavailable'
+  url.search = ''
+  return NextResponse.rewrite(url)
 }
 
 /** The event's organization when it isn't the one this login is working in. */
@@ -139,6 +163,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/invite') || pathname.startsWith('/join') || pathname.startsWith('/housing') || pathname.startsWith('/confirm') || pathname.startsWith('/unauthorized') || pathname.startsWith('/switch-org') || pathname.startsWith('/staff') || pathname.startsWith('/pay') || pathname.startsWith('/pass') || pathname.startsWith('/coach') || pathname.startsWith('/vendor') || pathname.startsWith('/media') || pathname.startsWith('/claim') || pathname.startsWith('/share') ||
       isLegalPath(pathname)
     if (!passthrough) {
+      if ((await archivedLists(req)).slugs.has(customSlug.toLowerCase())) return unavailable(req)
       const url = req.nextUrl.clone()
       url.pathname = `/o/${customSlug}${pathname === '/' ? '' : pathname}`
       return NextResponse.rewrite(url)
@@ -160,6 +185,7 @@ export async function middleware(req: NextRequest) {
         // scheduling grid at /tournaments/<id>.
         const target = `/tournaments/${id}${pretty[2] || '/event'}`
         if (PUBLIC_TOURNAMENT_PATH.test(target)) {
+          if ((await archivedLists(req)).tids.has(String(id))) return unavailable(req)
           const url = req.nextUrl.clone()
           url.pathname = target
           return NextResponse.rewrite(url)   // URL stays pretty
@@ -171,6 +197,9 @@ export async function middleware(req: NextRequest) {
     } catch { /* resolver down -- fall through rather than blocking the request */ }
   }
 
+  // An archived organization's public site (lib/orgArchive).
+  const orgSite = /^\/o\/([^/]+)/.exec(pathname)
+  if (orgSite && (await archivedLists(req)).slugs.has(orgSite[1].toLowerCase())) return unavailable(req)
   // Always allow public routes, auth API, and all other API routes (they handle own auth)
   if (PUBLIC_ROUTES.some(r => pathname.startsWith(r))) return NextResponse.next()
   // A field director works only the events assigned to them (lib/fieldDirector; the
@@ -203,7 +232,11 @@ export async function middleware(req: NextRequest) {
   // share with players. It's a 5-line redirect to /register/individual (which IS
   // public) -- but it was never listed here, so this gate fired BEFORE the redirect
   // could run and every player who clicked the advertised link landed on /login.
-  if (PUBLIC_TOURNAMENT_PATH.test(pathname)) return NextResponse.next()
+  if (PUBLIC_TOURNAMENT_PATH.test(pathname)) {
+    const ev = /^\/tournaments\/([^/]+)\//.exec(pathname)
+    if (ev && (await archivedLists(req)).tids.has(ev[1])) return unavailable(req)   // an archived organization's event
+    return NextResponse.next()
+  }
   // "Claim your team" — MUST be public: the coach following this link has no account
   // yet (creating one is the whole point). The token in the URL is the authorization.
   if (/^\/claim(\/|$)/.test(pathname)) return NextResponse.next()

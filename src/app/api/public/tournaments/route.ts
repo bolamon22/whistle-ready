@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { archivedTournamentIds } from '@/lib/orgArchive'
 
 // Public tournament directory for the whistleready.app landing "find your
 // tournament" look-up. No auth — attendees (coaches, parents, players,
@@ -25,7 +26,9 @@ export async function GET() {
         startDate: true, endDate: true, location: true, logoUrl: true,
       },
     })
-    return NextResponse.json(rows)
+    // An archived organization's events are offline (lib/orgArchive).
+    const closed = await archivedTournamentIds()
+    return NextResponse.json(closed.size ? rows.filter(r => !closed.has(r.id)) : rows)
   } catch (e) {
     console.error('[public/tournaments]', e)
     return NextResponse.json([], { status: 200 })

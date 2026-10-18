@@ -4,6 +4,7 @@ import { orgAbs, tournamentAbs } from '@/lib/seo'
 import { ORG_DOMAINS } from '@/lib/orgDomains'
 import { BRAND, BRAND_FAQ } from '@/lib/brandFaq'
 import { GUIDES } from '@/lib/guides'
+import { archivedOrgIds } from '@/lib/orgArchive'
 
 // llms.txt — the plain-text site summary answer engines read.
 //
@@ -34,7 +35,8 @@ export async function GET() {
     const r = orgSlugForHost
       ? await client.execute({ sql: 'SELECT id, name, slug FROM "Organization" WHERE slug = ?', args: [orgSlugForHost] })
       : await client.execute('SELECT id, name, slug FROM "Organization"')
-    orgs = r.rows as any[]
+    const closed = await archivedOrgIds()   // offline (lib/orgArchive)
+    orgs = (r.rows as any[]).filter(o => !closed.has(String(o.id)))
   } catch { /* fall through to the generic body below */ }
 
   const single = orgSlugForHost ? orgs[0] : null

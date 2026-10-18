@@ -5,6 +5,7 @@ import { orgAbs, tournamentAbs } from '@/lib/seo'
 import { ORG_DOMAINS, DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 import { SITE_URL } from '@/lib/seo'
 import { GUIDES } from '@/lib/guides'
+import { archivedOrgIds } from '@/lib/orgArchive'
 
 export const dynamic = 'force-dynamic'
 function db() { return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }) }
@@ -36,8 +37,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const orgs = await client.execute('SELECT id, slug FROM "Organization"')
 
     const included = new Set<string>()
+    const closed = await archivedOrgIds()   // offline (lib/orgArchive)
     for (const row of orgs.rows as any[]) {
       const slug = String(row.slug || ''); if (!slug) continue
+      if (closed.has(String(row.id))) continue
       orgSlugById[String(row.id)] = slug
       // On an org's own domain: that org only. On whistleready.app: only orgs
       // without a custom domain, so no entry is ever cross-host.
