@@ -32,7 +32,7 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
   initialSong?: string
   /** The social scheduler: hand the finished Reel (MP4) and a cover frame straight to
    *  a post instead of saving the file. Resolves once it's uploaded. */
-  onUse?: (video: Blob, poster: Blob | null, durationSec: number) => Promise<void> }
+  onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean }) => Promise<void> }
 
 const loadImg = (url: string) => new Promise<HTMLImageElement | null>(res => {
   if (!url) return res(null)
@@ -186,7 +186,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
   const [using, setUsing] = useState(false)
   const [ownFile, setOwnFile] = useState<File | null>(null)
   const ownUrl = useRef('')
-  const songUrl = song === 'none' ? '' : song === 'own' ? ownUrl.current : trackUrl(song)
+  // 'ig' (scheduler only): record without music; the post adds an Instagram song when it publishes.
+  const songUrl = song === 'none' || song === 'ig' ? '' : song === 'own' ? ownUrl.current : trackUrl(song)
   const [showVideo, setShowVideo] = useState(false)   // after recording: the real video, with sound, instead of the silent loop
   const [err, setErr] = useState('')
 
@@ -323,7 +324,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     setUsing(true); setErr('')
     try {
       const codecs = out?.ext === 'mp4' ? await mp4Codecs(blob) : { h264: false, aac: false }
-      if (!codecs.h264 || (song !== 'none' && !codecs.aac)) {
+      if (!codecs.h264 || (song !== 'none' && song !== 'ig' && !codecs.aac)) {
         setErr("This browser saved the video in a format Instagram won't accept. Make the Reel in Chrome on a computer, or Safari.")
         return
       }
@@ -334,7 +335,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
         poster = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.86))
         loop()
       }
-      await onUse(blob, poster, dur)
+      await onUse(blob, poster, dur, { igSong: song === 'ig' })
     } catch (e: any) {
       setErr(String(e?.message || 'Upload failed'))
     } finally { setUsing(false) }
@@ -361,6 +362,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
               <span className="font-semibold shrink-0">Song</span>
               <select value={song} onChange={e => setSong(e.target.value)} disabled={playing}
                 className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+                {onUse && <option value="ig">Instagram trending song (pick it on the post)</option>}
                 {REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.title} · {x.mood}</option>)}
                 {ownFile && <option value="own">{ownFile.name} (your file)</option>}
                 <option value="none">No music</option>
@@ -393,6 +395,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
           {out && state !== 'recording' && (
             <a href={out.url} download={`${fileName}.${out.ext}`} className="w-full rounded-lg border border-teal-600 text-teal-700 font-semibold py-2.5 inline-flex items-center justify-center gap-2"><Download size={16} /> Save {out.ext.toUpperCase()}</a>
           )}
+          {song === 'ig' && <p className="text-xs text-pink-700">The Reel is made without music. On the post, pick a song from Instagram's trending list; Instagram adds it when it publishes.</p>}
           <p className="text-xs text-slate-500">The preview loops silently; press Play with sound to hear it with the music. After you make the Reel, the finished video plays here with sound before you save it. To use a trending sound instead, lower it in Instagram when you post. Post only once the family says Yes.</p>
         </div>
       </div>

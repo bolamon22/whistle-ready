@@ -18,7 +18,7 @@ import PlayersTray, { planList, type ClearedData } from './PlayersTray'
 import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
 import ReelMaker from '@/components/ReelMaker'
 import { POST_STYLES } from '@/lib/socialPosts'
-import { lookFor, daysUntil, playerCaption, rollCallCaption, collabFor, songFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
+import { lookFor, daysUntil, playerCaption, rollCallCaption, collabFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
 import { ChevronLeft, ChevronRight, Plus, X, Link2, ThumbsUp, Instagram, Facebook, Image as ImageIcon, Heart, MessageCircle, Send, Check, AlertTriangle, Trash2, RotateCcw, Zap, ListPlus, Clock, ExternalLink, Download, Play, Film, Sparkles, Lightbulb, Layers, ArrowLeft, ArrowRight, Music, Pause, Search } from 'lucide-react'
@@ -40,6 +40,8 @@ interface ComposeSeed {
   storyUrl?: string
   placements: Placement[]; storyTiming: StoryTiming; collab: string[]; player: PostPlayerLink
   note: string; dayKey: string; countdown: boolean
+  /** Reel made without music: open Instagram's trending songs on the post. */
+  pickSong?: boolean
 }
 // An Instagram song on a Reel (Meta Audio API; src/lib/socialAudio.ts).
 type Song = { audioId: string; title: string; artist: string; cover: string; durationMs: number; audioVolume: number; videoVolume: number; dropped?: string }
@@ -55,7 +57,9 @@ interface QueueInfo { slots: QueueSlot[]; tzOffsetMin: number; next: string[] }
 interface PostMetrics { reach: number; impressions: number; likes: number; comments: number; saves: number; shares: number; interactions: number; fetchedAt: string }
 interface Rollup { reach: number; interactions: number; withData: number; posts: number }
 interface Insights { latest: Record<string, PostMetrics>; window: { days: number; current: Rollup; previous: Rollup } | null }
-type Media = { url: string; mediaType: 'image' | 'video'; thumbnailUrl?: string; durationSec?: number; width?: number; height?: number }
+type Media = { url: string; mediaType: 'image' | 'video'; thumbnailUrl?: string; durationSec?: number; width?: number; height?: number
+  /** Made by our Reel makers with one of our tracks baked in: an Instagram song on top mutes it. */
+  builtIn?: boolean }
 type Placement = 'feed' | 'story'
 interface IdeaSettings { leagues: string[]; show: boolean; dismissed: string[] }
 interface IdeaSource { events: IdeaEvent[]; settings: IdeaSettings; site: string }
@@ -277,15 +281,15 @@ function SocialInner() {
     const when = whenFor(p); setReel({ p, look, when, days: daysAt(p, when) })
   }
   /** ReelMaker hands back the recorded MP4: upload it and open Compose with it. */
-  async function useReel(video: Blob, poster: Blob | null, durationSec: number) {
+  async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean }) {
     if (!reel) return
     const { p, look, when, days } = reel
     const thumbnailUrl = poster ? await uploadJpeg(poster, `${fileSlug(p, look)}-cover.jpg`).catch(() => '') : ''
     const name = `${fileSlug(p, look)}-reel.mp4`
     const up = await blobUpload(name, new File([video], name, { type: 'video/mp4' }), { access: 'public', handleUploadUrl: '/api/social/upload-video' })
     setReel(null)
-    setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', [{ url: up.url, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920 }]) })
-    toast.success('Reel ready — check the post and save it')
+    setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', [{ url: up.url, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920, builtIn: !opts.igSong }], { pickSong: opts.igSong }) })
+    toast.success(opts.igSong ? 'Reel ready — pick a trending song, then save' : 'Reel ready — check the post and save it')
   }
   /** "Plan all cleared players": one feed post + Story per player with nothing
    *  scheduled, each on its own open day before the event, plus a Roll Call carousel
@@ -522,7 +526,7 @@ function SocialInner() {
       {/* a cleared player's Reel: recorded here, then handed to Compose */}
       {reel && <ReelMaker src={postPngUrl(reel.p.token, reel.look, reel.days)} style={reel.look} label={`${firstOf(reel.p.playerName)} · ${lookLabel(reel.look)}`}
         event={reel.p.event.name || 'Game day'} sub={storySub(reel.p)} days={reel.days} fileName={fileSlug(reel.p, reel.look)} token={reel.p.token}
-        initialSong={songFor(reel.p.event.name)} onUse={useReel} onClose={() => setReel(null)} />}
+        initialSong="ig" onUse={useReel} onClose={() => setReel(null)} />}
     </div>
   )
 }
@@ -691,7 +695,7 @@ function MediaBox({ media, onChange }: { media?: Media; onChange: (m: Media) => 
 
 /** Instagram's own music for a Reel. Searches /api/social/audio (trending when
  *  the box is empty), previews a clip, and sets the song + the two volumes. */
-function MusicPicker({ song, setSong }: { song: Song | null; setSong: (s: Song | null) => void }) {
+function MusicPicker({ song, setSong, autoOpen, videoVolume = 30 }: { song: Song | null; setSong: (s: Song | null) => void; autoOpen?: boolean; videoVolume?: number }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -712,6 +716,8 @@ function MusicPicker({ song, setSong }: { song: Song | null; setSong: (s: Song |
     const a = new Audio(url); audioEl.current = a; a.onended = () => setPlaying(''); a.play().then(() => setPlaying(id)).catch(() => toast.error("Couldn't play the preview"))
   }
   const openPicker = () => { setOpen(true); if (!list.length) search('') }
+  // A player Reel made without music opens straight onto Instagram's trending list.
+  useEffect(() => { if (autoOpen && !song) openPicker() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div>
       <label className={labelCls}>Instagram music <span className="normal-case tracking-normal font-semibold text-slate-400">· licensed by Instagram, Reels only</span></label>
@@ -744,7 +750,7 @@ function MusicPicker({ song, setSong }: { song: Song | null; setSong: (s: Song |
                   <span className="relative w-6 h-6 rounded-full bg-black/55 text-white grid place-items-center">{playing === t.audioId ? <Pause size={11} /> : <Play size={11} fill="currentColor" />}</span>
                 </button>
                 <div className="min-w-0 flex-1"><div className="text-xs font-bold truncate">{t.title || 'Untitled'}</div><div className="text-[11px] text-slate-500 truncate">{t.artist}{t.durationMs ? ` · ${mmss(t.durationMs)}` : ''}</div></div>
-                <button type="button" onClick={() => { audioEl.current?.pause(); setPlaying(''); setSong({ audioId: t.audioId, title: t.title, artist: t.artist, cover: t.cover, durationMs: t.durationMs, audioVolume: song?.audioVolume ?? 100, videoVolume: song?.videoVolume ?? 30 }); setOpen(false) }} className="rounded-lg border border-teal-500 text-teal-700 hover:bg-teal-50 text-xs font-bold px-2.5 py-1">Use</button>
+                <button type="button" onClick={() => { audioEl.current?.pause(); setPlaying(''); setSong({ audioId: t.audioId, title: t.title, artist: t.artist, cover: t.cover, durationMs: t.durationMs, audioVolume: song?.audioVolume ?? 100, videoVolume: song?.videoVolume ?? videoVolume }); setOpen(false) }} className="rounded-lg border border-teal-500 text-teal-700 hover:bg-teal-50 text-xs font-bold px-2.5 py-1">Use</button>
               </div>
             ))}
           </div>
@@ -762,8 +768,8 @@ function storyTimeFor(t: StoryTiming, feed: Date): Date {
   if (t.mode === 'custom') return t.at
   return feed
 }
-interface EditProps { reelEvents?: IdeaEvent[]; reelSite?: string; song?: Song | null; setSong?: (s: Song | null) => void; slides?: Media[]; setSlides?: (s: Media[]) => void; storyTiming?: StoryTiming; setStoryTiming?: (t: StoryTiming) => void; aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
-function EditFields({ reelEvents, reelSite, song, setSong, slides, setSlides, storyTiming, setStoryTiming, aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
+interface EditProps { autoSong?: boolean; reelEvents?: IdeaEvent[]; reelSite?: string; song?: Song | null; setSong?: (s: Song | null) => void; slides?: Media[]; setSlides?: (s: Media[]) => void; storyTiming?: StoryTiming; setStoryTiming?: (t: StoryTiming) => void; aiInit?: string; platforms?: string[]; caption: string; setCaption: (s: string) => void; firstComment: string; setFirstComment: (s: string) => void; when: Date; setWhen: (d: Date) => void; media?: Media; setMedia: (m: Media) => void; placements?: Placement[]; setPlacements?: (p: Placement[]) => void; queue: QueueInfo; accounts?: Account[]; acctIds?: string[]; setAcctIds?: (ids: string[]) => void; showFirstComment: boolean; storyOnly?: boolean }
+function EditFields({ autoSong, reelEvents, reelSite, song, setSong, slides, setSlides, storyTiming, setStoryTiming, aiInit, platforms, caption, setCaption, firstComment, setFirstComment, when, setWhen, media, setMedia, placements, setPlacements, queue, accounts, acctIds, setAcctIds, showFirstComment, storyOnly }: EditProps) {
   const past = when < new Date()
   const [ai, setAi] = useState<{ open: boolean; brief: string; busy: boolean; options: { label: string; caption: string }[]; hashtags: string }>({ open: !!aiInit, brief: aiInit || '', busy: false, options: [], hashtags: '' })
   const plats = platforms || (accounts ? Array.from(new Set(accounts.filter(a => acctIds?.includes(a.id)).map(a => a.platform))) : ['instagram'])
@@ -795,7 +801,7 @@ function EditFields({ reelEvents, reelSite, song, setSong, slides, setSlides, st
         </div>
       )}
       <div><div className="flex items-center justify-between mb-1.5"><label className={labelCls + ' !mb-0'}>{carousel ? `Carousel · ${slides!.length} slides` : isVideo ? 'Video' : 'Photo or video'}</label><button type="button" onClick={() => setReelOpen(true)} className="inline-flex items-center gap-1 text-xs font-bold rounded-lg px-2 py-1 text-pink-700 hover:bg-pink-50" title="Turn photos into a Reel with music"><Film size={13} /> Make a Reel</button></div><MediaBox media={media} onChange={setMedia} />
-        {reelOpen && <ReelBuilder initialPhotos={(slides || (media ? [media] : [])).filter(x => x.mediaType === 'image').map(x => x.url)} events={reelEvents || []} site={reelSite} onClose={() => setReelOpen(false)} onDone={m => { if (setSlides) setSlides([m]); else setMedia(m); setReelOpen(false) }} />}
+        {reelOpen && <ReelBuilder initialPhotos={(slides || (media ? [media] : [])).filter(x => x.mediaType === 'image').map(x => x.url)} events={reelEvents || []} site={reelSite} onClose={() => setReelOpen(false)} onDone={r => { const m: Media = { ...r, builtIn: true }; if (setSlides) setSlides([m]); else setMedia(m); setReelOpen(false) }} />}
         {slides && setSlides && media?.url && !storyOnly && <div className="mt-2"><SlidesStrip slides={slides} setSlides={setSlides} /></div>}
         {carousel && <div className="text-[11px] text-slate-500 mt-1.5 flex flex-col gap-0.5">
           <span>Instagram crops every slide to slide 1's shape — keep them the same size (e.g. all 1080×1350).</span>
@@ -811,7 +817,7 @@ function EditFields({ reelEvents, reelSite, song, setSong, slides, setSlides, st
           <div className="text-[11px] text-slate-500 mt-1.5">{isVideo && (media.durationSec || 0) > 60 ? 'Over 60 s, so it can go out as a Reel but not a Story.' : carousel ? 'Pick both and the Story gets slide 1 (a Story takes one photo or video).' : 'Pick both to publish it to the feed and your Story.'}{isVideo && media.width && media.height && Math.abs(media.width / media.height - 9 / 16) > 0.05 ? ` This is ${media.width}×${media.height} — Reels and Stories are 9:16, so it'll show with bars.` : ''}</div>
         </div>
       )}
-      {setSong && isVideo && !carousel && plats.includes('instagram') && !storyOnly && (!placements || placements.includes('feed')) && <MusicPicker song={song || null} setSong={setSong} />}
+      {setSong && isVideo && !carousel && plats.includes('instagram') && !storyOnly && (!placements || placements.includes('feed')) && <MusicPicker song={song || null} setSong={setSong} autoOpen={autoSong} videoVolume={media?.builtIn ? 0 : 30} />}
       {!storyOnly && <div>
         <div className="flex items-center justify-between mb-1.5"><label className={labelCls + ' !mb-0'}>Caption</label><button type="button" onClick={() => setAi(a => ({ ...a, open: !a.open }))} className={`inline-flex items-center gap-1 text-xs font-bold rounded-lg px-2 py-1 ${ai.open ? 'bg-violet-100 text-violet-800' : 'text-violet-700 hover:bg-violet-50'}`}><Sparkles size={13} /> Write with AI</button></div>
         <textarea value={caption} onChange={e => setCaption(e.target.value)} maxLength={2200} rows={5} className={inputCls + ' resize-y leading-snug'} placeholder="Write the caption…" /><div className="text-right text-[11px] text-slate-500 mt-1 tabular-nums">{caption.length}/2200</div>
@@ -958,9 +964,10 @@ function ComposeDrawer({ reelEvents, reelSite, when: init, idea, seed, accounts,
               <div className="text-teal-800/80">{toIg ? 'They get an invite on Instagram; once they accept, the post shows on their profile too. The handles are in the caption either way.' : 'Collab invites are Instagram only. Pick the Instagram account to send them.'}</div>
             </> : seed.collab.length === 0 && seed.player.kind !== 'story' ? <div className="text-teal-800/80">The family didn't give an Instagram handle, so there's no Collab invite.</div> : null}
             {storyMediaUrl && placements.includes('story') && <div className="text-teal-800/80">The Story uses the full-screen 9:16 version.</div>}
+            {seed.pickSong && <div className="text-pink-800 font-semibold">This Reel has no music yet: pick a song from Instagram's trending list below. Instagram adds it to the Reel when it publishes (the Story and Facebook copies stay silent).</div>}
             {seed.countdown && localDayKey(when) !== seed.dayKey && <div className="text-amber-800 font-bold">The countdown on this graphic was made for {fmtDate(new Date(seed.dayKey + 'T12:00:00'))}. Posting on a different day? Make it again from the tray so the number matches.</div>}
           </div>
-        )}{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
+        )}{idea && <IdeaNote idea={idea} onUseStarter={idea.cap && !storyOnly ? () => { setCaption(idea.cap); toast.success('Starter caption added — edit away') } : undefined} />}<EditFields autoSong={!!seed?.pickSong} aiInit={idea?.brief} caption={caption} setCaption={setCaption} firstComment={firstComment} setFirstComment={setFirstComment} when={when} setWhen={setWhen} media={med} setMedia={setMed} slides={slides} setSlides={setSlides} song={song} setSong={setSong} reelEvents={reelEvents} reelSite={reelSite} storyTiming={storyTiming} setStoryTiming={setStoryTiming} placements={placements} setPlacements={setPlacements} storyOnly={storyOnly} queue={queue} accounts={accounts} acctIds={acctIds} setAcctIds={setAcctIds} showFirstComment={accounts.some(a => acctIds.includes(a.id) && a.platform === 'instagram')} /></>}
         <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs px-3 py-2.5 flex gap-2"><AlertTriangle size={14} className="flex-none mt-px" />{canApprove ? 'Save as a draft to review later, or approve now and it publishes itself at the scheduled time.' : 'Saves as a draft. A director approves it before the automation will publish it.'}</div>
       </div>
       <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2">
