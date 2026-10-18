@@ -15,6 +15,7 @@ import { normalizeReel } from '@/lib/normalizeReel'
 import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ReelBuilder from './ReelBuilder'
+import MusicDrawer from './MusicDrawer'
 import PlayersTray, { planList, type ClearedData, type ReelDraft } from './PlayersTray'
 import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
 import ReelMaker, { type ReelSetup } from '@/components/ReelMaker'
@@ -137,7 +138,7 @@ function SocialInner() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'queue' | 'insights'>('week')
   const [rangeStart, setRangeStart] = useState(() => startOfWeek(new Date()))
-  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date; idea?: Idea; seed?: ComposeSeed } | { kind: 'idea'; idea: Idea } | { kind: 'chirp' } | { kind: 'accounts' } | null>(null)
+  const [drawer, setDrawer] = useState<{ kind: 'post'; id: string; mode: 'preview' | 'edit' } | { kind: 'new'; when: Date; idea?: Idea; seed?: ComposeSeed } | { kind: 'idea'; idea: Idea } | { kind: 'chirp' } | { kind: 'accounts' } | { kind: 'music' } | null>(null)
   const [ideaSrc, setIdeaSrc] = useState<IdeaSource | null>(null)
   const [fitFor, setFitFor] = useState<string>('')
   const [chirpMsgs, setChirpMsgs] = useState<ChirpMsg[]>([])
@@ -438,6 +439,7 @@ function SocialInner() {
             <div className="min-w-0"><div className="font-extrabold text-sm leading-tight">Social scheduler</div><div className="text-xs text-slate-500 truncate hidden sm:block">Instagram &amp; Facebook · approve once, it publishes itself</div></div>
           </div>
           <div className="flex items-center gap-2">
+          <button onClick={() => setDrawer({ kind: 'music' })} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 text-slate-800 font-bold text-sm px-3 py-2.5" title="Your music for Reels: add, rename, sort into categories"><Music size={15} className="text-teal-700" /> <span className="hidden sm:inline">Music</span></button>
           <button onClick={() => setDrawer({ kind: 'chirp' })} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 text-slate-800 font-bold text-sm pl-1.5 pr-3 py-1.5" title="Brainstorm post ideas with Chirp"><ChirpAvatar size={26} /> <span className="hidden sm:inline">Ask Chirp</span><span className="sm:hidden">Chirp</span></button>
           <button onClick={() => newPostOn(addDays(today, 1))} disabled={!accounts.length} className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm px-4 py-2.5 disabled:opacity-40"><Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">Create post</span><span className="sm:hidden">Post</span></button>
           </div>
@@ -594,6 +596,7 @@ function SocialInner() {
         {drawer?.kind === 'new' && <ComposeDrawer key={drawer.idea?.key || drawer.seed?.key || 'blank'} seed={drawer.seed} reelEvents={(ideaSrc?.events || []).filter(e => e.end >= localDayKey(new Date()))} reelSite={ideaSrc?.site} when={drawer.when} idea={drawer.idea} accounts={accounts} queue={queue} canApprove={canApprove} onClose={() => setDrawer(drawer.idea?.src === 'chirp' ? { kind: 'chirp' } : null)} onSaved={async () => { setDrawer(null); await load() }} />}
         {drawer?.kind === 'chirp' && <ChirpPanel msgs={chirpMsgs} setMsgs={setChirpMsgs} site={ideaSrc?.site} onClose={() => setDrawer(null)} onDraft={idea => { if (!accounts.length) { toast.error('Connect an account first'); return } draftFromIdea(idea) }} />}
         {drawer?.kind === 'idea' && <IdeaDrawer idea={drawer.idea} canDraft={accounts.length > 0} onClose={() => setDrawer(null)} onDraft={() => draftFromIdea(drawer.idea)} onDismiss={() => { saveIdeaSettings({ dismiss: drawer.idea.key }); setDrawer(null); toast('Idea hidden') }} />}
+        {drawer?.kind === 'music' && <MusicDrawer onClose={() => setDrawer(null)} />}
         {drawer?.kind === 'accounts' && <AccountsDrawer accounts={accounts} configured={configured} queue={queue} canManage={canApprove} onClose={() => setDrawer(null)} onChanged={load} />}
       </div>
 

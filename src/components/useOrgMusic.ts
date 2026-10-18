@@ -32,5 +32,13 @@ export function useOrgMusic() {
     setTracks(j.tracks)
   }, [])
 
-  return { tracks, add, remove }
+  /** Rename or re-file a track. */
+  const update = useCallback(async (id: string, patch: { title?: string; category?: string }) => {
+    const r = await fetch('/api/social/music', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) })
+    const j = await r.json().catch(() => ({} as any))
+    if (!r.ok) throw new Error(j.error || 'Could not save it')
+    setTracks(j.tracks)
+  }, [])
+
+  return { tracks, add, remove, update }
 }
