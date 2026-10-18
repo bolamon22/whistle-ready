@@ -4,6 +4,7 @@ import { requireStaff, eventGate, orgGate, viewer } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { notifyFinal } from '@/lib/finalAlerts'
 import { ownClubTeams, isOwnClubGame, ownClubRefusal } from '@/lib/ownClub'
+import { actorOf, gameMoveChanges, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
 
 // Middleware lets every /api/* request through, so the gate has to live here.
 // Without it this route rewrote or deleted any game by id with no login at all —
@@ -54,6 +55,10 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   if (before && ((b.score1 !== undefined && asScore(b.score1) !== before.score1) || (b.score2 !== undefined && asScore(b.score2) !== before.score2))) {
     const refused = await ownClubRefusal(gate, before.tournamentId, [before.team1, before.team2, b.team1, b.team2]); if (refused) return refused
   }
+  // A move, cancel or renumber is told to the officials on it once their crew is
+  // published (lib/officialChangeAlerts). Score saves skip the extra read.
+  const moves = ['date', 'startTime', 'location', 'isCanceled', 'gameNumber'].some(k => b[k] !== undefined)
+  const was = moves ? await prisma.game.findUnique({ where: { id: params.id }, include: { assignments: { select: { workerId: true, role: true } } } }) : null
   const updated = await prisma.game.update({ where:{id:params.id}, data:{
     // null and '' both mean "no score". Number(null) is 0, so the old ''-only check
     // turned the Scores page's empty box (it sends null) into a 0 -- filling in the
@@ -84,6 +89,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   if (before && b.provisional !== true) {
     await notifyFinal(before, { ...updated, url: `/tournaments/${updated.tournamentId}/public/games/${updated.id}` })
   }
+  if (was) await sendOfficialChanges(updated.tournamentId, gameMoveChanges(was, updated), actorOf(gate))
   return NextResponse.json(updated)
 }
 
@@ -91,7 +97,12 @@ export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   if (gate.role === 'assigner' || gate.role === 'field_director') return NextResponse.json({ error: 'Only the scheduler or director can delete games.' }, { status: 403 })
   const away = await otherOrg(gate, params.id); if (away) return away
+  const was = await prisma.game.findUnique({ where: { id: params.id }, include: { assignments: { select: { workerId: true, role: true } } } })
   await prisma.game.delete({ where:{id:params.id} })
+  if (was?.assignments.length) {
+    const spot = spotOf(was)
+    await sendOfficialChanges(was.tournamentId, was.assignments.map((a): OfficialChange => ({ kind: 'removed', workerId: a.workerId, role: a.role, spot })), actorOf(gate))
+  }
   return NextResponse.json({ ok:true })
 }
 

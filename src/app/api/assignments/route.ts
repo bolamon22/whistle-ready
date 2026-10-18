@@ -9,6 +9,7 @@ import { checkInsFor } from '@/lib/staffCheckIn'
 import { releaseFilter } from '@/lib/staffReleaseStore'
 import { eventSideOf } from '@/lib/eventTeamsStore'
 import type { GameGender } from '@/lib/gameGender'
+import { actorOf, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
 
 // Staff only. These had no sign-in check: anyone with a tournament id could
 // read every official's contact and pay, or assign and unassign games. Pay
@@ -32,7 +33,16 @@ export async function POST(req: Request) {
   const payRates=parsePayRates(game.tournament.payRates)
   const payRate=worker.payRateOverride??getPayRate(worker.certLevel,role,payRates)
   const scope=await payScopeFor(gate.role,gate.userId)
-  return NextResponse.json(shape(await prisma.assignment.upsert({where:{gameId_role:{gameId,role}},create:{gameId,workerId,role,payRate},update:{workerId,payRate},include:{worker:true}}), gate.role, scope, game.division, await eventSideOf(game.tournamentId)),{status:201})
+  // Who held the slot before, so a published official taken off it is told too (lib/officialChangeAlerts).
+  const prev=await prisma.assignment.findUnique({where:{gameId_role:{gameId,role}},select:{workerId:true}})
+  const saved=await prisma.assignment.upsert({where:{gameId_role:{gameId,role}},create:{gameId,workerId,role,payRate},update:{workerId,payRate},include:{worker:true}})
+  if(prev?.workerId!==workerId){
+    const spot=spotOf(game)
+    const changes:OfficialChange[]=[{kind:'added',workerId,role,spot}]
+    if(prev?.workerId)changes.push({kind:'removed',workerId:prev.workerId,role,spot})
+    await sendOfficialChanges(game.tournamentId,changes,actorOf(gate))
+  }
+  return NextResponse.json(shape(saved, gate.role, scope, game.division, await eventSideOf(game.tournamentId)),{status:201})
 }
 
 export async function GET(req: Request) {

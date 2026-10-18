@@ -9,6 +9,7 @@ import { addDaysISO, dayTitle, eventToday } from '@/lib/availabilityAnswers'
 import { answersFor, confirmLinks, gameSig, readAsk, stateOf, writeAsk } from '@/lib/officialConfirm'
 import { CREWS, crewsOf, isCrew, type Crew } from '@/lib/staffRelease'
 import { getRelease, setRelease } from '@/lib/staffReleaseStore'
+import { rememberCrewAssigner } from '@/lib/officialChangeAlerts'
 import { eventSideOf } from '@/lib/eventTeamsStore'
 
 // "Notify officials" on the Assigner board (Bo, Oct 13 2026: "we should have a way
@@ -143,6 +144,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Show these crews' games on the staff portal first, so the email's "My games"
   // and Confirm links open to the games it lists.
   if (!only) await setRelease(params.id, crews, true, String(gate.session?.user?.name || gate.session?.user?.email || ''))
+  // Whoever sends a crew its games is the assigner told of later changes (lib/officialChangeAlerts).
+  if (!only) await rememberCrewAssigner(params.id, crews, { email: String(gate.session?.user?.email || ''), name: String(gate.session?.user?.name || '') })
 
   const org = await orgForTournament(params.id).catch(() => null)
   const base = 'https://whistleready.app'

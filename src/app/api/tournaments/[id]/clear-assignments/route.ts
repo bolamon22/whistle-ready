@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { gameGender } from '@/lib/gameGender'
 import { eventSideOf } from '@/lib/eventTeamsStore'
+import { actorOf, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
 
 // Clear a day's assignments by kind (girls' refs, boys' refs, scorekeepers) and,
 // optionally, by field (Bo, Oct 12 2026: "maybe we can do by field").
@@ -39,9 +40,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     if (!worker) return NextResponse.json({ error: 'That person isn’t in the Staff Pool' }, { status: 404 })
     const mine = await prisma.assignment.findMany({
       where: { workerId, game: { tournamentId: params.id, ...(date ? { date } : {}) } },
-      select: { id: true },
+      select: { id: true, role: true, game: true },
     })
     const gone = mine.length ? await prisma.assignment.deleteMany({ where: { id: { in: mine.map(a => a.id) } } }) : { count: 0 }
+    await sendOfficialChanges(params.id, mine.map((a): OfficialChange => ({ kind: 'removed', workerId, role: a.role, spot: spotOf(a.game) })), actorOf(gate))
     await prisma.auditLog.create({
       data: {
         tournamentId: params.id,
@@ -58,7 +60,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   const games = await prisma.game.findMany({
     where: { tournamentId: params.id, date, ...(fields.length ? { location: { in: fields } } : {}) },
-    select: { id: true, division: true, assignments: { select: { id: true, role: true } } },
+    select: { id: true, division: true, date: true, startTime: true, location: true, gameNumber: true, team1: true, team2: true, isCanceled: true, assignments: { select: { id: true, role: true, workerId: true } } },
   })
   const ids: string[] = []
   const side = await eventSideOf(params.id)   // a division that says neither: the event's teams
@@ -72,6 +74,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     }
   }
   const deleted = ids.length ? await prisma.assignment.deleteMany({ where: { id: { in: ids } } }) : { count: 0 }
+  // Published officials taken off are told (lib/officialChangeAlerts).
+  const cleared = new Set(ids)
+  await sendOfficialChanges(params.id, games.flatMap(g => g.assignments.filter(a => cleared.has(a.id)).map((a): OfficialChange => ({ kind: 'removed', workerId: a.workerId, role: a.role, spot: spotOf(g) }))), actorOf(gate))
 
   const what = KINDS.filter(k => kinds.has(k)).map(k => LABEL[k]).join(', ')
   const where = fields.length ? ` on ${fields.map(f => f.split(' - ').pop() || f).join(', ')}` : ''

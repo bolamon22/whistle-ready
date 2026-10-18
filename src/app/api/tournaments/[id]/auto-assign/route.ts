@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { gameGender, type GameGender } from '@/lib/gameGender'
 import { eventSideOf } from '@/lib/eventTeamsStore'
 import { effectiveUnavailability } from '@/lib/availability'
+import { actorOf, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
 
 interface WorkerRow {
   id: string; name: string; certLevel: string; defaultRole: string
@@ -60,6 +61,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const picks = (apply as { gameId?: string; role?: string; workerId?: string }[])
       .filter(x => x && typeof x.gameId === 'string' && typeof x.workerId === 'string' && ['ref1', 'ref2', 'ref3', 'scorekeeper'].includes(String(x.role)))
     const gameIds = Array.from(new Set(picks.map(x => x.gameId!)))
+    const addedNow: OfficialChange[] = []
     const pickGames = await prisma.game.findMany({ where: { tournamentId: params.id, id: { in: gameIds } }, include: { assignments: true } })
     const roster = await prisma.rosterEntry.findMany({ where: { tournamentId: params.id }, include: { worker: true } })
     const onRoster = new Map<string, WorkerRow>(roster.map(e => [e.workerId, e.worker as unknown as WorkerRow] as [string, WorkerRow]))
@@ -78,7 +80,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       g.assignments.push({ role: x.role! } as any)
       busyAt.add(k)
       saved++
+      addedNow.push({ kind: 'added', workerId: w.id, role: x.role!, spot: spotOf(g) })
     }
+    // Published officials put on a game are told (lib/officialChangeAlerts).
+    await sendOfficialChanges(params.id, addedNow, actorOf(gate))
     return NextResponse.json({ assigned: saved, skipped, gaps: [], missingRefs: 0, missingSKs: 0,
       summary: `Saved ${saved} assignment${saved === 1 ? '' : 's'}${skipped ? ` · ${skipped} skipped (slot filled or person busy since the preview)` : ''}.` })
   }
@@ -302,6 +307,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         update: { workerId: c.workerId, payRate: c.payRate },
       })
     }
+    // Published officials put on a game are told (lib/officialChangeAlerts).
+    await sendOfficialChanges(params.id, created.flatMap((c): OfficialChange[] => { const g = games.find(x => x.id === c.gameId); return g ? [{ kind: 'added', workerId: c.workerId, role: c.role, spot: spotOf(g) }] : [] }), actorOf(gate))
   }
   // No pay rate in the preview: the board doesn't show it, and an assigner sees
   // pay only for their own pay groups (lib/payGroups).
