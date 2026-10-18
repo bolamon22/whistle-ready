@@ -89,6 +89,22 @@ export default function SocialPhotos() {
     finally { setTesting(false) }
   }
 
+  // Move every scheduled send (keeping each one's posts) to a new time.
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [moveAt, setMoveAt] = useState(tomorrowMorning)
+  const [moving, setMoving] = useState(false)
+  async function moveScheduled() {
+    setMoving(true)
+    try {
+      const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ moveTo: new Date(moveAt).toISOString() }) })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.error || 'Could not move them'); return }
+      toast.success(`Moved ${j.moved} scheduled email${j.moved === 1 ? '' : 's'} to ${when(j.sendAt)}`)
+      setMoveOpen(false); setTick(t => t + 1)
+    } catch { toast.error('Could not move them') }
+    finally { setMoving(false) }
+  }
+
   async function unschedule(p: Player) {
     try {
       const r = await fetch(`/api/tournaments/${id}/social-photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cancelIds: [p.id] }) })
@@ -135,6 +151,18 @@ export default function SocialPhotos() {
             </button>
           ))}
           {!emailReady && <span className="text-xs text-rose-700 self-center">Email isn't set up, so requests can't be sent.</span>}
+          {counts.scheduled > 0 && (
+            moveOpen ? (
+              <span className="inline-flex flex-wrap items-center gap-2 text-xs">
+                <label htmlFor="sp-move-at" className="font-semibold text-slate-700">Move all {counts.scheduled} scheduled to</label>
+                <input id="sp-move-at" type="datetime-local" value={moveAt} onChange={e => setMoveAt(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1 text-xs" />
+                <button type="button" onClick={moveScheduled} disabled={moving} className="rounded-md bg-sky-700 text-white font-semibold px-3 py-1.5 disabled:opacity-50">{moving ? 'Moving…' : 'Move'}</button>
+                <button type="button" onClick={() => setMoveOpen(false)} className="text-slate-500 underline underline-offset-2">Cancel</button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setMoveOpen(true)} className="text-xs font-semibold text-sky-800 underline underline-offset-2 self-center">Change time for all {counts.scheduled} scheduled</button>
+            )
+          )}
         </div>
       </div>
 

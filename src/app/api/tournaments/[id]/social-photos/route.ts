@@ -20,6 +20,10 @@ import { pickStyles } from '@/lib/socialPosts'
 //   Sends and schedules take styles?: string[], the example posts the email shows
 //   (lib/socialPosts; default all four). A scheduled send keeps them on the waiver.
 //   POST  { cancelIds: string[] } → takes those players off the schedule.
+//   POST  { moveTo: ISO, moveIds?: string[] } → moves already-scheduled sends to a new time,
+//           keeping each one's chosen posts (Bo, Oct 18 2026: a batch set for Monday 8 AM
+//           should go Sunday 8 AM, "too many to go back and do"). No moveIds = every
+//           scheduled send at this event.
 //   POST  { testId } → sends that player's letter to the signed-in staff member only,
 //           with a test link: the page works, but nothing answered on it is saved,
 //           and the player is not marked as asked.
@@ -82,6 +86,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const list = (v: unknown): string[] => Array.isArray(v) ? v.map(x => String(x)).filter(Boolean) : []
 
   // Take players off the schedule.
+  // Move scheduled sends to another time. Only photoAskSchedAt changes, so the posts
+  // picked for each send stay as they were.
+  if (body.moveTo) {
+    const t = new Date(String(body.moveTo))
+    if (isNaN(t.getTime())) return NextResponse.json({ error: 'That send time is not a valid date.' }, { status: 400 })
+    if (t.getTime() < Date.now() - 60_000) return NextResponse.json({ error: 'That time has already passed. Pick a later one, or send now.' }, { status: 400 })
+    if (t.getTime() > Date.now() + 30 * 86_400_000) return NextResponse.json({ error: 'Schedule it within the next 30 days.' }, { status: 400 })
+    const only = new Set(list(body.moveIds))
+    const subs = await listSubmissions({ orgId: r.orgId, formType: 'player', tournamentId: params.id, limit: 20000 })
+    let moved = 0
+    for (const s of subs) {
+      if (!s.data?.photoAskSchedAt || (only.size && !only.has(s.id))) continue
+      await updateSubmissionData(r.orgId, s.id, { photoAskSchedAt: t.toISOString(), photoAskSchedBy: by || String(s.data.photoAskSchedBy || '') }, by || 'staff')
+      moved++
+    }
+    return NextResponse.json({ ok: true, moved, sendAt: t.toISOString() })
+  }
+
   const cancelIds = list(body.cancelIds)
   if (cancelIds.length) {
     let canceled = 0
