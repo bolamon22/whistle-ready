@@ -6,7 +6,9 @@ import { appBaseUrl, playerPassEnabled } from '@/lib/playerPass'
 import { emailEnabled } from '@/lib/email'
 import { photoAskRecipients } from '@/lib/photoConsent'
 import { photoAskContext, askable, sendPhotoAsk } from '@/lib/photoAskSend'
-import { pickStyles } from '@/lib/socialPosts'
+import { pickStyles, startFacts } from '@/lib/socialPosts'
+import { prisma } from '@/lib/db'
+import { eventDates } from '@/lib/vendorApproval'
 
 // Staff: player cards for social media, and the families' permission to use them
 // (lib/photoConsent, lib/photoAskSend).
@@ -43,10 +45,19 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const r = await gate(params.id)
   if ('res' in r) return r.res
   try {
+    const tq = prisma.tournament.findUnique({ where: { id: params.id }, select: { name: true, startDate: true, endDate: true, location: true } }).catch(() => null)
     const [subs, passOn] = await Promise.all([
       listSubmissions({ orgId: r.orgId, formType: 'player', tournamentId: params.id, sort: 'name', limit: 20000 }),
       playerPassEnabled(r.orgId),
     ])
+    const t = await tq
+    // For the Reel maker: the event's name and dates over the post, and the countdown number.
+    const event = {
+      name: String(t?.name || ''),
+      dates: eventDates(String(t?.startDate || ''), String(t?.endDate || '')),
+      location: String(t?.location || ''),
+      daysOut: startFacts(String(t?.startDate || '')).daysOut,
+    }
     const players = subs
       .filter(s => String(s.data?.photoUrl || '').trim())
       .map(s => {
@@ -72,7 +83,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           clubFacebook: String(d.photoClubFb || ''),
         }
       })
-    return NextResponse.json({ players, emailReady: emailEnabled() })
+    return NextResponse.json({ players, emailReady: emailEnabled(), event })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Could not load photos', players: [] }, { status: 500 })
   }

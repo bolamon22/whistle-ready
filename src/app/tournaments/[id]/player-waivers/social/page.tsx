@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ArrowLeft, Send, Check, Download, Mail, Eye, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Send, Check, Download, Mail, Eye, X, ChevronLeft, ChevronRight, Film } from 'lucide-react'
 import { POST_STYLES, DEFAULT_STYLES, type PostStyle } from '@/lib/socialPosts'
+import ReelMaker from '@/components/ReelMaker'
 
 // Photos for social: every player at this event who added a photo to their card.
 // Staff pick the good ones and ask the families (lib/photoConsent); the parent
@@ -46,7 +47,9 @@ export default function SocialPhotos() {
   const [later, setLater] = useState(true)              // Schedule (default: it's usually late at night) vs Send now
   const [sendAt, setSendAt] = useState(tomorrowMorning)
   const [tick, setTick] = useState(0)
-  const [preview, setPreview] = useState<string | null>(null)   // player id whose posts are open full size
+  const [preview, setPreview] = useState<string | null>(null)
+  const [event, setEvent] = useState<{ name: string; dates: string; location: string; daysOut: number | null }>({ name: '', dates: '', location: '', daysOut: null })
+  const [reel, setReel] = useState<{ src: string; style: string; label: string; fileName: string } | null>(null)   // player id whose posts are open full size
   const [styles, setStyles] = useState<Set<PostStyle>>(() => new Set(DEFAULT_STYLES))   // example posts the email shows
   const styleList = POST_STYLES.filter(s => styles.has(s.id)).map(s => s.id)
   const toggleStyle = (s: PostStyle) => setStyles(cur => { const n = new Set(cur); n.has(s) ? n.delete(s) : n.add(s); return n })
@@ -58,6 +61,7 @@ export default function SocialPhotos() {
       if (!r.ok) { setError(j.error || 'Could not load photos'); return }
       setPlayers(Array.isArray(j.players) ? j.players : [])
       setEmailReady(j.emailReady !== false)
+      if (j.event) setEvent(j.event)
     }).catch(() => setError('Could not load photos')).finally(() => setLoading(false))
   }, [id, tick])
 
@@ -264,17 +268,26 @@ export default function SocialPhotos() {
                           <input type="checkbox" checked={inEmail} onChange={() => toggleStyle(ps.id)} className="h-4 w-4 accent-teal-600" />
                           <span className="truncate">{ps.label}</span>
                         </label>
-                        <a href={`${src}?dl=1`} className="inline-flex items-center gap-1 text-teal-700"><Download size={12} /> Save</a>
+                        <span className="inline-flex items-center gap-2.5 shrink-0">
+                          <button type="button" onClick={() => setReel({ src, style: ps.id, label: ps.label, fileName: `${p.playerName.split(' ')[0] || 'player'}-${ps.id}-reel`.toLowerCase().replace(/[^a-z0-9-]+/g, '-') })} className="inline-flex items-center gap-1 text-teal-700 font-semibold"><Film size={12} /> Reel</button>
+                          <a href={`${src}?dl=1`} className="inline-flex items-center gap-1 text-teal-700"><Download size={12} /> Save</a>
+                        </span>
                       </figcaption>
                     </figure>
                   )
                 })}
               </div>
-              <p className="text-xs text-slate-500 mt-3">Tick the posts to put in the email, then Ask {p.playerName.split(' ')[0]}&apos;s family. You&apos;ll still choose Send now or Schedule, or send yourself a test, before anything goes out. Click a post to open it full size. Save is for planning only: post it only once the family says Yes.</p>
+              <p className="text-xs text-slate-500 mt-3">Tick the posts to put in the email, then Ask {p.playerName.split(' ')[0]}&apos;s family. You&apos;ll still choose Send now or Schedule, or send yourself a test, before anything goes out. Click a post to open it full size, or Reel to turn it into an 8-second video with music. Save is for planning only: post it only once the family says Yes.</p>
             </div>
           </div>
         )
       })()}
+
+      {reel && (
+        <ReelMaker src={reel.src} style={reel.style} label={reel.label} fileName={reel.fileName}
+          event={event.name || 'Game day'} sub={[event.dates, event.location].filter(Boolean).join(' · ')} days={event.daysOut}
+          onClose={() => setReel(null)} />
+      )}
 
       {confirm && (
         <div className="fixed inset-0 z-20 bg-slate-900/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
